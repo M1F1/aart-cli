@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.configuration.model import CompanyReviewedSource, SourceKind
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.marketplace.catalog import build_marketplace
-from agent_artifacts.marketplace.model import TrustClass
-from agent_artifacts.protocol.registry_models import ReviewRecord
+from aart_cli.configuration.model import CompanyReviewedSource, SourceKind
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.result import Ok
+from aart_cli.marketplace.catalog import build_marketplace
+from aart_cli.marketplace.model import TrustClass
+from aart_cli.protocol.registry_models import ReviewRecord
 from tests.marketplace_fixtures import (
     artifact,
     configured_source,

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.tui_layout import (
+from aart_cli.tui_layout import (
     STAGE_CONFIRMED,
     STAGE_CURRENT,
     STAGE_PENDING,
     STAGE_PROJECTION,
 )
-from agent_artifacts.wizard import (
+from aart_cli.wizard import (
     BasketItem,
     advance,
     initial_session,

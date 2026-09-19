@@ -5,14 +5,14 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.domain.artifacts import (
+from aart_cli.domain.artifacts import (
     ArtifactFormat,
     ArtifactKind,
     ArtifactPackage,
     Compatibility,
     Provenance,
 )
-from agent_artifacts.domain.candidates import (
+from aart_cli.domain.candidates import (
     CandidateFinding,
     CandidateState,
     FindingSeverity,
@@ -24,13 +24,13 @@ from agent_artifacts.domain.candidates import (
     semantic_candidate_diff,
     supersede_candidate,
 )
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.registry import (
+from aart_cli.domain.registry import (
     PromotionMode,
     PublicationStage,
     RegistryLifecycle,

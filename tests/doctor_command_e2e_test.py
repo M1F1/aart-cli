@@ -1,4 +1,4 @@
-"""CP-16: ``aart doctor`` measures installed state and proposes only minimal repairs.
+"""CP-16: ``aart-cli doctor`` measures installed state and proposes only minimal repairs.
 
 The fixture installs through the public configured-registry command and then changes the file a
 harness actually reads.  Doctor therefore has to derive both the healthy answer and the drifted

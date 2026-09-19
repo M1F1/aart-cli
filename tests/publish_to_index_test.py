@@ -36,7 +36,7 @@ def _wheel(directory: Path, name: str = "aart_cli-9.9.9-py3-none-any.whl") -> Pa
 
     path = directory / name
     with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr("agent_artifacts/__init__.py", "# nothing\n")
+        archive.writestr("aart_cli/__init__.py", "# nothing\n")
         archive.writestr("aart_cli-9.9.9.dist-info/METADATA", _METADATA)
     return path
 
@@ -76,7 +76,7 @@ class FieldsComeFromTheWheelTest(unittest.TestCase):
             directory = Path(held)
             path = directory / "aart_cli-9.9.9-py3-none-any.whl"
             with zipfile.ZipFile(path, "w") as archive:
-                archive.writestr("agent_artifacts/__init__.py", "")
+                archive.writestr("aart_cli/__init__.py", "")
             with self.assertRaises(publish_to_index.PublishError) as refusal:
                 publish_to_index.form(path)
         self.assertIn("METADATA", str(refusal.exception))

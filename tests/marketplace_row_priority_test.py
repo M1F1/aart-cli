@@ -11,10 +11,10 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_views import PresentationProfile
-from agent_artifacts.lifecycle.model import LifecycleItem, LifecycleKey, LifecycleStatus
-from agent_artifacts.tui_consumer import render_marketplace_artifact
-from agent_artifacts.tui_marketplace import (
+from aart_cli.application.consumer_views import PresentationProfile
+from aart_cli.lifecycle.model import LifecycleItem, LifecycleKey, LifecycleStatus
+from aart_cli.tui_consumer import render_marketplace_artifact
+from aart_cli.tui_marketplace import (
     MarketplaceFilters,
     MarketplaceTarget,
     filter_marketplace_rows,

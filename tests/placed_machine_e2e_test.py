@@ -17,22 +17,22 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.domain.effects import DeliverArtifact, DeliveryKind
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.effects import DeliverArtifact, DeliveryKind
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     SourceAlias,
 )
-from agent_artifacts.domain.receipts import ArtifactDelivery, PlacedArtifactReceipt
-from agent_artifacts.domain.reconciliation import Component
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
-from agent_artifacts.io.consumer_machine import read_consumer_machine
-from agent_artifacts.io.execution import DeliveryEffectInterpreter
-from agent_artifacts.io.receipt_store import LocalReceiptStore
-from agent_artifacts.io.runtime_projection import tree_digest_at
-from agent_artifacts.protocol.hashing import file_entry, tree_digest
-from agent_artifacts.protocol.paths import parse_relative_path
+from aart_cli.domain.receipts import ArtifactDelivery, PlacedArtifactReceipt
+from aart_cli.domain.reconciliation import Component
+from aart_cli.domain.result import Ok
+from aart_cli.domain.selection import OwnershipKind, OwnershipReason
+from aart_cli.io.consumer_machine import read_consumer_machine
+from aart_cli.io.execution import DeliveryEffectInterpreter
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.io.runtime_projection import tree_digest_at
+from aart_cli.protocol.hashing import file_entry, tree_digest
+from aart_cli.protocol.paths import parse_relative_path
 
 COORDINATE = ArtifactCoordinate(
     SourceAlias("public"), ArtifactIdentity("skill", "code-review"), "2.0.0"

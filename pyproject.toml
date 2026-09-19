@@ -20,8 +20,7 @@ keywords = ["ai", "skills", "mcp", "hooks", "agents", "opencode", "claude", "tab
 dependencies = []
 
 [project.scripts]
-agent-artifacts = "agent_artifacts.cli:main"
-aart = "agent_artifacts.cli:main"
+aart-cli = "aart_cli.cli:main"
 
 # Where this distribution is published, which is a fact about it rather than a value any other
 # deployment inherits -- the distinction D-309 draws.  It named the predecessor repository until
@@ -37,15 +36,15 @@ Repository = "https://github.com/M1F1/aart-cli"
 # `dependencies = []` stays where a reader looks for it.  This section holds only what
 # is Poetry's own: what goes into the archive, and the tooling groups.
 [tool.poetry]
-packages = [{ include = "agent_artifacts" }]
+packages = [{ include = "aart_cli" }]
 # The wheel carries the package's data files as well as its modules.  `scripts/build_wheel.py`
 # re-checks the built archive against this same allowlist and refuses anything else, so a stray
 # file dropped into the package directory fails the build instead of shipping in it.
 include = [
-    { path = "agent_artifacts/schemas/**/*", format = ["sdist", "wheel"] },
-    { path = "agent_artifacts/profiles/**/*", format = ["sdist", "wheel"] },
-    { path = "agent_artifacts/importers/**/*", format = ["sdist", "wheel"] },
-    { path = "agent_artifacts/templates/**/*", format = ["sdist", "wheel"] },
+    { path = "aart_cli/schemas/**/*", format = ["sdist", "wheel"] },
+    { path = "aart_cli/profiles/**/*", format = ["sdist", "wheel"] },
+    { path = "aart_cli/importers/**/*", format = ["sdist", "wheel"] },
+    { path = "aart_cli/templates/**/*", format = ["sdist", "wheel"] },
 ]
 
 # Developer tooling.  NOT required to run the CLI — the runtime above stays zero-dependency,
@@ -108,7 +107,7 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.10"
-files = ["agent_artifacts"]
+files = ["aart_cli"]
 warn_redundant_casts = true
 warn_unused_ignores = true
 warn_unused_configs = true
@@ -117,7 +116,7 @@ check_untyped_defs = true
 
 [tool.coverage.run]
 branch = true
-source = ["agent_artifacts"]
+source = ["aart_cli"]
 
 [tool.coverage.report]
 show_missing = true

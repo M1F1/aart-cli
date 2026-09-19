@@ -14,9 +14,9 @@ import unittest
 from dataclasses import replace
 from unittest import mock
 
-from agent_artifacts import cli
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.sources.git import acquire_git_snapshot
+from aart_cli import cli
+from aart_cli.domain.result import Ok
+from aart_cli.sources.git import acquire_git_snapshot
 from tests.registry_repository_scan_test import OTHER_MANIFEST, _git, _Lab
 
 
@@ -38,7 +38,7 @@ class RegistryAdoptionCliTest(_Lab):
 
         with (
             mock.patch(
-                "agent_artifacts.curation.runtime.acquire_git_snapshot",
+                "aart_cli.curation.runtime.acquire_git_snapshot",
                 side_effect=local_transport,
             ),
             contextlib.redirect_stdout(output),
@@ -196,7 +196,7 @@ class RegistryAdoptionCliTest(_Lab):
         an accident of this repository's layout.
         """
 
-        from agent_artifacts.commands import registry as registry_command
+        from aart_cli.commands import registry as registry_command
 
         real = registry_command.scan_repository
 

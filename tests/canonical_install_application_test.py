@@ -6,33 +6,33 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.configuration.model import OrganizationPolicy, SourceKind
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.install_state.schema import parse_install_state
-from agent_artifacts.installation.application import finalize_install, prepare_install
-from agent_artifacts.installation.io import LocalInstallAdapter
-from agent_artifacts.installation.model import InstallLocation, InstallRequest, InstallStatus
-from agent_artifacts.io.object_store import publish_object
-from agent_artifacts.io.reference_store import read_references
-from agent_artifacts.marketplace.catalog import build_marketplace
-from agent_artifacts.profiles.builtin import builtin
-from agent_artifacts.protocol.hashing import file_entry, json_digest, tree_digest
-from agent_artifacts.protocol.json import canonical_json_bytes
-from agent_artifacts.protocol.native_models import (
+from aart_cli.configuration.model import OrganizationPolicy, SourceKind
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.install_state.schema import parse_install_state
+from aart_cli.installation.application import finalize_install, prepare_install
+from aart_cli.installation.io import LocalInstallAdapter
+from aart_cli.installation.model import InstallLocation, InstallRequest, InstallStatus
+from aart_cli.io.object_store import publish_object
+from aart_cli.io.reference_store import read_references
+from aart_cli.marketplace.catalog import build_marketplace
+from aart_cli.profiles.builtin import builtin
+from aart_cli.protocol.hashing import file_entry, json_digest, tree_digest
+from aart_cli.protocol.json import canonical_json_bytes
+from aart_cli.protocol.native_models import (
     PAYLOAD_FORMAT_BY_TYPE,
     ArtifactManifest,
     CompatibilitySpec,
     InstallSpec,
     PayloadSpec,
 )
-from agent_artifacts.protocol.native_schema import artifact_manifest_to_json
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.semver import SemVer, VersionBounds
-from agent_artifacts.runtime_contract import EXECUTABLE_VERSION
-from agent_artifacts.store.model import (
+from aart_cli.protocol.native_schema import artifact_manifest_to_json
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.semver import SemVer, VersionBounds
+from aart_cli.runtime_contract import EXECUTABLE_VERSION
+from aart_cli.store.model import (
     ObjectPublishCommand,
     ReferenceKind,
     ReferenceReadRequest,
@@ -451,7 +451,7 @@ class CanonicalInstallApplicationTest(unittest.TestCase):
             )
             assert isinstance(planned, Ok), planned
             original = __import__(
-                "agent_artifacts.installation.io",
+                "aart_cli.installation.io",
                 fromlist=["_write_atomic"],
             )._write_atomic
             calls = 0
@@ -464,7 +464,7 @@ class CanonicalInstallApplicationTest(unittest.TestCase):
                 return original(path, content, mode=mode)
 
             with patch(
-                "agent_artifacts.installation.io._write_atomic",
+                "aart_cli.installation.io._write_atomic",
                 side_effect=fail_first_write,
             ):
                 outcome = finalize_install(
@@ -588,7 +588,7 @@ class CanonicalInstallApplicationTest(unittest.TestCase):
             )
             assert isinstance(planned, Ok), planned
             original = __import__(
-                "agent_artifacts.installation.io",
+                "aart_cli.installation.io",
                 fromlist=["_write_atomic"],
             )._write_atomic
 
@@ -598,7 +598,7 @@ class CanonicalInstallApplicationTest(unittest.TestCase):
                 return original(path, content, mode=mode)
 
             with patch(
-                "agent_artifacts.installation.io._write_atomic",
+                "aart_cli.installation.io._write_atomic",
                 side_effect=fail_state,
             ):
                 outcome = finalize_install(

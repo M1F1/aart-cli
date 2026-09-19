@@ -309,7 +309,7 @@ do **not** author your own — it is refused as a collision with the taken bytes
 ### 4.2 Vendor, review only
 
 ```sh
-aart registry vendor mcp "$NAME" \
+aart-cli registry vendor mcp "$NAME" \
   --url "$URL" \
   --ref "$REF" \
   --path "$SERVER_FILE" \
@@ -365,7 +365,7 @@ That is only fixable by editing `artifact.json`, bumping the version, and publis
 ### 4.3 Finalize the vendor
 
 ```sh
-aart registry vendor mcp "$NAME" … --yes
+aart-cli registry vendor mcp "$NAME" … --yes
 ```
 
 Same command, `--yes` appended. It writes:
@@ -390,18 +390,18 @@ against `importer.options_digest`.
 ### 4.4 Publish
 
 ```sh
-aart registry format --yes
+aart-cli registry format --yes
 ```
 
 ```sh
-aart registry publish
+aart-cli registry publish
 ```
 
 Review-only. It computes lock and index in memory, runs `validate` and `audit` over that exact
 snapshot, and lists every path it would commit. Read the list. Then:
 
 ```sh
-aart registry publish --yes -m "Add mcp/<NAME> vendored from <URL>@<REF>"
+aart-cli registry publish --yes -m "Add mcp/<NAME> vendored from <URL>@<REF>"
 ```
 
 It commits and does **not** push. Pushing is a separate, human decision.
@@ -434,13 +434,13 @@ registry commit has been pushed, and the choice has consequences beyond convenie
 After pushing — this is what a colleague uses:
 
 ```sh
-aart source add --alias "$ALIAS" --kind registry-git --location "$REGISTRY_URL" --ref main --default
+aart-cli source add --alias "$ALIAS" --kind registry-git --location "$REGISTRY_URL" --ref main --default
 ```
 
 Before pushing, to test the commit you just made without publishing it:
 
 ```sh
-aart source add --alias "$ALIAS" --kind source-local --location "$REGISTRY_PATH"
+aart-cli source add --alias "$ALIAS" --kind source-local --location "$REGISTRY_PATH"
 ```
 
 `source-local` cannot take `--default` — `only a registry source can become the default registry` —
@@ -449,7 +449,7 @@ registry's own packages carry no review record either, so `registry-git` reads a
 needs the same flag. Expect it in both cases; it is not a symptom of anything being wrong.
 
 `source add` also refuses a second alias for an origin already configured, so switching from local to
-Git means `aart source remove --alias "$ALIAS" --yes` first — and that leaves the installation record
+Git means `aart-cli source remove --alias "$ALIAS" --yes` first — and that leaves the installation record
 behind, which is what produces `installation effect ownership must be unique across the manifest` on
 the next install. Uninstall under the old alias before re-adding.
 
@@ -457,11 +457,11 @@ Then, before every install, re-synchronize. Source health reports the snapshot's
 agreement with the origin, so a registry that moved still reads as healthy until you sync:
 
 ```sh
-aart source sync --alias "$ALIAS"
+aart-cli source sync --alias "$ALIAS"
 ```
 
 ```sh
-aart marketplace install --profile tabnine "$ALIAS/mcp/$NAME"
+aart-cli marketplace install --profile tabnine "$ALIAS/mcp/$NAME"
 ```
 
 Review-only; it prints the destination file. Then append `--yes`.

@@ -1,9 +1,9 @@
-"""CP-15: `aart source sync` over a real source whose upstream turned invalid.
+"""CP-15: `aart-cli source sync` over a real source whose upstream turned invalid.
 
 INV-218 — *invalid fetched registry state cannot replace last-known-good state* — is already held
 at two seams below the CLI: `source_store_adapter_test` proves a corrupt convergent snapshot never
 becomes `current`, and `source_sync_application_test` proves a validation failure publishes nothing.
-Both drive the seam directly. Nothing drove `aart source sync`, the verb an operator actually runs,
+Both drive the seam directly. Nothing drove `aart-cli source sync`, the verb an operator actually runs,
 over a real source that changed under it — so the invariant was held by the machinery and unproven
 at the surface that uses it.
 
@@ -27,9 +27,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts import cli
-from agent_artifacts.io.source_store import read_current_source
-from agent_artifacts.sources.model import (
+from aart_cli import cli
+from aart_cli.io.source_store import read_current_source
+from aart_cli.sources.model import (
     CurrentSourceRequest,
     source_instance_id,
     source_store_paths,

@@ -12,17 +12,17 @@ import pathlib
 import unittest
 from unittest import mock
 
-from agent_artifacts import tui
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession
-from agent_artifacts.domain.identifiers import (
+from aart_cli import tui
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     SourceAlias,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.receipt_store import LocalReceiptStore
-from agent_artifacts.tui_consumer import run_consumer_shell
+from aart_cli.domain.result import Ok
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AuthoredSetup
 from tests.configured_setup_gap_test import AUTHORED, CONFIGURED, COORDINATE, RECIPE

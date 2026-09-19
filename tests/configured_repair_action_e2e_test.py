@@ -18,16 +18,16 @@ import shutil
 import stat
 import unittest
 
-from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.configured_installation_action import InstallationHost
-from agent_artifacts.io.configured_repair_action import (
+from aart_cli.domain.harness import Scope
+from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.configured_installation_action import InstallationHost
+from aart_cli.io.configured_repair_action import (
     complete_configured_repair,
     prepare_configured_repair,
 )
-from agent_artifacts.io.consumer_machine import read_installed_inspections
+from aart_cli.io.consumer_machine import read_installed_inspections
 from tests.configured_install_command_e2e_test import COORDINATE, _environment
 from tests.configured_uninstall_command_e2e_test import _delivered
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     CONFIG_CONTINUE_ROW,
     ConsumerActionKind,
     ConsumerUiCommand,
@@ -18,20 +18,20 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConfigInputView,
     ConsumerScreen,
     ConsumerSession,
     CredentialInputView,
 )
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.inputs import InputValidation, PromptedConfigValue
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_consumer import CanonicalScreenSource, compose_frame, frame
+from aart_cli.domain.inputs import InputValidation, PromptedConfigValue
+from aart_cli.domain.result import Ok
+from aart_cli.tui_consumer import CanonicalScreenSource, compose_frame, frame
 from tests.artifact_installation_e2e_test import ORG
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP

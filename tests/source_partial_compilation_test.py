@@ -5,19 +5,19 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import (
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import (
     compile_author_manifests,
     compile_author_snapshot,
 )
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
+from aart_cli.protocol.paths import parse_relative_path
 
 _SOURCE = "https://git.example/authors.git"
 _REVISION = "a" * 40

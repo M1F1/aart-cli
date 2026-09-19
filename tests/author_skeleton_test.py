@@ -1,4 +1,4 @@
-"""`aart author init` writes a skeleton the parser accepts and no field it forgot.
+"""`aart-cli author init` writes a skeleton the parser accepts and no field it forgot.
 
 The maintainer's requirement is that the skeleton carries the *full* accepted surface, so an agent
 or a person deletes down to what they need instead of discovering fields by reading the parser.
@@ -17,25 +17,25 @@ from __future__ import annotations
 import unittest
 from typing import get_args
 
-from agent_artifacts.authoring.skeleton import (
+from aart_cli.authoring.skeleton import (
     ALTERNATIVE_PREFIX,
     COMMENTED_YAML_PREFIX,
     GENERATED_KINDS,
     PROSE_PREFIX,
     author_skeleton,
 )
-from agent_artifacts.domain.artifacts import ArtifactKind
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import (
+from aart_cli.domain.artifacts import ArtifactKind
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import (
     AuthorKind,
     DiscoveredAuthorManifest,
     compile_author_snapshot,
     package_hook,
     parse_author_manifest,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.yaml import _plain_safe, emit_yaml, parse_yaml
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.yaml import _plain_safe, emit_yaml, parse_yaml
 from tests.authoring_compiler_test import _file, _snapshot
 from tests.authoring_field_surface import parser_field_surface
 

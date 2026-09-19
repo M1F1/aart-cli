@@ -21,23 +21,23 @@ from unittest import mock
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiCommandKind,
     ConsumerUiState,
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerScreen, PresentationProfile
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.selection import Collection, CollectionCoordinate
-from agent_artifacts.tui_consumer import (
+from aart_cli.application.consumer_views import ConsumerScreen, PresentationProfile
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.selection import Collection, CollectionCoordinate
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     MarketplaceCollectionEntry,
     MarketplaceEntry,
     _reload,
     frame,
 )
-from agent_artifacts.tui_layout import CONTENT_MEASURE, SECTION_RULE
+from aart_cli.tui_layout import CONTENT_MEASURE, SECTION_RULE
 from tests.consumer_marketplace_shell_test import COLLECTION, collection, member
 from tests.consumer_marketplace_shell_test import screens as marketplace_screens
 from tests.consumer_shell_test import _at

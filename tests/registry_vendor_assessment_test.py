@@ -21,11 +21,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind, SourceSnapshot
-from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
-from agent_artifacts.security.attestation_schema import parse_attestation
-from agent_artifacts.security.attestations import AttestationOriginKind, attestation_digest
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind, SourceSnapshot
+from aart_cli.registry_maintenance.model import NativeReferenceAcquisition
+from aart_cli.security.attestation_schema import parse_attestation
+from aart_cli.security.attestations import AttestationOriginKind, attestation_digest
 from tests.credential_fixtures import access_token
 from tests.registry_vendor_command_test import (
     _ACQUISITION,
@@ -98,13 +98,13 @@ class VendorAssessmentTest(unittest.TestCase):
                 if snapshot is None
                 else NativeReferenceAcquisition(_URL, "v1.4.0", _COMMIT, snapshot)
             )
-            from agent_artifacts.curation.runtime import LocalCurationService
+            from aart_cli.curation.runtime import LocalCurationService
 
             service = LocalCurationService(
                 str(root), native_acquirer=lambda _url, _ref: Ok(acquisition)
             )
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 yield root

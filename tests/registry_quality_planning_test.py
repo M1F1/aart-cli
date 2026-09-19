@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.registry_commands.planning import (
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.capabilities import Capability
+from aart_cli.protocol.semver import SemVer
+from aart_cli.registry_commands.planning import (
     audit_registry_workspace,
     plan_registry_format,
     project_registry_workspace_plan,
     validate_registry_workspace,
 )
-from agent_artifacts.registry_commands.planning import (
+from aart_cli.registry_commands.planning import (
     test_registry_compatibility as check_registry_compatibility,
 )
 from tests.registry_maintenance_fixtures import (

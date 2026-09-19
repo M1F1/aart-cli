@@ -17,9 +17,9 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.artifact_placement import PLACEMENT_UNAVAILABLE, placement_for
+from aart_cli.domain.harness import Scope
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.artifact_placement import PLACEMENT_UNAVAILABLE, placement_for
 from tests.measured_host_profiles_test import _PlacementFixture
 
 

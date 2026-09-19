@@ -11,7 +11,7 @@ Git author repository
         -> later Source Sync reports upstream movement
 ```
 
-Its public entrance is `aart source add --kind source-git`. Until B-094 that entrance validated
+Its public entrance is `aart-cli source add --kind source-git`. Until B-094 that entrance validated
 every acquired tree through `load_native_source`, the loader for a *consumer* native package
 tree: a root `aart-source.json` plus `<root>/<kind>/<name>/artifact.json` and `payload/`. An
 authoring repository declares none of that -- it declares one `aart.yaml` next to the files that
@@ -38,8 +38,8 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts import cli
-from agent_artifacts.configuration.model import (
+from aart_cli import cli
+from aart_cli.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
     SourceAlias,
@@ -47,30 +47,30 @@ from agent_artifacts.configuration.model import (
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.paths import Platform, resolve_config_paths
-from agent_artifacts.configuration.policy import RuntimeOverrides, apply_configuration
-from agent_artifacts.configuration.schema import (
+from aart_cli.configuration.paths import Platform, resolve_config_paths
+from aart_cli.configuration.policy import RuntimeOverrides, apply_configuration
+from aart_cli.configuration.schema import (
     parse_user_configuration,
     user_configuration_bytes,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.registry import PromotionMode
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.candidate_store import candidate_history_paths, read_candidate_history
-from agent_artifacts.io.maintainer_promotion import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.candidate_store import candidate_history_paths, read_candidate_history
+from aart_cli.io.maintainer_promotion import (
     complete_configured_candidate_promotion,
     prepare_configured_candidate_promotion,
 )
-from agent_artifacts.io.maintainer_sync import (
+from aart_cli.io.maintainer_sync import (
     complete_configured_source_sync,
     prepare_configured_source_sync,
 )
-from agent_artifacts.io.maintainer_views import read_maintainer_views
-from agent_artifacts.io.registry_promotion import FilesystemPromotionOutput
-from agent_artifacts.io.source_store import read_current_source
-from agent_artifacts.sources.git import acquire_git_snapshot
-from agent_artifacts.sources.model import (
+from aart_cli.io.maintainer_views import read_maintainer_views
+from aart_cli.io.registry_promotion import FilesystemPromotionOutput
+from aart_cli.io.source_store import read_current_source
+from aart_cli.sources.git import acquire_git_snapshot
+from aart_cli.sources.model import (
     CurrentSourceRequest,
     GitSnapshotRequest,
     source_instance_id,
@@ -212,7 +212,7 @@ class _Environment:
             contextlib.redirect_stdout(output),
             mock.patch("os.getcwd", return_value=str(self.project)),
             mock.patch(
-                "agent_artifacts.sources.runtime.acquire_git_snapshot",
+                "aart_cli.sources.runtime.acquire_git_snapshot",
                 side_effect=self._local_transport,
             ),
         ):
@@ -405,7 +405,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
 
     Admission on its own is not the claim B-094 makes; it is the door the claim walks through.
     These drive the same configured composition the Maintainer Source Sync screens call, over
-    the durable store `aart source add` just wrote, so what is proven is the real monitored flow
+    the durable store `aart-cli source add` just wrote, so what is proven is the real monitored flow
     rather than a compiled snapshot handed to a fixture.
     """
 
@@ -422,7 +422,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
         """One reviewed Source Sync, exactly as the screen performs it: prepare then confirm."""
 
         with mock.patch(
-            "agent_artifacts.sources.runtime.acquire_git_snapshot",
+            "aart_cli.sources.runtime.acquire_git_snapshot",
             side_effect=env._local_transport,
         ):
             prepared = self._prepare(env, alias)
@@ -528,7 +528,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
 
             env.author.publish(UPDATED_SKILL_BODY)
             with mock.patch(
-                "agent_artifacts.io.maintainer_sync.compile_author_source",
+                "aart_cli.io.maintainer_sync.compile_author_source",
                 return_value=Err(
                     (
                         Diagnostic(
@@ -557,7 +557,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
         """CP-24.03: the way back, end to end, with no file moved by hand.
 
         The owner's store held Candidate history from an earlier revision. Nothing said so
-        outside the screens that would not load, `aart source sync` reported `unchanged` and wrote
+        outside the screens that would not load, `aart-cli source sync` reported `unchanged` and wrote
         nothing, and the only recovery found was `mv .../candidates .../candidates.bak`.
         """
 
@@ -617,7 +617,7 @@ class PromotionFromAnAdmittedGitSourceTest(unittest.TestCase):
             env.synchronize_registry()
             self.assertEqual(env.add_author_source()[0], 0)
             with mock.patch(
-                "agent_artifacts.sources.runtime.acquire_git_snapshot",
+                "aart_cli.sources.runtime.acquire_git_snapshot",
                 side_effect=env._local_transport,
             ):
                 prepared_sync = prepare_configured_source_sync(

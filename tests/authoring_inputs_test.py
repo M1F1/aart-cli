@@ -15,16 +15,16 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.inputs import (
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.inputs import (
     CliArgumentBinding,
     ConfigInput,
     EnvironmentBinding,
     SecretInput,
 )
-from agent_artifacts.domain.python_runtime import PyProjectSpec, RequirementsFile
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import (
+from aart_cli.domain.python_runtime import PyProjectSpec, RequirementsFile
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import (
     compile_author_snapshot,
     discover_author_manifests,
     parse_author_manifest,

@@ -17,17 +17,17 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.consumer_session import begin_installation
-from agent_artifacts.application.installation_offer import (
+from aart_cli.application.consumer_session import begin_installation
+from aart_cli.application.installation_offer import (
     OFFER_NOT_PLANNABLE,
     ArtifactPlacement,
     InstallationOffer,
     offer_installation,
 )
-from agent_artifacts.domain.harness import Scope, mcp_target
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.reconciliation import CurrentState
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.harness import Scope, mcp_target
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.reconciliation import CurrentState
+from aart_cli.domain.result import Err, Ok
 from tests.artifact_installation_test import (
     INTERPRETER,
     PAYLOAD_SOURCE,
@@ -187,7 +187,7 @@ class InstallationOfferTest(unittest.TestCase):
 
 
 def _unmeasurable():
-    from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+    from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 
     return Diagnostic(DiagnosticCode("environment-unmeasurable"), Severity.ERROR, "no")
 

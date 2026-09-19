@@ -14,9 +14,9 @@ import os
 import shutil
 import unittest
 
-from agent_artifacts.model import SetupQueueItem
-from agent_artifacts.setup import parse_installer, plan_setup, project_setup_review
-from agent_artifacts.setup_runtime import ProcessResult, SetupRuntime, apply_setup_plan
+from aart_cli.model import SetupQueueItem
+from aart_cli.setup import parse_installer, plan_setup, project_setup_review
+from aart_cli.setup_runtime import ProcessResult, SetupRuntime, apply_setup_plan
 from tests.setup_fixtures import recipe
 
 _EXPORT_STEP = {

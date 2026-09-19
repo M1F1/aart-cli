@@ -6,8 +6,8 @@ import time
 import unittest
 from unittest.mock import patch
 
-from agent_artifacts.io.security_analyzers import resolve_executable, run_analyzer_process
-from agent_artifacts.security.analyzers import (
+from aart_cli.io.security_analyzers import resolve_executable, run_analyzer_process
+from aart_cli.security.analyzers import (
     AnalyzerProcessKind,
     AnalyzerProcessRequest,
 )
@@ -82,7 +82,7 @@ class SecurityAnalyzerProcessAdapterTest(unittest.TestCase):
         }
 
         with patch(
-            "agent_artifacts.io.security_analyzers.subprocess.Popen", return_value=process
+            "aart_cli.io.security_analyzers.subprocess.Popen", return_value=process
         ) as called:
             result = run_analyzer_process(request, environ=environment)
 
@@ -103,7 +103,7 @@ class SecurityAnalyzerProcessAdapterTest(unittest.TestCase):
     def test_timeout_missing_and_os_errors_have_secret_free_kinds(self) -> None:
         request = AnalyzerProcessRequest(("/opt/example",), "/object", b"{}", 1, 32)
         process = _FakeProcess(stderr=b"secret", times_out=True)
-        with patch("agent_artifacts.io.security_analyzers.subprocess.Popen", return_value=process):
+        with patch("aart_cli.io.security_analyzers.subprocess.Popen", return_value=process):
             timed_out = run_analyzer_process(request, environ={})
         self.assertEqual(timed_out.kind, AnalyzerProcessKind.TIMED_OUT)
         self.assertTrue(process.killed)
@@ -115,7 +115,7 @@ class SecurityAnalyzerProcessAdapterTest(unittest.TestCase):
         for error, expected in failures:
             with (
                 self.subTest(expected=expected),
-                patch("agent_artifacts.io.security_analyzers.subprocess.Popen", side_effect=error),
+                patch("aart_cli.io.security_analyzers.subprocess.Popen", side_effect=error),
             ):
                 outcome = run_analyzer_process(request, environ={})
                 self.assertEqual(outcome.kind, expected)
@@ -125,7 +125,7 @@ class SecurityAnalyzerProcessAdapterTest(unittest.TestCase):
     def test_successful_process_returns_only_bounded_streams(self) -> None:
         request = AnalyzerProcessRequest(("/opt/example",), "/object", b"request", 1, 32)
         process = _FakeProcess(b"response", b"warning", returncode=1)
-        with patch("agent_artifacts.io.security_analyzers.subprocess.Popen", return_value=process):
+        with patch("aart_cli.io.security_analyzers.subprocess.Popen", return_value=process):
             outcome = run_analyzer_process(request, environ={})
         self.assertEqual(outcome.kind, AnalyzerProcessKind.COMPLETED)
         self.assertEqual(outcome.returncode, 1)
@@ -137,7 +137,7 @@ class SecurityAnalyzerProcessAdapterTest(unittest.TestCase):
         process = _FakeProcess()
         process.stdout = _DelayedStream()  # type: ignore[assignment]
         started = time.monotonic()
-        with patch("agent_artifacts.io.security_analyzers.subprocess.Popen", return_value=process):
+        with patch("aart_cli.io.security_analyzers.subprocess.Popen", return_value=process):
             outcome = run_analyzer_process(request, environ={})
         self.assertLess(time.monotonic() - started, 0.4)
         self.assertEqual(outcome.kind, AnalyzerProcessKind.FAILED_TO_START)
@@ -158,13 +158,11 @@ class SecurityAnalyzerProcessAdapterTest(unittest.TestCase):
                 constructor()
 
     def test_resolution_returns_only_absolute_executable_files(self) -> None:
-        with patch("agent_artifacts.io.security_analyzers.shutil.which", return_value="relative"):
+        with patch("aart_cli.io.security_analyzers.shutil.which", return_value="relative"):
             self.assertIsNone(resolve_executable("example"))
-        with patch("agent_artifacts.io.security_analyzers.shutil.which", return_value="/bin/sh"):
+        with patch("aart_cli.io.security_analyzers.shutil.which", return_value="/bin/sh"):
             self.assertIsNone(resolve_executable("example"))
-        with patch(
-            "agent_artifacts.io.security_analyzers.shutil.which", return_value="/opt/example"
-        ):
+        with patch("aart_cli.io.security_analyzers.shutil.which", return_value="/opt/example"):
             self.assertEqual(resolve_executable("example"), "/opt/example")
 
 

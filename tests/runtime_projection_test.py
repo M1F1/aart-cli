@@ -11,7 +11,7 @@ import unittest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.runtime_projection import (
+from aart_cli.application.runtime_projection import (
     LAUNCHER_BINDING_UNSUPPORTED,
     LAUNCHER_INVALID,
     LAUNCHER_PROVIDER_UNRESOLVABLE,
@@ -19,13 +19,13 @@ from agent_artifacts.application.runtime_projection import (
     MISSING_CONFIGURATION_STATUS,
     generate_launcher,
 )
-from agent_artifacts.domain.configuration_files import (
+from aart_cli.domain.configuration_files import (
     configuration_value_problem,
     render_configuration_file,
 )
-from agent_artifacts.domain.credentials import CredentialProviderRef, CredentialReference
-from agent_artifacts.domain.identifiers import InputId
-from agent_artifacts.domain.inputs import (
+from aart_cli.domain.credentials import CredentialProviderRef, CredentialReference
+from aart_cli.domain.identifiers import InputId
+from aart_cli.domain.inputs import (
     BoundInput,
     BoundInputs,
     CliArgumentBinding,
@@ -37,15 +37,15 @@ from agent_artifacts.domain.inputs import (
     SecretProviderReference,
     StdinBinding,
 )
-from agent_artifacts.domain.launch import (
+from aart_cli.domain.launch import (
     LAUNCHER_FILENAME,
     LaunchContract,
     Transport,
     launcher_path,
     shell_quote,
 )
-from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.python_runtime import ArtifactEnvironment
+from aart_cli.domain.result import Err, Ok
 
 ROOT = "/opt/agents/.tabnine/agent/aart/mcp/github"
 ENVIRONMENT = ArtifactEnvironment("mcp/github", ROOT)

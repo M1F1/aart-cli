@@ -20,17 +20,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts import cli
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.registry_bootstrap import refresh_registry_workspace
-from agent_artifacts.protocol.native_tree import (
+from aart_cli import cli
+from aart_cli.domain.result import Ok
+from aart_cli.io.registry_bootstrap import refresh_registry_workspace
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.registry_maintenance.promoted import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.registry_maintenance.promoted import (
     is_promoted_registry,
     legacy_registry_paths,
 )

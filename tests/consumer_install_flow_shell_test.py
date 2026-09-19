@@ -10,14 +10,14 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     PresentationProfile,
     navigation_targets,
@@ -28,8 +28,8 @@ from agent_artifacts.application.consumer_views import (
     project_lifecycle_outcome,
     project_lifecycle_plan,
 )
-from agent_artifacts.application.intents import InstalledHealth, MemberHealth
-from agent_artifacts.tui_consumer import (
+from aart_cli.application.intents import InstalledHealth, MemberHealth
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     ConsumerScreens,
     _reload,

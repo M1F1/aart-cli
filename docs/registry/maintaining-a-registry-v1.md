@@ -14,7 +14,7 @@ passed, what is dropped, and what to configure instead — `https_proxy` is drop
 proxy that is the whole failure.
 
 `registry init` turns an empty checkout into a registry: the two JSON markers, a `.gitignore`,
-the quality workflow, a `README.md` describing the registry it just made, and a `.aart-version` pinning the AART
+the quality workflow, a `README.md` describing the registry it just made, and a `.aart-cli-version` pinning the AART
 that created it. Those last two are written only when absent — they are the files
 you own afterwards, and AART never compares or overwrites them. The workflows and the JSON are
 managed: hand-edit one and `init` refuses the registry.
@@ -25,25 +25,25 @@ set repository variables — no file in the registry changes. See
 
 ```sh
 # Create a registry
-aart registry init --source . --source-id company --display-name "Company Registry"
-aart registry init --source . --source-id company --display-name "Company Registry" --yes
+aart-cli registry init --source . --source-id company --display-name "Company Registry"
+aart-cli registry init --source . --source-id company --display-name "Company Registry" --yes
 
 # Author in a separate Source checkout, then scan and promote its reviewed Candidate
-aart registry scan --help
-aart registry promote --help
+aart-cli registry scan --help
+aart-cli registry promote --help
 
 # Or copy foreign content the upstream has not packaged for AART
-aart registry vendor skill code-review --source . \
+aart-cli registry vendor skill code-review --source . \
   --url https://github.com/acme/prompts.git --ref main --path prompts/code-review \
   --artifact-version 1.0.0 --summary "Review code." \
   --profile claude --platform darwin
 
 # Review, then finalize lock + build + validate + audit + one commit
-aart registry publish --source .
-aart registry publish --source . --yes
+aart-cli registry publish --source .
+aart-cli registry publish --source . --yes
 
 # Push the commit to a review branch, then open a pull request
-aart registry push --source . --branch add-code-review
+aart-cli registry push --source . --branch add-code-review
 ```
 
 `vendor` is the foreign-repository path: it copies a file or subtree into this registry, records the

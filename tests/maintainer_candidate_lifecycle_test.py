@@ -5,20 +5,20 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.application.candidate_validation import validate_candidate
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.candidate_validation import validate_candidate
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     key_event,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer import CandidateBundle, reconcile_source_scan
+from aart_cli.application.maintainer_views import (
     CandidateLifecyclePhase,
     MaintainerScreen,
     MaintainerViews,
@@ -26,19 +26,19 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_candidates,
     project_maintainer_dashboard,
 )
-from agent_artifacts.application.promotion import (
+from aart_cli.application.promotion import (
     PromotionEvidence,
     load_registry_promotions,
     load_registry_versions,
     plan_bulk_promotion,
     project_promotion,
 )
-from agent_artifacts.domain.candidates import assess_candidate, mark_candidate_promoted
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from aart_cli.domain.candidates import assess_candidate, mark_candidate_promoted
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
 from tests.maintainer_candidate_shell_test import _projected_source
 from tests.maintainer_candidate_views_test import _changed_scan, _compiled
 

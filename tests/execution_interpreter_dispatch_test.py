@@ -20,11 +20,11 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.credentials import (
     CredentialProviderRef,
     CredentialReference,
 )
-from agent_artifacts.domain.effects import (
+from aart_cli.domain.effects import (
     ConfigureHarness,
     CopyTree,
     CreatePythonEnvironment,
@@ -35,18 +35,18 @@ from agent_artifacts.domain.effects import (
     VerifyCredential,
     WriteFile,
 )
-from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
-from agent_artifacts.domain.identifiers import InputId
-from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.execution import (
+from aart_cli.domain.harness import McpRegistration, Scope, mcp_target
+from aart_cli.domain.identifiers import InputId
+from aart_cli.domain.python_runtime import ArtifactEnvironment
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.execution import (
     CredentialEffectInterpreter,
     FileEffectInterpreter,
     HarnessEffectInterpreter,
     RuntimeEffectInterpreter,
 )
-from agent_artifacts.io.harness import LocalHarnessRegistry
-from agent_artifacts.io.python_runtime import LocalPythonRuntime
+from aart_cli.io.harness import LocalHarnessRegistry
+from aart_cli.io.python_runtime import LocalPythonRuntime
 
 
 def _registration(server: str) -> McpRegistration:
@@ -67,7 +67,7 @@ class _InteractiveProvider(_Provider):
 
     def store(self, reference, secret=None, *, replace=False):
         self.stored.append((reference, secret, replace))
-        from agent_artifacts.domain.credentials import (
+        from aart_cli.domain.credentials import (
             CredentialObservation,
             CredentialState,
             ProviderState,
@@ -79,7 +79,7 @@ class _InteractiveProvider(_Provider):
 
 
 def _dispatch(effect, interpreters):
-    from agent_artifacts.application.execution import _dispatch as dispatch
+    from aart_cli.application.execution import _dispatch as dispatch
 
     return dispatch(effect, tuple(interpreters))
 

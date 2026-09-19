@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.hooks import (
+from aart_cli.domain.hooks import (
     HookEntry,
     HookEntryShape,
     hook_entry_at,
@@ -22,7 +22,7 @@ from agent_artifacts.domain.hooks import (
     merge_hook_entry,
     remove_hook_entry,
 )
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.result import Err, Ok
 
 PATH = "hooks.PreToolUse"
 ENTRY = HookEntry(HookEntryShape.NESTED_COMMAND, "Bash", "/artifacts/lint/run.sh")

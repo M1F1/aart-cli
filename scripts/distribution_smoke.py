@@ -25,7 +25,7 @@ from typing import Any
 
 
 def _unwrap(result: Any) -> Any:
-    from agent_artifacts.domain.result import Ok
+    from aart_cli.domain.result import Ok
 
     if not isinstance(result, Ok):
         raise RuntimeError(f"AART operation failed: {result!r}")
@@ -37,7 +37,7 @@ def _platform() -> str:
 
 
 def _config_paths(home: Path):
-    from agent_artifacts.configuration.paths import Platform, resolve_config_paths
+    from aart_cli.configuration.paths import Platform, resolve_config_paths
 
     platform = Platform.DARWIN if sys.platform == "darwin" else Platform.LINUX
     return resolve_config_paths(
@@ -55,9 +55,9 @@ def _assert_installed_origin(
     source_root: Path,
     environment_root: Path,
 ) -> int:
-    import agent_artifacts
+    import aart_cli
 
-    package_file = Path(agent_artifacts.__file__).resolve()
+    package_file = Path(aart_cli.__file__).resolve()
     if expected == "editable":
         if not package_file.is_relative_to(source_root):
             raise RuntimeError(f"editable phase imported unexpected package: {package_file}")
@@ -73,29 +73,29 @@ def _assert_installed_origin(
 
 
 def _configure_and_sync(source_root: Path, home: Path) -> str:
-    from agent_artifacts.application.configuration import ConfigDocument
-    from agent_artifacts.application.sources import SourceSyncPorts, SourceSyncRequest, sync_source
-    from agent_artifacts.configuration.model import (
+    from aart_cli.application.configuration import ConfigDocument
+    from aart_cli.application.sources import SourceSyncPorts, SourceSyncRequest, sync_source
+    from aart_cli.configuration.model import (
         ConfiguredSource,
         SourceKind,
         SyncSettings,
         UserConfiguration,
     )
-    from agent_artifacts.configuration.schema import user_configuration_bytes
-    from agent_artifacts.domain.identifiers import SourceAlias
-    from agent_artifacts.io.config_store import write_configuration
-    from agent_artifacts.io.source_store import (
+    from aart_cli.configuration.schema import user_configuration_bytes
+    from aart_cli.domain.identifiers import SourceAlias
+    from aart_cli.io.config_store import write_configuration
+    from aart_cli.io.source_store import (
         acquire_source_lock,
         publish_source_snapshot,
         read_current_source,
         release_source_lock,
     )
-    from agent_artifacts.protocol.capabilities import Capability
-    from agent_artifacts.protocol.semver import SemVer
-    from agent_artifacts.sources.git import acquire_git_snapshot
-    from agent_artifacts.sources.local import read_local_snapshot
-    from agent_artifacts.sources.model import SyncFallback
-    from agent_artifacts.sources.validation import validate_source_candidate
+    from aart_cli.protocol.capabilities import Capability
+    from aart_cli.protocol.semver import SemVer
+    from aart_cli.sources.git import acquire_git_snapshot
+    from aart_cli.sources.local import read_local_snapshot
+    from aart_cli.sources.model import SyncFallback
+    from aart_cli.sources.validation import validate_source_candidate
 
     source = ConfiguredSource(
         SourceAlias("reference"),
@@ -144,7 +144,7 @@ def _configure_and_sync(source_root: Path, home: Path) -> str:
 
 
 def _load_service(project: Path, home: Path):
-    from agent_artifacts.consumer.runtime import load_local_consumer_service
+    from aart_cli.consumer.runtime import load_local_consumer_service
 
     return _unwrap(load_local_consumer_service(project=str(project), user_home=str(home)))
 
@@ -155,8 +155,8 @@ def _apply(service: Any, request: Any) -> Any:
 
 
 def _state(service: Any) -> Any:
-    from agent_artifacts.install_state.paths import install_state_paths
-    from agent_artifacts.install_state.schema import parse_install_state
+    from aart_cli.install_state.paths import install_state_paths
+    from aart_cli.install_state.schema import parse_install_state
 
     location = service.context.location
     state_path = install_state_paths(
@@ -211,7 +211,7 @@ def _symlinkable_coordinate(service: Any) -> Any:
 
 
 def _phase_seed(args: argparse.Namespace) -> dict[str, Any]:
-    from agent_artifacts.consumer.model import ConsumerActionRequest
+    from aart_cli.consumer.model import ConsumerActionRequest
 
     source_root = Path(args.source_root).resolve()
     project = Path(args.project).resolve()
@@ -248,8 +248,8 @@ def _phase_seed(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _phase_resume(args: argparse.Namespace) -> dict[str, Any]:
-    from agent_artifacts.consumer.model import ConsumerActionRequest
-    from agent_artifacts.domain.identifiers import ArtifactCoordinate
+    from aart_cli.consumer.model import ConsumerActionRequest
+    from aart_cli.domain.identifiers import ArtifactCoordinate
 
     project = Path(args.project).resolve()
     home = Path(args.home).resolve()
@@ -352,7 +352,7 @@ def _lend_build_backend(workspace: Path) -> Path:
 
     The dev group names ``poetry-core`` at the version ``[build-system]`` pins, for exactly this,
     so this process has one to lend. Only the backend is lent: a directory of links, not the whole
-    environment, so nothing else -- least of all an editable ``agent_artifacts`` from the
+    environment, so nothing else -- least of all an editable ``aart_cli`` from the
     developer's own environment -- can leak in and make the install look like it worked when it
     did not.
     """
@@ -505,7 +505,7 @@ def run_smoke(source_root: Path) -> dict[str, Any]:
             environment=build_environment,
         )
         _run(
-            [str(_environment_script(editable_environment, "aart")), "--version"],
+            [str(_environment_script(editable_environment, "aart-cli")), "--version"],
             cwd=outside,
             environment=environment,
         )
@@ -546,7 +546,7 @@ def run_smoke(source_root: Path) -> dict[str, Any]:
             cwd=outside,
             environment=environment,
         )
-        aart = _environment_script(wheel_environment, "aart")
+        aart = _environment_script(wheel_environment, "aart-cli")
         _run([str(aart), "--version"], cwd=outside, environment=environment)
         upgrade = _run(
             [str(aart), "upgrade", "--wheel", str(wheel), "--dry-run"],
@@ -728,7 +728,7 @@ def _stand_ins(directory: Path, wheel: Path) -> Path:
 
 def _installed_executable(roots: tuple[Path, ...]) -> Path | None:
     for root in roots:
-        candidate = root / "aart"
+        candidate = root / "aart-cli"
         if candidate.is_file():
             return candidate
     return None
@@ -738,7 +738,7 @@ def _run_route(command: str, *, workspace: Path, index: int, wheel: Path) -> dic
     """One documented line, in its own environment, with the developer's tools out of reach.
 
     `UV_TOOL_DIR`, `PIPX_HOME` and their bin directories are redirected into the workspace. Without
-    that, running this gate would reinstall the developer's own `aart` from a throwaway wheel --
+    that, running this gate would reinstall the developer's own `aart-cli` from a throwaway wheel --
     a gate that damages the machine it runs on is worse than the drift it was written to catch.
     """
 
@@ -783,7 +783,7 @@ def _run_route(command: str, *, workspace: Path, index: int, wheel: Path) -> dic
         return {"version": None}
     executable = _installed_executable((bin_directory, uv_bin, pipx_bin))
     if executable is None:
-        raise RuntimeError(f"documented install line installed no `aart`: {command}")
+        raise RuntimeError(f"documented install line installed no `aart-cli`: {command}")
     version = subprocess.run(
         [str(executable), "--version"], capture_output=True, text=True, timeout=120, check=True
     )

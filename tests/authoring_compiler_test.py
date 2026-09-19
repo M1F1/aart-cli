@@ -8,21 +8,21 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import (
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import (
     ComplianceLevel,
     compile_author_snapshot,
     discover_author_manifests,
 )
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
     compile_native_package,
 )
-from agent_artifacts.protocol.paths import SafeRelativePath, parse_relative_path
+from aart_cli.protocol.paths import SafeRelativePath, parse_relative_path
 from tests.credential_fixtures import assignment
 
 

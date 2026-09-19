@@ -3,12 +3,12 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from agent_artifacts import __version__, cli
-from agent_artifacts.commands import registry as registry_command
-from agent_artifacts.curation.model import CurationAction
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.model import Request
-from agent_artifacts.protocol.semver import VersionBounds, parse_semver
+from aart_cli import __version__, cli
+from aart_cli.commands import registry as registry_command
+from aart_cli.curation.model import CurationAction
+from aart_cli.domain.result import Ok
+from aart_cli.model import Request
+from aart_cli.protocol.semver import VersionBounds, parse_semver
 
 _VENDOR = (
     "registry vendor --source /tmp/registry mcp atlassian --url https://example.com/up.git "

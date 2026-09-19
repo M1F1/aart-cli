@@ -6,8 +6,8 @@ import dataclasses
 import unittest
 from unittest import mock
 
-from agent_artifacts.application.candidate_validation import validate_candidate
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.candidate_validation import validate_candidate
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -17,24 +17,24 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer_promotion import (
+from aart_cli.application.maintainer_promotion import (
     prepare_candidate_promotion_transaction,
 )
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer_views import (
     MaintainerScreen,
     project_maintainer_registry_commit,
     project_maintainer_registry_validation,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.registry import PromotionMode
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
 from tests.maintainer_promotion_execution_test import _approved
 from tests.maintainer_promotion_test import _bundle
 

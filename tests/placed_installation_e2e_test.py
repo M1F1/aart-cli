@@ -23,35 +23,35 @@ import tempfile
 import unittest
 from datetime import date
 
-from agent_artifacts.application.execution import (
+from aart_cli.application.execution import (
     ExecutionStatus,
     InstallationExecutionStatus,
     execute_repair,
 )
-from agent_artifacts.application.installed_state import removal_state_from_placement
-from agent_artifacts.application.reconciliation import plan_repair
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceId
-from agent_artifacts.domain.placement import artifact_root
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.reconciliation import Component, ComponentId
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.domain.selection import (
+from aart_cli.application.installed_state import removal_state_from_placement
+from aart_cli.application.reconciliation import plan_repair
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.harness import Scope
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceId
+from aart_cli.domain.placement import artifact_root
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.reconciliation import Component, ComponentId
+from aart_cli.domain.result import Ok
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     VersionConstraint,
 )
-from agent_artifacts.io.configured_installation_action import (
+from aart_cli.io.configured_installation_action import (
     InstallationHost,
     complete_configured_installation,
     prepare_configured_installation,
 )
-from agent_artifacts.io.harness import LocalHarnessRegistry
-from agent_artifacts.io.installation_execution import interpreters_for
-from agent_artifacts.io.installation_observation import observe_planned_installation
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.sources.model import (
+from aart_cli.io.harness import LocalHarnessRegistry
+from aart_cli.io.installation_execution import interpreters_for
+from aart_cli.io.installation_observation import observe_planned_installation
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
     make_source_candidate,
@@ -303,7 +303,7 @@ class PlacedInstallationTest(unittest.TestCase):
 
 
 def _receipt(planned):
-    from agent_artifacts.application.installation_proposal import intended_placement_receipt
+    from aart_cli.application.installation_proposal import intended_placement_receipt
 
     return intended_placement_receipt(planned)
 

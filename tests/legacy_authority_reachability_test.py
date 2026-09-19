@@ -43,13 +43,13 @@ import pathlib
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "agent_artifacts"
-RUNTIME_ROOTS = frozenset({"agent_artifacts.__main__", "agent_artifacts.cli"})
+PACKAGE = ROOT / "aart_cli"
+RUNTIME_ROOTS = frozenset({"aart_cli.__main__", "aart_cli.cli"})
 DELIBERATE_NON_RUNTIME_MODULES = frozenset(
     {
-        "agent_artifacts._commit",
-        "agent_artifacts.application.activity_telemetry",
-        "agent_artifacts.profiles.loader",
+        "aart_cli._commit",
+        "aart_cli.application.activity_telemetry",
+        "aart_cli.profiles.loader",
     }
 )
 

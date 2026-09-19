@@ -7,14 +7,14 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.model import SetupQueueItem
-from agent_artifacts.setup import (
+from aart_cli.model import SetupQueueItem
+from aart_cli.setup import (
     parse_installer,
     plan_setup,
     retry_command,
     rollback_command,
 )
-from agent_artifacts.setup_runtime import ProcessResult, SetupRuntime, apply_setup_plan
+from aart_cli.setup_runtime import ProcessResult, SetupRuntime, apply_setup_plan
 from tests.setup_fixtures import recipe
 from tests.source_remediation_test import _parse_failure
 
@@ -140,7 +140,7 @@ class CustomProtocolTests(unittest.TestCase):
             # until `2.6.0` shipped `receipt undo` and then was a claim the same executable
             # contradicted in every record it wrote.
             self.assertIn("mcp/atlassian", result.rollback_command)
-            self.assertIn("aart marketplace receipt undo", result.rollback_command)
+            self.assertIn("aart-cli marketplace receipt undo", result.rollback_command)
 
 
 class WrittenCommandFieldTests(unittest.TestCase):

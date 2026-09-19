@@ -8,23 +8,23 @@ import tempfile
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_session import assemble_consumer_machine
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_session import assemble_consumer_machine
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConfigurationFileView,
     ConsumerScreen,
     ConsumerSession,
 )
-from agent_artifacts.domain.configuration_files import ConfigurationFileRecord
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.consumer_machine import read_configuration_files
-from agent_artifacts.protocol.hashing import sha256_bytes
-from agent_artifacts.tui_consumer import CanonicalScreenSource, _reload, frame, screens_from
+from aart_cli.domain.configuration_files import ConfigurationFileRecord
+from aart_cli.domain.result import Ok
+from aart_cli.io.consumer_machine import read_configuration_files
+from aart_cli.protocol.hashing import sha256_bytes
+from aart_cli.tui_consumer import CanonicalScreenSource, _reload, frame, screens_from
 from tests.consumer_session_test import TOKEN, inspection, observed
 
 

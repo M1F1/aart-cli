@@ -15,11 +15,11 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.domain.effects import DeliverArtifact, DeliveryKind, WithdrawArtifact
-from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.receipts import ArtifactDelivery
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.execution import DeliveryEffectInterpreter
+from aart_cli.domain.effects import DeliverArtifact, DeliveryKind, WithdrawArtifact
+from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.domain.receipts import ArtifactDelivery
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.execution import DeliveryEffectInterpreter
 
 
 def _digest(character: str = "b") -> ObjectDigest:
@@ -174,7 +174,7 @@ class DeliveryDispatchTest(_Delivers, unittest.TestCase):
         self.assertFalse(self.destination.exists())
 
     def test_a_harness_effect_is_not_a_delivery(self) -> None:
-        from agent_artifacts.domain.effects import ConfigureHarness
+        from aart_cli.domain.effects import ConfigureHarness
 
         effect = ConfigureHarness("claude", "skill/code-review", str(self.base / "settings.json"))
         self.assertFalse(self._interpreter().supports(effect))

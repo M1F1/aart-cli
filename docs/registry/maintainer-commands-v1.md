@@ -1,6 +1,6 @@
 # Registry maintainer commands v1
 
-`aart registry` turns a local Git checkout into a canonical, reviewable AART registry. Ordinary
+`aart-cli registry` turns a local Git checkout into a canonical, reviewable AART registry. Ordinary
 mutations stop after reviewed managed-file writes. The explicit `publish --yes` workflow validates,
 audits, and commits every listed Git change. Only `push` touches a remote, and only a review branch.
 
@@ -8,7 +8,7 @@ audits, and commits every listed Git change. Only `push` touches a remote, and o
 
 | Command | Effect | Purpose |
 |---|---|---|
-| `init` | writes | Add protocol markers, `.aart-version`, a README, and registry CI |
+| `init` | writes | Add protocol markers, `.aart-cli-version`, a README, and registry CI |
 | `format` | writes, or reads with `--check` | Canonicalize every managed JSON document |
 | `validate` | reads | Validate protocol, compatibility, lock/index, native packages, and graph |
 | `lock` | writes, or reads with `--check` | Resolve every approved native reference to an exact commit and digests |
@@ -21,7 +21,7 @@ audits, and commits every listed Git change. Only `push` touches a remote, and o
 
 The authoring commands that bring content in — `scan`, `promote`, `adopt`, `check-upstream`,
 `discover`, `vendor`, `vendor-batch`, `revendor` and `collection` — follow the same
-review-then-`--yes` boundary; `aart registry ACTION --help` states
+review-then-`--yes` boundary; `aart-cli registry ACTION --help` states
 each one's inputs.
 
 Mutation requires a writable real directory containing `.git` (a directory or worktree gitfile).
@@ -39,11 +39,11 @@ Start from an empty Git checkout:
 
 ```console
 git init company-registry
-aart registry init --source company-registry \
+aart-cli registry init --source company-registry \
   --source-id company-registry --display-name "Company Registry"
 ```
 
-The generated quality workflow puts the AART version pinned in `.aart-version` on the runner — from
+The generated quality workflow puts the AART version pinned in `.aart-cli-version` on the runner — from
 an index, a wheel, a path or a Git clone, chosen by repository variables — and proves the version
 it got matches the pin. It then runs format, strict/frozen validation, lock, build, audit, and
 minimum/latest compatibility checks. The workflow has read-only repository permissions and contains
@@ -54,8 +54,8 @@ Artifacts are authored in a separate Source checkout with an explicit `aart.yaml
 and payload. Commit that clean checkout, then use the Registry's Candidate workflow:
 
 ```console
-aart registry scan --help
-aart registry promote --help
+aart-cli registry scan --help
+aart-cli registry promote --help
 ```
 
 `scan` compiles only explicit author manifests and never changes the Registry. `promote` rechecks

@@ -1,9 +1,9 @@
 """No TUI frame tells the operator to go and run a command.
 
 `QA-017`/`B-091`. Adding an already-connected Registry produced domain diagnostics whose
-remediation is literally `aart source sync …`, `aart source resubscribe …` and `aart source remove
+remediation is literally `aart-cli source sync …`, `aart-cli source resubscribe …` and `aart-cli source remove
 …`, and the interactive adapter copied them into the notice verbatim. The line was long enough to
-be clipped after `aart source remove`, so the interactive application answered a refusal by sending
+be clipped after `aart-cli source remove`, so the interactive application answered a refusal by sending
 the operator to a terminal and then cut the instruction in half.
 
 The CLI and the JSON envelope keep their complete remediation contracts — that is where those
@@ -21,19 +21,19 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer_views import MaintainerScreen
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.result import Err
-from agent_artifacts.io.consumer_actions import _ELSEWHERE, _refusal
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
-from agent_artifacts.tui_sources import plan_source_addition
+from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.result import Err
+from aart_cli.io.consumer_actions import _ELSEWHERE, _refusal
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
+from aart_cli.tui_sources import plan_source_addition
 from tests.source_remediation_test import _registry, _view
 
 CODE = DiagnosticCode("source-selection-invalid")
@@ -55,7 +55,7 @@ class InteractiveRefusalTest(unittest.TestCase):
             (
                 _diagnostic(
                     "source alias is already configured: company",
-                    "run `aart source sync --alias company` to refresh it",
+                    "run `aart-cli source sync --alias company` to refresh it",
                     interactive=(
                         "This registry is already connected. Refresh it from Registries.",
                     ),
@@ -65,7 +65,7 @@ class InteractiveRefusalTest(unittest.TestCase):
 
         self.assertIn("source alias is already configured: company", rendered)
         self.assertIn("This registry is already connected. Refresh it from Registries.", rendered)
-        self.assertFalse(any("aart " in line for line in rendered), rendered)
+        self.assertFalse(any("aart-cli " in line for line in rendered), rendered)
 
     def test_a_command_free_remediation_is_still_shown_when_there_is_no_prose(self) -> None:
         """Dropping every step would answer `QA-019` with the defect it just removed."""
@@ -81,13 +81,13 @@ class InteractiveRefusalTest(unittest.TestCase):
             (
                 _diagnostic(
                     "source origin and ref are already configured as company",
-                    "run `aart source sync --alias company` to refresh it",
-                    "`aart source remove --alias company` to free the origin",
+                    "run `aart-cli source sync --alias company` to refresh it",
+                    "`aart-cli source remove --alias company` to free the origin",
                 ),
             )
         )
 
-        self.assertFalse(any("aart " in line for line in rendered), rendered)
+        self.assertFalse(any("aart-cli " in line for line in rendered), rendered)
         self.assertGreater(len(rendered), 1, rendered)
 
     def test_the_message_itself_is_never_dropped(self) -> None:
@@ -113,7 +113,7 @@ class NoCommandReachesTheInteractiveAdapterTest(unittest.TestCase):
                         max_size=8,
                     ),
                 ),
-                st.builds(lambda rest: f"aart {rest}", st.text(min_size=1, max_size=20)),
+                st.builds(lambda rest: f"aart-cli {rest}", st.text(min_size=1, max_size=20)),
             ),
             max_size=5,
         ),
@@ -124,7 +124,7 @@ class NoCommandReachesTheInteractiveAdapterTest(unittest.TestCase):
         rendered = _refusal((_diagnostic(message, *steps),))
 
         for line in rendered[1:]:
-            self.assertNotIn("aart ", line)
+            self.assertNotIn("aart-cli ", line)
 
 
 class DuplicateConnectionSpeaksInteractivelyTest(unittest.TestCase):
@@ -146,7 +146,7 @@ class DuplicateConnectionSpeaksInteractivelyTest(unittest.TestCase):
         rendered = _refusal(refused.diagnostics)
         self.assertTrue(any("already connected" in line for line in rendered), rendered)
         self.assertTrue(any("registry" in line for line in rendered), rendered)
-        self.assertFalse(any("aart " in line for line in rendered), rendered)
+        self.assertFalse(any("aart-cli " in line for line in rendered), rendered)
         self.assertNotIn(_ELSEWHERE, rendered)
 
     def test_a_duplicate_origin_names_the_alias_that_already_holds_it(self) -> None:
@@ -158,7 +158,7 @@ class DuplicateConnectionSpeaksInteractivelyTest(unittest.TestCase):
         assert isinstance(refused, Err), refused
         rendered = _refusal(refused.diagnostics)
         self.assertTrue(any("already connected as registry" in line for line in rendered), rendered)
-        self.assertFalse(any("aart " in line for line in rendered), rendered)
+        self.assertFalse(any("aart-cli " in line for line in rendered), rendered)
         self.assertNotIn(_ELSEWHERE, rendered)
 
     def test_the_cli_contract_still_carries_the_exact_commands(self) -> None:
@@ -172,7 +172,7 @@ class DuplicateConnectionSpeaksInteractivelyTest(unittest.TestCase):
         assert isinstance(refused, Err), refused
         self.assertTrue(
             any(
-                "aart source sync" in step
+                "aart-cli source sync" in step
                 for item in refused.diagnostics
                 for step in item.remediation
             ),
@@ -184,9 +184,9 @@ class NoFrameDrawsACommandTest(unittest.TestCase):
     """`B-091`'s audit, as a sweep rather than a reading: every screen, with a refusal on it."""
 
     #: A command, not a filename. `aart.yaml`, `aart-registry.json` and the `AART /` title are all
-    #: legitimate; `aart source sync --alias company` is the thing this must never draw.
+    #: legitimate; `aart-cli source sync --alias company` is the thing this must never draw.
     COMMAND = re.compile(
-        r"aart (source|registry|marketplace|setup|doctor|security|memory|reporting)\b"
+        r"aart-cli (source|registry|marketplace|setup|doctor|security|memory|reporting)\b"
     )
 
     def _source(self) -> CanonicalScreenSource:
@@ -194,8 +194,8 @@ class NoFrameDrawsACommandTest(unittest.TestCase):
             (
                 _diagnostic(
                     "source alias is already configured: company",
-                    "run `aart source sync --alias company` to refresh it, "
-                    "`aart source remove --alias company` to subscribe to a different origin",
+                    "run `aart-cli source sync --alias company` to refresh it, "
+                    "`aart-cli source remove --alias company` to subscribe to a different origin",
                 ),
             )
         )
@@ -220,7 +220,7 @@ class NoFrameDrawsACommandTest(unittest.TestCase):
         planted = CanonicalScreenSource(
             ConsumerScreens(
                 project_dashboard((), registry_count=0),
-                notice=("run `aart source sync --alias company`",),
+                notice=("run `aart-cli source sync --alias company`",),
             )
         )
         state = ConsumerUiState(

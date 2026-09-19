@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiState,
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     DoctorView,
     project_dashboard,
 )
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload
 
 
 class DoctorSubjectTest(unittest.TestCase):

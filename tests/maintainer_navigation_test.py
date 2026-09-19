@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiCommandKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
@@ -13,7 +13,7 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     SETTING_ROWS,
     ApplicationScreen,
     ConsumerScreen,
@@ -22,11 +22,11 @@ from agent_artifacts.application.consumer_views import (
     navigation_targets,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer_views import (
     MAINTAINER_SCREENS,
     MaintainerScreen,
 )
-from agent_artifacts.tui_consumer import (
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     ConsumerScreens,
     _reload,

@@ -17,7 +17,7 @@ class _DataclassParams(Protocol):
 
 
 def _unwrap(result):
-    from agent_artifacts.domain.result import Ok
+    from aart_cli.domain.result import Ok
 
     if not isinstance(result, Ok):
         raise AssertionError(f"expected Ok, got {result!r}")
@@ -25,7 +25,7 @@ def _unwrap(result):
 
 
 def _code(result) -> str:
-    from agent_artifacts.domain.result import Err
+    from aart_cli.domain.result import Err
 
     if not isinstance(result, Err):
         raise AssertionError(f"expected Err, got {result!r}")
@@ -34,7 +34,7 @@ def _code(result) -> str:
 
 class SafeRelativePathTest(unittest.TestCase):
     def test_safe_paths_use_portable_posix_form(self):
-        from agent_artifacts.protocol.paths import parse_relative_path
+        from aart_cli.protocol.paths import parse_relative_path
 
         valid = _unwrap(parse_relative_path("artifacts/skill/café"))
         self.assertEqual(valid.parts, ("artifacts", "skill", "café"))
@@ -59,7 +59,7 @@ class SafeRelativePathTest(unittest.TestCase):
 
 class CapabilityNegotiationTest(unittest.TestCase):
     def test_required_capabilities_block_while_optional_capabilities_degrade(self):
-        from agent_artifacts.protocol.capabilities import negotiate_capabilities, parse_capability
+        from aart_cli.protocol.capabilities import negotiate_capabilities, parse_capability
 
         manifest = _unwrap(parse_capability("artifact-manifest-v1"))
         security = _unwrap(parse_capability("security-evidence-v1"))
@@ -76,7 +76,7 @@ class CapabilityNegotiationTest(unittest.TestCase):
         self.assertEqual(compatible.unsupported_optional, (security,))
 
     def test_capability_names_are_strict_and_negotiation_is_sorted_and_deduplicated(self):
-        from agent_artifacts.protocol.capabilities import negotiate_capabilities, parse_capability
+        from aart_cli.protocol.capabilities import negotiate_capabilities, parse_capability
 
         for raw in ("", "UPPER", "leading-", "two--dashes", "has space", "ümlaut"):
             with self.subTest(raw=raw):
@@ -96,7 +96,7 @@ class CapabilityNegotiationTest(unittest.TestCase):
 
 class ProtocolArchitectureTest(unittest.TestCase):
     def test_protocol_values_are_frozen_and_modules_have_no_io_or_host_locale_imports(self):
-        protocol = ROOT / "agent_artifacts" / "protocol"
+        protocol = ROOT / "aart_cli" / "protocol"
         self.assertTrue(protocol.is_dir(), protocol)
         forbidden = {"locale", "os", "pathlib", "shutil", "socket", "subprocess", "urllib"}
         violations: list[str] = []
@@ -118,7 +118,7 @@ class ProtocolArchitectureTest(unittest.TestCase):
                     if module.split(".", 1)[0] in forbidden
                 )
 
-            module = importlib.import_module(f"agent_artifacts.protocol.{path.stem}")
+            module = importlib.import_module(f"aart_cli.protocol.{path.stem}")
             for value in vars(module).values():
                 if not isinstance(value, type) or value.__module__ != module.__name__:
                     continue

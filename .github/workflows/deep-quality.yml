@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: "Module to mutate, e.g. agent_artifacts/application/consumer_views.py"
+        description: "Module to mutate, e.g. aart_cli/application/consumer_views.py"
         required: true
         type: string
       tests:

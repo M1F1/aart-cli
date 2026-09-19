@@ -7,22 +7,22 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.domain.identifiers import SourceAlias, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.source_store import (
+from aart_cli.domain.identifiers import SourceAlias, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.source_store import (
     discard_source_store,
     prune_source_store_root,
     publish_source_snapshot,
     read_current_source,
 )
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.sources.model import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.sources.model import (
     CurrentSourceRequest,
     SourceInstanceId,
     SourcePublishCommand,
@@ -30,7 +30,7 @@ from agent_artifacts.sources.model import (
     make_source_candidate,
     source_store_paths,
 )
-from agent_artifacts.sources.pointer import (
+from aart_cli.sources.pointer import (
     CurrentPointer,
     current_pointer_bytes,
     parse_current_pointer,
@@ -136,7 +136,7 @@ class SourceStoreAdapterTest(unittest.TestCase):
             self.assertIsInstance(publish_source_snapshot(first), Ok)
 
             with patch(
-                "agent_artifacts.io.source_store.os.replace",
+                "aart_cli.io.source_store.os.replace",
                 side_effect=OSError("replace failed " + assignment("token", "secret")),
             ):
                 failed = publish_source_snapshot(second)
@@ -274,7 +274,7 @@ class SourceStoreAdapterTest(unittest.TestCase):
             self.assertIsInstance(read_current_source(request), Err)
 
             with patch(
-                "agent_artifacts.io.source_store.Path.read_bytes",
+                "aart_cli.io.source_store.Path.read_bytes",
                 side_effect=PermissionError(assignment("token", "secret")),
             ):
                 unreadable = read_current_source(request)

@@ -35,7 +35,7 @@ Load-bearing statements:
 
 `tui.py` holds a mature maintainer-oriented Sources UI and registry command surface, characterized
 but wizard-shaped. `commands/registry.py` and `registry_commands/`, `registry_maintenance/` own the
-public non-interactive maintainer commands. `agent_artifacts/consumer/*`, `installation/*`,
+public non-interactive maintainer commands. `aart_cli/consumer/*`, `installation/*`,
 `lifecycle/*` and `setup_engine/*` still carry consumer authority for Collections and direct/local
 sources; CP-13's remaining legacy removal is sequenced behind this slice (D-091).
 
@@ -234,7 +234,7 @@ green. 3,017 unit tests and 208 E2E tests pass; branch coverage is 83.31%.
 
 ## Step 4 progress — the validation engine (2026-09-01)
 
-`agent_artifacts/application/candidate_validation.py` implements 164.6's pipeline as a value, ahead
+`aart_cli/application/candidate_validation.py` implements 164.6's pipeline as a value, ahead
 of the screens that show it, so screens 38–40 project a validation run rather than compute one while
 drawing.
 
@@ -505,12 +505,12 @@ it was verified red by removing the injection, so a fixture that stopped declari
 leave the defect tests quietly passing. The other three assert the absence of the one file the
 recipe writes, on both front ends.
 
-**They correct D-118's last sentence.** `aart marketplace install` does not carry setup for an
+**They correct D-118's last sentence.** `aart-cli marketplace install` does not carry setup for an
 approved registry coordinate either: it reaches `_configured_lifecycle`, which calls
 `complete_configured_installation` — the same seam `_execute_installation` uses — and reports
 `session_status: succeeded` with no `setup` key and no diagnostic. Setup runs only on the legacy
 path, which `_configured_registry_selection` selects by returning `None` for a direct or local
-source. `aart marketplace setup` does not recover it: it resolves through the legacy catalogue and
+source. `aart-cli marketplace setup` does not recover it: it resolves through the legacy catalogue and
 refuses with `registry company has invalid root manifests`, since a promoted registry snapshot
 carries none. So B-044 is one fix at one shared seam (D-120).
 
@@ -532,7 +532,7 @@ What remained before the green was the installed-record question, settled in ste
 receipt becomes an `UnadoptedInstallation` (D-069) — while the configured seam writes receipts. The
 choice between widening the engine to read receipts and having the seam also write install state
 looked like a taste question and turned out to be a measurement: **the canonical receipt could not
-name the object that was installed.** After `aart marketplace install` of the fixture Skill,
+name the object that was installed.** After `aart-cli marketplace install` of the fixture Skill,
 `<data_root>/state/installations/*.json` held the coordinate, `payload_digest`, `root` and the
 deliveries, and no object digest; `install_state`'s `ArtifactEvidence` carries one. Setup is
 declared on the *package manifest*, and `_prepare_setup_object` finds it by loading the object by
@@ -564,7 +564,7 @@ promoted registry snapshot, and `RegistryArtifactVersion` carries `object_digest
 `payload_digest` but no `manifest_digest`, so canonical evidence is not a field-for-field
 substitution for `ArtifactEvidence`. And `persist_setup` (`setup_engine/io.py:89`) records that
 setup ran by replacing `setup_state_ref` inside the install-state record under its lock, which
-`setup_receipt.locate_setup_record` reads for `aart marketplace receipt show|verify|undo` — the
+`setup_receipt.locate_setup_record` reads for `aart-cli marketplace receipt show|verify|undo` — the
 canonical route has no such pointer and needs its own durable setup record. Every trust, evidence
 and policy check stays inside the engine either way.
 
@@ -577,7 +577,7 @@ artifact is installed and unconfigured has one step left, and one who is told th
 believes a Skill is configured when it is not.
 
 `complete_configured_installation` now reads the objects it just recorded and carries what they
-declare as `CompletedConfiguredInstallation.pending_setup`. `aart marketplace install` emits it as
+declare as `CompletedConfiguredInstallation.pending_setup`. `aart-cli marketplace install` emits it as
 an additive `pending_setup` key and renders it; the persistent shell carries it on
 `ConsumerScreens` and draws it under screen 11's success, through a typed field rather than the
 `notice` channel — a notice is why something was refused, and this is part of what happened. The
@@ -622,7 +622,7 @@ about it.
 
 *Marketplace evidence.* `_resolve_installed_item` re-resolves the coordinate through
 `resolve_artifact` and requires the item's evidence to equal the record's -- and the legacy
-catalogue cannot read a promoted registry snapshot, which is the same reason `aart marketplace
+catalogue cannot read a promoted registry snapshot, which is the same reason `aart-cli marketplace
 setup` refuses today with `registry company has invalid root manifests`. Two things are actually
 taken from the resolved item: the trust decision, and the indexed `setup` declaration that is
 cross-checked against the compiled one. Canonical trust is answerable honestly --
@@ -637,7 +637,7 @@ time, and compares the installed record read back out of install state.
 
 *Persistence.* `persist_setup` records that setup ran by replacing `setup_state_ref` inside the
 install-state record under its lock, and `setup_receipt.locate_setup_record` reads that pointer for
-`aart marketplace receipt show|verify|undo`.
+`aart-cli marketplace receipt show|verify|undo`.
 
 A canonical `InstallationRecord` is constructible: `ArtifactEvidence` from the coordinate and the
 `object_digest` the receipt now records, `SourceEvidence` from the configured registry source and
@@ -705,7 +705,7 @@ cross-checking against it. `EffectProof`s come from the receipt's deliveries; no
 path, so the receipt's absolute destinations must be relativized against the project root. Then a
 canonical `persist_setup`, whose durable pointer belongs on the receipt rather than in an
 install-state manifest, and a canonical equivalent of `setup_receipt.locate_setup_record` for
-`aart marketplace receipt show|verify|undo` (follow-up, not blocking the wiring).
+`aart-cli marketplace receipt show|verify|undo` (follow-up, not blocking the wiring).
 
 ## Step 7k — configured setup and reporting completion (2026-09-03)
 
@@ -949,7 +949,7 @@ is not silently downgraded to text. Three duplicates of those were written again
 `tests/tui_consumer_entry_test.py` and then reverted rather than left as a second copy of one
 behaviour in a second file.
 
-Removed: `_run_curses` (754 lines) from `agent_artifacts/tui.py`; `_legacy_setup_stage_failure` and
+Removed: `_run_curses` (754 lines) from `aart_cli/tui.py`; `_legacy_setup_stage_failure` and
 `_run_post_install_setup`, which it was the sole caller of; and the seven tests that existed only to
 drive it — three in `tests/tui_fallback_boundary_test.py`, two in `tests/tui_curation_test.py`, two
 in `tests/tui_wizard_curses_test.py` — plus the now-dangling `_run_curses` patch in the entry test.
@@ -965,7 +965,7 @@ dispatch path rather than with the wizard shell.
 
 One thing the removal exposed: `tests/tui_consumer_text_test.py` reached the legacy `model.Err`
 through `tui.Err`, an alias that existed only because `tui` happened to import it. The test now
-imports it from `agent_artifacts.model` directly, which is where it lives; the assertion is
+imports it from `aart_cli.model` directly, which is where it lives; the assertion is
 unchanged.
 
 Recorded as D-113; B-039 is now partly closed — the shell is gone, the semantic paths behind it
@@ -1069,9 +1069,9 @@ definitions with no reference anywhere in `tui.py`, in any other production modu
 What each removed test pinned was checked against a public flow before it went, rather than
 assumed:
 
-- scaffolding → `aart registry scaffold` (`registry_init_scaffold_test.py`,
+- scaffolding → `aart-cli registry scaffold` (`registry_init_scaffold_test.py`,
   `registry_cli_integration_test.py`);
-- source add / remove / sync / resubscribe → the `aart source` command surface
+- source add / remove / sync / resubscribe → the `aart-cli source` command surface
   (`source_cli_command_test.py`, 23 tests pinning the same review-then-finalize semantics);
 - vendoring → the flags half of the parity `tui_vendoring_test.py` was testing; with one front end
   left there is nothing to compare, and the assessment rendering it checked is pinned by
@@ -1105,8 +1105,8 @@ and `tests/reporting_tui_test.py` are deleted; `SourceLifecycleCursesTests` and
 
 **Step 7 does not end where this slice file said it would.** The plan recorded above — "then
 `consumer/application.py` with `lifecycle/*` and `setup_engine/*` behind it" — is wrong, and the
-correction matters more than the removal. `agent_artifacts/commands/marketplace.py`, the public
-`aart marketplace install|update|uninstall|setup` command, composes `ConsumerApplicationService`
+correction matters more than the removal. `aart_cli/commands/marketplace.py`, the public
+`aart-cli marketplace install|update|uninstall|setup` command, composes `ConsumerApplicationService`
 directly and runs the setup queue through it; `tui_marketplace.py`, which the canonical shell
 imports, takes `LifecycleItem` and `InstallMode` out of `lifecycle/model.py` and
 `installation/model.py`. That stack is load-bearing for a public flow. It is not legacy authority
@@ -1133,7 +1133,7 @@ The rest went against evidence that already existed: workspace classification ag
 planner's refusal of a snapshot with no `aart-registry.json`
 (`registry_maintenance_edges_test.py`); the "AART never commits or pushes" menu label against
 `maintainer_composition_e2e_test.py::test_validated_promotion_is_committed_locally_and_never_pushed`,
-which shows the label was stale rather than carried; source maintenance against the `aart source`
+which shows the label was stale rather than carried; source maintenance against the `aart-cli source`
 surface; ERR06 refusal-as-a-record and quit-confirms-a-basket against
 `consumer_application_e2e_test.py::ConsumerApplicationRefusalTest` and the canonical shell's own
 discard prompt.
@@ -1143,7 +1143,7 @@ performs no setup and no reporting, so since D-115 an artifact installed from th
 setup requirements lands unconfigured and no usage report is offered. `_canonical_setup_run` and
 `_complete_canonical_consumer_action` are the only implementation of that capability, so they are
 kept — production-orphaned and test-pinned — as the material to wire it back. Recorded as D-118 and
-promoted to the critical path as **B-044**. ~~the public `aart marketplace install` is
+promoted to the critical path as **B-044**. ~~the public `aart-cli marketplace install` is
 unaffected.~~ — that half is false and is corrected below.
 
 One live output was falsified by the removal and is fixed here: `InternalFailureContext.stage` was
@@ -1164,7 +1164,7 @@ the sweep.
 Every test that held a removed definition went through D-091 before its file was touched.
 `tests/tui_search_test.py`, `tests/tui_wizard_curses_test.py`, `tests/tui_install_scope_test.py`
 and `tests/tui_receipt_test.py` are deleted. `tests/setup_receipt_cli_test.py` is new and is the
-first thing anywhere to drive `aart marketplace receipt show|verify|undo` through a front end on
+first thing anywhere to drive `aart-cli marketplace receipt show|verify|undo` through a front end on
 real records — that reachability was previously asserted only against the retired wizard skins.
 `tests/consumer_shell_test.py` gains three carried assertions, each proven red against a real
 mutation; `tui_consumer_entry_test.py`, `tui_consumer_text_test.py`, `tui_source_lifecycle_test.py`,
@@ -1177,7 +1177,7 @@ mockups use it).
 Checkpoint gates on 2026-09-02: `make quality` and `make integration` are both green.
 
 **B-046 is closed (D-130).** The setup run a configured install performs is now reachable through
-`aart marketplace receipt show|verify|undo`: `locate_receipt_setup_record` reads the pointer off the
+`aart-cli marketplace receipt show|verify|undo`: `locate_receipt_setup_record` reads the pointer off the
 receipt, and `receipt_service.load_receipt` asks the canonical store before the retiring manifest.
 No legacy install state is written. What the canonical store's shape forced is recorded in D-130 --
 scope checked rather than rebound, profile taken from the record, and the manifest's "no

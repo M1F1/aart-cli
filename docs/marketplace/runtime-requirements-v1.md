@@ -1,7 +1,7 @@
 # Advisory runtime requirements v1
 
 This document defines informational runtime metadata for artifacts and the repository-supplied
-environment inventory consumed by `aart marketplace health`. It does not extend installation
+environment inventory consumed by `aart-cli marketplace health`. It does not extend installation
 compatibility and does not make AART a runtime or dependency manager.
 
 ## Responsibility boundary
@@ -67,7 +67,7 @@ maintain it directly.
 ## Health command
 
 ```sh
-aart marketplace health \
+aart-cli marketplace health \
   reference/collection/residuality \
   --environment .agent-artifacts/runtime-environment.json \
   --json

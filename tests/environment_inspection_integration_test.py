@@ -8,22 +8,22 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts.application.installation_planning import (
+from aart_cli.application.installation_planning import (
     ArtifactInstallIntent,
     inspect_requirements,
     prepare_install_plan,
 )
-from agent_artifacts.domain.effects import CopyTree
-from agent_artifacts.domain.inspection import FactState
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.requirements import (
+from aart_cli.domain.effects import CopyTree
+from aart_cli.domain.inspection import FactState
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.requirements import (
     ExecutableRequirement,
     FilesystemRequirement,
     RequirementId,
     RuntimeRequirement,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.environment_inspection import LocalEnvironmentInspector
+from aart_cli.domain.result import Ok
+from aart_cli.io.environment_inspection import LocalEnvironmentInspector
 from tests.environment_planning_test import _resolved, _selection
 
 

@@ -40,12 +40,12 @@ does not certify them. A vendor or re-vendor that completes with no findings mea
 made and pinned, and nothing more; responsibility for the copied content stays with the maintainer
 who published it. Licensing is part of that responsibility: the copy carries whatever obligations
 the upstream licence imposes, `artifact.json`'s `license` records what this registry publishes it
-under, and `aart registry audit` reports a vendored artifact that records none.
+under, and `aart-cli registry audit` reports a vendored artifact that records none.
 
 **The copy is verified against the record it carries.** `origin.input_digest` is the digest of the
 taken subtree, and it is recomputable from the package alone: the payload files not listed in
-`aart.vendor.authored` are exactly the copied ones. `aart registry validate --strict` and
-`aart registry audit` recompute it, and `aart registry revendor` recomputes it before it reaches the
+`aart.vendor.authored` are exactly the copied ones. `aart-cli registry validate --strict` and
+`aart-cli registry audit` recompute it, and `aart-cli registry revendor` recomputes it before it reaches the
 network. A vendored payload edited after vendoring therefore fails, offline, without upstream being
 contacted — a package that claims an origin must still match it. This is a consistency check, not an
 authentication: it proves the package agrees with its own record, not that the record is true.
@@ -78,9 +78,9 @@ depending registry can pin what it does not contain. Consumption federates acros
 source; publication does not.
 
 To depend on content this registry does not yet own, either author it in a separate Source checkout
-and bring its reviewed Candidate in through `aart registry scan --help` and
-`aart registry promote --help`, or vendor the upstream content into a package this registry owns
-(`aart registry vendor --help`), which copies the subtree and records where it came from. A promoted
+and bring its reviewed Candidate in through `aart-cli registry scan --help` and
+`aart-cli registry promote --help`, or vendor the upstream content into a package this registry owns
+(`aart-cli registry vendor --help`), which copies the subtree and records where it came from. A promoted
 native reference is not a route to this: it is the `entries/` case below.
 
 An `entries/` native reference is not a `requires` target. It offers a foreign package to consumers

@@ -15,19 +15,19 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts import cli
-from agent_artifacts.configuration.model import (
+from aart_cli import cli
+from aart_cli.configuration.model import (
     SourceKind,
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.paths import Platform, resolve_config_paths
-from agent_artifacts.configuration.schema import user_configuration_bytes
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.receipt_store import LocalReceiptStore
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind, SourceSnapshot
-from agent_artifacts.sources.git import acquire_git_snapshot
-from agent_artifacts.sources.model import GitSnapshotRequest
+from aart_cli.configuration.paths import Platform, resolve_config_paths
+from aart_cli.configuration.schema import user_configuration_bytes
+from aart_cli.domain.result import Ok
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind, SourceSnapshot
+from aart_cli.sources.git import acquire_git_snapshot
+from aart_cli.sources.model import GitSnapshotRequest
 from tests.configured_installation_draft_e2e_test import _published_registries
 from tests.configured_update_command_e2e_test import (
     AUTHORED_SKILL_1_3_0,
@@ -172,7 +172,7 @@ class _Environment:
         output = io.StringIO()
         transport = (
             mock.patch(
-                "agent_artifacts.sources.runtime.acquire_git_snapshot",
+                "aart_cli.sources.runtime.acquire_git_snapshot",
                 side_effect=self._local_transport,
             )
             if source_transport

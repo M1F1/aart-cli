@@ -39,7 +39,7 @@ decision log, next-work file, slice template, Codex goal and discovery backlog. 
 `M1F1/aart-cli`.
 
 ### CP-01 — Repository characterization and invariant map
-Inventory current `agent_artifacts` modules, CLI/TUI behavior, protocols, tests, quality gates and
+Inventory current `aart_cli` modules, CLI/TUI behavior, protocols, tests, quality gates and
 live acceptance. Build a traceability matrix from Product Specification invariants to existing/new
 modules and tests. Add characterization tests where refactoring could change accepted behavior. No
 broad moves yet.
@@ -122,7 +122,7 @@ input/auth contracts, policy drift, multi-registry collision, dev installs, cand
 publication/audit semantics.
 
 ### CP-16 — Global doctor and supportability
-Implement `aart doctor` as environment-wide inspection/reconciliation, readable Activity/Receipt
+Implement `aart-cli doctor` as environment-wide inspection/reconciliation, readable Activity/Receipt
 diagnostics, safe repair entry points and machine-complete JSON. Do not implement reinstall-all as
 repair.
 

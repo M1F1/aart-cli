@@ -4,7 +4,7 @@ The owner reversed D-228 for the terminal surface. Screen 45 reviews and writes 
 transaction and then says what happens next outside AART: push the Registry branch, get it
 reviewed and merged where the Registry requires that, update the local checkout, and run Registry
 Sync to observe the approved state. No key on any state of screen 45 can prepare or execute a push,
-and the supported `aart registry push` CLI contract is untouched.
+and the supported `aart-cli registry push` CLI contract is untouched.
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ import dataclasses
 import inspect
 import unittest
 
-from agent_artifacts import tui_consumer
-from agent_artifacts.application.consumer_ui import (
+from aart_cli import tui_consumer
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommandKind,
     ConsumerUiEvent,
@@ -24,22 +24,22 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import PresentationProfile, project_dashboard
-from agent_artifacts.application.maintainer_promotion import CandidatePromotionExecutionResult
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.consumer_views import PresentationProfile, project_dashboard
+from aart_cli.application.maintainer_promotion import CandidatePromotionExecutionResult
+from aart_cli.application.maintainer_views import (
     REGISTRY_WORKSPACE_READY_ROW,
     MaintainerRegistryCommitView,
     MaintainerScreen,
     project_maintainer_registry_commit,
 )
-from agent_artifacts.tui_consumer import (
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     ConsumerScreens,
     _reload,
     compose_frame,
 )
-from agent_artifacts.tui_layout import CONTENT_MEASURE
-from agent_artifacts.tui_maintainer import render_maintainer_registry_commit
+from aart_cli.tui_layout import CONTENT_MEASURE
+from aart_cli.tui_maintainer import render_maintainer_registry_commit
 from tests.maintainer_promotion_shell_execution_test import _on, _prepared
 from tests.screen_cases import screen_cases
 

@@ -9,7 +9,7 @@ class SourceBoundaryTest(unittest.TestCase):
     def test_source_model_validation_pointer_and_application_have_no_durable_io_imports(
         self,
     ) -> None:
-        root = Path(__file__).parents[1] / "agent_artifacts"
+        root = Path(__file__).parents[1] / "aart_cli"
         files = (
             root / "sources" / "model.py",
             root / "sources" / "pointer.py",
@@ -24,7 +24,7 @@ class SourceBoundaryTest(unittest.TestCase):
             "subprocess",
             "tempfile",
             "urllib",
-            "agent_artifacts.io",
+            "aart_cli.io",
         }
         for path in files:
             with self.subTest(path=path):
@@ -45,7 +45,7 @@ class SourceBoundaryTest(unittest.TestCase):
                 )
 
     def test_only_io_adapter_invokes_subprocess(self) -> None:
-        root = Path(__file__).parents[1] / "agent_artifacts"
+        root = Path(__file__).parents[1] / "aart_cli"
         subprocess_importers: list[Path] = []
         for path in root.rglob("*.py"):
             tree = ast.parse(path.read_text(encoding="utf-8"))

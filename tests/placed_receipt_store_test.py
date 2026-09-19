@@ -13,17 +13,17 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.domain.effects import DeliveryKind
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.effects import DeliveryKind
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.receipts import ArtifactDelivery, PlacedArtifactReceipt
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
-from agent_artifacts.io.receipt_store import RECEIPT_UNREADABLE, LocalReceiptStore
+from aart_cli.domain.receipts import ArtifactDelivery, PlacedArtifactReceipt
+from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.selection import OwnershipKind, OwnershipReason
+from aart_cli.io.receipt_store import RECEIPT_UNREADABLE, LocalReceiptStore
 
 COORDINATE = ArtifactCoordinate(
     SourceAlias("public"), ArtifactIdentity("skill", "code-review"), "2.0.0"

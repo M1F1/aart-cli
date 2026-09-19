@@ -16,25 +16,25 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent_artifacts.application.maintainer import reconcile_source_scan
-from agent_artifacts.application.promotion import (
+from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.application.promotion import (
     PromotionEvidence,
     load_registry_versions,
     plan_bulk_promotion,
     project_promotion,
 )
-from agent_artifacts.domain.candidates import assess_candidate
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.registry import PromotionMode
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.candidates import assess_candidate
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
+from aart_cli.protocol.paths import parse_relative_path
 
 MARKER = ".aart-manual-lab.json"
 SCHEMA = 1
@@ -523,7 +523,7 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
         (
             sys.executable,
             "-m",
-            "agent_artifacts.cli",
+            "aart_cli.cli",
             "registry",
             "init",
             "--source",
@@ -645,7 +645,7 @@ def _shell(root: Path, role: str) -> int:
     env, cwd = shell_environment(root, role)
     env["AART_MANUAL_ROLE"] = role
     print(f"AART manual lab shell ({role}). HOME={env['HOME']}")
-    print(f"Run AART as: python3 -m agent_artifacts.cli ...   (cwd: {cwd})")
+    print(f"Run AART as: python3 -m aart_cli.cli ...   (cwd: {cwd})")
     print("Leave with: exit")
     return subprocess.call((os.environ.get("SHELL", "/bin/sh"),), cwd=cwd, env=env)
 
@@ -657,7 +657,7 @@ def _open(root: Path, role: str) -> int:
     project = root / ("repositories/registry" if role == "maintainer" else "consumer-project")
     env = _home(home, remotes)
     return subprocess.call(
-        (sys.executable, "-m", "agent_artifacts.cli"),
+        (sys.executable, "-m", "aart_cli.cli"),
         cwd=project,
         env=env,
     )

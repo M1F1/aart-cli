@@ -104,7 +104,7 @@ macOS test repeats the whole flow against a real temporary Keychain.
 - `application/installation_verification.py` names six ways an installation drifts, in a fixed
   order, and treats an unmeasurable launcher as drift (D-028).
 - Runtime independence is proven negatively: the launched server reports
-  `importlib.util.find_spec("agent_artifacts") is None`, and its `sys.executable` is the
+  `importlib.util.find_spec("aart_cli") is None`, and its `sys.executable` is the
   artifact-owned interpreter.
 - The real Keychain path is proven end to end on macOS: a 256-bit token stored in a temporary
   keychain reaches the launched process, and only its SHA-256 is ever asserted on.

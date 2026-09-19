@@ -6,12 +6,12 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.protocol.hashing import file_entry, json_digest, tree_digest
-from agent_artifacts.protocol.json import canonical_json_bytes
-from agent_artifacts.protocol.native_models import (
+from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.capabilities import Capability
+from aart_cli.protocol.hashing import file_entry, json_digest, tree_digest
+from aart_cli.protocol.json import canonical_json_bytes
+from aart_cli.protocol.native_models import (
     ArtifactManifest,
     CompatibilitySpec,
     ImporterProvenance,
@@ -21,20 +21,20 @@ from agent_artifacts.protocol.native_models import (
     Provenance,
     SetupReference,
 )
-from agent_artifacts.protocol.native_schema import (
+from aart_cli.protocol.native_schema import (
     artifact_manifest_to_json,
     provenance_to_json,
 )
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.registry_models import (
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.registry_models import (
     IndexArtifact,
     IndexProvenance,
     IndexSetup,
     ReviewRecord,
 )
-from agent_artifacts.protocol.semver import SemVer, VersionBounds
-from agent_artifacts.security import (
+from aart_cli.protocol.semver import SemVer, VersionBounds
+from aart_cli.security import (
     BASELINE_RULES_DIGEST,
     AssessmentCoverage,
     AssessmentStatus,
@@ -50,7 +50,7 @@ from agent_artifacts.security import (
     not_scanned_assessment,
     parse_assessment,
 )
-from agent_artifacts.store.model import ObjectCandidate, make_object_candidate
+from aart_cli.store.model import ObjectCandidate, make_object_candidate
 from tests.credential_fixtures import access_token, assignment
 
 
@@ -771,7 +771,7 @@ class SecurityBaselineContentTest(unittest.TestCase):
         self.assertEqual(assessment.status, AssessmentStatus.PARTIAL)
 
     def test_baseline_implementation_has_no_network_process_or_optional_imports(self) -> None:
-        root = Path(__file__).parents[1] / "agent_artifacts" / "security"
+        root = Path(__file__).parents[1] / "aart_cli" / "security"
         forbidden = {"subprocess", "socket", "requests", "httpx", "urllib", "aiohttp"}
         imported: set[str] = set()
         for path in root.glob("*.py"):

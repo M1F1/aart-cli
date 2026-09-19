@@ -2,12 +2,13 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–18 are **done** on `refactor/cp-26-legacy-removal`; **step 18a is next**. Step 18 carried
-one item into 18a rather than doing it twice: the Push review's branch suggestion is still the
-constant `aart-cli/registry-update`, and 18a renames that namespace. The carry-over is written
-into 18a's own section of the slice. B-057 and B-149
-are both closed. The plan has **22 tasks (17 done)**: the owner added **CP-26.18a** between
-18 and 19 without renumbering existing ids. Task 21 remains the final broad verification.
+Steps 1–18 are **done** on `refactor/cp-26-legacy-removal`; **step 18a is in progress** — its
+first half, the executable and import namespace, is on the branch and green. Step 18 carried one
+item into it rather than doing it twice: the Push review's branch suggestion is still the constant
+`aart-cli/registry-update`, and 18a renames that namespace. The carry-over is written into 18a's own
+section of the slice. B-057 and B-149 are both closed. The plan has **22 tasks (17 done)**: the
+owner added **CP-26.18a** between 18 and 19 without renumbering existing ids. Task 21 remains the
+final broad verification.
 
 ### Accepted installation contract to carry into implementation (2026-09-19)
 
@@ -30,37 +31,48 @@ reference allowances in D-313 are superseded; B-150 is promoted into 19 with B-1
 prove the same isolation for local/remote Registry aliases. Read the detailed 18a/19 acceptance in
 the slice; do not mark either task done for this specification-only segment.
 
-`aart author init` generates all five kinds; `aart author check` answers both halves of §1.4; the
+`aart-cli author init` generates all five kinds; `aart-cli author check` answers both halves of §1.4; the
 README opens with the route a new user runs, followed by a bounded `## What AART is`, a
 `## Documentation` index reaching all 33 public documents, and the licence -- four sections and
 nothing else, because step 15 moved the detail into eight linked documents.
 `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–17 (D-321 to D-341).
 
-### Execute CP-26.18 next
+### Execute CP-26.18a next — it is already underway
 
-*Registry Maintainer may push its publish-ready local snapshot.* Plan step 18, and the start of
-phase 4. The full placement and acceptance contract is in this slice's **Step 18** section and in
-Product Specification §164.7; D-312 supersedes CP-23 task 05/D-255. Read both before designing.
+*Use `aart-cli` throughout active names, and give the product one portable home.* Plan step 18a,
+added by the owner on 2026-09-19 between 18 and 19 without renumbering. The full acceptance contract
+is in this slice's **Step 18a** section and in Product Specification §169.1-3/5 with INV-244/247.
 
-**The shape of it.** `[p] Push` is an action on screen 46's local Registry workspace row, never on
-initialization, rebuild, single or bulk promotion, and never on a connected approved-snapshot row,
-a Candidate or a Source. The row must not collapse three different facts: the accepted snapshot
-read from the Registry's default branch, the local snapshot under maintenance (worktree path,
-branch, `HEAD`, canonical content digest) and push readiness.
+**Already on the branch, uncommitted history aside.** The import package is `aart_cli`, the single
+console script is `aart-cli`, and every command line the product prints, documents or runs starts
+`aart-cli `. The Enterprise shim, the pin file `.aart-cli-version`, the unsupported-version
+diagnostic and `scripts/distribution_smoke.py` moved with it, and the schema freeze was regenerated
+because the rename moved every normative schema input path (D-275). `unit`, `integration`, `lint`,
+`typecheck`, `format-check`, `packaging-check`, `docs-check` and `secret-shape-check` are green over
+that state.
 
-**Readiness is computed, not remembered.** Clean worktree and index, exact `HEAD`, reproducible
-canonical outputs with no pending build change, and the Registry's mandatory gate set green over
-those committed bytes -- through one application-level publication preparation shared with
-`registry publish`, not a third list. Never inferred from a wizard flag, a commit subject or the
-presence of unpushed commits. Every blocker is visible.
+**What is left, in order.** First the names the *filesystem* sees, which the rename above
+deliberately did not touch: manifest discovery (`aart.yaml`/`aart.json` -> `aart-cli.yaml`/
+`aart-cli.json`), generated files (`aart-registry.json`, `aart-source.json`,
+`.github/workflows/aart-registry.yml`), managed block markers `>>> agent-artifacts ...`, the project
+state directory `.agent-artifacts`, the `AART_*` environment and CI variables -> `AART_CLI_*`,
+schema/URI identifiers and the branch prefix. Then one normalized absolute `AART_CLI_HOME`
+defaulting to `<user-home>/.aart-cli`, resolved once at the process boundary, with the §169.2 layout
+and no XDG or platform root anywhere near it, plus the adapter-owned path policy for private
+installation trees under harness directories. Then step 16's executed installation/README contract
+re-run against the changed advertised commands.
 
-**Targets.** The current named branch when it is neither `main` nor the Registry default; otherwise
-the maintainer enters a new review branch. The worktree holding `working_at` must itself be the
-canonical Registry -- a Source, a connected snapshot or an unrelated repository is never a target.
-`publish` still ends at the reviewed local commit and does not push.
+**Carried in from step 18.** The Push review's branch suggestion is still the constant
+`aart-cli/registry-update`. It must come from the most recent producing action, which needs the
+reducer to carry which action produced the commit -- the commit subject cannot tell init from
+rebuild, since `publish` writes both. It waited for this step because this step renames that
+namespace; implement it with the new names.
 
-**Step 18 must remove drift** between that shared contract, CLI `publish` and the generated Registry
-workflow rather than introduce a third gate list. That is part of the step, not a follow-up.
+**Delete, do not bridge.** No fallback reader, no old-path probe, no dual write, no migration
+command and no alias survives a rename here (D-334, §169.1). A guard that fails because a name moved
+is a guard doing its job: fix the name, not the guard. The one exception so far is recorded in
+`tests/adoption_first_contact_test.py` -- the Product Specification names commands the executable
+does not have yet, on purpose, so it is not instructions to a reader.
 
 ### What the evidence said, so it is not re-derived
 
@@ -79,13 +91,13 @@ workflow rather than introduce a third gate list. That is part of the step, not 
 - A targeted mutation that does not change a file's length leaves a `__pycache__` entry CPython
   considers current. Clear `__pycache__` after reverting one (CP-26.10 record).
 - Never run `ruff format .` repo-wide: it rewrites Python code blocks inside Markdown, including
-  the Product Specification. Scope it to `agent_artifacts tests scripts` (B-153).
+  the Product Specification. Scope it to `aart_cli tests scripts` (B-153).
 
 Four open findings:
 
 - **B-151** — seven shipped documents still describe `aart.lock.json` and `aart.index.json` as files
   AART writes. Not gated by `make docs-check`. A precondition of CP-26.21.
-- **B-154** — `aart author check` reports a Collection manifest as `skip` rather than checking it.
+- **B-154** — `aart-cli author check` reports a Collection manifest as `skip` rather than checking it.
 - **B-155** — 274 mutants survive in `authoring/skeleton.py`, almost all in generated prose.
 - **B-150** — promoted into mandatory CP-26.19 acceptance (D-332/D-333): private harness-owned
   installation trees and separately entered per-installation inputs, now in Product Specification
@@ -150,12 +162,12 @@ withdrawn; canonical `publish` remains the aggregate. The replacement test is
 Run it with:
 
 ```
-poetry run python -c "import agent_artifacts.application, unittest; \
+poetry run python -c "import aart_cli.application, unittest; \
   unittest.main(module=None, argv=['x','tests.registry_cli_test'])"
 ```
 
 The indirection is not decoration: importing `tests.registry_cli_test` directly hits a circular
-import through `registry_commands.model`, and importing `agent_artifacts.application` first breaks
+import through `registry_commands.model`, and importing `aart_cli.application` first breaks
 the cycle. Use it for every test module under `tests/` that touches registry commands.
 
 ### What step 2 deletes
@@ -166,20 +178,20 @@ only its legacy branch in step 3. Line numbers are a map, not coordinates.
 
 | File | What goes |
 |---|---|
-| `agent_artifacts/cli.py` | `p_scaffold` parser and the two `registry_action == "scaffold"` default-injections |
-| `agent_artifacts/curation/model.py` | `CurationAction.SCAFFOLD`; `CurationAction.PUBLISH` survives |
-| `agent_artifacts/curation/runtime.py` | `_prepare_scaffold`, its imports and dispatch entries; `_prepare_publish` survives |
-| `agent_artifacts/commands/registry.py` | scaffold dispatch only; `_run_publish` survives |
-| `agent_artifacts/registry_commands/planning.py` | `plan_artifact_scaffold` 705–748 and `_payload` 616–702 — verify `_payload` has no other caller before cutting it |
-| `agent_artifacts/registry_commands/model.py` | `RegistryOperation.SCAFFOLD`, `ArtifactScaffoldOptions` and its validator; `PUBLISH` survives |
-| `agent_artifacts/registry_commands/__init__.py` | the `plan_artifact_scaffold` import (18) and `__all__` entry (43) |
-| `agent_artifacts/application/registry_commands.py` | `prepare_artifact_scaffold` 58–66 and its import at 25 |
-| `agent_artifacts/application/__init__.py` | the import (10) and `__all__` entry (56) |
-| `agent_artifacts/protocol/native_tree.py` | the remediation at 99 tells the reader to run `registry scaffold --help`; it must name `scan`/`promote` instead |
-| `agent_artifacts/registry_commands/templates.py` | the generated tutorial line at 377 runs `registry scaffold` |
-| `agent_artifacts/wizard.py` | `"scaffold"` at 175 |
+| `aart_cli/cli.py` | `p_scaffold` parser and the two `registry_action == "scaffold"` default-injections |
+| `aart_cli/curation/model.py` | `CurationAction.SCAFFOLD`; `CurationAction.PUBLISH` survives |
+| `aart_cli/curation/runtime.py` | `_prepare_scaffold`, its imports and dispatch entries; `_prepare_publish` survives |
+| `aart_cli/commands/registry.py` | scaffold dispatch only; `_run_publish` survives |
+| `aart_cli/registry_commands/planning.py` | `plan_artifact_scaffold` 705–748 and `_payload` 616–702 — verify `_payload` has no other caller before cutting it |
+| `aart_cli/registry_commands/model.py` | `RegistryOperation.SCAFFOLD`, `ArtifactScaffoldOptions` and its validator; `PUBLISH` survives |
+| `aart_cli/registry_commands/__init__.py` | the `plan_artifact_scaffold` import (18) and `__all__` entry (43) |
+| `aart_cli/application/registry_commands.py` | `prepare_artifact_scaffold` 58–66 and its import at 25 |
+| `aart_cli/application/__init__.py` | the import (10) and `__all__` entry (56) |
+| `aart_cli/protocol/native_tree.py` | the remediation at 99 tells the reader to run `registry scaffold --help`; it must name `scan`/`promote` instead |
+| `aart_cli/registry_commands/templates.py` | the generated tutorial line at 377 runs `registry scaffold` |
+| `aart_cli/wizard.py` | `"scaffold"` at 175 |
 
-**One trap.** Every publish symbol survives. `agent_artifacts/compiler/model.py` defines
+**One trap.** Every publish symbol survives. `aart_cli/compiler/model.py` defines
 `PUBLISH = "publish"` as a compiler phase, while `CurationAction.PUBLISH` and
 `RegistryOperation.PUBLISH` are the retained canonical aggregate. Delete none of them.
 
@@ -195,7 +207,7 @@ only its legacy branch in step 3. Line numbers are a map, not coordinates.
 - Read every other scaffold mention before cutting it. A publish mention is not removal work.
 
 **Definition of done for step 2:** the replacement test passes,
-`grep -rn "CurationAction.SCAFFOLD\|RegistryOperation.SCAFFOLD\|plan_artifact_scaffold" agent_artifacts/` is empty, one recorded
+`grep -rn "CurationAction.SCAFFOLD\|RegistryOperation.SCAFFOLD\|plan_artifact_scaffold" aart_cli/` is empty, one recorded
 targeted semantic mutation, `make lint format-check typecheck` plus the affected test modules green,
 then `handoff-plan done 2` and a commit.
 
@@ -376,7 +388,7 @@ needing a Sync and names the remedy, and every other Source loads. Its evidence 
 refusal leaves the Source exactly as it was. The only window left is the two adjacent writes, which
 is what task 01's tolerance covers.
 
-**Task 03 is done (D-282).** `aart doctor` names a Candidate history that does not bind the pin,
+**Task 03 is done (D-282).** `aart-cli doctor` names a Candidate history that does not bind the pin,
 with both revisions and the remedy, and exits non-zero; the Maintainer Source Sync performs the
 repair, which it previously refused to do over exactly that state.
 
@@ -430,7 +442,7 @@ Still open, and not agent work: the owner's manual acceptance walk
 
 Reproduction for tasks 01–03, from the owner's own store: a pinned revision and a Candidate history
 recorded at a different one. `read_maintainer_views` then refuses everything with
-`maintainer-composition-invalid`, `aart source sync` reports `unchanged` and writes no history, and
+`maintainer-composition-invalid`, `aart-cli source sync` reports `unchanged` and writes no history, and
 the only recovery found was moving `<data root>/sources/<instance-id>/candidates` aside.
 
 **CP-23 is CLOSED** — the owner closed it on 2026-09-16 rather than recording the manual
@@ -704,7 +716,7 @@ CP-20 is **IMPLEMENTED — AWAITING MANUAL RETEST**. All seven steps in
 `docs/refactor/plan.json` are done: the Registry/Doctor/install wording and navigation are clear;
 Registry disconnection is reviewed and bounded; the disposable MCP exercises a provider-owned
 credential prompt; fresh manual labs own isolated HOME/XDG, repositories, bare remotes and unique
-branches; and `aart reset` plans only exact AART-owned state behind two confirmations.
+branches; and `aart-cli reset` plans only exact AART-owned state behind two confirmations.
 
 Closing evidence is green: six targeted semantic mutations were killed; the focused CP-20 set
 passes 177 tests plus eight subtests; `make quality` passes 3,677 tests (one skipped) at 85.36%
@@ -826,7 +838,7 @@ B-084/QA-010 and B-087/QA-013 are now **fixed and awaiting manual retest** (D-17
 routes `s` to a distinct `REGISTRY_SYNC` action whose review (21c) names the ref that will be
 fetched, states PS 161.7's rule that a registry refresh is not an artifact update, and says a failed
 fetch keeps the snapshot already held; execution goes through `sync_configured_sources`, the single
-transaction `aart source sync` also uses, and `_prepare_registry_refresh` refuses a row that is not
+transaction `aart-cli source sync` also uses, and `_prepare_registry_refresh` refuses a row that is not
 a connected registry, so INV-199 stays testable rather than asserted. `registry init` now writes the
 usage-reporting Issue Form and its two workflows only when `--usage-reporting-repository` names a
 destination, and the generated README describes the registry that was actually created. Evidence:
@@ -881,7 +893,7 @@ B-090/QA-016 is now **fixed and awaiting manual retest** (D-186). Maintainer scr
 Initialize Registry: a form (46a) collecting the registry ID, display name, an optional
 usage-reporting destination and the one opt-in local commit, and a review (46b) that names all five
 stages and states that nothing will be pushed or merged. One confirmation runs init → lock → build →
-validate → audit fail-fast through `agent_artifacts/io/registry_bootstrap.py`, which is the ordering
+validate → audit fail-fast through `aart_cli/io/registry_bootstrap.py`, which is the ordering
 and nothing else: the three writing stages go through the same `LocalCurationService` prepare/
 finalize pair the CLI drives and the two gates are the same planning functions, so there is no
 second implementation of what a registry is. `registry_identity_refusal` judges the form's identity
@@ -894,7 +906,7 @@ leaves four real files in a project checkout) and `tests/maintainer_navigation_t
 targeted mutations, all killed, three of which found claims that were not yet held.
 
 B-095/QA-021's **application half is built and green** (D-187); its TUI half is the next piece of
-work. `agent_artifacts/io/registry_adoption.py` gives a maintainer the second onboarding model beside
+work. `aart_cli/io/registry_adoption.py` gives a maintainer the second onboarding model beside
 the monitored Source: `scan_repository` acquires one credential-free Git URL at one pinned commit,
 compiles only committed `aart.yaml`/`aart.json` manifests through `compile_author_snapshot`,
 reconciles and validates the resulting Candidates entirely in memory, and writes nothing — a test
@@ -925,8 +937,8 @@ Git transport while driving a real author repository and real registry checkout.
 `tests/maintainer_repository_adoption_test.py` (8 tests); three targeted mutations killed (route,
 adoptability filter, exact selection crossing the port).
 
-B-095/QA-021 is now **complete and awaiting manual retest** (D-192). `aart registry adopt` and
-`aart registry check-upstream` are the machine-complete CLI projection, and they are a skin over
+B-095/QA-021 is now **complete and awaiting manual retest** (D-192). `aart-cli registry adopt` and
+`aart-cli registry check-upstream` are the machine-complete CLI projection, and they are a skin over
 `io/registry_adoption.py` rather than a second implementation: no planning, discovery or provenance
 logic lives in `commands/registry.py`, so the CLI and the TUI cannot drift into two answers about
 what adopting means. `adopt` with no `--artifact` is a complete answer on its own — it lists every
@@ -1085,7 +1097,7 @@ a declaration is not a dependency graph (D-152).
 Step 2 (INV-072-080, the CI/release profile contract) is done: `tests/enterprise_ci_template_test.py`
 holds the five variable/secret/egress/thinness claims, and `tests/aggregate_gate_test.py` proves the
 aggregate gate by extracting its shell from the YAML and *running* it (D-153). That found a shipped
-defect -- the registry `aart registry init` emits had no requirable aggregate check name, and GitHub
+defect -- the registry `aart-cli registry init` emits had no requirable aggregate check name, and GitHub
 counts a skipped required check as satisfied -- so the emitted registry now gets one too.
 
 Step 3 (legacy removal) is done, and B-070's four unreachable modules are all decided.
@@ -1100,7 +1112,7 @@ is parsed by three test files and ignored by the product (D-155, B-072).
 Step 4 (docs reconciled) is done. It applied steps 1-3's method to prose — a document that names a
 command is a checkable claim about `cli.build_parser()` — and compared both directions, because an
 invented command wastes a reader's time while an omitted one is capability nobody can find. The
-omission was `aart doctor`: the whole of CP-16, an entire top-level command, documented nowhere in
+omission was `aart-cli doctor`: the whole of CP-16, an entire top-level command, documented nowhere in
 the README. The same comparison now covers the product's own user-facing strings, since a
 remediation is documentation read at the worst possible moment. Four documents carried stale 0.1
 verbs, and the three root trackers (`PLAN.md`, `PROGRESS.md`, `TODO.md`) pointed a newcomer at the
@@ -1134,7 +1146,7 @@ boundary; and release CI verifies the built wheel against the tag instead of com
 maintained source values (D-160 through D-165). Issued schema freezes remain immutable.
 
 The scoped mutmut run found and fixed a runner defect: asking for `scripts/release_artifact.py`
-still copied only `agent_artifacts`, generated no useful mutants and then failed to import the
+still copied only `aart_cli`, generated no useful mutants and then failed to import the
 target. The runner now derives source roots from `ONLY`. The final run generated 373 mutants,
 killed 174 and left four inspected equivalent/cosmetic survivors; the 195 real-install/entry-point
 mutants are exercised once by the real artifact gate instead of reinstalling a wheel for every
@@ -1160,7 +1172,7 @@ delete. Unreachability is a reason to ask, never on its own an answer.
 
 **CP-14 Maintainer TUI 30–53 is VERIFIED.** All seven steps are complete: screens 30–53 are live in
 the one shared shell, and step 7's legacy retirement finished with the evidence-led orphan sweep of
-`agent_artifacts/tui.py` (D-129), B-044 closed by D-128 and B-046 closed by D-130. The CP-14
+`aart_cli/tui.py` (D-129), B-044 closed by D-128 and B-046 closed by D-130. The CP-14
 narrative below is kept as the record of how it got there.
 
 **CP-15 Accepted lifecycle/edge-case hardening 54–100 is VERIFIED.** The slice document is
@@ -1172,7 +1184,7 @@ the verb an operator actually runs makes of it. All sixteen now carry public-flo
 narrative below is kept as the record of how each one got there.
 
 **CP-16 Global doctor and supportability is VERIFIED.** Step 1 adds the public, read-only
-`aart doctor` (D-139): one environment-wide observation of canonical project and user installations
+`aart-cli doctor` (D-139): one environment-wide observation of canonical project and user installations
 feeds both the accepted screen-29 health projection and the existing minimal-reconciliation
 planner. Its JSON carries every item, component drift and full repair plans; its human output names
 the same artifacts and reasons. It resolves no Marketplace content and applies nothing. Step 1 is
@@ -1186,7 +1198,7 @@ B-051 is closed and INV-223 is EVIDENCED; B-010 remains the deliberately separat
 dependency-cache capability. Eight new E2E scenarios, both scoped mutation passes, all nine quality
 gates (3,251 tests, 85.37% branch coverage) and 287 integration tests are green.
 
-Step 3 is VERIFIED (D-141): `aart doctor --repair` reviews and applies exactly one minimal plan.
+Step 3 is VERIFIED (D-141): `aart-cli doctor --repair` reviews and applies exactly one minimal plan.
 Review and confirmation are separate invocations and the review's digest is authorization input to
 the confirmation; a review applies nothing, `--yes` without the digest is refused, and a machine
 that moved returns the recomputed plan rather than applying the stale one. The staleness check
@@ -1197,10 +1209,10 @@ the exactness test, whose name claimed source *and* version while only ever omit
 removing the version requirement killed nothing; it now runs both under-specified forms and each
 mutation half kills its own subtest. B-059 records the one survivor left standing.
 
-Step 4a is VERIFIED (D-142). `aart marketplace receipt verify` finds an interrupted run's working
+Step 4a is VERIFIED (D-142). `aart-cli marketplace receipt verify` finds an interrupted run's working
 copy only if the operator already knows which receipt to verify, because the probe filters the run
 root by one receipt's `plan_hash[:16]` -- and being interrupted is usually the reason they stopped
-watching. `aart doctor` is now told nothing and finds it anyway, naming the plan-hash prefix that
+watching. `aart-cli doctor` is now told nothing and finds it anyway, naming the plan-hash prefix that
 ties it back to its run. `LAF-61` and `LAF-66` are both preserved and both have a mutation proving
 it. B-052 and B-055 were triaged and stay in the backlog: neither is reachable from a global report
 and no mandatory invariant requires either.
@@ -1215,7 +1227,7 @@ cannot be distinguished by a fixture holding a single working copy.
 Step 4b is VERIFIED (D-143). The audit trail INV-191 names had `project_activity`,
 `activity_from_receipts`, `activity_view_to_data` and `render_activity` all built and referenced
 only by the TUI's assembly -- the third capability in this slice found at a seam with no verb
-reporting it. `aart doctor` now carries the day-grouped timeline and each recorded action's own undo
+reporting it. `aart-cli doctor` now carries the day-grouped timeline and each recorded action's own undo
 answer, and INV-192 is held as a pair one flow produces: an install reports an undo naming
 `delivery:claude` and `payload`, the uninstall that follows reports none. D-143 records the mistake
 the first draft made -- cross-checking against `marketplace receipt show`, which returns the *setup*
@@ -1255,7 +1267,7 @@ B-060's 84 in `_run_repair` and 47 in the report composition, now B-061.
 
 Step 5 is VERIFIED (D-145) and **CP-16 is VERIFIED**. Three things closed it.
 
-The front door: `aart doctor --help` still described the step-1 report, naming one of the six
+The front door: `aart-cli doctor --help` still described the step-1 report, naming one of the six
 sections the command now carries, so four steps of newly reachable capability stayed undiscoverable
 short of running the verb and reading its output. `tests/doctor_help_e2e_test.py` holds the help
 against the report it fronts.
@@ -1337,7 +1349,7 @@ the boundary. INV-238, 240, 241 and 242 move to EVIDENCED; the Git hop stays wit
 layout `registry publish` refuses.
 
 **Step 6 before it** is
-`tests/policy_drift_e2e_test.py`, and it closes two invariants with one fact. `aart marketplace
+`tests/policy_drift_e2e_test.py`, and it closes two invariants with one fact. `aart-cli marketplace
 status` reported one word per installation and it was about the payload: an artifact installed under
 a permissive policy, on a machine whose administrator later required `registry-reviewed` trust,
 reported `current` while `marketplace install` would have refused the very same artifact. And
@@ -1356,9 +1368,9 @@ judged.
 **Steps 1, 2, 3, 4a, 4b and 5 before it.** Step 5 is
 `tests/withdrawal_and_purge_e2e_test.py`, and 165.10's two statements needed measuring separately.
 The purge half passed on shipped code and the reason is the strongest one available: there is no
-`purge` verb anywhere in `agent_artifacts` -- the word does not appear -- and the registry lifecycle
+`purge` verb anywhere in `aart_cli` -- the word does not appear -- and the registry lifecycle
 only deprecates and revokes. So what the file measures is the *ordinary* withdrawal: an upstream
-that deletes an artifact and re-points its Collection, then `aart source sync`. The artifact stops
+that deletes an artifact and re-points its Collection, then `aart-cli source sync`. The artifact stops
 being offered, installing it is refused with a remediation, **what is already installed is untouched
 and reports `removed-upstream`**, the payload bytes stay in the object store, and `uninstall` still
 works -- the last held by a deliberate special case, since uninstall resolves against the manifest
@@ -1401,7 +1413,7 @@ dependencies cached, and AART holds all three as separate refusals under distinc
 `--offline` is one boolean. The dependency layer had no test at all before this, so removing
 `--no-index`/`--offline` from the installer argv would have left every gate green while every
 `--offline` install silently reached the network. INV-223 stays PARTIAL against a named gap: nothing
-*reports* the three before an install is attempted (B-051, for CP-16's `aart doctor`).
+*reports* the three before an install is attempted (B-051, for CP-16's `aart-cli doctor`).
 
 Step 2 is `tests/source_upstream_movement_e2e_test.py` plus one
 promotion-planning claim: a moving upstream may offer new work and may not rewrite what an
@@ -1409,11 +1421,11 @@ installation says it was installed from, and D-089's rebinding of an already-app
 pinned to `registry_snapshot` alone with the promotion audit byte-identical. INV-219 moves to
 EVIDENCED and INV-216's consumer half is closed.
 
-Step 1 is `tests/source_sync_command_e2e_test.py`, which drives `aart source sync` over a real
+Step 1 is `tests/source_sync_command_e2e_test.py`, which drives `aart-cli source sync` over a real
 source whose upstream published an invalid revision, and INV-218 moves to EVIDENCED. Writing it
 found D-132: `could-not-check` -- the health an explicit last-known-good fallback produces -- was
 read as "this source is gone" in three places, so one invalid upstream revision made
-`aart marketplace status` report every installation as `source-unavailable` and made `install` and
+`aart-cli marketplace status` report every installation as `source-unavailable` and made `install` and
 `update` fail on a plan-construction invariant carrying no remediation. Product Specification
 165.11 settles it.
 
@@ -1495,7 +1507,7 @@ through the same real Git repository and installs it with public verbs only; the
 receipt effects (`copy-tree`, `create-python-environment`, `write-file`, `configure-harness`) show a
 virtual environment was really built, and the launcher it wrote then answers `initialize`,
 `tools/list` and `tools/call` over stdio. The server runs on the interpreter the install created,
-with the `--strict` argument the manifest declared, and cannot import `agent_artifacts`. A second
+with the `--strict` argument the manifest declared, and cannot import `aart_cli`. A second
 test starts what `.mcp.json` names, which is the file a harness actually consults.
 
 The artifact declares no inputs deliberately, and that is now a claim rather than a choice: the CLI
@@ -1507,7 +1519,7 @@ killed nothing, because the CLI never reaches it, and the refusal an operator me
 `source.resolved_revision`, which is the maintainer half of the chain still being synthetic.
 
 Step 4's drift half is VERIFIED, and it is the first step in this slice to change production code.
-Damaging the live Git-backed MCP installation four ways found that `aart doctor` reported
+Damaging the live Git-backed MCP installation four ways found that `aart-cli doctor` reported
 `health: ready, drift: []` for every kind of payload damage -- while the server exited 1 -- and was
 precise about a rewritten launcher in the same report. D-150 has the cause and the fix: both
 observers measure the payload, and both current-state builders discarded that measurement before
@@ -1585,9 +1597,9 @@ non-extra `Requires-Dist` in the built wheel. Both are worth keeping and neither
 runtime module that imports a development tool *inside a function body* declares nothing, adds no
 `Requires-Dist`, ships in the wheel, and violates the invariant on the first call. Measured, not
 supposed -- with `import hypothesis` inserted into a function body in
-`agent_artifacts/application/installed_state.py`, `dev_tools_test` and `packaging_test` were green
+`aart_cli/application/installed_state.py`, `dev_tools_test` and `packaging_test` were green
 and `packaging_check` said `packaging check OK`. `tests/runtime_purity_test.py` reads every module
-under `agent_artifacts/` with `ast` and asserts none imports a development tool, the test suite or
+under `aart_cli/` with `ast` and asserts none imports a development tool, the test suite or
 the gate scripts; its forbidden set is derived from Poetry's dev group at test time rather than
 hardcoded, and `ast` is deliberate, since import-time introspection sees only module-level imports
 and would miss the one shape that defeats both incumbent checks. INV-071 moves to EVIDENCED.
@@ -1608,7 +1620,7 @@ branch protection depends on, was covered by nothing. `tests/aggregate_gate_test
 that script and *runs it under bash* for each combination of `needs.*.result`, which is INV-076
 collecting on its own promise that such logic stays runnable outside GitHub Actions.
 
-The second situation was a real defect. The CI `aart registry init` writes had no aggregate at all:
+The second situation was a real defect. The CI `aart-cli registry init` writes had no aggregate at all:
 `registry-quality` and `registry-quality-private-image`, two container shapes of which one ever
 runs, each a matrix -- so a registry owner protecting `main` had no name that is stable across
 configurations, and naming an arm their deployment skips is worse than useless, because GitHub reads
@@ -1640,7 +1652,7 @@ records the enterprise wart and says explicitly that it is not an INV-078 findin
 
 **CP-18 step 3 is PARTIAL.** Codex removed seven production modules and the five test files that
 existed only to drive them (-2552 lines) and added `tests/legacy_authority_reachability_test.py`,
-which builds the import graph from `agent_artifacts.cli` and `__main__` and asserts on an exact set
+which builds the import graph from `aart_cli.cli` and `__main__` and asserts on an exact set
 that every shipped module is reachable or named as an exception. That is the right evidence for this
 step, and two mutations show it has teeth in both directions.
 
@@ -1675,7 +1687,7 @@ The Collection capability may be scheduled ahead of the rest of CP-18. B-067 car
 scope and is the natural candidate for a slice of its own: INV-186 and INV-213 cannot be evidenced
 through any public verb until it exists, so it has to be built before either can move off PARTIAL.
 
-Do not weaken `runtime_purity_test`'s two guards. Without them a rename of `agent_artifacts/` leaves
+Do not weaken `runtime_purity_test`'s two guards. Without them a rename of `aart_cli/` leaves
 four green tests asserting nothing, which is the failure mode D-149 names.
 
 Do not widen `_reported`'s keep-rule on either axis. Payload-only and ABSENT/DIVERGENT-only are
@@ -1715,7 +1727,7 @@ That unblocked the removal, which is done: `_run_text`, `_runtime_source_stage_c
 `_dispatch_result` and the 26 further definitions that became unreferenced once it was gone are
 deleted, with the tests that existed only to drive them — about 2,200 lines, and `tui.py` down from
 5,705 to 4,262. Each removed test's capability was checked against a public flow first: scaffolding
-against `aart registry scaffold`, source maintenance against the `aart source` commands, vendoring
+against `aart-cli registry scaffold`, source maintenance against the `aart-cli source` commands, vendoring
 against its flags half, ERR04's legacy install state against four other modules, ERR06 refusals
 against the canonical shell's drawn notice (D-116).
 
@@ -1737,7 +1749,7 @@ were verified red against the defect they exist to catch.
 
 **Do not try to remove `consumer/application.py`, `lifecycle/*` or `setup_engine/*`.** This file
 previously said nothing but the wizard reached them; that was wrong. `commands/marketplace.py` — the
-public `aart marketplace install|update|uninstall|setup` — composes `ConsumerApplicationService`
+public `aart-cli marketplace install|update|uninstall|setup` — composes `ConsumerApplicationService`
 directly and runs the setup queue through it, and `tui_marketplace.py`, which the canonical shell
 imports, takes `LifecycleItem` and `InstallMode` from `lifecycle/model.py` and
 `installation/model.py`. The stack is load-bearing for a public flow. Like `installation/*`, it goes
@@ -1764,13 +1776,13 @@ every existing caller is unchanged.
 asserting the approved registry really does carry the declaration and its recipe; the other three
 record the defect on **both** front ends.
 
-**What it proved corrects D-118 and this file's earlier ordering.** `aart marketplace install` does
+**What it proved corrects D-118 and this file's earlier ordering.** `aart-cli marketplace install` does
 *not* carry setup for an approved registry coordinate: it reaches `_configured_lifecycle`, which
 calls `complete_configured_installation` — the same seam `io/consumer_actions.py::_execute_installation`
 uses — and reports `session_status: succeeded` with no `setup` key, no diagnostic, and the
 configuration file the recipe declares unwritten. Setup runs only on the legacy path, which
 `_configured_registry_selection` selects by returning `None` for a direct or local source. Nor is
-there an operator recovery: `aart marketplace setup` afterwards refuses with `registry company has
+there an operator recovery: `aart-cli marketplace setup` afterwards refuses with `registry company has
 invalid root manifests`, because it resolves through the legacy catalogue and a promoted registry
 snapshot carries no root manifests.
 
@@ -1796,7 +1808,7 @@ which durable record the setup engine should resolve an installed artifact from.
 (`.agent-artifacts/manifest.json`), which only `installation/application.py` and
 `lifecycle/application.py` write and which `io/consumer_machine.py` calls the *legacy* store; the
 configured seam writes receipts instead. The deciding measurement was that **a canonical receipt
-could not name the object that was installed**: after `aart marketplace install` of the fixture
+could not name the object that was installed**: after `aart-cli marketplace install` of the fixture
 Skill, `<data_root>/state/installations/*.json` held the coordinate, `payload_digest`, `root` and
 the deliveries, and no object digest — while `install_state`'s `ArtifactEvidence` carries one. The
 engine needs the object digest to `read_object` at all, so pointing it at the receipt store was not
@@ -1820,7 +1832,7 @@ refusal.
 
 **Landed (D-123): both front ends now name the setup they did not run.**
 `complete_configured_installation` reads the objects it just recorded and carries what they declare
-as `pending_setup`; `aart marketplace install` emits it as an additive `pending_setup` key and
+as `pending_setup`; `aart-cli marketplace install` emits it as an additive `pending_setup` key and
 renders it, and the persistent shell draws it under screen 11's success. This is what D-122 is
 first spent on — setup is declared on the package manifest, not on anything the plan carries, so
 answering "does this artifact declare setup" means going back to the object the receipt names. The
@@ -1875,7 +1887,7 @@ values from two documents, which is the honest check where the index *is* the pa
    moving a CAS reference as one compensated unit. The canonical adapter writes the same setup
    record and moves the same reference, but its durable pointer belongs on the receipt rather than
    in an install-state manifest. `setup_receipt.locate_setup_record` reads that pointer for
-   `aart marketplace receipt show|verify|undo` and needs a canonical equivalent (follow-up, not
+   `aart-cli marketplace receipt show|verify|undo` and needs a canonical equivalent (follow-up, not
    blocking the wiring). The receipt-backed equivalent is now B-046.
 
 `io/configured_setup.py` implements both without writing install state. Install/update and the
@@ -1929,8 +1941,8 @@ registry state (D-112). What remains in CP-14:
 
 1. **Step 7 is done.** The wizard front-end is removed (D-113, D-116, D-117), B-039 is closed,
    and the orphaned implementation behind it is swept (D-129). What it aimed at beyond that — `consumer/application.py`,
-   `lifecycle/*`, `setup_engine/*` — is load-bearing for `aart marketplace` and is not removed.
-   B-038's screen-21 half is done (D-114) and its remaining half is restated as an `aart marketplace
+   `lifecycle/*`, `setup_engine/*` — is load-bearing for `aart-cli marketplace` and is not removed.
+   B-038's screen-21 half is done (D-114) and its remaining half is restated as an `aart-cli marketplace
    install` question. B-044 is closed (D-128) and B-046 with it (D-130).
 2. Preserve D-089/B-037 whenever promotion planning is touched: retained approved records rebind to
    the transaction snapshot as metadata only, and published package bytes do not change.

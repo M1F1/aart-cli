@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.outcomes import (
+from aart_cli.outcomes import (
     ActionSummary,
     OutcomeItem,
     render_summary,

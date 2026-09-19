@@ -7,13 +7,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.source_store import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.source_store import (
     _owner_alive,
     acquire_source_lock,
     release_source_lock,
 )
-from agent_artifacts.sources.model import SourceLockLease, SourceLockRequest
+from aart_cli.sources.model import SourceLockLease, SourceLockRequest
 
 
 def _owner(token: str, hostname: str, pid: int, acquired_at: int) -> dict[str, object]:
@@ -97,9 +97,7 @@ class SourceLockAdapterTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as root:
             request = SourceLockRequest(str(Path(root) / "sync.lock"), 0.01, 10)
-            with patch(
-                "agent_artifacts.io.source_store.os.mkdir", side_effect=PermissionError("denied")
-            ):
+            with patch("aart_cli.io.source_store.os.mkdir", side_effect=PermissionError("denied")):
                 failed = acquire_source_lock(request, token_factory=lambda: "token")
             self.assertIsInstance(failed, Err)
 
@@ -109,14 +107,14 @@ class SourceLockAdapterTest(unittest.TestCase):
                 SourceLockRequest(lock, 0.01, 10), token_factory=lambda: "token"
             )
             assert isinstance(acquired, Ok)
-            with patch("agent_artifacts.io.source_store.os.rename", side_effect=OSError("rename")):
+            with patch("aart_cli.io.source_store.os.rename", side_effect=OSError("rename")):
                 self.assertIsInstance(release_source_lock(acquired.value), Err)
 
     def test_default_owner_liveness_is_conservative_and_detects_missing_local_pid(self) -> None:
         self.assertTrue(_owner_alive("another-host", 123))
-        with patch("agent_artifacts.io.source_store.os.kill", side_effect=ProcessLookupError):
+        with patch("aart_cli.io.source_store.os.kill", side_effect=ProcessLookupError):
             self.assertFalse(_owner_alive(__import__("socket").gethostname(), 123))
-        with patch("agent_artifacts.io.source_store.os.kill", side_effect=PermissionError):
+        with patch("aart_cli.io.source_store.os.kill", side_effect=PermissionError):
             self.assertTrue(_owner_alive(__import__("socket").gethostname(), 123))
 
     def _busy(self, lock: Path, *, alive: bool, stale_after: int = 600):

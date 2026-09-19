@@ -14,7 +14,7 @@ from dataclasses import replace
 from datetime import date
 from unittest import mock
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -25,13 +25,13 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerSession, ConsumerSettings
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.consumer_views import ConsumerSession, ConsumerSettings
+from aart_cli.application.maintainer_views import (
     MaintainerScreen,
     maintainer_navigation_targets,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.registry_adoption import (
+from aart_cli.domain.result import Ok
+from aart_cli.io.registry_adoption import (
     AdoptedArtifact,
     AdoptionUpstreamCheck,
     AdoptionUpstreamDisposition,
@@ -39,8 +39,8 @@ from agent_artifacts.io.registry_adoption import (
     RepositoryScan,
     ScannedArtifact,
 )
-from agent_artifacts.sources.git import acquire_git_snapshot
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
+from aart_cli.sources.git import acquire_git_snapshot
+from aart_cli.tui_consumer import CanonicalScreenSource, frame
 from tests.consumer_shell_test import screens
 from tests.registry_repository_scan_test import OTHER_MANIFEST, _git, _Lab
 
@@ -168,8 +168,8 @@ class RepositoryAdoptionInteractionTest(unittest.TestCase):
         self.assertEqual(commands[0].repository_scan_draft, draft)
 
     def test_scan_result_is_selectable_and_a_requests_adoption(self) -> None:
-        from agent_artifacts.io.consumer_actions import _project_repository_scan
-        from agent_artifacts.tui_consumer import ConsumerScreens
+        from aart_cli.io.consumer_actions import _project_repository_scan
+        from aart_cli.tui_consumer import ConsumerScreens
 
         projected = _project_repository_scan(_scan())
         source = CanonicalScreenSource(
@@ -218,8 +218,8 @@ class RepositoryAdoptionInteractionTest(unittest.TestCase):
         self.assertIs(completed.session.screen, MaintainerScreen.SCAN_RESULT)
 
     def test_registry_opens_the_adopted_artifact_list_and_enter_requests_one_check(self) -> None:
-        from agent_artifacts.io.consumer_actions import _project_adopted_artifact
-        from agent_artifacts.tui_consumer import ConsumerScreens
+        from aart_cli.io.consumer_actions import _project_adopted_artifact
+        from aart_cli.tui_consumer import ConsumerScreens
 
         registry = _state(MaintainerScreen.REGISTRY)
         event = key_event("u", registry)
@@ -299,7 +299,7 @@ class RepositoryAdoptionInteractionTest(unittest.TestCase):
 
 class RepositoryAdoptionActionTest(unittest.TestCase):
     def _composed(self, env):
-        from agent_artifacts import tui
+        from aart_cli import tui
 
         composed = tui._canonical_consumer_actions(
             project=str(env.project), user_home=str(env.home), today=tui.date.today()
@@ -468,7 +468,7 @@ class RepositoryAdoptionCompositionTest(_Lab):
     def test_the_canonical_tui_ports_scan_real_git_and_write_the_reviewed_copy(self) -> None:
         """The public composition joins the already-tested scan/adoption stages without a Source."""
 
-        from agent_artifacts import tui
+        from aart_cli import tui
 
         home = self.root / "home"
         home.mkdir()
@@ -491,7 +491,7 @@ class RepositoryAdoptionCompositionTest(_Lab):
         with (
             mock.patch.dict("os.environ", xdg, clear=False),
             mock.patch(
-                "agent_artifacts.curation.runtime.acquire_git_snapshot",
+                "aart_cli.curation.runtime.acquire_git_snapshot",
                 side_effect=local_transport,
             ),
         ):

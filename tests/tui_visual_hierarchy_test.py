@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from unittest import TestCase
 
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     PresentationProfile,
     RegistryView,
     project_dashboard,
 )
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
-from agent_artifacts.tui_layout import SECTION_RULE
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
+from aart_cli.tui_layout import SECTION_RULE
 
 
 def _registry(alias: str) -> RegistryView:

@@ -180,7 +180,7 @@ pipx install "git+https://ghe.corp/platform/aart-cli.git@v0.1.0"
 ```
 
 ```bash
-aart --version
+aart-cli --version
 ```
 
 The command is `aart`; the package is `aart-cli`. `agent-artifacts` on a public index is somebody
@@ -201,14 +201,14 @@ git clone https://ghe.corp/platform/agent-registry.git && cd agent-registry
 Review first. Every mutating `aart` command prints what it would write and stops:
 
 ```bash
-aart registry init --source . --source-id corp-registry --display-name "Corp Registry"
+aart-cli registry init --source . --source-id corp-registry --display-name "Corp Registry"
 ```
 
-The review lists `.aart-version`, `.github/workflows/aart-registry.yml`, `.gitignore`, `README.md`,
+The review lists `.aart-cli-version`, `.github/workflows/aart-registry.yml`, `.gitignore`, `README.md`,
 `aart-registry.json` and `aart-source.json`. When it reads right, finalize:
 
 ```bash
-aart registry init --source . --source-id corp-registry --display-name "Corp Registry" --yes
+aart-cli registry init --source . --source-id corp-registry --display-name "Corp Registry" --yes
 ```
 
 | Option | What it decides |
@@ -217,7 +217,7 @@ aart registry init --source . --source-id corp-registry --display-name "Corp Reg
 | `--display-name` | the human-readable name |
 | `--minimum-version`, `--maximum-version` | the AART version window the registry declares; defaults are the running AART's version and the next major version (exclusive) |
 
-`.aart-version` holds the version of the `aart` you just ran. That is the version the registry's CI
+`.aart-cli-version` holds the version of the `aart` you just ran. That is the version the registry's CI
 will run, and bumping it later is a pull request.
 
 ### Step 3 — Commit, publish, and push the first `main`
@@ -226,8 +226,8 @@ will run, and bumping it later is a pull request.
 git add -A
 git commit -m "chore: initialise the registry"
 
-aart registry publish --source .
-aart registry publish --source . --yes -m "chore: publish the empty registry"
+aart-cli registry publish --source .
+aart-cli registry publish --source . --yes -m "chore: publish the empty registry"
 
 git push -u origin main
 git remote set-head origin --auto
@@ -238,7 +238,7 @@ git remote set-head origin --auto
 so the first `main` has to carry them.
 
 This first push is the only one you make by hand. `git remote set-head origin --auto` records which
-branch the remote calls default; `aart registry push` reads it to know which branch it must refuse.
+branch the remote calls default; `aart-cli registry push` reads it to know which branch it must refuse.
 Cloning an empty repository leaves it unset.
 
 ### Step 4 — From now on, every change is a pull request
@@ -247,17 +247,17 @@ Cloning an empty repository leaves it unset.
 git switch -c add-code-review
 # Author and commit aart.yaml plus its payload in a separate clean Source checkout.
 # Then inspect the exact scan/promotion inputs for that checkout:
-aart registry scan --help
-aart registry promote --help
-aart registry publish --source . --yes -m "feat: add the code-review skill"
-aart registry push --source . --branch add-code-review
+aart-cli registry scan --help
+aart-cli registry promote --help
+aart-cli registry publish --source . --yes -m "feat: add the code-review skill"
+aart-cli registry push --source . --branch add-code-review
 ```
 
 The artifact is authored in its Source repository, not inside the Registry. `scan` compiles its
 explicit manifest into a Candidate and `promote` brings the reviewed Candidate into this checkout.
 Use the Candidate and evidence digests printed by the review flow; neither command invents them.
 
-`aart registry push` refuses the default branch by name, and AART never merges. Open the pull request
+`aart-cli registry push` refuses the default branch by name, and AART never merges. Open the pull request
 on the instance; its CI is what Part 4 makes pass. The generated `README.md` in the registry lists the
 other everyday commands.
 
@@ -266,7 +266,7 @@ other everyday commands.
 ### Step 1 — Choose how the registry's CI fetches AART
 
 The registry's workflow puts `aart` on the runner in one of four ways. **The first variable that is
-set wins**; they are never combined. The version always comes from `.aart-version` — `{version}` in a
+set wins**; they are never combined. The version always comes from `.aart-cli-version` — `{version}` in a
 variable is replaced with it — so no variable carries a version number.
 
 | Order | Variable | Example | Works when |
@@ -318,12 +318,12 @@ at both ends of the version window. Its **Provide AART** step ends with one line
 happened:
 
 ```text
-AART: aart-cli 0.1.0  via index https://nexus.corp/repository/pypi-group/simple (aart-cli==0.1.0)  pinned by .aart-version
+AART: aart-cli 0.1.0  via index https://nexus.corp/repository/pypi-group/simple (aart-cli==0.1.0)  pinned by .aart-cli-version
 ```
 
 Which version ran, which route answered, and whether the pin was honoured. When it is green, merge.
 
-From here, moving the registry to a new AART is a pull request that edits `.aart-version`: the gates
+From here, moving the registry to a new AART is a pull request that edits `.aart-cli-version`: the gates
 run on the new version before anyone merges it. Take the release into the copy first
 ([Part 1, step 4](#step-4--turn-off-the-release-engine-on-the-copy)), and publish it to the index if
 you use one.
@@ -334,7 +334,7 @@ Each person installs `aart` as in [Part 2, step 5](#step-5--install-aart-on-your
 adds the registry once:
 
 ```bash
-aart source add --alias company --kind registry-git \
+aart-cli source add --alias company --kind registry-git \
   --location https://ghe.corp/platform/agent-registry.git --ref main --default
 ```
 
@@ -345,8 +345,8 @@ machine's own Git and credential helper; see
 Then run `aart` for the terminal UI, or use the flag form:
 
 ```bash
-aart marketplace list
-aart marketplace install --help
+aart-cli marketplace list
+aart-cli marketplace install --help
 ```
 
 ## Troubleshooting
@@ -358,11 +358,11 @@ aart marketplace install --help
 | `CERTIFICATE_VERIFY_FAILED` or a timeout from `pypi.org` | `AART_PIP_INDEX_URL` is unset and the runner has no route to the public index |
 | `poetry: command not found` in `release` | set `AART_POETRY` to Poetry's full path in the image |
 | `pr-check` fails with "neither gate job ran" | `AART_IMAGE_USERNAME_SECRET` names a secret that does not exist |
-| `no agent_artifacts package under …` | the registry's fetch route reached something that is not AART: wrong URL, wrong path, or a sign-in page instead of a wheel |
-| `.aart-version pins X but … provided Y` | the route works and disagrees with the pin: a moved tag, an index that resolved another version, or an image with an old AART baked in |
+| `no aart_cli package under …` | the registry's fetch route reached something that is not AART: wrong URL, wrong path, or a sign-in page instead of a wheel |
+| `.aart-cli-version pins X but … provided Y` | the route works and disagrees with the pin: a moved tag, an index that resolved another version, or an image with an old AART baked in |
 | `pin X overridden by AART_REF` | not a failure. Someone set `AART_REF` to run a branch or tag on purpose, and the run says so |
-| `aart registry push` refuses a branch that is not `main` | the checkout does not know the remote's default branch. Run `git remote set-head origin --auto` |
-| `aart source add` says the URL is not a safe Git location | the location is not `https`, or it carries a user or token. Remove it and let the credential helper supply it |
+| `aart-cli registry push` refuses a branch that is not `main` | the checkout does not know the remote's default branch. Run `git remote set-head origin --auto` |
+| `aart-cli source add` says the URL is not a safe Git location | the location is not `https`, or it carries a user or token. Remove it and let the credential helper supply it |
 
 ## Reference
 
@@ -389,7 +389,7 @@ Read by `.github/workflows/pr-check.yml` and `.github/workflows/release.yml`.
 
 ### Variables a registry reads
 
-Read by the workflows `aart registry init` writes. Those files are managed: `init` refuses to
+Read by the workflows `aart-cli registry init` writes. Those files are managed: `init` refuses to
 overwrite one that was edited by hand, so configure them with variables, not edits.
 
 | Variable | Default | What it does |

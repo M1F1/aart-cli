@@ -14,18 +14,18 @@ from dataclasses import replace
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
     ConsumerUiState,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     InstallScopeChoiceView,
     offer_install_scopes,
 )
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.result import Err, Ok
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _INSTALL, ENTER, _actions, _drive
 from tests.consumer_shell_test import DOWN, SPACE, _at

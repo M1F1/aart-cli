@@ -6,8 +6,8 @@ Run: ``python -m unittest discover -s tests -p "*_test.py"``
 import dataclasses
 import unittest
 
-from agent_artifacts import model
-from agent_artifacts.model import (
+from aart_cli import model
+from aart_cli.model import (
     Artifact,
     ManifestEntry,
     MergeJson,

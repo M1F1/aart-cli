@@ -9,8 +9,8 @@ import tempfile
 import unittest
 from typing import cast
 
-from agent_artifacts.application.maintainer import reconcile_source_scan
-from agent_artifacts.application.promotion import (
+from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.application.promotion import (
     PromotionEvidence,
     load_registry_versions,
     plan_bulk_promotion,
@@ -18,41 +18,41 @@ from agent_artifacts.application.promotion import (
     project_lifecycle_update,
     project_promotion,
 )
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.candidates import CandidateId, assess_candidate
-from agent_artifacts.domain.credentials import CredentialProviderRef
-from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceAlias, SourceId
-from agent_artifacts.domain.inputs import PromptedConfigValue, SecretProviderReference
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.registry import PromotionMode, publish_registry_version
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.domain.selection import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.candidates import CandidateId, assess_candidate
+from aart_cli.domain.credentials import CredentialProviderRef
+from aart_cli.domain.harness import Scope
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias, SourceId
+from aart_cli.domain.inputs import PromptedConfigValue, SecretProviderReference
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.registry import PromotionMode, publish_registry_version
+from aart_cli.domain.result import Ok
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     VersionConstraint,
 )
-from agent_artifacts.io.configured_installation import prepare_configured_installation_draft
-from agent_artifacts.io.object_store import read_object
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.protocol.authoring import CompiledAuthorArtifact, compile_author_snapshot
-from agent_artifacts.protocol.json import canonical_json_bytes
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.io.configured_installation import prepare_configured_installation_draft
+from aart_cli.io.object_store import read_object
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.protocol.authoring import CompiledAuthorArtifact, compile_author_snapshot
+from aart_cli.protocol.json import canonical_json_bytes
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
     compile_native_package,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.sources.model import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
     make_source_candidate,
     source_instance_id,
     source_store_paths,
 )
-from agent_artifacts.store.model import ObjectReadRequest, object_store_paths
+from aart_cli.store.model import ObjectReadRequest, object_store_paths
 from tests.artifact_installation_e2e_test import MANIFEST, ORG, SERVER_SOURCE, TOKEN
 from tests.marketplace_fixtures import configured_source, effective_configuration
 from tests.promotion_planning_test import _evidence

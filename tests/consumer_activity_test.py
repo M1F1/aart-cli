@@ -6,7 +6,7 @@ import datetime as dt
 import json
 import unittest
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ActivityOutcome,
     ActivityRecord,
     PresentationProfile,
@@ -15,28 +15,28 @@ from agent_artifacts.application.consumer_views import (
     project_receipt_detail,
     receipt_detail_to_data,
 )
-from agent_artifacts.application.execution import (
+from aart_cli.application.execution import (
     ExecutionOutcome,
     LifecycleExecutionOutcome,
     StepOutcome,
     StepStatus,
 )
-from agent_artifacts.application.intents import (
+from aart_cli.application.intents import (
     LifecycleIntentKind,
     LifecyclePlan,
     credential_rotation_intent,
     install_intent,
 )
-from agent_artifacts.application.reconciliation import plan_repair
-from agent_artifacts.domain.effects import (
+from aart_cli.application.reconciliation import plan_repair
+from aart_cli.domain.effects import (
     ConfigureHarness,
     ReplaceCredential,
     StoreCredential,
     WriteFile,
 )
-from agent_artifacts.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.reconciliation import (
+from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.reconciliation import (
     Component,
     ComponentId,
     ComponentState,
@@ -45,8 +45,8 @@ from agent_artifacts.domain.reconciliation import (
     DesiredState,
     ObservedComponent,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_consumer import render_activity, render_receipt_detail
+from aart_cli.domain.result import Ok
+from aart_cli.tui_consumer import render_activity, render_receipt_detail
 
 ARTIFACT = ArtifactCoordinate(SourceAlias("public"), ArtifactIdentity("mcp", "github"), "1.6.0")
 ROOT = "/opt/agents/mcp/github"

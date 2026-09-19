@@ -6,7 +6,7 @@ import unittest
 
 
 def _unwrap(result):
-    from agent_artifacts.domain.result import Ok
+    from aart_cli.domain.result import Ok
 
     if not isinstance(result, Ok):
         raise AssertionError(f"expected Ok, got {result!r}")
@@ -14,7 +14,7 @@ def _unwrap(result):
 
 
 def _code(result) -> str:
-    from agent_artifacts.domain.result import Err
+    from aart_cli.domain.result import Err
 
     if not isinstance(result, Err):
         raise AssertionError(f"expected Err, got {result!r}")
@@ -23,7 +23,7 @@ def _code(result) -> str:
 
 class SemVerTest(unittest.TestCase):
     def test_canonical_versions_round_trip_and_invalid_forms_fail(self):
-        from agent_artifacts.protocol.semver import parse_semver
+        from aart_cli.protocol.semver import parse_semver
 
         valid = (
             "0.0.0",
@@ -54,7 +54,7 @@ class SemVerTest(unittest.TestCase):
                 self.assertEqual(_code(parse_semver(raw)), "protocol-semver-invalid")
 
     def test_prerelease_precedence_matches_semver_spec(self):
-        from agent_artifacts.protocol.semver import parse_semver
+        from aart_cli.protocol.semver import parse_semver
 
         raw = (
             "1.0.0-alpha",
@@ -73,7 +73,7 @@ class SemVerTest(unittest.TestCase):
         )
 
     def test_bounds_are_min_inclusive_max_exclusive_and_validate_order(self):
-        from agent_artifacts.protocol.semver import (
+        from aart_cli.protocol.semver import (
             VersionBounds,
             parse_semver,
             version_bounds,

@@ -1,7 +1,7 @@
 """B-090/QA-016: a Maintainer can create the registry the rest of the mode needs, in the TUI.
 
 Maintainer Mode could promote into a registry and audit one, but had no way to bring one into
-existence: the operator left for a terminal, ran five separate `aart registry` commands in the
+existence: the operator left for a terminal, ran five separate `aart-cli registry` commands in the
 right order, and came back.  Screen 46 now owns that: one form, one review, and one run of
 init -> lock -> build -> validate -> audit against the project checkout.
 
@@ -22,7 +22,7 @@ from unittest import mock
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -33,21 +33,21 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerSession, ConsumerSettings
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.consumer_views import ConsumerSession, ConsumerSettings
+from aart_cli.application.maintainer_views import (
     MaintainerScreen,
     maintainer_navigation_targets,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.registry_bootstrap import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.registry_bootstrap import (
     REGISTRY_BOOTSTRAP_STAGES,
     RegistryBootstrapReport,
     RegistryBootstrapStage,
     bootstrap_registry_workspace,
     registry_identity_refusal,
 )
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
-from agent_artifacts.tui_layout import CONTENT_MEASURE
+from aart_cli.tui_consumer import CanonicalScreenSource, frame
+from aart_cli.tui_layout import CONTENT_MEASURE
 from tests.consumer_shell_test import screens
 
 
@@ -233,7 +233,7 @@ class RegistryBootstrapTest(unittest.TestCase):
 
     def test_a_requested_commit_is_local_and_never_pushed_or_merged(self) -> None:
         root = self._workspace()
-        from agent_artifacts.io import registry_bootstrap
+        from aart_cli.io import registry_bootstrap
 
         calls: list[tuple[str, ...]] = []
         real = registry_bootstrap._git
@@ -285,9 +285,9 @@ class RegistryBootstrapTest(unittest.TestCase):
     def test_a_stage_refusing_mid_run_stops_the_ones_after_it(self) -> None:
         """Fail-fast is the ordering's whole point: build over an unlocked registry is a lie."""
 
-        from agent_artifacts.curation.model import CurationAction
-        from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-        from agent_artifacts.io import registry_bootstrap
+        from aart_cli.curation.model import CurationAction
+        from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+        from aart_cli.io import registry_bootstrap
 
         root = self._workspace()
         real = registry_bootstrap.load_local_curation_service
@@ -329,14 +329,14 @@ class RegistryBootstrapTest(unittest.TestCase):
     def test_a_gate_that_fails_is_reported_as_failed_and_stops_the_run(self) -> None:
         """A registry that did not validate is not a registry this flow may call finished."""
 
-        from agent_artifacts.io import registry_bootstrap
-        from agent_artifacts.registry_commands.model import (
+        from aart_cli.io import registry_bootstrap
+        from aart_cli.registry_commands.model import (
             RegistryQualityCheck,
             RegistryQualityReport,
         )
 
         root = self._workspace()
-        from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+        from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 
         failing = RegistryQualityReport(
             (
@@ -387,7 +387,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
     """The action boundary: reviewed before it runs, and drawn as stages afterwards."""
 
     def _composed(self, env):
-        from agent_artifacts import tui
+        from aart_cli import tui
 
         composed = tui._canonical_consumer_actions(
             project=str(env.project), user_home=str(env.home), today=tui.date.today()
@@ -521,7 +521,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
             )
         )
         with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
-            from agent_artifacts.io.consumer_actions import RegistryBootstrapCompletion
+            from aart_cli.io.consumer_actions import RegistryBootstrapCompletion
 
             actions = self._composed(env)
             actions._registry_bootstrap = lambda draft: Ok(  # type: ignore[assignment]

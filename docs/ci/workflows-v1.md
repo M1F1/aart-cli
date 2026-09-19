@@ -48,7 +48,7 @@ release Release Please creates start nothing on their own. `release-please.yml` 
 ## What `pr-check` runs on a release pull request
 
 A release pull request rewrites four files — the version literals in `pyproject.toml`,
-`agent_artifacts/__init__.py` and `.release-please-manifest.json`, and the changelog — on a tree the
+`aart_cli/__init__.py` and `.release-please-manifest.json`, and the changelog — on a tree the
 full gate already passed when the last ordinary pull request merged. Running 4,338 tests on three
 interpreters against it proves that tree a second time, which is the thing INV-097 and INV-102 rule
 out. So `pr-check` narrows to what the release pull request can actually break (INV-096):

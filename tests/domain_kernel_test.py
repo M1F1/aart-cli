@@ -18,7 +18,7 @@ class _DataclassParams(Protocol):
 
 class DomainIdentifiersTest(unittest.TestCase):
     def test_identifiers_are_nominal_frozen_and_render_canonical_coordinates(self):
-        from agent_artifacts.domain.identifiers import (
+        from aart_cli.domain.identifiers import (
             ArtifactCoordinate,
             ArtifactIdentity,
             ObjectDigest,
@@ -46,7 +46,7 @@ class DomainIdentifiersTest(unittest.TestCase):
 
 class DomainDiagnosticsTest(unittest.TestCase):
     def test_diagnostics_sort_by_location_and_serialize_only_through_boundary(self):
-        from agent_artifacts.domain.diagnostics import (
+        from aart_cli.domain.diagnostics import (
             Diagnostic,
             DiagnosticCode,
             Severity,
@@ -54,14 +54,14 @@ class DomainDiagnosticsTest(unittest.TestCase):
             diagnostic_to_data,
             sort_diagnostics,
         )
-        from agent_artifacts.domain.identifiers import SourceAlias
+        from aart_cli.domain.identifiers import SourceAlias
 
         later = Diagnostic(
             code=DiagnosticCode("source-invalid"),
             severity=Severity.ERROR,
             message="later",
             location=SourceLocation(SourceAlias("zeta"), "b.json", "/name", 4, 2),
-            remediation=("aart source health zeta",),
+            remediation=("aart-cli source health zeta",),
         )
         earlier = Diagnostic(
             code=DiagnosticCode("source-incompatible"),
@@ -89,7 +89,7 @@ class DomainDiagnosticsTest(unittest.TestCase):
         )
 
     def test_initial_stable_codes_match_the_spec(self):
-        from agent_artifacts.domain.diagnostics import INITIAL_ERROR_CODES
+        from aart_cli.domain.diagnostics import INITIAL_ERROR_CODES
 
         self.assertEqual(
             INITIAL_ERROR_CODES,
@@ -116,8 +116,8 @@ class DomainDiagnosticsTest(unittest.TestCase):
 
 class DomainResultTest(unittest.TestCase):
     def test_result_combinators_are_typed_and_accumulate_sorted_diagnostics(self):
-        from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-        from agent_artifacts.domain.result import Err, Ok, bind, collect, map_ok
+        from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+        from aart_cli.domain.result import Err, Ok, bind, collect, map_ok
 
         first = Diagnostic(DiagnosticCode("z-problem"), Severity.ERROR, "z")
         second = Diagnostic(DiagnosticCode("a-problem"), Severity.ERROR, "a")
@@ -132,14 +132,14 @@ class DomainResultTest(unittest.TestCase):
         )
 
     def test_err_requires_at_least_one_diagnostic(self):
-        from agent_artifacts.domain.result import Err
+        from aart_cli.domain.result import Err
 
         with self.assertRaises(ValueError):
             Err(())
 
     def test_result_predicates_mapping_and_error_factory_preserve_typed_values(self):
-        from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-        from agent_artifacts.domain.result import Err, Ok, Result, err, is_err, is_ok, map_err
+        from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+        from aart_cli.domain.result import Err, Ok, Result, err, is_err, is_ok, map_err
 
         problem = Diagnostic(DiagnosticCode("source-invalid"), Severity.ERROR, "invalid")
         failure = err(problem)
@@ -158,8 +158,8 @@ class DomainResultTest(unittest.TestCase):
 
 class DomainOutcomeTest(unittest.TestCase):
     def test_terminal_outcome_is_canonical_and_has_structured_counts(self):
-        from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-        from agent_artifacts.domain.outcomes import (
+        from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+        from aart_cli.domain.outcomes import (
             OperationOutcome,
             TerminalItem,
             TerminalStatus,
@@ -193,8 +193,8 @@ class DomainOutcomeTest(unittest.TestCase):
         self.assertEqual(data["counts"], {"changed": 1, "current": 1, "failed": 1})
 
     def test_session_status_accounts_for_root_errors_partial_work_and_cancellation(self):
-        from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-        from agent_artifacts.domain.outcomes import (
+        from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+        from aart_cli.domain.outcomes import (
             OperationOutcome,
             SessionStatus,
             TerminalItem,
@@ -230,12 +230,12 @@ class DomainOutcomeTest(unittest.TestCase):
 
 class DomainArchitectureTest(unittest.TestCase):
     def test_domain_modules_do_not_import_io_or_legacy_layers(self):
-        domain = ROOT / "agent_artifacts" / "domain"
+        domain = ROOT / "aart_cli" / "domain"
         self.assertTrue(domain.is_dir(), domain)
         # INV-108 names six things by hand -- filesystem mutation, subprocess execution,
         # credential-provider access, network I/O, terminal rendering and GitHub-specific
         # operations -- and this set covered three of them.  A domain module could `import curses`,
-        # or import `agent_artifacts.io` despite this test's own name, and stay green (M43/M44).
+        # or import `aart_cli.io` despite this test's own name, and stay green (M43/M44).
         forbidden_roots = {
             "curses",  # terminal rendering
             "ftplib",
@@ -252,13 +252,13 @@ class DomainArchitectureTest(unittest.TestCase):
             "urllib",
         }
         forbidden_prefixes = {
-            "agent_artifacts.io",  # the effect boundary this layer must stay above
-            "agent_artifacts.cli",
-            "agent_artifacts.tui",
-            "agent_artifacts.commands",
-            "agent_artifacts.security",  # GitHub- and provider-specific operations live below here
+            "aart_cli.io",  # the effect boundary this layer must stay above
+            "aart_cli.cli",
+            "aart_cli.tui",
+            "aart_cli.commands",
+            "aart_cli.security",  # GitHub- and provider-specific operations live below here
         }
-        forbidden_modules = {"agent_artifacts.model", "agent_artifacts.outcomes"}
+        forbidden_modules = {"aart_cli.model", "aart_cli.outcomes"}
         violations: list[str] = []
         for path in sorted(domain.glob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -291,7 +291,7 @@ class DomainArchitectureTest(unittest.TestCase):
         module_names = tuple(
             sorted(
                 path.stem
-                for path in (ROOT / "agent_artifacts" / "domain").glob("*.py")
+                for path in (ROOT / "aart_cli" / "domain").glob("*.py")
                 if path.stem != "__init__"
             )
         )
@@ -300,7 +300,7 @@ class DomainArchitectureTest(unittest.TestCase):
         mutable: list[str] = []
         found: list[str] = []
         for name in module_names:
-            module = importlib.import_module(f"agent_artifacts.domain.{name}")
+            module = importlib.import_module(f"aart_cli.domain.{name}")
             for value in vars(module).values():
                 if not isinstance(value, type) or value.__module__ != module.__name__:
                     continue

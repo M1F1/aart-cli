@@ -13,21 +13,21 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
-from agent_artifacts.domain.effects import DeliveryKind
-from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.artifact_placement import PLACEMENT_UNAVAILABLE, placement_for
-from agent_artifacts.io.object_store import publish_object
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.sources.local import read_local_snapshot
-from agent_artifacts.sources.model import (
+from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.domain.effects import DeliveryKind
+from aart_cli.domain.harness import Scope
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.artifact_placement import PLACEMENT_UNAVAILABLE, placement_for
+from aart_cli.io.object_store import publish_object
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.sources.local import read_local_snapshot
+from aart_cli.sources.model import (
     LocalSnapshotRequest,
     SnapshotLimits,
     source_instance_id,
 )
-from agent_artifacts.store.model import (
+from aart_cli.store.model import (
     ObjectPublishCommand,
     make_object_candidate,
     object_store_paths,
@@ -310,13 +310,13 @@ class DeliveredPlacementTest(unittest.TestCase):
 
 
 def _stored_artifact(package, digest: ObjectDigest):
-    from agent_artifacts.domain.candidates import CandidateId
-    from agent_artifacts.domain.registry import (
+    from aart_cli.domain.candidates import CandidateId
+    from aart_cli.domain.registry import (
         PromotionMode,
         PublicationStage,
         RegistryArtifactVersion,
     )
-    from agent_artifacts.domain.selection import (
+    from aart_cli.domain.selection import (
         OwnershipKind,
         OwnershipReason,
         ResolvedArtifact,

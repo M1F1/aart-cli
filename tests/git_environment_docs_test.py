@@ -16,7 +16,7 @@ import re
 import unittest
 from pathlib import Path
 
-from agent_artifacts.io.git import _ALLOWED_ENVIRONMENT, _safe_environment
+from aart_cli.io.git import _ALLOWED_ENVIRONMENT, _safe_environment
 from tests.credential_fixtures import credential_url
 
 _ROOT = Path(__file__).resolve().parent.parent

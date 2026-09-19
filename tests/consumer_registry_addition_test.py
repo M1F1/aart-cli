@@ -6,7 +6,7 @@ import os
 import unittest
 from unittest import mock
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -16,11 +16,11 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.consumer_actions import RegistryConnectionSnapshot
-from agent_artifacts.tui import _TextTerminal
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
+from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
+from aart_cli.domain.result import Ok
+from aart_cli.io.consumer_actions import RegistryConnectionSnapshot
+from aart_cli.tui import _TextTerminal
+from aart_cli.tui_consumer import CanonicalScreenSource, frame
 from tests.consumer_shell_test import screens
 
 
@@ -99,7 +99,7 @@ class RegistryAdditionInteractionTest(unittest.TestCase):
         self.assertEqual(state.cursor, 0)
 
     def test_composed_action_uses_the_canonical_source_add_transaction(self) -> None:
-        from agent_artifacts import tui
+        from aart_cli import tui
         from tests.configured_install_command_e2e_test import _environment
 
         draft = RegistryDraft(
@@ -116,7 +116,7 @@ class RegistryAdditionInteractionTest(unittest.TestCase):
             connector = composed.value._registry_connection
             self.assertIsNotNone(connector)
             with mock.patch(
-                "agent_artifacts.commands.source.add_configured_source",
+                "aart_cli.commands.source.add_configured_source",
                 return_value=Ok(object()),
             ) as add:
                 refreshed = connector(draft)  # type: ignore[misc]
@@ -130,7 +130,7 @@ class RegistryAdditionInteractionTest(unittest.TestCase):
         self.assertFalse(request.source_make_default)
 
     def test_invalid_local_registry_is_refused_before_the_connection_port(self) -> None:
-        from agent_artifacts import tui
+        from aart_cli import tui
         from tests.configured_install_command_e2e_test import _environment
 
         with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
@@ -154,7 +154,7 @@ class RegistryAdditionInteractionTest(unittest.TestCase):
         self.assertEqual(update.event.review_digest, "")
 
     def test_reviewed_connection_refreshes_the_running_action_context(self) -> None:
-        from agent_artifacts import tui
+        from aart_cli import tui
         from tests.configured_install_command_e2e_test import _environment
 
         draft = RegistryDraft("team", "https://git.example.test/team/registry.git", "main", False)

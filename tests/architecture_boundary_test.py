@@ -10,7 +10,7 @@ import unittest
 from typing import Protocol, cast
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "agent_artifacts"
+PACKAGE = ROOT / "aart_cli"
 
 
 class _DataclassParams(Protocol):
@@ -32,7 +32,7 @@ def _imports(path: pathlib.Path) -> tuple[str, ...]:
 # credential shape in reviewed registry guidance is a domain validity rule, and the alternative to
 # this one allowance is a second copy of that matcher -- which is what `redaction.py` exists to
 # prevent. Nothing else outside `domain` may be added here.
-DOMAIN_ALLOWED_LEAVES = ("agent_artifacts.redaction",)
+DOMAIN_ALLOWED_LEAVES = ("aart_cli.redaction",)
 
 
 class CanonicalArchitectureBoundaryTest(unittest.TestCase):
@@ -41,8 +41,8 @@ class CanonicalArchitectureBoundaryTest(unittest.TestCase):
         for path in sorted((PACKAGE / "domain").glob("*.py")):
             for module in _imports(path):
                 if (
-                    module.startswith("agent_artifacts.")
-                    and not module.startswith("agent_artifacts.domain")
+                    module.startswith("aart_cli.")
+                    and not module.startswith("aart_cli.domain")
                     and module not in DOMAIN_ALLOWED_LEAVES
                 ):
                     violations.append(f"{path.name}: {module}")
@@ -52,17 +52,15 @@ class CanonicalArchitectureBoundaryTest(unittest.TestCase):
     def test_the_allowed_domain_leaf_stays_a_leaf(self) -> None:
         for name in DOMAIN_ALLOWED_LEAVES:
             path = PACKAGE / (name.split(".", 1)[1].replace(".", "/") + ".py")
-            imported = [
-                module for module in _imports(path) if module.startswith("agent_artifacts.")
-            ]
+            imported = [module for module in _imports(path) if module.startswith("aart_cli.")]
 
             self.assertEqual(imported, [], f"{name} must keep importing nothing from the package")
 
     def test_application_does_not_import_concrete_io_or_interfaces(self) -> None:
         forbidden = (
-            "agent_artifacts.io",
-            "agent_artifacts.cli",
-            "agent_artifacts.tui",
+            "aart_cli.io",
+            "aart_cli.cli",
+            "aart_cli.tui",
         )
         violations: list[str] = []
         for path in sorted((PACKAGE / "application").glob("*.py")):
@@ -78,7 +76,7 @@ class CanonicalArchitectureBoundaryTest(unittest.TestCase):
         for path in sorted((PACKAGE / "domain").glob("*.py")):
             if path.name == "__init__.py":
                 continue
-            module = importlib.import_module(f"agent_artifacts.domain.{path.stem}")
+            module = importlib.import_module(f"aart_cli.domain.{path.stem}")
             for value in vars(module).values():
                 if (
                     not isinstance(value, type)

@@ -9,30 +9,30 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts.application.promotion import registry_state_digest
-from agent_artifacts.compiler.graph import compile_marketplace_graph
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.configuration.paths import Platform, resolve_config_paths
-from agent_artifacts.configuration.schema import user_configuration_bytes
-from agent_artifacts.consumer.runtime import (
+from aart_cli.application.promotion import registry_state_digest
+from aart_cli.compiler.graph import compile_marketplace_graph
+from aart_cli.configuration.model import SourceKind
+from aart_cli.configuration.paths import Platform, resolve_config_paths
+from aart_cli.configuration.schema import user_configuration_bytes
+from aart_cli.consumer.runtime import (
     _CAPABILITIES,
     _graph_source,
     _registry_security_evidence,
     load_local_consumer_service,
     load_read_only_marketplace,
 )
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.config_store import read_configuration
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.marketplace.catalog import build_marketplace
-from agent_artifacts.marketplace.model import MarketplaceSourceState
-from agent_artifacts.protocol.hashing import json_digest
-from agent_artifacts.protocol.json import JsonObject
-from agent_artifacts.protocol.native_tree import SourceSnapshot
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.security.attestation_schema import attestation_bytes, security_index_bytes
-from agent_artifacts.security.attestations import (
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.config_store import read_configuration
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.marketplace.catalog import build_marketplace
+from aart_cli.marketplace.model import MarketplaceSourceState
+from aart_cli.protocol.hashing import json_digest
+from aart_cli.protocol.json import JsonObject
+from aart_cli.protocol.native_tree import SourceSnapshot
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.security.attestation_schema import attestation_bytes, security_index_bytes
+from aart_cli.security.attestations import (
     AssessmentCacheKey,
     AttestationOrigin,
     AttestationOriginKind,
@@ -42,8 +42,8 @@ from agent_artifacts.security.attestations import (
     SecurityIndexEntry,
     attestation_digest,
 )
-from agent_artifacts.security.baseline import BASELINE_RULES_DIGEST, not_scanned_assessment
-from agent_artifacts.sources.model import (
+from aart_cli.security.baseline import BASELINE_RULES_DIGEST, not_scanned_assessment
+from aart_cli.sources.model import (
     CurrentSource,
     SourcePublishCommand,
     ValidatedSourceCandidate,
@@ -52,8 +52,8 @@ from agent_artifacts.sources.model import (
     source_instance_id,
     source_store_paths,
 )
-from agent_artifacts.store.model import object_store_paths
-from agent_artifacts.tui_marketplace import MarketplaceTarget
+from aart_cli.store.model import object_store_paths
+from aart_cli.tui_marketplace import MarketplaceTarget
 from tests.marketplace_fixtures import configured_source, effective_configuration
 from tests.registry_maintenance_fixtures import (
     append_snapshot_file,
@@ -107,7 +107,7 @@ class ConsumerRuntimeTest(unittest.TestCase):
             with (
                 mock.patch.dict(os.environ, xdg, clear=False),
                 mock.patch(
-                    "agent_artifacts.consumer.runtime.read_configuration",
+                    "aart_cli.consumer.runtime.read_configuration",
                     side_effect=lambda request: (
                         Ok(b'{"schema_version":1,"required_sources":["company","team"]}')
                         if request.path == paths.policy_file

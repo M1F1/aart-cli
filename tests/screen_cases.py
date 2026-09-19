@@ -11,20 +11,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from agent_artifacts.application.candidate_validation import validate_candidate
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.candidate_validation import validate_candidate
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiState,
     InstallationConfigDraft,
     InstallationConfigField,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer_views import (
     MaintainerScreen,
     MaintainerViews,
     project_maintainer_candidate_lifecycle,
@@ -34,8 +34,8 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_version_conflict,
     project_registry_workspace,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload
 from tests import (
     action_prompt_layout_test,
     consumer_install_flow_shell_test,

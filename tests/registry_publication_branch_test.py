@@ -7,11 +7,11 @@ import unittest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.domain.publication import (
+from aart_cli.domain.publication import (
     PublicationBranch,
     resolve_publication_branch,
 )
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.result import Err, Ok
 
 
 class PublicationBranchNameTest(unittest.TestCase):

@@ -12,18 +12,18 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
 )
-from agent_artifacts.tui_consumer import CanonicalScreenSource, _reload, compose_frame
+from aart_cli.tui_consumer import CanonicalScreenSource, _reload, compose_frame
 from tests import user_inputs_area_test
 from tests.consumer_marketplace_shell_test import COLLECTION, drive
 from tests.consumer_marketplace_shell_test import screens as marketplace_screens

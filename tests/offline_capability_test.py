@@ -24,16 +24,16 @@ import shutil
 import unittest
 from pathlib import Path
 
-from agent_artifacts.domain.effects import InstallPythonDependencies
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceAlias
-from agent_artifacts.domain.python_runtime import ArtifactEnvironment, PythonInstaller
-from agent_artifacts.domain.result import Err
-from agent_artifacts.installation.application import prepare_install
-from agent_artifacts.installation.model import InstallLocation, InstallRequest
-from agent_artifacts.io.python_runtime import LocalPythonRuntime
-from agent_artifacts.profiles.builtin import builtin
-from agent_artifacts.sources.model import source_instance_id, source_store_paths
-from agent_artifacts.store.model import object_store_paths
+from aart_cli.domain.effects import InstallPythonDependencies
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias
+from aart_cli.domain.python_runtime import ArtifactEnvironment, PythonInstaller
+from aart_cli.domain.result import Err
+from aart_cli.installation.application import prepare_install
+from aart_cli.installation.model import InstallLocation, InstallRequest
+from aart_cli.io.python_runtime import LocalPythonRuntime
+from aart_cli.profiles.builtin import builtin
+from aart_cli.sources.model import source_instance_id, source_store_paths
+from aart_cli.store.model import object_store_paths
 from tests.canonical_install_planning_test import _candidate, _catalog, _MemoryReads
 from tests.marketplace_lifecycle_e2e_test import _COORDINATE
 from tests.source_sync_command_e2e_test import _environment_over_a_writable_source
@@ -91,7 +91,7 @@ class OfflineCapabilityTest(unittest.TestCase):
             self.assertEqual(diagnostic["code"], "source-not-synchronized")
             self.assertIn("--offline forbids fetching it", diagnostic["message"])
             self.assertIn(
-                "aart source sync --alias reference, while connected",
+                "aart-cli source sync --alias reference, while connected",
                 diagnostic["remediation"],
             )
 

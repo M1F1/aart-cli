@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from typing import cast
 
-from agent_artifacts.compiler.graph import (
+from aart_cli.compiler.graph import (
     ArtifactLifecycle,
     CollectionCoordinate,
     CompatibilityReason,
@@ -21,30 +21,30 @@ from agent_artifacts.compiler.graph import (
     marketplace_graph_bytes,
     select_artifacts,
 )
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
     SourceId,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.protocol.hashing import sha256_bytes
-from agent_artifacts.protocol.native_models import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.capabilities import Capability
+from aart_cli.protocol.hashing import sha256_bytes
+from aart_cli.protocol.native_models import (
     ArtifactSelector,
     CollectionManifest,
     CompatibilitySpec,
     InstallSpec,
 )
-from agent_artifacts.protocol.paths import SafeRelativePath
-from agent_artifacts.protocol.registry_models import (
+from aart_cli.protocol.paths import SafeRelativePath
+from aart_cli.protocol.registry_models import (
     IndexArtifact,
     IndexProvenance,
     IndexSetup,
     ReviewRecord,
 )
-from agent_artifacts.protocol.semver import SemVer, VersionBounds
+from aart_cli.protocol.semver import SemVer, VersionBounds
 
 
 def _digest(character: str) -> ObjectDigest:
@@ -156,11 +156,11 @@ class CompilerGraphTest(unittest.TestCase):
         self.assertTrue(supported.compatible)
         self.assertEqual(
             tuple(reason.code for reason in too_old.reasons),
-            ("aart-version-unsupported",),
+            ("aart-cli-version-unsupported",),
         )
         self.assertEqual(
             tuple(reason.code for reason in too_new.reasons),
-            ("aart-version-unsupported",),
+            ("aart-cli-version-unsupported",),
         )
         self.assertIn(
             b'"requires_aart":{"max_exclusive":"2.0.0","min_inclusive":"1.1.0"}',

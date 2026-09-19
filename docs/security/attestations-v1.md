@@ -2,7 +2,7 @@
 
 An AART security attestation is canonical, digest-bound assessment evidence for one immutable
 artifact object and one provider execution identity. It reduces uncertainty; it is not a claim
-that an artifact is safe. AART itself remains dependency-free, and no `aart security` command
+that an artifact is safe. AART itself remains dependency-free, and no `aart-cli security` command
 installs an optional analyzer.
 
 ## Cache identity and local storage
@@ -32,7 +32,7 @@ security/attestations/<attestation-sha256>.json
 
 The canonical index binds each document path and byte digest to its full cache key. Every
 registry-CI attestation also names the registry source ID, exact registry-inputs digest, and
-resolved revision. `aart registry audit` verifies those bindings against `aart.index.json`, requires
+resolved revision. `aart-cli registry audit` verifies those bindings against `aart.index.json`, requires
 evidence coverage for every compiled object, rejects evidence for unknown objects, rejects critical
 installation risk, and reports high or unknown risk for explicit review.
 
@@ -59,19 +59,19 @@ evidence rather than making optional analyzers runtime dependencies.
 
 ```console
 # Run the zero-dependency baseline over an exact object selected from a compiled index.
-aart security scan object.json --index aart.index.json --artifact skill/review \
+aart-cli security scan object.json --index aart.index.json --artifact skill/review \
   --lock aart.lock.json --cache /path/to/aart-security-cache
 
 # Inspect canonical assessment or attestation evidence.
-aart security show /path/to/attestation.json --json
+aart-cli security show /path/to/attestation.json --json
 
 # Verify canonical form and compare the full expected cache identity.
-aart security verify /path/to/attestation.json \
+aart-cli security verify /path/to/attestation.json \
   --object-digest sha256:<current-object-digest> --json
 
 # Discover reviewed adapters already present on this machine; nothing is installed.
-aart security analyzers
-aart security suites
+aart-cli security analyzers
+aart-cli security suites
 ```
 
 `scan` reads bounded real files, verifies the canonical object/index/optional lock, runs the pure

@@ -18,7 +18,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from agent_artifacts.registry_commands import templates
+from aart_cli.registry_commands import templates
 
 _ROOT = Path(__file__).resolve().parents[1]
 _MAINTAINER = re.compile(rb"M1F1", re.I)
@@ -105,7 +105,7 @@ class GeneratedRegistryTest(unittest.TestCase):
 
 class OperationalDefaultTest(unittest.TestCase):
     def test_the_registry_init_remediation_names_variables_rather_than_a_repository(self) -> None:
-        from agent_artifacts.curation import runtime
+        from aart_cli.curation import runtime
 
         source = Path(runtime.__file__).read_bytes()
 

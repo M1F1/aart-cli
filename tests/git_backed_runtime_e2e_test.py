@@ -16,8 +16,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.receipt_store import LocalReceiptStore
+from aart_cli.domain.result import Ok
+from aart_cli.io.receipt_store import LocalReceiptStore
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
 from tests.git_backed_consumer_e2e_test import _Environment
 from tests.mcp_stdio_e2e_test import SERVER_SOURCE, speak
@@ -26,7 +26,7 @@ COORDINATE = "company/mcp/notes"
 
 #: The same server `mcp_stdio_e2e_test` starts, published as an artifact that declares no inputs.
 #:
-#: The artifact declares none deliberately. `aart marketplace install` has no way to answer a
+#: The artifact declares none deliberately. `aart-cli marketplace install` has no way to answer a
 #: declared input -- the form belongs to the persistent shell -- so an artifact that declares one
 #: cannot be installed through the CLI at all, which the refusal test below pins. Credential and
 #: config delivery into a launched server is `mcp_stdio_e2e_test`'s subject and is not restated
@@ -168,7 +168,7 @@ if __name__ == "__main__":
 
 
 class GitBackedDoctorE2ETest(unittest.TestCase):
-    """CP-17 step 4: what `aart doctor` says about the installation the chain just produced.
+    """CP-17 step 4: what `aart-cli doctor` says about the installation the chain just produced.
 
     D-150's subject, proved where an operator meets it. The installation under test is the real
     one -- synchronized from a Git commit and installed through public verbs -- and the damage is

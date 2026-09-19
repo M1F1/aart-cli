@@ -1,4 +1,4 @@
-"""Tests for agent_artifacts.io.fs."""
+"""Tests for aart_cli.io.fs."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import os
 import tempfile
 import unittest
 
-from agent_artifacts.io.fs import (
+from aart_cli.io.fs import (
     copy_tree,
     exists,
     listdir,

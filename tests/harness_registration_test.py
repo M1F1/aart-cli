@@ -8,16 +8,16 @@ import stat
 import tempfile
 import unittest
 
-from agent_artifacts.domain.harness import (
+from aart_cli.domain.harness import (
     McpRegistration,
     McpTarget,
     Scope,
     mcp_target,
     registration_entry,
 )
-from agent_artifacts.domain.launch import Transport
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.harness import (
+from aart_cli.domain.launch import Transport
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.harness import (
     HARNESS_SETTINGS_UNREADABLE,
     HARNESS_SETTINGS_UNUSABLE,
     LocalHarnessRegistry,

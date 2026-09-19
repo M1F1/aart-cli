@@ -7,19 +7,19 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.compiler.model import ObjectPlan
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.object_store import (
+from aart_cli.compiler.model import ObjectPlan
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.object_store import (
     delete_object,
     inventory_objects,
     materialize_compiler_object,
     publish_object,
     read_object,
 )
-from agent_artifacts.protocol.hashing import sha256_bytes
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.store.model import (
+from aart_cli.protocol.hashing import sha256_bytes
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.store.model import (
     ObjectDeleteCommand,
     ObjectPublishCommand,
     ObjectReadRequest,
@@ -189,9 +189,7 @@ class ObjectStoreAdapterTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as root:
             paths = object_store_paths(root)
-            with patch(
-                "agent_artifacts.io.object_store.os.open", side_effect=PermissionError("denied")
-            ):
+            with patch("aart_cli.io.object_store.os.open", side_effect=PermissionError("denied")):
                 failed = publish_object(ObjectPublishCommand(paths, _candidate()))
             self.assertIsInstance(failed, Err)
 
@@ -213,7 +211,7 @@ class ObjectStoreAdapterTest(unittest.TestCase):
                 return real_rename(source, destination)
 
             with patch(
-                "agent_artifacts.io.object_store.os.rename",
+                "aart_cli.io.object_store.os.rename",
                 side_effect=fail_second_stage_rename,
             ):
                 failed = publish_object(ObjectPublishCommand(paths, candidate))
@@ -238,7 +236,7 @@ class ObjectStoreAdapterTest(unittest.TestCase):
             assert isinstance(published, Ok)
 
             with patch(
-                "agent_artifacts.io.object_store.shutil.rmtree",
+                "aart_cli.io.object_store.shutil.rmtree",
                 side_effect=OSError("delete failed"),
             ):
                 failed = delete_object(ObjectDeleteCommand(paths, candidate.digest))
@@ -275,9 +273,9 @@ class ObjectStoreAdapterTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as root:
             paths, candidate, _object_root = published(root)
-            with patch("agent_artifacts.io.object_store.os.scandir", side_effect=OSError("scan")):
+            with patch("aart_cli.io.object_store.os.scandir", side_effect=OSError("scan")):
                 self.assertIsInstance(read_object(ObjectReadRequest(paths, candidate.digest)), Err)
-            with patch("agent_artifacts.io.object_store.os.open", side_effect=OSError("open")):
+            with patch("aart_cli.io.object_store.os.open", side_effect=OSError("open")):
                 self.assertIsInstance(read_object(ObjectReadRequest(paths, candidate.digest)), Err)
 
             payload = Path(_object_root) / "artifact.json"
@@ -296,7 +294,7 @@ class ObjectStoreAdapterTest(unittest.TestCase):
                     original.st_ctime,
                 )
             )
-            with patch("agent_artifacts.io.object_store.os.fstat", return_value=raced):
+            with patch("aart_cli.io.object_store.os.fstat", return_value=raced):
                 self.assertIsInstance(read_object(ObjectReadRequest(paths, candidate.digest)), Err)
 
     def test_reader_does_not_follow_directory_swapped_to_symlink_mid_scan(self) -> None:
@@ -326,9 +324,7 @@ class ObjectStoreAdapterTest(unittest.TestCase):
                     swapped = True
                 return real_open(path, flags, *args, **kwargs)
 
-            with patch(
-                "agent_artifacts.io.object_store.os.open", side_effect=swap_before_file_open
-            ):
+            with patch("aart_cli.io.object_store.os.open", side_effect=swap_before_file_open):
                 result = read_object(ObjectReadRequest(paths, candidate.digest))
 
             self.assertTrue(swapped)
@@ -349,7 +345,7 @@ class ObjectStoreAdapterTest(unittest.TestCase):
             for name, value in limits:
                 with (
                     self.subTest(name=name),
-                    patch(f"agent_artifacts.io.object_store.{name}", value),
+                    patch(f"aart_cli.io.object_store.{name}", value),
                 ):
                     self.assertIsInstance(read_object(request), Err)
 
@@ -395,9 +391,7 @@ class ObjectStoreAdapterTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             paths = object_store_paths(root)
 
-            with patch(
-                "agent_artifacts.io.object_store.os.open", side_effect=PermissionError("denied")
-            ):
+            with patch("aart_cli.io.object_store.os.open", side_effect=PermissionError("denied")):
                 failed = publish_object(ObjectPublishCommand(paths, _candidate()))
 
             assert isinstance(failed, Err)

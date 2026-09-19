@@ -10,19 +10,19 @@ from __future__ import annotations
 
 from unittest import TestCase
 
-from agent_artifacts.configuration.model import (
+from aart_cli.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
     SourceKind,
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.policy import EffectiveConfiguration
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err
-from agent_artifacts.io.maintainer_sync import prepare_configured_source_sync
-from agent_artifacts.tui_layout import separate
-from agent_artifacts.tui_maintainer import (
+from aart_cli.configuration.policy import EffectiveConfiguration
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err
+from aart_cli.io.maintainer_sync import prepare_configured_source_sync
+from aart_cli.tui_layout import separate
+from aart_cli.tui_maintainer import (
     maintainer_registry_descriptor,
     maintainer_registry_status,
 )

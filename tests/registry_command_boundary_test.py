@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PURE = ROOT / "agent_artifacts" / "registry_commands"
+PURE = ROOT / "aart_cli" / "registry_commands"
 FORBIDDEN = {"os", "pathlib", "shutil", "socket", "subprocess", "tempfile", "importlib"}
 
 
@@ -23,7 +23,7 @@ class RegistryCommandBoundaryTest(unittest.TestCase):
         self.assertEqual(violations, [])
 
     def test_only_the_explicit_publish_flow_can_commit_and_no_registry_code_can_push(self) -> None:
-        command = ROOT / "agent_artifacts" / "commands" / "registry.py"
+        command = ROOT / "aart_cli" / "commands" / "registry.py"
         calls: list[tuple[str, str]] = []
         tree = ast.parse(command.read_text(encoding="utf-8"), filename=str(command))
         for function in (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)):
@@ -39,7 +39,7 @@ class RegistryCommandBoundaryTest(unittest.TestCase):
                     calls.append((function.name, node.args[1].value))
         self.assertEqual(calls, [("_run_publish", "commit")])
 
-        for path in (*PURE.rglob("*.py"), ROOT / "agent_artifacts/io/registry_workspace.py"):
+        for path in (*PURE.rglob("*.py"), ROOT / "aart_cli/io/registry_workspace.py"):
             text = path.read_text(encoding="utf-8")
             self.assertNotIn("git commit", text, path)
             self.assertNotIn("git push", text, path)

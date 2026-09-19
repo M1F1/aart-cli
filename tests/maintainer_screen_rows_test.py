@@ -12,18 +12,18 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer_views import (
     MaintainerBulkPromotionView,
     MaintainerCandidateFilter,
     MaintainerScreen,
@@ -34,14 +34,14 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_collection_validation,
     project_maintainer_dashboard,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.tui_consumer import (
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     ConsumerScreens,
     _reload,
     compose_frame,
 )
-from agent_artifacts.tui_maintainer import (
+from aart_cli.tui_maintainer import (
     maintainer_bulk_promotion_status,
     maintainer_registry_detail,
     maintainer_registry_rows,
@@ -284,7 +284,7 @@ class BulkPromotionTest(_Contract):
 
 class RepositoryAdoptionTest(_Contract):
     def test_46d_scan_result_rows_are_what_can_be_adopted(self) -> None:
-        from agent_artifacts.io.consumer_actions import _project_repository_scan
+        from aart_cli.io.consumer_actions import _project_repository_scan
 
         source = CanonicalScreenSource(
             ConsumerScreens(screens().dashboard, repository_scan=_project_repository_scan(_scan()))
@@ -297,7 +297,7 @@ class RepositoryAdoptionTest(_Contract):
         self.assertIn("skill/unfinished@1.0.0", status)
 
     def test_46f_adopted_artifacts_are_rows_with_no_key_prose(self) -> None:
-        from agent_artifacts.io.consumer_actions import _project_adopted_artifact
+        from aart_cli.io.consumer_actions import _project_adopted_artifact
 
         source = CanonicalScreenSource(
             ConsumerScreens(

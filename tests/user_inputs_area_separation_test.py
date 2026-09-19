@@ -14,10 +14,10 @@ from __future__ import annotations
 import datetime as dt
 import unittest
 
-from agent_artifacts.application.consumer_session import assemble_consumer_machine
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession
-from agent_artifacts.tui_consumer import (
+from aart_cli.application.consumer_session import assemble_consumer_machine
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     _reload,
     frame,

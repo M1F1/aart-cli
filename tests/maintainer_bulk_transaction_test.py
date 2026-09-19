@@ -11,28 +11,28 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.application.candidate_validation import validate_candidate
-from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
-from agent_artifacts.application.maintainer_promotion import (
+from aart_cli.application.candidate_validation import validate_candidate
+from aart_cli.application.maintainer import CandidateBundle, reconcile_source_scan
+from aart_cli.application.maintainer_promotion import (
     PreparedCandidatePromotionTransaction,
     plan_promotion_transaction,
     prepare_candidate_promotion,
     prepare_promotion_transaction,
 )
-from agent_artifacts.application.maintainer_sync import ApprovedRegistryState
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.registry import PromotionMode
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.application.maintainer_sync import ApprovedRegistryState
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.sources.model import source_snapshot_digest
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.sources.model import source_snapshot_digest
 
 
 def _entry(path: str, content: str) -> SnapshotEntry:

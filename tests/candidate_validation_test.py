@@ -12,7 +12,7 @@ import dataclasses
 import json
 import unittest
 
-from agent_artifacts.application.candidate_validation import (
+from aart_cli.application.candidate_validation import (
     VALIDATION_PIPELINE,
     CandidateValidation,
     ValidationCheck,
@@ -20,19 +20,19 @@ from agent_artifacts.application.candidate_validation import (
     validate_candidate,
     validated_candidate,
 )
-from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
-from agent_artifacts.domain.candidates import CandidateState, FindingSeverity
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.application.maintainer import CandidateBundle, reconcile_source_scan
+from aart_cli.domain.candidates import CandidateState, FindingSeverity
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
+from aart_cli.protocol.paths import parse_relative_path
 
 _ENVIRONMENT_SECRET = {
     "id": "github-token",

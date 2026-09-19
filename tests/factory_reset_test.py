@@ -15,10 +15,10 @@ from unittest import mock
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.factory_reset import plan_factory_reset
-from agent_artifacts.configuration.paths import ConfigPaths, Platform, resolve_config_paths
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.model import Request
+from aart_cli.application.factory_reset import plan_factory_reset
+from aart_cli.configuration.paths import ConfigPaths, Platform, resolve_config_paths
+from aart_cli.domain.result import Err, Ok
+from aart_cli.model import Request
 
 
 class FactoryResetPlanningTest(unittest.TestCase):
@@ -143,7 +143,7 @@ class FactoryResetTest(unittest.TestCase):
         (self.cache / "object").write_text("cache\n")
 
     def _run(self, answers: list[str]) -> tuple[int, str]:
-        from agent_artifacts.commands import reset
+        from aart_cli.commands import reset
 
         output = io.StringIO()
         with (
@@ -156,7 +156,7 @@ class FactoryResetTest(unittest.TestCase):
         return status, output.getvalue() + f"\nprompts={prompt.call_count}"
 
     def test_reset_is_a_distinct_public_cli_command(self) -> None:
-        from agent_artifacts import cli
+        from aart_cli import cli
 
         request = cli._to_request(cli.build_parser().parse_args(["reset"]))
 

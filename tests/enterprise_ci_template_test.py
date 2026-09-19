@@ -19,7 +19,7 @@ import tempfile
 import unittest
 import zipfile
 
-from agent_artifacts.registry_commands.templates import REGISTRY_CI_WORKFLOW
+from aart_cli.registry_commands.templates import REGISTRY_CI_WORKFLOW
 from tests.credential_fixtures import credential_url
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -322,7 +322,7 @@ class ToolNeedsNoPackagingTest(unittest.TestCase):
 
         template = TEMPLATE_TEXT
         self.assertIn("PYTHONPATH=", template)
-        self.assertIn("-m agent_artifacts", template)
+        self.assertIn("-m aart_cli", template)
         self.assertNotIn("setup-python", template)
         for name, body in _fetching_jobs(template).items():
             self.assertEqual(body.count("pip install"), 1, name)
@@ -338,7 +338,7 @@ class ToolNeedsNoPackagingTest(unittest.TestCase):
 
     def test_both_resolvers_check_the_package_before_trusting_the_tree(self) -> None:
         for body in (TEMPLATE_TEXT, _read(ACTION)):
-            self.assertIn("agent_artifacts/__main__.py", body)
+            self.assertIn("aart_cli/__main__.py", body)
             self.assertIn('echo "$bin" >> "$GITHUB_PATH"', body)
 
     def test_a_commit_sha_falls_back_from_the_shallow_clone(self) -> None:
@@ -369,11 +369,11 @@ class RegistryGatesAreCompleteTest(unittest.TestCase):
     def test_the_template_runs_every_registry_gate(self) -> None:
         template = TEMPLATE_TEXT
         for gate in (
-            "aart registry format --source . --check",
-            "aart registry validate --source .",
-            "aart registry build --source . --check",
-            "aart registry audit --source .",
-            "aart registry test --source . --compatibility",
+            "aart-cli registry format --source . --check",
+            "aart-cli registry validate --source .",
+            "aart-cli registry build --source . --check",
+            "aart-cli registry audit --source .",
+            "aart-cli registry test --source . --compatibility",
         ):
             self.assertIn(gate, template)
 
@@ -427,12 +427,12 @@ class EveryFetchArmIsReachableTest(unittest.TestCase):
         for label, body in EMITTED.items():
             for name, job in _fetching_jobs(body).items():
                 self.assertEqual(
-                    job.count('test -f "$tool/agent_artifacts/__main__.py"'), 1, f"{label}: {name}"
+                    job.count('test -f "$tool/aart_cli/__main__.py"'), 1, f"{label}: {name}"
                 )
 
 
 class ThePinIsReadFromTheRepositoryTest(unittest.TestCase):
-    """`.aart-version` decides the version; the variables only decide where to get it.
+    """`.aart-cli-version` decides the version; the variables only decide where to get it.
 
     The split is the point: a registry stood up at two companies runs the same version through
     different supply chains, so a version in a variable would have to be repeated per deployment
@@ -441,8 +441,10 @@ class ThePinIsReadFromTheRepositoryTest(unittest.TestCase):
 
     def test_every_workflow_reads_the_pin_before_choosing_an_arm(self) -> None:
         for label, body in EMITTED.items():
-            self.assertIn("if [ -f .aart-version ]; then PIN=", body, label)
-            self.assertLess(body.index(".aart-version"), body.index('if [ -n "$PACKAGE" ]'), label)
+            self.assertIn("if [ -f .aart-cli-version ]; then PIN=", body, label)
+            self.assertLess(
+                body.index(".aart-cli-version"), body.index('if [ -n "$PACKAGE" ]'), label
+            )
 
     def test_the_index_and_wheel_arms_substitute_the_pin(self) -> None:
         """Otherwise a version would have to be written into a variable as well as the file.
@@ -922,7 +924,7 @@ def _strict_posix_shell() -> str | None:
 
 POSIX_SHELL = _strict_posix_shell()
 
-# What the fake interpreter answers to `--version`, and what `.aart-version` therefore pins.  A
+# What the fake interpreter answers to `--version`, and what `.aart-cli-version` therefore pins.  A
 # number no real build carries, so a passing run cannot be one that reached the real package.
 FAKE_VERSION = "4.5.6"
 _FAKE_PY = """#!/usr/bin/env python3
@@ -936,10 +938,10 @@ if args[0] == "-c":
     sys.argv = ["-c", *args[2:]]
     exec(compile(args[1], "<fake>", "exec"), {"__name__": "__main__"})
 elif args[:2] == ["-m", "pip"]:
-    target = pathlib.Path(args[args.index("--target") + 1]) / "agent_artifacts"
+    target = pathlib.Path(args[args.index("--target") + 1]) / "aart_cli"
     target.mkdir(parents=True, exist_ok=True)
     (target / "__main__.py").write_text("", encoding="utf-8")
-elif args[:2] == ["-m", "agent_artifacts"]:
+elif args[:2] == ["-m", "aart_cli"]:
     print("aart-cli __VERSION__")
 """
 
@@ -958,7 +960,7 @@ class TheStepRunsOnAnImageWithoutBashTest(unittest.TestCase):
     def _stage(self, stack: contextlib.ExitStack) -> pathlib.Path:
         home = pathlib.Path(stack.enter_context(tempfile.TemporaryDirectory()))
         (home / "work").mkdir()
-        (home / "work" / ".aart-version").write_text(FAKE_VERSION + "\n", encoding="utf-8")
+        (home / "work" / ".aart-cli-version").write_text(FAKE_VERSION + "\n", encoding="utf-8")
         (home / "runner").mkdir()
         (home / "script.sh").write_text(_provide_aart_script(TEMPLATE_TEXT), encoding="utf-8")
         interpreter = home / "fake-python"
@@ -1003,11 +1005,11 @@ class TheStepRunsOnAnImageWithoutBashTest(unittest.TestCase):
         with contextlib.ExitStack() as stack:
             home = self._stage(stack)
             baked = home / "baked"
-            (baked / "agent_artifacts").mkdir(parents=True)
-            (baked / "agent_artifacts" / "__main__.py").write_text("", encoding="utf-8")
+            (baked / "aart_cli").mkdir(parents=True)
+            (baked / "aart_cli" / "__main__.py").write_text("", encoding="utf-8")
             out = self._succeeded(self._run(home, TOOL_PATH=str(baked)))
             self.assertIn(f"AART: aart-cli {FAKE_VERSION}", out)
-            self.assertIn("pinned by .aart-version", out)
+            self.assertIn("pinned by .aart-cli-version", out)
 
     def test_the_index_arm_expands_the_pin_without_bash(self) -> None:
         """`{version}` is substituted by a bash-only expansion that dash answers `Bad substitution`."""
@@ -1035,7 +1037,7 @@ class TheStepRunsOnAnImageWithoutBashTest(unittest.TestCase):
             served.mkdir(parents=True)
             wheel = served / f"aart_cli-{FAKE_VERSION}-py3-none-any.whl"
             with zipfile.ZipFile(wheel, "w") as archive:
-                archive.writestr("agent_artifacts/__main__.py", "")
+                archive.writestr("aart_cli/__main__.py", "")
             template = (
                 f"file://{home / 'served'}/v{{version}}/aart_cli-{{version}}-py3-none-any.whl"
             )
@@ -1049,10 +1051,10 @@ class TheStepRunsOnAnImageWithoutBashTest(unittest.TestCase):
         with contextlib.ExitStack() as stack:
             home = self._stage(stack)
             baked = home / "baked"
-            (baked / "agent_artifacts").mkdir(parents=True)
-            (baked / "agent_artifacts" / "__main__.py").write_text("", encoding="utf-8")
+            (baked / "aart_cli").mkdir(parents=True)
+            (baked / "aart_cli" / "__main__.py").write_text("", encoding="utf-8")
             self._succeeded(self._run(home, TOOL_PATH=str(baked)))
-            shebang = (home / "runner" / "aart-bin" / "aart").read_text(encoding="utf-8")
+            shebang = (home / "runner" / "aart-bin" / "aart-cli").read_text(encoding="utf-8")
             self.assertNotIn("bash", shebang.splitlines()[0])
 
 
@@ -1076,8 +1078,8 @@ if args[0] == "clone":
             "fatal: could not read Username for '%s': No such device or address\\n" % url
         )
         raise SystemExit(128)
-    (dest / "agent_artifacts").mkdir(parents=True, exist_ok=True)
-    (dest / "agent_artifacts" / "__main__.py").write_text("", encoding="utf-8")
+    (dest / "aart_cli").mkdir(parents=True, exist_ok=True)
+    (dest / "aart_cli" / "__main__.py").write_text("", encoding="utf-8")
     config(dest).parent.mkdir(parents=True, exist_ok=True)
     config(dest).write_text("url = %s\\n" % url, encoding="utf-8")
 elif args[0] == "-C" and "remote" in args:
@@ -1219,7 +1221,7 @@ class TheWorkspaceIsTrustedBeforeTheGatesTest(unittest.TestCase):
             self.assertIn(_TRUST_STEP, body, label)
             self.assertLess(
                 body.index(_TRUST_STEP),
-                body.index("- run: aart registry"),
+                body.index("- run: aart-cli registry"),
                 f"{label}: a gate would read the checkout before git had been told to trust it",
             )
 

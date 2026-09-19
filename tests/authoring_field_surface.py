@@ -20,7 +20,7 @@ import ast
 from dataclasses import dataclass
 from pathlib import Path
 
-AUTHORING_PARSER = Path(__file__).resolve().parents[1] / "agent_artifacts/protocol/authoring.py"
+AUTHORING_PARSER = Path(__file__).resolve().parents[1] / "aart_cli/protocol/authoring.py"
 
 #: The keyword-only parameters that make a function a field-accepting helper.
 FIELD_KEYWORDS = ("required", "optional")

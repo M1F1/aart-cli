@@ -22,17 +22,17 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts import cli
-from agent_artifacts.curation.runtime import LocalCurationService
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import (
+from aart_cli import cli
+from aart_cli.curation.runtime import LocalCurationService
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
+from aart_cli.registry_maintenance.model import NativeReferenceAcquisition
 from tests.registry_vendoring_projection_test import (
     _COMMIT,
     _MCP_JSON,
@@ -114,7 +114,7 @@ class RevendorTest(unittest.TestCase):
                 ),
             )
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(original),
             ):
                 code, output = _run(
@@ -162,7 +162,7 @@ class RevendorTest(unittest.TestCase):
             )
             service = LocalCurationService(str(root), native_acquirer=acquirer)
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 yield root
@@ -384,7 +384,7 @@ class RevendorTest(unittest.TestCase):
                 ),
             )
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 code, output = _run(

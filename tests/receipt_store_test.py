@@ -13,32 +13,32 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ActivityRecord,
     activity_from_receipts,
     project_receipt_detail,
     receipt_detail_from_data,
     receipt_detail_to_data,
 )
-from agent_artifacts.domain.credentials import CredentialProviderRef, CredentialReference
-from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.credentials import CredentialProviderRef, CredentialReference
+from aart_cli.domain.harness import McpRegistration, Scope, mcp_target
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     InputId,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.launch import Transport
-from agent_artifacts.domain.receipts import (
+from aart_cli.domain.launch import Transport
+from aart_cli.domain.receipts import (
     InstallationReceipt,
     config_fingerprint,
     installation_receipt_from_data,
     installation_receipt_to_data,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
-from agent_artifacts.io.receipt_store import RECEIPT_UNREADABLE, LocalReceiptStore
+from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.selection import OwnershipKind, OwnershipReason
+from aart_cli.io.receipt_store import RECEIPT_UNREADABLE, LocalReceiptStore
 from tests.consumer_activity_test import lifecycle_outcome
 
 COORDINATE = ArtifactCoordinate(SourceAlias("public"), ArtifactIdentity("mcp", "github"), "1.6.0")

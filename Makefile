@@ -46,7 +46,7 @@ lint:
 	$(QUALITY) lint
 
 format:
-	$(PYTHON) -m ruff format agent_artifacts tests scripts
+	$(PYTHON) -m ruff format aart_cli tests scripts
 
 format-check:
 	$(QUALITY) format-check
@@ -72,7 +72,7 @@ quality:
 # Mutation adequacy, advisory and always scoped (D-134). A suite that passes proves the code does
 # what the tests say; a killed mutant proves the test would have noticed if it did not.
 #
-#   make mutants ONLY=agent_artifacts/setup_render.py TESTS="tests/setup_render_test.py"
+#   make mutants ONLY=aart_cli/setup_render.py TESTS="tests/setup_render_test.py"
 #
 # Survivors are findings to read, not a number to drive to zero. Never weaken a test to move it.
 ONLY ?=

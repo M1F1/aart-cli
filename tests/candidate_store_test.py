@@ -8,15 +8,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.application.maintainer import reconcile_source_scan
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.candidate_store import (
+from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.candidate_store import (
     candidate_history_paths,
     read_candidate_history,
     write_candidate_history,
 )
-from agent_artifacts.sources.model import SourceInstanceId, source_store_paths
+from aart_cli.sources.model import SourceInstanceId, source_store_paths
 from tests.candidate_history_test import _ready_scan
 from tests.maintainer_source_scan_test import _compiled
 
@@ -97,7 +97,7 @@ class CandidateHistoryStoreTest(unittest.TestCase):
             self.assertIsInstance(write_candidate_history(paths, first), Ok)
 
             with patch(
-                "agent_artifacts.io.candidate_store.os.replace",
+                "aart_cli.io.candidate_store.os.replace",
                 side_effect=OSError("replace failed"),
             ):
                 interrupted = write_candidate_history(paths, changed.value)

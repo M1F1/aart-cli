@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import SnapshotOrigin
-from agent_artifacts.sources.model import SourceInstanceId
-from agent_artifacts.sources.pointer import (
+from aart_cli.domain.identifiers import ObjectDigest, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import SnapshotOrigin
+from aart_cli.sources.model import SourceInstanceId
+from aart_cli.sources.pointer import (
     CurrentPointer,
     current_pointer_bytes,
     parse_current_pointer,

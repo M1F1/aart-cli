@@ -25,7 +25,7 @@ from unittest import mock
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -36,22 +36,22 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     PresentationProfile,
     project_credential_record,
 )
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.consumer_actions import LocalConsumerActions
-from agent_artifacts.io.consumer_machine import read_consumer_machine
-from agent_artifacts.io.receipt_store import LocalReceiptStore
-from agent_artifacts.tui_consumer import CanonicalScreenSource, _reload, frame
+from aart_cli.domain.result import Ok
+from aart_cli.io.consumer_actions import LocalConsumerActions
+from aart_cli.io.consumer_machine import read_consumer_machine
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.tui_consumer import CanonicalScreenSource, _reload, frame
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions, _at, _drive
 from tests.consumer_install_flow_shell_test import _navigate, at, screens

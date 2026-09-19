@@ -21,32 +21,32 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.application.consumer_views import ConsumerScreen
-from agent_artifacts.application.promotion import (
+from aart_cli.application.consumer_views import ConsumerScreen
+from aart_cli.application.promotion import (
     load_registry_versions,
     plan_registry_lifecycle,
     project_lifecycle_update,
 )
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.registry import PromotionMode, RegistryLifecycle
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
-from agent_artifacts.sources.model import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.registry import PromotionMode, RegistryLifecycle
+from aart_cli.domain.result import Ok
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from aart_cli.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
     make_source_candidate,
     source_instance_id,
     source_store_paths,
 )
-from agent_artifacts.tui_consumer import (
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     read_consumer_offers,
     run_consumer_shell,
     screens_from,
 )
-from agent_artifacts.tui_marketplace import MarketplaceTarget
+from aart_cli.tui_marketplace import MarketplaceTarget
 from tests.configured_installation_draft_e2e_test import (
     AUTHORED_MCP,
     _published_registries,
@@ -73,7 +73,7 @@ def _at_version(version: str):
 
 
 def _machine():
-    from agent_artifacts.application.consumer_session import assemble_consumer_machine
+    from aart_cli.application.consumer_session import assemble_consumer_machine
 
     return assemble_consumer_machine((), today=TODAY)
 

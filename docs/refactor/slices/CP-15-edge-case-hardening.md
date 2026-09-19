@@ -44,7 +44,7 @@ temporary machine, and (c) records which mutation it was proven against.
 
 | Accepted scenario | Invariant | Evidence that existed | Gap |
 |---|---|---|---|
-| Source publishes an invalid revision | INV-218 | `source_store_adapter_test` (corrupt convergent snapshot never becomes current); `source_sync_application_test` (validation failure publishes nothing) | Both drive the seam. Nothing drove `aart source sync`. **Closed by increment 1.** |
+| Source publishes an invalid revision | INV-218 | `source_store_adapter_test` (corrupt convergent snapshot never becomes current); `source_sync_application_test` (validation failure publishes nothing) | Both drive the seam. Nothing drove `aart-cli source sync`. **Closed by increment 1.** |
 | Registry change must not silently mutate installations | INV-210 | `canonical_lifecycle_test` covers a source that is missing, disabled or has moved origin | The state a refused sync actually leaves — `could-not-check` — was untested, and was being read as "source gone". **Closed by increment 1 (D-132).** |
 | Registry unavailable / offline | INV-223, 165.11 | `--offline` installs from cached objects | Online-but-unreachable was a hard failure with an internal message. **Closed by increment 1 (D-132).** The three-way decomposition is **held and measured by increment 3**; what remains is *reporting* it before an install is attempted (B-051). |
 | Registry rollback preserves history | INV-216 | promotion audit chain walks backwards from the approved snapshot (D-104) | **Closed for the consumer half by increment 2.** The Git revert/commit half waits on CP-17 |
@@ -84,9 +84,9 @@ Nothing else is blocked at slice start.
 
 ## Completed increments
 
-### Step 1 — registry state safety through `aart source sync` (D-132)
+### Step 1 — registry state safety through `aart-cli source sync` (D-132)
 
-`tests/source_sync_command_e2e_test.py` is the first thing anywhere to drive `aart source sync`
+`tests/source_sync_command_e2e_test.py` is the first thing anywhere to drive `aart-cli source sync`
 over a real source that turned invalid under it. The upstream publishes a new revision *and* an
 `aart-registry.json` that does not parse, which is the `RS-08` refusal a real publisher can cause;
 both halves are deliberate, because an invalid revision carrying the good bytes would pass every
@@ -96,7 +96,7 @@ What the eight tests hold:
 
 - the refusal is per-source in the JSON payload and exits non-zero, and the human rendering carries
   the remediation rather than only the complaint;
-- the store still points at the last good snapshot and `aart marketplace list` still offers every
+- the store still points at the last good snapshot and `aart-cli marketplace list` still offers every
   artifact of it, digest for digest;
 - the source stops claiming to be healthy: `could-not-check` with a named `source-invalid`
   diagnostic, degraded rather than withdrawn;
@@ -109,7 +109,7 @@ What the eight tests hold:
 
 Writing them found the defect D-132 records: `could-not-check` — which is exactly what the explicit
 last-known-good fallback `SyncDisposition.RETAINED` produces — was read as "this source is gone" in
-three places, so one invalid upstream revision made `aart marketplace status` report every
+three places, so one invalid upstream revision made `aart-cli marketplace status` report every
 installation as `source-unavailable` and made `install` and `update` fail on a plan-construction
 invariant with no remediation on it. Product Specification 165.11 settles it, and both sets now
 admit it.
@@ -165,7 +165,7 @@ one boolean, so the question this step had to answer is whether the three collap
 They do not. `tests/offline_capability_test.py` pins each layer where it lives and, more to the
 point, pins that they stay distinguishable from each other:
 
-- a source whose metadata was never synchronized refuses by naming the *cache* -- `aart source
+- a source whose metadata was never synchronized refuses by naming the *cache* -- `aart-cli source
   sync` as the way forward -- rather than the artifact, because an artifact that was never offered
   cannot be the thing at fault;
 - a cached-metadata, uncached-object install is a different refusal under a different code, and the
@@ -191,7 +191,7 @@ offline installs and would have stayed green with the flag removed, silently rea
 on every `--offline` install.
 
 What is not closed: nothing *reports* the three capabilities before an install is attempted, which
-is the reading 165.11 shows. Recorded as B-051 for CP-16, where `aart doctor` is the surface that
+is the reading 165.11 shows. Recorded as B-051 for CP-16, where `aart-cli doctor` is the surface that
 would carry it; INV-223 stays PARTIAL against it.
 
 ### Step 4a — effects that applied, then a verification that failed (INV-224, D-133)
@@ -206,7 +206,7 @@ first and separately, which is the shape 165.12 describes -- *"github-mcp was in
 verification failed"* -- and `marketplace status` afterwards still reports it `current`, so a failed
 check on one transaction does not un-install what another already placed.
 
-165.12 makes two claims and they came apart. The report half already held: `aart marketplace setup`
+165.12 makes two claims and they came apart. The report half already held: `aart-cli marketplace setup`
 exits non-zero, `ok` is false, the item is `verification-failed` -- its own word, not
 `apply-failed-rolled-back` and not `cancelled`, because an operator told the wrong one repairs the
 wrong thing -- the counts read `configured=0, incomplete=1`, and the human rendering carries the
@@ -245,7 +245,7 @@ Six claims:
   `apply-failed-rolled-back`, and it carries a recovery line. Those are two different promises about
   the machine, and an operator told the restoring one when the other is true stops looking (165.13);
 - the working copy is still there afterwards;
-- `aart marketplace receipt verify` finds it, exits non-zero, and names *the directory the engine
+- `aart-cli marketplace receipt verify` finds it, exits non-zero, and names *the directory the engine
   actually created* -- asserted by identity, and cross-checked against the record's own plan hash;
 - verify reports it and leaves it exactly where it is (`LAF-61`), because inspection that deletes
   its own evidence is worse than no inspection;
@@ -256,7 +256,7 @@ Six claims:
 
 The JSON claim is there because writing this file found the defect. A parsed record's steps are
 frozen recursively into `MappingProxyType` and the receipt projection copied each step shallowly, so
-every nested object stayed a proxy and `json.dumps` refused it — `aart marketplace receipt show
+every nested object stayed a proxy and `json.dumps` refused it — `aart-cli marketplace receipt show
 --json` ended in a `TypeError` traceback for exactly the run whose evidence is hardest to
 reconstruct by hand. `setup.py`'s `_plain` was already the inverse of `_freeze`; it is now public as
 `plain_value` and the projection uses it.
@@ -277,7 +277,7 @@ same directory through the same reader.
 pull in opposite directions, so the file has two halves and they were measured separately.
 
 **The first half is characterization and it passed on shipped code.** There is no `purge` verb
-anywhere in `agent_artifacts` — the word does not appear — and the registry lifecycle offers only
+anywhere in `aart_cli` — the word does not appear — and the registry lifecycle offers only
 `deprecate_registry_version` and `revoke_registry_version`, both of which `replace()` state and
 delete nothing. So "physical purge is exceptional" is held in the strongest available form, and what
 needed measuring was the *ordinary* path: what a real upstream withdrawal does to a real machine.
@@ -286,17 +286,17 @@ The upstream deletes the artifact and re-points its Collection at the one that r
 a maintainer withdrawing one artifact would actually publish; the withdrawal has to be coherent to
 be measured at all, because deleting the artifact alone leaves the graph invalid and emptying the
 Collection is refused for its own reason, and both refusals arrive before any of these questions is
-reached. Then `aart source sync`, and five claims:
+reached. Then `aart-cli source sync`, and five claims:
 
-- the artifact stops being offered by `aart marketplace list`, and the source keeps serving the rest;
+- the artifact stops being offered by `aart-cli marketplace list`, and the source keeps serving the rest;
 - installing it is refused as `artifact-not-found` with a remediation on it, rather than as a crash;
 - **what is already installed is not touched** — the placed files are byte-identical and
-  `aart marketplace status` says `removed-upstream`, which is the honest word: not `current`, and
+  `aart-cli marketplace status` says `removed-upstream`, which is the honest word: not `current`, and
   not `broken`. A registry that could uninstall by publishing would be a registry that reaches into
   a project without a plan, which is the boundary INV-210 draws;
 - the payload bytes stay in the content-addressed object store, which is what keeps that
   installation whole;
-- and `aart marketplace uninstall` still works, because not-deleting must not become
+- and `aart-cli marketplace uninstall` still works, because not-deleting must not become
   not-removable — withdrawal cannot be a way to pin something on a machine permanently. This one is
   held by a deliberate special case: uninstall resolves against the manifest and never through the
   source, with `commands/marketplace.py` saying so in its own comment.
@@ -333,7 +333,7 @@ such.
 
 B-055 records the unreachable `ArtifactLifecycle.REMOVED` merge path found while writing this.
 
-`make mutants ONLY=agent_artifacts/security/baseline.py` was run over this module with the three
+`make mutants ONLY=aart_cli/security/baseline.py` was run over this module with the three
 test files nearest it, per D-134: 1218 mutants, 335 survivors. The count means nothing on its own
 (B-054), but one survivor did. Replacing the assignment-detector's result with `None` —
 
@@ -359,7 +359,7 @@ development install is clearly marked and keeps being surfaced afterwards. What 
 *trust* an artifact is installed at, and what the machine's policy says about that trust now.
 
 Two of the eight claims passed on shipped code and they are the ones that matter as premises: a
-policy that tightens after the fact changes nothing on disk, and `aart marketplace install` really
+policy that tightens after the fact changes nothing on disk, and `aart-cli marketplace install` really
 does refuse the same artifact under the new rule (`install-policy-denied`). Six were red. `aart
 marketplace status` reported `current` and nothing else — not that the artifact would be refused
 today, not the reason, and not that its content came from a mutable directory on somebody's disk
@@ -393,7 +393,7 @@ branch that no caller could reach, because every path where the record resolves 
 the code that looked like it held it. The unreachable branch is gone and the default is now what the
 docstring points at — and mutating *that* default to a pass turns exactly the one test red.
 
-`make mutants ONLY=agent_artifacts/lifecycle/application.py` then found one more, and it was inside
+`make mutants ONLY=aart_cli/lifecycle/application.py` then found one more, and it was inside
 this slice's own new code: dropping the standing on the *other* branch of the merge -- the one taken
 when the local installation is itself damaged -- killed nothing, because every test here had a
 healthy payload. That is precisely the case D-136 exists for: a payload edited under AART's feet
@@ -458,7 +458,7 @@ because the consumer had not re-synchronized, not because the promotion was unpu
 simulated-push mutation left it green. It now synchronizes first, so the refusal it asserts is the
 one 165.28 promises.
 
-`make mutants ONLY=agent_artifacts/application/promotion.py TESTS=<this file>` was run per D-134:
+`make mutants ONLY=aart_cli/application/promotion.py TESTS=<this file>` was run per D-134:
 1604 mutants, 388 killed, 842 skipped as uncovered, 374 survived. Read that figure for what it is —
 the run was scoped to *these nine tests alone*, so a survivor means "these nine do not hold it", not
 "nothing holds it", and nine end-to-end tests are not meant to hold a 1600-mutant module. The
@@ -486,7 +486,7 @@ A changes cannot be measured with only an A.
 Nothing needed changing. The claims split three ways by where they can honestly be measured, and the
 split is recorded here rather than smoothed over:
 
-- **The retention statement runs through the public verb.** `aart marketplace uninstall` already
+- **The retention statement runs through the public verb.** `aart-cli marketplace uninstall` already
   emits `"credentials": "retained"` and the line `Credentials: retained.`, with a source comment
   saying a review that stayed silent would leave the reader assuming the opposite. No test anywhere
   asserted either string.
@@ -518,7 +518,7 @@ mutation: it read `step["effect"]["kind"]` from a finalized receipt where `effec
 its comprehension filtered every step away and the assertion ran over an empty set. Where an
 absence is asserted here, the set it is asserted over is now asserted non-empty first.
 
-`make mutants ONLY=agent_artifacts/application/installation_inputs.py` scoped to this file: 94
+`make mutants ONLY=aart_cli/application/installation_inputs.py` scoped to this file: 94
 mutants, 77 killed, 17 survived. All seventeen are outside these claims — the defensive
 `INPUT_COMPOSITION_INVALID` type-guard branch, the wording of that message, the `ValueError`
 catch-all, and the sort key that orders fields, which two tests asserting a single-element list

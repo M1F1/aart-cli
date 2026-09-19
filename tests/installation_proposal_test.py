@@ -13,7 +13,7 @@ import json
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.installation_proposal import (
+from aart_cli.application.installation_proposal import (
     PROPOSAL_INVALID,
     InstallationProposal,
     PlannedInstallation,
@@ -21,19 +21,19 @@ from agent_artifacts.application.installation_proposal import (
     intended_receipt,
     propose_installation,
 )
-from agent_artifacts.application.installation_verification import InstallationObservation
-from agent_artifacts.application.installed_state import (
+from aart_cli.application.installation_verification import InstallationObservation
+from aart_cli.application.installed_state import (
     current_state_from_observation,
     desired_state_from_receipt,
 )
-from agent_artifacts.application.intents import LifecycleIntentKind
-from agent_artifacts.application.runtime_projection import (
+from aart_cli.application.intents import LifecycleIntentKind
+from aart_cli.application.runtime_projection import (
     RuntimeProjection,
     configuration_projection,
 )
-from agent_artifacts.domain.candidates import CandidateId
-from agent_artifacts.domain.credentials import CredentialProviderRef
-from agent_artifacts.domain.effects import (
+from aart_cli.domain.candidates import CandidateId
+from aart_cli.domain.credentials import CredentialProviderRef
+from aart_cli.domain.effects import (
     ConfigureHarness,
     CopyTree,
     CreatePythonEnvironment,
@@ -43,15 +43,15 @@ from agent_artifacts.domain.effects import (
     StoreCredential,
     WriteFile,
 )
-from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.harness import McpRegistration, Scope, mcp_target
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     InputId,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.inputs import (
+from aart_cli.domain.inputs import (
     BoundInput,
     BoundInputs,
     ConfigInput,
@@ -60,25 +60,25 @@ from agent_artifacts.domain.inputs import (
     SecretInput,
     SecretProviderReference,
 )
-from agent_artifacts.domain.inspection import EnvironmentFacts
-from agent_artifacts.domain.launch import LaunchContract, Transport
-from agent_artifacts.domain.plans import install_plan_to_data
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.reconciliation import (
+from aart_cli.domain.inspection import EnvironmentFacts
+from aart_cli.domain.launch import LaunchContract, Transport
+from aart_cli.domain.plans import install_plan_to_data
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.python_runtime import ArtifactEnvironment
+from aart_cli.domain.reconciliation import (
     Component,
     ComponentId,
     ComponentState,
     CurrentState,
     ObservedComponent,
 )
-from agent_artifacts.domain.registry import (
+from aart_cli.domain.registry import (
     PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.domain.selection import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     OwnershipKind,

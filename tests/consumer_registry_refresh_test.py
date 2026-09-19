@@ -24,7 +24,7 @@ from unittest import mock
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -34,26 +34,26 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.consumer_actions import RegistryConnectionSnapshot
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.sources.model import (
+from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.consumer_actions import RegistryConnectionSnapshot
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
     make_source_candidate,
     source_instance_id,
     source_store_paths,
 )
-from agent_artifacts.tui_consumer import (
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     frame,
     read_consumer_offers,
     screens_from,
 )
-from agent_artifacts.tui_marketplace import MarketplaceTarget
+from aart_cli.tui_marketplace import MarketplaceTarget
 from tests.configured_installation_draft_e2e_test import _published_registry
 from tests.consumer_marketplace_composition_e2e_test import _machine
 from tests.marketplace_fixtures import configured_source, effective_configuration
@@ -153,8 +153,8 @@ class RegistryRefreshInteractionTest(unittest.TestCase):
     def test_the_maintainer_source_sync_key_is_untouched(self) -> None:
         """One key means what the screen it was pressed on is about; 31 keeps its own action."""
 
-        from agent_artifacts.application.consumer_views import ConsumerSettings
-        from agent_artifacts.application.maintainer_views import MaintainerScreen
+        from aart_cli.application.consumer_views import ConsumerSettings
+        from aart_cli.application.maintainer_views import MaintainerScreen
 
         state = ConsumerUiState(
             ConsumerSession(MaintainerScreen.SOURCES),
@@ -225,7 +225,7 @@ class RegistryRefreshCompositionTest(unittest.TestCase):
     """The composed application, and the canonical transaction it is obliged to use."""
 
     def _composed(self, env):
-        from agent_artifacts import tui
+        from aart_cli import tui
 
         composed = tui._canonical_consumer_actions(
             project=str(env.project), user_home=str(env.home), today=TODAY
@@ -243,7 +243,7 @@ class RegistryRefreshCompositionTest(unittest.TestCase):
                     refresher = actions._registry_refresh
                     self.assertIsNotNone(refresher)
                     with mock.patch(
-                        "agent_artifacts.commands.source.sync_configured_sources",
+                        "aart_cli.commands.source.sync_configured_sources",
                         return_value=Ok(()),
                     ) as synchronize:
                         refreshed = refresher(alias)  # type: ignore[misc]
@@ -258,7 +258,7 @@ class RegistryRefreshCompositionTest(unittest.TestCase):
     def test_a_refusal_leaves_the_previously_offered_marketplace_standing(self) -> None:
         """Last-known-good: a failed fetch must not take away what is already approved."""
 
-        from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+        from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
         from tests.configured_install_command_e2e_test import _environment
 
         with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
@@ -401,7 +401,7 @@ class RegistryRefreshNavigationTest(unittest.TestCase):
         self.assertTrue(ConsumerScreen.REGISTRY_SYNC.value.startswith("21"))
 
     def test_the_result_returns_to_the_registry_list(self) -> None:
-        from agent_artifacts.application.consumer_ui import _ACTION_RESULT
+        from aart_cli.application.consumer_ui import _ACTION_RESULT
 
         self.assertIs(
             _ACTION_RESULT[(ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRY_SYNC)],
@@ -409,7 +409,7 @@ class RegistryRefreshNavigationTest(unittest.TestCase):
         )
 
     def test_the_review_screen_is_reachable_from_the_registry_list(self) -> None:
-        from agent_artifacts.application.consumer_views import navigation_targets
+        from aart_cli.application.consumer_views import navigation_targets
 
         self.assertIn(
             ConsumerScreen.REGISTRY_SYNC,

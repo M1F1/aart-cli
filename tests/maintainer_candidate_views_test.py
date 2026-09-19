@@ -5,19 +5,19 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.application.maintainer import reconcile_source_scan
-from agent_artifacts.application.maintainer_views import project_maintainer_candidates
-from agent_artifacts.domain.candidates import CandidateState
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.application.maintainer_views import project_maintainer_candidates
+from aart_cli.domain.candidates import CandidateState
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
+from aart_cli.protocol.paths import parse_relative_path
 
 
 def _entry(path: str, content: str) -> SnapshotEntry:

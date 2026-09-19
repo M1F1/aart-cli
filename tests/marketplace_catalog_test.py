@@ -3,12 +3,12 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.marketplace.catalog import build_marketplace, resolve_artifact
-from agent_artifacts.marketplace.model import ArtifactQuery
-from agent_artifacts.protocol.registry_models import ReviewRecord
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.marketplace.catalog import build_marketplace, resolve_artifact
+from aart_cli.marketplace.model import ArtifactQuery
+from aart_cli.protocol.registry_models import ReviewRecord
 from tests.marketplace_fixtures import (
     artifact,
     configured_source,
@@ -151,13 +151,13 @@ class MarketplaceCatalogTest(unittest.TestCase):
         source = configured_source("direct", SourceKind.SOURCE_GIT)
         state = source_state(source, "direct-id", display_order=0)
         compiled = graph((source, "direct-id", (artifact("direct-id", "item"),)))
-        with patch("agent_artifacts.marketplace.catalog._MAX_SOURCES", 0):
+        with patch("aart_cli.marketplace.catalog._MAX_SOURCES", 0):
             source_bound = build_marketplace(
                 compiled,
                 effective_configuration((source,)),
                 (state,),
             )
-        with patch("agent_artifacts.marketplace.catalog._MAX_ITEMS", 0):
+        with patch("aart_cli.marketplace.catalog._MAX_ITEMS", 0):
             item_bound = build_marketplace(
                 compiled,
                 effective_configuration((source,)),

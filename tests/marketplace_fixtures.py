@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from agent_artifacts.compiler.graph import GraphSource, MarketplaceGraph, compile_marketplace_graph
-from agent_artifacts.configuration.model import (
+from aart_cli.compiler.graph import GraphSource, MarketplaceGraph, compile_marketplace_graph
+from aart_cli.configuration.model import (
     CompanyReviewedSource,
     ConfiguredSource,
     OrganizationPolicy,
@@ -9,40 +9,40 @@ from agent_artifacts.configuration.model import (
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.policy import (
+from aart_cli.configuration.policy import (
     EffectiveConfiguration,
     RuntimeOverrides,
     apply_configuration,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.diagnostics import Diagnostic
+from aart_cli.domain.identifiers import (
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
     SourceId,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.marketplace.model import MarketplaceSourceState
-from agent_artifacts.protocol.native_models import (
+from aart_cli.domain.result import Ok
+from aart_cli.marketplace.model import MarketplaceSourceState
+from aart_cli.protocol.native_models import (
     ArtifactSelector,
     CollectionManifest,
     CompatibilitySpec,
     InstallSpec,
 )
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import SafeRelativePath
-from agent_artifacts.protocol.registry_models import (
+from aart_cli.protocol.paths import SafeRelativePath
+from aart_cli.protocol.registry_models import (
     IndexArtifact,
     IndexProvenance,
     ReviewRecord,
 )
-from agent_artifacts.protocol.semver import SemVer, VersionBounds
-from agent_artifacts.sources.model import (
+from aart_cli.protocol.semver import SemVer, VersionBounds
+from aart_cli.sources.model import (
     CurrentSource,
     assess_source_health,
     make_source_candidate,

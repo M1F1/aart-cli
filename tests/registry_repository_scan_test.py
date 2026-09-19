@@ -24,15 +24,15 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts.application.maintainer import CandidateBundle
-from agent_artifacts.domain.candidates import (
+from aart_cli.application.maintainer import CandidateBundle
+from aart_cli.domain.candidates import (
     CandidateFinding,
     FindingSeverity,
     assess_candidate,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.registry_adoption import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.registry_adoption import (
     AdoptionUpstreamDisposition,
     apply_adoption,
     check_adopted_upstream,
@@ -40,9 +40,9 @@ from agent_artifacts.io.registry_adoption import (
     prepare_adoption,
     scan_repository,
 )
-from agent_artifacts.io.registry_bootstrap import bootstrap_registry_workspace
-from agent_artifacts.sources.git import acquire_git_snapshot
-from agent_artifacts.sources.model import GitSnapshotRequest
+from aart_cli.io.registry_bootstrap import bootstrap_registry_workspace
+from aart_cli.sources.git import acquire_git_snapshot
+from aart_cli.sources.model import GitSnapshotRequest
 
 SKILL_MANIFEST = """schema: aart.dev/skill/v1
 artifact:
@@ -137,7 +137,7 @@ class _Lab(unittest.TestCase):
         under test ever weakens the transport request it makes.
         """
 
-        from agent_artifacts.curation.runtime import default_native_acquirer
+        from aart_cli.curation.runtime import default_native_acquirer
 
         def local(request: GitSnapshotRequest):
             self.assertFalse(
@@ -153,7 +153,7 @@ class _Lab(unittest.TestCase):
                 replace(request, location=local_url, allow_local_transport=True)
             )
 
-        with mock.patch("agent_artifacts.curation.runtime.acquire_git_snapshot", side_effect=local):
+        with mock.patch("aart_cli.curation.runtime.acquire_git_snapshot", side_effect=local):
             return default_native_acquirer(url, ref)
 
     def _scan(self):

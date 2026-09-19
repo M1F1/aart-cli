@@ -5459,7 +5459,7 @@ The current TUI implementation should be split as new capabilities are introduce
 A possible direction is:
 
 ```text
-agent_artifacts/
+aart_cli/
 └── tui/
     ├── app.py
     ├── state.py
@@ -6890,7 +6890,7 @@ abstractions after migration.
 Conceptually:
 
 ```text
-agent_artifacts/
+aart_cli/
 ├── domain/
 │   ├── artifacts.py
 │   ├── requirements.py

@@ -3,16 +3,16 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.configuration.model import CompanyReviewedSource, SourceKind
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceAlias, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.marketplace.catalog import (
+from aart_cli.configuration.model import CompanyReviewedSource, SourceKind
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.marketplace.catalog import (
     build_marketplace,
     marketplace_catalog_bytes,
     resolve_artifact,
 )
-from agent_artifacts.marketplace.model import ArtifactQuery, TrustClass
-from agent_artifacts.protocol.registry_models import ReviewRecord
+from aart_cli.marketplace.model import ArtifactQuery, TrustClass
+from aart_cli.protocol.registry_models import ReviewRecord
 from tests.marketplace_fixtures import (
     artifact,
     configured_source,

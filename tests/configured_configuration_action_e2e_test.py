@@ -10,43 +10,43 @@ import tempfile
 import unittest
 from datetime import date
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
     ConsumerUiEventKind,
     ConsumerUiState,
 )
-from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession
-from agent_artifacts.application.execution import LifecycleExecutionStatus
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.credentials import CredentialProviderRef
-from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceId
-from agent_artifacts.domain.inputs import PromptedConfigValue, SecretProviderReference
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.domain.selection import ArtifactRequest, ArtifactSelection, VersionConstraint
-from agent_artifacts.io.configured_configuration_action import (
+from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
+from aart_cli.application.execution import LifecycleExecutionStatus
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.credentials import CredentialProviderRef
+from aart_cli.domain.harness import Scope
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceId
+from aart_cli.domain.inputs import PromptedConfigValue, SecretProviderReference
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.selection import ArtifactRequest, ArtifactSelection, VersionConstraint
+from aart_cli.io.configured_configuration_action import (
     complete_configured_configuration,
     prepare_configured_configuration,
 )
-from agent_artifacts.io.configured_installation_action import (
+from aart_cli.io.configured_installation_action import (
     InstallationHost,
     complete_configured_installation,
     prepare_configured_installation,
 )
-from agent_artifacts.io.consumer_actions import ConsumerActionContext, LocalConsumerActions
-from agent_artifacts.io.consumer_machine import read_consumer_machine, read_installed_inspections
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.sources.model import (
+from aart_cli.io.consumer_actions import ConsumerActionContext, LocalConsumerActions
+from aart_cli.io.consumer_machine import read_consumer_machine, read_installed_inspections
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
     make_source_candidate,
     source_instance_id,
     source_store_paths,
 )
-from agent_artifacts.tui_consumer import run_consumer_shell
+from aart_cli.tui_consumer import run_consumer_shell
 from tests.artifact_installation_e2e_test import MANIFEST, MOMENT, ORG, TOKEN
 from tests.configured_installation_action_e2e_test import _FileCredentials
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP, _published_registry

@@ -29,8 +29,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts import cli
-from agent_artifacts.protocol.hashing import sha256_bytes
+from aart_cli import cli
+from aart_cli.protocol.hashing import sha256_bytes
 from tests.maintainer_scan_cli_test import _author_checkout, _git
 from tests.marketplace_lifecycle_e2e_test import _FIXTURE, _Environment
 from tests.source_sync_command_e2e_test import _source_json

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.curation.model import (
+from aart_cli.curation.model import (
     CurationAction,
     CurationChange,
     CurationCheck,
@@ -22,8 +22,8 @@ from agent_artifacts.curation.model import (
     CurationReview,
     render_curation_outcome,
 )
-from agent_artifacts.curation.runtime import _follow_up
-from agent_artifacts.domain.identifiers import ObjectDigest
+from aart_cli.curation.runtime import _follow_up
+from aart_cli.domain.identifiers import ObjectDigest
 
 DIGEST = ObjectDigest("sha256", "a" * 64)
 
@@ -52,7 +52,7 @@ def _outcome(*warnings: str, changed: int = 1, observed: int = 0) -> CurationOut
 
 class ConfirmedOutcomeBrevityTest(unittest.TestCase):
     def test_a_warning_the_review_already_stated_is_not_stated_again(self) -> None:
-        warning = "registry CI runs AART 1.0.0, pinned in .aart-version"
+        warning = "registry CI runs AART 1.0.0, pinned in .aart-cli-version"
 
         rendered = render_curation_outcome(_outcome(warning), reviewed=_review(warning))
 
@@ -130,9 +130,9 @@ class FollowUpCommandTest(unittest.TestCase):
         self.assertEqual(
             commands,
             (
-                "aart registry validate --source /tmp/registry",
-                "aart registry build --source /tmp/registry",
-                "aart registry audit --source /tmp/registry",
+                "aart-cli registry validate --source /tmp/registry",
+                "aart-cli registry build --source /tmp/registry",
+                "aart-cli registry audit --source /tmp/registry",
             ),
         )
 
@@ -153,8 +153,8 @@ class FollowUpCommandTest(unittest.TestCase):
         self.assertEqual(
             commands,
             (
-                "aart registry validate --source /tmp/registry",
-                "aart registry audit --source /tmp/registry",
+                "aart-cli registry validate --source /tmp/registry",
+                "aart-cli registry audit --source /tmp/registry",
             ),
         )
 

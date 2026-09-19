@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.activity_telemetry import (
+from aart_cli.application.activity_telemetry import (
     DisabledActivityTelemetry,
     TelemetryDelivery,
     publish_activity,
 )
-from agent_artifacts.application.consumer_views import ActivityRecord
-from agent_artifacts.domain.result import Ok
+from aart_cli.application.consumer_views import ActivityRecord
+from aart_cli.domain.result import Ok
 from tests.consumer_activity_test import lifecycle_outcome
 
 

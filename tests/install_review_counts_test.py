@@ -13,14 +13,14 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.consumer_session import begin_installation
-from agent_artifacts.application.consumer_views import PresentationProfile
-from agent_artifacts.application.installation_proposal import BoundInputs
-from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
-from agent_artifacts.domain.inspection import EnvironmentFact, EnvironmentFacts, FactState
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_consumer import render_ready
+from aart_cli.application.consumer_session import begin_installation
+from aart_cli.application.consumer_views import PresentationProfile
+from aart_cli.application.installation_proposal import BoundInputs
+from aart_cli.domain.harness import McpRegistration, Scope, mcp_target
+from aart_cli.domain.inspection import EnvironmentFact, EnvironmentFacts, FactState
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Ok
+from aart_cli.tui_consumer import render_ready
 from tests.consumer_flow_test import _begin, _selection
 from tests.installation_proposal_test import _launcher, _planned
 from tests.placement_offer_test import _machine, _nothing_installed, _offer, _skill_placement

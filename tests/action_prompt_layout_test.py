@@ -18,15 +18,15 @@ import unittest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
     PresentationProfile,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer_views import (
     MaintainerAdoptionReviewView,
     MaintainerRegistryCommitView,
     MaintainerScreen,
@@ -34,10 +34,10 @@ from agent_artifacts.application.maintainer_views import (
     MaintainerSourceSyncReviewView,
     MaintainerTransactionCandidateView,
 )
-from agent_artifacts.domain.candidates import CandidateState
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens
-from agent_artifacts.tui_layout import action_prompt, is_action_prompt, separate
-from agent_artifacts.tui_maintainer import (
+from aart_cli.domain.candidates import CandidateState
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens
+from aart_cli.tui_layout import action_prompt, is_action_prompt, separate
+from aart_cli.tui_maintainer import (
     render_maintainer_registry_commit,
     render_repository_adoption_review,
     render_source_sync_result,

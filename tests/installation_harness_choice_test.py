@@ -11,15 +11,15 @@ from types import SimpleNamespace
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_session import assemble_consumer_machine
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_session import assemble_consumer_machine
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
     ConsumerUiEventKind,
     ConsumerUiState,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     HarnessTargetView,
@@ -27,13 +27,13 @@ from agent_artifacts.application.consumer_views import (
     project_install_plan,
     target_row,
 )
-from agent_artifacts.domain.effects import RiskClass
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.receipts import receipt_profiles
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.consumer_actions import LocalConsumerActions, _installation_targets
-from agent_artifacts.io.receipt_store import LocalReceiptStore
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame, render_ready, screens_from
+from aart_cli.domain.effects import RiskClass
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.receipts import receipt_profiles
+from aart_cli.domain.result import Ok
+from aart_cli.io.consumer_actions import LocalConsumerActions, _installation_targets
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.tui_consumer import CanonicalScreenSource, frame, render_ready, screens_from
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions, _at, _drive
 from tests.consumer_shell_test import DOWN, ENTER, SPACE
@@ -122,7 +122,7 @@ class HarnessTargetScreenTest(unittest.TestCase):
             ),
         )
 
-        from agent_artifacts.application.consumer_ui import ConsumerUiEvent, reduce_consumer_ui
+        from aart_cli.application.consumer_ui import ConsumerUiEvent, reduce_consumer_ui
 
         for event in events:
             state, _commands = reduce_consumer_ui(

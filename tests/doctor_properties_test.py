@@ -16,33 +16,33 @@ import unittest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_views import project_credential_record
-from agent_artifacts.application.orphaned_runs import (
+from aart_cli.application.consumer_views import project_credential_record
+from aart_cli.application.orphaned_runs import (
     OrphanedRun,
     OrphanedRuns,
     orphaned_run_lines,
 )
-from agent_artifacts.commands.doctor import (
+from aart_cli.commands.doctor import (
     _configuration_data,
     _configuration_lines,
     _credential_lines,
 )
-from agent_artifacts.configuration.model import (
+from aart_cli.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
     SourceKind,
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.policy import EffectiveConfiguration
-from agent_artifacts.domain.credentials import (
+from aart_cli.configuration.policy import EffectiveConfiguration
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialProviderRef,
     CredentialReference,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.identifiers import InputId, SourceAlias
+from aart_cli.domain.identifiers import InputId, SourceAlias
 
 # `differing_executors` is suppressed for one reason: `scripts/mutants.py` re-runs the same test
 # method object from a fresh runner per mutant, which is what the check detects. These properties

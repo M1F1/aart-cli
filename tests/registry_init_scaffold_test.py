@@ -4,33 +4,33 @@ import json
 import shlex
 import unittest
 
-from agent_artifacts import cli
-from agent_artifacts.curation.model import DEFAULT_MAXIMUM_AART, DEFAULT_MINIMUM_AART
-from agent_artifacts.domain.identifiers import ArtifactIdentity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.protocol.native_schema import parse_collection_manifest
-from agent_artifacts.protocol.native_tree import (
+from aart_cli import cli
+from aart_cli.curation.model import DEFAULT_MAXIMUM_AART, DEFAULT_MINIMUM_AART
+from aart_cli.domain.identifiers import ArtifactIdentity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.capabilities import Capability
+from aart_cli.protocol.native_schema import parse_collection_manifest
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.registry_schema import parse_registry_manifest
-from agent_artifacts.protocol.semver import SemVer, parse_semver
-from agent_artifacts.registry_commands.model import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.registry_schema import parse_registry_manifest
+from aart_cli.protocol.semver import SemVer, parse_semver
+from aart_cli.registry_commands.model import (
     CollectionAuthorOptions,
     RegistryInitOptions,
 )
-from agent_artifacts.registry_commands.planning import (
+from aart_cli.registry_commands.planning import (
     plan_registry_collection,
     plan_registry_init,
     project_registry_workspace_plan,
     validate_registry_workspace,
 )
-from agent_artifacts.registry_commands.templates import REGISTRY_CI_WORKFLOW
-from agent_artifacts.runtime_contract import EXECUTABLE_VERSION
+from aart_cli.registry_commands.templates import REGISTRY_CI_WORKFLOW
+from aart_cli.runtime_contract import EXECUTABLE_VERSION
 from tests.registry_maintenance_fixtures import (
     approved_registry_snapshot,
     replace_snapshot_file,
@@ -178,7 +178,7 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         self.assertEqual(workflow.count(b"pip install"), workflow.count(b"- name: Provide AART"))
         self.assertIn(b'if [ -n "$PACKAGE" ]', workflow)
         self.assertIn(b"PYTHONPATH=", workflow)
-        self.assertIn(b"-m agent_artifacts", workflow)
+        self.assertIn(b"-m aart_cli", workflow)
         self.assertIn(b"vars.AART_REPOSITORY", workflow)
         # One checkout per job — the registry's own — and it still persists no credential.  The
         # tool is cloned without one, because AART carries no credential of its own.
@@ -210,7 +210,7 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         commands = [
             line.strip().removeprefix("- run: ")
             for line in workflow.decode().splitlines()
-            if line.strip().startswith("- run: aart ")
+            if line.strip().startswith("- run: aart-cli ")
         ]
         # Five gates, emitted once per container shape, and both shapes must run the same five.
         # `lock` left the workflow with `CP-26.5`: over the approved representation it resolves
@@ -219,7 +219,7 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         self.assertEqual(commands[:5], commands[5:])
         for command in commands:
             argv = shlex.split(
-                command.removeprefix("aart ").replace("${{ matrix.compatibility }}", "minimum")
+                command.removeprefix("aart-cli ").replace("${{ matrix.compatibility }}", "minimum")
             )
             with self.subTest(command=command):
                 self.assertEqual(cli.build_parser().parse_args(argv).command, "registry")
@@ -356,16 +356,16 @@ class GeneratedRegistryReadmeTest(unittest.TestCase):
 
     def test_a_registry_without_one_gets_a_pin_naming_the_running_version(self):
         changes = self._init()
-        self.assertIn(".aart-version", changes)
-        self.assertEqual(changes[".aart-version"], f"{EXECUTABLE_VERSION}\n".encode("utf-8"))
+        self.assertIn(".aart-cli-version", changes)
+        self.assertEqual(changes[".aart-cli-version"], f"{EXECUTABLE_VERSION}\n".encode("utf-8"))
 
     def test_a_registry_that_already_has_a_pin_keeps_it(self):
         """A maintainer bumps this file; `init` re-run must never drag it back to its own version."""
 
-        path = parse_relative_path(".aart-version")
+        path = parse_relative_path(".aart-cli-version")
         assert isinstance(path, Ok)
         pinned = SnapshotEntry(path.value, SnapshotEntryKind.FILE, b"9.9.9\n")
-        self.assertNotIn(".aart-version", self._init(pinned))
+        self.assertNotIn(".aart-cli-version", self._init(pinned))
 
     def test_the_pin_falls_inside_the_window_the_marker_declares(self):
         """A pin outside `requires_aart` would be a registry contradicting itself on day one."""
@@ -374,7 +374,7 @@ class GeneratedRegistryReadmeTest(unittest.TestCase):
 
         changes = self._init()
         window = json.loads(changes["aart-registry.json"])["requires_aart"]
-        pin = parse_semver(changes[".aart-version"].decode("utf-8").strip())
+        pin = parse_semver(changes[".aart-cli-version"].decode("utf-8").strip())
         self.assertIsInstance(pin, Ok)
         low = parse_semver(window["min_inclusive"])
         high = parse_semver(window["max_exclusive"])
@@ -411,12 +411,12 @@ class GeneratedRegistryReadmeTest(unittest.TestCase):
             root = Path(raw)
             subprocess.run(("git", "init", "-q", str(root)), check=True)
             (root / "README.md").write_text("# hands off\n", encoding="utf-8")
-            (root / ".aart-version").write_text("9.9.9\n", encoding="utf-8")
+            (root / ".aart-cli-version").write_text("9.9.9\n", encoding="utf-8")
             finished = subprocess.run(
                 [
                     sys.executable,
                     "-m",
-                    "agent_artifacts",
+                    "aart_cli",
                     "registry",
                     "init",
                     "--source",
@@ -433,7 +433,7 @@ class GeneratedRegistryReadmeTest(unittest.TestCase):
             )
             self.assertEqual(finished.returncode, 0, finished.stderr)
             self.assertEqual((root / "README.md").read_text(encoding="utf-8"), "# hands off\n")
-            self.assertEqual((root / ".aart-version").read_text(encoding="utf-8"), "9.9.9\n")
+            self.assertEqual((root / ".aart-cli-version").read_text(encoding="utf-8"), "9.9.9\n")
             self.assertTrue((root / "aart-registry.json").is_file())
 
     def test_a_real_init_on_an_empty_directory_writes_the_readme(self):
@@ -449,7 +449,7 @@ class GeneratedRegistryReadmeTest(unittest.TestCase):
                 [
                     sys.executable,
                     "-m",
-                    "agent_artifacts",
+                    "aart_cli",
                     "registry",
                     "init",
                     "--source",
@@ -469,5 +469,5 @@ class GeneratedRegistryReadmeTest(unittest.TestCase):
             self.assertTrue(written.startswith("# Company Registry\n"))
             self.assertIn("AART_PACKAGE", written)
             self.assertEqual(
-                (root / ".aart-version").read_text(encoding="utf-8"), f"{EXECUTABLE_VERSION}\n"
+                (root / ".aart-cli-version").read_text(encoding="utf-8"), f"{EXECUTABLE_VERSION}\n"
             )

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
@@ -27,12 +27,12 @@ from agent_artifacts.application.consumer_ui import (
     SourceDraft,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
 )
-from agent_artifacts.application.maintainer_views import MaintainerScreen
+from aart_cli.application.maintainer_views import MaintainerScreen
 
 TYPED = {
     "registry_draft": RegistryDraft(alias="old", location="https://git.example/old.git"),
@@ -136,7 +136,7 @@ class NewSubscriptionIsStatedTest(unittest.TestCase):
     """The other half of the operator's question: an empty form, and what confirming it means."""
 
     def _body(self, screen) -> str:
-        from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
+        from aart_cli.tui_consumer import CanonicalScreenSource, frame
         from tests.consumer_shell_test import screens
 
         state = ConsumerUiState(

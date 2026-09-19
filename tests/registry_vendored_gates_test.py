@@ -18,28 +18,28 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.domain.identifiers import ArtifactIdentity
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.protocol.json import canonical_json_bytes
-from agent_artifacts.protocol.native_schema import parse_provenance, provenance_to_json
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.identifiers import ArtifactIdentity
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.capabilities import Capability
+from aart_cli.protocol.json import canonical_json_bytes
+from aart_cli.protocol.native_schema import parse_provenance, provenance_to_json
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.registry_models import ReviewRecord
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.registry_commands.planning import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.registry_models import ReviewRecord
+from aart_cli.protocol.semver import SemVer
+from aart_cli.registry_commands.planning import (
     audit_registry_workspace,
     plan_artifact_vendor,
     project_registry_workspace_plan,
     validate_registry_workspace,
 )
-from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
-from agent_artifacts.registry_maintenance.vendoring import (
+from aart_cli.registry_maintenance.model import NativeReferenceAcquisition
+from aart_cli.registry_maintenance.vendoring import (
     VendorOptions,
 )
 from tests.registry_maintenance_fixtures import (

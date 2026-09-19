@@ -47,7 +47,7 @@ def _wheel(
     ]
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(f"aart_cli-{version}.dist-info/METADATA", "\n".join(metadata) + "\n")
-        archive.writestr("agent_artifacts/__init__.py", "")
+        archive.writestr("aart_cli/__init__.py", "")
     return path
 
 
@@ -118,7 +118,7 @@ class ReleasedIdentityTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             path = pathlib.Path(raw) / "aart_cli-1.4.0-py3-none-any.whl"
             with zipfile.ZipFile(path, "w") as archive:
-                archive.writestr("agent_artifacts/__init__.py", "")
+                archive.writestr("aart_cli/__init__.py", "")
             diagnostic = _diagnostic(
                 release_artifact.verify_artifact(path, "v1.4.0"),
                 "artifact-metadata-unreadable",

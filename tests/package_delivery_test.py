@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.artifacts import ArtifactKind
-from agent_artifacts.domain.effects import DeliveryKind
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import package_delivery, package_merge
-from agent_artifacts.protocol.hashing import sha256_bytes
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-from agent_artifacts.protocol.paths import parse_relative_path
+from aart_cli.domain.artifacts import ArtifactKind
+from aart_cli.domain.effects import DeliveryKind
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import package_delivery, package_merge
+from aart_cli.protocol.hashing import sha256_bytes
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from aart_cli.protocol.paths import parse_relative_path
 
 
 def _entry(path: str, content: bytes = b"", *, directory: bool = False) -> SnapshotEntry:

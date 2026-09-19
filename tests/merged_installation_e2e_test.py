@@ -18,7 +18,7 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.domain.managed_blocks import managed_block_body
+from aart_cli.domain.managed_blocks import managed_block_body
 from tests.configured_install_command_e2e_test import _Environment
 
 MEMORY_MANIFEST = {

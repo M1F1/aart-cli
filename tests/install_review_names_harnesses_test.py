@@ -14,9 +14,9 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_views import PresentationProfile
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_consumer import render_ready
+from aart_cli.application.consumer_views import PresentationProfile
+from aart_cli.domain.result import Ok
+from aart_cli.tui_consumer import render_ready
 from tests.consumer_flow_test import _begin
 
 

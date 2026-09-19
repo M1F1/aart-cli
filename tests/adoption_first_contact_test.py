@@ -6,8 +6,8 @@ import re
 import unittest
 from pathlib import Path
 
-from agent_artifacts import cli, model, wizard
-from agent_artifacts.domain.artifacts import ArtifactKind
+from aart_cli import cli, model, wizard
+from aart_cli.domain.artifacts import ArtifactKind
 from tests.source_remediation_test import _parse_failure
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -57,8 +57,16 @@ def _linked_documents() -> dict[str, str]:
     return {
         target: (_ROOT / target).read_text(encoding="utf-8")
         for target in sorted(set(re.findall(r"\]\((docs/[^)#]+\.md)\)", _README)))
-        if (_ROOT / target).is_file()
+        if (_ROOT / target).is_file() and target not in _NOT_INSTRUCTIONS
     }
+
+
+#: The one linked document that is not instructions to a reader. The Product Specification is the
+#: accepted target, so it names commands on purpose that the executable does not have yet --
+#: `registry policy-check`, `refresh-upstreams`, `sync`. Holding it to "invents no command" would
+#: make accepting a specification change fail a test about the README, which is backwards: the
+#: specification leads the implementation (`CLAUDE.md`), and `docs/refactor/*` tracks the gap.
+_NOT_INSTRUCTIONS = frozenset({"docs/product-specification/PRODUCT_SPECIFICATION.md"})
 
 
 def _documentation() -> str:
@@ -101,10 +109,10 @@ class DocumentedCommandSurfaceTest(unittest.TestCase):
     def test_every_shipped_top_level_command_is_named(self) -> None:
         surface = _command_surface()
 
-        # Plain `aart <name>`, not a backticked spelling: most of these appear inside fenced
+        # Plain `aart-cli <name>`, not a backticked spelling: most of these appear inside fenced
         # shell blocks, where there are no backticks, and requiring them made this test report
         # five commands the README documents perfectly well.
-        mentioned = set(re.findall(r"\baart ([a-z][a-z-]+)", _documentation()))
+        mentioned = set(re.findall(r"\baart-cli ([a-z][a-z-]+)", _documentation()))
         missing = sorted(set(surface) - mentioned)
 
         self.assertEqual(
@@ -120,7 +128,7 @@ class DocumentedCommandSurfaceTest(unittest.TestCase):
             {
                 f"{group} {sub}"
                 for group, sub in re.findall(
-                    r"aart ([a-z][a-z-]+) ([a-z][a-z-]+)", _documentation()
+                    r"aart-cli ([a-z][a-z-]+) ([a-z][a-z-]+)", _documentation()
                 )
                 if group in surface and surface[group] and sub not in surface[group]
             }
@@ -172,27 +180,27 @@ class QuickStartRouteTest(unittest.TestCase):
 
         for step in self.ROUTE:
             with self.subTest(step=step):
-                self.assertIn(f"aart {step}", quick_start)
+                self.assertIn(f"aart-cli {step}", quick_start)
 
     def test_the_review_step_is_shown_before_the_step_that_applies_it(self) -> None:
         """Every mutation is two commands, and a route that showed only `--yes` would teach a
         reader to skip the half where nothing has happened yet."""
 
         quick_start = self._quick_start()
-        reviewed = quick_start.index("aart marketplace install")
+        reviewed = quick_start.index("aart-cli marketplace install")
         finalized = quick_start.index("--yes")
 
         self.assertLess(reviewed, finalized)
         self.assertNotIn("--yes", quick_start[reviewed : quick_start.index("\n", reviewed)])
 
     def test_the_tui_is_offered_as_the_route_for_a_person(self) -> None:
-        self.assertIn("aart\n", self._quick_start())
+        self.assertIn("aart-cli\n", self._quick_start())
 
     def test_every_command_in_the_route_is_one_the_parser_accepts(self) -> None:
         """The claim worth holding. Placeholders are substituted with a token that is merely a
         value, so what is parsed is the reader's command with their answers in it."""
 
-        commands = re.findall(r"^aart .+$", self._quick_start(), re.M)
+        commands = re.findall(r"^aart-cli .+$", self._quick_start(), re.M)
         self.assertGreaterEqual(len(commands), len(self.ROUTE))
 
         for command in commands:
@@ -360,9 +368,9 @@ class RemediationNamesRealCommandsTest(unittest.TestCase):
     names commands the way a page does -- so it drifts the way a page does, with no reader to
     notice until someone is already stuck.
 
-    Scoped to `aart <group> <subcommand>` where the group is real, which is the shape that can be
-    checked without guessing: bare `aart <word>` also matches the managed-block marker
-    `# >>> aart setup: ... >>>` and ordinary prose like "aart installs", neither of which is a
+    Scoped to `aart-cli <group> <subcommand>` where the group is real, which is the shape that can be
+    checked without guessing: bare `aart-cli <word>` also matches the managed-block marker
+    `# >>> aart-cli setup: ... >>>` and ordinary prose like "aart-cli installs", neither of which is a
     command anyone is being told to run.
     """
 
@@ -370,7 +378,7 @@ class RemediationNamesRealCommandsTest(unittest.TestCase):
         surface = _command_surface()
         invented: dict[str, set[str]] = {}
 
-        for module in sorted((_ROOT / "agent_artifacts").rglob("*.py")):
+        for module in sorted((_ROOT / "aart_cli").rglob("*.py")):
             try:
                 tree = ast.parse(module.read_text(encoding="utf-8"))
             except SyntaxError:  # pragma: no cover - the package parses
@@ -378,7 +386,7 @@ class RemediationNamesRealCommandsTest(unittest.TestCase):
             for node in ast.walk(tree):
                 if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
                     continue
-                for group, sub in re.findall(r"aart ([a-z][a-z-]+) ([a-z][a-z-]+)", node.value):
+                for group, sub in re.findall(r"aart-cli ([a-z][a-z-]+) ([a-z][a-z-]+)", node.value):
                     if group in surface and surface[group] and sub not in surface[group]:
                         name = str(module.relative_to(_ROOT))
                         invented.setdefault(name, set()).add(f"{group} {sub}")
@@ -387,7 +395,7 @@ class RemediationNamesRealCommandsTest(unittest.TestCase):
 
     def test_this_guard_is_not_vacuous(self) -> None:
         surface = _command_surface()
-        sources = list((_ROOT / "agent_artifacts").rglob("*.py"))
+        sources = list((_ROOT / "aart_cli").rglob("*.py"))
 
         self.assertGreater(len(sources), 100)
         self.assertIn("uninstall", surface["marketplace"])

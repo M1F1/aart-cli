@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Stamp the current git commit into ``agent_artifacts/_commit.py``.
+"""Stamp the current git commit into ``aart_cli/_commit.py``.
 
-A build-time step: it overwrites ``agent_artifacts/_commit.py`` with the full git ``HEAD``
+A build-time step: it overwrites ``aart_cli/_commit.py`` with the full git ``HEAD``
 sha (via ``git rev-parse HEAD``) so the built wheel records exactly which source it came
 from (consumed by ``check`` / ``upgrade``). When git is unavailable or this
 is not a checkout, it falls back to ``"unknown"``.
@@ -21,7 +21,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TARGET = ROOT / "agent_artifacts" / "_commit.py"
+TARGET = ROOT / "aart_cli" / "_commit.py"
 
 # Kept verbatim so the rewritten module reads the same as the version-controlled one.
 DOCSTRING = '''"""Source commit the package was built from.

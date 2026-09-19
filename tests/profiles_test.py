@@ -7,9 +7,9 @@ import os
 import tempfile
 import unittest
 
-from agent_artifacts.profiles.builtin import builtin
-from agent_artifacts.profiles.loader import _profile_from_dict, load_profiles
-from agent_artifacts.profiles.model import (
+from aart_cli.profiles.builtin import builtin
+from aart_cli.profiles.loader import _profile_from_dict, load_profiles
+from aart_cli.profiles.model import (
     CopyTarget,
     GuidelineTarget,
     HookTarget,

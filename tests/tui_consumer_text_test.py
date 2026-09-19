@@ -5,17 +5,17 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts import tui
-from agent_artifacts.configuration.model import OrganizationPolicy
-from agent_artifacts.consumer import (
+from aart_cli import tui
+from aart_cli.configuration.model import OrganizationPolicy
+from aart_cli.consumer import (
     ConsumerActionRequest,
     ConsumerApplicationService,
     ConsumerContext,
     LocalConsumerAdapter,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.profiles.builtin import builtin
-from agent_artifacts.protocol.capabilities import Capability
+from aart_cli.domain.result import Ok
+from aart_cli.profiles.builtin import builtin
+from aart_cli.protocol.capabilities import Capability
 from tests.canonical_setup_application_test import Fixture as SetupFixture
 
 _INSTALL_STATE_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "install-state"

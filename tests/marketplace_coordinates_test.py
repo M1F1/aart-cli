@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.consumer.coordinates import (
+from aart_cli.consumer.coordinates import (
     ArtifactSelector,
     parse_artifact_selector,
     parse_artifact_selectors,
 )
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceAlias
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias
+from aart_cli.domain.result import Err, Ok
 
 
 class ArtifactSelectorParsingTests(unittest.TestCase):

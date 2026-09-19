@@ -1,0 +1,1854 @@
+"""Agent CLI surface for the configured canonical marketplace.
+
+This module exposes the configured-source marketplace and its canonical lifecycle.
+
+Two properties are load-bearing for automation safety and are asserted by the tests:
+
+* **Review before Finalize.**  The TUI asks a human to confirm an exact reviewed plan.  The
+  non-interactive equivalent is ``--yes``: without it every action stops after Review and reports
+  the plan it *would* apply.  Finalize always passes the digest of the review computed in this same
+  process, so a plan can never drift between Review and Finalize.  ``--expect DIGEST`` extends that
+  guarantee across two commands: it binds the decision a human actually read to the plan being
+  applied, and refuses — showing the new review — when they have stopped being the same plan.
+* **Authorizations are never implied.**  Untrusted-source setup, custom entrypoints, and setup
+  effect consent each need their own flag.  Omitting a flag denies; it never asks and never
+  assumes.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from dataclasses import replace
+from datetime import datetime, timezone
+from pathlib import Path
+
+from aart_cli import command_outcome as _common
+from aart_cli.application.consumer_views import (
+    PresentationProfile,
+    ReceiptArtifactView,
+    consumer_plan_to_data,
+    receipt_detail_to_data,
+)
+from aart_cli.application.credential_guidance import (
+    credential_guidance_lines,
+    credential_guidance_to_data,
+    guidance_by_input,
+)
+from aart_cli.application.installed_setup import declared_setup_to_data
+from aart_cli.configuration.model import SourceKind
+from aart_cli.configuration.policy import EffectiveConfiguration
+from aart_cli.consumer.application import (
+    CONSUMER_REVIEW_MISMATCH,
+    ConsumerApplicationService,
+)
+from aart_cli.consumer.coordinates import (
+    CONSUMER_INVALID,
+    ArtifactSelector,
+    parse_artifact_selectors,
+)
+from aart_cli.consumer.model import (
+    ConsumerAction,
+    ConsumerActionRequest,
+    ConsumerOutcome,
+    ConsumerReview,
+    ConsumerSetupQueue,
+    ConsumerTerminalItem,
+    consumer_review_value,
+    render_consumer_outcome,
+    render_consumer_review,
+    review_source_freshness,
+)
+from aart_cli.consumer.resolution import resolve_selectors
+from aart_cli.consumer.runtime import load_local_consumer_service, load_read_only_marketplace
+from aart_cli.consumer.runtime_requirements import (
+    RUNTIME_ENVIRONMENT_INVALID,
+    RuntimeEnvironment,
+    RuntimeRequirementStatus,
+    evaluate_runtime_requirements,
+    parse_runtime_environment,
+    parse_runtime_requirements,
+    runtime_capability_to_data,
+    runtime_check_to_data,
+)
+from aart_cli.domain.diagnostics import Diagnostic, Severity, diagnostic_to_data
+from aart_cli.domain.effects import effect_to_data
+from aart_cli.domain.harness import Scope
+from aart_cli.domain.identifiers import ArtifactCoordinate
+from aart_cli.domain.inputs import SecretInput
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.receipts import ArtifactReceipt
+from aart_cli.domain.reconciliation import DesiredState
+from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.domain.selection import (
+    ArtifactRequest,
+    ArtifactSelection,
+    VersionConstraint,
+)
+from aart_cli.io.configured_installation_action import (
+    InstallationHost,
+    complete_configured_installation,
+    prepare_configured_installation,
+)
+from aart_cli.io.configured_setup import (
+    ConfiguredSetupService,
+    configured_consumer_completion,
+    configured_installed_setup_completion,
+)
+from aart_cli.io.configured_uninstall_action import (
+    complete_configured_uninstall,
+    prepare_configured_uninstall,
+)
+from aart_cli.io.consumer_machine import (
+    read_consumer_machine,
+    read_installed_inspections,
+)
+from aart_cli.io.credentials import MacOsKeychainProvider
+from aart_cli.marketplace.catalog import marketplace_catalog_bytes, render_marketplace
+from aart_cli.marketplace.search import Document, search, summary_line
+from aart_cli.model import Request, SetupManualReference
+from aart_cli.protocol.json import canonical_json_bytes
+from aart_cli.protocol.native_schema import parse_artifact_manifest
+from aart_cli.protocol.native_tree import SnapshotEntryKind
+from aart_cli.receipt_service import (
+    RECEIPT_ACTIONS,
+    apply_undo,
+    load_receipt,
+    resolved_paths,
+    show_view,
+    undo_view,
+    unsupported_action,
+    verify_view,
+)
+from aart_cli.redaction import redact_text
+from aart_cli.runtime_contract import EXECUTABLE_VERSION
+from aart_cli.setup import (
+    _command_strings,
+    advisory_messages,
+    project_setup_review,
+    recovery_messages,
+    render_setup_review,
+    run_reload_reminders,
+    setup_banner,
+    setup_retry_command,
+)
+from aart_cli.setup_render import (
+    render_receipt_payload,
+    render_setup_payload,
+    render_undo_payload,
+    render_verification_payload,
+)
+from aart_cli.store.model import ObjectReadRequest
+from aart_cli.tui_consumer import (
+    render_install_plan,
+    render_installed_artifact,
+    render_pending_setup,
+    render_transaction_success,
+)
+
+from ._configured_runtime import ConfiguredRuntime, load_runtime_configuration
+
+_LIST_OPERATION = "marketplace.list"
+_SEARCH_OPERATION = "marketplace.search"
+_HEALTH_OPERATION = "marketplace.health"
+_MAX_ENVIRONMENT_BYTES = 1024 * 1024
+
+# ``setup`` is not a domain action: it reaches a terminal payload state through ``install`` and then
+# runs only the setup work that state left pending.
+_LIFECYCLE_ACTIONS: dict[str, ConsumerAction] = {
+    "install": "install",
+    "update": "update",
+    "uninstall": "uninstall",
+    "status": "status",
+    "setup": "install",
+}
+_REQUIRES_COORDINATES = frozenset({"install", "uninstall", "setup"})
+_MUTATING = frozenset({"install", "update", "uninstall", "setup"})
+# The actions that read what the project already has. Neither fetches anything, so neither
+# needs an enabled source to be answerable — an installed artifact is on disk whether or not the
+# subscription that delivered it is still configured, so an operator who ran `source remove` can
+# still read and clean up their own project.
+_PROJECT_LOCAL = frozenset({"uninstall", "status"})
+
+
+def _emit_error(request: Request, result: Err, operation: str = _LIST_OPERATION) -> int:
+    if request.json:
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "ok": False,
+                    "operation": operation,
+                    "diagnostics": [diagnostic_to_data(item) for item in result.diagnostics],
+                },
+                indent=2,
+            )
+        )
+    else:
+        for diagnostic in result.diagnostics:
+            print(f"{diagnostic.severity.value}: {diagnostic.message}")
+            for remediation in diagnostic.remediation:
+                print(f"  remediation: {remediation}")
+    return _common.ERROR
+
+
+def _list(request: Request) -> int:
+    # Enforce the canonical content-operation no-source contract before building a marketplace.
+    runtime = load_runtime_configuration(request, content_required=True)
+    if isinstance(runtime, Err):
+        return _emit_error(request, runtime)
+    catalog = load_read_only_marketplace(
+        runtime.value.loaded.effective,
+        data_root=runtime.value.paths.data_root,
+        observe_freshness=not request.offline,
+    )
+    if isinstance(catalog, Err):
+        return _emit_error(request, catalog)
+    if request.json:
+        payload = json.loads(
+            marketplace_catalog_bytes(
+                catalog.value,
+                executable_version=EXECUTABLE_VERSION,
+            ).decode("utf-8")
+        )
+        payload["aart_version"] = str(EXECUTABLE_VERSION)
+        payload["ok"] = True
+        payload["operation"] = _LIST_OPERATION
+        print(json.dumps(payload, indent=2))
+    else:
+        rendered = render_marketplace(catalog.value, executable_version=EXECUTABLE_VERSION)
+        print(rendered, end="") if rendered else print("No marketplace artifacts are available.")
+    return _common.OK
+
+
+def _search_rows(catalog) -> tuple[tuple[Document, ...], tuple[dict, ...]]:
+    """The catalog as searchable text, and the row each piece of text stands for.
+
+    Every field searched is the redacted field, so what can be found is exactly what can be
+    printed. Searching the unredacted text would let a query confirm, one letter at a time, a
+    secret the output refuses to show.
+    """
+
+    documents: list[Document] = []
+    rows: list[dict] = []
+    for item in catalog.items:
+        artifact = item.artifact.artifact
+        summary = redact_text(artifact.summary)
+        documents.append(
+            Document(
+                item.coordinate.artifact.name,
+                str(item.coordinate),
+                summary,
+                (("collections", " ".join(artifact.collections)),) if artifact.collections else (),
+            )
+        )
+        rows.append(
+            {
+                "coordinate": str(item.coordinate),
+                "kind": "artifact",
+                "summary": summary,
+                "trust": item.trust.kind.value,
+                "source": item.source.alias.value,
+            }
+        )
+    for collection in catalog.collections:
+        summary = redact_text(collection.summary)
+        members = tuple(str(member) for member in collection.members)
+        documents.append(
+            Document(
+                collection.coordinate.name,
+                str(collection.coordinate),
+                summary,
+                (("members", " ".join(members)),),
+            )
+        )
+        rows.append(
+            {
+                "coordinate": str(collection.coordinate),
+                "kind": "collection",
+                "summary": summary,
+                "members": list(members),
+            }
+        )
+    return tuple(documents), tuple(rows)
+
+
+def _search(request: Request) -> int:
+    runtime = load_runtime_configuration(request, content_required=True)
+    if isinstance(runtime, Err):
+        return _emit_error(request, runtime, _SEARCH_OPERATION)
+    catalog = load_read_only_marketplace(
+        runtime.value.loaded.effective,
+        data_root=runtime.value.paths.data_root,
+        observe_freshness=not request.offline,
+    )
+    if isinstance(catalog, Err):
+        return _emit_error(request, catalog, _SEARCH_OPERATION)
+
+    query = " ".join(request.query)
+    documents, rows = _search_rows(catalog.value)
+    limit = request.search_limit
+    if limit is not None and limit < 1:
+        return _emit_error(
+            request,
+            _invalid(
+                "--limit is a count of rows to print, so it is at least 1",
+                "drop --limit to print every match",
+            ),
+            _SEARCH_OPERATION,
+        )
+    hits = search(documents, query, limit=limit)
+
+    if request.json:
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "ok": True,
+                    "operation": _SEARCH_OPERATION,
+                    "aart_version": str(EXECUTABLE_VERSION),
+                    "query": query,
+                    "searched": len(documents),
+                    "matches": [
+                        {
+                            **rows[hit.index],
+                            "score": hit.score,
+                            "matched": list(hit.matched),
+                        }
+                        for hit in hits
+                    ],
+                },
+                indent=2,
+            )
+        )
+        return _common.OK
+
+    print(summary_line(query, len(hits), len(documents)))
+    for hit in hits:
+        row = rows[hit.index]
+        marker = "[collection]" if row["kind"] == "collection" else f"[{row['trust']}]"
+        where = f" ({', '.join(hit.matched)})" if hit.matched else ""
+        print(f"  {row['coordinate']} {marker} {row['summary']}{where}")
+    if not hits:
+        print("Try one word, or part of one: matching is by substring, not by whole word.")
+    return _common.OK
+
+
+def _invalid(message: str, *remediation: str) -> Err:
+    return Err((Diagnostic(CONSUMER_INVALID, Severity.ERROR, message, remediation=remediation),))
+
+
+def _runtime_environment_error(message: str) -> Err:
+    return Err((Diagnostic(RUNTIME_ENVIRONMENT_INVALID, Severity.ERROR, message),))
+
+
+def _load_runtime_environment(request: Request) -> Result[RuntimeEnvironment]:
+    raw_path = request.runtime_environment
+    if raw_path is None:
+        return _runtime_environment_error(
+            "marketplace health requires a repository runtime environment description"
+        )
+    path = os.path.abspath(raw_path)
+    try:
+        if os.path.getsize(path) > _MAX_ENVIRONMENT_BYTES:
+            return _runtime_environment_error(
+                f"runtime environment description exceeds {_MAX_ENVIRONMENT_BYTES} bytes"
+            )
+        data = Path(path).read_bytes()
+    except (OSError, ValueError) as error:
+        return _runtime_environment_error(
+            f"cannot read runtime environment description {path}: {error}"
+        )
+    if len(data) > _MAX_ENVIRONMENT_BYTES:
+        return _runtime_environment_error(
+            f"runtime environment description exceeds {_MAX_ENVIRONMENT_BYTES} bytes"
+        )
+    return parse_runtime_environment(data, path=path)
+
+
+def _health_coordinates(request: Request, service: ConsumerApplicationService) -> Result[tuple]:
+    if not request.names:
+        return Ok(tuple(item.coordinate for item in service.context.catalog.items))
+    parsed = parse_artifact_selectors(tuple(request.names))
+    if isinstance(parsed, Err):
+        return parsed
+    return resolve_selectors(service.context.catalog, parsed.value)
+
+
+def _health_item(service: ConsumerApplicationService, coordinate, environment) -> dict:
+    item = next(
+        candidate
+        for candidate in service.context.catalog.items
+        if candidate.coordinate == coordinate
+    )
+    loaded = service.ports.read_object(
+        ObjectReadRequest(service.context.store_paths, item.artifact.artifact.object_digest)
+    )
+    if isinstance(loaded, Err):
+        return {
+            "coordinate": str(coordinate),
+            "status": "unavailable",
+            "requirements": [],
+            "diagnostics": [diagnostic_to_data(value) for value in loaded.diagnostics],
+        }
+    if loaded.value is None:
+        return {
+            "coordinate": str(coordinate),
+            "status": "unavailable",
+            "requirements": [],
+            "detail": (
+                "verified artifact content is not available locally; synchronize or install it "
+                "before inspecting advisory requirements"
+            ),
+        }
+    manifest_entry = next(
+        (
+            entry
+            for entry in loaded.value.candidate.entries
+            if str(entry.path) == "artifact.json" and entry.kind is SnapshotEntryKind.FILE
+        ),
+        None,
+    )
+    if manifest_entry is None:
+        return {
+            "coordinate": str(coordinate),
+            "status": "invalid",
+            "requirements": [],
+            "detail": "verified artifact content has no artifact.json file",
+        }
+    parsed_manifest = parse_artifact_manifest(manifest_entry.content, path="artifact.json")
+    if isinstance(parsed_manifest, Err):
+        return {
+            "coordinate": str(coordinate),
+            "status": "invalid",
+            "requirements": [],
+            "diagnostics": [diagnostic_to_data(value) for value in parsed_manifest.diagnostics],
+        }
+    parsed_requirements = parse_runtime_requirements(parsed_manifest.value)
+    if isinstance(parsed_requirements, Err):
+        return {
+            "coordinate": str(coordinate),
+            "status": "invalid",
+            "requirements": [],
+            "diagnostics": [diagnostic_to_data(value) for value in parsed_requirements.diagnostics],
+        }
+    if not parsed_requirements.value:
+        return {
+            "coordinate": str(coordinate),
+            "status": "not-declared",
+            "requirements": [],
+        }
+    checks = evaluate_runtime_requirements(parsed_requirements.value, environment)
+    statuses = {check.status for check in checks}
+    status = (
+        RuntimeRequirementStatus.UNSATISFIED.value
+        if RuntimeRequirementStatus.UNSATISFIED in statuses
+        else (
+            RuntimeRequirementStatus.UNKNOWN.value
+            if RuntimeRequirementStatus.UNKNOWN in statuses
+            else RuntimeRequirementStatus.SATISFIED.value
+        )
+    )
+    return {
+        "coordinate": str(coordinate),
+        "status": status,
+        "requirements": [runtime_check_to_data(check) for check in checks],
+    }
+
+
+def _health(request: Request) -> int:
+    environment = _load_runtime_environment(request)
+    if isinstance(environment, Err):
+        return _emit_error(request, environment, _HEALTH_OPERATION)
+    service = load_local_consumer_service(
+        project=request.project,
+        user_home=request.user_home,
+        observe_freshness=True,
+        refresh_sources=True,
+        offline=request.offline,
+    )
+    if isinstance(service, Err):
+        return _emit_error(request, service, _HEALTH_OPERATION)
+    coordinates = _health_coordinates(request, service.value)
+    if isinstance(coordinates, Err):
+        return _emit_error(request, coordinates, _HEALTH_OPERATION)
+    items = [
+        _health_item(service.value, coordinate, environment.value)
+        for coordinate in coordinates.value
+    ]
+    statuses = (
+        "satisfied",
+        "unsatisfied",
+        "unknown",
+        "not-declared",
+        "unavailable",
+        "invalid",
+    )
+    summary = {status: sum(item["status"] == status for item in items) for status in statuses}
+    payload = {
+        "schema_version": 1,
+        "ok": True,
+        "operation": _HEALTH_OPERATION,
+        "advisory": True,
+        "installation_blocking": False,
+        "environment": {
+            "path": os.path.abspath(request.runtime_environment or ""),
+            "name": environment.value.name,
+            "capabilities": [
+                runtime_capability_to_data(item) for item in environment.value.capabilities
+            ],
+        },
+        "summary": summary,
+        "items": items,
+    }
+    lines = (
+        f"Runtime requirement health: {len(items)} artifact(s)",
+        *tuple(f"{item['coordinate']}: {item['status']}" for item in items),
+        "Advisory only: these results never block artifact installation.",
+    )
+    _emit(request, _HEALTH_OPERATION, payload, lines)
+    return _common.OK
+
+
+def _selection(request: Request, action: str) -> Result[tuple]:
+    """Parse and validate the requested selection without touching any source."""
+
+    if not request.profiles:
+        return _invalid(
+            f"marketplace {action} requires at least one harness profile",
+            "pass --profile <name> (repeatable, or comma-separated)",
+        )
+    if action in _REQUIRES_COORDINATES and not request.names:
+        return _invalid(
+            f"marketplace {action} requires at least one artifact or collection coordinate",
+            "pass <source>/<kind>/<name>[@<version>] or <source>/collection/<name>",
+            "run `aart-cli marketplace list --json` to see available coordinates",
+        )
+    return parse_artifact_selectors(tuple(request.names))
+
+
+def _action_request(
+    request: Request,
+    action: str,
+    coordinates: tuple,
+) -> ConsumerActionRequest:
+    return ConsumerActionRequest(
+        _LIFECYCLE_ACTIONS[action],
+        coordinates,
+        tuple(request.profiles),
+        scope=request.scope,
+        mode=request.install_mode,
+        force=request.force,
+        offline=request.offline,
+        prune=request.prune,
+        memory_mode=request.memory_mode or "prepend",
+    )
+
+
+def _manual_payload(reference: SetupManualReference | None) -> dict | None:
+    if reference is None:
+        return None
+    return {
+        "relative_path": reference.relative_path,
+        "source": reference.source,
+    }
+
+
+def _setup_plan_payload(plan) -> dict:
+    projected = project_setup_review(plan.legacy_plan)
+    return {
+        "key": f"{plan.request.coordinate}#{plan.request.profile}/{plan.request.scope}",
+        "trust": plan.trust,
+        "recipe": str(plan.recipe_path),
+        "review_digest": str(plan.review_digest),
+        "manual": _manual_payload(projected.manual),
+        "effects": [
+            {
+                "index": effect.index,
+                "identity": effect.identity,
+                "target": effect.target,
+                "capability": effect.capability,
+                "recovery": effect.recovery,
+                "details": effect.details,
+            }
+            for effect in projected.effects
+        ],
+    }
+
+
+def _setup_warnings(outcome) -> list[dict]:
+    """Advisory findings a completed run recorded, carried to the surface the operator reads.
+
+    A secret that is wrong — truncated at the prompt, or simply the one stored months ago and
+    rotated since — configures cleanly and fails much later, at the server, as one word in a
+    harness UI. The receipt knows; nothing read it until here.
+
+    The reading itself is `advisory_messages`, shared with the wizard, because this command was
+    the only surface that did it and the wizard is the one people use.
+    """
+
+    warnings: list[dict] = []
+    for item in outcome.items:
+        record = item.record
+        if record is None:
+            continue
+        for advisory in advisory_messages(record):
+            warnings.append(
+                {
+                    "key": f"{item.coordinate}#{item.profile}/{item.scope}",
+                    "detail": str(advisory.get("detail", "")),
+                    "commands": list(_command_strings(advisory.get("commands"))),
+                }
+            )
+    return warnings
+
+
+def _setup_reminders(outcome) -> list[dict]:
+    """The reload a run cannot perform, carried the same way the advisories are.
+
+    Once for the run, not once per artifact.  Three servers writing exports to
+    `~/.zshrc` need the shell reloaded once, and the row carries no artifact key because the
+    reminder is a fact about the machine — the key said it belonged to one item, which is how
+    the same instruction came to be printed three times and read none.
+    """
+
+    return [
+        {
+            "detail": str(reminder.get("detail", "")),
+            "commands": list(_command_strings(reminder.get("commands"))),
+            "alternative": str(reminder.get("alternative", "")),
+        }
+        for reminder in run_reload_reminders(tuple(item.record for item in outcome.items))
+    ]
+
+
+def _setup_payload(queue: ConsumerSetupQueue, outcome=None) -> dict:
+    payload: dict = {
+        "planned": [_setup_plan_payload(plan) for plan in queue.plans],
+        "planning_failures": [
+            {
+                "key": failure.key,
+                "detail": failure.detail,
+                "manual": _manual_payload(failure.manual),
+            }
+            for failure in queue.failures
+        ],
+    }
+    if outcome is not None:
+        payload["configured"] = outcome.configured
+        payload["incomplete"] = outcome.incomplete
+        payload["items"] = [
+            {
+                "key": f"{item.coordinate}#{item.profile}/{item.scope}",
+                # The three parts beside the key, because a renderer that has to split a string
+                # to name an artifact is one that will name it differently from the other
+                # surface. Additive: `key` stays exactly as it was for whatever reads it.
+                "coordinate": str(item.coordinate),
+                "profile": item.profile,
+                "scope": item.scope,
+                "status": item.setup_status.value,
+                "detail": item.detail,
+                "successful": item.successful,
+                "retry": (
+                    ""
+                    if item.successful
+                    else setup_retry_command(
+                        coordinate=str(item.coordinate), profile=item.profile, scope=item.scope
+                    )
+                ),
+                # The wizard prints these and so does this path, so the note that says what a
+                # rollback would do to a Docker image reaches anyone running setup from the
+                # command line.
+                "recovery": (
+                    []
+                    if item.record is None
+                    else [str(one) for one in recovery_messages(item.record)]
+                ),
+            }
+            for item in outcome.items
+        ]
+        warnings = _setup_warnings(outcome)
+        if warnings:
+            payload["warnings"] = warnings
+        reminders = _setup_reminders(outcome)
+        if reminders:
+            payload["next_steps"] = reminders
+    return payload
+
+
+def _run_setup_queue(
+    request: Request,
+    service: ConsumerApplicationService | ConfiguredSetupService,
+    review: ConsumerReview,
+    outcome: ConsumerOutcome,
+) -> tuple[dict, bool]:
+    """Prepare and, only when explicitly authorized, execute the declared setup queue."""
+
+    queue = service.setup_queue(
+        review,
+        outcome,
+        authorize_untrusted_source=request.authorize_untrusted_source,
+        authorize_custom_entrypoint=request.authorize_custom_entrypoint,
+    )
+    if not request.yes or not queue.plans:
+        return _setup_payload(queue), not queue.failures
+    # Consent is a decision, not a prompt: each reviewed effect is approved only when the caller
+    # passed --approve-setup-effects.  A declined effect leaves installed payloads untouched.
+    approved = request.approve_setup_effects
+
+    def announce(position: int, total: int, plan) -> None:
+        """Say whose setup is starting, on the stream the prompts already use.
+
+        This path prints its whole report after the run, so while the run is happening the only
+        thing on the terminal is `security` asking for a password twice while naming nothing
+        and `Setup input:` asking for a value. With several servers selected
+        that is an unlabelled sequence of credential prompts, and the wrong token typed into the
+        right-looking one is a credential handed to the wrong server.
+
+        stderr, because stdout carries one JSON document and nothing else may enter it — the
+        same rule the runtime's own prompts follow.
+        """
+
+        for line in setup_banner(
+            artifact=str(plan.request.coordinate),
+            profile=plan.request.profile,
+            scope=plan.request.scope,
+            phase="START",
+            position=position,
+            total=total,
+        ):
+            print(line, file=sys.stderr, flush=True)
+
+    setup_outcome = service.finalize_setup_queue(
+        queue, consent=lambda _effect: approved, on_item_start=announce
+    )
+    return (
+        _setup_payload(queue, setup_outcome),
+        not queue.failures and setup_outcome.incomplete == 0,
+    )
+
+
+def _setup_review_outcome(review: ConsumerReview) -> ConsumerOutcome:
+    """Project setup-eligible Review items without finalizing their payload plans.
+
+    ``prepare_consumer_setup_queue`` intentionally accepts only terminal payload outcomes.  The
+    setup command's read-only branch has no real outcome because Review must not mutate, but an
+    already-installed artifact still needs its canonical setup plan rendered.  This projection
+    supplies only the bounded identity and pending/not-required status needed for that second
+    Review; ``prepare_setup`` remains responsible for proving the installed record exists and
+    matches the immutable marketplace object.
+    """
+
+    return ConsumerOutcome(
+        _LIFECYCLE_ACTIONS["setup"],
+        tuple(
+            ConsumerTerminalItem(
+                item.key,
+                "current",
+                setup_status="pending" if item.setup is not None else "not-required",
+            )
+            for item in review.items
+        ),
+    )
+
+
+def _emit(
+    request: Request,
+    operation: str,
+    payload: dict,
+    lines: tuple[str, ...],
+) -> None:
+    if request.json:
+        print(json.dumps(payload, indent=2))
+        return
+    for line in lines:
+        print(line)
+
+
+def _configured_registry_selection(
+    selectors: tuple[ArtifactSelector, ...], effective: EffectiveConfiguration
+) -> ArtifactSelection | None:
+    """Return the direct Selection whose source is wholly owned by the new registry seam.
+
+    Collections and direct/local sources stay on the characterized path until their own public
+    replacement evidence exists. An unqualified selector reaches this seam only when the configured
+    default is an approved registry; otherwise choosing a source here would be new product policy.
+    """
+
+    registry_aliases = {
+        source.alias
+        for source in effective.configuration.sources
+        if source.enabled and source.kind is SourceKind.REGISTRY_GIT
+    }
+    default = effective.configuration.default_registry
+    if not registry_aliases or any(item.identity.kind == "collection" for item in selectors):
+        return None
+    if any(
+        (item.source is not None and item.source not in registry_aliases)
+        or (item.source is None and default not in registry_aliases)
+        for item in selectors
+    ):
+        return None
+    try:
+        return ArtifactSelection(
+            tuple(
+                ArtifactRequest(
+                    item.identity,
+                    VersionConstraint(item.version or "*"),
+                    item.source or default,
+                )
+                for item in selectors
+            )
+        )
+    except ValueError:
+        return None
+
+
+def _configured_review_items(prepared) -> list[dict[str, str]]:
+    action = prepared.action
+    if action is None:
+        return []
+    return [
+        {"key": str(item.coordinate), "status": "planned", "detail": ""}
+        for item in action.installations
+    ]
+
+
+def _configured_install(request: Request, selectors: tuple[ArtifactSelector, ...]) -> int | None:
+    """Run the canonical install seam, or decline when this Selection still belongs to legacy."""
+
+    operation = "marketplace.install"
+    runtime = load_runtime_configuration(request, content_required=True)
+    if isinstance(runtime, Err):
+        return _emit_error(request, runtime, operation)
+    selection = _configured_registry_selection(selectors, runtime.value.loaded.effective)
+    if selection is None:
+        return None
+    return _configured_lifecycle(request, operation, runtime.value, selection)
+
+
+def _unchanged(artifact: ReceiptArtifactView) -> bool:
+    """Whether this member of a finished transaction left the machine exactly as it found it."""
+
+    return not artifact.steps and artifact.status == "completed"
+
+
+def _configured_lifecycle(
+    request: Request,
+    operation: str,
+    runtime: ConfiguredRuntime,
+    selection: ArtifactSelection,
+    previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
+    previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
+) -> int:
+    """Review one canonical Selection, and apply exactly the review that was confirmed.
+
+    Install and update are the same three steps -- prepare without touching anything, project the
+    review, execute only the digest somebody confirmed -- differing in one input: whether each
+    artifact replaces a version already here. Writing that flow twice would let the two drift, and
+    the half that drifted would be the half that mutates the machine.
+    """
+
+    if request.install_mode != "copy":
+        return _emit_error(
+            request,
+            _invalid(
+                "approved registry installation currently supports copy mode only",
+                "omit --mode or pass --mode copy",
+            ),
+            operation,
+        )
+
+    project_root, user_home = resolved_paths(
+        data_root=runtime.paths.data_root,
+        project=request.project,
+        user_home=request.user_home,
+    )
+    host = InstallationHost(
+        runtime.paths.data_root,
+        project_root,
+        user_home,
+        Scope(request.scope),
+        tuple(request.profiles),
+    )
+    policy = EffectivePolicy()
+    credential_providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    prepared = prepare_configured_installation(
+        runtime.loaded.effective,
+        selection,
+        host=host,
+        sources=(),
+        policy=policy,
+        selected_remediations=None,
+        credential_providers=credential_providers,
+        resolvers=credential_providers,
+        previous=previous,
+    )
+    if isinstance(prepared, Err):
+        return _emit_error(request, prepared, operation)
+    if not prepared.value.ready:
+        composition = prepared.value.draft.inputs
+        # A credential the command line cannot take is still explained here, in the words the TUI
+        # and the provider prompt use: what it is, who needs it and how to get it (D-263).
+        guidance = guidance_by_input((str(use.owner), use.input) for use in composition.uses)
+        unanswered = [
+            {
+                "id": field.input.id.value,
+                "kind": "credential" if isinstance(field.input, SecretInput) else "config",
+                "dependants": [str(item) for item in field.dependants],
+                **(
+                    {"guidance": credential_guidance_to_data(guidance[field.input.id.value])}
+                    if isinstance(field.input, SecretInput)
+                    else {}
+                ),
+            }
+            for field in composition.unanswered
+        ]
+        explained = tuple(
+            line
+            for field in composition.unanswered
+            for line in (
+                (f"  - {field.input.id.value} (credential)",)
+                + tuple(
+                    "    " + text
+                    for text in credential_guidance_lines(guidance[field.input.id.value])
+                )
+                if isinstance(field.input, SecretInput)
+                else (f"  - {field.input.id.value} (config)",)
+            )
+        )
+        diagnostic = Diagnostic(
+            CONSUMER_INVALID,
+            Severity.ERROR,
+            "required installation inputs are unanswered",
+            remediation=("answer the required-input form before confirming this install",),
+        )
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": False,
+                "operation": operation,
+                "finalized": False,
+                "diagnostics": [diagnostic_to_data(diagnostic)],
+                "inputs": unanswered,
+            },
+            (f"{diagnostic.severity.value}: {diagnostic.message}", *explained),
+        )
+        return _common.ERROR
+
+    assert prepared.value.action is not None
+    view = prepared.value.action.flow.plan
+    review_data = consumer_plan_to_data(view)
+    review_data["items"] = _configured_review_items(prepared.value)
+    digest = str(prepared.value.review_digest)
+    if not request.yes:
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": True,
+                "operation": operation,
+                "finalized": False,
+                "review_digest": digest,
+                "review": review_data,
+            },
+            render_install_plan(view, PresentationProfile.FAST)
+            + ("Reviewed only; re-run with --yes to apply this exact plan.",),
+        )
+        return _common.OK
+
+    if request.expect is not None and request.expect != digest:
+        refusal = Diagnostic(
+            CONSUMER_REVIEW_MISMATCH,
+            Severity.ERROR,
+            f"the plan changed since it was reviewed: expected {request.expect}, recomputed {digest}",
+            remediation=("re-read the review below, then re-run --expect with its review_digest",),
+        )
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": False,
+                "operation": operation,
+                "finalized": False,
+                "diagnostics": [diagnostic_to_data(refusal)],
+                "expected_review_digest": request.expect,
+                "review_digest": digest,
+                "review": review_data,
+            },
+            (
+                f"{refusal.severity.value}: {refusal.message}",
+                *(f"  remediation: {item}" for item in refusal.remediation),
+                *render_install_plan(view, PresentationProfile.FAST),
+            ),
+        )
+        return _common.ERROR
+
+    now = datetime.now(timezone.utc)
+    completed = complete_configured_installation(
+        prepared.value,
+        expected_review_digest=prepared.value.review_digest,
+        host=host,
+        policy=policy,
+        credential_providers=credential_providers,
+        previous_receipts=previous_receipts,
+        recorded_at=now.isoformat(),
+        today=now.date(),
+        offline=request.offline,
+    )
+    if isinstance(completed, Err):
+        return _emit_error(request, completed, operation)
+    receipt = completed.value.action.flow.outcome
+    assert receipt is not None
+    receipt_data = receipt_detail_to_data(receipt)
+    successful = receipt.outcome.value in {"succeeded", "attention"}
+    payload = {
+        "schema_version": 1,
+        "ok": successful,
+        "operation": operation,
+        "finalized": True,
+        "review_digest": digest,
+        "session_status": receipt.outcome.value,
+        "items": [
+            {
+                "key": item.coordinate,
+                # A member that finished without running a single step changed nothing, because
+                # the machine already matched what was asked for. Reporting that as "completed"
+                # is true and useless -- it reads as though an update happened -- so it is
+                # reported as what it is.
+                "status": "current" if _unchanged(item) else item.status,
+                "detail": item.detail,
+            }
+            for item in receipt.artifacts
+        ],
+        "receipt": receipt_data,
+    }
+    lines = render_transaction_success(receipt, PresentationProfile.FAST)
+    setup_payload: dict | None = None
+    projected = configured_consumer_completion(
+        completed.value,
+        runtime.loaded.effective,
+        host,
+        action="update" if operation == "marketplace.update" else "install",
+    )
+    if isinstance(projected, Ok):
+        review, outcome, setup_service = projected.value
+        if completed.value.pending_setup:
+            setup_payload, _setup_ok = _run_setup_queue(request, setup_service, review, outcome)
+            payload["setup"] = setup_payload
+            lines += render_setup_payload(setup_payload)
+    else:
+        lines += ("warning: setup completion is unavailable; the installed payload is unchanged",)
+    # Additive, and absent when there is nothing to say. An install that always carried the key --
+    # empty -- would make every artifact look like one that was checked and found to need nothing,
+    # which is a stronger claim than this seam makes.
+    setup_complete = (
+        setup_payload is not None
+        and setup_payload.get("incomplete") == 0
+        and not (setup_payload.get("planning_failures"))
+    )
+    if completed.value.pending_setup and not setup_complete:
+        payload["pending_setup"] = [
+            declared_setup_to_data(item) for item in completed.value.pending_setup
+        ]
+        lines += render_pending_setup(completed.value.pending_setup)
+    _emit(
+        request,
+        operation,
+        payload,
+        lines,
+    )
+    return _common.OK if successful else _common.ERROR
+
+
+def _configured_update(request: Request, selectors: tuple[ArtifactSelector, ...]) -> int | None:
+    """Converge canonical installs onto what the approved registry now offers, or decline.
+
+    Update acts on something already installed, so the record decides whether this seam owns the
+    request: an artifact with no canonical receipt is left to the characterized path rather than
+    installed here under a verb that promises to replace something. That is also why the selection
+    is rebuilt from the records instead of from the coordinates somebody typed -- what is being
+    updated is what is installed, and its source is the one it came from.
+
+    No version is pinned unless somebody pinned one. `update` asks for what the registry approves
+    now; whether that is newer, the same, or older than what is installed is answered by the plan
+    (`supersession_intent`), which is where the refusal to call a rollback an update lives.
+    """
+
+    operation = "marketplace.update"
+    runtime = load_runtime_configuration(request, content_required=True)
+    if isinstance(runtime, Err):
+        return _emit_error(request, runtime, operation)
+    effective = runtime.value.loaded.effective
+    registry_aliases = {
+        source.alias
+        for source in effective.configuration.sources
+        if source.enabled and source.kind is SourceKind.REGISTRY_GIT
+    }
+    if not registry_aliases:
+        return None
+    if selectors and _configured_registry_selection(selectors, effective) is None:
+        return None
+
+    project_root, user_home = resolved_paths(
+        data_root=runtime.value.paths.data_root,
+        project=request.project,
+        user_home=request.user_home,
+    )
+    scope = Scope(request.scope)
+    inspected = read_installed_inspections(
+        state_root=os.path.join(runtime.value.paths.data_root, "state"),
+        harness_root=project_root if scope is Scope.PROJECT else user_home,
+        credential_providers=(MacOsKeychainProvider(),) if sys.platform == "darwin" else (),
+        scope=scope,
+        profiles=tuple(request.profiles),
+    )
+    if isinstance(inspected, Err):
+        return _emit_error(request, inspected, operation)
+    installed = tuple(
+        item
+        for item in inspected.value.inspections
+        if item.record.coordinate.source in registry_aliases
+        and (
+            not selectors
+            or any(_status_matches(selector, item.coordinate) for selector in selectors)
+        )
+    )
+    if not installed:
+        return None
+
+    try:
+        selection = ArtifactSelection(
+            tuple(
+                ArtifactRequest(
+                    item.record.coordinate.artifact,
+                    VersionConstraint(_pinned_version(selectors, item.coordinate) or "*"),
+                    item.record.coordinate.source,
+                )
+                for item in installed
+            )
+        )
+    except ValueError:
+        return None
+    previous = tuple(
+        (replace(item.record.coordinate, version=None), item.desired) for item in installed
+    )
+    receipts = tuple((item.record.coordinate, item.record.receipt) for item in installed)
+    return _configured_lifecycle(request, operation, runtime.value, selection, previous, receipts)
+
+
+def _pinned_version(selectors: tuple[ArtifactSelector, ...], coordinate: str) -> str | None:
+    """The version somebody asked for by name, if they asked for one at all."""
+
+    for selector in selectors:
+        if _status_matches(selector, coordinate) and selector.version:
+            return selector.version
+    return None
+
+
+def _status_matches(selector: ArtifactSelector, coordinate: str) -> bool:
+    """Match a validated selector against a canonical view without reparsing domain identity."""
+
+    body, separator, version = coordinate.rpartition("@")
+    if not separator:
+        body, version = coordinate, ""
+    source, kind, name = body.split("/", 2)
+    return (
+        (selector.source is None or str(selector.source) == source)
+        and selector.identity.kind == kind
+        and selector.identity.name == name
+        and (selector.version is None or selector.version == version)
+    )
+
+
+def _configured_uninstall(request: Request, selectors: tuple[ArtifactSelector, ...]) -> int | None:
+    """Take canonical installations back out from what this machine recorded, or decline.
+
+    Nothing here reads a registry. An artifact stays installed after the source that delivered it
+    is removed from the configuration, so the receipts are the authority on what is removed and
+    where from; requiring the source would refuse exactly when somebody most needs this to work.
+    That is also why the runtime is loaded without content: the configuration is consulted for the
+    paths this machine keeps its state under, not for anything to resolve.
+
+    Declining means there is no canonical record matching what was asked for, which is left to the
+    characterized path rather than answered here -- an uninstall of something this seam has never
+    heard of is not an uninstall it can claim to have performed.
+    """
+
+    operation = "marketplace.uninstall"
+    runtime = load_runtime_configuration(request, content_required=False)
+    if isinstance(runtime, Err):
+        return _emit_error(request, runtime, operation)
+
+    project_root, user_home = resolved_paths(
+        data_root=runtime.value.paths.data_root,
+        project=request.project,
+        user_home=request.user_home,
+    )
+    scope = Scope(request.scope)
+    credential_providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    inspected = read_installed_inspections(
+        state_root=os.path.join(runtime.value.paths.data_root, "state"),
+        harness_root=project_root if scope is Scope.PROJECT else user_home,
+        credential_providers=credential_providers,
+        scope=scope,
+        profiles=tuple(request.profiles),
+    )
+    if isinstance(inspected, Err):
+        return _emit_error(request, inspected, operation)
+    installed = tuple(
+        item
+        for item in inspected.value.inspections
+        if not selectors
+        or any(_status_matches(selector, item.coordinate) for selector in selectors)
+    )
+    if not installed:
+        return None
+
+    host = InstallationHost(
+        runtime.value.paths.data_root,
+        project_root,
+        user_home,
+        scope,
+        tuple(request.profiles),
+    )
+    policy = EffectivePolicy()
+    prepared = prepare_configured_uninstall(
+        tuple(item.record for item in installed),
+        host=host,
+        policy=policy,
+        credential_providers=credential_providers,
+    )
+    if isinstance(prepared, Err):
+        return _emit_error(request, prepared, operation)
+
+    proposal = prepared.value.proposal
+    digest = str(prepared.value.review_digest)
+    removing = [
+        {"key": str(item.coordinate), "status": "planned", "detail": ""}
+        for item in prepared.value.removals
+    ]
+    review_data: dict[str, object] = {
+        "items": removing,
+        "effects": [effect_to_data(effect) for effect in proposal.effects],
+        "risks": [risk.name.lower().replace("_", "-") for risk in proposal.risks],
+        # Credentials are retained unless somebody says otherwise, and a review that stayed silent
+        # about that would leave the reader to assume the opposite.
+        "credentials": "retained",
+    }
+    review_lines = (
+        f"Removing {len(removing)} artifact(s):",
+        *(f"  - {item['key']}" for item in removing),
+        "Credentials: retained.",
+    )
+    if not request.yes:
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": True,
+                "operation": operation,
+                "finalized": False,
+                "review_digest": digest,
+                "review": review_data,
+            },
+            review_lines + ("Reviewed only; re-run with --yes to apply this exact removal.",),
+        )
+        return _common.OK
+
+    if request.expect is not None and request.expect != digest:
+        refusal = Diagnostic(
+            CONSUMER_REVIEW_MISMATCH,
+            Severity.ERROR,
+            f"the removal changed since it was reviewed: expected {request.expect}, "
+            f"recomputed {digest}",
+            remediation=("re-read the review below, then re-run --expect with its review_digest",),
+        )
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": False,
+                "operation": operation,
+                "finalized": False,
+                "diagnostics": [diagnostic_to_data(refusal)],
+                "expected_review_digest": request.expect,
+                "review_digest": digest,
+                "review": review_data,
+            },
+            (
+                f"{refusal.severity.value}: {refusal.message}",
+                *(f"  remediation: {item}" for item in refusal.remediation),
+                *review_lines,
+            ),
+        )
+        return _common.ERROR
+
+    now = datetime.now(timezone.utc)
+    completed = complete_configured_uninstall(
+        prepared.value,
+        expected_review_digest=prepared.value.review_digest,
+        host=host,
+        policy=policy,
+        credential_providers=credential_providers,
+        recorded_at=now.isoformat(),
+        today=now.date(),
+    )
+    if isinstance(completed, Err):
+        return _emit_error(request, completed, operation)
+    receipt = completed.value.recorded.receipt
+    successful = receipt.outcome.value in {"succeeded", "attention"}
+    payload = {
+        "schema_version": 1,
+        "ok": successful,
+        "operation": operation,
+        "finalized": True,
+        "review_digest": digest,
+        "session_status": receipt.outcome.value,
+        "items": [
+            {
+                "key": item.coordinate,
+                # Nothing to do means it was not here to take away, which is a different fact
+                # from having removed it and worth saying so.
+                "status": "absent" if _unchanged(item) else "removed",
+                "detail": item.detail,
+            }
+            for item in receipt.artifacts
+        ],
+        "receipt": receipt_detail_to_data(receipt),
+    }
+    _emit(
+        request,
+        operation,
+        payload,
+        render_transaction_success(receipt, PresentationProfile.FAST),
+    )
+    return _common.OK if successful else _common.ERROR
+
+
+def _configured_status(request: Request, selectors: tuple[ArtifactSelector, ...]) -> int | None:
+    """Read canonical status when the configured registry owns this public selection."""
+
+    operation = "marketplace.status"
+    runtime = load_runtime_configuration(request, content_required=False)
+    if isinstance(runtime, Err):
+        return _emit_error(request, runtime, operation)
+    effective = runtime.value.loaded.effective
+    registry_aliases = {
+        source.alias
+        for source in effective.configuration.sources
+        if source.enabled and source.kind is SourceKind.REGISTRY_GIT
+    }
+    if selectors:
+        if _configured_registry_selection(selectors, effective) is None:
+            return None
+    elif effective.configuration.default_registry not in registry_aliases:
+        return None
+
+    project_root, user_home = resolved_paths(
+        data_root=runtime.value.paths.data_root,
+        project=request.project,
+        user_home=request.user_home,
+    )
+    harness_root = project_root if request.scope == "project" else user_home
+    credential_providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    machine = read_consumer_machine(
+        state_root=os.path.join(runtime.value.paths.data_root, "state"),
+        harness_root=harness_root,
+        today=datetime.now(timezone.utc).date(),
+        project_root=project_root,
+        user_home=user_home,
+        data_root=runtime.value.paths.data_root,
+        credential_providers=credential_providers,
+        scope=Scope(request.scope),
+        profiles=tuple(request.profiles),
+    )
+    if isinstance(machine, Err):
+        return _emit_error(request, machine, operation)
+    installed = tuple(
+        item
+        for item in machine.value.installed
+        if not selectors
+        or any(_status_matches(selector, item.coordinate) for selector in selectors)
+    )
+    payload = {
+        "schema_version": 1,
+        "ok": True,
+        "operation": operation,
+        "finalized": True,
+        "items": [
+            {
+                "key": item.coordinate,
+                # Preserve the public command's record-oriented status while exposing the
+                # measured health separately. Presence in this list means the durable record is
+                # current; readiness is an observation and may be unknown or drifted.
+                "status": "current",
+                "detail": "" if item.health == "ready" else f"health: {item.health}",
+                "health": item.health,
+            }
+            for item in installed
+        ],
+    }
+    _emit(
+        request,
+        operation,
+        payload,
+        tuple(
+            line
+            for item in installed
+            for line in render_installed_artifact(item, PresentationProfile.FAST)
+        ),
+    )
+    return _common.OK
+
+
+def _configured_setup(request: Request, selectors: tuple[ArtifactSelector, ...]) -> int | None:
+    """Run setup from canonical receipts without consulting the retiring install-state store."""
+
+    operation = "marketplace.setup"
+    runtime = load_runtime_configuration(request, content_required=True)
+    if isinstance(runtime, Err):
+        return _emit_error(request, runtime, operation)
+    project_root, user_home = resolved_paths(
+        data_root=runtime.value.paths.data_root,
+        project=request.project,
+        user_home=request.user_home,
+    )
+    scope = Scope(request.scope)
+    providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    inspected = read_installed_inspections(
+        state_root=os.path.join(runtime.value.paths.data_root, "state"),
+        harness_root=project_root if scope is Scope.PROJECT else user_home,
+        credential_providers=providers,
+        scope=scope,
+        profiles=tuple(request.profiles),
+    )
+    if isinstance(inspected, Err):
+        return _emit_error(request, inspected, operation)
+    installed = tuple(
+        item.record.coordinate
+        for item in inspected.value.inspections
+        if not selectors
+        or any(_status_matches(selector, item.coordinate) for selector in selectors)
+    )
+    if not installed:
+        return None
+    host = InstallationHost(
+        runtime.value.paths.data_root,
+        project_root,
+        user_home,
+        scope,
+        tuple(request.profiles),
+    )
+    projected = configured_installed_setup_completion(
+        runtime.value.loaded.effective,
+        host,
+        installed,
+        platform=sys.platform,
+        authorize_untrusted_source=request.authorize_untrusted_source,
+        authorize_custom_entrypoint=request.authorize_custom_entrypoint,
+    )
+    if isinstance(projected, Err):
+        return _emit_error(request, projected, operation)
+    review, outcome, service = projected.value
+    review_data = json.loads(canonical_json_bytes(consumer_review_value(review)).decode("utf-8"))
+    queue = service.setup_queue(
+        review,
+        outcome,
+        authorize_untrusted_source=request.authorize_untrusted_source,
+        authorize_custom_entrypoint=request.authorize_custom_entrypoint,
+    )
+    if not request.yes:
+        setup_data = _setup_payload(queue)
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": True,
+                "operation": operation,
+                "finalized": False,
+                "review_digest": str(review.review_digest),
+                "review": review_data,
+                "setup": setup_data,
+            },
+            render_consumer_review(review)
+            + tuple(line for plan in queue.plans for line in render_setup_review(plan.legacy_plan))
+            + render_setup_payload(setup_data, planned_effects=False)
+            + ("Reviewed only; re-run with --yes to apply this exact plan.",),
+        )
+        return _common.OK
+    if request.expect is not None and request.expect != str(review.review_digest):
+        refusal = Diagnostic(
+            CONSUMER_REVIEW_MISMATCH,
+            Severity.ERROR,
+            f"the plan changed since it was reviewed: expected {request.expect}, recomputed {review.review_digest}",
+            remediation=("re-read the review, then re-run --expect with its review_digest",),
+        )
+        return _emit_error(request, Err((refusal,)), operation)
+    setup_payload, setup_ok = _run_setup_queue(request, service, review, outcome)
+    payload = {
+        "schema_version": 1,
+        "ok": setup_ok,
+        "operation": operation,
+        "finalized": True,
+        "review_digest": str(review.review_digest),
+        "session_status": outcome.session_status,
+        "setup": setup_payload,
+    }
+    lines = render_setup_payload(setup_payload)
+    _emit(request, operation, payload, lines)
+    return _common.OK if setup_ok else _common.ERROR
+
+
+def _lifecycle(request: Request, action: str) -> int:
+    operation = f"marketplace.{action}"
+    selection = _selection(request, action)
+    if isinstance(selection, Err):
+        return _emit_error(request, selection, operation)
+    if action == "install":
+        configured = _configured_install(request, selection.value)
+        if configured is not None:
+            return configured
+    if action == "update":
+        configured = _configured_update(request, selection.value)
+        if configured is not None:
+            return configured
+    if action == "uninstall":
+        configured = _configured_uninstall(request, selection.value)
+        if configured is not None:
+            return configured
+    if action == "status":
+        configured = _configured_status(request, selection.value)
+        if configured is not None:
+            return configured
+    if action == "setup":
+        configured = _configured_setup(request, selection.value)
+        if configured is not None:
+            return configured
+    service = load_local_consumer_service(
+        project=request.project,
+        user_home=request.user_home,
+        observe_freshness=True,
+        offline=request.offline,
+        # Neither of these is a content operation: one removes what the manifest records, the other
+        # reports it.  Requiring an enabled source here would refuse the exact exit `source remove`
+        # tells operators to take.
+        content_required=action not in _PROJECT_LOCAL,
+    )
+    if isinstance(service, Err):
+        return _emit_error(request, service, operation)
+    if action == "uninstall":
+        # Uninstall resolves against the manifest, never through the source: the project has a
+        # complete record of what it installed, and removing a subscription must not strand it.
+        coordinates = service.value.resolve_uninstall(
+            selection.value,
+            scope=request.scope,
+            profiles=tuple(request.profiles),
+        )
+    else:
+        coordinates = resolve_selectors(
+            service.value.context.catalog, selection.value, offline=request.offline
+        )
+    if isinstance(coordinates, Err):
+        return _emit_error(request, coordinates, operation)
+    prepared = service.value.prepare(_action_request(request, action, coordinates.value))
+    if isinstance(prepared, Err):
+        return _emit_error(request, prepared, operation)
+    review = prepared.value
+    review_data = json.loads(canonical_json_bytes(consumer_review_value(review)).decode("utf-8"))
+
+    if not request.yes and action in _MUTATING:
+        payload = {
+            "schema_version": 1,
+            "ok": True,
+            "operation": operation,
+            "finalized": False,
+            "review_digest": str(review.review_digest),
+            "review": review_data,
+            # A sibling of ``review``, never a member of it: ``review`` is the exact value the
+            # digest is computed over, and freshness is a clock reading.
+            "source_freshness": [
+                {"alias": alias, "health": health, "age_seconds": age}
+                for alias, health, age in review_source_freshness(review)
+            ],
+        }
+        setup_lines: tuple[str, ...] = ()
+        if action == "setup":
+            setup_queue = service.value.setup_queue(
+                review,
+                _setup_review_outcome(review),
+                authorize_untrusted_source=request.authorize_untrusted_source,
+                authorize_custom_entrypoint=request.authorize_custom_entrypoint,
+            )
+            setup_data = _setup_payload(setup_queue)
+            payload["setup"] = setup_data
+            # The plan renderer alone emits nothing when planning failed, so the
+            # operator approving effects was shown a setup queue and never told it will not run.
+            setup_lines = tuple(
+                line for plan in setup_queue.plans for line in render_setup_review(plan.legacy_plan)
+            ) + render_setup_payload(setup_data, planned_effects=False)
+        _emit(
+            request,
+            operation,
+            payload,
+            render_consumer_review(review)
+            + setup_lines
+            + ("Reviewed only; re-run with --yes to apply this exact plan.",),
+        )
+        return _common.OK
+
+    if request.expect is not None and request.expect != str(review.review_digest):
+        # The reviewed decision did not survive to this command.  Refuse, and render the plan that
+        # would actually run — an operator who cannot see the new plan cannot re-authorize it.
+        refusal = Diagnostic(
+            CONSUMER_REVIEW_MISMATCH,
+            Severity.ERROR,
+            (
+                f"the plan changed since it was reviewed: expected {request.expect}, "
+                f"recomputed {review.review_digest}"
+            ),
+            remediation=("re-read the review below, then re-run --expect with its review_digest",),
+        )
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": False,
+                "operation": operation,
+                "finalized": False,
+                "diagnostics": [diagnostic_to_data(refusal)],
+                "expected_review_digest": request.expect,
+                "review_digest": str(review.review_digest),
+                "review": review_data,
+            },
+            (
+                f"{refusal.severity.value}: {refusal.message}",
+                *(f"  remediation: {item}" for item in refusal.remediation),
+                *render_consumer_review(review),
+            ),
+        )
+        return _common.ERROR
+
+    finalized = service.value.finalize(review, review.review_digest)
+    if isinstance(finalized, Err):
+        return _emit_error(request, finalized, operation)
+    outcome = finalized.value
+    payload = {
+        "schema_version": 1,
+        "ok": True,
+        "operation": operation,
+        "finalized": True,
+        "review_digest": str(review.review_digest),
+        "session_status": outcome.session_status,
+        "offline_last_known_good": outcome.offline_last_known_good,
+        "items": [
+            {
+                "key": item.key,
+                "status": item.status,
+                "detail": item.detail,
+                "setup_status": item.setup_status,
+                "policy_status": item.policy_status,
+                "policy_detail": item.policy_detail,
+                "trust": item.trust,
+            }
+            for item in outcome.items
+        ],
+    }
+    lines = render_consumer_outcome(outcome)
+    setup_ok = True
+    setup_payload: dict | None = None
+    if action == "setup" or any(item.setup_status == "pending" for item in outcome.items):
+        setup_payload, setup_ok = _run_setup_queue(request, service.value, review, outcome)
+        payload["setup"] = setup_payload
+        # The counts stay, at the end, after the content they summarize.
+        lines += render_setup_payload(setup_payload)
+    # Install and update report the payload transaction they were asked to perform. Setup has its
+    # own separately reviewed effects and consent flags, so declining or failing it does not turn a
+    # successfully placed payload into a failed placement. The explicit setup command owns only
+    # that second operation and therefore reports the queue's terminal verdict as its exit status.
+    setup_controls_exit = action == "setup"
+    payload["ok"] = outcome.session_status != "failed" and (setup_ok or not setup_controls_exit)
+    _emit(request, operation, payload, lines)
+    if outcome.session_status in {"failed", "partial"} or (setup_controls_exit and not setup_ok):
+        return _common.ERROR
+    return _common.OK
+
+
+def _undo(request: Request, loaded, operation: str) -> int:
+    """Review-first, exactly as every other mutating action: `--yes` finalizes, nothing else."""
+
+    payload, digest = undo_view(loaded)
+
+    if not request.yes:
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": True,
+                "operation": operation,
+                "finalized": False,
+                "undo_digest": digest,
+                "undo": payload,
+            },
+            render_undo_payload(payload)
+            + ("Reviewed only; re-run with --yes to apply this exact undo.",),
+        )
+        return _common.OK
+
+    if request.expect is not None and request.expect != digest:
+        refusal = Diagnostic(
+            CONSUMER_REVIEW_MISMATCH,
+            Severity.ERROR,
+            f"the undo changed since it was reviewed: expected {request.expect}, "
+            f"recomputed {digest}",
+            remediation=("re-read the undo below, then re-run --expect with its undo_digest",),
+        )
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": False,
+                "operation": operation,
+                "finalized": False,
+                "diagnostics": [diagnostic_to_data(refusal)],
+                "expected_undo_digest": request.expect,
+                "undo_digest": digest,
+                "undo": payload,
+            },
+            (
+                f"{refusal.severity.value}: {refusal.message}",
+                *(f"  remediation: {item}" for item in refusal.remediation),
+                *render_undo_payload(payload),
+            ),
+        )
+        return _common.ERROR
+
+    rolled = apply_undo(loaded)
+    complete = rolled.status == "skipped"
+    _emit(
+        request,
+        operation,
+        {
+            "schema_version": 1,
+            "ok": complete,
+            "operation": operation,
+            "finalized": True,
+            "undo_digest": digest,
+            "status": rolled.status,
+            "detail": rolled.detail,
+            "undo": payload,
+        },
+        render_undo_payload(payload, applied=True)
+        + (f"Undo outcome: {rolled.status} \u2014 {rolled.detail}",),
+    )
+    return _common.OK if complete else _common.ERROR
+
+
+def _receipt(request: Request) -> int:
+    operation = f"marketplace.receipt.{request.receipt_action or 'show'}"
+    if request.receipt_action not in RECEIPT_ACTIONS:
+        return _emit_error(request, unsupported_action(request.receipt_action), operation)
+
+    runtime = load_runtime_configuration(request, content_required=False)
+    if isinstance(runtime, Err):
+        return _emit_error(request, runtime, operation)
+    data_root = runtime.value.paths.data_root
+    project_root, home = resolved_paths(
+        data_root=data_root, project=request.project, user_home=request.user_home
+    )
+    loaded = load_receipt(
+        data_root=data_root,
+        project_root=project_root,
+        user_home=home,
+        scope=request.scope,
+        selector=request.names[0],
+        profiles=tuple(request.profiles),
+    )
+    if isinstance(loaded, Err):
+        return _emit_error(request, loaded, operation)
+
+    if request.receipt_action == "undo":
+        return _undo(request, loaded.value, operation)
+
+    if request.receipt_action == "verify":
+        verification = verify_view(loaded.value)
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                # A false claim is a finding, and a finding must not report success to CI.
+                "ok": verification["false"] == 0,
+                "operation": operation,
+                "coordinate": loaded.value.location.coordinate,
+                "verification": verification,
+            },
+            render_verification_payload(verification),
+        )
+        return _common.OK if verification["false"] == 0 else _common.ERROR
+
+    payload = show_view(loaded.value)
+    _emit(
+        request,
+        operation,
+        {
+            "schema_version": 1,
+            "ok": True,
+            "operation": operation,
+            "receipt": payload,
+        },
+        render_receipt_payload(payload),
+    )
+    return _common.OK
+
+
+def run(request: Request) -> int:
+    """Run one canonical marketplace command."""
+
+    if request.marketplace_action == "receipt":
+        return _receipt(request)
+    if request.marketplace_action == "list":
+        return _list(request)
+    if request.marketplace_action == "search":
+        return _search(request)
+    if request.marketplace_action == "health":
+        return _health(request)
+    if request.marketplace_action in _LIFECYCLE_ACTIONS:
+        return _lifecycle(request, request.marketplace_action)
+    if request.json:
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "ok": False,
+                    "operation": "marketplace",
+                    "diagnostics": [
+                        {
+                            "code": "consumer-invalid",
+                            "severity": "error",
+                            "message": "unsupported marketplace command action",
+                            "location": None,
+                            "remediation": [],
+                        }
+                    ],
+                },
+                indent=2,
+            )
+        )
+    else:
+        print("error: unsupported marketplace command action")
+    return _common.ERROR
+
+
+__all__ = ["run"]

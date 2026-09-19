@@ -9,7 +9,7 @@ has `aart` parse it without changing anything, and tells you the commands that p
 
 A collection is the shipped name for a group of artifacts a colleague installs in one command:
 
-    aart marketplace install <source>/collection/<name> --profile tabnine --yes
+    aart-cli marketplace install <source>/collection/<name> --profile tabnine --yes
 
 Re-running with a name that already exists edits that collection: its current members come back
 pre-selected, so adding one artifact is a run through with one answer changed.
@@ -291,13 +291,15 @@ def main(argv: list[str] | None = None) -> int:
     if not ok:
         return 1
     print("\nnext:")
-    print(f"  aart registry lock --source {args.source} --yes")
+    print(f"  aart-cli registry lock --source {args.source} --yes")
     print("  git add -A && git commit -m 'add the collection'")
-    print(f"  aart registry build --source {args.source} --yes")
+    print(f"  aart-cli registry build --source {args.source} --yes")
     print("  git add -A && git commit -m 'rebuild the index'")
     print("\nthen a colleague installs the whole thing with one command:")
     source_id = read_json(registry / "aart-source.json").get("source_id", "<source>")
-    print(f"  aart marketplace install {source_id}/collection/{args.name} --profile tabnine --yes")
+    print(
+        f"  aart-cli marketplace install {source_id}/collection/{args.name} --profile tabnine --yes"
+    )
     return 0
 
 

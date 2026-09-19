@@ -17,10 +17,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err
-from agent_artifacts.sources.git import _tree_listing
-from agent_artifacts.sources.model import (
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err
+from aart_cli.sources.git import _tree_listing
+from aart_cli.sources.model import (
     GitSnapshotRequest,
     SnapshotLimits,
     SourceInstanceId,

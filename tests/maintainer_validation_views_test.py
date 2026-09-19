@@ -12,11 +12,11 @@ import dataclasses
 import json
 import unittest
 
-from agent_artifacts.application.candidate_validation import (
+from aart_cli.application.candidate_validation import (
     ValidationCheck,
     validate_candidate,
 )
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
@@ -25,14 +25,14 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     PresentationProfile,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer import CandidateBundle, reconcile_source_scan
+from aart_cli.application.maintainer_views import (
     MaintainerScreen,
     MaintainerValidationRowId,
     MaintainerViews,
@@ -43,22 +43,22 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_source,
     project_maintainer_validation,
 )
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.candidates import CandidateState
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.candidates import CandidateState
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
-from agent_artifacts.tui_layout import footer_start
-from agent_artifacts.tui_maintainer import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from aart_cli.tui_layout import footer_start
+from aart_cli.tui_maintainer import (
     render_maintainer_policy_review,
     render_maintainer_validation,
     render_maintainer_validation_check,

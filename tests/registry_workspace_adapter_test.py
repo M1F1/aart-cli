@@ -8,13 +8,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.registry_workspace import FilesystemRegistryWorkspace
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.registry_commands.model import RegistryApplyCommand, RegistryInitOptions
-from agent_artifacts.registry_commands.planning import plan_registry_init
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.registry_workspace import FilesystemRegistryWorkspace
+from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from aart_cli.protocol.semver import SemVer
+from aart_cli.registry_commands.model import RegistryApplyCommand, RegistryInitOptions
+from aart_cli.registry_commands.planning import plan_registry_init
 
 
 class RegistryWorkspaceAdapterTest(unittest.TestCase):

@@ -24,9 +24,9 @@ import json
 import pathlib
 import unittest
 
-from agent_artifacts.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.receipt_store import LocalReceiptStore
+from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
+from aart_cli.domain.result import Ok
+from aart_cli.io.receipt_store import LocalReceiptStore
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AuthoredSetup
 from tests.configured_setup_gap_test import AUTHORED, COORDINATE, RECIPE

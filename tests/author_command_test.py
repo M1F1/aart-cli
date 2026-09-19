@@ -1,4 +1,4 @@
-"""`aart author init` writes a whole authoring workspace, or it writes nothing at all.
+"""`aart-cli author init` writes a whole authoring workspace, or it writes nothing at all.
 
 The generator is tested against the parser in `author_skeleton_test`; what is left to hold is the
 command around it. Two claims matter here and neither is about YAML. The first is that what lands
@@ -19,22 +19,22 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts.authoring.skeleton import (
+from aart_cli.authoring.skeleton import (
     GENERATED_KINDS,
     PayloadFile,
     author_skeleton,
 )
-from agent_artifacts.cli import main
-from agent_artifacts.command_outcome import ERROR, OK, USAGE
-from agent_artifacts.commands.author import run
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.author_workspace import write_author_skeleton
-from agent_artifacts.model import Request
-from agent_artifacts.protocol.authoring import (
+from aart_cli.cli import main
+from aart_cli.command_outcome import ERROR, OK, USAGE
+from aart_cli.commands.author import run
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.author_workspace import write_author_skeleton
+from aart_cli.model import Request
+from aart_cli.protocol.authoring import (
     DiscoveredAuthorManifest,
     parse_author_manifest,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
+from aart_cli.protocol.paths import parse_relative_path
 
 _NAME = "github-mcp"
 

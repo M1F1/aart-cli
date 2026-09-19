@@ -79,8 +79,8 @@ def operational_catalog_diagnostics(root: Path) -> tuple[str, ...]:
 
 def main() -> int:
     diagnostics = (
-        *non_stdlib_imports(ROOT / "agent_artifacts"),
-        *credential_promise_diagnostics(ROOT / "agent_artifacts"),
+        *non_stdlib_imports(ROOT / "aart_cli"),
+        *credential_promise_diagnostics(ROOT / "aart_cli"),
         *operational_catalog_diagnostics(ROOT),
     )
     for diagnostic in diagnostics:

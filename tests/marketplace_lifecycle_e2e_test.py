@@ -18,30 +18,30 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts import cli
-from agent_artifacts.application.sources import SourceSyncPorts, SourceSyncRequest, sync_source
-from agent_artifacts.configuration.model import (
+from aart_cli import cli
+from aart_cli.application.sources import SourceSyncPorts, SourceSyncRequest, sync_source
+from aart_cli.configuration.model import (
     ConfiguredSource,
     SourceKind,
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.paths import Platform, resolve_config_paths
-from agent_artifacts.configuration.schema import user_configuration_bytes
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.source_store import (
+from aart_cli.configuration.paths import Platform, resolve_config_paths
+from aart_cli.configuration.schema import user_configuration_bytes
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Ok
+from aart_cli.io.source_store import (
     acquire_source_lock,
     publish_source_snapshot,
     read_current_source,
     release_source_lock,
 )
-from agent_artifacts.protocol.capabilities import parse_capability
-from agent_artifacts.runtime_contract import EXECUTABLE_VERSION
-from agent_artifacts.sources.git import acquire_git_snapshot
-from agent_artifacts.sources.local import read_local_snapshot
-from agent_artifacts.sources.model import SyncFallback
-from agent_artifacts.sources.validation import validate_source_candidate
+from aart_cli.protocol.capabilities import parse_capability
+from aart_cli.runtime_contract import EXECUTABLE_VERSION
+from aart_cli.sources.git import acquire_git_snapshot
+from aart_cli.sources.local import read_local_snapshot
+from aart_cli.sources.model import SyncFallback
+from aart_cli.sources.validation import validate_source_candidate
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "native-source-v1"
 _COORDINATE = "reference/skill/code-review"

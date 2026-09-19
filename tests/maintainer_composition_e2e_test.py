@@ -11,51 +11,51 @@ import time
 import unittest
 from unittest import mock
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
     ConsumerUiEventKind,
     opening_state,
 )
-from agent_artifacts.application.consumer_views import ConsumerSettings, PresentationProfile
-from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
-from agent_artifacts.application.maintainer_promotion import CandidatePromotionRecord
-from agent_artifacts.application.maintainer_views import MaintainerScreen, parse_validation_row
-from agent_artifacts.application.promotion import (
+from aart_cli.application.consumer_views import ConsumerSettings, PresentationProfile
+from aart_cli.application.maintainer import CandidateBundle, reconcile_source_scan
+from aart_cli.application.maintainer_promotion import CandidatePromotionRecord
+from aart_cli.application.maintainer_views import MaintainerScreen, parse_validation_row
+from aart_cli.application.promotion import (
     PromotionSourceKind,
     load_registry_promotions,
     load_registry_versions,
     validate_promoted_registry,
 )
-from agent_artifacts.configuration.model import (
+from aart_cli.configuration.model import (
     ConfiguredSource,
     SourceKind,
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.schema import user_configuration_bytes
-from agent_artifacts.domain.candidates import assess_candidate
-from agent_artifacts.domain.identifiers import SourceAlias, SourceId
-from agent_artifacts.domain.registry import PromotionMode
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.candidate_store import (
+from aart_cli.configuration.schema import user_configuration_bytes
+from aart_cli.domain.candidates import assess_candidate
+from aart_cli.domain.identifiers import SourceAlias, SourceId
+from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.result import Ok
+from aart_cli.io.candidate_store import (
     candidate_history_paths,
     read_candidate_history,
     write_candidate_history,
 )
-from agent_artifacts.io.consumer_settings import write_consumer_settings
-from agent_artifacts.io.registry_promotion import FilesystemPromotionOutput
-from agent_artifacts.io.source_store import publish_source_snapshot, read_current_source
-from agent_artifacts.protocol.authoring import compile_author_snapshot, compile_author_source
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.io.consumer_settings import write_consumer_settings
+from aart_cli.io.registry_promotion import FilesystemPromotionOutput
+from aart_cli.io.source_store import publish_source_snapshot, read_current_source
+from aart_cli.protocol.authoring import compile_author_snapshot, compile_author_source
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.sources.model import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.sources.model import (
     CurrentSourceRequest,
     SourcePublishCommand,
     ValidatedSourceCandidate,
@@ -63,8 +63,8 @@ from agent_artifacts.sources.model import (
     source_instance_id,
     source_store_paths,
 )
-from agent_artifacts.tui_consumer import run_consumer_shell
-from agent_artifacts.tui_maintainer import render_maintainer_candidates
+from aart_cli.tui_consumer import run_consumer_shell
+from aart_cli.tui_maintainer import render_maintainer_candidates
 from tests.candidate_history_test import _ready_scan
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions

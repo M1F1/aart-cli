@@ -74,6 +74,6 @@ proxies, is this. Confirm it in one step: unset the proxy variables in a shell a
 ## Keeping this page true
 
 `tests/git_environment_docs_test.py` reads the three tables here and compares them against
-`agent_artifacts/io/git.py` — the allowlist against `_ALLOWED_ENVIRONMENT`, and every variable this
+`aart_cli/io/git.py` — the allowlist against `_ALLOWED_ENVIRONMENT`, and every variable this
 page calls dropped against what `_safe_environment` actually returns. A variable added to the code
 and not to this page fails the suite, which is the only reason to trust a list published in prose.

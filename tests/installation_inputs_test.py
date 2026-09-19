@@ -4,20 +4,20 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.consumer_views import ConfigInputView, CredentialInputView
-from agent_artifacts.application.installation_inputs import (
+from aart_cli.application.consumer_views import ConfigInputView, CredentialInputView
+from aart_cli.application.installation_inputs import (
     INPUT_DECLARATION_CONFLICT,
     InstallationInputUse,
     compose_installation_inputs,
 )
-from agent_artifacts.domain.credentials import CredentialProviderRef
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.credentials import CredentialProviderRef
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     InputId,
     SourceAlias,
 )
-from agent_artifacts.domain.inputs import (
+from aart_cli.domain.inputs import (
     ConfigInput,
     EnvironmentBinding,
     InputGuidance,
@@ -26,8 +26,8 @@ from agent_artifacts.domain.inputs import (
     SecretInput,
     SecretProviderReference,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Err, Ok
 
 ORG = InputId("org")
 TOKEN = InputId("token")

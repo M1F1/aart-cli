@@ -10,7 +10,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -18,22 +18,22 @@ from agent_artifacts.application.consumer_ui import (
     ConsumerUiEventKind,
     ConsumerUiState,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     PresentationProfile,
     project_running_installation,
 )
-from agent_artifacts.application.execution import StepProgress, StepStatus
-from agent_artifacts.domain.effects import ConfigureHarness, WriteFile
-from agent_artifacts.domain.reconciliation import Component, ComponentId
-from agent_artifacts.tui_consumer import (
+from aart_cli.application.execution import StepProgress, StepStatus
+from aart_cli.domain.effects import ConfigureHarness, WriteFile
+from aart_cli.domain.reconciliation import Component, ComponentId
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     ConsumerActionUpdate,
     render_running,
     run_consumer_shell,
 )
-from agent_artifacts.tui_layout import CONTENT_MEASURE, SECTION_RULE
+from aart_cli.tui_layout import CONTENT_MEASURE, SECTION_RULE
 from tests.consumer_action_shell_test import RECORDED_AT, _prepared_source
 from tests.consumer_install_flow_shell_test import plan_view
 from tests.consumer_install_flow_shell_test import screens as flow_screens

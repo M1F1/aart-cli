@@ -169,7 +169,9 @@ def smoke(version: str, *, runner: Runner) -> tuple[ArtifactDiagnostic, ...]:
     reported = runner(("aart", "--version"))
     if reported[0] != 0:
         diagnostics.append(
-            _diagnostic("artifact-smoke-failed", f"`aart --version` failed: {reported[1].strip()}")
+            _diagnostic(
+                "artifact-smoke-failed", f"`aart-cli --version` failed: {reported[1].strip()}"
+            )
         )
     elif reported[1].strip() != f"{PROJECT} {version}":
         diagnostics.append(
@@ -181,7 +183,7 @@ def smoke(version: str, *, runner: Runner) -> tuple[ArtifactDiagnostic, ...]:
     helped = runner(("aart", "--help"))
     if helped[0] != 0:
         diagnostics.append(
-            _diagnostic("artifact-smoke-failed", f"`aart --help` failed: {helped[1].strip()}")
+            _diagnostic("artifact-smoke-failed", f"`aart-cli --help` failed: {helped[1].strip()}")
         )
     return tuple(sorted(diagnostics))
 

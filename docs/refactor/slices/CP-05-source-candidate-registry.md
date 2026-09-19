@@ -15,10 +15,10 @@ INV-229, INV-238–INV-242.
 
 ## Legacy/current paths
 
-- `agent_artifacts/sources/*` and `application/sources.py` safely acquire, validate, publish and
+- `aart_cli/sources/*` and `application/sources.py` safely acquire, validate, publish and
   retain last-known-good source snapshots.
-- `agent_artifacts/registry_maintenance/*` plans reviewed registry mutations and never pushes.
-- `agent_artifacts/curation/*` supports review/finalize maintainer operations and existing native
+- `aart_cli/registry_maintenance/*` plans reviewed registry mutations and never pushes.
+- `aart_cli/curation/*` supports review/finalize maintainer operations and existing native
   vendoring/reference flows.
 - Registry protocol v1 is identity-oriented and does not yet own the accepted Candidate lifecycle
   or versioned vendored artifact history.
@@ -99,7 +99,7 @@ packaging, docs and secret-shape gates.
 - Added approved-version reload/validation, including canonical package tamper detection.
 - Added separate reviewed publication/deprecation/revocation metadata plans that prove payload
   bytes and approved content snapshot identity do not change.
-- Added public `aart registry scan` and exact-ID `aart registry promote` review/local-apply flows.
+- Added public `aart-cli registry scan` and exact-ID `aart-cli registry promote` review/local-apply flows.
   Promotion reviews by default; `--yes` applies locally and explicitly reports no commit or push.
 - Preserved existing bounded source acquisition, last-known-good snapshots and legacy
   curation/registry behavior under focused regression tests.

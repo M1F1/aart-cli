@@ -4,7 +4,7 @@ import dataclasses
 import json
 import unittest
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     CredentialInputView,
@@ -22,22 +22,22 @@ from agent_artifacts.application.consumer_views import (
     target_row,
     targets_confirmed,
 )
-from agent_artifacts.domain.candidates import CandidateId
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.candidates import CandidateId
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialProviderRef,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.effects import CopyTree, RiskClass, StoreCredential
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.effects import CopyTree, RiskClass, StoreCredential
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     InputId,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.inputs import (
+from aart_cli.domain.inputs import (
     BoundInput,
     BoundInputs,
     CliArgumentBinding,
@@ -49,7 +49,7 @@ from agent_artifacts.domain.inputs import (
     SecretInput,
     SecretProviderReference,
 )
-from agent_artifacts.domain.plans import (
+from aart_cli.domain.plans import (
     InstallPlan,
     MutationPlan,
     OwnedAssessment,
@@ -57,19 +57,19 @@ from agent_artifacts.domain.plans import (
     PlannedEffect,
     PlannedRemediation,
 )
-from agent_artifacts.domain.registry import (
+from aart_cli.domain.registry import (
     PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
 )
-from agent_artifacts.domain.remediations import ConfigureCredential
-from agent_artifacts.domain.requirements import (
+from aart_cli.domain.remediations import ConfigureCredential
+from aart_cli.domain.requirements import (
     CredentialRequirement,
     RequirementId,
     RequirementState,
     RuntimeRequirement,
 )
-from agent_artifacts.domain.selection import (
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     CollectionCoordinate,
@@ -79,13 +79,13 @@ from agent_artifacts.domain.selection import (
     ResolvedSelection,
     VersionConstraint,
 )
-from agent_artifacts.tui_consumer import (
+from aart_cli.tui_consumer import (
     render_collection,
     render_install_plan,
     render_marketplace_artifact,
     render_required_inputs,
 )
-from agent_artifacts.tui_marketplace import MarketplaceTarget, project_marketplace_rows
+from aart_cli.tui_marketplace import MarketplaceTarget, project_marketplace_rows
 from tests.tui_marketplace_test import _catalog as marketplace_catalog
 
 
@@ -490,7 +490,7 @@ class HarnessTargetChoiceTest(unittest.TestCase):
                 SourceAlias("company"),
             ),
         )
-        from agent_artifacts.domain.selection import Collection, CollectionMember
+        from aart_cli.domain.selection import Collection, CollectionMember
 
         definition = Collection(
             collection,

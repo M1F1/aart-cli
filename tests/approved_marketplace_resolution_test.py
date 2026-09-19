@@ -8,7 +8,7 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.marketplace_resolution import (
+from aart_cli.application.marketplace_resolution import (
     ARTIFACT_AMBIGUOUS,
     ARTIFACT_REVOKED,
     CROSS_REGISTRY_DENIED,
@@ -20,21 +20,21 @@ from agent_artifacts.application.marketplace_resolution import (
     aggregate_approved_marketplace,
     resolve_selection,
 )
-from agent_artifacts.domain.candidates import CandidateId
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.candidates import CandidateId
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.registry import (
+from aart_cli.domain.registry import (
     PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
     RegistryLifecycle,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.domain.selection import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     Collection,

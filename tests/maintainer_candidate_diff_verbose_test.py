@@ -16,22 +16,22 @@ import unittest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiCommandKind,
     ConsumerUiState,
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerSession, PresentationProfile
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.consumer_views import ConsumerSession, PresentationProfile
+from aart_cli.application.maintainer_views import (
     MaintainerScreen,
     MaintainerViews,
     project_maintainer_candidates,
     project_maintainer_dashboard,
 )
-from agent_artifacts.tui_consumer import _reload, frame
-from agent_artifacts.tui_layout import footer_start
-from agent_artifacts.tui_maintainer import render_maintainer_candidate_diff
+from aart_cli.tui_consumer import _reload, frame
+from aart_cli.tui_layout import footer_start
+from aart_cli.tui_maintainer import render_maintainer_candidate_diff
 from tests.maintainer_candidate_shell_test import (
     _on,
     _projected_source,

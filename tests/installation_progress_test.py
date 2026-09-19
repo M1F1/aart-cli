@@ -14,23 +14,23 @@ import unittest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     RUNNING,
     RunningInstallationView,
     project_running_installation,
 )
-from agent_artifacts.application.execution import (
+from aart_cli.application.execution import (
     StepProgress,
     StepStatus,
     execute_installation,
     execute_lifecycle,
     execute_repair,
 )
-from agent_artifacts.application.intents import plan_lifecycle_intent, repair_intent
-from agent_artifacts.domain.effects import ConfigureHarness, WriteFile
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.reconciliation import Component, ComponentId, ComponentState
-from agent_artifacts.domain.result import Ok
+from aart_cli.application.intents import plan_lifecycle_intent, repair_intent
+from aart_cli.domain.effects import ConfigureHarness, WriteFile
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.reconciliation import Component, ComponentId, ComponentState
+from aart_cli.domain.result import Ok
 from tests.execution_test import DESIRED, _Inspector, _Interpreter, observed, plan
 from tests.installation_proposal_test import _nothing_installed
 from tests.installation_transaction_test import _Interpreter as _TransactionInterpreter

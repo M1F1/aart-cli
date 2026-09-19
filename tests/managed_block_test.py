@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.managed_blocks import (
+from aart_cli.domain.managed_blocks import (
     BlockPosition,
     is_block_name,
     managed_block,
@@ -25,7 +25,7 @@ from agent_artifacts.domain.managed_blocks import (
     merge_managed_block,
     remove_managed_block,
 )
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.result import Err, Ok
 
 NAME = "house-style"
 BODY = "Always name the failure.\n"

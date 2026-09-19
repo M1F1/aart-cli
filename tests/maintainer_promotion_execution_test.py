@@ -5,36 +5,36 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.application.candidate_validation import validate_candidate
-from agent_artifacts.application.consumer_views import PresentationProfile
-from agent_artifacts.application.maintainer import CandidateBundle
-from agent_artifacts.application.maintainer_promotion import (
+from aart_cli.application.candidate_validation import validate_candidate
+from aart_cli.application.consumer_views import PresentationProfile
+from aart_cli.application.maintainer import CandidateBundle
+from aart_cli.application.maintainer_promotion import (
     CandidatePromotionCommitReceipt,
     CandidatePromotionExecutionResult,
     MaintainerCandidatePromotionPorts,
     execute_candidate_promotion,
     prepare_candidate_promotion_transaction,
 )
-from agent_artifacts.application.maintainer_sync import ApprovedRegistryState
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer_sync import ApprovedRegistryState
+from aart_cli.application.maintainer_views import (
     project_maintainer_registry_commit,
     project_maintainer_registry_validation,
 )
-from agent_artifacts.application.promotion import (
+from aart_cli.application.promotion import (
     PromotionApplyReceipt,
     load_registry_versions,
     project_promotion,
     validate_promoted_registry,
 )
-from agent_artifacts.domain.candidates import assess_candidate
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.registry import PromotionMode
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
-from agent_artifacts.sources.model import source_snapshot_digest
-from agent_artifacts.tui_maintainer import (
+from aart_cli.domain.candidates import assess_candidate
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from aart_cli.sources.model import source_snapshot_digest
+from aart_cli.tui_maintainer import (
     render_maintainer_registry_commit,
     render_maintainer_registry_validation,
 )

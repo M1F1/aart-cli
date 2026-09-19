@@ -18,26 +18,26 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.identifiers import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
     SourceId,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.install_state.model import (
+from aart_cli.domain.result import Ok
+from aart_cli.install_state.model import (
     ArtifactEvidence,
     EffectProof,
     InstallationRecord,
     InstallState,
     SourceEvidence,
 )
-from agent_artifacts.install_state.schema import install_state_bytes
-from agent_artifacts.io.consumer_machine import read_consumer_machine
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.tui_consumer import PresentationProfile, render_installed_artifact
+from aart_cli.install_state.schema import install_state_bytes
+from aart_cli.io.consumer_machine import read_consumer_machine
+from aart_cli.protocol.semver import SemVer
+from aart_cli.tui_consumer import PresentationProfile, render_installed_artifact
 
 TODAY = dt.date(2026, 8, 31)
 

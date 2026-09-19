@@ -88,7 +88,7 @@ def run_step(aart: str, action: str, registry: Path, *, finalize: bool) -> int:
     command = [aart, "registry", action, "--source", str(registry)]
     if finalize:
         command.append("--yes")
-    print(f"\n=== aart registry {action}{' --yes' if finalize else ''}", flush=True)
+    print(f"\n=== aart-cli registry {action}{' --yes' if finalize else ''}", flush=True)
     return subprocess.run(command, text=True).returncode
 
 
@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
                 "\n  audit reported a finding; continuing because --allow-audit-failure was given"
             )
             continue
-        die(f"`aart registry {action}` failed with exit {code} — it was meant to {why}")
+        die(f"`aart-cli registry {action}` failed with exit {code} — it was meant to {why}")
 
     changes = pending(registry)
     if not changes:

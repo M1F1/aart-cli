@@ -8,16 +8,16 @@ selection, consent, effects, or exit semantics.
 
 ```sh
 # Explicit source refresh
-aart source sync --alias company --json
+aart-cli source sync --alias company --json
 
 # Review, then finalize
-aart marketplace install company/skill/code-review --profile claude --json
-aart marketplace install company/skill/code-review --profile claude --yes --json
+aart-cli marketplace install company/skill/code-review --profile claude --json
+aart-cli marketplace install company/skill/code-review --profile claude --yes --json
 
-aart marketplace status --profile claude --json
-aart marketplace update --profile claude --yes --json
-aart marketplace update --profile claude --prune --yes --json
-aart marketplace uninstall company/skill/code-review --profile claude --yes --json
+aart-cli marketplace status --profile claude --json
+aart-cli marketplace update --profile claude --yes --json
+aart-cli marketplace update --profile claude --prune --yes --json
+aart-cli marketplace uninstall company/skill/code-review --profile claude --yes --json
 ```
 
 An empty `marketplace update` selects every installed artifact in the given profile and scope.
@@ -34,8 +34,8 @@ closure before review; an unavailable or conflicting dependency cannot create a 
 of it:
 
 ```sh
-aart marketplace search review
-aart marketplace search review python --json
+aart-cli marketplace search review
+aart-cli marketplace search review python --json
 ```
 
 Every word must match, so a second word narrows the answer rather than widening it. Matching is
@@ -67,14 +67,14 @@ how it exited, and one receipt per step. Three actions read that account after t
 
 ```sh
 # What did the run actually do?
-aart marketplace receipt show company/mcp/github --profile claude --json
+aart-cli marketplace receipt show company/mcp/github --profile claude --json
 
 # Is any of it still true?
-aart marketplace receipt verify company/mcp/github --profile claude
+aart-cli marketplace receipt verify company/mcp/github --profile claude
 
 # Reverse it — review first, then finalize
-aart marketplace receipt undo company/mcp/github --profile claude
-aart marketplace receipt undo company/mcp/github --profile claude --yes
+aart-cli marketplace receipt undo company/mcp/github --profile claude
+aart-cli marketplace receipt undo company/mcp/github --profile claude --yes
 ```
 
 `show` renders the persisted record. `verify` asks this machine whether each receipt's claim still
@@ -120,13 +120,13 @@ All three are also reachable from `aart` with no arguments, under **Action → r
 
 ### One report for the whole machine
 
-The three commands above each answer a question about one installation. `aart doctor` answers them
+The three commands above each answer a question about one installation. `aart-cli doctor` answers them
 for everything at once, and reads only — it resolves no marketplace content and applies nothing.
 
 ```sh
 # What is the state of everything installed here?
-aart doctor
-aart doctor --json
+aart-cli doctor
+aart-cli doctor --json
 ```
 
 One run reports measured drift with the smallest policy-permitted repair plan for each item; offline
@@ -141,10 +141,10 @@ Repair follows the same review-then-confirm boundary as everything else, one art
 
 ```sh
 # Review one artifact's minimal plan — applies nothing
-aart doctor --repair company/mcp/github
+aart-cli doctor --repair company/mcp/github
 
 # Apply exactly the plan that review returned
-aart doctor --repair company/mcp/github --yes --expect <digest>
+aart-cli doctor --repair company/mcp/github --yes --expect <digest>
 ```
 
 `--yes` without `--expect` is refused, and a machine that changed between the review and the

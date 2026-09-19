@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts import cli
+from aart_cli import cli
 
 
 def _git(root: Path, *arguments: str) -> None:

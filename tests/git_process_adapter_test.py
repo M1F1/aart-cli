@@ -4,8 +4,8 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.git import GitProcessRequest, run_git_process
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.git import GitProcessRequest, run_git_process
 from tests.credential_fixtures import assignment, assignment_bytes, credential_url
 
 
@@ -29,7 +29,7 @@ class GitProcessAdapterTest(unittest.TestCase):
             "LC_ALL": "unsafe",
         }
 
-        with patch("agent_artifacts.io.git.subprocess.run", return_value=completed) as called:
+        with patch("aart_cli.io.git.subprocess.run", return_value=completed) as called:
             result = run_git_process(request, environ=environment)
 
         self.assertIsInstance(result, Ok)
@@ -56,7 +56,7 @@ class GitProcessAdapterTest(unittest.TestCase):
                 f"Authentication failed for {secret_url} " + assignment("token", "top-secret")
             ).encode(),
         )
-        with patch("agent_artifacts.io.git.subprocess.run", return_value=failed):
+        with patch("aart_cli.io.git.subprocess.run", return_value=failed):
             auth = run_git_process(request, environ={"PATH": "/bin"})
         self.assertIsInstance(auth, Err)
         assert isinstance(auth, Err)
@@ -66,14 +66,14 @@ class GitProcessAdapterTest(unittest.TestCase):
         timeout = subprocess.TimeoutExpired(
             list(request.argv), 1, output=assignment_bytes("token", "late")
         )
-        with patch("agent_artifacts.io.git.subprocess.run", side_effect=timeout):
+        with patch("aart_cli.io.git.subprocess.run", side_effect=timeout):
             timed_out = run_git_process(request, environ={"PATH": "/bin"})
         self.assertIsInstance(timed_out, Err)
         assert isinstance(timed_out, Err)
         self.assertEqual(timed_out.diagnostics[0].code.value, "source-unavailable")
         self.assertNotIn("late", timed_out.diagnostics[0].message)
 
-        with patch("agent_artifacts.io.git.subprocess.run", side_effect=FileNotFoundError("git")):
+        with patch("aart_cli.io.git.subprocess.run", side_effect=FileNotFoundError("git")):
             missing = run_git_process(request, environ={})
         self.assertIsInstance(missing, Err)
         assert isinstance(missing, Err)
@@ -82,13 +82,13 @@ class GitProcessAdapterTest(unittest.TestCase):
         unavailable = subprocess.CompletedProcess(
             list(request.argv), 1, stdout=b"ordinary failure", stderr=None
         )
-        with patch("agent_artifacts.io.git.subprocess.run", return_value=unavailable):
+        with patch("aart_cli.io.git.subprocess.run", return_value=unavailable):
             failed = run_git_process(request, environ={})
         self.assertIsInstance(failed, Err)
         assert isinstance(failed, Err)
         self.assertEqual(failed.diagnostics[0].code.value, "source-unavailable")
 
-        with patch("agent_artifacts.io.git.subprocess.run", side_effect=OSError("cannot exec")):
+        with patch("aart_cli.io.git.subprocess.run", side_effect=OSError("cannot exec")):
             os_error = run_git_process(request, environ={})
         self.assertIsInstance(os_error, Err)
 

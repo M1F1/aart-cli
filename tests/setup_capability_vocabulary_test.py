@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.model import SetupInstaller
-from agent_artifacts.setup import _CAPABILITIES, _MODULES, _PLANNED_CAPABILITIES, parse_installer
-from agent_artifacts.setup_engine.application import _planned_capabilities
+from aart_cli.model import SetupInstaller
+from aart_cli.setup import _CAPABILITIES, _MODULES, _PLANNED_CAPABILITIES, parse_installer
+from aart_cli.setup_engine.application import _planned_capabilities
 from tests.setup_fixtures import recipe
 
 _EVERY_MODULE = [
@@ -103,7 +103,7 @@ class OneTableDecidesWhatARecipeNeedsTest(unittest.TestCase):
     def test_the_index_publishes_what_the_consumer_recomputes(self) -> None:
         """The gate in `_prepare_setup_plan` is only meaningful if both sides can agree."""
 
-        from agent_artifacts.protocol.registry_index import index_artifact_from_package
+        from aart_cli.protocol.registry_index import index_artifact_from_package
 
         installer = _installer(_EVERY_MODULE)
         published = tuple(
@@ -137,9 +137,9 @@ def _published_capabilities(project, installer: SetupInstaller):
 
     from dataclasses import replace
 
-    from agent_artifacts.domain.identifiers import ObjectDigest, SourceId
-    from agent_artifacts.protocol.native_schema import parse_artifact_manifest
-    from agent_artifacts.protocol.native_tree import NativeArtifactPackage
+    from aart_cli.domain.identifiers import ObjectDigest, SourceId
+    from aart_cli.protocol.native_schema import parse_artifact_manifest
+    from aart_cli.protocol.native_tree import NativeArtifactPackage
 
     manifest = parse_artifact_manifest(
         """{

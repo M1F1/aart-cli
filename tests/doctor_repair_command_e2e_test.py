@@ -1,6 +1,6 @@
 """CP-16: Doctor applies only one explicitly reviewed minimal reconciliation plan.
 
-Every scenario enters through the real ``aart doctor`` command over a real canonical installation.
+Every scenario enters through the real ``aart-cli doctor`` command over a real canonical installation.
 The review and finalize calls are deliberately separate: the first digest is authorization input
 to the second, while the second still has to re-observe the machine before any effect runs.
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from agent_artifacts.commands import doctor as doctor_command
+from aart_cli.commands import doctor as doctor_command
 from tests.configured_install_command_e2e_test import COORDINATE, _environment
 from tests.configured_repair_action_e2e_test import _delete_delivery
 from tests.configured_uninstall_command_e2e_test import _delivered

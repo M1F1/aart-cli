@@ -9,7 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -17,17 +17,17 @@ from agent_artifacts.application.consumer_ui import (
     ConsumerUiState,
     SourceDraft,
 )
-from agent_artifacts.application.consumer_views import ConsumerSession
-from agent_artifacts.application.maintainer_views import MaintainerScreen
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.candidate_store import candidate_history_paths, read_candidate_history
-from agent_artifacts.io.source_store import read_current_source
-from agent_artifacts.sources.model import (
+from aart_cli.application.consumer_views import ConsumerSession
+from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.domain.result import Ok
+from aart_cli.io.candidate_store import candidate_history_paths, read_candidate_history
+from aart_cli.io.source_store import read_current_source
+from aart_cli.sources.model import (
     CurrentSourceRequest,
     source_instance_id,
     source_store_paths,
 )
-from agent_artifacts.tui_consumer import run_consumer_shell
+from aart_cli.tui_consumer import run_consumer_shell
 from tests.authoring_source_admission_e2e_test import SKILL_BODY, SKILL_MANIFEST
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions

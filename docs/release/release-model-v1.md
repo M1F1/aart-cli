@@ -54,7 +54,7 @@ that agree today.
 
 ## One version, written by one thing
 
-`agent_artifacts/__init__.py` holds the only version literal in the tree:
+`aart_cli/__init__.py` holds the only version literal in the tree:
 
 ```python
 __version__ = "X.Y.Z"  # x-release-please-version

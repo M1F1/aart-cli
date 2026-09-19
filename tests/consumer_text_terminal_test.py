@@ -20,11 +20,11 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from agent_artifacts import tui
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import ConsumerSettings
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_consumer import key_name
+from aart_cli import tui
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import ConsumerSettings
+from aart_cli.domain.result import Ok
+from aart_cli.tui_consumer import key_name
 
 
 def _reader(*lines: str):

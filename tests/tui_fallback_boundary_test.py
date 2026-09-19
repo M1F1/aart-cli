@@ -13,14 +13,14 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
-from agent_artifacts import tui
-from agent_artifacts.configuration.model import (
+from aart_cli import tui
+from aart_cli.configuration.model import (
     OrganizationPolicy,
     default_user_configuration,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.tui_sources import build_source_stage
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.tui_sources import build_source_stage
 
 
 class _TtyCapture(io.StringIO):

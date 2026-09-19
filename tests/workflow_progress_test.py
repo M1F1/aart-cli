@@ -5,20 +5,20 @@ from __future__ import annotations
 from dataclasses import replace
 from unittest import TestCase
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer_views import MaintainerScreen
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
+from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
 from tests.maintainer_candidate_shell_test import _shell, _views
 
 

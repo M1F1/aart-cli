@@ -26,12 +26,12 @@ def _first_sync_states(
         """
         import os, sys
         from pathlib import Path
-        from agent_artifacts.configuration.model import OrganizationPolicy, SourceAlias
-        from agent_artifacts.configuration.paths import Platform, resolve_config_paths
-        from agent_artifacts.configuration.policy import RuntimeOverrides, apply_configuration
-        from agent_artifacts.configuration.schema import parse_user_configuration
-        from agent_artifacts.domain.result import Ok
-        from agent_artifacts.io.maintainer_sync import (
+        from aart_cli.configuration.model import OrganizationPolicy, SourceAlias
+        from aart_cli.configuration.paths import Platform, resolve_config_paths
+        from aart_cli.configuration.policy import RuntimeOverrides, apply_configuration
+        from aart_cli.configuration.schema import parse_user_configuration
+        from aart_cli.domain.result import Ok
+        from aart_cli.io.maintainer_sync import (
             complete_configured_source_sync,
             prepare_configured_source_sync,
         )
@@ -232,7 +232,7 @@ class ManualTestLabTest(unittest.TestCase):
                 (
                     sys.executable,
                     "-m",
-                    "agent_artifacts.cli",
+                    "aart_cli.cli",
                     "source",
                     "add",
                     "--alias",

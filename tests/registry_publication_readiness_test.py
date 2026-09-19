@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.registry_publication import prepare_registry_publication_state
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.registry_commands.planning import project_registry_workspace_plan
-from agent_artifacts.registry_commands.publication import REGISTRY_PUBLICATION_GATES
-from agent_artifacts.registry_commands.templates import REGISTRY_CI_WORKFLOW
-from agent_artifacts.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
+from aart_cli.application.registry_publication import prepare_registry_publication_state
+from aart_cli.domain.result import Ok
+from aart_cli.registry_commands.planning import project_registry_workspace_plan
+from aart_cli.registry_commands.publication import REGISTRY_PUBLICATION_GATES
+from aart_cli.registry_commands.templates import REGISTRY_CI_WORKFLOW
+from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
 from tests.registry_maintenance_fixtures import (
     empty_registry_snapshot,
     replace_snapshot_file,
@@ -40,7 +40,7 @@ class RegistryPublicationReadinessTest(unittest.TestCase):
                 continue
             for command in gate.commands:
                 expected = (
-                    "aart registry test --source . --compatibility ${{ matrix.compatibility }}"
+                    "aart-cli registry test --source . --compatibility ${{ matrix.compatibility }}"
                     if gate.name == "compatibility"
                     else command
                 )
@@ -65,7 +65,7 @@ class RegistryPublicationReadinessTest(unittest.TestCase):
             for command in gate.commands:
                 with self.subTest(command=command):
                     self.assertNotIn(command, workflow)
-        self.assertNotIn("aart registry lock", workflow)
+        self.assertNotIn("aart-cli registry lock", workflow)
 
     def test_canonical_outputs_make_every_gate_green_and_leave_no_build_change(self) -> None:
         original = empty_registry_snapshot()

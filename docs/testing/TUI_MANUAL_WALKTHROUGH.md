@@ -257,7 +257,7 @@ nothing is recorded as an `invalid` Candidate.
 - [ ] Put it back (`git revert --no-edit HEAD && git push`) before continuing.
 
 A Source whose Candidate history was recorded at another revision than the snapshot it has pinned
-shows `Attention` and lists no Candidates. `aart source sync` produces exactly that, because the
+shows `Attention` and lists no Candidates. `aart-cli source sync` produces exactly that, because the
 consumer refresh moves the pin and writes no Candidate history — writing it is Maintainer
 authority. It takes a minute to prove, and it is the failure the first released version could not
 recover from (issue #8, D-280 to D-282):
@@ -265,17 +265,17 @@ recover from (issue #8, D-280 to D-282):
 - [ ] Push a commit to one author repository, then refresh it from outside the screens:
 
 ```sh
-aart source sync
-aart doctor
+aart-cli source sync
+aart-cli doctor
 ```
 
-Expected: `aart doctor` exits non-zero and its `Candidate history` section names the Source, the
+Expected: `aart-cli doctor` exits non-zero and its `Candidate history` section names the Source, the
 revision its history was recorded at, the revision now pinned, and the remedy — `run Source Sync on
 <alias> to rebuild its Candidate history`. Every other Source, Candidate and Registry still loads.
 
 - [ ] Do what it says: **Sources** → that Source → `s` (**Sync**), and confirm.
 
-Expected: the Source reports the new commit and its Candidates are listed again; `aart doctor` exits
+Expected: the Source reports the new commit and its Candidates are listed again; `aart-cli doctor` exits
 zero and its `Candidate history` section is gone. Nothing under the data root is edited by hand.
 
 ## 6 — Review a Candidate
@@ -322,7 +322,7 @@ confirmation (`QA-033`).
 
 This step changed again. `D-228` once had AART push a reviewed commit to a review branch from this
 screen; the product owner reversed that for the TUI (Product Specification 164.7, `D-249`), and
-CP-23 task 05 removed it (`D-255`). The supported `aart registry push` CLI is unchanged — this
+CP-23 task 05 removed it (`D-255`). The supported `aart-cli registry push` CLI is unchanged — this
 walkthrough is TUI-only, so it does not use it.
 
 The committed **Registry commit** screen says what comes next, in order:

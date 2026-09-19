@@ -3,23 +3,23 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
-from agent_artifacts.domain.identifiers import SourceAlias, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.domain.identifiers import SourceAlias, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
-from agent_artifacts.sources.model import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
+from aart_cli.sources.model import (
     SourceValidationRequest,
     make_source_candidate,
     source_instance_id,
 )
-from agent_artifacts.sources.validation import validate_configured_source_candidate
+from aart_cli.sources.validation import validate_configured_source_candidate
 from tests.registry_maintenance_fixtures import (
     append_snapshot_file,
     approved_registry_snapshot,

@@ -14,14 +14,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.lifecycle import (
+from aart_cli.domain.result import Ok
+from aart_cli.lifecycle import (
     LifecycleStatus,
     finalize_uninstall,
     prepare_uninstall,
 )
-from agent_artifacts.lifecycle.io import _tear_down
-from agent_artifacts.lifecycle.model import ScopeTeardown
+from aart_cli.lifecycle.io import _tear_down
+from aart_cli.lifecycle.model import ScopeTeardown
 from tests.canonical_lifecycle_test import _install, _state
 from tests.canonical_symlink_test import _fixture
 from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _environment

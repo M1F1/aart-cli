@@ -15,21 +15,21 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts import cli
-from agent_artifacts.configuration.model import (
+from aart_cli import cli
+from aart_cli.configuration.model import (
     ConfiguredSource,
     SourceKind,
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.paths import (
+from aart_cli.configuration.paths import (
     Platform,
     config_lock_directory,
     resolve_config_paths,
 )
-from agent_artifacts.configuration.schema import parse_user_configuration, user_configuration_bytes
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Ok
+from aart_cli.configuration.schema import parse_user_configuration, user_configuration_bytes
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Ok
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "native-source-v1"
 
@@ -124,7 +124,7 @@ class SourceAddConfigCasTest(unittest.TestCase):
                 env.write_configuration(competitor)
                 return real_sync(source, data_root=data_root)
 
-            from agent_artifacts.commands import source as source_command
+            from aart_cli.commands import source as source_command
 
             real_sync = source_command.sync_configured_source
             with mock.patch.object(source_command, "sync_configured_source", racing_sync):
@@ -145,7 +145,7 @@ class SourceAddConfigCasTest(unittest.TestCase):
 
             # Shorten the wait: this asserts the outcome of losing the lock, not how long a real
             # CLI is willing to wait for a competing writer.
-            with mock.patch("agent_artifacts.io.config_cas.DEFAULT_LOCK_TIMEOUT_SECONDS", 0.05):
+            with mock.patch("aart_cli.io.config_cas.DEFAULT_LOCK_TIMEOUT_SECONDS", 0.05):
                 code, payload = env.add_source("reference")
 
             self.assertEqual(code, 1, payload)

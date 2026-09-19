@@ -40,7 +40,7 @@ python scripts/conventional_title.py "feat(tui): add a screen"
 
 Release Please reads the accumulated commits on `main` and keeps **one** pull request open: the
 next version, the generated `CHANGELOG.md` entry, and the version written into `pyproject.toml`,
-`agent_artifacts/__init__.py` and this README. It updates that same pull request as more changes
+`aart_cli/__init__.py` and this README. It updates that same pull request as more changes
 land, rather than asking anyone for a version-bump PR.
 
 Merging it is the release: the tag and the GitHub Release are created, and the release run builds the wheel,
@@ -76,7 +76,7 @@ reach it.
 
 ## One version, written by one thing
 
-`agent_artifacts/__init__.py` holds the only version literal. `runtime_contract.EXECUTABLE_VERSION`
+`aart_cli/__init__.py` holds the only version literal. `runtime_contract.EXECUTABLE_VERSION`
 parses it, the release engine rewrites it and `pyproject.toml`, and nothing compares any of them to
 anything, because nothing can disagree. This README names no release: it writes `X.Y.Z`, and the
 exact commands come from `scripts/install_commands.py` and the release page.

@@ -45,7 +45,7 @@ Each entry records:
       now appears above navigation and points to Registry onboarding. B-080/D-170.
 
 - [ ] **QA-005 — Old user subscriptions look like built-in registries.** The two persisted August
-      subscriptions and their managed snapshots were removed through `aart source remove`; a fresh
+      subscriptions and their managed snapshots were removed through `aart-cli source remove`; a fresh
       public list is empty. B-081.
 
 - [ ] **QA-006 — Registry cannot be added from the TUI.** Screen 21 now provides Add Registry with
@@ -66,7 +66,7 @@ Each entry records:
       to its own Refresh Registry action with a review (21c) that names the ref to be fetched,
       states that a refresh is not an artifact update, and warns that a failed fetch keeps the
       snapshot already held. Execution goes through `sync_configured_sources`, the same transaction
-      as `aart source sync`. B-084/D-179.
+      as `aart-cli source sync`. B-084/D-179.
 
 - [ ] **QA-011 — Canonical installation cannot target OpenCode.**
       Stage: installing the Skill and MCP into the locally installed OpenCode 1.18.29
@@ -194,7 +194,7 @@ Each entry records:
       immutable namespaced provenance (D-189). The read-only check distinguishes unchanged,
       changed, missing, unreachable and invalid manifests, and prepares a new immutable version
       only after an upstream version bump (D-190, 8 tests), reached as `u` Check upstream on
-      screens 46f/46g (D-191). `aart registry adopt` and `aart registry check-upstream` are the
+      screens 46f/46g (D-191). `aart-cli registry adopt` and `aart-cli registry check-upstream` are the
       machine-complete CLI projection: scan/review/apply phases, `--expect` verified whenever
       given, sorted listings (D-192, 8 tests).
 
@@ -548,7 +548,7 @@ Each entry records:
       configuration/data/cache targets, requires two deliberate confirmations, refuses unsafe
       targets, restores the app to no connections/settings, and leaves projects, harness files,
       other applications' credentials and unrelated files untouched. CP-20 step 6.
-      Fix: CLI-only `aart reset` lists the exact plan/digest, requires `RESET AART` and
+      Fix: CLI-only `aart-cli reset` lists the exact plan/digest, requires `RESET AART` and
       `DELETE AART STATE`, and refuses unsafe/symlinked targets before deleting anything.
       Evidence: `tests/factory_reset_test.py` including Hypothesis target properties.
 
@@ -581,7 +581,7 @@ Each entry records:
       `[n] Initialize` on the empty Registry.
 
 - [ ] **QA-056 — A promotion cannot be completed from the CLI without fabricating its evidence.**
-      Surface: `aart registry promote`. Severity: medium. **Unconfirmed — verify during the CLI
+      Surface: `aart-cli registry promote`. Severity: medium. **Unconfirmed — verify during the CLI
       run.** Observed in code: `registry promote` requires `--validation-report DIGEST` and
       `--policy-result DIGEST`, and no CLI command emits either; `validation_report_digest` is
       derived in the application layer and displayed only by the Maintainer screens. An operator

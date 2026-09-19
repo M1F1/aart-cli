@@ -51,7 +51,7 @@ requires that exact digest. Both changed and no-op finalization recheck the curr
 the injected output port must return a receipt matching the reviewed digest, resulting input
 digest, and changed-path count.
 
-The port has no commit or push operation. The `aart registry` maintainer commands and
+The port has no commit or push operation. The `aart-cli registry` maintainer commands and
 registry quality gates expose these planners; Git publication remains an explicit action after reviewing the
 generated diff. The consumer-side lock and index invariants are specified in
 [`registry protocol v1`](../protocol/registry-v1.md).

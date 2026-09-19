@@ -1,4 +1,4 @@
-"""`aart registry push` moves the reviewed commit, and never to the default branch (`D-228`).
+"""`aart-cli registry push` moves the reviewed commit, and never to the default branch (`D-228`).
 
 164.7 stopped ending the maintainer's work at the local commit. The push is an action inside AART,
 and the boundary it keeps is the branch: reviewed bytes go somewhere people can look at them, and
@@ -14,9 +14,9 @@ import unittest
 from contextlib import contextmanager
 from typing import Iterator
 
-from agent_artifacts import cli
-from agent_artifacts.commands import registry as registry_command
-from agent_artifacts.io.registry_workspace import read_registry_workspace
+from aart_cli import cli
+from aart_cli.commands import registry as registry_command
+from aart_cli.io.registry_workspace import read_registry_workspace
 
 
 def _git(root: pathlib.Path, *arguments: str) -> str:

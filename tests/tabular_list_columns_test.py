@@ -20,15 +20,15 @@ import unittest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_views import PresentationProfile
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.consumer_views import PresentationProfile
+from aart_cli.application.maintainer_views import (
     MaintainerBulkCandidateView,
     MaintainerBulkPromotionView,
     MaintainerCandidateView,
 )
-from agent_artifacts.domain.candidates import CandidateState
-from agent_artifacts.tui_layout import CONTENT_MEASURE, STAGE_PROJECTION
-from agent_artifacts.tui_maintainer import (
+from aart_cli.domain.candidates import CandidateState
+from aart_cli.tui_layout import CONTENT_MEASURE, STAGE_PROJECTION
+from aart_cli.tui_maintainer import (
     maintainer_candidate_detail,
     render_maintainer_bulk_promotion,
     render_maintainer_candidates,

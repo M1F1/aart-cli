@@ -30,16 +30,16 @@ import stat
 import unittest
 from unittest import mock
 
-from agent_artifacts import tui
-from agent_artifacts.application.consumer_ui import ConsumerUiState, opening_state
-from agent_artifacts.application.consumer_views import (
+from aart_cli import tui
+from aart_cli.application.consumer_ui import ConsumerUiState, opening_state
+from aart_cli.application.consumer_views import (
     SETTING_ROWS,
     ConsumerScreen,
     ConsumerSession,
     PresentationProfile,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_consumer import run_consumer_shell
+from aart_cli.domain.result import Ok
+from aart_cli.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
 from tests.consumer_shell_test import DOWN, ENTER, ESCAPE, SPACE, FakeTerminal

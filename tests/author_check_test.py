@@ -1,4 +1,4 @@
-"""`aart author check` answers with the parser, not with a lint of its own.
+"""`aart-cli author check` answers with the parser, not with a lint of its own.
 
 The loop this command exists for is amend, check, amend, and the only verdict worth having in it is
 the one the Registry will later issue. So the claim held here is not "the checker reports errors" —
@@ -22,18 +22,18 @@ import unittest
 from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
 
-from agent_artifacts.authoring.skeleton import author_skeleton
-from agent_artifacts.cli import main
-from agent_artifacts.command_outcome import ERROR, OK
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.author_workspace import write_author_skeleton
+from aart_cli.authoring.skeleton import author_skeleton
+from aart_cli.cli import main
+from aart_cli.command_outcome import ERROR, OK
+from aart_cli.domain.result import Ok
+from aart_cli.io.author_workspace import write_author_skeleton
 
 _NAME = "github-mcp"
 
 
 @contextmanager
 def _workspace(kind: str = "mcp", name: str = _NAME):
-    """A directory holding exactly what `aart author init` would have written."""
+    """A directory holding exactly what `aart-cli author init` would have written."""
 
     with tempfile.TemporaryDirectory() as root:
         generated = author_skeleton(kind, name)
@@ -150,7 +150,7 @@ class RefusalTest(unittest.TestCase):
         """An author who mistyped a directory is one command from a manifest, and told which."""
 
         with tempfile.TemporaryDirectory() as empty:
-            self.assertIn("aart author init", _check(Path(empty))[1])
+            self.assertIn("aart-cli author init", _check(Path(empty))[1])
 
     def test_a_source_that_does_not_exist_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as root:

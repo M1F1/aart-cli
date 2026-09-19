@@ -1,11 +1,11 @@
 """End to end: the global report finds a working copy nobody knew to ask about.
 
-CP-15 step 4b proved that `aart marketplace receipt verify <coordinate>` names the working copy an
+CP-15 step 4b proved that `aart-cli marketplace receipt verify <coordinate>` names the working copy an
 interrupted run left behind. That claim has a precondition buried in it: the operator must already
 know which receipt to verify. Being interrupted is usually the reason they stopped watching, so the
 one fact they cannot supply is the one the existing surface requires.
 
-This drives `aart doctor` instead, which is told nothing. Every scenario runs the same real custom
+This drives `aart-cli doctor` instead, which is told nothing. Every scenario runs the same real custom
 entrypoint CP-15 step 4b used -- a shell script whose `apply` exits non-zero and whose `rollback`
 then also exits non-zero, the one path in `_custom_apply` that raises without removing its run
 directory -- so the working copy asserted on is one the engine really created and really failed to

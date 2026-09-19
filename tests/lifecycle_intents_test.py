@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.intents import (
+from aart_cli.application.intents import (
     InstalledHealth,
     LifecycleIntentKind,
     MemberHealth,
@@ -20,20 +20,20 @@ from agent_artifacts.application.intents import (
     uninstall_intent,
     update_intent,
 )
-from agent_artifacts.application.reconciliation import RepairPlan
-from agent_artifacts.domain.effects import (
+from aart_cli.application.reconciliation import RepairPlan
+from aart_cli.domain.effects import (
     ConfigureHarness,
     ReplaceCredential,
     UnconfigureHarness,
     WriteFile,
 )
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     SourceAlias,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.reconciliation import (
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.reconciliation import (
     Component,
     ComponentId,
     ComponentState,
@@ -42,8 +42,8 @@ from agent_artifacts.domain.reconciliation import (
     DesiredState,
     ObservedComponent,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
+from aart_cli.domain.result import Ok
+from aart_cli.domain.selection import OwnershipKind, OwnershipReason
 
 V1 = ArtifactCoordinate(SourceAlias("public"), ArtifactIdentity("mcp", "github"), "1.5.0")
 V2 = ArtifactCoordinate(SourceAlias("public"), ArtifactIdentity("mcp", "github"), "2.0.0")

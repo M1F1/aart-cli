@@ -16,33 +16,33 @@ import sys
 import tempfile
 import unittest
 
-from agent_artifacts.application.execution import (
+from aart_cli.application.execution import (
     ExecutionStatus,
     StepStatus,
     execute_repair,
     execution_outcome_to_data,
 )
-from agent_artifacts.application.installation_verification import verify_installation
-from agent_artifacts.application.installed_state import (
+from aart_cli.application.installation_verification import verify_installation
+from aart_cli.application.installed_state import (
     current_state_from_observation,
     desired_state_from_receipt,
     removal_state_from_receipt,
 )
-from agent_artifacts.application.reconciliation import plan_repair
-from agent_artifacts.application.runtime_projection import (
+from aart_cli.application.reconciliation import plan_repair
+from aart_cli.application.runtime_projection import (
     configuration_projection,
     generate_launcher,
 )
-from agent_artifacts.domain.credentials import CredentialProviderRef
-from agent_artifacts.domain.effects import CreatePythonEnvironment
-from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.credentials import CredentialProviderRef
+from aart_cli.domain.effects import CreatePythonEnvironment
+from aart_cli.domain.harness import McpRegistration, Scope, mcp_target
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     InputId,
     SourceAlias,
 )
-from agent_artifacts.domain.inputs import (
+from aart_cli.domain.inputs import (
     BoundInput,
     BoundInputs,
     ConfigInput,
@@ -51,21 +51,21 @@ from agent_artifacts.domain.inputs import (
     SecretInput,
     SecretProviderReference,
 )
-from agent_artifacts.domain.launch import LaunchContract, Transport
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.receipts import InstallationReceipt
-from agent_artifacts.domain.reconciliation import Component, ComponentId, ComponentState
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.execution import (
+from aart_cli.domain.launch import LaunchContract, Transport
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.python_runtime import ArtifactEnvironment
+from aart_cli.domain.receipts import InstallationReceipt
+from aart_cli.domain.reconciliation import Component, ComponentId, ComponentState
+from aart_cli.domain.result import Ok
+from aart_cli.io.execution import (
     CredentialEffectInterpreter,
     FileEffectInterpreter,
     HarnessEffectInterpreter,
     RuntimeEffectInterpreter,
 )
-from agent_artifacts.io.harness import LocalHarnessRegistry
-from agent_artifacts.io.python_runtime import LocalPythonRuntime
-from agent_artifacts.io.runtime_projection import LocalProjectionWriter, observe_installation
+from aart_cli.io.harness import LocalHarnessRegistry
+from aart_cli.io.python_runtime import LocalPythonRuntime
+from aart_cli.io.runtime_projection import LocalProjectionWriter, observe_installation
 from tests.mcp_stdio_e2e_test import SERVER_SOURCE, _FileProvider, speak
 
 ARTIFACT = "mcp/github"

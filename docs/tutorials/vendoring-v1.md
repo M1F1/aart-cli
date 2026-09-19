@@ -2,7 +2,7 @@
 
 Upstream publishes a useful MCP server in a monorepo. It has no `aart-source.json`, no
 `artifact.json`, and no interest in acquiring either. Your consumers must install it from your
-registry and from nowhere else. This is the case `aart registry vendor` exists for: it copies a
+registry and from nowhere else. This is the case `aart-cli registry vendor` exists for: it copies a
 subtree of any Git repository into your registry as a package you own, pinned to a resolved commit,
 with a `provenance.json` recording where the bytes came from.
 
@@ -17,7 +17,7 @@ security fixes included — do not reach them until you vendor the artifact agai
 ## 1. The registry
 
 ```shell
-aart registry init --source . --source-id company-registry --display-name "Company Registry" --yes
+aart-cli registry init --source . --source-id company-registry --display-name "Company Registry" --yes
 ```
 
 ## 2. What upstream looks like
@@ -62,8 +62,8 @@ find out at runtime.
 **It is not shaped like `.mcp.json`.** The harness file this entry ends up in is
 `{"mcpServers": {"atlassian": {…}}}`; the *artifact* is `{"name": …, "server": {…}}`. Installing
 delivers `server` and nothing else, so a descriptor written in the harness shape has no `server` at
-all and merges an empty entry — a named server that starts no process. `aart registry vendor` and
-`aart registry audit` fail on it.
+all and merges an empty entry — a named server that starts no process. `aart-cli registry vendor` and
+`aart-cli registry audit` fail on it.
 
 **It cannot launch a copied file.** Installing an `mcp` artifact merges one JSON object into the
 profile's MCP configuration and copies nothing; `payload/index.js` stays in your registry and never
@@ -88,7 +88,7 @@ any later re-vendor.
 ## 4. Vendor, and read the review
 
 ```shell
-aart registry vendor --source . mcp atlassian \
+aart-cli registry vendor --source . mcp atlassian \
   --url https://github.com/example/atlassian-mcp.git \
   --ref v1.4.0 --path packages/atlassian-mcp \
   --artifact-version 1.0.0 \
@@ -163,7 +163,7 @@ both, because a maintainer reading `critical` above should know which risk they 
 `recorded:` is what your `artifact.json` will publish it under. AART only reports a licence where
 the text settles the SPDX identifier, and it never guesses between GPL `-only` and `-or-later`. If
 it discovers nothing, state the identifier yourself with `--license`; a vendored artifact recording
-none is reported by `aart registry audit`.
+none is reported by `aart-cli registry audit`.
 
 **`vendor-origin` is the pin.** `ref` is what you asked for and `resolved commit` is what it meant
 at this moment. Only the commit is recorded as the origin; the ref is kept separately, so that
@@ -175,11 +175,11 @@ nothing more.
 ## 5. Finalize, then treat it as ordinary content
 
 ```shell
-aart registry vendor --source . mcp atlassian … --yes
-aart registry lock --source . --yes
-aart registry build --source . --yes
-aart registry audit --source .
-aart registry validate --source . --strict --frozen
+aart-cli registry vendor --source . mcp atlassian … --yes
+aart-cli registry lock --source . --yes
+aart-cli registry build --source . --yes
+aart-cli registry audit --source .
+aart-cli registry validate --source . --strict --frozen
 ```
 
 Nothing in those four commands knows what vendoring is. `artifact.json` is an ordinary manifest:
@@ -206,25 +206,25 @@ The one document that marks it as a copy is `provenance.json`, which AART reads:
 `aart.vendor` is the namespaced extension holding the two facts re-vendoring needs and a provenance
 document does not otherwise carry: the ref the copy was taken at, and which files you wrote rather
 than copied. It is verified against `importer.options_digest`, so a hand-edited record is refused
-rather than believed — editing `ref` there to point somewhere else fails `aart registry audit`.
+rather than believed — editing `ref` there to point somewhere else fails `aart-cli registry audit`.
 
 `origin.input_digest` is the digest of the subtree that was taken, and the copy on disk is checked
 against it. Recomputing it needs nothing but the package: the files under `payload/` that are not
 listed in `authored` are exactly the ones that were copied. So editing a vendored payload by hand —
 patching upstream in place, deleting a file you would rather not redistribute — fails
-`aart registry validate --strict` and `aart registry audit`, on a registry that was green before the
+`aart-cli registry validate --strict` and `aart-cli registry audit`, on a registry that was green before the
 edit, and re-locking or rebuilding does not make it green again. The supported way to change copied
 bytes is to change them upstream, or in a fork you vendor from, and vendor again; a copy that says
 where it came from has to be that.
 
 `registry vendor` stops at the reviewed working-tree change. Commit it yourself, or use
-`aart registry publish --source . --yes` to run lock, build, validate, and audit before one listed
+`aart-cli registry publish --source . --yes` to run lock, build, validate, and audit before one listed
 commit. AART never pushes.
 
 ## 6. When upstream moves
 
 ```shell
-aart registry revendor --source . mcp atlassian --check
+aart-cli registry revendor --source . mcp atlassian --check
 ```
 
 ```
@@ -269,7 +269,7 @@ Applying the movement requires the version you state for it. Upstream declares n
 trust — that is the price of owning the copy — so there is no default and no inference:
 
 ```shell
-aart registry revendor --source . mcp atlassian --artifact-version 1.1.0 --yes
+aart-cli registry revendor --source . mcp atlassian --artifact-version 1.1.0 --yes
 ```
 
 The review lists the same assessment again, over the new bytes, and the same three `unchanged:`
@@ -278,11 +278,11 @@ until you do, your consumers are still installing `1.0.0`.
 
 ## 7. Keeping the copy honest
 
-`aart registry audit` is a pure function of the committed snapshot by default: it reaches no
+`aart-cli registry audit` is a pure function of the committed snapshot by default: it reaches no
 network, so it works offline and in CI without a Git remote. Ask it to look upstream explicitly:
 
 ```shell
-aart registry audit --source . --check-upstream
+aart-cli registry audit --source . --check-upstream
 ```
 
 It then reports every vendored artifact that is behind its origin, and reports an unreachable origin

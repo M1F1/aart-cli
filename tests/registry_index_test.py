@@ -8,25 +8,25 @@ from types import MappingProxyType
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.model import SetupCapability, SetupInstaller, SetupStep
-from agent_artifacts.protocol.native_models import ArtifactSelector, CollectionManifest
-from agent_artifacts.protocol.native_schema import (
+from aart_cli.domain.identifiers import ObjectDigest, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.model import SetupCapability, SetupInstaller, SetupStep
+from aart_cli.protocol.native_models import ArtifactSelector, CollectionManifest
+from aart_cli.protocol.native_schema import (
     parse_artifact_manifest,
     parse_collection_manifest,
     parse_provenance,
 )
-from agent_artifacts.protocol.native_tree import NativeArtifactPackage
-from agent_artifacts.protocol.registry_index import (
+from aart_cli.protocol.native_tree import NativeArtifactPackage
+from aart_cli.protocol.registry_index import (
     index_artifact_from_package,
     validate_registry_graph,
 )
-from agent_artifacts.protocol.registry_models import ReviewRecord
-from agent_artifacts.protocol.registry_schema import (
+from aart_cli.protocol.registry_models import ReviewRecord
+from aart_cli.protocol.registry_schema import (
     parse_registry_manifest,
 )
-from agent_artifacts.protocol.semver import SemVer, VersionBounds
+from aart_cli.protocol.semver import SemVer, VersionBounds
 
 
 def _digest(character: str) -> ObjectDigest:

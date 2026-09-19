@@ -11,26 +11,26 @@ from pathlib import Path
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer import CandidateBundle, reconcile_source_scan
+from aart_cli.application.maintainer_views import (
     UNBOUND_SCAN_DIAGNOSTIC,
     MaintainerSourceStatus,
 )
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.candidates import assess_candidate
-from agent_artifacts.domain.identifiers import SourceAlias, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.candidate_store import candidate_history_paths, write_candidate_history
-from agent_artifacts.io.maintainer_views import read_maintainer_views
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.candidates import assess_candidate
+from aart_cli.domain.identifiers import SourceAlias, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.candidate_store import candidate_history_paths, write_candidate_history
+from aart_cli.io.maintainer_views import read_maintainer_views
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import SafeRelativePath
-from agent_artifacts.sources.model import (
+from aart_cli.protocol.paths import SafeRelativePath
+from aart_cli.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
     make_source_candidate,

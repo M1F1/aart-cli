@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.curation.model import (
+from aart_cli.curation.model import (
     CurationAction,
     CurationChange,
     CurationCheck,
@@ -12,7 +12,7 @@ from agent_artifacts.curation.model import (
     render_curation_outcome,
     render_curation_review,
 )
-from agent_artifacts.domain.identifiers import ObjectDigest
+from aart_cli.domain.identifiers import ObjectDigest
 
 
 class CurationModelTest(unittest.TestCase):
@@ -49,7 +49,7 @@ class CurationModelTest(unittest.TestCase):
             changes=(CurationChange("collections/demo.json", "added"),),
             checks=(CurationCheck("registry", True),),
             warnings=("Review generated starter content.",),
-            follow_up_commands=("aart registry validate --source /tmp/registry --strict",),
+            follow_up_commands=("aart-cli registry validate --source /tmp/registry --strict",),
         )
         rendered = "\n".join(render_curation_review(review))
         self.assertIn("collection", rendered)
@@ -68,7 +68,7 @@ class CurationModelTest(unittest.TestCase):
         )
         summary = "\n".join(render_curation_outcome(outcome))
         self.assertIn("Changed 1 managed path", summary)
-        self.assertIn("aart registry validate", summary)
+        self.assertIn("aart-cli registry validate", summary)
 
         failed = CurationOutcome(
             CurationAction.AUDIT,

@@ -6,7 +6,7 @@ shows a consumer the transfer line and never the exit code.
 
 from __future__ import annotations
 
-from agent_artifacts.setup_runtime import failure_detail
+from aart_cli.setup_runtime import failure_detail
 from tests.credential_fixtures import assignment
 from tests.function_cases import function_test_case
 

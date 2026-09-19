@@ -11,27 +11,27 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts import tui
-from agent_artifacts.application.sources import SourceAdoptionOutcome
-from agent_artifacts.configuration.model import (
+from aart_cli import tui
+from aart_cli.application.sources import SourceAdoptionOutcome
+from aart_cli.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
     SourceKind,
     UserConfiguration,
     default_user_configuration,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.consumer_actions import _refusal
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.consumer_actions import _refusal
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.sources.model import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.sources.model import (
     CurrentSource,
     HealthStatus,
     SourceHealth,
@@ -41,7 +41,7 @@ from agent_artifacts.sources.model import (
     make_source_candidate,
     source_instance_id,
 )
-from agent_artifacts.tui_sources import (
+from aart_cli.tui_sources import (
     build_source_stage,
     plan_source_removal,
     render_source_removal_review,
@@ -189,7 +189,7 @@ class SourceLifecyclePlanningTests(unittest.TestCase):
 
         self.assertIsInstance(refused, Err)
         assert isinstance(refused, Err)
-        self.assertIn("aart source list", refused.diagnostics[0].remediation[0])
+        self.assertIn("aart-cli source list", refused.diagnostics[0].remediation[0])
 
     def test_the_removal_review_promises_installed_artifacts_are_kept(self) -> None:
         view = _view(_configuration(_registry(), default="registry"))
@@ -325,7 +325,7 @@ class SourceRefusalWayOutTests(unittest.TestCase):
             Severity.ERROR,
             "resolved source changed its declared source identity",
             remediation=(
-                "review the origin, then run `aart source remove --alias registry` and add "
+                "review the origin, then run `aart-cli source remove --alias registry` and add "
                 "it again to subscribe to the new identity",
             ),
             # `QA-017`/`D-185`: the way out is still stated, in the words of somebody who is

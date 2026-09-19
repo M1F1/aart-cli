@@ -11,27 +11,27 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.application.installed_setup import (
+from aart_cli.application.installed_setup import (
     DeclaredArtifactSetup,
     declared_artifact_setup,
     declared_setup_to_data,
 )
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.receipts import (
+from aart_cli.domain.receipts import (
     ArtifactDelivery,
     DeliveryKind,
     PlacedArtifactReceipt,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.domain.serialization import canonical_json_bytes
-from agent_artifacts.io.installed_setup import read_declared_setup
-from agent_artifacts.io.receipt_store import LocalReceiptStore
-from agent_artifacts.protocol.native_schema import parse_artifact_manifest
+from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.serialization import canonical_json_bytes
+from aart_cli.io.installed_setup import read_declared_setup
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.protocol.native_schema import parse_artifact_manifest
 
 COORDINATE = ArtifactCoordinate(
     SourceAlias("company"), ArtifactIdentity("skill", "code-review"), "1.2.0"

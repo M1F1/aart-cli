@@ -7,7 +7,7 @@ from pathlib import Path
 
 class CompilerBoundaryTest(unittest.TestCase):
     def test_compiler_domain_and_application_have_no_durable_io_imports(self) -> None:
-        root = Path(__file__).parents[1] / "agent_artifacts"
+        root = Path(__file__).parents[1] / "aart_cli"
         # `application/compiler.py` was here until CP-18 step 3 removed it: its callers had
         # already disappeared, so it was parallel authority rather than shipped behaviour.  The
         # two files left are the ones the marketplace, catalog and installation paths really
@@ -24,8 +24,8 @@ class CompilerBoundaryTest(unittest.TestCase):
             "socket",
             "subprocess",
             "urllib",
-            "agent_artifacts.io",
-            "agent_artifacts.github_source",
+            "aart_cli.io",
+            "aart_cli.github_source",
         }
         for path in files:
             with self.subTest(path=path):

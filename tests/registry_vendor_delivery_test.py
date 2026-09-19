@@ -20,12 +20,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts import cli
-from agent_artifacts.curation.runtime import LocalCurationService
-from agent_artifacts.domain.identifiers import ArtifactIdentity
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
-from agent_artifacts.registry_maintenance.vendoring import (
+from aart_cli import cli
+from aart_cli.curation.runtime import LocalCurationService
+from aart_cli.domain.identifiers import ArtifactIdentity
+from aart_cli.domain.result import Ok
+from aart_cli.registry_maintenance.model import NativeReferenceAcquisition
+from aart_cli.registry_maintenance.vendoring import (
     delivery_reference_message,
     describe_delivery,
     mcp_descriptor_message,
@@ -174,7 +174,7 @@ class VendorDeliveryReviewTest(unittest.TestCase):
                 ),
             )
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 yield root
@@ -301,7 +301,7 @@ class OwnedMcpDeliveryTest(unittest.TestCase):
                 ),
             )
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 code, output = _run(

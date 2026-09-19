@@ -13,20 +13,20 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.installation_offer import ArtifactPlacement, offer_installation
-from agent_artifacts.application.installation_proposal import (
+from aart_cli.application.installation_offer import ArtifactPlacement, offer_installation
+from aart_cli.application.installation_proposal import (
     PlannedInstallation,
     PlannedPlacement,
 )
-from agent_artifacts.domain.effects import DeliverArtifact, DeliveryKind
-from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.inspection import RemediationCapability, RemediationCapabilityKind
-from agent_artifacts.domain.install_description import InstallDescription
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.receipts import ArtifactDelivery
-from agent_artifacts.domain.reconciliation import CurrentState
-from agent_artifacts.domain.requirements import HarnessRequirement
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.effects import DeliverArtifact, DeliveryKind
+from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.domain.inspection import RemediationCapability, RemediationCapabilityKind
+from aart_cli.domain.install_description import InstallDescription
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.receipts import ArtifactDelivery
+from aart_cli.domain.reconciliation import CurrentState
+from aart_cli.domain.requirements import HarnessRequirement
+from aart_cli.domain.result import Err, Ok
 from tests.artifact_installation_test import (
     INTERPRETER,
     PAYLOAD_SOURCE,
@@ -154,7 +154,7 @@ class PlacementOfferTest(unittest.TestCase):
 
 class PlacementProposalTest(unittest.TestCase):
     def test_the_effects_a_placement_would_run_are_deliveries(self) -> None:
-        from agent_artifacts.application.consumer_session import begin_installation
+        from aart_cli.application.consumer_session import begin_installation
         from tests.installation_proposal_test import _selection
 
         offered = _offer(_skill_placement())
@@ -173,8 +173,8 @@ class PlacementProposalTest(unittest.TestCase):
         )
 
     def test_no_launcher_is_written_for_something_that_starts_nothing(self) -> None:
-        from agent_artifacts.application.consumer_session import begin_installation
-        from agent_artifacts.domain.effects import WriteFile
+        from aart_cli.application.consumer_session import begin_installation
+        from aart_cli.domain.effects import WriteFile
         from tests.installation_proposal_test import _selection
 
         offered = _offer(_skill_placement())

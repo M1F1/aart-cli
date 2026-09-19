@@ -3,13 +3,13 @@ Status: VERIFIED (opened 2026-09-03)
 
 ## Goal
 
-Implement `aart doctor` as an environment-wide inspection and reconciliation surface: readable
+Implement `aart-cli doctor` as an environment-wide inspection and reconciliation surface: readable
 diagnostics for people, machine-complete JSON for automation, and safe repair entry points backed by
 the canonical reconciliation engine. Doctor must never mean reinstall-all.
 
 ## Product Specification sections/invariants
 
-- Section 161.11, accepted screen 29 / CLI equivalent `aart doctor`.
+- Section 161.11, accepted screen 29 / CLI equivalent `aart-cli doctor`.
 - INV-194: Doctor uses reconciliation, not reinstall-all.
 - Section 165.11 / INV-223: offline installability remains three separately reportable
   capabilities -- metadata, canonical payload and runtime dependencies.
@@ -27,7 +27,7 @@ the canonical reconciliation engine. Doctor must never mean reinstall-all.
 
 ## Target paths/owners
 
-- `agent_artifacts/commands/doctor.py` owns the public command composition and serialization.
+- `aart_cli/commands/doctor.py` owns the public command composition and serialization.
 - Existing application projections and reconciliation planning remain authoritative; the command
   does not calculate health or repair effects a second way.
 
@@ -46,7 +46,7 @@ score.
 
 ## Implementation steps
 
-1. **VERIFIED:** add the read-only, environment-wide `aart doctor` report over
+1. **VERIFIED:** add the read-only, environment-wide `aart-cli doctor` report over
    canonical project and user installations, using the existing health projection and canonical
    minimal-repair planner; expose complete JSON and readable screen-29 text.
 2. **VERIFIED:** report 165.11's three offline capabilities before installation (B-051), without
@@ -65,7 +65,7 @@ score.
 ### Step 1 — one observation feeds health and minimal repair planning (D-139)
 
 `tests/doctor_command_e2e_test.py` installs two approved-registry Skills through the real public
-command. On a healthy non-empty machine, `aart doctor` reports both and no repairs. After one
+command. On a healthy non-empty machine, `aart-cli doctor` reports both and no repairs. After one
 delivered file is edited outside AART, it reports one ready artifact and one needing attention,
 names the divergent component, and serializes exactly one repair plan whose components equal the
 observed drift. The human rendering lists the same two artifacts. A project installation and a
@@ -81,7 +81,7 @@ directory's case survived on the case-insensitive Darwin filesystem and is equiv
 machine, so it is not claimed as evidence.
 
 A fresh scoped run of
-`make mutants ONLY=agent_artifacts/commands/doctor.py TESTS="tests/doctor_command_e2e_test.py"`
+`make mutants ONLY=aart_cli/commands/doctor.py TESTS="tests/doctor_command_e2e_test.py"`
 after the first five tests produced 132 mutants: 85 killed, 19 uncovered in the structured-error
 branch, and 28 survivors. The receipt-corruption scenario was added specifically to execute that
 branch. A second fresh run after its JSON and human assertions killed 104 and left 28 survivors,
@@ -92,7 +92,7 @@ test-only changes.
 
 ### Step 2 — three offline capabilities remain three observations (D-140)
 
-`tests/doctor_offline_readiness_e2e_test.py` drives the public `aart doctor` before any install. A
+`tests/doctor_offline_readiness_e2e_test.py` drives the public `aart-cli doctor` before any install. A
 real approved vendored Skill reports source and artifact metadata cached, its canonical payload
 cached, and runtime dependencies not required. A real referenced publication keeps the metadata
 but reports the payload missing. A packaged MCP declaration proves that a cached payload does not
@@ -119,7 +119,7 @@ D-134 they are findings, not a score or a reason to invent a fixture outside the
 
 ### Step 3 — one reviewed plan is applied, and only that one (D-141)
 
-`tests/doctor_repair_command_e2e_test.py` drives `aart doctor --repair` over a real canonical
+`tests/doctor_repair_command_e2e_test.py` drives `aart-cli doctor --repair` over a real canonical
 installation whose delivered file has been removed outside AART. Review and finalize are two
 separate command invocations, and the digest the first returns is authorization input to the second.
 
@@ -128,7 +128,7 @@ and the same minimal plan the read-only report already serializes — and the de
 absent afterwards, so the review did not quietly apply its own repair. The human rendering names the
 same delta, the review identity and the confirmation boundary, and neither surface contains the word
 `reinstall`. With `--yes` and the matching digest, the repair runs, records a `repair` receipt whose
-steps equal the observed drift, and a following `aart doctor` reports `{"ready": 1,
+steps equal the observed drift, and a following `aart-cli doctor` reports `{"ready": 1,
 "needs_attention": 0}` — health measured by the same read that found the damage, not by the repair
 reporting on itself.
 
@@ -158,14 +158,14 @@ survivor outside the increment's claims is a finding, not a reason to invent a f
 
 ### Step 4a — the working copy nobody knew to ask about (D-142)
 
-CP-15 step 4b proved that `aart marketplace receipt verify <coordinate>` names the working copy an
+CP-15 step 4b proved that `aart-cli marketplace receipt verify <coordinate>` names the working copy an
 interrupted run left behind. That claim carries a precondition inside it: the operator must already
 know which receipt to verify. `setup_verify_probes.orphan_run_directories` filters the run root by
 `plan_hash[:16]`, so without a plan hash it answers nothing — and being interrupted is usually the
 reason an operator stopped watching, which makes the one fact they cannot supply the one the
 existing surface requires.
 
-`tests/doctor_orphaned_runs_e2e_test.py` drives `aart doctor`, which is told nothing: no
+`tests/doctor_orphaned_runs_e2e_test.py` drives `aart-cli doctor`, which is told nothing: no
 coordinate, no receipt, no plan hash. It reports the working copy at the path the engine actually
 created, and names the plan-hash prefix that ties it back to its run, cross-checked against the
 receipt's own `plan_hash`. A machine with no interrupted run reports none, which is what stops the
@@ -210,7 +210,7 @@ to run the line that changed; otherwise it is noise that looks exactly like a ga
 mutation-testing counterpart of D-138 — there an absence was asserted where nothing could have been
 present, here a mutation was read as surviving where nothing could have executed it.
 
-A fresh scoped `make mutants ONLY=agent_artifacts/io/orphaned_runs.py
+A fresh scoped `make mutants ONLY=aart_cli/io/orphaned_runs.py
 TESTS="tests/doctor_orphaned_runs_e2e_test.py"` produced 43 mutants and found four real gaps that
 the seven manual mutations had not, which is exactly the division of labour D-134 describes: the
 targeted mutation proves the claim you made is load-bearing, the scoped run finds claims nobody
@@ -242,12 +242,12 @@ no mandatory invariant requires either, so both stay in the backlog rather than 
 
 `project_activity`, `activity_from_receipts`, `activity_view_to_data` and `render_activity` all
 existed, and every one of them was referenced by `application/consumer_session.py` and by nothing
-under `agent_artifacts/commands/`. The record of what AART did to a machine -- the trail INV-191
+under `aart_cli/commands/`. The record of what AART did to a machine -- the trail INV-191
 makes the audit evidence -- was reachable from the interactive shell and from nowhere else. That is
 the same shape as steps 1, 2 and 4a, and the third time in this slice that a capability turned out
 to exist at a seam with no verb reporting it.
 
-`tests/doctor_activity_e2e_test.py` drives `aart doctor` over a real configured registry. The
+`tests/doctor_activity_e2e_test.py` drives `aart-cli doctor` over a real configured registry. The
 report now carries the accepted day-grouped timeline and, beside it, each recorded action with the
 undo answer its own receipt holds. The timeline and the action list are asserted to carry the same
 recorded moments, so they are one observation rendered twice rather than two reads that can drift.
@@ -279,7 +279,7 @@ a rendering that failed rather than as a machine that has done nothing -- the sa
 unknown" confusion step 2 refused for the offline capabilities and step 4a refused for the run root.
 The baseline now asserts the words, and the mutation turns it red.
 
-A scoped `make mutants ONLY=agent_artifacts/commands/doctor.py` over all four Doctor test files
+A scoped `make mutants ONLY=aart_cli/commands/doctor.py` over all four Doctor test files
 produced 499 mutants, 354 killed. Nine survivors fall inside this step's two functions and three of
 them were real:
 
@@ -316,7 +316,7 @@ from nowhere else. That is the fifth capability in this slice found fully built 
 verb reporting it, after Doctor itself, offline readiness, the orphaned run root and the Activity
 trail.
 
-`aart doctor` now reports both, and the report answers the empty case in words rather than by
+`aart-cli doctor` now reports both, and the report answers the empty case in words rather than by
 omission -- "every configured source is enabled and no field is policy-locked", "no installed
 artifact references one" -- which is the same refusal of "absence against unknown" steps 2, 4a and
 4b each made in their own section.
@@ -376,14 +376,14 @@ A fresh scoped run confirms it: 595 mutants, 450 killed, and no survivor left in
 
 ### Step 5 — the front door, the universal halves, and the invariant walk (D-145)
 
-Four steps made a capability reachable that had been sitting at a seam. `aart doctor --help` still
+Four steps made a capability reachable that had been sitting at a seam. `aart-cli doctor --help` still
 described the step-1 report: "inspect installed artifacts and report minimal repair plans". An
 operator was told about one of six sections and had no way to discover the other five short of
 running the command and reading its output. A capability nobody can find is only marginally better
 than one nobody can reach, which is the argument this whole slice has been making one section at a
 time -- so the last place it applied was the command's own front door. `tests/doctor_help_e2e_test.py`
 holds it: the help names every section the report carries, says the report on its own changes
-nothing, and is reachable from the top-level `aart --help`, where argparse propagates the one-line
+nothing, and is reachable from the top-level `aart-cli --help`, where argparse propagates the one-line
 `help=` string.
 
 **The universal halves.** Three times in this slice a scoped run found a gap whose immediate fix was
@@ -420,7 +420,7 @@ composition. The 145 are B-060's 84 in `_run_repair`, B-061's 47 in `run`, and 1
 mutants in the error and emit helpers that substring assertions cannot distinguish. A number that
 did not move where nothing should have moved it is evidence the scoping is honest.
 
-**The invariant walk.** INV-191 moves to EVIDENCED: `aart doctor` is the first surface anywhere to
+**The invariant walk.** INV-191 moves to EVIDENCED: `aart-cli doctor` is the first surface anywhere to
 carry both of the invariant's layers at once -- the projection describing meaningful user actions
 and the complete record beside it, asserted to share the same recorded moments. INV-192 moves to
 EVIDENCED on step 4b's pair. INV-189 moves to EVIDENCED on step 4c: the public report exposes
@@ -450,7 +450,7 @@ five steps refusing.
 - Step 2 full gates: `make quality` green -- all nine gates, 3,251 tests, 1 skipped, 85.37% branch
   coverage -- and `make integration` separately green with 287 E2E tests.
 - Step 3 focused: eight repair E2E tests (ten including subtests) green; five targeted mutations each red only where claimed.
-- Step 3 full gates: the first run failed on `source_remediation_test`'s repository-wide rule that every command string the package shows an operator must be one the parser accepts. The no-match remediation read `run aart doctor and choose one exact installed coordinate`, and the scanner's bare-command pattern runs to the first comma or semicolon, so it extracted the whole sentence as the command. Reworded to `run aart doctor, then pass one exact installed coordinate to --repair`, which leaves `aart doctor` as the runnable part. Worth recording because no focused run could have caught it: the rule lives in a test that scans every module, and the eight repair E2E tests were green throughout.
+- Step 3 full gates: the first run failed on `source_remediation_test`'s repository-wide rule that every command string the package shows an operator must be one the parser accepts. The no-match remediation read `run aart-cli doctor and choose one exact installed coordinate`, and the scanner's bare-command pattern runs to the first comma or semicolon, so it extracted the whole sentence as the command. Reworded to `run aart-cli doctor, then pass one exact installed coordinate to --repair`, which leaves `aart-cli doctor` as the runnable part. Worth recording because no focused run could have caught it: the rule lives in a test that scans every module, and the eight repair E2E tests were green throughout.
 - Step 3 verified: `make quality` green across all nine gates -- 3,259 tests, 1 skipped, 85.37%
   branch coverage -- with the integration gate skipped as redundant because all 295 of its tests
   are among the 3,259 the unit gate runs.

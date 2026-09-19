@@ -25,32 +25,32 @@ import unittest
 from dataclasses import replace
 from datetime import date
 
-from agent_artifacts.application.execution import InstallationExecutionStatus
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.credentials import (
+from aart_cli.application.execution import InstallationExecutionStatus
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialProviderRef,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceId
-from agent_artifacts.domain.inputs import PromptedConfigValue, SecretProviderReference
-from agent_artifacts.domain.placement import artifact_root
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.domain.selection import (
+from aart_cli.domain.harness import Scope
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceId
+from aart_cli.domain.inputs import PromptedConfigValue, SecretProviderReference
+from aart_cli.domain.placement import artifact_root
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     VersionConstraint,
 )
-from agent_artifacts.io.configured_installation_action import (
+from aart_cli.io.configured_installation_action import (
     InstallationHost,
     complete_configured_installation,
     prepare_configured_installation,
 )
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.sources.model import (
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
     make_source_candidate,

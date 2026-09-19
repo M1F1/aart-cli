@@ -24,10 +24,10 @@ import ast
 import pathlib
 import unittest
 
-import agent_artifacts.protocol as protocol
+import aart_cli.protocol as protocol
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "agent_artifacts"
+PACKAGE = ROOT / "aart_cli"
 
 RETIRED_PROTOCOL_SYMBOLS = (
     "GitArtifactReference",

@@ -55,7 +55,7 @@ Established by reading the callers of `prepare_registry_lock`, `prepare_registry
 
 **Removed outright.** This has no approved-representation behaviour:
 
-- `registry scaffold` — authors in place. Replaced by `aart author init` plus `scan` + `promote`.
+- `registry scaffold` — authors in place. Replaced by `aart-cli author init` plus `scan` + `promote`.
 
 **Kept, losing one branch.** `publish` is the supported aggregate for the approved representation:
 build, validate, audit and create the reviewed local commit, without pushing. The `lock`, `build`,
@@ -91,13 +91,13 @@ whose `validate` refuses the snapshot. `kind: "local"` means the source may be a
 path — so "our own artifacts, no hosted repo" is already supported, as a `source-local` checkout
 beside the registry, not inside it.
 
-## 1.3 `aart author init`
+## 1.3 `aart-cli author init`
 
 A new top-level group. Not under `registry` (wrong target) and not under `source` (that group is
 about subscriptions, not content).
 
 ```
-aart author init --kind {skill,guideline,mcp,hook,memory} --name <slug> [--into DIR]
+aart-cli author init --kind {skill,guideline,mcp,hook,memory} --name <slug> [--into DIR]
 ```
 
 Writes `aart.yaml` plus a payload skeleton. CP-26 delivers `mcp` and `skill` first; the other three
@@ -135,10 +135,10 @@ transport runtime launch requirements inputs python credentials compatibility in
 Enumerations come from the same module: kinds are `skill|guideline|mcp|hook|memory`, injections
 `environment|cli-argument|file|stdin`, dependency kinds `requirements|pyproject|uv`.
 
-## 1.4 `aart author check`
+## 1.4 `aart-cli author check`
 
 ```
-aart author check [--source DIR] [--json]
+aart-cli author check [--source DIR] [--json]
 ```
 
 Two claims, in this order, because the second is worthless if the first fails:
@@ -170,7 +170,7 @@ on the callee name, which is exactly why it catches the `_nested_type` cases:
 ```python
 import ast, pathlib
 
-def accepted_fields(module="agent_artifacts/protocol/authoring.py") -> dict[tuple[str, str], list]:
+def accepted_fields(module="aart_cli/protocol/authoring.py") -> dict[tuple[str, str], list]:
     tree = ast.parse(pathlib.Path(module).read_text(encoding="utf-8"))
     owner = {}
     for fn in (n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)):
@@ -280,10 +280,10 @@ no migration command, and no deprecation period.
 | 5 | The lock/index schema, tree constants, planning halves and fixtures are deleted | B-057 closes here |
 | 6 | The authoring-manifest field surface is collected from the parser, not transcribed | the `ast` oracle; lands before anything generates |
 | 7 | A deterministic YAML emitter for the generated subset | block maps, sequences, plain scalars, comments |
-| 8 | `aart author init` emits a full-surface `aart.yaml` for `mcp` | first kind end to end, guarded by step 6 |
-| 9 | `aart author init` emits the same for `skill` | proves the generator is kind-driven, not special-cased |
-| 10 | `aart author check` proves every discovered manifest parses | through `parse_author_manifest` itself |
-| 11 | `aart author check` proves each manifest would be accepted by `scan` | the promotable claim |
+| 8 | `aart-cli author init` emits a full-surface `aart.yaml` for `mcp` | first kind end to end, guarded by step 6 |
+| 9 | `aart-cli author init` emits the same for `skill` | proves the generator is kind-driven, not special-cased |
+| 10 | `aart-cli author check` proves every discovered manifest parses | through `parse_author_manifest` itself |
+| 11 | `aart-cli author check` proves each manifest would be accepted by `scan` | the promotable claim |
 | 12 | The remaining three kinds | `guideline`, `hook`, `memory` |
 | 13 | README opens with the fastest normal-user path to an installed artifact | install AART → connect/sync Registry → choose in Marketplace → install into a harness → verify; TUI first, compact CLI equivalent second |
 | 14 | A short “What AART is” and categorized documentation index follow the quick start | explanation stays bounded; authoring, Registry, Enterprise, architecture and contributor detail are links, not README tutorials |
@@ -453,7 +453,7 @@ and serializer; `protocol/registry_index.py::build_registry_index`; the lock, en
 only that port consumed; `tests/fixtures/protocol/registry-v1/` and the six test modules that only
 described the retired shape.
 
-**Two commands were decided rather than deleted.** `aart security scan` took `--index`/`--lock` as
+**Two commands were decided rather than deleted.** `aart-cli security scan` took `--index`/`--lock` as
 operator-supplied files nothing produced; it now reads the approved Registry through `--registry DIR`
 and projects the catalog from version records (D-322, closing B-147). `promote-native` and
 `refresh-native` are withdrawn with the reference mechanism they wrote (D-321), and with them
@@ -565,7 +565,7 @@ the seven fields directly.
 
 ### Step 7 — a deterministic YAML emitter for the generated subset (2026-09-19)
 
-`aart author init` writes `aart.yaml`, and zero runtime dependencies means AART writes it itself.
+`aart-cli author init` writes `aart.yaml`, and zero runtime dependencies means AART writes it itself.
 `protocol/yaml.py` already held the parser for the finite subset, so the emitter was added beside it
 and is defined as that parser's inverse: whatever `emit_yaml` returns, `parse_yaml` gives back the
 value it was handed. The claim is universal over the subset, so it is a Hypothesis property over
@@ -597,11 +597,11 @@ round-trip property. Deleting the unused-comment refusal failed
 `test_a_comment_aimed_at_a_key_the_document_does_not_have_is_refused` and nothing else. Both
 restored green.
 
-### Step 8 — `aart author init` writes a full-surface `mcp` workspace (2026-09-19)
+### Step 8 — `aart-cli author init` writes a full-surface `mcp` workspace (2026-09-19)
 
 A new top-level group, `author`, rather than an action under `registry` or `source`: a Registry is
 where an artifact is published to, never where it is written, and `source` is about subscriptions.
-`aart author init --kind mcp --name <slug> [--into DIR]` writes `aart.yaml` plus the payload the
+`aart-cli author init --kind mcp --name <slug> [--into DIR]` writes `aart.yaml` plus the payload the
 manifest declares. `--kind` offers all five kinds from `get_args(AuthorKind)` — the parser's own
 vocabulary, so a kind it gains appears in the help without an edit here — and the generator refuses
 the four it does not yet build, by name.
@@ -634,7 +634,7 @@ through `parse_relative_path`, because a path that climbs out of the workspace w
 mistake to catch, not the author's.
 
 **Two repository gates caught real drift and both were right.** `source_remediation_test` and
-`adoption_first_contact_test` refused `aart author check` in the skeleton header and the command's
+`adoption_first_contact_test` refused `aart-cli author check` in the skeleton header and the command's
 report: steps 10–11 add that command and until then naming it sends an author to a usage error. The
 README now documents `author init`, because a shipped top-level command the README has no route to
 is capability nobody can find.
@@ -708,9 +708,9 @@ compilation and protocol tests; dropping the not-generated note failed the anti-
 `skill` and the block-naming test; pointing the `skill` blueprint at `_mcp_blueprint` failed seven
 tests across compilation, the launch-block claim and the payload claim. All restored green.
 
-### Step 10 — `aart author check` proves every manifest parses (2026-09-19)
+### Step 10 — `aart-cli author check` proves every manifest parses (2026-09-19)
 
-The first of §1.4's two claims. `agent_artifacts/authoring/check.py` is pure: it takes a
+The first of §1.4's two claims. `aart_cli/authoring/check.py` is pure: it takes a
 `SourceSnapshot` somebody else read and returns an `AuthorCheckReport` of one `ManifestVerdict` per
 discovered manifest. Discovery is `discover_author_manifests` and acceptance is
 `parse_author_manifest` -- both called, neither copied, for the reason §1.4 gives: a checker that
@@ -740,13 +740,13 @@ it. Any targeted mutation that does not change a file's length must be followed 
 `__pycache__`, or the revert is not real.
 
 **Evidence.** 87 tests across the five affected modules, `make unit`, `make typecheck`, Ruff check
-and format. `aart author check` is now a command the package may name, so the pointers in the
+and format. `aart-cli author check` is now a command the package may name, so the pointers in the
 skeleton header, `init`'s closing line and the README are live again and
 `source_remediation_test` parses them. The empty-tree remediation names
-`aart author init --kind mcp --name my-artifact`, because a bare `aart author init` is a dead end
+`aart-cli author init --kind mcp --name my-artifact`, because a bare `aart-cli author init` is a dead end
 that gate refuses.
 
-### Step 11 — `aart author check` proves the manifest would be promoted (2026-09-19)
+### Step 11 — `aart-cli author check` proves the manifest would be promoted (2026-09-19)
 
 §1.4's second claim, and the one a person cannot check by eye. `check` now calls
 `compile_author_manifests` -- the per-manifest boundary -- and reports the coordinate each manifest
@@ -1013,8 +1013,34 @@ gate makes the action unavailable.
 
 ### Step 18a — aart-cli namespace, portable home and harness path contract (D-332)
 
-Status: **todo**. Added by the owner on 2026-09-19; execute after 18 and before 19. Names and
-paths must be settled before wiring the new installation identity. Do not renumber task 21.
+Status: **in progress**. Added by the owner on 2026-09-19; execute after 18 and before 19. Names
+and paths must be settled before wiring the new installation identity. Do not renumber task 21.
+
+**Done so far — the name the machine sees.** The import package is `aart_cli` (254 modules moved,
+no `agent_artifacts` left to import), the single console script is `aart-cli`, `prog="aart-cli"`,
+and every command line the product prints, documents or executes now begins `aart-cli ` rather than
+`aart ` (125 files). The pieces that carry the name outside the package moved with it: the
+Enterprise CI shim writes and version-checks `$bin/aart-cli`, the pin file is `.aart-cli-version`,
+the diagnostic is `aart-cli-version-unsupported`, and `scripts/distribution_smoke.py` looks for
+`aart-cli` on the routes it installs. The schema freeze was regenerated in the same change, because
+the rename moved every normative schema input's path (D-275). `unit`, `integration`, `lint`,
+`typecheck`, `format-check`, `packaging-check`, `docs-check` and `secret-shape-check` are green over
+that state; task 21 still owns the full suite (D-317).
+
+Two guards had to be told what the rename means rather than being weakened by it. The install-route
+gate reported `documented install line installed no \`aart\``, which was true and was the point --
+it reads the documented lines and runs them, so it caught the one place the sweep had not reached.
+The first-contact guard began reporting five invented commands, all of them from the Product
+Specification, which the owner had already written in the new namespace: the specification names
+commands the executable does not have yet, on purpose, so it is the one linked document that is not
+instructions to a reader and is now excluded there with that reason recorded in the test.
+
+**Still open in this step.** Manifest discovery (`aart.yaml`/`aart.json`), generated file names
+(`aart-registry.json`, `aart-source.json`, `.github/workflows/aart-registry.yml`), managed block
+markers, the project state directory `.agent-artifacts`, the `AART_*` environment and CI variables,
+schema/URI identifiers and the branch prefix; then the one portable `AART_CLI_HOME` with the §169.2
+layout and the adapter-owned path policy; then step 16's executed installation/README contract
+re-run against the changed advertised commands, and the branch suggestion carried in below.
 
 **Carried in from step 18.** The Push review's branch suggestion is the constant
 `aart-cli/registry-update`. Step 18 requires it to come from the most recent producing action --
@@ -1242,7 +1268,7 @@ the advertised commands and reruns 16 afterwards. Neither is pulled forward.
 an authenticated download would have left it, and runs the lines the install document publishes.
 Five of the nine fenced blocks execute -- three clipboard routes through `uv`, `pipx` and
 `python -m pip`, and two from a file on disk -- plus the `gh release download` line added in this
-step. Each installs and then answers `aart --version` with the version that was built. Four are
+step. Each installs and then answers `aart-cli --version` with the version that was built. Four are
 declined with a recorded reason: two name a `<repository>` that only a real remote has, one is the
 consumer example, one is the generator whose output belongs to a release body rather than to a
 reader's shell.
@@ -1328,12 +1354,12 @@ and the generated workflow renders it. D-342 records why the list also has to sa
 runs: rendering it whole put `lock` back into every generated registry's CI, which CP-26.5 removed
 because over the approved representation it resolves nothing.
 
-**A shipped defect the shared list exposed (B-156).** `aart registry validate --source . --strict
+**A shipped defect the shared list exposed (B-156).** `aart-cli registry validate --source . --strict
 --frozen` had been in the generated workflow since `0.0.1` and the CLI has never accepted either
 flag, so that step failed with `unrecognized arguments` in every registry `registry init` has ever
 produced. `EveryVisibleCommandMentionTest` could not see it while it lived in a `bytes` template;
 moving the list into a `.py` file made the guard fail on the first run. The slice text above still
-says "strict/frozen validation" -- the correct command is `aart registry validate --source .`.
+says "strict/frozen validation" -- the correct command is `aart-cli registry validate --source .`.
 
 **Screen 46j.** Push is reached from screen 46's ready workspace row and from nowhere else; the
 commit screen offers no `p` and promises no push. Recording the screen in the frame matrix found

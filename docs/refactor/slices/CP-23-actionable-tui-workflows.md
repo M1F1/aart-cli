@@ -462,8 +462,8 @@ Evidence:
   successful scopes were:
 
 ```sh
-make mutants ONLY=agent_artifacts/application/consumer_ui.py TESTS="tests/maintainer_source_addition_test.py tests/maintainer_source_onboarding_e2e_test.py tests/maintainer_navigation_test.py"
-make mutants ONLY=agent_artifacts/io/consumer_actions.py TESTS="tests/maintainer_source_addition_test.py tests/maintainer_source_onboarding_e2e_test.py"
+make mutants ONLY=aart_cli/application/consumer_ui.py TESTS="tests/maintainer_source_addition_test.py tests/maintainer_source_onboarding_e2e_test.py tests/maintainer_navigation_test.py"
+make mutants ONLY=aart_cli/io/consumer_actions.py TESTS="tests/maintainer_source_addition_test.py tests/maintainer_source_onboarding_e2e_test.py"
 ```
 
 Gate evidence (2026-09-14, Claude taking over from Codex): `make quality` on the working tree
@@ -631,7 +631,7 @@ product direction by placing explicit Push on Registry Maintainer's local-worksp
 Characterized first: after the commit, screen 45 said `Git publication: not yet published; press p
 to choose a review branch`. `p` opened a remote/branch form, Enter prepared a
 `RegistryPublicationCommand` through the handler's default-branch port, and a second Enter pushed
-through `publish_registry_commit`. The CLI `aart registry push` uses the same application/IO
+through `publish_registry_commit`. The CLI `aart-cli registry push` uses the same application/IO
 modules through its own path.
 
 After: the TUI vocabulary has no publication action, event, draft, state flag or handler port. The

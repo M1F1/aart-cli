@@ -9,14 +9,14 @@ import unittest
 from contextlib import contextmanager
 from typing import Iterator
 
-from agent_artifacts.application.registry_publication import (
+from aart_cli.application.registry_publication import (
     PublicationOutcome,
     RegistryPublicationCommand,
 )
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.publication import PublicationBranch
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.registry_publication import (
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.publication import PublicationBranch
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.registry_publication import (
     publish_registry_commit,
     registry_remote_default_branch,
 )

@@ -16,17 +16,17 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.domain.effects import (
+from aart_cli.domain.effects import (
     DeliverArtifact,
     DeliveryKind,
     MergeManagedBlock,
     UnmergeManagedBlock,
 )
-from agent_artifacts.domain.managed_blocks import BlockPosition, managed_block_body
-from agent_artifacts.domain.receipts import ArtifactMerge
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.execution import ManagedBlockInterpreter
-from agent_artifacts.protocol.hashing import sha256_bytes
+from aart_cli.domain.managed_blocks import BlockPosition, managed_block_body
+from aart_cli.domain.receipts import ArtifactMerge
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.execution import ManagedBlockInterpreter
+from aart_cli.protocol.hashing import sha256_bytes
 
 ARTIFACT = "company/memory/house-style"
 REGION = "house-style"

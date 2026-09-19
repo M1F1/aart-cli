@@ -23,21 +23,21 @@ payload-free consumer projection. Both are generated and must pass their gates b
 ## Interface
 
 ```text
-aart author init|check
-aart source add|list|sync|remove|resubscribe|health
-aart marketplace list|search|health|install|update|uninstall|status|setup|receipt
-aart doctor
-aart reset
-aart registry init|collection|scan|promote|adopt|check-upstream|discover|format|vendor|vendor-batch|revendor|validate|lock|build|audit|publish|push|test|diff
-aart security scan|show|verify|analyzers|suites
-aart upgrade --wheel FILE | --source-checkout DIR
+aart-cli author init|check
+aart-cli source add|list|sync|remove|resubscribe|health
+aart-cli marketplace list|search|health|install|update|uninstall|status|setup|receipt
+aart-cli doctor
+aart-cli reset
+aart-cli registry init|collection|scan|promote|adopt|check-upstream|discover|format|vendor|vendor-batch|revendor|validate|lock|build|audit|publish|push|test|diff
+aart-cli security scan|show|verify|analyzers|suites
+aart-cli upgrade --wheel FILE | --source-checkout DIR
 ```
 
 Running `aart` without a subcommand on a TTY opens the human-oriented TUI (curses or text
 fallback). The TUI submits the same canonical requests as flag mode; it is not a second command
 engine.
 
-`aart reset` is the CLI-only factory reset. It lists the exact AART-owned per-user configuration,
+`aart-cli reset` is the CLI-only factory reset. It lists the exact AART-owned per-user configuration,
 managed state and cache paths, then requires two different typed confirmations. It never removes
 projects, harness files, organization policy or credentials owned by another application.
 

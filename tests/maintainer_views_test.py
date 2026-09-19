@@ -5,19 +5,19 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     PresentationProfile,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer import (
+from aart_cli.application.maintainer import (
     CandidateBundle,
     SourceScan,
     reconcile_source_scan,
 )
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer_views import (
     UNBOUND_SCAN_DIAGNOSTIC,
     MaintainerScreen,
     MaintainerSourceStatus,
@@ -25,19 +25,19 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_dashboard,
     project_maintainer_source,
 )
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.candidates import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.candidates import (
     CandidateFinding,
     CandidateState,
     FindingSeverity,
     assess_candidate,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.sources.model import HealthStatus, SourceHealth
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
-from agent_artifacts.tui_maintainer import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Ok
+from aart_cli.sources.model import HealthStatus, SourceHealth
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from aart_cli.tui_maintainer import (
     render_maintainer_dashboard,
     render_maintainer_source,
     render_maintainer_sources,

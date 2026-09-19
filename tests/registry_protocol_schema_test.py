@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.registry_schema import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.registry_schema import (
     parse_registry_manifest,
 )
 

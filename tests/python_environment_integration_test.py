@@ -17,21 +17,21 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from agent_artifacts.application.python_environment import (
+from aart_cli.application.python_environment import (
     plan_python_environment,
     select_python_installer,
 )
-from agent_artifacts.domain.effects import CreatePythonEnvironment, InstallPythonDependencies
-from agent_artifacts.domain.inspection import EnvironmentFacts, RemediationCapabilityKind
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.python_runtime import (
+from aart_cli.domain.effects import CreatePythonEnvironment, InstallPythonDependencies
+from aart_cli.domain.inspection import EnvironmentFacts, RemediationCapabilityKind
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.python_runtime import (
     ArtifactEnvironment,
     PyProjectSpec,
     PythonInstaller,
     RequirementsFile,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.python_runtime import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.python_runtime import (
     PYTHON_RUNTIME_REFUSED,
     PYTHON_RUNTIME_UNSUPPORTED,
     LocalPythonRuntime,

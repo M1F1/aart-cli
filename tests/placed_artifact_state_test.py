@@ -16,20 +16,20 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.installed_state import (
+from aart_cli.application.installed_state import (
     desired_state_from_placement,
     removal_state_from_placement,
 )
-from agent_artifacts.domain.effects import (
+from aart_cli.domain.effects import (
     DeliverArtifact,
     DeliveryKind,
     RiskClass,
     WithdrawArtifact,
     effect_to_data,
 )
-from agent_artifacts.domain.identifiers import ArtifactCoordinate, ObjectDigest
-from agent_artifacts.domain.receipts import ArtifactDelivery, PlacedArtifactReceipt
-from agent_artifacts.domain.reconciliation import Component, ComponentState
+from aart_cli.domain.identifiers import ArtifactCoordinate, ObjectDigest
+from aart_cli.domain.receipts import ArtifactDelivery, PlacedArtifactReceipt
+from aart_cli.domain.reconciliation import Component, ComponentState
 
 ROOT = "/home/agent/.agent-artifacts/runtimes/public/skill/code-review"
 SOURCE = f"{ROOT}/payload/skill"

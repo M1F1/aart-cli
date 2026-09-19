@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
@@ -14,11 +14,11 @@ from agent_artifacts.application.consumer_views import (
     project_doctor,
     project_registries,
 )
-from agent_artifacts.application.intents import InstalledHealth
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.marketplace.catalog import build_marketplace
-from agent_artifacts.tui_consumer import (
+from aart_cli.application.intents import InstalledHealth
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.result import Ok
+from aart_cli.marketplace.catalog import build_marketplace
+from aart_cli.tui_consumer import (
     registry_purpose,
     render_dashboard,
     render_doctor,

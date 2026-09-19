@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.security import BaselineScanRequest, assess_installation_risk
+from aart_cli.security import BaselineScanRequest, assess_installation_risk
 from tests.credential_fixtures import access_token
 from tests.security_baseline_test import _fixture
 

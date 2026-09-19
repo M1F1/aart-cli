@@ -22,9 +22,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts.domain.artifacts import ArtifactKind
-from agent_artifacts.domain.effects import DeliveryKind
-from agent_artifacts.domain.harness import (
+from aart_cli.domain.artifacts import ArtifactKind
+from aart_cli.domain.effects import DeliveryKind
+from aart_cli.domain.harness import (
     McpEditor,
     Scope,
     delivery_destination,
@@ -114,7 +114,7 @@ class CodexIsOfferedByThisMachineTest(unittest.TestCase):
         Skills and instructions to was invisible until it also started a server. Codex is measured
         exactly that way, and the set the TUI offers is now every measured table's harness."""
 
-        from agent_artifacts.tui import _canonical_marketplace_target
+        from aart_cli.tui import _canonical_marketplace_target
 
         target = _canonical_marketplace_target()
 

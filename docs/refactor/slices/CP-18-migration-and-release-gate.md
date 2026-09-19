@@ -69,7 +69,7 @@ first call — while every existing check stays green. That is not a hypothetica
 
 ### Evidence that the gap is real
 
-Mutation **M10** inserted exactly that import into `agent_artifacts/application/installed_state.py`,
+Mutation **M10** inserted exactly that import into `aart_cli/application/installed_state.py`,
 inside a function body, and ran the checks that are supposed to cover INV-071:
 
 | check | with the leak present |
@@ -83,7 +83,7 @@ walked past it.
 
 ### What the test does
 
-`tests/runtime_purity_test.py` parses every module under `agent_artifacts/` with `ast` and asserts
+`tests/runtime_purity_test.py` parses every module under `aart_cli/` with `ast` and asserts
 none of them imports a development tool, or the test suite, or the gate scripts.
 
 Two choices carry the claim:
@@ -102,7 +102,7 @@ assertion that reads an empty tree passes for the wrong reason (D-149):
 `test_the_dev_group_is_known_and_not_silently_empty` fails if the forbidden set is empty,
 `test_the_package_really_is_the_tree_being_read` fails if fewer than 100 sources are found, and
 `test_the_shortcut_reads_the_table_it_names_and_stops_at_the_next_one` holds the manifest parser.
-Without them, a rename of `agent_artifacts/` would turn this file into green tests that assert
+Without them, a rename of `aart_cli/` would turn this file into green tests that assert
 nothing.
 
 ### The portability defect the first draft carried
@@ -128,10 +128,10 @@ then catches.
 ### Targeted mutations (D-091)
 
 **M10** — insert `import hypothesis` into a function body in
-`agent_artifacts/application/installed_state.py`.
+`aart_cli/application/installed_state.py`.
 
 Result: `test_no_runtime_module_imports_a_development_tool` red —
-`AssertionError: Lists differ: [] != ['agent_artifacts/application/installed_state.py imports
+`AssertionError: Lists differ: [] != ['aart_cli/application/installed_state.py imports
 hypothesis']`. The other four green.
 
 **M11** — delete the `if stripped.startswith("["): break` line, so the shortcut runs past the table
@@ -193,7 +193,7 @@ Both arms are named in the output whatever the verdict, which is INV-080's visib
 
 ### The emitted registry CI had no aggregate at all
 
-`aart registry init` writes a workflow with `registry-quality` and
+`aart-cli registry init` writes a workflow with `registry-quality` and
 `registry-quality-private-image` — two container shapes of which exactly one ever runs, each a
 matrix over `compatibility: [minimum, latest]`. A registry owner protecting `main` therefore had no
 name that is the same in every configuration. Naming an arm their deployment skips is worse than
@@ -283,8 +283,8 @@ drive them — `application/compiler.py`, `compatibility.py`, `fp.py`, `hashing.
 `policy.py`, `registry_publication.py`, −2552 lines — and added
 `tests/legacy_authority_reachability_test.py` as the evidence.
 
-That test is the right shape for this step. It builds the import graph from `agent_artifacts.cli`
-and `agent_artifacts.__main__`, and asserts by `assertEqual` on an exact set that every shipped
+That test is the right shape for this step. It builds the import graph from `aart_cli.cli`
+and `aart_cli.__main__`, and asserts by `assertEqual` on an exact set that every shipped
 module is reachable or named as an exception. Its premise is the one the step needs: a production
 module reachable only from tests is not evidence of shipped behaviour, it is parallel authority
 whose callers have already disappeared.
@@ -415,7 +415,7 @@ A command the README invents wastes a reader's time at the shell. A command the 
 capability nobody can find — and it is the one a reading pass never finds, because nothing on the
 page is wrong.
 
-The omission was **`aart doctor`**: the whole of CP-16, three verified steps, an entire top-level
+The omission was **`aart-cli doctor`**: the whole of CP-16, three verified steps, an entire top-level
 command, documented nowhere in the README. It now has a section covering what one read reports, the
 three separate offline answers, the review-then-confirm repair boundary, and D-150's rule that what
 it cannot repair it still reports.
@@ -450,7 +450,7 @@ it is bannered rather than deleted.
 
 Deliberately **not** reconciled: `CHANGELOG.md` and `docs/release/compatibility-v*.md` name retired
 verbs because recording their retirement is their job, and the Product Specification's
-`aart registry policy-check`, `refresh-upstreams` and `sync` appear under "Suggested flow" and
+`aart-cli registry policy-check`, `refresh-upstreams` and `sync` appear under "Suggested flow" and
 "Possible maintainer-side vocabulary" — illustrative, not mandates, and therefore not capability
 gaps. Recorded here so the next agent does not re-chase them.
 
@@ -466,11 +466,11 @@ it themselves, and a test holds both halves.
 
 | # | mutation | red |
 |---|---|---|
-| M28 | rename `aart doctor` out of the README | `test_every_shipped_top_level_command_is_named` |
-| M29 | write `aart marketplace reinstall` into the README | `test_the_readme_invents_no_command` |
+| M28 | rename `aart-cli doctor` out of the README | `test_every_shipped_top_level_command_is_named` |
+| M29 | write `aart-cli marketplace reinstall` into the README | `test_the_readme_invents_no_command` |
 | M30 | strip a root file's historical banner | `test_a_root_document_citing_the_legacy_program_says_it_is_historical` |
 | M31 | restore the wrong-source-of-truth sentence | `test_no_root_document_sends_a_reader_to_the_legacy_issue_tracker_for_status` |
-| M32 | point a real remediation at `aart marketplace migrate` | `test_no_user_facing_string_names_a_subcommand_that_does_not_exist` |
+| M32 | point a real remediation at `aart-cli marketplace migrate` | `test_no_user_facing_string_names_a_subcommand_that_does_not_exist` |
 
 ### Status
 
@@ -581,7 +581,7 @@ Six decisions carry the shape:
 - D-160 leaves one version literal and makes every other release mention an engine-written output.
 - D-161 keeps issued schema freezes immutable and reads their release identity as recorded data.
 - D-162 makes the wheel the subject of release verification: filename, metadata, dependency
-  metadata, clean install, `aart --version` and `aart --help` all have to agree with the tag.
+  metadata, clean install, `aart-cli --version` and `aart-cli --help` all have to agree with the tag.
 - D-163 calls the release workflow directly after Release Please creates a release, because events
   produced with `GITHUB_TOKEN` do not recursively start another workflow.
 - D-164 derives the accepted Conventional Commit types from the Release Please configuration.
@@ -608,7 +608,7 @@ belonged to the real-environment/CLI wrapper deliberately outside the focused un
 actual closing artifact gate executes that wrapper against the built wheel.
 
 That run also found a defect in the mutation runner itself: `ONLY=scripts/...` still copied only
-`agent_artifacts`, producing zero mutants and an import failure. `scripts/mutants.py` now derives the
+`aart_cli`, producing zero mutants and an import failure. `scripts/mutants.py` now derives the
 top-level source roots from the requested repository-relative paths, with tests for single-root,
 multi-root and unsafe scopes. Fully qualified `scripts.*` imports make the original and mutated
 module identities agree.
@@ -668,7 +668,7 @@ The first operator pass found the persistent shell's navigation undiscoverable; 
 permanent key chrome. The next pass completed B-078 through B-082 (D-169–D-171): Esc's terminal
 prefix delay is bounded at 50 ms, Dashboard destinations explain themselves, a zero-source machine
 gets first-run guidance, and screen 21 now owns an exact reviewed Add Registry flow over the same
-canonical transaction as `aart source add`. Local paths remain Maintainer authoring Sources rather
+canonical transaction as `aart-cli source add`. Local paths remain Maintainer authoring Sources rather
 than approved Marketplace registries. Per operator request these feedback increments use focused
 consumer/source tests before manual acceptance; they do not alter CP-18's already-verified closing
 evidence.
@@ -755,7 +755,7 @@ B-084/QA-010 and B-087/QA-013 are now **fixed and awaiting manual retest** (D-17
 routes `s` to a distinct `REGISTRY_SYNC` action whose review (21c) names the ref that will be
 fetched, states PS 161.7's rule that a registry refresh is not an artifact update, and says a failed
 fetch keeps the snapshot already held; execution goes through `sync_configured_sources`, the single
-transaction `aart source sync` also uses, and `_prepare_registry_refresh` refuses a row that is not
+transaction `aart-cli source sync` also uses, and `_prepare_registry_refresh` refuses a row that is not
 a connected registry, so INV-199 stays testable rather than asserted. `registry init` now writes the
 usage-reporting Issue Form and its two workflows only when `--usage-reporting-repository` names a
 destination, and the generated README describes the registry that was actually created. Evidence:
@@ -810,7 +810,7 @@ B-090/QA-016 is now **fixed and awaiting manual retest** (D-186). Maintainer scr
 Initialize Registry: a form (46a) collecting the registry ID, display name, an optional
 usage-reporting destination and the one opt-in local commit, and a review (46b) that names all five
 stages and states that nothing will be pushed or merged. One confirmation runs init → lock → build →
-validate → audit fail-fast through `agent_artifacts/io/registry_bootstrap.py`, which is the ordering
+validate → audit fail-fast through `aart_cli/io/registry_bootstrap.py`, which is the ordering
 and nothing else: the three writing stages go through the same `LocalCurationService` prepare/
 finalize pair the CLI drives and the two gates are the same planning functions. The commit is part
 of the review digest, so the two commit choices are two plans, and a test records every `git` call
@@ -871,7 +871,7 @@ not become a write on that result screen: `a` enters the existing 46e transactio
 must confirm its digest. A production-composition E2E performs the full real-Git 2.1.0 → 2.2.0
 sequence without rewriting 2.1.0.
 
-D-192 closes B-095 with the CLI projection. `aart registry adopt` and `aart registry check-upstream`
+D-192 closes B-095 with the CLI projection. `aart-cli registry adopt` and `aart-cli registry check-upstream`
 call the same application functions the TUI does, name their phase in the payload, write only under
 `--yes`, verify `--expect` whenever it is given, and sort the machine-readable listing so it does not
 reorder itself between runs. Eight CLI tests over the real public entry point, a real Git repository

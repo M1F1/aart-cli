@@ -4,12 +4,12 @@ import posixpath
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.configuration.model import OrganizationPolicy, SourceKind
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.installation.application import InstallReadPorts, prepare_install
-from agent_artifacts.installation.model import (
+from aart_cli.configuration.model import OrganizationPolicy, SourceKind
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.installation.application import InstallReadPorts, prepare_install
+from aart_cli.installation.model import (
     CopyTreeOperation,
     InstallLocation,
     InstallRequest,
@@ -17,11 +17,11 @@ from agent_artifacts.installation.model import (
     PathSnapshot,
     WriteFileOperation,
 )
-from agent_artifacts.marketplace.catalog import build_marketplace
-from agent_artifacts.profiles.builtin import builtin
-from agent_artifacts.protocol.hashing import file_entry, json_digest, tree_digest
-from agent_artifacts.protocol.json import canonical_json_bytes
-from agent_artifacts.protocol.native_models import (
+from aart_cli.marketplace.catalog import build_marketplace
+from aart_cli.profiles.builtin import builtin
+from aart_cli.protocol.hashing import file_entry, json_digest, tree_digest
+from aart_cli.protocol.json import canonical_json_bytes
+from aart_cli.protocol.native_models import (
     PAYLOAD_FORMAT_BY_TYPE,
     ArtifactManifest,
     CompatibilitySpec,
@@ -31,16 +31,16 @@ from agent_artifacts.protocol.native_models import (
     PayloadSpec,
     Provenance,
 )
-from agent_artifacts.protocol.native_schema import (
+from aart_cli.protocol.native_schema import (
     artifact_manifest_to_json,
     parse_artifact_manifest,
     provenance_to_json,
 )
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.sources.model import HealthStatus
-from agent_artifacts.store.model import StoredObject, make_object_candidate, object_store_paths
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.semver import SemVer
+from aart_cli.sources.model import HealthStatus
+from aart_cli.store.model import StoredObject, make_object_candidate, object_store_paths
 from tests.marketplace_fixtures import (
     artifact,
     configured_source,

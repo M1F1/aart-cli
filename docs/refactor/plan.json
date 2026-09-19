@@ -818,27 +818,27 @@
         },
         {
           "id": "8",
-          "title": "`aart author init` emits a full-surface `aart.yaml` for `mcp`",
+          "title": "`aart-cli author init` emits a full-surface `aart.yaml` for `mcp`",
           "status": "done"
         },
         {
           "id": "9",
-          "title": "`aart author init` emits the same for `skill`",
+          "title": "`aart-cli author init` emits the same for `skill`",
           "status": "done"
         },
         {
           "id": "10",
-          "title": "`aart author check` proves every discovered manifest parses",
+          "title": "`aart-cli author check` proves every discovered manifest parses",
           "status": "done"
         },
         {
           "id": "11",
-          "title": "`aart author check` proves each manifest would be accepted by `scan`",
+          "title": "`aart-cli author check` proves each manifest would be accepted by `scan`",
           "status": "done"
         },
         {
           "id": "12",
-          "title": "`aart author init` covers `guideline`, `hook` and `memory`",
+          "title": "`aart-cli author init` covers `guideline`, `hook` and `memory`",
           "status": "done"
         },
         {
@@ -874,7 +874,7 @@
         {
           "id": "18a",
           "title": "Use aart-cli everywhere in active interfaces and one portable ~/.aart-cli home; define harness-owned installation paths",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "19",

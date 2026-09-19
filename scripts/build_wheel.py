@@ -14,7 +14,7 @@ are eight callers who would each have to hold them instead:
     commit. The version is pinned in `[build-system]` and checked here, so that upgrade fails a
     build instead of silently invalidating a published digest.
   * **Poetry ships whatever is in the package directory.** The allowlist below is a gate: a stray
-    file dropped under `agent_artifacts/` fails the build rather than shipping inside it.
+    file dropped under `aart_cli/` fails the build rather than shipping inside it.
 
 The archive is byte-reproducible: see docs/release/wheel-reproducibility-v1.md
 for what that now means and how to verify a published wheel.
@@ -80,7 +80,7 @@ def pinned_backend() -> str:
 
 def _allowed_package_member(arcname: str) -> bool:
     parts = tuple(Path(arcname).parts)
-    if len(parts) < 2 or parts[0] != "agent_artifacts":
+    if len(parts) < 2 or parts[0] != "aart_cli":
         return False
     if arcname.endswith(".py"):
         return True
@@ -96,7 +96,7 @@ def collect_package_files() -> dict[str, bytes]:
     """
 
     files: dict[str, bytes] = {}
-    for path in sorted((ROOT / "agent_artifacts").rglob("*")):
+    for path in sorted((ROOT / "aart_cli").rglob("*")):
         arc = str(path.relative_to(ROOT)).replace(os.sep, "/")
         if path.is_symlink():
             raise ValueError(f"wheel resource allowlist rejects: {arc}")

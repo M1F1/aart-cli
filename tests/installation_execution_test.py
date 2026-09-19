@@ -18,24 +18,24 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.application.installation_proposal import intended_receipt
-from agent_artifacts.domain.credentials import CredentialProviderRef
-from agent_artifacts.domain.effects import ConfigureHarness, WriteFile
-from agent_artifacts.domain.inputs import (
+from aart_cli.application.installation_proposal import intended_receipt
+from aart_cli.domain.credentials import CredentialProviderRef
+from aart_cli.domain.effects import ConfigureHarness, WriteFile
+from aart_cli.domain.inputs import (
     ConfigInput,
     EnvironmentBinding,
     PersistedConfigValue,
     SecretProviderReference,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.execution import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.execution import (
     CredentialEffectInterpreter,
     FileEffectInterpreter,
     HarnessEffectInterpreter,
     RuntimeEffectInterpreter,
 )
-from agent_artifacts.io.harness import LocalHarnessRegistry
-from agent_artifacts.io.installation_execution import (
+from aart_cli.io.harness import LocalHarnessRegistry
+from aart_cli.io.installation_execution import (
     INTERPRETERS_UNAVAILABLE,
     interpreters_for,
 )
@@ -46,7 +46,7 @@ SECOND_ROOT = "/home/agent/.agent-artifacts/runtimes/public/mcp/gitlab"
 
 
 def _dispatch(effect, interpreters):
-    from agent_artifacts.application.execution import _dispatch as dispatch
+    from aart_cli.application.execution import _dispatch as dispatch
 
     return dispatch(effect, tuple(interpreters))
 

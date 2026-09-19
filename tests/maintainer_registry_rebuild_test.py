@@ -21,7 +21,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -31,18 +31,18 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerSession, ConsumerSettings
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.consumer_views import ConsumerSession, ConsumerSettings
+from aart_cli.application.maintainer_views import (
     MaintainerScreen,
     maintainer_navigation_targets,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.registry_bootstrap import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.registry_bootstrap import (
     REGISTRY_MAINTENANCE_STAGES,
     bootstrap_registry_workspace,
     refresh_registry_workspace,
 )
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
+from aart_cli.tui_consumer import CanonicalScreenSource, frame
 from tests.consumer_shell_test import screens
 
 _PICKER_ROWS = ("all", "lock", "build", "validate", "audit")
@@ -108,7 +108,7 @@ class MaintainerRegistryRebuildInteractionTest(unittest.TestCase):
     def test_absent_registry_guidance_names_the_current_project_not_an_internal_screen(
         self,
     ) -> None:
-        from agent_artifacts.io.registry_bootstrap import registry_absent_refusal
+        from aart_cli.io.registry_bootstrap import registry_absent_refusal
 
         with tempfile.TemporaryDirectory() as root:
             refused = registry_absent_refusal(root)
@@ -261,9 +261,9 @@ class RegistryRefreshTest(unittest.TestCase):
                 self.assertIsInstance(refused, Err, stages)
 
     def test_a_failing_gate_stops_the_run_and_says_which_one(self) -> None:
-        from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-        from agent_artifacts.io import registry_bootstrap
-        from agent_artifacts.registry_commands.model import (
+        from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+        from aart_cli.io import registry_bootstrap
+        from aart_cli.registry_commands.model import (
             RegistryQualityCheck,
             RegistryQualityReport,
         )
@@ -302,7 +302,7 @@ class MaintainerRegistryRebuildActionTest(unittest.TestCase):
     """The action boundary: reviewed by name, run once, and drawn as stages afterwards."""
 
     def _composed(self, env):
-        from agent_artifacts import tui
+        from aart_cli import tui
 
         composed = tui._canonical_consumer_actions(
             project=str(env.project), user_home=str(env.home), today=tui.date.today()
@@ -407,8 +407,8 @@ class MaintainerRegistryRebuildShellTest(unittest.TestCase):
         import os as _os
         from unittest import mock as _mock
 
-        from agent_artifacts import tui
-        from agent_artifacts.tui_consumer import run_consumer_shell
+        from aart_cli import tui
+        from aart_cli.tui_consumer import run_consumer_shell
         from tests.configured_install_command_e2e_test import _environment
         from tests.consumer_shell_test import ENTER, FakeTerminal
 

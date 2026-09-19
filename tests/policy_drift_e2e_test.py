@@ -6,7 +6,7 @@ remediation decision rather than a silent mutation of installed state. 165.23 sa
 installations are clearly marked and that their nature keeps being surfaced afterwards.
 
 Both are answered by the same fact about one installation, which is why they are measured together:
-what a machine's policy says about the trust an artifact is installed at. `aart marketplace install`
+what a machine's policy says about the trust an artifact is installed at. `aart-cli marketplace install`
 already refuses a user-scope install below `minimum_trust_for_user_scope`; the question this file
 asks is what happens to the one that got in before the rule existed, and whether anyone is ever told
 that its source was a mutable local directory rather than a reviewed registry.
@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts.configuration.paths import PathOverrides, resolve_config_paths
+from aart_cli.configuration.paths import PathOverrides, resolve_config_paths
 from tests.marketplace_lifecycle_e2e_test import _COORDINATE
 from tests.source_sync_command_e2e_test import (
     _environment_over_a_writable_source,
@@ -61,8 +61,8 @@ def _machine_policy(path: Path):
         return real(platform, **kwargs)
 
     with (
-        mock.patch("agent_artifacts.commands._configured_runtime.resolve_config_paths", patched),
-        mock.patch("agent_artifacts.consumer.runtime.resolve_config_paths", patched),
+        mock.patch("aart_cli.commands._configured_runtime.resolve_config_paths", patched),
+        mock.patch("aart_cli.consumer.runtime.resolve_config_paths", patched),
     ):
         yield
 

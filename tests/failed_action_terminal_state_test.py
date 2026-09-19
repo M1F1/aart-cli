@@ -18,7 +18,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
@@ -27,13 +27,13 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
 )
-from agent_artifacts.application.maintainer_views import MaintainerScreen
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
+from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.tui_consumer import CanonicalScreenSource, frame
 from tests.consumer_shell_test import screens
 
 #: One confirmed action per review screen that owns one, with the screen its run belongs to.
@@ -222,10 +222,10 @@ class FailedActionShellTest(unittest.TestCase):
         import os
         from unittest import mock
 
-        from agent_artifacts import tui
-        from agent_artifacts.domain.result import Ok
-        from agent_artifacts.io.registry_bootstrap import bootstrap_registry_workspace
-        from agent_artifacts.tui_consumer import run_consumer_shell
+        from aart_cli import tui
+        from aart_cli.domain.result import Ok
+        from aart_cli.io.registry_bootstrap import bootstrap_registry_workspace
+        from aart_cli.tui_consumer import run_consumer_shell
         from tests.configured_install_command_e2e_test import _environment
         from tests.consumer_shell_test import ENTER, FakeTerminal
         from tests.maintainer_registry_rebuild_test import _repository

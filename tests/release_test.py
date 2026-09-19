@@ -39,7 +39,7 @@ def _fixture_root(raw: str, release, *, version: str = FIXTURE_VERSION) -> Path:
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
-    package = root / "agent_artifacts"
+    package = root / "aart_cli"
     package.mkdir(exist_ok=True)
     (package / "__init__.py").write_text(f'__version__ = "{version}"\n', encoding="utf-8")
     (root / "pyproject.toml").write_text(
@@ -145,7 +145,7 @@ class TheDeclaredSchemaInputsExistTest(unittest.TestCase):
         release = _load_script("release")
 
         self.assertTrue(release.SCHEMA_INPUTS)
-        self.assertFalse((ROOT / "agent_artifacts" / "no_such_schema.py").is_file())
+        self.assertFalse((ROOT / "aart_cli" / "no_such_schema.py").is_file())
 
 
 class ReleaseChecklistTest(unittest.TestCase):
@@ -198,7 +198,7 @@ class ReleaseChecklistTest(unittest.TestCase):
             root = _fixture_root(raw, release)
             registry = root / "reference-registry"
             registry.mkdir()
-            (root / "agent_artifacts/__init__.py").write_text("# no version\n", encoding="utf-8")
+            (root / "aart_cli/__init__.py").write_text("# no version\n", encoding="utf-8")
             (root / release.REQUIRED_RELEASE_DOCS[0]).unlink()
             schema = root / release.SCHEMA_INPUTS[0]
             schema.write_bytes(schema.read_bytes() + b"\n# changed after freeze\n")
@@ -687,7 +687,7 @@ class WheelDigestArtifactTest(unittest.TestCase):
         inject = _load_script("inject_commit")
 
         with zipfile.ZipFile(self._written_wheel()) as archive:
-            stamp = archive.read("agent_artifacts/_commit.py").decode("utf-8")
+            stamp = archive.read("aart_cli/_commit.py").decode("utf-8")
 
         # The tracked source says `unknown`; `build_wheel.py` run in the checkout packages that.
         self.assertIn(f'COMMIT = "{inject.current_commit()}"', stamp)

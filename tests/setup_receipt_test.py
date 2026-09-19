@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import json
 
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.install_state.schema import parse_install_state
-from agent_artifacts.setup_receipt import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.install_state.schema import parse_install_state
+from aart_cli.setup_receipt import (
     RECEIPT_INVALID,
     RECEIPT_MISSING,
     RECEIPT_NO_SETUP,

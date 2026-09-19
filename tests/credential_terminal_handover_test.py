@@ -6,23 +6,23 @@ import contextlib
 import sys
 import unittest
 
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialProviderRef,
     CredentialReference,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.effects import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.effects import (
     DeleteCredential,
     ReplaceCredential,
     StoreCredential,
     VerifyCredential,
 )
-from agent_artifacts.domain.identifiers import InputId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.execution import CredentialEffectInterpreter
+from aart_cli.domain.identifiers import InputId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.execution import CredentialEffectInterpreter
 
 
 def _reference(name: str) -> CredentialReference:
@@ -159,7 +159,7 @@ class CursesHandoverTest(unittest.TestCase):
     """The curses half: what the adapter actually does to the terminal while it is lent out."""
 
     def setUp(self) -> None:
-        from agent_artifacts import tui
+        from aart_cli import tui
 
         self.tui = tui
         self.calls: list[str] = []
@@ -241,11 +241,11 @@ class HandoverReachesTheInterpreterTest(unittest.TestCase):
     def test_every_hop_from_the_composed_actions_to_the_interpreter_carries_it(self) -> None:
         import inspect
 
-        from agent_artifacts.io.configured_installation_action import (
+        from aart_cli.io.configured_installation_action import (
             complete_configured_installation,
         )
-        from agent_artifacts.io.consumer_actions import LocalConsumerActions
-        from agent_artifacts.io.installation_execution import interpreters_for
+        from aart_cli.io.consumer_actions import LocalConsumerActions
+        from aart_cli.io.installation_execution import interpreters_for
 
         for function, parameter in (
             (LocalConsumerActions.__init__, "terminal_handover"),
@@ -267,8 +267,8 @@ class HandoverReachesTheInterpreterTest(unittest.TestCase):
         import types
         from datetime import datetime, timezone
 
-        import agent_artifacts.io.consumer_actions as actions_module
-        from agent_artifacts.io.consumer_actions import LocalConsumerActions
+        import aart_cli.io.consumer_actions as actions_module
+        from aart_cli.io.consumer_actions import LocalConsumerActions
 
         recorded: dict = {}
 

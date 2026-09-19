@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.sources import SourceStatusRequest, source_status
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.sources.model import (
+from aart_cli.application.sources import SourceStatusRequest, source_status
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.sources.model import (
     CurrentSourceRequest,
     HealthStatus,
     SourceInstanceId,

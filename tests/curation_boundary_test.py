@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PURE_ROOT = ROOT / "agent_artifacts" / "curation" / "model.py"
-RUNTIME = ROOT / "agent_artifacts" / "curation" / "runtime.py"
+PURE_ROOT = ROOT / "aart_cli" / "curation" / "model.py"
+RUNTIME = ROOT / "aart_cli" / "curation" / "runtime.py"
 
 
 class CurationBoundaryTest(unittest.TestCase):

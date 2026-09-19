@@ -17,12 +17,12 @@ possible when organization policy permits them.
 Maintainers work in an explicit writable registry checkout. Before a PR they run:
 
 ```shell
-aart registry format --source . --check
-aart registry validate --source . --strict --frozen
-aart registry lock --source . --check
-aart registry build --source . --check
-aart registry audit --source .
-aart registry test --source . --compatibility all --latest-version 1.0.0
+aart-cli registry format --source . --check
+aart-cli registry validate --source . --strict --frozen
+aart-cli registry lock --source . --check
+aart-cli registry build --source . --check
+aart-cli registry audit --source .
+aart-cli registry test --source . --compatibility all --latest-version 1.0.0
 ```
 
 Native references pin upstream commit/digests without copying payload; consumers resolve those

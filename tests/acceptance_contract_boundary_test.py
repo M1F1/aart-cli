@@ -16,13 +16,13 @@ TESTS = ROOT / "tests"
 #   credential halves of one report. The command prints them together, so a test going through the
 #   command can only assert on merged output; these two claims are about each half separately.
 KNOWN_PRIVATE_REACH = {
-    "artifact_installation_e2e_test.py": ("agent_artifacts.tui_consumer._reload",),
-    "consumer_session_e2e_test.py": ("agent_artifacts.tui_consumer._reload",),
+    "artifact_installation_e2e_test.py": ("aart_cli.tui_consumer._reload",),
+    "consumer_session_e2e_test.py": ("aart_cli.tui_consumer._reload",),
     "doctor_configuration_credentials_e2e_test.py": (
-        "agent_artifacts.commands.doctor._configuration_data",
-        "agent_artifacts.commands.doctor._configuration_lines",
-        "agent_artifacts.commands.doctor._credential_data",
-        "agent_artifacts.commands.doctor._credential_lines",
+        "aart_cli.commands.doctor._configuration_data",
+        "aart_cli.commands.doctor._configuration_lines",
+        "aart_cli.commands.doctor._credential_data",
+        "aart_cli.commands.doctor._credential_lines",
     ),
 }
 
@@ -31,11 +31,7 @@ def _private_reach(path: Path) -> tuple[str, ...]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     found: set[str] = set()
     for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.ImportFrom)
-            and node.module
-            and node.module.startswith("agent_artifacts")
-        ):
+        if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("aart_cli"):
             found.update(
                 f"{node.module}.{alias.name}" for alias in node.names if alias.name.startswith("_")
             )
@@ -43,7 +39,7 @@ def _private_reach(path: Path) -> tuple[str, ...]:
             found.update(
                 alias.name
                 for alias in node.names
-                if alias.name.startswith("agent_artifacts") and "._" in alias.name
+                if alias.name.startswith("aart_cli") and "._" in alias.name
             )
     return tuple(sorted(found))
 
@@ -77,7 +73,7 @@ class AcceptanceDependsOnPublicContractsTest(unittest.TestCase):
         self.assertTrue(KNOWN_PRIVATE_REACH)
         self.assertEqual(
             _private_reach(TESTS / "consumer_session_e2e_test.py"),
-            ("agent_artifacts.tui_consumer._reload",),
+            ("aart_cli.tui_consumer._reload",),
         )
 
 

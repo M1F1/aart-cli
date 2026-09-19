@@ -9,13 +9,13 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.compiler import CollectionCoordinate, MarketplaceCollection
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.consumer.coordinates import parse_artifact_selectors
-from agent_artifacts.consumer.resolution import resolve_selectors
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.marketplace.catalog import build_marketplace
-from agent_artifacts.protocol.native_models import ArtifactSelector, CollectionManifest
+from aart_cli.compiler import CollectionCoordinate, MarketplaceCollection
+from aart_cli.configuration.model import SourceKind
+from aart_cli.consumer.coordinates import parse_artifact_selectors
+from aart_cli.consumer.resolution import resolve_selectors
+from aart_cli.domain.result import Err, Ok
+from aart_cli.marketplace.catalog import build_marketplace
+from aart_cli.protocol.native_models import ArtifactSelector, CollectionManifest
 from tests.marketplace_fixtures import (
     artifact,
     configured_source,

@@ -3,24 +3,24 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.identifiers import ArtifactCoordinate, ArtifactIdentity
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.lifecycle import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity
+from aart_cli.domain.result import Ok
+from aart_cli.lifecycle import (
     LifecycleItem,
     LifecycleKey,
     LifecycleStatus,
 )
-from agent_artifacts.marketplace.catalog import build_marketplace
-from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.protocol.native_models import InstallSpec
-from agent_artifacts.protocol.paths import SafeRelativePath
-from agent_artifacts.protocol.registry_models import IndexSetup, ReviewRecord
-from agent_artifacts.protocol.semver import SemVer, VersionBounds
-from agent_artifacts.runtime_contract import EXECUTABLE_VERSION
-from agent_artifacts.security.aggregation import ArtifactSecurityEvidence
-from agent_artifacts.security.attestations import AttestationTrust
-from agent_artifacts.security.model import (
+from aart_cli.marketplace.catalog import build_marketplace
+from aart_cli.protocol.capabilities import Capability
+from aart_cli.protocol.native_models import InstallSpec
+from aart_cli.protocol.paths import SafeRelativePath
+from aart_cli.protocol.registry_models import IndexSetup, ReviewRecord
+from aart_cli.protocol.semver import SemVer, VersionBounds
+from aart_cli.runtime_contract import EXECUTABLE_VERSION
+from aart_cli.security.aggregation import ArtifactSecurityEvidence
+from aart_cli.security.attestations import AttestationTrust
+from aart_cli.security.model import (
     AssessmentCoverage,
     AssessmentStatus,
     FindingSeverity,
@@ -28,8 +28,8 @@ from agent_artifacts.security.model import (
     SecurityAssessment,
     risk_from_evidence,
 )
-from agent_artifacts.tui_layout import CONTENT_MEASURE, READABLE_MEASURE, columns
-from agent_artifacts.tui_marketplace import (
+from aart_cli.tui_layout import CONTENT_MEASURE, READABLE_MEASURE, columns
+from aart_cli.tui_marketplace import (
     MarketplaceFilters,
     MarketplaceTarget,
     artifact_cells,
@@ -178,7 +178,7 @@ class TuiMarketplaceTest(unittest.TestCase):
         pane = _flat(render_artifact_pane(rows[0], width=100))
         self.assertIn("unavailable", pane)
         self.assertIn(f"requires AART >={EXECUTABLE_VERSION.major + 1}.0.0", pane)
-        self.assertEqual(rows[0].reasons[0].code, "aart-version-unsupported")
+        self.assertEqual(rows[0].reasons[0].code, "aart-cli-version-unsupported")
         self.assertIn(
             f"requires AART >={EXECUTABLE_VERSION.major + 1}.0.0", rows[0].reasons[0].message
         )
@@ -509,7 +509,7 @@ class ArtifactProjectionTest(unittest.TestCase):
 
     def test_the_flattened_row_renderer_is_gone(self) -> None:
         # Every caller uses these projections, so no one-line dump exists to be reached for.
-        import agent_artifacts.tui_marketplace as module
+        import aart_cli.tui_marketplace as module
 
         self.assertFalse(hasattr(module, "render_marketplace_row"))
         self.assertNotIn("render_marketplace_row", module.__all__)

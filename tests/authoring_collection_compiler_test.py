@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot, compile_author_source
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import compile_author_snapshot, compile_author_source
+from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
 from tests.authoring_compiler_test import _file, _json_manifest
 
 

@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "agent_artifacts"
+PACKAGE = ROOT / "aart_cli"
 
 # The terminal driver is the one module allowed to be a terminal.  It exists to start curses, fall
 # back to text when curses is not there, and hand the failure back as a typed record; every screen
@@ -41,7 +41,7 @@ FORBIDDEN = frozenset(
 # store (D-051); a redraw that re-read the disk would make the frame rate a filesystem property.
 # Anything else appearing here is a screen that has started doing I/O behind a draw.
 DECLARED_EFFECT_SEAMS = {
-    ("tui_consumer.py", "read_consumer_offers"): "agent_artifacts.io.configured_offers",
+    ("tui_consumer.py", "read_consumer_offers"): "aart_cli.io.configured_offers",
 }
 
 
@@ -74,7 +74,7 @@ def _violations(path: Path, denied: frozenset[str] = FORBIDDEN) -> list[str]:
 
 
 def _effect_reaches(path: Path) -> dict[tuple[str, str], str]:
-    """Every `agent_artifacts.io` import in the file, keyed by the function that performs it.
+    """Every `aart_cli.io` import in the file, keyed by the function that performs it.
 
     A module-level reach is keyed by `<module>` so it can never collide with, and never be excused
     by, a function-scoped one that happens to be declared.
@@ -86,15 +86,13 @@ def _effect_reaches(path: Path) -> dict[tuple[str, str], str]:
         if isinstance(node, ast.ImportFrom) and node.module is not None:
             return node.module
         if isinstance(node, ast.Import):
-            return next(
-                (a.name for a in node.names if a.name.startswith("agent_artifacts.io")), None
-            )
+            return next((a.name for a in node.names if a.name.startswith("aart_cli.io")), None)
         return None
 
     def descend(node: ast.AST, where: str) -> None:
         for child in ast.iter_child_nodes(node):
             module = imported(child)
-            if module and module.startswith("agent_artifacts.io"):
+            if module and module.startswith("aart_cli.io"):
                 found[(path.name, where)] = module
             if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
                 descend(child, child.name)
@@ -224,7 +222,7 @@ class TheFrontendIsHeadlesslyTestableTest(unittest.TestCase):
             # module were not installed, which is the condition CI and a piped run both meet.
             sys.modules["curses"] = None  # type: ignore[assignment]
             for path in _screen_modules():
-                name = f"agent_artifacts.{path.stem}"
+                name = f"aart_cli.{path.stem}"
                 with self.subTest(module=name):
                     sys.modules.pop(name, None)
                     self.assertTrue(importlib.import_module(name))

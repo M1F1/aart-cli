@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.json import JsonArray, JsonObject
-from agent_artifacts.protocol.yaml import parse_yaml
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.json import JsonArray, JsonObject
+from aart_cli.protocol.yaml import parse_yaml
 
 
 class ProtocolYamlTest(unittest.TestCase):

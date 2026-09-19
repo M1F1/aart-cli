@@ -1,7 +1,7 @@
 """The difference between the harnesses somebody named and the harnesses this machine happens to
 have.
 
-`aart marketplace install` never guesses: it refuses without `--profile`, so every profile it
+`aart-cli marketplace install` never guesses: it refuses without `--profile`, so every profile it
 places into was typed by the operator, and a profile that cannot be placed is a refusal -- they
 asked for something that will not work.
 
@@ -24,16 +24,16 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
-from agent_artifacts.domain.harness import Scope, measured_harnesses
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.artifact_placement import PLACEMENT_UNAVAILABLE, placement_for
-from agent_artifacts.io.object_store import publish_object
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.sources.local import read_local_snapshot
-from agent_artifacts.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
-from agent_artifacts.store.model import (
+from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.domain.harness import Scope, measured_harnesses
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.artifact_placement import PLACEMENT_UNAVAILABLE, placement_for
+from aart_cli.io.object_store import publish_object
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.sources.local import read_local_snapshot
+from aart_cli.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
+from aart_cli.store.model import (
     ObjectPublishCommand,
     make_object_candidate,
     object_store_paths,
@@ -126,8 +126,8 @@ class ShellHostTest(unittest.TestCase):
     """What the persistent shell says about the profiles it installs into."""
 
     def _host(self):
-        from agent_artifacts.configuration.paths import Platform, resolve_config_paths
-        from agent_artifacts.tui import (
+        from aart_cli.configuration.paths import Platform, resolve_config_paths
+        from aart_cli.tui import (
             _canonical_installation_host,
             _canonical_marketplace_target,
         )
@@ -141,7 +141,7 @@ class ShellHostTest(unittest.TestCase):
         self.assertEqual(tuple(sorted(measured_harnesses())), self._host().profiles)
 
     def test_and_says_that_nobody_asked_for_them(self) -> None:
-        """`aart marketplace install` refuses without `--profile`; the shell names none, so a
+        """`aart-cli marketplace install` refuses without `--profile`; the shell names none, so a
         measured harness that cannot host one artifact must not refuse the whole install."""
 
         self.assertFalse(self._host().profiles_requested)

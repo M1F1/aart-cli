@@ -29,18 +29,18 @@ _DECLARED_VERSION_RE = re.compile(r'(?m)^__version__\s*=\s*"([^"]+)"')
 SCHEMA_FREEZE_PATH = "docs/release/schema-freeze.json"
 GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 SCHEMA_INPUTS = (
-    "agent_artifacts/configuration/schema.py",
-    "agent_artifacts/domain/outcomes.py",
-    "agent_artifacts/install_state/schema.py",
-    "agent_artifacts/protocol/capabilities.py",
-    "agent_artifacts/protocol/native_models.py",
-    "agent_artifacts/protocol/native_schema.py",
-    "agent_artifacts/protocol/registry_models.py",
-    "agent_artifacts/protocol/registry_schema.py",
-    "agent_artifacts/security/analyzers.py",
-    "agent_artifacts/security/attestation_schema.py",
-    "agent_artifacts/security/schema.py",
-    "agent_artifacts/setup.py",
+    "aart_cli/configuration/schema.py",
+    "aart_cli/domain/outcomes.py",
+    "aart_cli/install_state/schema.py",
+    "aart_cli/protocol/capabilities.py",
+    "aart_cli/protocol/native_models.py",
+    "aart_cli/protocol/native_schema.py",
+    "aart_cli/protocol/registry_models.py",
+    "aart_cli/protocol/registry_schema.py",
+    "aart_cli/security/analyzers.py",
+    "aart_cli/security/attestation_schema.py",
+    "aart_cli/security/schema.py",
+    "aart_cli/setup.py",
     "docs/protocol/native-source-v1.md",
     "docs/protocol/registry-v1.md",
 )
@@ -110,10 +110,10 @@ def declared_version(root: Path = ROOT) -> str:
     not a thing a human can cause and not a thing a checklist has to police.
     """
 
-    text = (root / "agent_artifacts" / "__init__.py").read_text(encoding="utf-8")
+    text = (root / "aart_cli" / "__init__.py").read_text(encoding="utf-8")
     match = _DECLARED_VERSION_RE.search(text)
     if match is None:
-        raise ValueError("agent_artifacts/__init__.py declares no __version__")
+        raise ValueError("aart_cli/__init__.py declares no __version__")
     return match.group(1)
 
 
@@ -175,7 +175,7 @@ def wheel_digest(root: Path = ROOT, *, output_dir: Path | None = None) -> tuple[
         packaging._copy_project(root, source_copy)
         # The copy has no ``.git``, so the stamp is taken from the real checkout and written in —
         # otherwise this would hash a wheel no release ever publishes.
-        (source_copy / "agent_artifacts" / "_commit.py").write_text(
+        (source_copy / "aart_cli" / "_commit.py").write_text(
             inject.render(inject.current_commit(), inject.current_commit_epoch()),
             encoding="utf-8",
         )
@@ -545,7 +545,7 @@ def _registry_diagnostics(
             False,
         )
     diagnostics: list[ReleaseDiagnostic] = []
-    base = (PYTHON, "-m", "agent_artifacts", "registry")
+    base = (PYTHON, "-m", "aart_cli", "registry")
     source = ("--source", str(registry), "--json")
     commands = (
         ("registry-format", "registry-format-stale", (*base, "format", *source, "--check")),

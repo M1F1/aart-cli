@@ -5,17 +5,17 @@ from __future__ import annotations
 import unittest
 from dataclasses import FrozenInstanceError
 
-from agent_artifacts.configuration.model import (
+from aart_cli.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
     SourceKind,
     UserConfiguration,
     default_user_configuration,
 )
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_sources import build_source_stage, plan_source_management
-from agent_artifacts.wizard import (
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Ok
+from aart_cli.tui_sources import build_source_stage, plan_source_management
+from aart_cli.wizard import (
     BasketItem,
     WizardPosition,
     advance,

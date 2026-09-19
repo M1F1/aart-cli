@@ -6,7 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts.consumer import (
+from aart_cli.consumer import (
     ConsumerActionRequest,
     ConsumerContext,
     finalize_consumer_action,
@@ -15,14 +15,14 @@ from agent_artifacts.consumer import (
     render_consumer_outcome,
     render_consumer_review,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.lifecycle import LocalLifecycleAdapter
-from agent_artifacts.marketplace.model import MarketplaceCatalog, MarketplaceItem
-from agent_artifacts.profiles.builtin import builtin
-from agent_artifacts.security.aggregation import ArtifactSecurityEvidence
-from agent_artifacts.security.attestations import AttestationTrust
-from agent_artifacts.security.baseline import not_scanned_assessment
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.lifecycle import LocalLifecycleAdapter
+from aart_cli.marketplace.model import MarketplaceCatalog, MarketplaceItem
+from aart_cli.profiles.builtin import builtin
+from aart_cli.security.aggregation import ArtifactSecurityEvidence
+from aart_cli.security.attestations import AttestationTrust
+from aart_cli.security.baseline import not_scanned_assessment
 from tests.canonical_setup_application_test import Fixture as SetupFixture
 from tests.canonical_symlink_test import _fixture
 
@@ -205,7 +205,7 @@ class ConsumerApplicationTest(unittest.TestCase):
             )
 
             with mock.patch(
-                "agent_artifacts.consumer.application.finalize_install",
+                "aart_cli.consumer.application.finalize_install",
                 return_value=failure,
             ):
                 outcome = finalize_consumer_action(

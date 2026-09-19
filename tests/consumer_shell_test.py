@@ -10,8 +10,8 @@ from __future__ import annotations
 import datetime as dt
 import unittest
 
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import (
     SETTING_ROWS,
     ActivityRecord,
     ConsumerScreen,
@@ -25,13 +25,13 @@ from agent_artifacts.application.consumer_views import (
     project_doctor,
     project_receipt_detail,
 )
-from agent_artifacts.tui_consumer import (
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     ConsumerScreens,
     frame,
     run_consumer_shell,
 )
-from agent_artifacts.tui_layout import SECTION_RULE
+from aart_cli.tui_layout import SECTION_RULE
 from tests.consumer_activity_test import lifecycle_outcome
 
 ESCAPE, ENTER, BACKSPACE, SLASH = 27, 10, 263, ord("/")
@@ -393,7 +393,7 @@ class ConsumerShellTest(unittest.TestCase):
 
 
 def _at(screen: ConsumerScreen) -> ConsumerUiState:
-    from agent_artifacts.application.consumer_ui import (
+    from aart_cli.application.consumer_ui import (
         ConsumerUiEvent,
         ConsumerUiEventKind,
         reduce_consumer_ui,

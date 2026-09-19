@@ -25,7 +25,7 @@ Poetry builds the wheel. `scripts/build_wheel.py` is the one place that invokes 
 - **Compression** is deflate; **create-system** is Unix, so a build on Windows cannot change the
   header.
 - **Contents** are checked against the resource allowlist twice: once over the source before
-  Poetry runs, and once over the archive Poetry produced. A stray file under `agent_artifacts/`
+  Poetry runs, and once over the archive Poetry produced. A stray file under `aart_cli/`
   fails the build instead of shipping inside it.
 
 Member order is Poetry's. It is stable, which is what byte-reproducibility needs.
@@ -81,4 +81,4 @@ The digest is read back from the file after it is written, so the first line des
 `--output <dir>` writes it somewhere else instead.
 
 `python scripts/build_wheel.py` alone builds a *different* file: the checkout carries no commit
-stamp, so `agent_artifacts/_commit.py` differs and the digest does not match the release.
+stamp, so `aart_cli/_commit.py` differs and the digest does not match the release.

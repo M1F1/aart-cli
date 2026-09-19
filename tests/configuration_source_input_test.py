@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
-from agent_artifacts.configuration.schema import (
+from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.configuration.schema import (
     configured_source_from_input,
     validate_configured_source,
 )
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
 from tests.credential_fixtures import credential_url
 
 

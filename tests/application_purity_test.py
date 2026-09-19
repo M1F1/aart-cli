@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-APPLICATION = ROOT / "agent_artifacts" / "application"
+APPLICATION = ROOT / "aart_cli" / "application"
 
 # The same set the four existing per-package boundary tests use, plus the network and database
 # modules a planner has no business reaching.  `urllib`/`http` matter because a plan that resolves
@@ -22,9 +22,9 @@ FORBIDDEN = frozenset(
         "subprocess",
         "tempfile",
         "urllib",
-        "agent_artifacts.cli",
-        "agent_artifacts.io",
-        "agent_artifacts.tui",
+        "aart_cli.cli",
+        "aart_cli.io",
+        "aart_cli.tui",
     }
 )
 
@@ -91,7 +91,7 @@ class ApplicationLayerIsPureTest(unittest.TestCase):
         self.assertGreater(len(modules), 20)
         self.assertTrue(FORBIDDEN)
         # The detector must actually detect: a module that really does import these exists.
-        self.assertTrue(_violations(ROOT / "agent_artifacts" / "io" / "execution.py"))
+        self.assertTrue(_violations(ROOT / "aart_cli" / "io" / "execution.py"))
 
 
 if __name__ == "__main__":

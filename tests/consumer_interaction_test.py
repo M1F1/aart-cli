@@ -10,7 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import unittest
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiCommandKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
@@ -18,13 +18,13 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ActivityRecord,
     ConsumerScreen,
     PresentationProfile,
     project_activity,
 )
-from agent_artifacts.tui_consumer import key_name, render_activity
+from aart_cli.tui_consumer import key_name, render_activity
 from tests.consumer_activity_test import lifecycle_outcome
 
 #: The codes a terminal delivers for the keys §161.1 makes global.

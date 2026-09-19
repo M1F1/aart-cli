@@ -62,7 +62,7 @@ the whole payload arrives, and for one it does not:
 configuration. Two consequences follow. A descriptor whose `command` or `args` names a path inside
 `payload/` names a file no consumer will have. And a document shaped like the harness file it is
 merged into — `{"mcpServers": {…}}` — has no `server` key, so it delivers an empty entry that starts
-nothing. Registry curation reports both (`aart registry vendor`, `aart registry audit`); the loader
+nothing. Registry curation reports both (`aart-cli registry vendor`, `aart-cli registry audit`); the loader
 accepts what it always accepted.
 
 ## Provenance and collections
@@ -71,7 +71,7 @@ Imported or curated content may include `provenance.json`. It binds the canonica
 credential-free Git URL, a lowercase 40-hex commit, input digest, importer ID/SemVer, options
 digest, and reviewable warnings. Secrets, moving refs, and absolute paths are invalid.
 
-A package produced by `aart registry vendor` is an ordinary package of its declared type that
+A package produced by `aart-cli registry vendor` is an ordinary package of its declared type that
 carries such a document, with importer ID `registry-vendor-v1`; the copied subtree is its
 `payload/`, and any wrapper the maintainer authored beside it — the `mcp.json` the type requires, a
 `SETUP.md`, a setup recipe — is part of the same package and is reviewed and assessed with it. No

@@ -84,8 +84,8 @@ class _WheelBuildFixture:
         self.tmp = pathlib.Path(tempfile.mkdtemp(prefix="wp21_wheel_"))
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         shutil.copytree(
-            REPO_ROOT / "agent_artifacts",
-            self.tmp / "agent_artifacts",
+            REPO_ROOT / "aart_cli",
+            self.tmp / "aart_cli",
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
         )
         shutil.copy2(REPO_ROOT / "pyproject.toml", self.tmp / "pyproject.toml")
@@ -118,10 +118,10 @@ class BuildWheelTest(_WheelBuildFixture, unittest.TestCase):
         for required in ("METADATA", "RECORD", "entry_points.txt", "WHEEL"):
             self.assertIn(f"{info}/{required}", names)
         # The package itself must be bundled.
-        self.assertIn("agent_artifacts/__init__.py", names)
-        self.assertIn("agent_artifacts/cli.py", names)
+        self.assertIn("aart_cli/__init__.py", names)
+        self.assertIn("aart_cli/cli.py", names)
 
-    def test_entry_points_list_both_scripts(self):
+    def test_the_one_entry_point_is_the_product_name(self):
         wheel = self._build()
         with zipfile.ZipFile(wheel) as z:
             info = next(n.split("/")[0] for n in z.namelist() if n.endswith(".dist-info/RECORD"))
@@ -132,10 +132,10 @@ class BuildWheelTest(_WheelBuildFixture, unittest.TestCase):
         parser = configparser.ConfigParser()
         parser.read_string(eps)
         scripts = dict(parser["console_scripts"])
-        self.assertEqual(
-            scripts,
-            {"agent-artifacts": "agent_artifacts.cli:main", "aart": "agent_artifacts.cli:main"},
-        )
+        # §169.1: one namespace. `agent-artifacts` and `aart` both installed the same callable
+        # and CP-26.18a deletes them rather than keeping either as an alias -- an old entry point
+        # left on the PATH is exactly the "compatibility alias" the section refuses.
+        self.assertEqual(scripts, {"aart-cli": "aart_cli.cli:main"})
 
     def test_wheel_contains_no_operational_registry_or_legacy_catalog(self):
         wheel = self._build()
@@ -153,7 +153,7 @@ class BuildWheelTest(_WheelBuildFixture, unittest.TestCase):
         self.assertFalse(any(name.startswith(root) for name in names for root in operational_roots))
 
     def test_builder_rejects_package_data_outside_the_distribution_allowlist(self):
-        forbidden = self.tmp / "agent_artifacts" / "artifacts" / "private.json"
+        forbidden = self.tmp / "aart_cli" / "artifacts" / "private.json"
         forbidden.parent.mkdir()
         forbidden.write_text("{" + secret_field("secret", "must-not-ship") + "}", encoding="utf-8")
 
@@ -163,7 +163,7 @@ class BuildWheelTest(_WheelBuildFixture, unittest.TestCase):
     def test_builder_rejects_symlinked_package_directories(self):
         outside = self.tmp / "outside"
         outside.mkdir()
-        linked = self.tmp / "agent_artifacts" / "templates"
+        linked = self.tmp / "aart_cli" / "templates"
         linked.symlink_to(outside, target_is_directory=True)
 
         with self.assertRaisesRegex(ValueError, "wheel resource allowlist"):
@@ -172,7 +172,7 @@ class BuildWheelTest(_WheelBuildFixture, unittest.TestCase):
     def test_packaging_gate_rejects_an_unrecorded_allowed_member(self):
         wheel = self._build()
         with zipfile.ZipFile(wheel, "a") as archive:
-            archive.writestr("agent_artifacts/unrecorded.py", b"value = 1\n")
+            archive.writestr("aart_cli/unrecorded.py", b"value = 1\n")
         packaging = _load_script("packaging_check")
 
         with self.assertRaisesRegex(ValueError, "RECORD does not list every member"):
@@ -209,7 +209,7 @@ class ReproducibleWheelTest(_WheelBuildFixture, unittest.TestCase):
     """
 
     def _stamp(self, epoch: int) -> None:
-        commit = self.tmp / "agent_artifacts" / "_commit.py"
+        commit = self.tmp / "aart_cli" / "_commit.py"
         commit.write_text(
             f'"""Stamp fixture."""\n\nCOMMIT = "{"a" * 40}"\nCOMMIT_EPOCH = {epoch}\n',
             encoding="utf-8",
@@ -415,10 +415,10 @@ class LentBuildBackendTest(unittest.TestCase):
             names = {entry.name for entry in lent.iterdir()}
             self.assertIn("poetry", names)
             # Only the backend travels.  Lending the whole environment would put the developer's
-            # own editable agent_artifacts on the path, and the install would look like it worked
+            # own editable aart_cli on the path, and the install would look like it worked
             # when nothing had been installed at all.
-            self.assertNotIn("agent_artifacts", names)
-            self.assertFalse([name for name in names if name.startswith("agent_artifacts")])
+            self.assertNotIn("aart_cli", names)
+            self.assertFalse([name for name in names if name.startswith("aart_cli")])
 
     def test_the_lent_backend_is_importable_by_another_interpreter(self) -> None:
         smoke = _load_script("distribution_smoke")

@@ -17,14 +17,14 @@ from __future__ import annotations
 from dataclasses import replace
 from unittest import TestCase
 
-from agent_artifacts.application.consumer_ui import ConsumerUiState, key_bindings, key_event
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_ui import ConsumerUiState, key_bindings, key_event
+from aart_cli.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     PresentationProfile,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer_views import (
     REGISTRY_WORKSPACE_READY_ROW,
     REGISTRY_WORKSPACE_ROW,
     MaintainerPublicationState,
@@ -35,8 +35,8 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_dashboard,
     project_registry_workspace,
 )
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
-from agent_artifacts.tui_maintainer import (
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
+from aart_cli.tui_maintainer import (
     maintainer_workspace_detail,
     maintainer_workspace_row,
 )

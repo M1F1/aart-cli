@@ -17,16 +17,16 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SourceSnapshot
-from agent_artifacts.protocol.registry_index import (
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import SnapshotEntry, SourceSnapshot
+from aart_cli.protocol.registry_index import (
     index_artifact_from_package,
     validate_registry_graph,
 )
-from agent_artifacts.protocol.registry_schema import parse_registry_manifest
-from agent_artifacts.protocol.semver import parse_semver
-from agent_artifacts.registry_maintenance.planning import registry_native_content
+from aart_cli.protocol.registry_schema import parse_registry_manifest
+from aart_cli.protocol.semver import parse_semver
+from aart_cli.registry_maintenance.planning import registry_native_content
 from tests.registry_index_test import _digest, _package
 from tests.registry_maintenance_fixtures import (
     append_snapshot_file,
@@ -157,8 +157,8 @@ class DependencyScopeRemediationTest(unittest.TestCase):
 
         joined = " ".join(self._remediation())
 
-        self.assertIn("aart registry scan", joined)
-        self.assertIn("aart registry promote", joined)
+        self.assertIn("aart-cli registry scan", joined)
+        self.assertIn("aart-cli registry promote", joined)
         self.assertIn("copy the upstream content into an artifact this registry owns", joined)
 
 

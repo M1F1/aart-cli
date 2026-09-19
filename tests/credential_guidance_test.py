@@ -36,50 +36,50 @@ from unittest import mock
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.candidate_validation import (
+from aart_cli.application.candidate_validation import (
     ValidationCheck,
     validate_candidate,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     PresentationProfile,
     project_required_inputs,
 )
-from agent_artifacts.application.credential_guidance import (
+from aart_cli.application.credential_guidance import (
     credential_guidance_lines,
     credential_prompt_briefing,
     gather_credential_guidance,
 )
-from agent_artifacts.application.installation_inputs import (
+from aart_cli.application.installation_inputs import (
     INPUT_DECLARATION_CONFLICT,
     InstallationInputUse,
     compose_installation_inputs,
 )
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.credentials import (
     CredentialProviderRef,
     CredentialReference,
     CredentialState,
 )
-from agent_artifacts.domain.effects import ReplaceCredential, StoreCredential
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.effects import ReplaceCredential, StoreCredential
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     InputId,
     SourceAlias,
 )
-from agent_artifacts.domain.inputs import (
+from aart_cli.domain.inputs import (
     BindingExposure,
     EnvironmentBinding,
     InputGuidance,
     ObtainFrom,
     SecretInput,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.consumer_actions import LocalConsumerActions
-from agent_artifacts.io.execution import CredentialEffectInterpreter
-from agent_artifacts.tui import _CursesHandover
-from agent_artifacts.tui_consumer import render_required_inputs
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.consumer_actions import LocalConsumerActions
+from aart_cli.io.execution import CredentialEffectInterpreter
+from aart_cli.tui import _CursesHandover
+from aart_cli.tui_consumer import render_required_inputs
 from tests.artifact_installation_e2e_test import MANIFEST, SERVER_SOURCE
 from tests.candidate_validation_test import _bundle
 from tests.configured_install_command_e2e_test import _environment
@@ -487,7 +487,7 @@ class ThePromptIsBriefedTest(unittest.TestCase):
         self.assertIn("Where to get it is not stated", "\n".join(briefing))
 
     def test_verifying_or_removing_briefs_nobody(self) -> None:
-        from agent_artifacts.domain.effects import DeleteCredential, VerifyCredential
+        from aart_cli.domain.effects import DeleteCredential, VerifyCredential
 
         interpreter = self._interpreter()
         interpreter.apply(VerifyCredential(str(_reference()), PROVIDER))
@@ -703,7 +703,7 @@ class SourceToPromptE2ETest(unittest.TestCase):
         self.assertIn("Service token — needed by company/mcp/beta@1.5.0", briefing)
 
     def test_no_frame_or_briefing_holds_anything_credential_shaped(self) -> None:
-        from agent_artifacts.redaction import contains_credential_shape
+        from aart_cli.redaction import contains_credential_shape
 
         terminal, journal, _ = _install(_authored("github", TOKEN_HELP))
 
@@ -719,7 +719,7 @@ class CommandLineGuidanceE2ETest(unittest.TestCase):
         with (
             _environment(authored=_authored("github", TOKEN_HELP)) as env,
             mock.patch(
-                "agent_artifacts.commands.marketplace.MacOsKeychainProvider",
+                "aart_cli.commands.marketplace.MacOsKeychainProvider",
                 lambda: _Resolving(journal),
             ),
         ):

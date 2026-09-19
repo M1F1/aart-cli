@@ -14,37 +14,37 @@ import pathlib
 import sys
 import unittest
 
-from agent_artifacts.application.consumer_session import (
+from aart_cli.application.consumer_session import (
     InstalledInspection,
     assemble_consumer_machine,
 )
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerScreen, navigation_targets
-from agent_artifacts.application.execution import execute_lifecycle
-from agent_artifacts.application.installed_state import (
+from aart_cli.application.consumer_views import ConsumerScreen, navigation_targets
+from aart_cli.application.execution import execute_lifecycle
+from aart_cli.application.installed_state import (
     current_state_from_observation,
     desired_state_from_receipt,
 )
-from agent_artifacts.application.intents import install_intent, plan_lifecycle_intent
-from agent_artifacts.application.receipt_recording import record_lifecycle_outcome
-from agent_artifacts.domain.credentials import (
+from aart_cli.application.intents import install_intent, plan_lifecycle_intent
+from aart_cli.application.receipt_recording import record_lifecycle_outcome
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.reconciliation import ComponentState
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
-from agent_artifacts.io.execution import LocalMutationLock
-from agent_artifacts.io.receipt_store import LocalReceiptStore
-from agent_artifacts.io.runtime_projection import observe_installation
-from agent_artifacts.tui_consumer import CanonicalScreenSource, _reload, frame, screens_from
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.reconciliation import ComponentState
+from aart_cli.domain.result import Ok
+from aart_cli.domain.selection import OwnershipKind, OwnershipReason
+from aart_cli.io.execution import LocalMutationLock
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.io.runtime_projection import observe_installation
+from aart_cli.tui_consumer import CanonicalScreenSource, _reload, frame, screens_from
 from tests.repair_e2e_test import COORDINATE, InstalledFixture
 
 TODAY = dt.date(2026, 8, 31)

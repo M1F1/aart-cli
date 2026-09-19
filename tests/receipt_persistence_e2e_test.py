@@ -16,27 +16,27 @@ import pathlib
 import sys
 import unittest
 
-from agent_artifacts.application.consumer_views import activity_from_receipts
-from agent_artifacts.application.execution import LifecycleExecutionStatus, execute_lifecycle
-from agent_artifacts.application.installed_state import (
+from aart_cli.application.consumer_views import activity_from_receipts
+from aart_cli.application.execution import LifecycleExecutionStatus, execute_lifecycle
+from aart_cli.application.installed_state import (
     current_state_from_observation,
     desired_state_from_receipt,
     removal_state_from_receipt,
 )
-from agent_artifacts.application.intents import (
+from aart_cli.application.intents import (
     install_intent,
     plan_lifecycle_intent,
     repair_intent,
     uninstall_intent,
 )
-from agent_artifacts.application.receipt_recording import record_lifecycle_outcome
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.reconciliation import Component, ComponentId, ComponentState
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
-from agent_artifacts.io.execution import LocalMutationLock
-from agent_artifacts.io.receipt_store import LocalReceiptStore
-from agent_artifacts.io.runtime_projection import observe_installation
+from aart_cli.application.receipt_recording import record_lifecycle_outcome
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.reconciliation import Component, ComponentId, ComponentState
+from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.selection import OwnershipKind, OwnershipReason
+from aart_cli.io.execution import LocalMutationLock
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.io.runtime_projection import observe_installation
 from tests.repair_e2e_test import COORDINATE, InstalledFixture
 
 TODAY = dt.date(2026, 8, 31)

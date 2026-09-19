@@ -13,7 +13,7 @@ script does, and then restores, so a tracked file is never left changed. Do not 
 quality gate is running: `scripts/quality.py` fails a run whose tracked files moved under it, and
 that is the guard working, not a false alarm.
 
-    python scripts/mutants.py --only agent_artifacts/setup_render.py \
+    python scripts/mutants.py --only aart_cli/setup_render.py \
         --tests tests/setup_render_test.py tests/verification_failure_e2e_test.py
 
 Survivors are findings to read, not a number to drive to zero. A survivor outside the claims the
@@ -35,7 +35,7 @@ CONFIG = ROOT / "setup.cfg"
 def _source_paths(only: list[str]) -> tuple[str, ...]:
     """Top-level trees mutmut must copy so every requested module is importable.
 
-    The original runner always copied ``agent_artifacts``.  That made a request for a repository
+    The original runner always copied ``aart_cli``.  That made a request for a repository
     script look scoped while generating zero mutants, then fail test collection because the
     script was absent from mutmut's working copy.  The requested files already name the required
     roots; derive the copy set from them instead of carrying a package-specific second scope.

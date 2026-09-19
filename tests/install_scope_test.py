@@ -12,10 +12,10 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.model import Request
-from agent_artifacts.profiles.builtin import builtin
-from agent_artifacts.profiles.loader import load_profiles
-from agent_artifacts.profiles.scope import profile_for_scope, support_for
+from aart_cli.model import Request
+from aart_cli.profiles.builtin import builtin
+from aart_cli.profiles.loader import load_profiles
+from aart_cli.profiles.scope import profile_for_scope, support_for
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 FIXTURES = str(REPO_ROOT / "tests" / "fixtures")

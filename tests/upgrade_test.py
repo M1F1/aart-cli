@@ -10,9 +10,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts.commands.upgrade import plan_upgrade, run
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.model import Request
+from aart_cli.commands.upgrade import plan_upgrade, run
+from aart_cli.domain.result import Err, Ok
+from aart_cli.model import Request
 
 
 class UpgradePlanningTest(unittest.TestCase):
@@ -35,7 +35,7 @@ class UpgradePlanningTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             checkout = Path(raw, "source")
             checkout.mkdir()
-            (checkout / "agent_artifacts").mkdir()
+            (checkout / "aart_cli").mkdir()
             (checkout / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
 
             result = plan_upgrade(
@@ -57,7 +57,7 @@ class UpgradePlanningTest(unittest.TestCase):
             wheel.write_bytes(b"fixture")
             checkout = Path(raw, "source")
             checkout.mkdir()
-            (checkout / "agent_artifacts").mkdir()
+            (checkout / "aart_cli").mkdir()
             (checkout / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
             linked = Path(raw, "linked.whl")
             linked.symlink_to(wheel)

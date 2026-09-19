@@ -137,7 +137,7 @@ class VerificationFailureE2ETest(unittest.TestCase):
             self.assertIn("verification", text)
             # `configured=0` alone would be a clean-looking line. The retry is what makes the
             # rendering actionable rather than merely non-positive.
-            self.assertIn("aart marketplace setup", text)
+            self.assertIn("aart-cli marketplace setup", text)
 
     def test_the_compensatable_effect_is_restored(self) -> None:
         with _environment_whose_verification_fails() as env:

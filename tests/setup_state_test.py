@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.model import SetupState, SetupStateRecord
-from agent_artifacts.setup import dump_setup_state, parse_setup_state, setup_state_path
+from aart_cli.model import SetupState, SetupStateRecord
+from aart_cli.setup import dump_setup_state, parse_setup_state, setup_state_path
 from tests.credential_fixtures import assignment
 
 

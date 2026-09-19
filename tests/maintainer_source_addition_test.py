@@ -2,7 +2,7 @@
 
 Maintainer Sources could inspect and synchronize a configured authoring Source but could not
 create one, so the TUI could not build the precondition its own Candidate and Promotion screens
-need. The operator had to leave for a terminal, run `aart source add`, and come back.
+need. The operator had to leave for a terminal, run `aart-cli source add`, and come back.
 
 This is deliberately not a widening of Add Registry. Product Specification 164.2 makes a Source an
 authoring/discovery location that is *not* an approved registry; screen 21a accepts only an
@@ -17,7 +17,7 @@ import os
 import unittest
 from unittest import mock
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -28,14 +28,14 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
 )
-from agent_artifacts.application.maintainer_views import MaintainerScreen
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
+from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.domain.result import Ok
+from aart_cli.tui_consumer import CanonicalScreenSource, frame
 from tests.consumer_shell_test import screens
 
 
@@ -161,7 +161,7 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
     """The form runs the same transaction as the CLI, not a second implementation of it."""
 
     def _composed(self, env):
-        from agent_artifacts import tui
+        from aart_cli import tui
 
         composed = tui._canonical_consumer_actions(
             project=str(env.project), user_home=str(env.home), today=tui.date.today()
@@ -256,7 +256,7 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
                     connector = actions._source_connection
                     self.assertIsNotNone(connector)
                     with mock.patch(
-                        "agent_artifacts.commands.source.add_configured_source",
+                        "aart_cli.commands.source.add_configured_source",
                         return_value=Ok(object()),
                     ) as add:
                         connected = connector(draft)  # type: ignore[misc]

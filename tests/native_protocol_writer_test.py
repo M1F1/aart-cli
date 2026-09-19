@@ -2,24 +2,24 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.json import canonical_json_bytes
-from agent_artifacts.protocol.native_models import (
+from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.json import canonical_json_bytes
+from aart_cli.protocol.native_models import (
     ArtifactSelector,
     CollectionManifest,
     ImporterProvenance,
     OriginProvenance,
     Provenance,
 )
-from agent_artifacts.protocol.native_schema import (
+from aart_cli.protocol.native_schema import (
     collection_manifest_to_json,
     parse_collection_manifest,
     parse_provenance,
     provenance_to_json,
 )
-from agent_artifacts.protocol.paths import SafeRelativePath
-from agent_artifacts.protocol.semver import SemVer
+from aart_cli.protocol.paths import SafeRelativePath
+from aart_cli.protocol.semver import SemVer
 
 
 class NativeProtocolWriterTest(unittest.TestCase):

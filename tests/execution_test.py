@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.execution import (
+from aart_cli.application.execution import (
     EXECUTION_INCOMPLETE,
     EXECUTION_INVALID,
     ExecutionStatus,
@@ -12,9 +12,9 @@ from agent_artifacts.application.execution import (
     execute_repair,
     execution_outcome_to_data,
 )
-from agent_artifacts.application.reconciliation import plan_repair
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.effects import (
+from aart_cli.application.reconciliation import plan_repair
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.effects import (
     ConfigureHarness,
     CreatePythonEnvironment,
     Effect,
@@ -23,9 +23,9 @@ from agent_artifacts.domain.effects import (
     RiskClass,
     WriteFile,
 )
-from agent_artifacts.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.reconciliation import (
+from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.reconciliation import (
     Component,
     ComponentId,
     ComponentState,
@@ -35,7 +35,7 @@ from agent_artifacts.domain.reconciliation import (
     DriftKind,
     ObservedComponent,
 )
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.result import Err, Ok
 
 ARTIFACT = ArtifactCoordinate(SourceAlias("public"), ArtifactIdentity("mcp", "github"), "1.5.0")
 ROOT = "/opt/agents/mcp/github"

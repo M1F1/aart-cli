@@ -16,23 +16,23 @@ import json
 import unittest
 from typing import cast
 
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.inputs import ConfigInput, SecretInput
-from agent_artifacts.domain.install_description import (
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.inputs import ConfigInput, SecretInput
+from aart_cli.domain.install_description import (
     InstallDescription,
     install_description_to_data,
 )
-from agent_artifacts.domain.launch import LaunchContract, Transport
-from agent_artifacts.domain.python_runtime import PyProjectSpec, RequirementsFile
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import (
+from aart_cli.domain.launch import LaunchContract, Transport
+from aart_cli.domain.python_runtime import PyProjectSpec, RequirementsFile
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import (
     compile_author_snapshot,
     describe_installation,
     package_payload_root,
     read_install_description,
     read_package_description,
 )
-from agent_artifacts.protocol.native_schema import parse_artifact_manifest
+from aart_cli.protocol.native_schema import parse_artifact_manifest
 from tests.authoring_compiler_test import _file, _snapshot
 from tests.authoring_inputs_test import _document, _parsed
 
@@ -72,8 +72,8 @@ def _stored_description(**overrides: object):
 def _without_authoring(entries):
     """The same tree, as some other importer that never wrote an authoring intent would leave it."""
 
-    from agent_artifacts.protocol.json import JsonObject, canonical_json_bytes, parse_json
-    from agent_artifacts.protocol.native_tree import SnapshotEntry
+    from aart_cli.protocol.json import JsonObject, canonical_json_bytes, parse_json
+    from aart_cli.protocol.native_tree import SnapshotEntry
 
     rewritten = []
     for entry in entries:

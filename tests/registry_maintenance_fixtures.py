@@ -4,15 +4,15 @@ import dataclasses
 import json
 from pathlib import Path
 
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.json import canonical_json_bytes, parse_json
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.json import canonical_json_bytes, parse_json
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
+from aart_cli.protocol.paths import parse_relative_path
 
 NATIVE_FIXTURE = Path("tests/fixtures/protocol/native-source-v1")
 
@@ -177,15 +177,15 @@ def approved_registry_snapshot(
     one package per version under `artifacts/<kind>/<name>/<version>/`.
     """
 
-    from agent_artifacts.application.maintainer import reconcile_source_scan
-    from agent_artifacts.application.promotion import (
+    from aart_cli.application.maintainer import reconcile_source_scan
+    from aart_cli.application.promotion import (
         PromotionEvidence,
         plan_bulk_promotion,
         project_promotion,
     )
-    from agent_artifacts.domain.candidates import assess_candidate
-    from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-    from agent_artifacts.protocol.authoring import compile_author_snapshot
+    from aart_cli.domain.candidates import assess_candidate
+    from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+    from aart_cli.protocol.authoring import compile_author_snapshot
 
     entries = []
     for name in names:

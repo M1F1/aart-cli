@@ -7,16 +7,16 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts.curation import runtime as curation_runtime
-from agent_artifacts.curation.model import (
+from aart_cli.curation import runtime as curation_runtime
+from aart_cli.curation.model import (
     CurationAction,
     CurationRequest,
 )
-from agent_artifacts.curation.runtime import LocalCurationService
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.sources.model import SourceInstanceId, make_source_candidate
+from aart_cli.curation.runtime import LocalCurationService
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.sources.model import SourceInstanceId, make_source_candidate
 from tests.registry_maintenance_fixtures import (
     native_snapshot,
 )
@@ -208,7 +208,7 @@ class CurationRuntimeTest(unittest.TestCase):
                 initialized.value.review.warnings,
             )
             self.assertIn(
-                f"aart registry validate --source {root}",
+                f"aart-cli registry validate --source {root}",
                 initialized.value.review.follow_up_commands,
             )
             self.assertFalse(

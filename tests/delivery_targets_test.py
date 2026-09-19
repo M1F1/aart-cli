@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.artifacts import ArtifactKind
-from agent_artifacts.domain.effects import DeliveryKind
-from agent_artifacts.domain.harness import (
+from aart_cli.domain.artifacts import ArtifactKind
+from aart_cli.domain.effects import DeliveryKind
+from aart_cli.domain.harness import (
     DELIVERY_TARGETS,
     HOOK_TARGETS,
     MEMORY_TARGETS,
@@ -28,8 +28,8 @@ from agent_artifacts.domain.harness import (
     hook_target,
     memory_target,
 )
-from agent_artifacts.domain.hooks import HookEntryShape
-from agent_artifacts.domain.managed_blocks import BlockPosition
+from aart_cli.domain.hooks import HookEntryShape
+from aart_cli.domain.managed_blocks import BlockPosition
 
 
 class DeliveryTargetTest(unittest.TestCase):

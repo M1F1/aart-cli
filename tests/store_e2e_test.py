@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 
-from agent_artifacts.application.store import (
+from aart_cli.application.store import (
     ReferenceUpdatePorts,
     ReferenceUpdateRequest,
     StoreGcPorts,
@@ -11,18 +11,18 @@ from agent_artifacts.application.store import (
     object_status,
     replace_references,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.object_store import (
+from aart_cli.domain.result import Ok
+from aart_cli.io.object_store import (
     delete_object,
     inventory_objects,
     publish_object,
     read_object,
 )
-from agent_artifacts.io.reference_store import read_references, write_references
-from agent_artifacts.io.store_lock import acquire_store_lock, release_store_lock
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.store.model import (
+from aart_cli.io.reference_store import read_references, write_references
+from aart_cli.io.store_lock import acquire_store_lock, release_store_lock
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.store.model import (
     GcRequest,
     ObjectPublishCommand,
     ObjectReadRequest,

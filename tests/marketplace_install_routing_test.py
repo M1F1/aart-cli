@@ -1,4 +1,4 @@
-"""B-038: which installs `aart marketplace install` sends to the canonical registry seam.
+"""B-038: which installs `aart-cli marketplace install` sends to the canonical registry seam.
 
 The strangler moves one source kind at a time, and the decision that says which is
 `_configured_registry_selection`. Nothing named it, so the route could change -- in either
@@ -15,10 +15,10 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.commands.marketplace import _configured_registry_selection
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.consumer.coordinates import ArtifactSelector
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceAlias
+from aart_cli.commands.marketplace import _configured_registry_selection
+from aart_cli.configuration.model import SourceKind
+from aart_cli.consumer.coordinates import ArtifactSelector
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias
 from tests.marketplace_fixtures import configured_source, effective_configuration
 
 REGISTRY = configured_source("company", SourceKind.REGISTRY_GIT)

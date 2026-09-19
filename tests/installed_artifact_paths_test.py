@@ -15,27 +15,27 @@ from __future__ import annotations
 import pathlib
 import unittest
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     PresentationProfile,
     project_installed_artifact,
 )
-from agent_artifacts.domain.effects import CopyTree
-from agent_artifacts.domain.harness import Scope, mcp_target
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.effects import CopyTree
+from aart_cli.domain.harness import Scope, mcp_target
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.receipts import (
+from aart_cli.domain.receipts import (
     ArtifactDelivery,
     DeliveryKind,
     InstallationReceipt,
     McpRegistration,
     PlacedArtifactReceipt,
 )
-from agent_artifacts.domain.reconciliation import (
+from aart_cli.domain.reconciliation import (
     Component,
     ComponentId,
     ComponentState,
@@ -44,7 +44,7 @@ from agent_artifacts.domain.reconciliation import (
     DesiredState,
     ObservedComponent,
 )
-from agent_artifacts.tui_consumer import render_installed_artifact
+from aart_cli.tui_consumer import render_installed_artifact
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import (
     _INSTALL,

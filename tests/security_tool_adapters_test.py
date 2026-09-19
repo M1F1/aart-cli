@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.hashing import sha256_bytes
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.security.analyzers import (
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.hashing import sha256_bytes
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.security.analyzers import (
     AnalyzerInput,
     AnalyzerProcessKind,
     AnalyzerProcessOutcome,
 )
-from agent_artifacts.security.model import AssessmentStatus, FindingSeverity
-from agent_artifacts.security.tool_adapters import (
+from aart_cli.security.model import AssessmentStatus, FindingSeverity
+from aart_cli.security.tool_adapters import (
     BUILTIN_TOOL_ADAPTERS,
     BuiltInToolAdapter,
     DiscoveredToolAdapter,

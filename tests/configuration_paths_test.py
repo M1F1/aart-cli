@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.configuration.paths import (
+from aart_cli.configuration.paths import (
     PathOverrides,
     Platform,
     resolve_config_paths,

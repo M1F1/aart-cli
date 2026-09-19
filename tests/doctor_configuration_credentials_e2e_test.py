@@ -35,32 +35,32 @@ import json
 import pathlib
 import unittest
 
-from agent_artifacts.application.consumer_session import credential_dependants
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_session import credential_dependants
+from aart_cli.application.consumer_views import (
     CredentialRecordView,
     project_credential_record,
 )
-from agent_artifacts.commands.doctor import (
+from aart_cli.commands.doctor import (
     _configuration_data,
     _configuration_lines,
     _credential_data,
     _credential_lines,
 )
-from agent_artifacts.configuration.model import (
+from aart_cli.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
     SourceKind,
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.policy import EffectiveConfiguration
-from agent_artifacts.configuration.schema import (
+from aart_cli.configuration.policy import EffectiveConfiguration
+from aart_cli.configuration.schema import (
     parse_user_configuration,
     user_configuration_bytes,
 )
-from agent_artifacts.domain.credentials import CredentialObservation, CredentialState
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Ok
+from aart_cli.domain.credentials import CredentialObservation, CredentialState
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Ok
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_session_test import OTHER, TOKEN, inspection, observed
 

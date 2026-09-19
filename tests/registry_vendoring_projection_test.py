@@ -21,20 +21,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts import cli
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import (
+from aart_cli import cli
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
     compile_native_package,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.registry_index import index_artifact_from_package
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.registry_maintenance.vendoring import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.registry_index import index_artifact_from_package
+from aart_cli.protocol.semver import SemVer
+from aart_cli.registry_maintenance.vendoring import (
     VENDOR_IMPORTER_ID,
     VendoredPackage,
     VendorOptions,
@@ -42,10 +42,10 @@ from agent_artifacts.registry_maintenance.vendoring import (
     acquisition_options_digest,
     project_vendored_package,
 )
-from agent_artifacts.runtime_contract import EXECUTABLE_CAPABILITIES
-from agent_artifacts.security.baseline import BaselineScanRequest, assess_installation_risk
-from agent_artifacts.sources.subtree import take_subtree
-from agent_artifacts.store.model import make_object_candidate
+from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES
+from aart_cli.security.baseline import BaselineScanRequest, assess_installation_risk
+from aart_cli.sources.subtree import take_subtree
+from aart_cli.store.model import make_object_candidate
 
 _CAPABILITIES = EXECUTABLE_CAPABILITIES
 _COMMIT = "f" * 40

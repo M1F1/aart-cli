@@ -11,16 +11,16 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.sources.model import SnapshotLimits
-from agent_artifacts.sources.subtree import take_subtree
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.sources.model import SnapshotLimits
+from aart_cli.sources.subtree import take_subtree
 
 
 def _path(raw: str):

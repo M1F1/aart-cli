@@ -68,14 +68,12 @@ class RepositoryBoundaryTest(unittest.TestCase):
 
         validate = _load_script("validate")
 
-        self.assertEqual(
-            validate.credential_promise_diagnostics(REPOSITORY_ROOT / "agent_artifacts"), ()
-        )
+        self.assertEqual(validate.credential_promise_diagnostics(REPOSITORY_ROOT / "aart_cli"), ())
 
     def test_validation_gate_rejects_a_planted_credential_promise(self) -> None:
         validate = _load_script("validate")
         with tempfile.TemporaryDirectory() as temporary:
-            package = pathlib.Path(temporary) / "agent_artifacts"
+            package = pathlib.Path(temporary) / "aart_cli"
             (package / "io").mkdir(parents=True)
             (package / "io" / "net.py").write_text(
                 'API = os.environ.get("GITHUB_API_URL")\nTOKEN = os.environ["GITHUB_TOKEN"]\n',
@@ -87,10 +85,9 @@ class RepositoryBoundaryTest(unittest.TestCase):
         self.assertEqual(
             diagnostics,
             (
-                "agent_artifacts/io/net.py: names GITHUB_API_URL, "
+                "aart_cli/io/net.py: names GITHUB_API_URL, "
                 "but AART holds no credentials of its own",
-                "agent_artifacts/io/net.py: names GITHUB_TOKEN, "
-                "but AART holds no credentials of its own",
+                "aart_cli/io/net.py: names GITHUB_TOKEN, but AART holds no credentials of its own",
             ),
         )
 

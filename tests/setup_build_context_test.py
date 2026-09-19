@@ -18,9 +18,9 @@ import shutil
 import stat
 import unittest
 
-from agent_artifacts.model import SetupInstaller, SetupPlan, SetupQueueItem
-from agent_artifacts.setup import _Invalid, _package_relative_source, resolve_package_source
-from agent_artifacts.setup_runtime import (
+from aart_cli.model import SetupInstaller, SetupPlan, SetupQueueItem
+from aart_cli.setup import _Invalid, _package_relative_source, resolve_package_source
+from aart_cli.setup_runtime import (
     CONTEXT_DIRECTORY,
     context_digest,
     materialize_build_context,

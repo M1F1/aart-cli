@@ -28,7 +28,7 @@ configuration:
 
 ```sh
 cd /path/to/your-project
-aart source add --alias <alias> --kind registry-git --location <registry-url> --ref main --default
+aart-cli source add --alias <alias> --kind registry-git --location <registry-url> --ref main --default
 ```
 
 **3. Find the artifact.** `list` prints the whole catalog; `search` is how you find one thing in
@@ -36,31 +36,31 @@ it. Every word must match, so a second word narrows rather than widens, and the 
 prints is the one `install` takes:
 
 ```sh
-aart marketplace search <word>
+aart-cli marketplace search <word>
 ```
 
 **4. Install it.** Every mutation is two commands on purpose. The first renders the plan and
 changes nothing; the second finalizes exactly that plan:
 
 ```sh
-aart marketplace install <alias>/<kind>/<name> --profile <harness>
-aart marketplace install <alias>/<kind>/<name> --profile <harness> --yes
+aart-cli marketplace install <alias>/<kind>/<name> --profile <harness>
+aart-cli marketplace install <alias>/<kind>/<name> --profile <harness> --yes
 ```
 
 **5. Verify.** `status` reports what is installed and whether it still matches the Registry —
 `current`, `update_available`, `removed_upstream`, `source_unavailable` or `local_drift`:
 
 ```sh
-aart marketplace status --profile <harness>
+aart-cli marketplace status --profile <harness>
 ```
 
 ### Or do all five in the TUI
 
-Running `aart` with no subcommand on a terminal opens the human-oriented interface, which is the
-primary route for a person rather than a script:
+Running `aart-cli` with no subcommand on a terminal opens the human-oriented interface, which is
+the primary route for a person rather than a script:
 
 ```sh
-aart
+aart-cli
 ```
 
 It adds the Source, lists and searches the catalog (press `/` and keep typing), shows the same
@@ -68,12 +68,12 @@ reviewed plan before anything is applied, and reports the same status. It submit
 canonical requests as the flags above — it is not a second command engine, so nothing is available
 in one and missing from the other.
 
-### Three names, one tool
+### One name, spelled two ways
 
-The command is **`aart`**, the package you install is **`aart-cli`**, and the import package is
-**`agent_artifacts`**. `agent-artifacts` on a package index is a **different project, belonging to
-someone else** — installing it gives you their code, not this one. The wheel also installs
-`agent-artifacts` as a second name for the `aart` command.
+The command, the package you install and the product are all **`aart-cli`**; the import package is
+**`aart_cli`**, because Python names cannot carry a hyphen. There is no second command and no
+alias. `agent-artifacts` on a package index is a **different project, belonging to someone else** —
+installing it gives you their code, not this one.
 
 ## What AART is
 

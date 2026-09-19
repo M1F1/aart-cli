@@ -11,22 +11,22 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.application.candidate_validation import validate_candidate
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.candidate_validation import validate_candidate
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     PresentationProfile,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
-from agent_artifacts.application.maintainer_promotion import (
+from aart_cli.application.maintainer import CandidateBundle, reconcile_source_scan
+from aart_cli.application.maintainer_promotion import (
     PreparedCandidatePromotion,
     effective_policy_digest,
     plan_candidate_promotion,
@@ -34,8 +34,8 @@ from agent_artifacts.application.maintainer_promotion import (
     promotion_evidence,
     validation_report_digest,
 )
-from agent_artifacts.application.maintainer_sync import ApprovedRegistryState
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer_sync import ApprovedRegistryState
+from aart_cli.application.maintainer_views import (
     MaintainerScreen,
     MaintainerViews,
     project_maintainer_candidates,
@@ -45,22 +45,22 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_source,
     project_maintainer_validation,
 )
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.candidates import CandidateState
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias, source_revision_kind
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.registry import PromotionMode
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.candidates import CandidateState
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias, source_revision_kind
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
-from agent_artifacts.tui_maintainer import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from aart_cli.tui_maintainer import (
     render_maintainer_promotion_review,
     render_maintainer_registry_diff,
 )

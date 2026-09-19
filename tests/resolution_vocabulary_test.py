@@ -15,15 +15,15 @@ import shutil
 import unittest
 from pathlib import Path
 
-from agent_artifacts.configuration.model import (
+from aart_cli.configuration.model import (
     ConfiguredSource,
     SourceKind,
     SyncMode,
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.schema import user_configuration_bytes
-from agent_artifacts.domain.identifiers import SourceAlias
+from aart_cli.configuration.schema import user_configuration_bytes
+from aart_cli.domain.identifiers import SourceAlias
 from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _FIXTURE, _environment
 
 _COLD = "mirror/skill/code-review"
@@ -68,7 +68,7 @@ class ResolutionFailureVocabularyTest(unittest.TestCase):
             self.assertEqual(diagnostic["code"], "source-unavailable")
             self.assertIn("ghost", diagnostic["message"])
             self.assertIn(
-                "aart source add --alias ghost --kind registry-git --location <url>",
+                "aart-cli source add --alias ghost --kind registry-git --location <url>",
                 diagnostic["remediation"],
             )
             # Uninstall is a valid exit here, and naming it is the whole point: an operator whose
@@ -86,7 +86,7 @@ class ResolutionFailureVocabularyTest(unittest.TestCase):
             self.assertEqual(code, 1)
             diagnostic = self._diagnostic(payload)
             self.assertEqual(diagnostic["code"], "source-not-synchronized")
-            self.assertEqual(diagnostic["remediation"], ["aart source sync --alias mirror"])
+            self.assertEqual(diagnostic["remediation"], ["aart-cli source sync --alias mirror"])
 
     def test_a_cold_cache_under_offline_says_so_rather_than_blaming_the_name(self) -> None:
         """A cold cache is not an unknown name."""
@@ -114,7 +114,7 @@ class ResolutionFailureVocabularyTest(unittest.TestCase):
             diagnostic = self._diagnostic(payload)
             self.assertEqual(diagnostic["code"], "artifact-not-found")
             self.assertEqual(
-                diagnostic["remediation"], ["aart marketplace list --source reference"]
+                diagnostic["remediation"], ["aart-cli marketplace list --source reference"]
             )
 
     def test_the_four_causes_do_not_share_one_code(self) -> None:

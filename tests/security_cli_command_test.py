@@ -8,24 +8,24 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.commands import security
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.marketplace.model import TrustClass
-from agent_artifacts.model import Request
-from agent_artifacts.protocol.hashing import json_digest, sha256_bytes
-from agent_artifacts.protocol.json import JsonObject
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-from agent_artifacts.protocol.paths import SafeRelativePath
-from agent_artifacts.security.attestation_schema import attestation_bytes
-from agent_artifacts.security.attestations import (
+from aart_cli.commands import security
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.result import Ok
+from aart_cli.marketplace.model import TrustClass
+from aart_cli.model import Request
+from aart_cli.protocol.hashing import json_digest, sha256_bytes
+from aart_cli.protocol.json import JsonObject
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from aart_cli.protocol.paths import SafeRelativePath
+from aart_cli.security.attestation_schema import attestation_bytes
+from aart_cli.security.attestations import (
     AssessmentCacheKey,
     AttestationOrigin,
     AttestationOriginKind,
     SecurityAttestation,
 )
-from agent_artifacts.security.baseline import BASELINE_RULES_DIGEST
-from agent_artifacts.store.model import make_object_candidate
+from aart_cli.security.baseline import BASELINE_RULES_DIGEST
+from aart_cli.store.model import make_object_candidate
 from tests.registry_maintenance_fixtures import approved_registry_snapshot, write_snapshot
 from tests.security_baseline_test import _fixture
 

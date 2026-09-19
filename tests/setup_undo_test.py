@@ -12,9 +12,9 @@ import os
 import tempfile
 import unittest
 
-from agent_artifacts.model import SetupStateRecord
-from agent_artifacts.setup_runtime import SetupRuntime, rollback_record
-from agent_artifacts.setup_undo import KEEPS, REVERSES, plan_undo, undo_payload
+from aart_cli.model import SetupStateRecord
+from aart_cli.setup_runtime import SetupRuntime, rollback_record
+from aart_cli.setup_undo import KEEPS, REVERSES, plan_undo, undo_payload
 
 BLOCK = "# >>> aart setup: mcp/x@claude >>>\nexport A=1\n# <<< aart setup: mcp/x@claude <<<"
 

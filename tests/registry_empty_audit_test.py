@@ -14,17 +14,17 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.diagnostics import Severity
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.diagnostics import Severity
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.capabilities import Capability
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.registry_commands.planning import audit_registry_workspace
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.semver import SemVer
+from aart_cli.registry_commands.planning import audit_registry_workspace
 from tests.registry_maintenance_fixtures import (
     append_snapshot_file,
     empty_registry_snapshot,

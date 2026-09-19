@@ -25,9 +25,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts.domain.artifacts import ArtifactKind
-from agent_artifacts.domain.effects import DeliveryKind
-from agent_artifacts.domain.harness import (
+from aart_cli.domain.artifacts import ArtifactKind
+from aart_cli.domain.effects import DeliveryKind
+from aart_cli.domain.harness import (
     McpRegistration,
     Scope,
     delivery_target,

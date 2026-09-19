@@ -9,9 +9,9 @@ from dataclasses import replace
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.configuration_edit import plan_configuration_edit
-from agent_artifacts.application.consumer_session import assemble_consumer_machine
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.configuration_edit import plan_configuration_edit
+from aart_cli.application.consumer_session import assemble_consumer_machine
+from aart_cli.application.consumer_ui import (
     CONFIG_CONTINUE_ROW,
     ConsumerActionKind,
     ConsumerUiCommandKind,
@@ -21,7 +21,7 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConfigurationFileView,
     ConsumerScreen,
     ConsumerSession,
@@ -29,16 +29,16 @@ from agent_artifacts.application.consumer_views import (
     LifecyclePlanView,
     PresentationProfile,
 )
-from agent_artifacts.domain.configuration_files import (
+from aart_cli.domain.configuration_files import (
     ConfigurationFileRecord,
     render_configuration_file,
 )
-from agent_artifacts.domain.effects import WriteFile
-from agent_artifacts.domain.identifiers import InputId
-from agent_artifacts.domain.inputs import InputValidation
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.hashing import sha256_bytes
-from agent_artifacts.tui_consumer import (
+from aart_cli.domain.effects import WriteFile
+from aart_cli.domain.identifiers import InputId
+from aart_cli.domain.inputs import InputValidation
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.hashing import sha256_bytes
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     _reload,
     compose_frame,

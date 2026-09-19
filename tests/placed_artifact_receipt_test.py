@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.identifiers import InputId, ObjectDigest
-from agent_artifacts.domain.receipts import (
+from aart_cli.domain.identifiers import InputId, ObjectDigest
+from aart_cli.domain.receipts import (
     ArtifactDelivery,
     DeliveryKind,
     PlacedArtifactReceipt,
@@ -25,7 +25,7 @@ from agent_artifacts.domain.receipts import (
     placed_artifact_receipt_from_data,
     placed_artifact_receipt_to_data,
 )
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.result import Err, Ok
 
 ROOT = "/home/agent/.agent-artifacts/runtimes/public/skill/code-review"
 

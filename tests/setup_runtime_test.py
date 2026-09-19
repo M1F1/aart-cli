@@ -8,9 +8,9 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 
-from agent_artifacts import setup_runtime
-from agent_artifacts.model import SetupQueueItem
-from agent_artifacts.setup import (
+from aart_cli import setup_runtime
+from aart_cli.model import SetupQueueItem
+from aart_cli.setup import (
     advisory_messages,
     home_relative,
     parse_installer,
@@ -21,7 +21,7 @@ from agent_artifacts.setup import (
     run_reload_reminders,
     shell_reload_reminder,
 )
-from agent_artifacts.setup_runtime import ProcessResult, SetupRuntime, apply_setup_plan
+from aart_cli.setup_runtime import ProcessResult, SetupRuntime, apply_setup_plan
 from tests.setup_fixtures import recipe
 
 
@@ -617,7 +617,7 @@ class DockerTagNoteTest(unittest.TestCase):
             "unless you are undoing this setup, and do not remove this tag: the server runs "
             "from it."
         )
-        source = pathlib.Path("agent_artifacts/setup_runtime.py").read_text(encoding="utf-8")
+        source = pathlib.Path("aart_cli/setup_runtime.py").read_text(encoding="utf-8")
 
         self.assertNotIn("is left alone; remove it manually", source)
         self.assertIn("do not remove this tag", source)

@@ -19,22 +19,22 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts import cli
-from agent_artifacts.curation.runtime import LocalCurationService
-from agent_artifacts.domain.identifiers import ArtifactIdentity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import (
+from aart_cli import cli
+from aart_cli.curation.runtime import LocalCurationService
+from aart_cli.domain.identifiers import ArtifactIdentity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.registry_models import ReviewRecord
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.registry_commands.planning import plan_artifact_vendor
-from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
-from agent_artifacts.registry_maintenance.vendoring import VendorOptions
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.registry_models import ReviewRecord
+from aart_cli.protocol.semver import SemVer
+from aart_cli.registry_commands.planning import plan_artifact_vendor
+from aart_cli.registry_maintenance.model import NativeReferenceAcquisition
+from aart_cli.registry_maintenance.vendoring import VendorOptions
 from tests.registry_vendoring_projection_test import (
     _COMMIT,
     _MCP_JSON,
@@ -128,7 +128,7 @@ class VendorCommandTest(unittest.TestCase):
                 str(root), native_acquirer=lambda _url, _ref: Ok(acquisition)
             )
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 yield root
@@ -322,7 +322,7 @@ class VendorCommandTest(unittest.TestCase):
 
             self.assertEqual(code, 1)
             self.assertIn("remediation:", output)
-            self.assertIn("aart registry revendor mcp atlassian", output)
+            self.assertIn("aart-cli registry revendor mcp atlassian", output)
             # `revendor` plans nothing without the version this registry will publish, so the
             # sentence that names it has to name that too.
             self.assertIn("--artifact-version", output)
@@ -397,7 +397,7 @@ class MarkerlessUpstreamVendorTest(unittest.TestCase):
                 str(root), native_acquirer=lambda _url, _ref: Ok(_ACQUISITION)
             )
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 vendored, vendor_output = _run(*_vendor_command(root, "--yes"))

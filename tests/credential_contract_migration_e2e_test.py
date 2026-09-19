@@ -13,7 +13,7 @@ Two of the claims here run through the public verb and two run at the seam, and 
 convenience. `commands/marketplace.py` wires a real `MacOsKeychainProvider` on darwin, so a
 command-line test that actually stored a credential would write into the developer's own Keychain.
 The retention statement needs no credential to exist -- the removal review makes it either way --
-so it is driven through `aart marketplace uninstall`. The dependant arithmetic does need one, so it
+so it is driven through `aart-cli marketplace uninstall`. The dependant arithmetic does need one, so it
 is measured where a file-backed provider can stand in, the same route every existing credential
 test takes.
 """
@@ -24,26 +24,26 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.application.consumer_session import assemble_consumer_machine
-from agent_artifacts.application.installation_inputs import (
+from aart_cli.application.consumer_session import assemble_consumer_machine
+from aart_cli.application.installation_inputs import (
     INPUT_DECLARATION_CONFLICT,
     InstallationInputUse,
     compose_installation_inputs,
 )
-from agent_artifacts.domain.effects import DeleteCredential
-from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.inputs import (
+from aart_cli.domain.effects import DeleteCredential
+from aart_cli.domain.harness import Scope
+from aart_cli.domain.inputs import (
     EnvironmentBinding,
     InputGuidance,
     PersistedConfigValue,
     SecretInput,
     SecretProviderReference,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.receipts import InstalledRecord
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.configured_installation_action import InstallationHost
-from agent_artifacts.io.configured_uninstall_action import prepare_configured_uninstall
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.receipts import InstalledRecord
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.configured_installation_action import InstallationHost
+from aart_cli.io.configured_uninstall_action import prepare_configured_uninstall
 from tests.configured_install_command_e2e_test import COORDINATE, _environment
 from tests.consumer_session_test import OTHER as SECOND_REFERENCE
 from tests.consumer_session_test import TODAY, coordinate, inspection, observed, receipt
@@ -58,7 +58,7 @@ def _deletions(prepared) -> list[DeleteCredential]:
 
 
 class RemovalRetainsCredentialsTest(unittest.TestCase):
-    """`aart marketplace uninstall` over a real machine, through the public verb."""
+    """`aart-cli marketplace uninstall` over a real machine, through the public verb."""
 
     def _installed(self, env) -> None:
         code, payload = env.run(

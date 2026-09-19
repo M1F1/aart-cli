@@ -7,27 +7,27 @@ from pathlib import Path
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
-from agent_artifacts.domain.identifiers import SourceAlias, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.capabilities import parse_capability
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.domain.identifiers import SourceAlias, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.capabilities import parse_capability
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.semver import parse_semver
-from agent_artifacts.sources.local import read_local_snapshot
-from agent_artifacts.sources.model import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.semver import parse_semver
+from aart_cli.sources.local import read_local_snapshot
+from aart_cli.sources.model import (
     LocalSnapshotRequest,
     SnapshotLimits,
     SourceInstanceId,
     SourceValidationRequest,
     make_source_candidate,
 )
-from agent_artifacts.sources.validation import (
+from aart_cli.sources.validation import (
     validate_authoring_source_candidate,
     validate_source_candidate,
 )

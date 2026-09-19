@@ -92,7 +92,7 @@ def workspace_paths(root: Path) -> tuple[Path, ...]:
 
 def build_gates(temp_root: Path, python: str = sys.executable) -> tuple[Gate, ...]:
     coverage_data = temp_root / "coverage.data"
-    paths = ("agent_artifacts", "tests", "scripts")
+    paths = ("aart_cli", "tests", "scripts")
     return (
         Gate("format-check", ((python, "-m", "ruff", "format", "--check", *paths),)),
         Gate("lint", ((python, "-m", "ruff", "check", *paths),)),
@@ -118,7 +118,7 @@ def build_gates(temp_root: Path, python: str = sys.executable) -> tuple[Gate, ..
                     "coverage",
                     "run",
                     "--branch",
-                    "--source=agent_artifacts",
+                    "--source=aart_cli",
                     f"--data-file={coverage_data}",
                     "-m",
                     "unittest",

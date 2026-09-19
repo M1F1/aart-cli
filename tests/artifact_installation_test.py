@@ -15,21 +15,21 @@ from __future__ import annotations
 import unittest
 from dataclasses import dataclass
 
-from agent_artifacts.application.artifact_installation import (
+from aart_cli.application.artifact_installation import (
     INSTALLATION_NOT_DESCRIBED,
     installation_remediations,
     plan_artifact_installation,
     requirements_for,
 )
-from agent_artifacts.application.installation_planning import (
+from aart_cli.application.installation_planning import (
     ArtifactInstallIntent,
     inspect_requirements,
     prepare_install_plan,
 )
-from agent_artifacts.domain.credentials import CredentialProviderRef, CredentialReference
-from agent_artifacts.domain.harness import Scope, mcp_target
-from agent_artifacts.domain.identifiers import InputId
-from agent_artifacts.domain.inputs import (
+from aart_cli.domain.credentials import CredentialProviderRef, CredentialReference
+from aart_cli.domain.harness import Scope, mcp_target
+from aart_cli.domain.identifiers import InputId
+from aart_cli.domain.inputs import (
     ConfigInput,
     EnvironmentBinding,
     InputValueSource,
@@ -37,25 +37,25 @@ from agent_artifacts.domain.inputs import (
     SecretInput,
     SecretProviderReference,
 )
-from agent_artifacts.domain.inspection import (
+from aart_cli.domain.inspection import (
     EnvironmentFact,
     EnvironmentFacts,
     FactState,
     RemediationCapability,
     RemediationCapabilityKind,
 )
-from agent_artifacts.domain.install_description import InstallDescription
-from agent_artifacts.domain.launch import LaunchContract, Transport
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.python_runtime import PyProjectSpec, RequirementsFile
-from agent_artifacts.domain.requirements import (
+from aart_cli.domain.install_description import InstallDescription
+from aart_cli.domain.launch import LaunchContract, Transport
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.python_runtime import PyProjectSpec, RequirementsFile
+from aart_cli.domain.requirements import (
     CredentialRequirement,
     HarnessRequirement,
     PythonPackageRequirement,
     RuntimeRequirement,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.domain.selection import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     ResolvedSelection,
@@ -357,7 +357,7 @@ class RefusedInstallationTest(unittest.TestCase):
         self.assertIn("available", _reason(refused))
 
     def test_a_binding_the_launcher_cannot_deliver_is_refused_here_too(self) -> None:
-        from agent_artifacts.domain.inputs import StdinBinding
+        from aart_cli.domain.inputs import StdinBinding
 
         refused = _plan(
             _description(inputs=(SecretInput(TOKEN, StdinBinding()),)), sources=_sources()[:1]

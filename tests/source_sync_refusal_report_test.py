@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.consumer_views import PresentationProfile
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.consumer_views import PresentationProfile
+from aart_cli.application.maintainer_views import (
     MaintainerSourceSyncResultView,
 )
-from agent_artifacts.domain.candidates import CandidateState
-from agent_artifacts.tui_maintainer import render_source_sync_result
+from aart_cli.domain.candidates import CandidateState
+from aart_cli.tui_maintainer import render_source_sync_result
 
 
 class SourceSyncRefusalViewTest(unittest.TestCase):

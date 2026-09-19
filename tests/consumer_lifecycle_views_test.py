@@ -4,7 +4,7 @@ import dataclasses
 import json
 import unittest
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     CredentialRecordView,
     PresentationProfile,
     project_credential_record,
@@ -13,13 +13,13 @@ from agent_artifacts.application.consumer_views import (
     project_lifecycle_outcome,
     project_lifecycle_plan,
 )
-from agent_artifacts.application.execution import (
+from aart_cli.application.execution import (
     ExecutionOutcome,
     LifecycleExecutionOutcome,
     StepOutcome,
     StepStatus,
 )
-from agent_artifacts.application.intents import (
+from aart_cli.application.intents import (
     InstalledHealth,
     MemberHealth,
     install_intent,
@@ -27,23 +27,23 @@ from agent_artifacts.application.intents import (
     repair_intent,
     uninstall_intent,
 )
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialProviderRef,
     CredentialReference,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.effects import CopyTree, WriteFile
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.effects import CopyTree, WriteFile
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     InputId,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.reconciliation import (
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.reconciliation import (
     Component,
     ComponentId,
     ComponentState,
@@ -52,9 +52,9 @@ from agent_artifacts.domain.reconciliation import (
     DesiredState,
     ObservedComponent,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
-from agent_artifacts.tui_consumer import (
+from aart_cli.domain.result import Ok
+from aart_cli.domain.selection import OwnershipKind, OwnershipReason
+from aart_cli.tui_consumer import (
     render_installed_artifact,
     render_installed_collection,
     render_lifecycle_outcome,

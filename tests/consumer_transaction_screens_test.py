@@ -10,22 +10,22 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.consumer_session import begin_installation, record_installation
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_session import begin_installation, record_installation
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerScreen
-from agent_artifacts.application.execution import (
+from aart_cli.application.consumer_views import ConsumerScreen
+from aart_cli.application.execution import (
     InstallationArtifactExecution,
     InstallationExecutionOutcome,
 )
-from agent_artifacts.domain.inspection import EnvironmentFacts
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_consumer import CanonicalScreenSource, _reload, frame, screens_from
+from aart_cli.domain.inspection import EnvironmentFacts
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Ok
+from aart_cli.tui_consumer import CanonicalScreenSource, _reload, frame, screens_from
 from tests.consumer_session_e2e_test import TODAY, _route
 from tests.installation_proposal_test import _nothing_installed, _planned, _selection
 from tests.installation_transaction_test import _proposal
@@ -34,7 +34,7 @@ MOMENT = "2026-08-31T17:05:00+00:00"
 
 
 def _machine():
-    from agent_artifacts.application.consumer_session import assemble_consumer_machine
+    from aart_cli.application.consumer_session import assemble_consumer_machine
 
     return assemble_consumer_machine((), today=TODAY)
 
@@ -56,8 +56,8 @@ def _bulk_flow():
     """A flow over two artifacts, where the second was never attempted."""
 
     proposal, _ = _proposal()
-    from agent_artifacts.application.consumer_session import ConsumerFlow
-    from agent_artifacts.application.consumer_views import project_install_plan
+    from aart_cli.application.consumer_session import ConsumerFlow
+    from aart_cli.application.consumer_views import project_install_plan
 
     return ConsumerFlow(proposal, project_install_plan(proposal.plan))
 

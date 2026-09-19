@@ -7,11 +7,11 @@ import subprocess
 import tempfile
 import unittest
 
-from agent_artifacts.application.maintainer_promotion import CandidatePromotionCommitCommand
-from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.result import Err
-from agent_artifacts.io.maintainer_promotion import commit_candidate_promotion
-from agent_artifacts.protocol.paths import SafeRelativePath
+from aart_cli.application.maintainer_promotion import CandidatePromotionCommitCommand
+from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.domain.result import Err
+from aart_cli.io.maintainer_promotion import commit_candidate_promotion
+from aart_cli.protocol.paths import SafeRelativePath
 
 
 def _git(root: pathlib.Path, *arguments: str) -> str:

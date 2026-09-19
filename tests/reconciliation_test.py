@@ -7,20 +7,20 @@ import unittest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.installation_verification import InstallationObservation
-from agent_artifacts.application.installed_state import (
+from aart_cli.application.installation_verification import InstallationObservation
+from aart_cli.application.installed_state import (
     current_state_from_observation,
     desired_state_from_receipt,
 )
-from agent_artifacts.application.reconciliation import (
+from aart_cli.application.reconciliation import (
     RECONCILE_INVALID,
     RECONCILE_POLICY_VIOLATION,
     plan_repair,
     repair_converged,
     repair_plan_to_data,
 )
-from agent_artifacts.domain.credentials import CredentialProviderRef, CredentialReference
-from agent_artifacts.domain.effects import (
+from aart_cli.domain.credentials import CredentialProviderRef, CredentialReference
+from aart_cli.domain.effects import (
     ConfigureHarness,
     CopyTree,
     CreatePythonEnvironment,
@@ -31,18 +31,18 @@ from agent_artifacts.domain.effects import (
     StoreCredential,
     WriteFile,
 )
-from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.harness import McpRegistration, Scope, mcp_target
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     InputId,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.launch import Transport
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.receipts import InstallationReceipt
-from agent_artifacts.domain.reconciliation import (
+from aart_cli.domain.launch import Transport
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.receipts import InstallationReceipt
+from aart_cli.domain.reconciliation import (
     Component,
     ComponentId,
     ComponentState,
@@ -53,7 +53,7 @@ from agent_artifacts.domain.reconciliation import (
     DriftKind,
     compare_states,
 )
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.result import Err, Ok
 
 STATES = (ComponentState.MATCHED, ComponentState.ABSENT, ComponentState.DIVERGENT)
 
@@ -126,7 +126,7 @@ def current_state(**states: ComponentState) -> CurrentState:
 
 
 def _observed(identifier: ComponentId, state: ComponentState):
-    from agent_artifacts.domain.reconciliation import ObservedComponent
+    from aart_cli.domain.reconciliation import ObservedComponent
 
     return ObservedComponent(identifier, state)
 

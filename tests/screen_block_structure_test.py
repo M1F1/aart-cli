@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import replace
 from unittest import TestCase
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
@@ -25,7 +25,7 @@ from agent_artifacts.application.consumer_ui import (
     SourceDraft,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     SETTING_PURPOSE,
     SETTING_ROWS,
     ConsumerScreen,
@@ -34,7 +34,7 @@ from agent_artifacts.application.consumer_views import (
     PresentationProfile,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer_views import (
     MaintainerRegistryView,
     MaintainerScreen,
     MaintainerViews,
@@ -43,14 +43,14 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_candidates,
     project_maintainer_dashboard,
 )
-from agent_artifacts.tui_consumer import (
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     ConsumerScreens,
     frame,
     render_doctor,
 )
-from agent_artifacts.tui_layout import BULLET, SECTION_RULE
-from agent_artifacts.tui_maintainer import (
+from aart_cli.tui_layout import BULLET, SECTION_RULE
+from aart_cli.tui_maintainer import (
     maintainer_registry_descriptor,
     maintainer_registry_rows,
     maintainer_registry_status,

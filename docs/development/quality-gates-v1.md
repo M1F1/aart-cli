@@ -60,13 +60,13 @@ and a real one did not. Run a single gate with `make <gate>`.
 
 | Gate | Command | Depends on |
 |---|---|---|
-| `format-check` | `ruff format --check agent_artifacts tests scripts` | `ruff` |
-| `lint` | `ruff check agent_artifacts tests scripts` | `ruff` |
+| `format-check` | `ruff format --check aart_cli tests scripts` | `ruff` |
+| `lint` | `ruff check aart_cli tests scripts` | `ruff` |
 | `typecheck` | `mypy` | `mypy` |
 | `unit` | `unittest discover -s tests -p "*_test.py"` | stdlib |
 | `integration` | `unittest discover -s tests -p "*e2e_test.py"` — drives the real CLI over real trees | stdlib |
 | `validate` | `scripts/validate.py` | stdlib |
-| `coverage` | `coverage run --branch --source=agent_artifacts` over the unit suite, then `coverage report` | `coverage` |
+| `coverage` | `coverage run --branch --source=aart_cli` over the unit suite, then `coverage report` | `coverage` |
 | `packaging-check` | `scripts/packaging_check.py` — builds the wheel and inspects it | stdlib |
 | `docs-check` | `scripts/docs_check.py` | stdlib |
 | `secret-shape-check` | `scripts/secret_shape_check.py` — refuses credential-shaped literals anywhere in the tracked tree, so the repository stays pushable to an instance with push protection on | stdlib |

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.configuration import (
+from aart_cli.application.configuration import (
     ConfigDocument,
     ConfigReadRequest,
     ConfigRecoveryReceipt,
@@ -14,12 +14,12 @@ from agent_artifacts.application.configuration import (
     save_user_configuration,
     save_user_configuration_for_source_management,
 )
-from agent_artifacts.configuration.paths import PathOverrides, Platform, resolve_config_paths
-from agent_artifacts.configuration.policy import RuntimeOverrides
-from agent_artifacts.configuration.schema import parse_organization_policy, parse_user_configuration
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.configuration.paths import PathOverrides, Platform, resolve_config_paths
+from aart_cli.configuration.policy import RuntimeOverrides
+from aart_cli.configuration.schema import parse_organization_policy, parse_user_configuration
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.domain.result import Err, Ok
 from tests.credential_fixtures import secret_object
 
 

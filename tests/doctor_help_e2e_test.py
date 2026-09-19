@@ -1,6 +1,6 @@
 """End to end: the front door describes the report behind it.
 
-CP-16 step 5. Steps 2, 4a, 4b and 4c each made a capability reachable from `aart doctor` that had
+CP-16 step 5. Steps 2, 4a, 4b and 4c each made a capability reachable from `aart-cli doctor` that had
 been sitting at a seam with no verb reporting it. The command's own `--help` still described the
 step-1 report, so an operator was told about one of six sections and had no way to discover the
 other five short of running it and reading the output.
@@ -15,7 +15,7 @@ import contextlib
 import io
 import unittest
 
-from agent_artifacts import cli
+from aart_cli import cli
 
 
 class DoctorHelpE2ETest(unittest.TestCase):
