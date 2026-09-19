@@ -4,6 +4,21 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-20, stale CP-26.18 handoff reconciled; focused verification only.** The supplied
+handoff described `4fe1fe4`, steps 1–17 done and a 17/22 plan. The clean checkout was actually
+`64db5c0` on `refactor/cp-26-legacy-removal`, with 18/18a done and 19 in progress (19/23 done).
+Read the execution contracts, §164.7, D-312 and the current slice/NEXT; D-347 completed the old
+step-18 branch-suggestion carry-over in 18a. No reopening or duplicate implementation is needed.
+
+Focused verification passed all 76 tests in `registry_publication_readiness_test` (5),
+`registry_publication_io_test` (11), `registry_publication_branch_test` (14),
+`registry_push_cli_test` (12), `registry_publish_command_test` (3) and
+`registry_workspace_lifecycle_test` (31), run through Poetry with `aart_cli.application`
+imported first. The old `agent_artifacts` command is superseded by the completed namespace change.
+These tests use controlled local fixtures; no external Registry was pushed. No runtime code,
+task status, new product decision or backlog item changed. No full quality gate or new mutation
+claim applies to this audit. Step 19's red-suite obligations below remain unresolved.
+
 **2026-09-20, CP-26.19 in progress — one installation per harness, and the record is keyed by it.
 NOT VERIFIED: the suite is red.**
 

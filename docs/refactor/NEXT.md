@@ -2,6 +2,12 @@
 
 ## Where CP-26 is (2026-09-19)
 
+**2026-09-20 handoff check:** the handoff naming `4fe1fe4`, 17/22 and step 18 as next is stale.
+At inspected HEAD `64db5c0`, steps 18 and 18a are already done; step 19 is in progress. A focused
+rerun of 76 Push/publication/workspace tests passed. This does not clear step 19's recorded red
+suite or its remaining owner-qualified Installed/lifecycle work below. Use the current plan and
+the "What is left, in order" section, not the old step-18 handoff, to resume implementation.
+
 Steps 1–18a are **done** on `refactor/cp-26-legacy-removal`; **step 19 is in progress**. Installation
 owners, per-owner input composition, concrete credential addresses, launcher-side harness address
 composition, reconciliation names and Screen 07's per-installation rows are now implemented

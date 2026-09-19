@@ -952,6 +952,13 @@ defaults. Record any necessary choice about an unset tool repository before impl
 
 ### Step 18 — Registry Maintainer owns Push and explains readiness
 
+**Current status: done.** The later dated partial record is historical; its producing-action
+branch suggestion carry-over was completed in 18a (D-347). On 2026-09-20, a stale handoff pointing
+at `4fe1fe4` was checked against HEAD `64db5c0`: 76 focused tests passed across publication
+readiness, publication I/O, branch suggestions, Push CLI, publish CLI and workspace presentation.
+No implementation or plan status was changed by this audit. Step 19 remains in progress with its
+separately recorded failures; this is not whole-branch verification.
+
 This step supersedes D-255's TUI-only withdrawal while preserving its safety boundary. Push does not
 belong to initialization, rebuild, single promotion or bulk promotion. It is an action on screen
 46's existing local Registry workspace row. Returning there after any workflow — or reopening AART
