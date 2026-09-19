@@ -73,7 +73,13 @@ Two things that make this fail, both worth recognising:
 
 A private release cannot be installed from its URL at all, for the reason above. Download the file
 with something that does authenticate -- the instance's own web UI, or a CLI you are already signed
-in to -- and install the path:
+in to. `gh` is already signed in to the instance you set it up for:
+
+```sh
+gh release download vX.Y.Z --pattern 'aart_cli-*-py3-none-any.whl' --dir .
+```
+
+Then install the path:
 
 ```sh
 uv tool install --force ./aart_cli-X.Y.Z-py3-none-any.whl

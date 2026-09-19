@@ -1,6 +1,6 @@
 # CP-26 — Canonical Registry maintenance, authoring tools and local consumption
 
-Status: **active**. Steps 1–15 are done; step 16 is next. The plan has **22 tasks** after the
+Status: **active**. Steps 1–16 are done; step 17 is next. The plan has **22 tasks** after the
 2026-09-19 addition of CP-26.18a (D-332); task 21 remains the final broad gate. D-333 requires
 independent input entry for each installation and withdraws all cross-installation sharing.
 Product Specification §169 defines the accepted layout and namespace; runtime implementation is
@@ -1228,3 +1228,46 @@ the advertised commands and reruns 16 afterwards. Neither is pulled forward.
 **Evidence.** 31 tests in `adoption_first_contact_test`, `RepositoryRelativeLinkTest` red then green,
 `make unit` (4534 tests), `make typecheck`, `make docs-check`, Ruff check and format. No broad
 `make quality` ran, under D-317.
+
+### Step 16 — the install lines are run, not read (2026-09-19)
+
+`run_install_routes` in `scripts/distribution_smoke.py` builds this checkout's wheel, puts it where
+an authenticated download would have left it, and runs the lines the install document publishes.
+Five of the nine fenced blocks execute -- three clipboard routes through `uv`, `pipx` and
+`python -m pip`, and two from a file on disk -- plus the `gh release download` line added in this
+step. Each installs and then answers `aart --version` with the version that was built. Four are
+declined with a recorded reason: two name a `<repository>` that only a real remote has, one is the
+consumer example, one is the generator whose output belongs to a release body rather than to a
+reader's shell.
+
+**Read from the document, not transcribed.** The commands come out of the fenced blocks with
+`X.Y.Z` substituted, and go to a shell as written -- `$(pbpaste)` included, because the substitution
+is part of the line. Anything the classifier does not recognise is `unclassified` and fails, so a
+line added to the page has to be declared runnable or unrunnable by whoever adds it.
+
+**The stand-ins are strict on purpose** (D-340). `gh` parses its arguments the way
+`gh release download` does and refuses anything else; a stub that accepted everything would prove
+its own tolerance and nothing about the page. What it cannot prove is that a remote answers, which
+is why the URL row stays declined.
+
+**A gate that does not damage the machine it runs on.** `UV_TOOL_DIR`, `PIPX_HOME` and their bin
+directories are redirected into the workspace. Without that, the gate would reinstall the
+developer's own `aart` from a throwaway wheel every time it ran.
+
+**No eleventh quality gate.** The `integration` gate discovers `*e2e_test.py`, so
+`tests/install_routes_e2e_test.py` rides it and `unit` without a new gate, a new row in the gate
+table, or a heading that says eleven. The structural half -- section order, bounded explanation,
+link reachability, licence last -- is loaded into the same test, so the integration gate does not
+prove the lines work on a page whose shape it never checked.
+
+**Targeted semantic mutations (four).** A pip flag that does not exist, a `gh` flag the real `gh`
+would reject, an unclassifiable line added to the page, and a wheel name drifted from what the build
+produces each failed the gate. The first two failed by the line refusing to run, which is the point;
+the last two by the classification claim, which is the same defect seen one step earlier.
+
+**Not in this step.** Step 17 removes `M1F1` as a generated or operational default and must rerun
+this gate if it changes README content or an install line.
+
+**Evidence.** 3 tests in `install_routes_e2e_test` (five executed routes plus the download),
+`make integration`, `make unit`, `make typecheck`, `make docs-check`, Ruff check and format. No
+broad `make quality` ran, under D-317.

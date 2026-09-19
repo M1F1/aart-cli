@@ -4,6 +4,25 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-19, CP-26.16 complete.** The documented install lines are executed.
+`run_install_routes` extends `scripts/distribution_smoke.py`, which already built and validated a
+wheel: it puts that wheel where an authenticated download would leave it and runs the fenced blocks
+of `docs/install/installing-aart-v1.md` with `X.Y.Z` substituted, through a shell, as written. Five
+execute -- `uv`, `pipx` and `python -m pip` from the clipboard, `uv` and `pipx` from a file -- plus
+the `gh release download` line this step added to the page, the concrete authenticating CLI the
+Enterprise section previously only alluded to. Each answers `aart --version` with the built version.
+Four are declined with a reason recorded, and an unrecognised line fails the gate, so a line added
+to the page must be declared runnable or unrunnable by whoever adds it. The `gh` stand-in parses its
+arguments the way the real one does and refuses anything else; what it cannot prove is that a remote
+answers, which is why the URL row stays declined as `network`. `UV_TOOL_DIR`, `PIPX_HOME` and their
+bin directories are redirected into the workspace, so the gate cannot reinstall the developer's own
+`aart` from a throwaway wheel. No eleventh quality gate: `integration` discovers `*e2e_test.py`, and
+the structural half is loaded into the same test so that gate does not prove the lines work on a
+page whose shape it never checked. Four targeted mutations -- a pip flag that does not exist, a `gh`
+flag the real `gh` rejects, an unclassifiable line, a drifted wheel name -- each failed it.
+Evidence: `make integration`, `make unit` (4537), `make typecheck`, `make docs-check`, Ruff check
+and format. No broad `make quality` (D-317).
+
 **2026-09-19, CP-26.15 complete.** The README's detail moved off the page into eight documents the
 index already reaches, verbatim: 639 lines out, 783 down to 152, nothing rewritten. Install and
 quick start, consumer lifecycle with MCP setup and reading/checking/undoing a setup, writing an

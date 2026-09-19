@@ -2,8 +2,8 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–15 are **done** on `refactor/cp-26-legacy-removal`; **step 16 is next**. B-057 and B-149
-are both closed. The plan has **22 tasks (15 done)**: the owner added **CP-26.18a** between
+Steps 1–16 are **done** on `refactor/cp-26-legacy-removal`; **step 17 is next**. B-057 and B-149
+are both closed. The plan has **22 tasks (16 done)**: the owner added **CP-26.18a** between
 18 and 19 without renumbering existing ids. Task 21 remains the final broad verification.
 
 ### Accepted installation contract to carry into implementation (2026-09-19)
@@ -31,30 +31,28 @@ the slice; do not mark either task done for this specification-only segment.
 README opens with the route a new user runs, followed by a bounded `## What AART is`, a
 `## Documentation` index reaching all 33 public documents, and the licence -- four sections and
 nothing else, because step 15 moved the detail into eight linked documents.
-`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–15 (D-321 to D-339).
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–16 (D-321 to D-340).
 
-### Execute CP-26.16 next
+### Execute CP-26.17 next
 
-The structure step 15 produced becomes an executed gate. `docs/refactor/plan.json` step 16: *a gate
-executes final install lines and verifies README order, bounded explanation, links, and final
-License*.
+*Remove `M1F1` as a generated or operational default.* Plan step 17, and the last of phase 3.
+The slice's scope: Registry workflow and README content, CLI guidance, release defaults and public
+configuration documents. No organization or repository may be baked into a generated registry.
 
-**What already exists, so it is not rebuilt.** `adoption_first_contact_test` holds the order as the
-whole four-section list (`OrientationTest.test_the_page_is_the_four_sections_it_is_meant_to_be_and_ends_at_the_licence`),
-the bound as a ratio against the route, every public document's reachability from the index, and the
-moved claims against the documents that now carry them. `docs_check` refuses a link with no target
-at any depth (D-339). What is *not* held anywhere is that the install lines a reader copies actually
-run: they are checked as text, never executed.
+**Start by finding them rather than by editing.** `grep -rn "M1F1" --include=*.py --include=*.md
+--include=*.yml .` outside `docs/refactor/` is the whole surface; the ones that matter are the
+values a *generated* artifact carries, not a link in a document that names this repository
+truthfully. Separate the two before changing anything: a README sentence that says where this
+checkout lives is not an operational default, and removing it would be a different change from the
+one step 17 asks for.
 
-**So step 16 is about execution.** `scripts/install_commands.py` prints the lines the release body
-carries; the install document's grid is the same three installers against `<repository>` and
-`X.Y.Z`. The gate has to run what can be run without a network and a published release -- the wheel
-path at minimum -- and refuse a grid that has drifted from what `install_commands.py` produces. Read
-the existing packaging-check and `wheel` targets before adding a gate: part of this may already be
-reachable from them.
+**Rerun step 16's gate afterwards.** The slice requires it explicitly: step 17 may change README
+content or an install line, and `make integration` now executes those lines. Neither
+`install_commands.py` nor the install document names a host today (D-277), so the likely blast
+radius is the Registry workflow and CLI guidance -- but the gate is cheap and the requirement is
+written down.
 
-**Do not pull 18a forward.** It renames the advertised commands and reruns this gate afterwards;
-writing step 16 to assume the new names would make 18a look done when it is not.
+**Do not pull 18a forward.** It renames the advertised commands and reruns step 16's gate again.
 
 ### What the evidence said, so it is not re-derived
 

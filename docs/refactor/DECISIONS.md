@@ -8439,3 +8439,46 @@ a DOC002 and the incorrect one pass.
 per directory between the file and the root, plus two. Held by
 `RepositoryRelativeLinkTest.test_the_count_of_steps_up_is_read_from_where_the_file_sits`, which
 also refuses both the too-short and the too-long form from a nested file.
+
+## D-340 — The install lines are executed by the gate that already builds a wheel
+
+Step 16 asks for the documented install lines to be run rather than described. Three questions had
+to be answered to do that.
+
+**Where the gate lives.** Not as an eleventh entry in `QUALITY_GATES`: the `integration` gate
+discovers `*e2e_test.py`, and `tests/install_routes_e2e_test.py` is picked up by it and by `unit`
+without a new gate, a new row in the gate table or a heading that says eleven. The driver is
+`run_install_routes` in `scripts/distribution_smoke.py`, which already builds and validates a local
+wheel for the lifecycle smoke; this is an extension of it rather than a second one.
+
+**What counts as a documented line.** Every fenced `sh` block in
+`docs/install/installing-aart-v1.md`, read from the document rather than transcribed into the test,
+with `X.Y.Z` replaced by the version just built and the line handed to a shell exactly as written --
+`$(pbpaste)` included, because the substitution is part of the line and a line that only works
+without it is not the line on the page. Each block is classified: `clipboard`, `disk` and
+`authenticated-download` are run; `network` and `consumer-example` are declined with that reason
+recorded; anything else is `unclassified` and fails the gate. A line added to the page therefore has
+to be declared runnable or unrunnable by the person adding it, which is the last moment anyone will
+be asked.
+
+**What the stand-ins prove, and what they do not.** `pbpaste` prints the path a reader would have
+copied. `gh` parses its arguments the way `gh release download` does and refuses anything else, so
+the documented flags are under test rather than the stub's tolerance. Neither proves that a remote
+answers; the route is named for the download, not for the release, and the URL row stays declined as
+`network`.
+
+**Isolation is part of the claim.** `UV_TOOL_DIR`, `UV_TOOL_BIN_DIR`, `PIPX_HOME` and
+`PIPX_BIN_DIR` are redirected into the workspace and every route gets its own environment. Without
+that, running this gate would reinstall the developer's own `aart` from a throwaway wheel. A gate
+that damages the machine it runs on is worse than the drift it was written to catch.
+
+`uv` and `pipx` widen the proof where they exist and are recorded as `unavailable` where they do
+not. `python -m pip` is required, because every environment has it.
+
+**One line was added to the page**, not merely executed: `gh release download` is the concrete
+authenticating CLI the Enterprise section previously only alluded to, and the slice names it as one
+of the two routes a first-time reader takes.
+
+**Both halves in one gate.** The section order, the bounded explanation, link reachability and the
+final licence are held by `adoption_first_contact_test` under `unit`; the e2e test loads those cases
+too, so the integration gate does not prove the lines work on a page whose shape it never checked.

@@ -13,6 +13,7 @@ import importlib.metadata
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -635,3 +636,223 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# --- The documented install routes, executed ----------------------------------------------------
+
+_INSTALL_DOCUMENT = "docs/install/installing-aart-v1.md"
+_SHELL_BLOCK = re.compile(r"```sh\n(.*?)```", re.S)
+#: Routes whose line can be run here. The rest name an address or a project that does not exist.
+_RUNNABLE = ("clipboard", "disk", "authenticated-download")
+
+
+def documented_commands(source_root: Path) -> tuple[str, ...]:
+    """Every fenced shell block in the install document, verbatim and in order."""
+
+    text = (Path(source_root) / _INSTALL_DOCUMENT).read_text(encoding="utf-8")
+    return tuple(match.group(1).strip() for match in _SHELL_BLOCK.finditer(text))
+
+
+def classify_command(command: str) -> str:
+    """Which route a documented line belongs to, or `unclassified`.
+
+    `unclassified` is not a failure mode of this function -- it is the answer for a line nobody has
+    said anything about, and the gate fails on it. A line added to the page then has to be declared
+    runnable or declared unrunnable, which is the question its author is in the best position to
+    answer and the last moment anyone will be asked.
+    """
+
+    if "<repository>" in command:
+        return "network"
+    if command.startswith("cd /path/to/"):
+        return "consumer-example"
+    if "scripts/install_commands.py" in command:
+        return "generator"
+    if "gh release download" in command:
+        return "authenticated-download"
+    if "$(pbpaste)" in command:
+        return "clipboard"
+    if "./aart_cli-X.Y.Z-py3-none-any.whl" in command:
+        return "disk"
+    return "unclassified"
+
+
+def installer_of(command: str) -> str:
+    for installer in ("python -m pip", "pipx", "uv", "gh"):
+        if command.startswith(installer):
+            return installer
+    return command.split(maxsplit=1)[0]
+
+
+def _stand_ins(directory: Path, wheel: Path) -> Path:
+    """`pbpaste` and `gh`, close enough to fail on a line the real ones would reject.
+
+    The clipboard reader prints the path the reader would have copied. `gh` parses its arguments
+    the way `gh release download` does and refuses anything else, so the documented flags are what
+    is under test rather than this stub's tolerance; what it cannot prove is that GitHub answers,
+    which is why the route is named for the download and not for the release.
+    """
+
+    directory.mkdir(parents=True, exist_ok=True)
+    clipboard = directory / "pbpaste"
+    clipboard.write_text(f'#!/bin/sh\nprintf %s "{wheel}"\n', encoding="utf-8")
+    clipboard.chmod(0o755)
+    stub = directory / "gh"
+    stub.write_text(
+        "\n".join(
+            (
+                "#!/usr/bin/env python3",
+                "import argparse, glob, shutil, sys",
+                "from pathlib import Path",
+                "parser = argparse.ArgumentParser(prog='gh')",
+                "group = parser.add_subparsers(dest='group', required=True)",
+                "action = group.add_parser('release').add_subparsers(dest='action', required=True)",
+                "download = action.add_parser('download')",
+                "download.add_argument('tag')",
+                "download.add_argument('--pattern', required=True)",
+                "download.add_argument('--dir', required=True)",
+                "parsed = parser.parse_args()",
+                f"assets = glob.glob({str(wheel.parent)!r} + '/' + parsed.pattern)",
+                "if not assets:",
+                "    sys.exit('no asset matched ' + parsed.pattern)",
+                "Path(parsed.dir).mkdir(parents=True, exist_ok=True)",
+                "shutil.copy(assets[0], Path(parsed.dir) / Path(assets[0]).name)",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+    return directory
+
+
+def _installed_executable(roots: tuple[Path, ...]) -> Path | None:
+    for root in roots:
+        candidate = root / "aart"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _run_route(command: str, *, workspace: Path, index: int, wheel: Path) -> dict[str, Any]:
+    """One documented line, in its own environment, with the developer's tools out of reach.
+
+    `UV_TOOL_DIR`, `PIPX_HOME` and their bin directories are redirected into the workspace. Without
+    that, running this gate would reinstall the developer's own `aart` from a throwaway wheel --
+    a gate that damages the machine it runs on is worse than the drift it was written to catch.
+    """
+
+    root = workspace / f"route-{index}"
+    environment = root / "venv"
+    venv.EnvBuilder(with_pip=True, clear=True).create(environment)
+    bin_directory = _environment_python(environment).parent
+    uv_bin, pipx_bin = root / "uv-bin", root / "pipx-bin"
+    stand_ins = _stand_ins(root / "stand-ins", wheel)
+    downloads = root / "downloads"
+    downloads.mkdir()
+    shutil.copy(wheel, downloads / wheel.name)
+
+    env = dict(os.environ)
+    env.update(
+        PATH=os.pathsep.join((str(bin_directory), str(stand_ins), env.get("PATH", ""))),
+        UV_TOOL_DIR=str(root / "uv-tools"),
+        UV_TOOL_BIN_DIR=str(uv_bin),
+        PIPX_HOME=str(root / "pipx"),
+        PIPX_BIN_DIR=str(pipx_bin),
+        PIP_DISABLE_PIP_VERSION_CHECK="1",
+    )
+    env.pop("VIRTUAL_ENV", None)
+
+    completed = subprocess.run(
+        command,
+        shell=True,
+        cwd=downloads,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"documented install line failed: {command}\n{completed.stdout}{completed.stderr}"
+        )
+    if classify_command(command) == "authenticated-download":
+        landed = tuple(downloads.glob(wheel.name))
+        if not landed:
+            raise RuntimeError(f"documented download left no wheel behind: {command}")
+        return {"version": None}
+    executable = _installed_executable((bin_directory, uv_bin, pipx_bin))
+    if executable is None:
+        raise RuntimeError(f"documented install line installed no `aart`: {command}")
+    version = subprocess.run(
+        [str(executable), "--version"], capture_output=True, text=True, timeout=120, check=True
+    )
+    return {"version": version.stdout.strip().split()[-1]}
+
+
+def run_install_routes(source_root: Path) -> dict[str, Any]:
+    """Execute the install document's runnable lines and return a stable receipt."""
+
+    source_root = Path(source_root).resolve()
+    commands = documented_commands(source_root)
+    with tempfile.TemporaryDirectory(prefix="aart-install-routes-") as raw:
+        workspace = Path(raw)
+        wheel = _build_local_wheel(source_root, workspace)
+        version = wheel.name.split("-")[1]
+
+        generated = subprocess.run(
+            [sys.executable, "scripts/install_commands.py"],
+            cwd=source_root,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+        executed: list[dict[str, Any]] = []
+        declined: list[dict[str, Any]] = []
+        unavailable: list[dict[str, Any]] = []
+        unclassified: list[str] = []
+        for index, command in enumerate(commands):
+            route = classify_command(command)
+            if route == "unclassified":
+                unclassified.append(command)
+                continue
+            if route == "generator":
+                # Run separately, before the routes, because its output is what the release body
+                # carries rather than something a reader installs from.
+                declined.append({"command": command, "route": route})
+                continue
+            if route not in _RUNNABLE:
+                declined.append({"command": command, "route": route})
+                continue
+            installer = installer_of(command)
+            if installer != "python -m pip" and shutil.which(installer) is None:
+                unavailable.append({"command": command, "route": route, "installer": installer})
+                continue
+            outcome = _run_route(
+                command.replace("X.Y.Z", version),
+                workspace=workspace,
+                index=index,
+                wheel=wheel,
+            )
+            executed.append(
+                {
+                    "command": command,
+                    "route": route,
+                    "installer": installer,
+                    "version": outcome["version"] or version,
+                }
+            )
+
+    return {
+        "schema_version": 1,
+        "version": version,
+        "wheel": wheel.name,
+        "documented": len(commands),
+        "executed": tuple(executed),
+        "declined": tuple(declined),
+        "unavailable": tuple(unavailable),
+        "unclassified": tuple(unclassified),
+        "generator_ran": generated.returncode == 0,
+        "generated_lines": generated.stdout,
+    }
