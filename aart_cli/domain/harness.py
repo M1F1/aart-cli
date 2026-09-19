@@ -27,10 +27,12 @@ __all__ = [
     "McpEditor",
     "McpEntryShape",
     "HOOK_TARGETS",
+    "MANAGED_TREE_TARGETS",
     "MCP_TARGETS",
     "MEMORY_TARGETS",
     "DeliveryTarget",
     "HookTarget",
+    "ManagedTreeTarget",
     "McpRegistration",
     "McpTarget",
     "MemoryTarget",
@@ -39,6 +41,7 @@ __all__ = [
     "delivery_target",
     "hook_event_path",
     "hook_target",
+    "managed_tree_target",
     "mcp_target",
     "measured_harnesses",
     "memory_target",
@@ -429,6 +432,86 @@ MEMORY_TARGETS: dict[tuple[str, Scope], MemoryTarget] = {
 
 
 @dataclass(frozen=True, slots=True)
+class ManagedTreeTarget:
+    """The directory of one harness's own that AART may keep installations under.
+
+    Everything else in this module answers "where does the harness read this from". This answers
+    the opposite question: where may files the harness never reads be kept, so that they are under
+    the harness that selected them and go away with it (`§169.3`). A `DeliveryTarget` names the
+    artifact because the harness scans that directory; this one does not, because the namespacing
+    below it is AART's own and `installation_tree_root` composes it.
+
+    The directory is measured the same way the rest of the module is measured -- it is a directory
+    an observed build already keeps its own files in -- but the *choice* to put a managed subtree
+    there is a policy, and it is a safe one only because no measured build scans its own root
+    recursively for artifacts. Every discovery location observed here is an exact path: a skill is
+    `<root>/skills/<name>/SKILL.md` and not any `SKILL.md` below `<root>`. A build that scanned
+    recursively would read a payload as a second installation, and would need a row outside the
+    harness rather than a row here.
+    """
+
+    harness: str
+    scope: Scope
+    directory: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.harness, str) or _SLUG_RE.fullmatch(self.harness) is None:
+            raise ValueError("harness must be a canonical slug")
+        if not isinstance(self.scope, Scope):
+            raise ValueError("managed tree scope is invalid")
+        if (
+            not isinstance(self.directory, str)
+            or not self.directory
+            or self.directory.startswith("/")
+            or any(part in ("", ".", "..") for part in self.directory.split("/"))
+            or any(character in self.directory for character in "\r\n")
+        ):
+            raise ValueError("a managed tree directory must stay inside its scope root")
+
+
+#: Where each measured harness tolerates a managed subtree, relative to that scope's root.
+#:
+#: No row here is a new observation. Each is the harness's own top-level directory as some other
+#: table in this module already names it -- `.claude` from its skills and settings, `.tabnine` from
+#: its agent settings and guidelines, `.codex` from its skills and `config.toml`, `.opencode` and
+#: `.config/opencode` from the paths that build's own `debug` commands report. Writing them down
+#: separately is what lets an installation keep its private files under the harness that selected
+#: it; deriving them from another table instead would tie the two facts together and break the
+#: first time a build moves one of them.
+#:
+#: Tabnine's project files sit one level further down, in `.tabnine/agent`, and this row is still
+#: `.tabnine`. The narrower directory is that build's agent settings, not the product's root, and
+#: the row that needs to be true is "a directory this harness owns at this scope" -- which
+#: `.tabnine` is at both scopes, where `.tabnine/agent` is evidenced at neither user scope nor
+#: guidelines.
+#:
+#: There is a row for every pair any other table names, deliberately. An installation whose harness
+#: has no managed root would have nowhere to keep its payload, launcher, runtime and configuration,
+#: and only half of it could be installed.
+MANAGED_TREE_TARGETS: dict[tuple[str, Scope], ManagedTreeTarget] = {
+    ("claude", Scope.PROJECT): ManagedTreeTarget("claude", Scope.PROJECT, ".claude"),
+    ("claude", Scope.USER): ManagedTreeTarget("claude", Scope.USER, ".claude"),
+    ("tabnine", Scope.PROJECT): ManagedTreeTarget("tabnine", Scope.PROJECT, ".tabnine"),
+    ("tabnine", Scope.USER): ManagedTreeTarget("tabnine", Scope.USER, ".tabnine"),
+    ("codex", Scope.PROJECT): ManagedTreeTarget("codex", Scope.PROJECT, ".codex"),
+    ("codex", Scope.USER): ManagedTreeTarget("codex", Scope.USER, ".codex"),
+    ("opencode", Scope.PROJECT): ManagedTreeTarget("opencode", Scope.PROJECT, ".opencode"),
+    ("opencode", Scope.USER): ManagedTreeTarget("opencode", Scope.USER, ".config/opencode"),
+}
+
+
+def managed_tree_target(harness: str, scope: Scope) -> ManagedTreeTarget:
+    """Where `harness` tolerates a managed subtree at `scope`, or `KeyError` if nobody measured."""
+
+    try:
+        return MANAGED_TREE_TARGETS[(harness, scope)]
+    except KeyError:
+        raise KeyError(
+            f"no measured managed tree directory for harness {harness!r} at {scope.value} scope"
+        ) from None
+
+
+@dataclass(frozen=True, slots=True)
 class HookTarget:
     """Where one harness keeps a hook's script, and where it is told to run it.
 
@@ -619,6 +702,7 @@ def measured_harnesses() -> frozenset[str]:
         {harness for harness, _ in MCP_TARGETS}
         | {harness for harness, _ in MEMORY_TARGETS}
         | {harness for harness, _ in HOOK_TARGETS}
+        | {harness for harness, _ in MANAGED_TREE_TARGETS}
         | {harness for harness, _, _ in DELIVERY_TARGETS}
     )
 

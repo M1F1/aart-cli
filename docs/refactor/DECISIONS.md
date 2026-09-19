@@ -8984,3 +8984,52 @@ registration keys follow the same name through `registration_name`, so `.mcp.jso
 Skill looks like. Line endings are taken from the document rather than assumed: scoped mutmut showed
 the `\r\n` claim unheld, and the fix was a real defect, not a test gap -- a name row written with
 `\n` into a file an author commits with `\r\n`.
+
+## D-359 — The managed tree's base is a measured row, and no row is a new observation
+
+**Status.** Accepted, CP-26.19.
+
+**Context.** `domain/installation_tree.py` has held the §169.3 policy since it was written --
+`<harness root>/aart-cli/<kind>/<alias>/<name>` -- against a `harness_root` it takes as an
+argument. That was deliberate (D-346): the rule could be stated and tested without anyone inventing
+a directory for a harness nobody had looked at. It also means the module is unwired, and stays
+unwired, until something can answer what that base is for a real harness at a real scope.
+
+The question is not the one the rest of `domain/harness.py` answers. Every other table there says
+where a harness *reads* something from, and every row in them was observed by running the build. A
+managed tree is the opposite: a place for files the harness never reads -- payload, launcher,
+runtime, configuration, receipt -- which have to sit under the harness that selected them so that
+harness's own uninstall takes its own files and nothing more.
+
+**Decision.** `MANAGED_TREE_TARGETS`, keyed by (harness, scope) like its neighbours, with a
+`ManagedTreeTarget` that validates the directory stays inside its scope root. Eight rows, one for
+every pair any other table in the module names: `.claude`, `.tabnine`, `.codex`, `.opencode` and
+`.config/opencode`.
+
+Two claims are held by tests rather than by this paragraph. **No row names a directory nobody
+measured**: each managed root is a directory some existing measured target for the *same* harness
+and scope already sits in, checked over the tables themselves, so this cannot quietly become the
+place where locations get invented. And **every harness this build can place into has one**: a pair
+another table names and this one does not would be an installation with nowhere to keep half of
+itself.
+
+Tabnine is the row worth saying out loud. Its project files sit in `.tabnine/agent`, and the row is
+`.tabnine` at both scopes. `.tabnine/agent` is that build's *agent settings* directory, evidenced at
+project scope only; `.tabnine` is evidenced at both, by the agent settings below it and by the
+user-scope guidelines beside them. The row that has to be true is "a directory this harness owns at
+this scope", and the narrower one is not that at user scope.
+
+Putting a managed subtree inside the harness's own directory is a policy, not a measurement, and it
+is safe only because of something that *was* measured: no observed build scans its own root
+recursively. Every discovery location in this module is an exact path -- a skill is
+`<root>/skills/<name>/SKILL.md`, not any `SKILL.md` below `<root>` -- so a payload under
+`<root>/aart-cli/` is not a second installation to the harness that owns the root. A build that
+scanned recursively would need a base outside its own directory, and that would be a different row,
+not a different policy.
+
+**Consequence.** `installation_tree_root` can now be composed against a real directory, which is
+the prerequisite for the two steps that follow it: one receipt per installation owner rather than
+one per coordinate, and one placement per (artifact, harness) rather than one per artifact. The
+module stays in `DELIBERATE_NON_RUNTIME_MODULES` until those land. A redundant trailing-separator
+guard was dropped from the validator when a targeted mutation showed the empty-path-part check
+already covered it -- unheld code, removed rather than given a test of its own.
