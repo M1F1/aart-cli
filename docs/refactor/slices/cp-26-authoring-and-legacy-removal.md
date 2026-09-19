@@ -1,6 +1,6 @@
 # CP-26 — Canonical Registry maintenance, authoring tools and local consumption
 
-Status: **active**. Steps 1–13 are done; step 14 is next. The plan has **22 tasks** after the
+Status: **active**. Steps 1–15 are done; step 16 is next. The plan has **22 tasks** after the
 2026-09-19 addition of CP-26.18a (D-332); task 21 remains the final broad gate. D-333 requires
 independent input entry for each installation and withdraws all cross-installation sharing.
 Product Specification §169 defines the accepted layout and namespace; runtime implementation is
@@ -1166,3 +1166,65 @@ CP-26's 13/22 done, unchanged existing statuses, 14 next, 18a before 19 and 21 l
 `git diff --check` passed. No semantic mutation is claimed for this documentation-only segment and
 full `make quality` is not run. The local `.claude/HANDOFF.md` is refreshed but ignored by Git;
 tracked NEXT/status/slice/alignment records contain the same resumption information.
+
+### Step 15 — the detail moves off the page, into documents the index already reaches (2026-09-19)
+
+Six hundred and thirty-nine lines left the README and none of them were rewritten. `## Install and
+quick start` through `## Releasing` are now eight documents, each linked from the index that step 14
+built, and the page is the four sections §1.6 asks for: the route, the orientation, the index and
+the licence. 783 lines became 152.
+
+| what moved | where it lives now |
+|---|---|
+| Install and quick start, with all three subsections | `docs/install/installing-aart-v1.md` |
+| Consumer lifecycle, MCP setup and credentials, reading/checking/undoing a setup | `docs/using/consumer-lifecycle-v1.md` |
+| Writing an artifact | `docs/authoring/authoring-an-artifact-v1.md` |
+| Maintaining a registry | `docs/registry/maintaining-a-registry-v1.md` |
+| Running inside a company | `docs/ci/running-inside-a-company-v1.md` |
+| Canonical package, Interface, Verification | `docs/development/packaging-and-interface-v1.md` |
+| Development dependencies and the ten gates | `docs/development/quality-gates-v1.md` |
+| Releasing | `docs/release/releasing-v1.md` |
+
+**Moved, not discarded, is a claim somebody has to hold.** The three tests that read sections which
+moved now read the documents those sections landed in, by path: `InstallDocumentTest`,
+`QualityGateDocumentTest`, `ReleaseDocumentTest` and `RegistryDocumentTest` replace
+`ReadmeAdoptionTest`. A section dropped rather than relocated fails there by name, which is the
+difference between a move and a deletion that nothing measures. The claims themselves are unchanged
+-- same grid, same Enterprise narrowing, same gate table read off `build_gates`, same release
+description with the retired half still refused.
+
+**The command surface widened rather than narrowed** (D-338). Most shipped commands now appear one
+link away, so `DocumentedCommandSurfaceTest` reads the README *and the documents it links*, taking
+the set from the page's own links rather than from a list in the test. Narrowing to what is left on
+the page would have reported the move as missing documentation; widening to all of `docs/` would
+let a file no route reaches count as documentation, which is what D-336 refuses.
+
+**A gate that would have been wrong at the new depth** (D-339). `../../releases` reaches the
+repository root from the README and reaches `blob/branch/` from a document two directories down.
+`docs_check` held the root-level form in a literal allowlist, so the move would have turned the
+correct link into a DOC002 and let the incorrect one pass. The allowed forms are now computed from
+the file's depth, red test first: from `docs/install/`, four steps up is accepted and both three and
+five are refused.
+
+**Relocated links, checked rather than assumed.** Fourteen link targets travelled. Every
+`docs/...` became `../...`, `release-please-config.json` became `../../release-please-config.json`,
+the same-directory link in the company document dropped its detour, and the quick start's anchor
+into a section that no longer exists became a link to the install document -- the one wording change
+in the step, held by its own test.
+
+**Targeted semantic mutations (seven).** Flipping the Enterprise answer, deleting a gate row,
+drifting a release command, renaming `revendor`, breaking the quick start's install link, growing a
+fifth section back onto the README, and deleting the install document outright each failed the tests
+that name those claims -- the fifth failed two and the seventh three, which is correct: a missing
+document breaks every claim that reads it. All restored green.
+
+**One citation repaired.** `INVARIANT_TRACEABILITY.md` cited INV-101's evidence as
+`ReadmeAdoptionTest::test_the_release_section_...`; the class is now `ReleaseDocumentTest`. The
+traceability gate caught it, which is the gate doing its job.
+
+**Not in this step.** Step 16 executes the install lines and gates the structure; CP-26.18a renames
+the advertised commands and reruns 16 afterwards. Neither is pulled forward.
+
+**Evidence.** 31 tests in `adoption_first_contact_test`, `RepositoryRelativeLinkTest` red then green,
+`make unit` (4534 tests), `make typecheck`, `make docs-check`, Ruff check and format. No broad
+`make quality` ran, under D-317.

@@ -69,11 +69,12 @@ def validate_markdown(path: Path, text: str, root: Path) -> tuple[Diagnostic, ..
             )
         )
 
+    fork_safe = _repository_relative(path, root)
     for match in _LINK_RE.finditer(text):
         local = _link_path(match.group(1))
         if not local:
             continue
-        if local in _REPOSITORY_RELATIVE:
+        if local in fork_safe:
             continue
         if local.startswith("/"):
             candidate = root / local.lstrip("/")
@@ -91,12 +92,27 @@ def validate_markdown(path: Path, text: str, root: Path) -> tuple[Diagnostic, ..
     return tuple(sorted(diagnostics))
 
 
-# GitHub resolves a link from a file at the repository root against `host/owner/name/blob/branch/`,
-# so `../../releases` lands on that repository's own releases page -- whichever repository, on
-# whichever instance, the reader is looking at.  There is no file behind it and there is not meant
-# to be: it is the one way a page can point at a release without writing down an address that
-# would be upstream's in every fork, and a merge conflict on every merge from upstream.
-_REPOSITORY_RELATIVE = ("../../releases", "../../issues", "../../pulls", "../../tags")
+# GitHub resolves a link against `host/owner/name/blob/branch/<the file's own directory>/`, so
+# `../../releases` from a file at the repository root lands on that repository's own releases page
+# -- whichever repository, on whichever instance, the reader is looking at.  There is no file
+# behind it and there is not meant to be: it is the one way a page can point at a release without
+# writing down an address that would be upstream's in every fork, and a merge conflict on every
+# merge from upstream.
+_REPOSITORY_PAGES = ("releases", "issues", "pulls", "tags")
+
+
+def _repository_relative(path: Path, root: Path) -> frozenset[str]:
+    """The fork-safe forms *for this file*, which depend on how deep it sits.
+
+    Two steps up strip the filename and the branch; a file in a subdirectory needs one more for
+    each directory between it and the root.  Accepting every depth everywhere would accept a link
+    that lands inside `blob/branch/` -- a page about a file rather than the releases -- and
+    accepting only two would refuse the correct link from every document under `docs/`.
+    """
+
+    depth = len(path.resolve().relative_to(root.resolve()).parts) - 1
+    prefix = "../" * (depth + 2)
+    return frozenset(prefix + page for page in _REPOSITORY_PAGES)
 
 
 def _repository_markdown(root: Path) -> tuple[Path, ...]:

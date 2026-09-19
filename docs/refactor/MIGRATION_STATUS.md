@@ -4,6 +4,28 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-19, CP-26.15 complete.** The README's detail moved off the page into eight documents the
+index already reaches, verbatim: 639 lines out, 783 down to 152, nothing rewritten. Install and
+quick start, consumer lifecycle with MCP setup and reading/checking/undoing a setup, writing an
+artifact, maintaining a registry, running inside a company, canonical package with interface and
+verification, development dependencies with the ten gates, and releasing now live under
+`docs/install`, `docs/using`, `docs/authoring`, `docs/registry`, `docs/ci`, `docs/development` and
+`docs/release`. The page is the four sections §1.6 asks for, held as the whole ordered list rather
+than as "the licence is last": a section growing back is the failure the move was for and would pass
+a claim that only looked at the end. Moved-not-discarded is held by tests that read the destination
+documents by path -- `InstallDocumentTest`, `QualityGateDocumentTest`, `ReleaseDocumentTest`,
+`RegistryDocumentTest` in place of `ReadmeAdoptionTest` -- with every claim unchanged. The
+command-surface claim widened to the README *and the documents it links* (D-338), read from the
+page's own links: narrowing it would have reported the move as missing documentation, and widening
+to all of `docs/` would let a file no route reaches count as documented, which D-336 refuses. One
+gate would have been wrong at the new depth (D-339): `../../releases` reaches the repository root
+from the README and `blob/branch/` from two directories down, so `docs_check` now computes the
+fork-safe forms per file, red test first, refusing both the too-short and the too-long form. Seven
+targeted mutations each failed the tests that name the claims they attacked; deleting the install
+document failed three, correctly. `INVARIANT_TRACEABILITY.md`'s INV-101 citation was repointed at
+the renamed class, caught by the traceability gate. Evidence: 31 adoption tests, `make unit` (4534),
+`make typecheck`, `make docs-check`, Ruff check and format. No broad `make quality` (D-317).
+
 **2026-09-19, CP-26.14 complete.** `## What AART is` is the second section and `## One contract`
 is absorbed into it: what AART is a package manager of, all five artifact families, the four places
 an artifact passes through -- Source, Candidate, Registry, Marketplace, introduced and tested in

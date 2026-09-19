@@ -19,6 +19,18 @@ _PLACEHOLDER = "placeholder"
 _STAGES = ("Source", "Candidate", "Registry", "Marketplace")
 
 
+def _document(relative: str) -> str:
+    """One document CP-26.15 moved the README's detail into.
+
+    The claims below were written about the page and are unchanged; only the file that has to hold
+    them moved.  Reading the document by path rather than re-slicing the README is what makes the
+    move visible as a move: a section that was dropped instead of relocated fails here, not by a
+    section going quietly missing from a page nothing checks the length of.
+    """
+
+    return (_ROOT / relative).read_text(encoding="utf-8")
+
+
 def _section(heading: str) -> str:
     """One top-level section, sliced at the next top-level heading rather than at a named one.
 
@@ -31,6 +43,28 @@ def _section(heading: str) -> str:
     following = re.search(r"^## ", _README[start + 1 :], re.M)
     assert following is not None, f"{heading} is the last section"
     return _README[start : start + 1 + following.start()]
+
+
+def _linked_documents() -> dict[str, str]:
+    """Every document the README links, by repository-relative path.
+
+    CP-26.15 moves the detail off the page and into these, so a claim that was about the README
+    is now about the README *and* what it points a reader at. Read here rather than listed, for
+    the reason `_command_surface` is read off the parser: a list in a test goes stale in the same
+    direction as the page it checks.
+    """
+
+    return {
+        target: (_ROOT / target).read_text(encoding="utf-8")
+        for target in sorted(set(re.findall(r"\]\((docs/[^)#]+\.md)\)", _README)))
+        if (_ROOT / target).is_file()
+    }
+
+
+def _documentation() -> str:
+    """The README and everything it links, as one body of text to make a claim about."""
+
+    return _README + "\n".join(_linked_documents().values())
 
 
 def _command_surface() -> dict[str, frozenset[str]]:
@@ -51,11 +85,18 @@ def _command_surface() -> dict[str, frozenset[str]]:
     return surface
 
 
-class ReadmeCommandSurfaceTest(unittest.TestCase):
-    """The README is where a reader learns what the tool can do, so it is a claim about the
-    command tree and drifts from it silently.  Both directions matter and they fail differently:
-    a command the README invents wastes a reader's time at the shell, and a command the README
-    omits is capability nobody can find."""
+class DocumentedCommandSurfaceTest(unittest.TestCase):
+    """The documentation is where a reader learns what the tool can do, so it is a claim about
+    the command tree and drifts from it silently.  Both directions matter and they fail
+    differently: a command the documentation invents wastes a reader's time at the shell, and a
+    command it omits is capability nobody can find.
+
+    The surface is the README **and the documents it links**, which is what CP-26.15 left. Before
+    it, every command appeared on the page; after it, most of them live one link away. Narrowing
+    the claim to the README would have made the move look like deletion, and widening it to all
+    of `docs/` would let a command be "documented" by a file no route reaches -- which is the
+    failure D-336 exists to refuse.
+    """
 
     def test_every_shipped_top_level_command_is_named(self) -> None:
         surface = _command_surface()
@@ -63,27 +104,37 @@ class ReadmeCommandSurfaceTest(unittest.TestCase):
         # Plain `aart <name>`, not a backticked spelling: most of these appear inside fenced
         # shell blocks, where there are no backticks, and requiring them made this test report
         # five commands the README documents perfectly well.
-        mentioned = set(re.findall(r"\baart ([a-z][a-z-]+)", _README))
+        mentioned = set(re.findall(r"\baart ([a-z][a-z-]+)", _documentation()))
         missing = sorted(set(surface) - mentioned)
 
         self.assertEqual(
             missing,
             [],
-            "the README documents no route to these shipped commands",
+            "the documentation names no route to these shipped commands",
         )
 
-    def test_the_readme_invents_no_command(self) -> None:
+    def test_the_documentation_invents_no_command(self) -> None:
         surface = _command_surface()
 
         invented = sorted(
             {
                 f"{group} {sub}"
-                for group, sub in re.findall(r"aart ([a-z][a-z-]+) ([a-z][a-z-]+)", _README)
+                for group, sub in re.findall(
+                    r"aart ([a-z][a-z-]+) ([a-z][a-z-]+)", _documentation()
+                )
                 if group in surface and surface[group] and sub not in surface[group]
             }
         )
 
-        self.assertEqual(invented, [], "the README names subcommands the CLI does not have")
+        self.assertEqual(invented, [], "the documentation names subcommands the CLI does not have")
+
+    def test_the_documents_are_actually_reached_through_the_readme(self) -> None:
+        """The widened surface is only honest if the documents in it are linked from the page."""
+
+        linked = _linked_documents()
+
+        self.assertGreater(len(linked), 20)
+        self.assertGreater(len(_documentation()), len(_README))
 
     def test_this_guard_is_not_vacuous(self) -> None:
         surface = _command_surface()
@@ -174,6 +225,20 @@ class OrientationTest(unittest.TestCase):
         headings = re.findall(r"^## (.+)$", _README, re.M)
 
         self.assertEqual(headings[:2], ["Install an artifact", self.HEADING])
+
+    def test_the_page_is_the_four_sections_it_is_meant_to_be_and_ends_at_the_licence(self) -> None:
+        """§1.6's shape, held now that step 15 has emptied everything between them.
+
+        The order is the contract -- route, orientation, index, licence -- and the licence is last
+        because it is the one section nobody arrives for.  Held as the whole list rather than as
+        `License is last`, because a section growing back onto this page is exactly what the move
+        was for, and it would pass a claim that only looked at the end.
+        """
+
+        self.assertEqual(
+            re.findall(r"^## (.+)$", _README, re.M),
+            ["Install an artifact", self.HEADING, "Documentation", "License"],
+        )
 
     def test_the_orientation_stays_a_fraction_of_the_route_it_explains(self) -> None:
         """Bounded, held against the thing it introduces rather than against a number chosen here.
@@ -328,26 +393,29 @@ class RemediationNamesRealCommandsTest(unittest.TestCase):
         self.assertIn("uninstall", surface["marketplace"])
 
 
-class ReadmeAdoptionTest(unittest.TestCase):
+class InstallDocumentTest(unittest.TestCase):
+    """`docs/install/installing-aart-v1.md`, which the quick start hands a reader who needs more."""
+
     def _install_section(self) -> str:
-        start = _README.index("## Install and quick start")
-        return _README[start : _README.index("The editable install is", start)]
+        document = _document("docs/install/installing-aart-v1.md")
+        return document[: document.index("The editable install is")]
 
     def test_the_page_names_no_address_a_fork_would_have_to_correct(self) -> None:
         """The exact commands belong on the release, not here.
 
-        A README cannot know which instance it is being read on -- nothing interpolates a variable
-        into a markdown file -- so an address written here is upstream's address, wrong in every
-        fork, and a line every fork would have to edit and then re-edit on each merge. The release
-        page can know: `cut_release.py` derives it from the remote it is publishing to.
+        A document cannot know which instance it is being read on -- nothing interpolates a
+        variable into a markdown file -- so an address written here is upstream's address, wrong in
+        every fork, and a line every fork would have to edit and then re-edit on each merge. The
+        release page can know: `cut_release.py` derives it from the remote it is publishing to.
         """
 
         section = self._install_section()
         for address in ("https://github.com/", "http://", "ghe.corp", "nexus.corp"):
             with self.subTest(address=address):
                 self.assertNotIn(address, section)
-        # Relative on purpose: it resolves inside whatever repository the file lives in.
-        self.assertIn("[Releases page](../../releases)", section)
+        # Relative on purpose: it resolves inside whatever repository the file lives in, and takes
+        # one step up per directory between the file and the root -- four from `docs/install/`.
+        self.assertIn("[Releases page](../../../../releases)", section)
         self.assertIn("python scripts/install_commands.py", section)
 
     def test_install_grid_covers_three_installers_against_a_named_placeholder(self) -> None:
@@ -362,7 +430,15 @@ class ReadmeAdoptionTest(unittest.TestCase):
         self.assertIn("`X.Y.Z` is the release you want", section)
         self.assertGreaterEqual(section.count("git+<repository>.git@vX.Y.Z"), 3)
         self.assertGreaterEqual(section.count("./aart_cli-X.Y.Z-py3-none-any.whl"), 3)
-        self.assertIn("The editable install is for working on AART itself", _README)
+        self.assertIn(
+            "The editable install is for working on AART itself",
+            _document("docs/install/installing-aart-v1.md"),
+        )
+
+    def test_the_quick_start_still_hands_the_reader_this_document(self) -> None:
+        """The route stayed on the page; everything it defers to has to remain one link away."""
+
+        self.assertIn("(docs/install/installing-aart-v1.md)", _section("Install an artifact"))
 
     def test_the_enterprise_section_still_says_which_sources_stop_working(self) -> None:
         """A private instance narrows the grid, and the narrowing has to be written down.
@@ -373,12 +449,15 @@ class ReadmeAdoptionTest(unittest.TestCase):
         public table and swaps the host gets that failure with no clue in it.
         """
 
-        start = _README.index("### On a private Enterprise instance")
-        section = _README[start : _README.index("The editable install is", start)]
+        document = _document("docs/install/installing-aart-v1.md")
+        start = document.index("## On a private Enterprise instance")
+        section = document[start : document.index("The editable install is", start)]
         self.assertIn('"aart-cli==X.Y.Z"', section)
         self.assertIn("Release wheel by URL", section)
         self.assertIn("**No.**", section)
 
+
+class QualityGateDocumentTest(unittest.TestCase):
     def test_the_gate_table_lists_every_gate_the_runner_actually_builds(self) -> None:
         """The heading said nine for as long as there were ten.
 
@@ -399,11 +478,14 @@ class ReadmeAdoptionTest(unittest.TestCase):
         sys.path.insert(0, str(_ROOT / "scripts"))
         import quality
 
+        document = _document("docs/development/quality-gates-v1.md")
         for gate in quality.build_gates(_ROOT / "unused"):
             with self.subTest(gate=gate.name):
-                self.assertIn(f"| `{gate.name}` |", _README)
-        self.assertIn(f"### The {_SPELLED[len(quality.QUALITY_GATES)]} gates", _README)
+                self.assertIn(f"| `{gate.name}` |", document)
+        self.assertIn(f"## The {_SPELLED[len(quality.QUALITY_GATES)]} gates", document)
 
+
+class ReleaseDocumentTest(unittest.TestCase):
     def test_the_release_section_describes_the_release_that_actually_happens(self) -> None:
         """A release page that has drifted is worse than none: it is followed.
 
@@ -413,7 +495,7 @@ class ReadmeAdoptionTest(unittest.TestCase):
         supply -- and the two commands that are still commands.
         """
 
-        section = _README[_README.index("## Releasing") : _README.index("## License")]
+        section = _document("docs/release/releasing-v1.md")
         for phrase in (
             "fix(tui): preserve selected artifact after refresh",
             "feat(registry)!: replace legacy source schema",
@@ -432,14 +514,18 @@ class ReadmeAdoptionTest(unittest.TestCase):
             with self.subTest(retired=retired):
                 self.assertNotIn(retired, section)
 
+
+class RegistryDocumentTest(unittest.TestCase):
     def test_registry_entrance_names_vendoring_and_links_the_walked_tutorial(self) -> None:
+        document = _document("docs/registry/maintaining-a-registry-v1.md")
         for phrase in (
             "`vendor` is the foreign-repository path",
             "`provenance.json`",
             "`revendor`",
-            "docs/tutorials/company-registry-tabnine-v1.md",
+            "tutorials/company-registry-tabnine-v1.md",
         ):
-            self.assertIn(phrase, _README)
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, document)
 
 
 class CollectionVocabularyTest(unittest.TestCase):

@@ -8387,3 +8387,55 @@ rather than a lead sentence, so the rule carries no exception.
 
 **Consequence for step 15.** Moving a README section into a focused document is not complete until
 that document is in the index. Step 16's executed gate inherits both claims.
+
+## D-337 — The README is the route, the orientation, the index and the licence
+
+CP-26.15 moves §1.6.4's detail off the page. Six hundred and thirty-nine lines of it went, verbatim,
+into eight documents: `docs/install/installing-aart-v1.md`, `docs/using/consumer-lifecycle-v1.md`,
+`docs/authoring/authoring-an-artifact-v1.md`, `docs/registry/maintaining-a-registry-v1.md`,
+`docs/ci/running-inside-a-company-v1.md`, `docs/development/packaging-and-interface-v1.md`,
+`docs/development/quality-gates-v1.md` and `docs/release/releasing-v1.md`. Each is in the index,
+which D-336 requires and which is what makes this a move rather than a deletion.
+
+**Decision.** The page is exactly four sections, in this order: `Install an artifact`,
+`What AART is`, `Documentation`, `License`. Held as the whole list by
+`OrientationTest.test_the_page_is_the_four_sections_it_is_meant_to_be_and_ends_at_the_licence`
+rather than as "the licence is last", because a section growing back onto the page is the failure
+the move was for and it would pass a claim that only looked at the end.
+
+**Heading levels.** A document holding one moved section takes that section's heading as its `#`
+and promotes its children; a document holding several takes a new `#` and leaves the moved levels
+where they were. Both are the same rule -- the document's top level is `#` and relative depth is
+preserved -- and neither rewords anything.
+
+The one wording change is the quick start's pointer, which was an anchor into a section on the same
+page and is now a link to `docs/install/installing-aart-v1.md`. Held by
+`InstallDocumentTest.test_the_quick_start_still_hands_the_reader_this_document`.
+
+## D-338 — The command surface is the README and the documents it links
+
+`ReadmeCommandSurfaceTest` required every shipped top-level command to be named on the README. After
+D-337 most of them are named one link away, and the choice was to narrow the claim to what is left
+on the page or to widen it to what the page reaches.
+
+Narrowing would have made the move look like deletion: a command documented only in
+`docs/release/releasing-v1.md` would count as undocumented. Widening to all of `docs/` would let a
+command be "documented" by a file no route reaches, which is the failure D-336 exists to refuse.
+
+**Decision.** The surface is the README plus the documents it links, read from the page's own links
+rather than listed in the test. `DocumentedCommandSurfaceTest` holds both directions as before: no
+shipped command without a route to it, and no invented subcommand. Its third test refuses the
+degenerate reading in which the linked set is empty and the claim becomes vacuous.
+
+## D-339 — A fork-safe link's depth is read from where the file sits
+
+`../../releases` resolves against `host/owner/name/blob/branch/<the file's directory>/`, so the two
+steps up that reach the repository root from the README reach `blob/branch/` from a document two
+directories down -- a page about a file, not the releases. `docs_check` had the root-level form in a
+literal allowlist, so moving the install text under `docs/install/` would have made the correct link
+a DOC002 and the incorrect one pass.
+
+**Decision.** `_repository_relative(path, root)` computes the allowed forms per file: one step up
+per directory between the file and the root, plus two. Held by
+`RepositoryRelativeLinkTest.test_the_count_of_steps_up_is_read_from_where_the_file_sits`, which
+also refuses both the too-short and the too-long form from a nested file.

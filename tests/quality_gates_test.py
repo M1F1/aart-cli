@@ -189,6 +189,12 @@ class RepositoryRelativeLinkTest(unittest.TestCase):
 
     It resolves against whichever repository the reader is in, which is the one way a page can
     point at a release without writing down an address that is upstream's in every fork.
+
+    How many `../` that takes depends on where the file sits. GitHub resolves the link against
+    `host/owner/name/blob/branch/<the file's own directory>`, so a page at the root needs two and
+    a page two directories down needs four. The count is not decoration: written short from a
+    subdirectory the link lands inside `blob/branch/`, which is a page about a file, not the
+    releases. Only the count that reaches the repository root is a fork-safe form.
     """
 
     def test_the_fork_safe_forms_are_allowed_and_a_typo_is_not(self) -> None:
@@ -205,6 +211,26 @@ class RepositoryRelativeLinkTest(unittest.TestCase):
             )
             found = docs_check.validate_markdown(bad, bad.read_text(encoding="utf-8"), root)
             self.assertEqual([item.code for item in found], ["DOC002"])
+
+    def test_the_count_of_steps_up_is_read_from_where_the_file_sits(self) -> None:
+        """A subdirectory needs more of them, and exactly as many as reach the root."""
+
+        docs_check = _load_script("docs_check")
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            nested = root / "docs" / "install" / "installing.md"
+            nested.parent.mkdir(parents=True)
+            for target, expected in (
+                ("../../../../releases", []),
+                ("../../releases", ["DOC002"]),
+                ("../../../../../releases", ["DOC002"]),
+            ):
+                with self.subTest(target=target):
+                    nested.write_text(f"See [Releases]({target}).\n", encoding="utf-8")
+                    found = docs_check.validate_markdown(
+                        nested, nested.read_text(encoding="utf-8"), root
+                    )
+                    self.assertEqual([item.code for item in found], expected)
 
 
 class GateReportingTest(unittest.TestCase):

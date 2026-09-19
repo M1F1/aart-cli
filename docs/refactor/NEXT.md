@@ -2,8 +2,8 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–14 are **done** on `refactor/cp-26-legacy-removal`; **step 15 is next**. B-057 and B-149
-are both closed. The plan has **22 tasks (14 done)**: the owner added **CP-26.18a** between
+Steps 1–15 are **done** on `refactor/cp-26-legacy-removal`; **step 16 is next**. B-057 and B-149
+are both closed. The plan has **22 tasks (15 done)**: the owner added **CP-26.18a** between
 18 and 19 without renumbering existing ids. Task 21 remains the final broad verification.
 
 ### Accepted installation contract to carry into implementation (2026-09-19)
@@ -28,34 +28,33 @@ prove the same isolation for local/remote Registry aliases. Read the detailed 18
 the slice; do not mark either task done for this specification-only segment.
 
 `aart author init` generates all five kinds; `aart author check` answers both halves of §1.4; the
-README opens with the route a new user runs rather than with the architecture, and a bounded
-`## What AART is` and a `## Documentation` index reaching all 25 public documents follow it.
-`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–14 (D-321 to D-331).
+README opens with the route a new user runs, followed by a bounded `## What AART is`, a
+`## Documentation` index reaching all 33 public documents, and the licence -- four sections and
+nothing else, because step 15 moved the detail into eight linked documents.
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–15 (D-321 to D-339).
 
-### Execute CP-26.15 next
+### Execute CP-26.16 next
 
-The README's detailed sections move into focused documents. `## Install and quick start` and
-everything below it is still the page it was before CP-26.13: consumer lifecycle, MCP setup and
-credentials, reading/checking/undoing a setup, writing an artifact, maintaining a registry, running
-inside a company, canonical package, interface, verification, development dependencies and the ten
-gates, releasing. The quick start already links down to the install grid for `pip`, `pipx` and the
-private-instance cases, so whatever moves has to leave that route intact.
+The structure step 15 produced becomes an executed gate. `docs/refactor/plan.json` step 16: *a gate
+executes final install lines and verifies README order, bounded explanation, links, and final
+License*.
 
-**Moved, not discarded** (§1.6.4). Each section lands in a document the index already names, or in
-a new one added to the index — the index test refuses a public document nothing links. **License
-stays last**, with its current MIT wording and the copyright/footer preserved unless the owner asks
-otherwise.
+**What already exists, so it is not rebuilt.** `adoption_first_contact_test` holds the order as the
+whole four-section list (`OrientationTest.test_the_page_is_the_four_sections_it_is_meant_to_be_and_ends_at_the_licence`),
+the bound as a ratio against the route, every public document's reachability from the index, and the
+moved claims against the documents that now carry them. `docs_check` refuses a link with no target
+at any depth (D-339). What is *not* held anywhere is that the install lines a reader copies actually
+run: they are checked as text, never executed.
 
-Three tests in `adoption_first_contact_test` read sections that will move: `ReadmeAdoptionTest`
-slices on `## Install and quick start`, `### On a private Enterprise instance` and `## Releasing`,
-and holds the install grid, the Enterprise narrowing, the gate table and the release description.
-Whatever survives on the page keeps those claims; whatever moves takes them to a test that reads
-the new document. `ReadmeCommandSurfaceTest` requires every shipped top-level command to be named
-**somewhere in the README**, so a group whose only mention of a command leaves the page breaks it —
-that is the test doing its job, and the fix is a line in the index, not a weaker test.
+**So step 16 is about execution.** `scripts/install_commands.py` prints the lines the release body
+carries; the install document's grid is the same three installers against `<repository>` and
+`X.Y.Z`. The gate has to run what can be run without a network and a published release -- the wheel
+path at minimum -- and refuse a grid that has drifted from what `install_commands.py` produces. Read
+the existing packaging-check and `wheel` targets before adding a gate: part of this may already be
+reachable from them.
 
-Step 16 then executes the install lines and gates the structure; CP-26.18a renames the advertised
-commands and reruns step 16 afterwards. Do not pull either forward.
+**Do not pull 18a forward.** It renames the advertised commands and reruns this gate afterwards;
+writing step 16 to assume the new names would make 18a look done when it is not.
 
 ### What the evidence said, so it is not re-derived
 
