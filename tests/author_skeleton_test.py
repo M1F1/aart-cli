@@ -15,6 +15,7 @@ block live parses too -- so uncommenting a block is a working edit, not a guess.
 from __future__ import annotations
 
 import unittest
+from typing import get_args
 
 from agent_artifacts.authoring.skeleton import (
     ALTERNATIVE_PREFIX,
@@ -26,6 +27,7 @@ from agent_artifacts.authoring.skeleton import (
 from agent_artifacts.domain.identifiers import SourceAlias
 from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.protocol.authoring import (
+    AuthorKind,
     DiscoveredAuthorManifest,
     compile_author_snapshot,
     parse_author_manifest,
@@ -38,7 +40,13 @@ from tests.authoring_field_surface import parser_field_surface
 _NAME = "github-mcp"
 
 #: A plausible name per generated kind, so each skeleton is read the way an author would get it.
-_NAMES: dict[str, str] = {"mcp": _NAME, "skill": "code-review"}
+_NAMES: dict[str, str] = {
+    "guideline": "commit-style",
+    "hook": "guard-bash",
+    "mcp": _NAME,
+    "memory": "team-context",
+    "skill": "code-review",
+}
 
 
 def _name_for(kind: str) -> str:
@@ -136,7 +144,8 @@ class CompilationTest(unittest.TestCase):
         root = skeleton.name
         files = [_file(f"{root}/aart.yaml", skeleton.manifest.encode())]
         files.extend(
-            _file(f"{root}/{path}", content.encode()) for path, content in skeleton.payload
+            _file(f"{root}/{file.path}", file.content.encode(), executable=file.executable)
+            for file in skeleton.payload
         )
         compiled = compile_author_snapshot(
             _snapshot(*files),
@@ -168,8 +177,8 @@ class CompilationTest(unittest.TestCase):
             with self.subTest(kind=kind):
                 entries = {str(entry.path) for entry in self._compiled(kind).canonical_entries}
 
-                for path, _ in skeleton.payload:
-                    self.assertIn(f"payload/{path}", entries)
+                for file in skeleton.payload:
+                    self.assertIn(f"payload/{file.path}", entries)
                 self.assertEqual([e for e in entries if "payload/payload/" in e], [])
 
 
@@ -266,7 +275,7 @@ class ShapeTest(unittest.TestCase):
 
                 self.assertTrue(skeleton.payload)
                 self.assertEqual(
-                    sorted(path for path, _content in skeleton.payload),
+                    sorted(file.path for file in skeleton.payload),
                     sorted(parsed.value.includes),
                 )
 
@@ -278,7 +287,7 @@ class ShapeTest(unittest.TestCase):
         assert isinstance(parsed, Ok), parsed
 
         self.assertIsNotNone(parsed.value.entrypoint)
-        self.assertIn(str(parsed.value.entrypoint), [path for path, _content in skeleton.payload])
+        self.assertIn(str(parsed.value.entrypoint), [file.path for file in skeleton.payload])
 
     def test_the_name_the_caller_gave_is_the_artifact_name(self) -> None:
         parsed = _parsed(_skeleton(name="atlassian").manifest)
@@ -293,10 +302,10 @@ class SkillTest(unittest.TestCase):
     def test_the_payload_carries_the_file_a_skill_package_requires(self) -> None:
         """`native_tree` refuses a skill package without `payload/SKILL.md`."""
 
-        self.assertIn("SKILL.md", [path for path, _ in _skeleton("skill").payload])
+        self.assertIn("SKILL.md", [file.path for file in _skeleton("skill").payload])
 
     def test_the_skill_markdown_is_not_empty(self) -> None:
-        contents = dict(_skeleton("skill").payload)
+        contents = {file.path: file.content for file in _skeleton("skill").payload}
 
         self.assertIn("#", contents["SKILL.md"])
 
@@ -327,11 +336,14 @@ class SkillTest(unittest.TestCase):
 
 
 class RefusalTest(unittest.TestCase):
-    def test_a_kind_this_step_does_not_generate_is_refused_by_name(self) -> None:
-        result = author_skeleton("guideline", _NAME)
+    def test_this_build_generates_every_kind_the_parser_accepts(self) -> None:
+        """The refusal path is still reachable; there is simply no accepted kind left in it.
 
-        assert isinstance(result, Err), result
-        self.assertIn("guideline", result.diagnostics[0].message)
+        `AuthorKind` is the parser's list, and a kind on it with no blueprint would be a `--kind`
+        the CLI offers and the generator refuses.
+        """
+
+        self.assertEqual(GENERATED_KINDS, tuple(sorted(get_args(AuthorKind))))
 
     def test_a_kind_the_parser_does_not_know_is_refused(self) -> None:
         result = author_skeleton("plugin", _NAME)

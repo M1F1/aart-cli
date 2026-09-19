@@ -10,10 +10,15 @@ started with -- never a half of one they would then have to tell apart from thei
 from __future__ import annotations
 
 import os
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent_artifacts.authoring.skeleton import SKELETON_MANIFEST_NAME, AuthorSkeleton
+from agent_artifacts.authoring.skeleton import (
+    SKELETON_MANIFEST_NAME,
+    AuthorSkeleton,
+    PayloadFile,
+)
 from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
 from agent_artifacts.domain.diagnostics import Diagnostic, Severity
 from agent_artifacts.domain.identifiers import SourceAlias
@@ -50,7 +55,7 @@ def _error(message: str, *remediation: str) -> Err:
     )
 
 
-def _files(skeleton: AuthorSkeleton) -> Result[tuple[tuple[str, str], ...]]:
+def _files(skeleton: AuthorSkeleton) -> Result[tuple[PayloadFile, ...]]:
     """The workspace as relative path and content, with every path read by the path parser.
 
     The paths come from the generator rather than from an author, which is exactly why they are
@@ -58,35 +63,40 @@ def _files(skeleton: AuthorSkeleton) -> Result[tuple[tuple[str, str], ...]]:
     otherwise write outside the directory the author named.
     """
 
-    files: list[tuple[str, str]] = []
-    for relative, content in ((SKELETON_MANIFEST_NAME, skeleton.manifest), *skeleton.payload):
-        safe = parse_relative_path(relative)
+    files: list[PayloadFile] = []
+    for file in (PayloadFile(SKELETON_MANIFEST_NAME, skeleton.manifest), *skeleton.payload):
+        safe = parse_relative_path(file.path)
         if isinstance(safe, Err):
-            return _error(f"the generated workspace names an unusable path: {relative!r}")
-        files.append((str(safe.value), content))
+            return _error(f"the generated workspace names an unusable path: {file.path!r}")
+        files.append(PayloadFile(str(safe.value), file.content, file.executable))
     return Ok(tuple(files))
 
 
-def _occupied(root: Path, files: tuple[tuple[str, str], ...]) -> str | None:
+def _occupied(root: Path, files: tuple[PayloadFile, ...]) -> str | None:
     """The first target that already exists, by any kind of directory entry there may be."""
 
-    for relative, _ in files:
-        if os.path.lexists(root / relative):
-            return relative
+    for file in files:
+        if os.path.lexists(root / file.path):
+            return file.path
     return None
 
 
-def _directories(root: Path, files: tuple[tuple[str, str], ...]) -> tuple[Path, ...]:
+def _directories(root: Path, files: tuple[PayloadFile, ...]) -> tuple[Path, ...]:
     """Every directory the workspace needs, outermost first, without repeating one."""
 
     ordered: list[Path] = []
-    for relative, _ in files:
+    for file in files:
         current = root
-        for component in Path(relative).parts[:-1]:
+        for component in Path(file.path).parts[:-1]:
             current = current / component
             if current not in ordered:
                 ordered.append(current)
     return tuple(ordered)
+
+
+#: Execute for everyone who can already read, which is what `chmod +x` does and what
+#: `package_hook` checks for.
+_EXECUTABLE_BITS = stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
 
 
 def write_author_skeleton(skeleton: AuthorSkeleton, *, into: str) -> Result[AuthorWorkspaceWrite]:
@@ -115,14 +125,18 @@ def write_author_skeleton(skeleton: AuthorSkeleton, *, into: str) -> Result[Auth
             if not directory.exists():
                 directory.mkdir(parents=True)
                 created.append(directory)
-        for relative, content in files:
-            target = root / relative
-            target.write_text(content, encoding="utf-8")
+        for file in files:
+            target = root / file.path
+            target.write_text(file.content, encoding="utf-8")
             created.append(target)
+            if file.executable:
+                # A hook's script is refused at install time unless the harness can run it, so the
+                # bit is part of what `init` writes rather than something the author is told about.
+                target.chmod(target.stat().st_mode | _EXECUTABLE_BITS)
     except OSError as error:
         _undo(created)
         return _error(f"the authoring workspace could not be written under {into}: {error}")
-    return Ok(AuthorWorkspaceWrite(str(root), tuple(relative for relative, _ in files)))
+    return Ok(AuthorWorkspaceWrite(str(root), tuple(file.path for file in files)))
 
 
 def _undo(created: list[Path]) -> None:

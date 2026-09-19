@@ -22,6 +22,7 @@ tell them apart:
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -37,7 +38,7 @@ PROSE_PREFIX = "## "
 COMMENTED_YAML_PREFIX = "# "
 ALTERNATIVE_PREFIX = "#? "
 
-#: Kinds this build generates a skeleton for. Step 12 adds the remaining three. Derived from the
+#: Kinds this build generates a skeleton for: all five the parser accepts. Derived from the
 #: blueprints at the foot of this module, so registering one is the whole of adding a kind.
 GENERATED_KINDS: tuple[str, ...]
 
@@ -48,6 +49,21 @@ SKELETON_MANIFEST_NAME = "aart.yaml"
 #: files under the package's `payload/` itself, so a `payload/` written here would arrive as
 #: `payload/payload/`: the shipped example in `docs/examples/author-source` is the shape.
 _REQUIREMENTS = "requirements.txt"
+
+
+@dataclass(frozen=True, slots=True)
+class PayloadFile:
+    """One generated payload file. `executable` because a hook's script has to be.
+
+    A hook declares `command: ${SCRIPT_DIR}/run.sh`, and `package_hook` refuses a package whose
+    script is not executable -- "the harness could not run it". Compilation does not catch it, so
+    an `init` that wrote the file unexecutable would hand the author a workspace that compiles,
+    promotes and then refuses to install.
+    """
+
+    path: str
+    content: str
+    executable: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,7 +78,7 @@ class AuthorSkeleton:
     live: JsonObject
     #: The same document with every commented block enabled. Parses; see the module docstring.
     full: JsonObject
-    payload: tuple[tuple[str, str], ...]
+    payload: tuple[PayloadFile, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +99,7 @@ class _Blueprint:
     nested_optional: tuple[tuple[str, str], ...]
     #: Lines closing the document: what the parser accepts here that this kind does not generate.
     notes: tuple[str, ...]
-    payload: tuple[tuple[str, str], ...]
+    payload: tuple[PayloadFile, ...]
 
 
 def _error(message: str) -> Err:
@@ -260,14 +276,14 @@ _EXPLANATIONS: dict[str, str] = {
     "arguments": "Extra arguments the server is started with, after the entrypoint.",
     "compatibility": "Narrow the artifact to the harnesses and platforms it actually runs on.",
     "exclude": "Payload files to leave out of the package, applied after `include`.",
-    "inputs": "Values AART collects from the installer and injects when the server runs.",
+    "inputs": "Values AART collects from the installer and keeps for this artifact.",
     "python": "How the payload's Python dependencies are resolved at install time.",
     "summary": "One line shown wherever the artifact is listed. Derived from the name if absent.",
 }
 
 #: The explanation for a position whose purpose differs by kind. Read before `_EXPLANATIONS`.
 _KIND_EXPLANATIONS: dict[tuple[str, str], str] = {
-    ("skill", "inputs"): "Values AART collects from the installer and keeps for this skill.",
+    ("mcp", "inputs"): "Values AART collects from the installer and injects when the server runs.",
 }
 
 #: Fields that cannot be live beside one that is, offered under the line each replaces. Two of
@@ -498,12 +514,12 @@ def _skill_blueprint(name: str) -> _Blueprint:
     )
 
 
-def _skill_payload(name: str) -> tuple[tuple[str, str], ...]:
+def _skill_payload(name: str) -> tuple[PayloadFile, ...]:
     """The one file a skill package requires, with the shape a harness reads."""
 
     title = _humanized(name)
     return (
-        (
+        PayloadFile(
             _SKILL_DOCUMENT,
             f"# {title}\n"
             "\n"
@@ -522,9 +538,247 @@ def _skill_payload(name: str) -> tuple[tuple[str, str], ...]:
     )
 
 
+#: What the parser accepts on a document artifact and this generator will not write for one. A
+#: guideline is written into a file and a memory is merged into a block somebody else owns, so
+#: nothing launches either, and `native_tree` requires the payload to be *exactly one* Markdown
+#: document -- which is why no dependency file can be offered for these two at all.
+_DOCUMENT_NOT_GENERATED: tuple[str, ...] = (
+    "## This artifact is delivered by writing its one document where the harness reads it, so",
+    "## nothing launches it. The parser accepts these anyway; declaring them makes the compiled",
+    "## package advertise a protocol it does not speak:",
+    "#? transport:",
+    "#?   type: stdio",
+    "#? runtime:",
+    "#?   type: python",
+    '#?   version: ">=3.11"',
+    "#? launch:",
+    "#?   type: python",
+    "#?   entrypoint: run.py",
+    "#?   arguments:",
+    '#?     - "--once"',
+    "## `python:` is accepted and cannot be used here: every dependency descriptor names a file,",
+    "## and this payload is exactly one Markdown document. A second file in it is refused",
+    "## outright, so all three shapes are named rather than offered:",
+    "#? python:",
+    "#?   dependencies:",
+    "#?     type: requirements",
+    "#?     path: requirements.txt",
+    "#?   dependencies:",
+    "#?     type: pyproject",
+    "#?     pyproject: pyproject.toml",
+    "#?     lock: uv.lock",
+)
+
+#: The hook is launched by its own `hook.json`, so the launch block would be a second answer to a
+#: question already answered -- and the payload it would name is the script the declaration names.
+_HOOK_NOT_GENERATED: tuple[str, ...] = (
+    "## A hook says what runs it in `hook.json`, not here, so these are left to you. `launch:`",
+    "## in particular would be a second answer to a question the declaration already answers:",
+    "#? transport:",
+    "#?   type: stdio",
+    "#? runtime:",
+    "#?   type: python",
+    '#?   version: ">=3.11"',
+    "#? launch:",
+    "#?   type: python",
+    "#?   entrypoint: run.py",
+    "#?   arguments:",
+    '#?     - "--once"',
+    "## Python dependencies, if the script is Python. Enabling this also means adding the file",
+    "## to `include`, which is why it is offered rather than written out:",
+    "#? python:",
+    "#?   dependencies:",
+    "#?     type: requirements",
+    "#?     path: requirements.txt",
+    "#?   dependencies:",
+    "#?     type: pyproject",
+    "#?     pyproject: pyproject.toml",
+    "#?     lock: uv.lock",
+)
+
+_GUIDELINE_DOCUMENT = "GUIDELINE.md"
+_MEMORY_DOCUMENT = "MEMORY.md"
+_HOOK_DECLARATION = "hook.json"
+_HOOK_SCRIPT = "run.sh"
+
+
+def _document_blueprint(
+    kind: str,
+    name: str,
+    *,
+    document_name: str,
+    summary: str,
+    payload: tuple[PayloadFile, ...],
+) -> _Blueprint:
+    """A guideline and a memory differ in where they are delivered, not in what they declare.
+
+    Both are one Markdown document: `native_tree` refuses either package unless the payload holds
+    exactly one `.md` file and nothing else. So `include` names one file, and the closing note says
+    why a second cannot be added rather than leaving an author to find out from a refusal.
+    """
+
+    return _Blueprint(
+        kind,
+        _object(
+            ("schema", f"aart.dev/{kind}/v1"),
+            (
+                "artifact",
+                _object(
+                    ("kind", kind),
+                    ("name", name),
+                    ("summary", summary),
+                    ("version", "0.1.0"),
+                ),
+            ),
+            (
+                "payload",
+                _object(
+                    ("exclude", _strings("**/.DS_Store")),
+                    ("include", _strings(document_name)),
+                ),
+            ),
+            (
+                "compatibility",
+                _object(
+                    ("harnesses", _strings("claude-code")),
+                    ("platforms", _strings("darwin", "linux")),
+                ),
+            ),
+            ("inputs", _inputs()),
+        ),
+        optional=("compatibility", "inputs"),
+        nested_optional=(("artifact", "summary"), ("payload", "exclude")),
+        notes=(*_DOCUMENT_NOT_GENERATED, *_UNREAD_NOTE),
+        payload=payload,
+    )
+
+
+def _guideline_blueprint(name: str) -> _Blueprint:
+    """A guideline: one document written where the harness reads its standing instructions."""
+
+    return _document_blueprint(
+        "guideline",
+        name,
+        document_name=_GUIDELINE_DOCUMENT,
+        summary=f"{_humanized(name)} guideline.",
+        payload=(
+            PayloadFile(
+                _GUIDELINE_DOCUMENT,
+                f"# {_humanized(name)}\n"
+                "\n"
+                "The standing instruction this guideline carries, in the words an agent should\n"
+                "read it in. Replace all of it.\n"
+                "\n"
+                "- One rule per line, stated as a rule rather than as advice.\n"
+                "- Say what to do when two rules disagree.\n",
+            ),
+        ),
+    )
+
+
+def _memory_blueprint(name: str) -> _Blueprint:
+    """A memory: one document merged into a managed block inside a file the user owns."""
+
+    return _document_blueprint(
+        "memory",
+        name,
+        document_name=_MEMORY_DOCUMENT,
+        summary=f"{_humanized(name)} memory.",
+        payload=(
+            PayloadFile(
+                _MEMORY_DOCUMENT,
+                f"# {_humanized(name)}\n"
+                "\n"
+                "What an agent should already know before it starts. This body is merged into a\n"
+                "managed region of a file the user also writes in, so keep it short and keep it\n"
+                "true -- everything here is read on every turn.\n"
+                "\n"
+                "- One fact per line.\n",
+            ),
+        ),
+    )
+
+
+def _hook_blueprint(name: str) -> _Blueprint:
+    """A hook is two things at once: a script AART delivers, and one entry in somebody else's file.
+
+    The entry comes from `hook.json`, which the author writes -- unlike `mcp.json`, which is
+    reserved for the compiler. `package_hook` reads the declaration, requires `command` to begin
+    `${SCRIPT_DIR}/`, and requires the file it names to be in the payload and executable.
+    """
+
+    return _Blueprint(
+        "hook",
+        _object(
+            ("schema", "aart.dev/hook/v1"),
+            (
+                "artifact",
+                _object(
+                    ("kind", "hook"),
+                    ("name", name),
+                    ("summary", f"{_humanized(name)} hook."),
+                    ("version", "0.1.0"),
+                ),
+            ),
+            (
+                "payload",
+                _object(
+                    ("exclude", _strings("**/.DS_Store")),
+                    ("include", _strings(_HOOK_DECLARATION, _HOOK_SCRIPT)),
+                ),
+            ),
+            (
+                "compatibility",
+                _object(
+                    ("harnesses", _strings("claude-code")),
+                    ("platforms", _strings("darwin", "linux")),
+                ),
+            ),
+            ("inputs", _inputs()),
+        ),
+        optional=("compatibility", "inputs"),
+        nested_optional=(("artifact", "summary"), ("payload", "exclude")),
+        notes=(*_HOOK_NOT_GENERATED, *_UNREAD_NOTE),
+        payload=_hook_payload(name),
+    )
+
+
+def _hook_payload(name: str) -> tuple[PayloadFile, ...]:
+    """The declaration a harness is told about, and the script it names -- executable.
+
+    `${SCRIPT_DIR}` is the one substitution a declaration may carry: it is where AART will have
+    delivered the script on the installing machine, which the author has never seen.
+    """
+
+    declaration = json.dumps(
+        {
+            "name": name,
+            "event": "PreToolUse",
+            "matcher": "Bash",
+            "command": f"${{SCRIPT_DIR}}/{_HOOK_SCRIPT}",
+        },
+        indent=2,
+    )
+    return (
+        PayloadFile(_HOOK_DECLARATION, f"{declaration}\n"),
+        PayloadFile(
+            _HOOK_SCRIPT,
+            "#!/bin/sh\n"
+            "# Runs on every event this hook's `matcher` selects. Replace it.\n"
+            "#\n"
+            "# Exit non-zero to refuse whatever triggered it; exit 0 to let it through.\n"
+            "exit 0\n",
+            executable=True,
+        ),
+    )
+
+
 #: Kind -> the blueprint for it. Registering one here is the whole of adding a generated kind.
 _BLUEPRINTS: dict[str, Callable[[str], _Blueprint]] = {
+    "guideline": _guideline_blueprint,
+    "hook": _hook_blueprint,
     "mcp": _mcp_blueprint,
+    "memory": _memory_blueprint,
     "skill": _skill_blueprint,
 }
 
@@ -548,12 +802,12 @@ def _verified(manifest: str) -> Result[None]:
     return Ok(None)
 
 
-def _mcp_payload(entrypoint: str) -> tuple[tuple[str, str], ...]:
+def _mcp_payload(entrypoint: str) -> tuple[PayloadFile, ...]:
     """A payload the generated manifest actually describes: the entrypoint it declares, and a
     requirements file the dependency descriptor names."""
 
     return (
-        (
+        PayloadFile(
             entrypoint,
             '"""An MCP server over stdio. Replace this with the real one."""\n'
             "\n"
@@ -565,5 +819,5 @@ def _mcp_payload(entrypoint: str) -> tuple[tuple[str, str], ...]:
             'if __name__ == "__main__":\n'
             "    main()\n",
         ),
-        (_REQUIREMENTS, "# One pinned requirement per line.\n"),
+        PayloadFile(_REQUIREMENTS, "# One pinned requirement per line.\n"),
     )

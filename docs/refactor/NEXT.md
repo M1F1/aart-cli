@@ -2,42 +2,59 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–11 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
-retired authoring-workspace representation has no schema, no fixtures, no planning half and no
-command left; `aart registry vendor` writes the approved representation's versioned package through
-`plan_bulk_promotion`; the authoring field surface is read out of the parser rather than
-transcribed; AART can write the YAML subset it parses; `aart author init` writes a full-surface
-workspace for `mcp` and for `skill`; and `aart author check` answers both halves of §1.4 — every
-discovered manifest parses, and each one compiles to the package `registry scan` would accept,
-reported as `ok  <path>  ->  <kind>/<name>@<version>`.
-`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records these under §"Step 5",
-§"B-149" and §"Step 6" to §"Step 11" (D-321 to D-330).
+Steps 1–11 are **done** on `refactor/cp-26-legacy-removal`; **step 12 is in flight** and committed
+green but not verified. B-057 and B-149 are both closed.
 
-**Step 12 is next** — `guideline`, `hook` and `memory` skeletons. Registering one is a `_Blueprint`
-in `_BLUEPRINTS` and everything in `author_skeleton_test` then runs over it automatically. Two
-things to settle first, both evidence questions rather than taste:
+`aart author init` now generates all five kinds and `aart author check` answers both halves of
+§1.4 — every discovered manifest parses, and each one compiles to the package `registry scan` would
+accept, reported as `ok  <path>  ->  <kind>/<name>@<version>`.
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–11 (D-321 to D-330).
 
-- **What each kind's package format requires.** An `mcp` and a `hook` need `payload/mcp.json` and
-  `payload/hook.json`, which the compiler *generates* from the manifest, so the author ships
-  neither; `native_tree` is the authority on what a compiled package of each kind must contain, and
-  probing it is how step 9 settled the skill's `SKILL.md`.
-- **Whether a Collection skeleton is generated at all.** The anti-drift oracle currently excludes
-  `site.owner == "parse_author_collection_manifest"`, so a Collection blueprint would need that
-  exclusion revisited rather than worked around.
+### Finish CP-26.12 first
 
-Two traps worth carrying:
+The code is written and green (60 tests in `author_skeleton_test`, `author_command_test`,
+`author_check_test`; `make unit`, `make typecheck`, Ruff). What the contract still owes:
 
-- A targeted mutation that does not change a file's length leaves a `__pycache__` entry CPython
-  considers current. Clear `__pycache__` after reverting one, or the test run disagrees with the
-  source on disk (CP-26.10 record).
-- Read `make mutants` survivors as findings. In CP-26.11 one of them proved a whole call was
-  redundant, which shortened the code rather than adding a test.
+1. **Kind-specific tests.** Nothing yet holds the three new shapes:
+   - the generated `hook.json` is what `package_hook` accepts (compile the workspace, then call
+     `package_hook(ArtifactKind.HOOK, compiled.canonical_entries)` — it is `Ok` only when
+     `command` begins `${SCRIPT_DIR}/` and the script it names is present **and executable**);
+   - `write_author_skeleton` actually sets the executable bit on `run.sh` (`os.access(..., os.X_OK)`
+     after `aart author init --kind hook`);
+   - a `guideline` and a `memory` payload is exactly one `.md` file, because `native_tree` refuses
+     the package otherwise.
+2. **Targeted semantic mutations**, one per claim, recorded in the slice. Suggested: make
+   `_hook_payload` write the script non-executable (must fail the install-time claim); point
+   `_memory_blueprint` at a second payload file (must fail the one-document claim); drop
+   `arguments`/`pyproject`/`lock` from a closing note (must fail the anti-drift oracle for that
+   kind). **Clear `__pycache__` after reverting any mutation that does not change the file's
+   length** — see the CP-26.10 record for why.
+3. `make mutants ONLY=agent_artifacts/authoring/skeleton.py TESTS="tests/author_skeleton_test.py"`,
+   read as findings.
+4. `make integration`, the README (the "Writing an artifact" section still says "This build
+   generates the `mcp` and `skill` skeletons"), the slice record, `handoff-plan done CP-26.12`,
+   a staged-diff privacy scan, and a commit.
+
+### What the evidence said, so it is not re-derived
+
+- A **guideline** and a **memory** payload must be **exactly one** Markdown document and nothing
+  else (`native_tree._payload_shape`). That is why neither skeleton offers a dependency file: the
+  file it would name cannot be in the payload. Both notes say so rather than leaving an author to
+  find out from a refusal.
+- A **hook**'s `hook.json` is **authored**, unlike `mcp.json`, which `parse_author_manifest`
+  reserves for the compiler. `package_hook` requires non-empty `name`, `command`, `event` and
+  `matcher`, `command` to begin `${SCRIPT_DIR}/`, and the script to be executable. **Compilation
+  does not check the executable bit; installation does**, which is why `PayloadFile` carries it.
+- `launch` on a guideline is refused by compilation (`launch.entrypoint run.py is outside the
+  declared payload`), but `transport` and `runtime` are accepted on every kind — so all three are
+  named in a `#?` note rather than generated.
+
+**Then step 13** — the README/docs contract, per the numbered plan.
 
 Three open findings:
 
 - **B-151** — seven shipped documents still describe `aart.lock.json` and `aart.index.json` as files
-  AART writes. Not gated by `make docs-check`, which validates fences and links. Noncritical for
-  step 5; a precondition of CP-26.21.
+  AART writes. Not gated by `make docs-check`. A precondition of CP-26.21.
 - **B-154** — `aart author check` reports a Collection manifest as `skip` rather than checking it.
   Noncritical; `registry scan` passes over one too.
 - **B-150** — the owner's installation-identity principle: an installation is

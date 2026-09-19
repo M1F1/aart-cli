@@ -1,5 +1,24 @@
 # AART Refactor Migration Status
 
+**2026-09-19, CP-26.12 IN FLIGHT — code green, slice NOT verified.** `aart author init` now
+generates all five kinds the parser accepts: `guideline`, `hook` and `memory` joined `mcp` and
+`skill`, and `GENERATED_KINDS == tuple(sorted(get_args(AuthorKind)))` is now a test. Evidence for
+each shape was taken from the compiler rather than chosen: `native_tree` requires a guideline and a
+memory payload to be **exactly one** Markdown document and nothing else, which is why neither
+skeleton can offer a dependency file and the closing note says so; a hook's `hook.json` is
+*authored* (unlike `mcp.json`, reserved for the compiler) and `package_hook` requires its `command`
+to begin `${SCRIPT_DIR}/` and the file it names to be in the payload **and executable**.
+Compilation does not catch a non-executable script -- installation does -- so `AuthorSkeleton`
+payload entries became a `PayloadFile` value carrying an `executable` flag and
+`write_author_skeleton` chmods it.
+
+**What is still owed before CP-26.12 may be called done:** the targeted semantic mutations and
+their record; hook-, guideline- and memory-specific tests (that `hook.json` is what `package_hook`
+accepts, that the script is written executable, that a document kind's payload is one `.md`);
+`make mutants` on `skeleton.py`; `make integration`; the README; the slice record; and
+`handoff-plan done CP-26.12`. 60 tests in the three author modules, `make unit`, `make typecheck`,
+Ruff check and format are green as committed. No broad `make quality` ran, under D-317.
+
 **2026-09-19, CP-26.11 complete.** `aart author check` now answers §1.4's second claim: every
 manifest that parses is compiled through `compile_author_manifests` and the check prints the
 coordinate it would be promoted as. `read_author_workspace` returns the root and the

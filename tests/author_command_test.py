@@ -17,16 +17,20 @@ import unittest
 from contextlib import contextmanager, redirect_stdout
 from dataclasses import replace
 from pathlib import Path
-from typing import get_args
 from unittest import mock
 
-from agent_artifacts.authoring.skeleton import GENERATED_KINDS, author_skeleton
+from agent_artifacts.authoring.skeleton import (
+    GENERATED_KINDS,
+    PayloadFile,
+    author_skeleton,
+)
 from agent_artifacts.cli import main
 from agent_artifacts.command_outcome import ERROR, OK, USAGE
+from agent_artifacts.commands.author import run
 from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.io.author_workspace import write_author_skeleton
+from agent_artifacts.model import Request
 from agent_artifacts.protocol.authoring import (
-    AuthorKind,
     DiscoveredAuthorManifest,
     parse_author_manifest,
 )
@@ -75,8 +79,8 @@ class InitTest(unittest.TestCase):
             written = _tree(root)
 
         self.assertIn("aart.yaml", written)
-        for relative, _ in _generated().payload:
-            self.assertIn(relative, written)
+        for file in _generated().payload:
+            self.assertIn(file.path, written)
 
     def test_what_is_written_is_exactly_what_the_generator_produced(self) -> None:
         """The oracle checks the generated text; this is what makes it the text on the disk."""
@@ -87,8 +91,8 @@ class InitTest(unittest.TestCase):
             _init(root)
 
             self.assertEqual((root / "aart.yaml").read_text(encoding="utf-8"), skeleton.manifest)
-            for relative, content in skeleton.payload:
-                self.assertEqual((root / relative).read_text(encoding="utf-8"), content)
+            for file in skeleton.payload:
+                self.assertEqual((root / file.path).read_text(encoding="utf-8"), file.content)
 
     def test_the_written_manifest_parses(self) -> None:
         with _workspace() as root:
@@ -146,17 +150,32 @@ class RefusalTest(unittest.TestCase):
         """The conflict is found before anything is written, not while writing."""
 
         with _workspace() as root:
-            taken = _generated().payload[0][0]
+            taken = _generated().payload[0].path
             (root / taken).write_text("mine\n", encoding="utf-8")
 
             self.assertEqual(_init(root), ERROR)
             self.assertEqual(_tree(root), {taken})
 
     def test_a_kind_this_build_does_not_generate_writes_nothing(self) -> None:
-        ungenerated = next(kind for kind in get_args(AuthorKind) if kind not in GENERATED_KINDS)
+        """No accepted kind is ungenerated any more, so this goes through the command directly.
+
+        The `--kind` choices are `get_args(AuthorKind)`, so argparse refuses anything else before
+        the command sees it. The refusal below is the one that would matter again the day the
+        parser accepts a kind no blueprint has been written for.
+        """
 
         with _workspace() as root:
-            self.assertEqual(_init(root, kind=ungenerated), ERROR)
+            code = run(
+                Request(
+                    command="author",
+                    author_action="init",
+                    artifact_kind="plugin",
+                    author_name=_NAME,
+                    author_into=str(root),
+                )
+            )
+
+            self.assertEqual(code, ERROR)
             self.assertEqual(_tree(root), set())
 
     def test_every_kind_this_build_generates_writes_a_workspace(self) -> None:
@@ -241,7 +260,7 @@ class WriterTest(unittest.TestCase):
     def test_a_payload_path_that_climbs_out_of_the_workspace_is_refused(self) -> None:
         """The paths come from the generator, which is exactly why they are checked here."""
 
-        escaping = replace(_generated(), payload=(("../escape.py", "nothing\n"),))
+        escaping = replace(_generated(), payload=(PayloadFile("../escape.py", "nothing\n"),))
 
         with _workspace() as root:
             written = write_author_skeleton(escaping, into=str(root / "inside"))
