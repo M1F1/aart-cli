@@ -659,6 +659,40 @@ and was corrected rather than deleted: it now requires the written payload files
 `payload.include` to be the same set, which is the claim that was meant and does not depend on
 where the files sit.
 
+### Step 9 — the same generator writes a `skill` (2026-09-19)
+
+A kind is not a parameter on one document, so the generator gained a `_Blueprint`: the document, the
+keys written out disabled, the nested positions disabled inside a block that stays live, the closing
+notes and the payload. `_BLUEPRINTS` maps kind to blueprint and `GENERATED_KINDS` is derived from
+it, so registering one is the whole of adding a kind. Every claim in `author_skeleton_test` now runs
+over every generated kind rather than over `mcp`: parseability, the `full` document, the
+uncommenting equality, compilation, the anti-drift oracle and the alternatives.
+
+**What a skill declares is different, not smaller.** A skill is delivered by copying its tree into
+the harness. The parser accepts `transport`, `runtime` and `launch` on one — probed directly, it
+compiles — and the resulting package advertises `transport/stdio` and `protocol=stdio`, which is a
+skill claiming to be a server. So the generator does not write them, live or into `full`, and names
+them in a closing `#?` note with the reason. `python` is offered the same way, because enabling it
+also means adding the dependency file to `payload.include`, which the generator cannot do for an
+author who has not decided on one. Naming them keeps §1.5's requirement intact: the anti-drift
+oracle still finds every accepted field as a key in the skill skeleton, and the mutation that
+removes the note fails it.
+
+**`payload/SKILL.md` is what `init` owes a skill author.** `native_tree` refuses a skill package
+without it, so discovering it from a promotion refusal is exactly the failure §1.3 is written
+against. The generated `SKILL.md` carries the section shape a harness reads.
+
+**A trap the alternatives test caught.** The offered `launch.arguments` alternative was written
+`- --once`, which does not parse: `-` is a reserved opening character in this subset, so an author
+uncommenting it would get a refusal from the file AART wrote them. The value is now quoted, and the
+test that had asked only for a mapping entry now asks the emitter's own question — a sequence item
+an author uncomments must be quoted unless `_plain_safe` would have written it bare.
+
+**Targeted semantic mutations (three).** Renaming the required skill document failed the payload,
+compilation and protocol tests; dropping the not-generated note failed the anti-drift oracle for
+`skill` and the block-naming test; pointing the `skill` blueprint at `_mcp_blueprint` failed seven
+tests across compilation, the launch-block claim and the payload claim. All restored green.
+
 ### Step 17 — no maintainer identity as a default
 
 The owner explicitly requires generated registries and operational examples to carry no default

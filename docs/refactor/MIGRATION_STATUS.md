@@ -1,5 +1,19 @@
 # AART Refactor Migration Status
 
+**2026-09-19, CP-26.09 complete.** `aart author init --kind skill` writes a skill workspace. The
+generator now holds a `_Blueprint` per kind -- document, disabled keys, nested disabled positions,
+closing notes, payload -- registered in `_BLUEPRINTS`, from which `GENERATED_KINDS` is derived; every
+claim in the skeleton tests runs over every generated kind. A skill is delivered by copying its tree
+into the harness, so the generator writes no `transport`, `runtime` or `launch` for one: the parser
+accepts them and the compiled package then advertises `protocol=stdio`, which is a skill claiming to
+be a server. They are named in a closing `#?` note instead, which keeps the anti-drift oracle
+satisfied -- the mutation removing that note fails it. The payload carries the `SKILL.md` that
+`native_tree` requires of a skill package. The alternatives test caught a real trap: the offered
+`launch.arguments` item `- --once` does not parse, and the test now asks the emitter's own question
+about any sequence item an author might uncomment. Three targeted mutations each failed only the
+tests naming their claim. 43 tests in the two author modules, the CLI damage sweep, `make
+docs-check`, Ruff and Mypy are green. No broad `make quality` ran, under D-317.
+
 **2026-09-19, CP-26.08 amendment.** The generated `mcp` manifest named its payload under
 `payload/`, and `compile_author_snapshot` places the author's files under the package's own
 `payload/` root, so the generated workspace compiled to `payload/payload/server.py`. It parsed and

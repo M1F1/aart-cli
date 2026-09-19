@@ -22,6 +22,7 @@ tell them apart:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from agent_artifacts.domain.diagnostics import Diagnostic, Severity
@@ -36,8 +37,9 @@ PROSE_PREFIX = "## "
 COMMENTED_YAML_PREFIX = "# "
 ALTERNATIVE_PREFIX = "#? "
 
-#: Kinds this build generates a skeleton for. The parser knows five; steps 9 and 12 add the rest.
-GENERATED_KINDS = ("mcp",)
+#: Kinds this build generates a skeleton for. Step 12 adds the remaining three. Derived from the
+#: blueprints at the foot of this module, so registering one is the whole of adding a kind.
+GENERATED_KINDS: tuple[str, ...]
 
 #: Where a generated manifest says it came from, for the diagnostics of the verification below.
 SKELETON_MANIFEST_NAME = "aart.yaml"
@@ -63,6 +65,27 @@ class AuthorSkeleton:
     payload: tuple[tuple[str, str], ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _Blueprint:
+    """One kind's document, and which parts of it the generator writes out disabled.
+
+    A kind is not a parameter on one document. An `mcp` is launched and a `skill` is copied into
+    place, so what each one may meaningfully declare differs, and a single template with flags
+    would have to encode that difference anyway -- less legibly, and in a place no author reads.
+    """
+
+    kind: str
+    #: Every block this kind's skeleton carries, live.
+    document: JsonObject
+    #: Top-level keys written out disabled rather than live.
+    optional: tuple[str, ...]
+    #: `(owner, field)` positions disabled inside a block that has to stay live.
+    nested_optional: tuple[tuple[str, str], ...]
+    #: Lines closing the document: what the parser accepts here that this kind does not generate.
+    notes: tuple[str, ...]
+    payload: tuple[tuple[str, str], ...]
+
+
 def _error(message: str) -> Err:
     return Err((Diagnostic(AUTHOR_MANIFEST_INVALID, Severity.ERROR, message),))
 
@@ -79,7 +102,7 @@ def _humanized(name: str) -> str:
     return name.replace("-", " ").capitalize()
 
 
-def _mcp_document(name: str) -> tuple[JsonObject, tuple[str, ...]]:
+def _mcp_blueprint(name: str) -> _Blueprint:
     """Every block an `mcp` manifest may carry, live, plus the top-level keys that are optional.
 
     `mcp` is stricter than the schema: `parse_author_manifest` refuses it without stdio transport
@@ -136,8 +159,14 @@ def _mcp_document(name: str) -> tuple[JsonObject, tuple[str, ...]]:
     )
     # `summary`, `exclude` and `arguments` are optional inside blocks the parser requires, so they
     # are commented individually rather than with their parent.
-    optional = ("compatibility", "inputs", "python")
-    return document, optional
+    return _Blueprint(
+        "mcp",
+        document,
+        optional=("compatibility", "inputs", "python"),
+        nested_optional=(("artifact", "summary"), ("launch", "arguments"), ("payload", "exclude")),
+        notes=_UNREAD_NOTE,
+        payload=_mcp_payload(entrypoint),
+    )
 
 
 def _inputs() -> JsonArray:
@@ -163,7 +192,7 @@ def _inputs() -> JsonArray:
                 (
                     "help",
                     _object(
-                        ("description", "Where this server reaches its provider."),
+                        ("description", "Where this artifact reaches its provider."),
                         ("example", "https://example.invalid"),
                         ("label", "Base URL"),
                     ),
@@ -203,13 +232,16 @@ def _inputs() -> JsonArray:
 def _guidance() -> JsonObject:
     """What a person is told when AART asks for a secret.
 
+    Worded for an artifact rather than for a server, because every generated kind shares these
+    three inputs and a skill is not a server.
+
     No `example`: §91 keeps the confidential class free of any field a real credential could be
     written into, and `parse_author_manifest` refuses a secret whose guidance carries one. The
     `example` field is covered by the config input below, where a sample value is just a sample.
     """
 
     return _object(
-        ("description", "The token this server authenticates to its provider with."),
+        ("description", "The token this artifact authenticates to its provider with."),
         ("format_hint", "A provider-issued access token, on one line."),
         ("label", "API token"),
         (
@@ -223,14 +255,6 @@ def _guidance() -> JsonObject:
     )
 
 
-#: Optional positions inside a block the parser requires: each is disabled on its own, because its
-#: parent has to stay live.
-_NESTED_OPTIONAL: tuple[tuple[str, str], ...] = (
-    ("artifact", "summary"),
-    ("launch", "arguments"),
-    ("payload", "exclude"),
-)
-
 #: One line per optional position: what it is for, not what it contains.
 _EXPLANATIONS: dict[str, str] = {
     "arguments": "Extra arguments the server is started with, after the entrypoint.",
@@ -239,6 +263,11 @@ _EXPLANATIONS: dict[str, str] = {
     "inputs": "Values AART collects from the installer and injects when the server runs.",
     "python": "How the payload's Python dependencies are resolved at install time.",
     "summary": "One line shown wherever the artifact is listed. Derived from the name if absent.",
+}
+
+#: The explanation for a position whose purpose differs by kind. Read before `_EXPLANATIONS`.
+_KIND_EXPLANATIONS: dict[tuple[str, str], str] = {
+    ("skill", "inputs"): "Values AART collects from the installer and keeps for this skill.",
 }
 
 #: Fields that cannot be live beside one that is, offered under the line each replaces. Two of
@@ -276,7 +305,7 @@ _UNREAD_NOTE: tuple[str, ...] = (
 )
 
 
-def _disabled(key: str, value: JsonValue) -> Result[tuple[str, ...]]:
+def _disabled(kind: str, key: str, value: JsonValue) -> Result[tuple[str, ...]]:
     """One optional block as the lines it would occupy, so what is commented is the document.
 
     The text is produced by the emitter from the value itself rather than written out here, which
@@ -287,7 +316,8 @@ def _disabled(key: str, value: JsonValue) -> Result[tuple[str, ...]]:
     emitted = emit_yaml(_object((key, value)))
     if isinstance(emitted, Err):
         return emitted
-    lines = [f"## {_EXPLANATIONS[key]}", *emitted.value.splitlines()]
+    lines = [f"## {_KIND_EXPLANATIONS.get((kind, key), _EXPLANATIONS[key])}"]
+    lines.extend(emitted.value.splitlines())
     lines.extend(_ALTERNATIVES.get(key, ()))
     return Ok(tuple(lines))
 
@@ -296,11 +326,11 @@ def _without(document: JsonObject, *keys: str) -> JsonObject:
     return JsonObject(tuple(entry for entry in document.entries if entry[0] not in keys))
 
 
-def _live_document(full: JsonObject, optional: tuple[str, ...]) -> JsonObject:
-    live = _without(full, *optional)
+def _live_document(blueprint: _Blueprint) -> JsonObject:
+    live = _without(blueprint.document, *blueprint.optional)
     entries: list[tuple[str, JsonValue]] = []
     for key, value in live.entries:
-        nested = tuple(field for owner, field in _NESTED_OPTIONAL if owner == key)
+        nested = tuple(field for owner, field in blueprint.nested_optional if owner == key)
         if nested and isinstance(value, JsonObject):
             entries.append((key, _without(value, *nested)))
             continue
@@ -310,8 +340,7 @@ def _live_document(full: JsonObject, optional: tuple[str, ...]) -> JsonObject:
 
 def _anchored(
     live: JsonObject,
-    full: JsonObject,
-    optional: tuple[str, ...],
+    blueprint: _Blueprint,
 ) -> Result[tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]]:
     """Where each disabled block goes: above the next live key, or below the block it ends in.
 
@@ -325,7 +354,7 @@ def _anchored(
 
     def place(container: str, keys: tuple[str, ...], blocks: tuple[tuple[str, JsonValue], ...]):
         for key, value in blocks:
-            rendered = _disabled(key, value)
+            rendered = _disabled(blueprint.kind, key, value)
             if isinstance(rendered, Err):
                 return rendered
             following = [live_key for live_key in keys if live_key > key]
@@ -336,14 +365,15 @@ def _anchored(
                 trailing[container] = (*trailing.get(container, ()), *rendered.value)
         return None
 
+    full = blueprint.document
     failed = place(
         "",
         live.keys(),
-        tuple((key, value) for key, value in full.entries if key in optional),
+        tuple((key, value) for key, value in full.entries if key in blueprint.optional),
     )
     if failed is not None:
         return failed
-    for owner, field in _NESTED_OPTIONAL:
+    for owner, field in blueprint.nested_optional:
         parent = full.get(owner)
         current = live.get(owner)
         if not isinstance(parent, JsonObject) or not isinstance(current, JsonObject):
@@ -365,12 +395,13 @@ def author_skeleton(kind: str, name: str) -> Result[AuthorSkeleton]:
     because the author's first check of it would blame their own edits for the refusal.
     """
 
-    if kind not in GENERATED_KINDS:
+    if kind not in _BLUEPRINTS:
         offered = ", ".join(GENERATED_KINDS)
         return _error(f"this build generates no {kind!r} skeleton yet; it generates {offered}")
-    full, optional = _mcp_document(name)
-    live = _live_document(full, optional)
-    anchored = _anchored(live, full, optional)
+    blueprint = _BLUEPRINTS[kind](name)
+    full = blueprint.document
+    live = _live_document(blueprint)
+    anchored = _anchored(live, blueprint)
     if isinstance(anchored, Err):
         return anchored
     comments, trailing = anchored.value
@@ -380,14 +411,124 @@ def author_skeleton(kind: str, name: str) -> Result[AuthorSkeleton]:
         "## `#?` is an alternative to the line above it, not an addition. Delete what you do",
         "## not need and uncomment what you do.",
     )
-    trailing[""] = (*trailing.get("", ()), *_UNREAD_NOTE)
+    trailing[""] = (*trailing.get("", ()), *blueprint.notes)
     emitted = emit_yaml(live, comments={"": header, **comments}, trailing=trailing)
     if isinstance(emitted, Err):
         return emitted
     accepted = _verified(emitted.value)
     if isinstance(accepted, Err):
         return accepted
-    return Ok(AuthorSkeleton(kind, name, emitted.value, live, full, _mcp_payload(full)))
+    return Ok(AuthorSkeleton(kind, name, emitted.value, live, full, blueprint.payload))
+
+
+#: What the parser accepts on a `skill` and this generator will not write for one. A skill is
+#: delivered by copying its tree into place, so a launch makes the compiled package advertise a
+#: protocol it does not speak; a dependency descriptor also needs its file added to `include`.
+#: Named rather than silently absent, because hiding an accepted field is the drift §1.5 is about.
+_SKILL_NOT_GENERATED: tuple[str, ...] = (
+    "## A skill is installed by copying this tree into the harness, so nothing launches it and",
+    "## these three are left to you. Declaring them makes the package advertise a protocol it",
+    "## does not speak, which is rarely what a skill wants:",
+    "#? transport:",
+    "#?   type: stdio",
+    "#? runtime:",
+    "#?   type: python",
+    '#?   version: ">=3.11"',
+    "#? launch:",
+    "#?   type: python",
+    "#?   entrypoint: run.py",
+    "#?   arguments:",
+    '#?     - "--once"',
+    "## Python dependencies likewise. Enabling this also means adding the file to `include`,",
+    "## which is why it is offered rather than written out:",
+    "#? python:",
+    "#?   dependencies:",
+    "#?     type: requirements",
+    "#?     path: requirements.txt",
+    "#?   dependencies:",
+    "#?     type: pyproject",
+    "#?     pyproject: pyproject.toml",
+    "#?     lock: uv.lock",
+)
+
+_SKILL_DOCUMENT = "SKILL.md"
+
+
+def _skill_blueprint(name: str) -> _Blueprint:
+    """A skill is a tree of instructions, so its document is the artifact and its payload.
+
+    `native_tree` refuses a skill package without `payload/SKILL.md`, which makes that file part of
+    what `init` owes an author rather than something they discover from a promotion refusal.
+    """
+
+    document = _object(
+        ("schema", "aart.dev/skill/v1"),
+        (
+            "artifact",
+            _object(
+                ("kind", "skill"),
+                ("name", name),
+                ("summary", f"{_humanized(name)} skill."),
+                ("version", "0.1.0"),
+            ),
+        ),
+        (
+            "payload",
+            _object(
+                ("exclude", _strings("**/.DS_Store")),
+                ("include", _strings(_SKILL_DOCUMENT)),
+            ),
+        ),
+        (
+            "compatibility",
+            _object(
+                ("harnesses", _strings("claude-code")),
+                ("platforms", _strings("darwin", "linux")),
+            ),
+        ),
+        ("inputs", _inputs()),
+    )
+    return _Blueprint(
+        "skill",
+        document,
+        optional=("compatibility", "inputs"),
+        nested_optional=(("artifact", "summary"), ("payload", "exclude")),
+        notes=(*_SKILL_NOT_GENERATED, *_UNREAD_NOTE),
+        payload=_skill_payload(name),
+    )
+
+
+def _skill_payload(name: str) -> tuple[tuple[str, str], ...]:
+    """The one file a skill package requires, with the shape a harness reads."""
+
+    title = _humanized(name)
+    return (
+        (
+            _SKILL_DOCUMENT,
+            f"# {title}\n"
+            "\n"
+            "One paragraph on what this skill is for and when an agent should reach for it.\n"
+            "Replace everything below with the instructions the agent is to follow.\n"
+            "\n"
+            "## When to use it\n"
+            "\n"
+            "- The situation that calls for this skill.\n"
+            "\n"
+            "## How to use it\n"
+            "\n"
+            "1. The first step.\n"
+            "2. The next one.\n",
+        ),
+    )
+
+
+#: Kind -> the blueprint for it. Registering one here is the whole of adding a generated kind.
+_BLUEPRINTS: dict[str, Callable[[str], _Blueprint]] = {
+    "mcp": _mcp_blueprint,
+    "skill": _skill_blueprint,
+}
+
+GENERATED_KINDS = tuple(sorted(_BLUEPRINTS))
 
 
 def _verified(manifest: str) -> Result[None]:
@@ -407,14 +548,10 @@ def _verified(manifest: str) -> Result[None]:
     return Ok(None)
 
 
-def _mcp_payload(full: JsonObject) -> tuple[tuple[str, str], ...]:
+def _mcp_payload(entrypoint: str) -> tuple[tuple[str, str], ...]:
     """A payload the generated manifest actually describes: the entrypoint it declares, and a
     requirements file the dependency descriptor names."""
 
-    launch = full.get("launch")
-    assert isinstance(launch, JsonObject)
-    entrypoint = launch.get("entrypoint")
-    assert isinstance(entrypoint, str)
     return (
         (
             entrypoint,

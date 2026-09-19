@@ -335,9 +335,12 @@ replaced.
 
 ```sh
 aart author init --kind mcp --name github-mcp --into ./github-mcp
+aart author init --kind skill --name code-review --into ./code-review
 ```
 
-This build generates the `mcp` skeleton.
+This build generates the `mcp` and `skill` skeletons. Each carries the payload file its package
+format requires — an entrypoint for an MCP server, a `SKILL.md` for a skill — and names the blocks
+it deliberately leaves to you.
 
 ## Maintaining a registry
 

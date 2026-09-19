@@ -19,6 +19,7 @@ import unittest
 from agent_artifacts.authoring.skeleton import (
     ALTERNATIVE_PREFIX,
     COMMENTED_YAML_PREFIX,
+    GENERATED_KINDS,
     PROSE_PREFIX,
     author_skeleton,
 )
@@ -30,17 +31,30 @@ from agent_artifacts.protocol.authoring import (
     parse_author_manifest,
 )
 from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.yaml import emit_yaml, parse_yaml
+from agent_artifacts.protocol.yaml import _plain_safe, emit_yaml, parse_yaml
 from tests.authoring_compiler_test import _file, _snapshot
 from tests.authoring_field_surface import parser_field_surface
 
 _NAME = "github-mcp"
 
+#: A plausible name per generated kind, so each skeleton is read the way an author would get it.
+_NAMES: dict[str, str] = {"mcp": _NAME, "skill": "code-review"}
 
-def _skeleton(kind: str = "mcp", name: str = _NAME):
-    result = author_skeleton(kind, name)
+
+def _name_for(kind: str) -> str:
+    return _NAMES[kind]
+
+
+def _skeleton(kind: str = "mcp", name: str | None = None):
+    result = author_skeleton(kind, _name_for(kind) if name is None else name)
     assert isinstance(result, Ok), result
     return result.value
+
+
+def _every():
+    """Every kind this build generates, so a claim is made about all of them or about none."""
+
+    return tuple((kind, _skeleton(kind)) for kind in GENERATED_KINDS)
 
 
 def _parsed(text: str):
@@ -83,44 +97,46 @@ def _uncommented(text: str) -> str:
 
 class ParseabilityTest(unittest.TestCase):
     def test_what_is_written_parses_with_the_real_parser(self) -> None:
-        parsed = _parsed(_skeleton().manifest)
-
-        self.assertIsInstance(parsed, Ok, parsed)
+        for kind, skeleton in _every():
+            with self.subTest(kind=kind):
+                self.assertIsInstance(_parsed(skeleton.manifest), Ok)
 
     def test_the_same_document_with_every_optional_block_live_parses_too(self) -> None:
-        emitted = emit_yaml(_skeleton().full)
-        assert isinstance(emitted, Ok), emitted
+        for kind, skeleton in _every():
+            with self.subTest(kind=kind):
+                emitted = emit_yaml(skeleton.full)
+                assert isinstance(emitted, Ok), emitted
 
-        parsed = _parsed(emitted.value)
-
-        self.assertIsInstance(parsed, Ok, parsed)
+                self.assertIsInstance(_parsed(emitted.value), Ok)
 
     def test_uncommenting_the_skeleton_yields_exactly_that_document(self) -> None:
         """The commented text is the live document, not prose that resembles it."""
 
-        skeleton = _skeleton()
-        emitted = emit_yaml(skeleton.full)
-        assert isinstance(emitted, Ok), emitted
+        for kind, skeleton in _every():
+            with self.subTest(kind=kind):
+                emitted = emit_yaml(skeleton.full)
+                assert isinstance(emitted, Ok), emitted
 
-        self.assertEqual(
-            parse_yaml(_uncommented(skeleton.manifest)),
-            parse_yaml(emitted.value),
-        )
+                self.assertEqual(
+                    parse_yaml(_uncommented(skeleton.manifest)),
+                    parse_yaml(emitted.value),
+                )
 
     def test_the_required_only_document_is_what_the_skeleton_parses_to(self) -> None:
-        parsed = parse_yaml(_skeleton().manifest)
-
-        self.assertEqual(parsed, Ok(_skeleton().live))
+        for kind, skeleton in _every():
+            with self.subTest(kind=kind):
+                self.assertEqual(parse_yaml(skeleton.manifest), Ok(skeleton.live))
 
 
 class CompilationTest(unittest.TestCase):
     """What an author runs next is a compile, so the skeleton is held to compiling."""
 
-    def _compiled(self):
-        skeleton = _skeleton()
-        files = [_file(f"{_NAME}/aart.yaml", skeleton.manifest.encode())]
+    def _compiled(self, kind: str = "mcp"):
+        skeleton = _skeleton(kind)
+        root = skeleton.name
+        files = [_file(f"{root}/aart.yaml", skeleton.manifest.encode())]
         files.extend(
-            _file(f"{_NAME}/{path}", content.encode()) for path, content in skeleton.payload
+            _file(f"{root}/{path}", content.encode()) for path, content in skeleton.payload
         )
         compiled = compile_author_snapshot(
             _snapshot(*files),
@@ -133,7 +149,12 @@ class CompilationTest(unittest.TestCase):
         return compiled.value[0]
 
     def test_the_generated_workspace_compiles_to_one_canonical_package(self) -> None:
-        self.assertEqual(str(self._compiled().package.coordinate.artifact.name), _NAME)
+        for kind in GENERATED_KINDS:
+            with self.subTest(kind=kind):
+                compiled = self._compiled(kind)
+
+                self.assertEqual(str(compiled.package.coordinate.artifact.name), _name_for(kind))
+                self.assertEqual(compiled.package.coordinate.artifact.kind, kind)
 
     def test_the_payload_arrives_under_its_own_names_and_not_a_second_time(self) -> None:
         """A `payload/` written into the manifest lands as `payload/payload/`, and compiles.
@@ -143,87 +164,116 @@ class CompilationTest(unittest.TestCase):
         is exactly why this is asserted rather than left to a gate.
         """
 
-        entries = {str(entry.path) for entry in self._compiled().canonical_entries}
+        for kind, skeleton in _every():
+            with self.subTest(kind=kind):
+                entries = {str(entry.path) for entry in self._compiled(kind).canonical_entries}
 
-        for path, _ in _skeleton().payload:
-            self.assertIn(f"payload/{path}", entries)
-        self.assertEqual([entry for entry in entries if "payload/payload/" in entry], [])
+                for path, _ in skeleton.payload:
+                    self.assertIn(f"payload/{path}", entries)
+                self.assertEqual([e for e in entries if "payload/payload/" in e], [])
 
 
 class AntiDriftTest(unittest.TestCase):
     """The oracle of CP-26.6 §1.5: the parser decides what the skeleton must carry."""
 
     def test_every_field_name_the_parser_accepts_appears_as_a_key(self) -> None:
-        missing = sorted(
-            name
-            for site in parser_field_surface()
-            # A collection manifest is a different document with a different generator; step 12
-            # gives it its own skeleton and its own half of this oracle.
-            if site.owner != "parse_author_collection_manifest"
-            for name in (*site.required, *site.optional)
-            if name not in _keys(_skeleton().manifest)
-        )
+        for kind, skeleton in _every():
+            missing = sorted(
+                name
+                for site in parser_field_surface()
+                # A collection manifest is a different document with a different generator; step
+                # 12 gives it its own skeleton and its own half of this oracle.
+                if site.owner != "parse_author_collection_manifest"
+                for name in (*site.required, *site.optional)
+                if name not in _keys(skeleton.manifest)
+            )
 
-        self.assertEqual(
-            missing, [], f"the parser accepts fields the skeleton never names: {missing}"
-        )
+            with self.subTest(kind=kind):
+                self.assertEqual(
+                    missing, [], f"the parser accepts fields the skeleton never names: {missing}"
+                )
 
     def test_an_unresolved_site_is_still_covered(self) -> None:
         """The three computed sites are where a skeleton silently loses fields."""
 
-        skeleton = _skeleton().manifest
-
-        for name in ("required", "help", "default", "validation", "pyproject", "lock"):
-            with self.subTest(field=name):
-                self.assertIn(name, skeleton)
+        for kind, skeleton in _every():
+            for name in ("required", "help", "default", "validation", "pyproject", "lock"):
+                with self.subTest(kind=kind, field=name):
+                    self.assertIn(name, skeleton.manifest)
 
 
 class AlternativeTest(unittest.TestCase):
     """An alternative is offered so it can be enabled, so it has to be enable-able."""
 
-    def _alternatives(self) -> tuple[str, ...]:
+    def _alternatives(self, kind: str = "mcp") -> tuple[str, ...]:
         return tuple(
             line.strip()[len(ALTERNATIVE_PREFIX) :]
-            for line in _skeleton().manifest.splitlines()
+            for line in _skeleton(kind).manifest.splitlines()
             if line.strip().startswith(ALTERNATIVE_PREFIX)
         )
 
     def test_the_skeleton_offers_alternatives_at_all(self) -> None:
-        self.assertTrue(self._alternatives())
+        for kind in GENERATED_KINDS:
+            with self.subTest(kind=kind):
+                self.assertTrue(self._alternatives(kind))
 
     def test_no_alternative_uses_a_construct_this_yaml_subset_cannot_read(self) -> None:
         """Flow mappings and sequences parse in YAML at large and are refused here."""
 
-        for line in self._alternatives():
-            with self.subTest(line=line):
-                value = line.split(":", 1)[1].strip() if ":" in line else ""
+        for kind in GENERATED_KINDS:
+            for line in self._alternatives(kind):
+                with self.subTest(kind=kind, line=line):
+                    value = line.split(":", 1)[1].strip() if ":" in line else ""
 
-                self.assertFalse(value.startswith(("{", "[", "&", "*", "!", "|", ">")), line)
+                    self.assertFalse(value.startswith(("{", "[", "&", "*", "!", "|", ">")), line)
 
-    def test_every_alternative_is_a_mapping_entry(self) -> None:
-        for line in self._alternatives():
-            with self.subTest(line=line):
-                self.assertIn(":", line)
+    def test_every_alternative_is_a_mapping_entry_or_a_sequence_item(self) -> None:
+        for kind in GENERATED_KINDS:
+            for line in self._alternatives(kind):
+                with self.subTest(kind=kind, line=line):
+                    self.assertTrue(":" in line or line.strip().startswith("- "), line)
+
+    def test_a_sequence_item_an_author_uncomments_is_quoted_when_it_has_to_be(self) -> None:
+        """`- --once` reads as a reserved opening character and does not parse.
+
+        The rule is the emitter's own: what `_plain_safe` would not write bare, an alternative
+        written by hand has to carry quoted, or uncommenting it produces a refusal.
+        """
+
+        for kind in GENERATED_KINDS:
+            for line in self._alternatives(kind):
+                value = line.strip()
+                if not value.startswith("- "):
+                    continue
+                value = value[2:].strip()
+                with self.subTest(kind=kind, value=value):
+                    self.assertTrue(value.startswith('"') or _plain_safe(value), value)
 
 
 class ShapeTest(unittest.TestCase):
     def test_the_generator_is_deterministic(self) -> None:
-        self.assertEqual(_skeleton().manifest, _skeleton().manifest)
+        for kind in GENERATED_KINDS:
+            with self.subTest(kind=kind):
+                self.assertEqual(_skeleton(kind).manifest, _skeleton(kind).manifest)
 
     def test_the_payload_skeleton_matches_what_the_manifest_includes(self) -> None:
         """A written file the manifest does not name is not part of the artifact."""
 
-        skeleton = _skeleton()
-        parsed = _parsed(skeleton.manifest)
-        assert isinstance(parsed, Ok), parsed
+        for kind, skeleton in _every():
+            with self.subTest(kind=kind):
+                parsed = _parsed(skeleton.manifest)
+                assert isinstance(parsed, Ok), parsed
 
-        self.assertTrue(skeleton.payload)
-        self.assertEqual(
-            sorted(path for path, _content in skeleton.payload), sorted(parsed.value.includes)
-        )
+                self.assertTrue(skeleton.payload)
+                self.assertEqual(
+                    sorted(path for path, _content in skeleton.payload),
+                    sorted(parsed.value.includes),
+                )
 
     def test_the_manifest_declares_the_entrypoint_the_payload_provides(self) -> None:
-        skeleton = _skeleton()
+        """An `mcp` launches; the claim is about the kinds that declare an entrypoint at all."""
+
+        skeleton = _skeleton("mcp")
         parsed = _parsed(skeleton.manifest)
         assert isinstance(parsed, Ok), parsed
 
@@ -235,6 +285,45 @@ class ShapeTest(unittest.TestCase):
         assert isinstance(parsed, Ok), parsed
 
         self.assertEqual(parsed.value.name, "atlassian")
+
+
+class SkillTest(unittest.TestCase):
+    """A skill is delivered as a tree, which makes it a different document, not a smaller one."""
+
+    def test_the_payload_carries_the_file_a_skill_package_requires(self) -> None:
+        """`native_tree` refuses a skill package without `payload/SKILL.md`."""
+
+        self.assertIn("SKILL.md", [path for path, _ in _skeleton("skill").payload])
+
+    def test_the_skill_markdown_is_not_empty(self) -> None:
+        contents = dict(_skeleton("skill").payload)
+
+        self.assertIn("#", contents["SKILL.md"])
+
+    def test_no_launch_block_is_generated_for_a_tree_delivered_kind(self) -> None:
+        """The parser accepts one; enabling it makes the package advertise a protocol it does
+        not speak, so the generator does not write it live or into `full`."""
+
+        skeleton = _skeleton("skill")
+
+        for block in ("transport", "runtime", "launch"):
+            with self.subTest(block=block):
+                self.assertIsNone(skeleton.live.get(block))
+                self.assertIsNone(skeleton.full.get(block))
+
+    def test_the_blocks_it_does_not_generate_are_still_named(self) -> None:
+        """Not generating a block is a choice; hiding that the parser accepts it is drift."""
+
+        manifest = _skeleton("skill").manifest
+
+        for block in ("transport", "runtime", "launch"):
+            with self.subTest(block=block):
+                self.assertIn(block, _keys(manifest))
+
+    def test_a_skill_compiles_without_declaring_a_protocol(self) -> None:
+        compiled = CompilationTest()._compiled("skill")
+
+        self.assertIsNone(compiled.package.protocol)
 
 
 class RefusalTest(unittest.TestCase):

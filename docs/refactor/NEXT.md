@@ -2,23 +2,22 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–8 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
+Steps 1–9 are done on `refactor/cp-26-legacy-removal`, and **B-057 and B-149 are both closed**. The
 retired authoring-workspace representation has no schema, no fixtures, no planning half and no
 command left; `aart registry vendor` writes the approved representation's versioned package through
 `plan_bulk_promotion`; the authoring field surface is read out of the parser rather than
-transcribed; AART can write the YAML subset it parses; and `aart author init --kind mcp` writes a
-full-surface authoring workspace.
+transcribed; AART can write the YAML subset it parses; and `aart author init` writes a full-surface
+workspace for `mcp` and for `skill`.
 `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records these under §"Step 5",
-§"B-149" and §"Step 6" to §"Step 8" (D-321 to D-329).
+§"B-149" and §"Step 6" to §"Step 9" (D-321 to D-329).
 
-**Step 9 is next** — the same generator for `skill`. `agent_artifacts/authoring/skeleton.py`
-generates one kind today: `GENERATED_KINDS` names it, `_mcp_document` builds it, and
-`author_skeleton` refuses the other four by name. A `skill` is a different shape — delivered by
-`copy-tree`, with no transport, runtime or launch — so step 9 is a second document builder behind
-the same anti-drift oracle, not a parameter on the first. The oracle in
-`tests/author_skeleton_test.py` currently excludes `parse_author_collection_manifest`'s field site,
-because an artifact manifest cannot carry a Collection's fields; step 12 decides whether a
-Collection skeleton is generated at all.
+**Steps 10–11 are next** — `aart author check [--source DIR] [--json]`, the higher-value half of the
+pair (§1.4). Two claims in order: every discovered `aart.yaml`/`aart.json` goes through the real
+`parse_author_manifest`, and the parsed manifest compiles to a canonical package that `registry
+scan` would accept. `tests/author_skeleton_test.py::CompilationTest` already runs the second claim
+against the generated workspaces through `compile_author_snapshot`, which is the function `check`
+should use rather than a reimplementation. Until `check` exists, nothing in the package may name
+`aart author check`: `source_remediation_test` and `adoption_first_contact_test` both refuse it.
 
 Two open findings from step 5:
 

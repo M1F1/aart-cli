@@ -17,14 +17,19 @@ import unittest
 from contextlib import contextmanager, redirect_stdout
 from dataclasses import replace
 from pathlib import Path
+from typing import get_args
 from unittest import mock
 
-from agent_artifacts.authoring.skeleton import author_skeleton
+from agent_artifacts.authoring.skeleton import GENERATED_KINDS, author_skeleton
 from agent_artifacts.cli import main
 from agent_artifacts.command_outcome import ERROR, OK, USAGE
 from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.io.author_workspace import write_author_skeleton
-from agent_artifacts.protocol.authoring import DiscoveredAuthorManifest, parse_author_manifest
+from agent_artifacts.protocol.authoring import (
+    AuthorKind,
+    DiscoveredAuthorManifest,
+    parse_author_manifest,
+)
 from agent_artifacts.protocol.paths import parse_relative_path
 
 _NAME = "github-mcp"
@@ -148,9 +153,17 @@ class RefusalTest(unittest.TestCase):
             self.assertEqual(_tree(root), {taken})
 
     def test_a_kind_this_build_does_not_generate_writes_nothing(self) -> None:
+        ungenerated = next(kind for kind in get_args(AuthorKind) if kind not in GENERATED_KINDS)
+
         with _workspace() as root:
-            self.assertEqual(_init(root, kind="skill"), ERROR)
+            self.assertEqual(_init(root, kind=ungenerated), ERROR)
             self.assertEqual(_tree(root), set())
+
+    def test_every_kind_this_build_generates_writes_a_workspace(self) -> None:
+        for kind in GENERATED_KINDS:
+            with self.subTest(kind=kind), _workspace() as root:
+                self.assertEqual(_init(root, kind=kind, name="code-review"), OK)
+                self.assertTrue((root / "aart.yaml").is_file())
 
     def test_a_name_the_parser_rejects_writes_nothing(self) -> None:
         with _workspace() as root:
