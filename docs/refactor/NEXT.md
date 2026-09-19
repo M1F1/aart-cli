@@ -72,10 +72,9 @@ nothing else, because step 15 moved the detail into eight linked documents.
 `credential_address()` derives the per-owner item address (D-352), and `installed_name()` /
 `installed_names()` project that owner to §169.7's harness-visible name and refuse an ambiguous
 set before anything is written (slice §"Done so far — who an installation is" and §"Done so far —
-the name the harness shows"). The module is deliberately not reachable from the runtime yet and is
-recorded in `DELIBERATE_NON_RUNTIME_MODULES` with the reason. What remains in the naming half is
-applying that projection at the adapters: installed skill directories and their frontmatter, and
-MCP registration keys, with the collision check run before provider mutation rather than after.
+the name the harness shows"). The module is reachable from the runtime now: the draft stamps the
+name after the operation-wide collision check, placement composes the same name for each delivery
+through `installed_name_for`, and `DELIBERATE_NON_RUNTIME_MODULES` no longer lists it.
 
 **The launcher no longer carries one harness's address (D-355).** `generate_launcher` takes an
 optional `credential_service_template` — the installation's credential service with its harness left
@@ -112,22 +111,33 @@ went from 65 to 64 survivors after a provider-preservation hole in the test was 
 `consumer_ui.py` generated 2502 mutants across unrelated screens and was stopped after 253 as
 disproportionate; B-158 records the runner limitation.
 
-**In flight in the working tree, and red.** That next action was begun and left unfinished: the
-uncommitted diff adds `aart_cli/application/skill_projection.py` (untracked) with
-`tests/skill_projection_test.py`, and edits `artifact_installation.py`, `installation_offer.py`,
-`installation_owner.py`, `receipts.py`, `configured_installation.py` and five test files. Six tests
-fail because the projection is not wired into placement yet -- `artifact_placement_resolution_test`
-expects each requested harness to get its own delivery under the projected name, and
-`placed_installation_e2e_test` expects `<project>/.claude/skills/code-review-company-project/SKILL.md`
-to exist. Nothing of it is committed. Resume it or `git checkout --` it deliberately; do not assume
-the tree is clean.
+**Done since: the name reaches the harness (D-358).** The projection is wired through placement.
+`installed_name_for(coordinate, scope)` composes the name `installed_name(owner)` also returns;
+`io/artifact_placement._deliveries` uses it for the destination and records it on the delivery
+alongside the summary and, for a Skill only, `projected_document="SKILL.md"`. `package_delivery`
+takes a `projection` applied before the digest, so the recorded digest is of the tree that will be
+on disk; `DeliveryEffectInterpreter` applies the same `project_skill_document` after copying,
+borrowing owner write access and restoring it. The payload stays byte-for-byte what the Registry
+approved. MCP registration keys already followed the same name through `registration_name`, so
+`.mcp.json` now holds `github-company-project`.
 
-**The next action.** Apply `installed_name()` at the adapters before any provider or filesystem
-mutation: skill directory/frontmatter names and MCP registration keys first, with the operation-wide
-collision check. Then replace the remaining shared runtime/payload/receipt placement with one
-harness-owned installation tree and one lifecycle record per owner. D-354's temporary refusal for
-different ordinary values remains until that projection can carry each owner's own value; do not
-turn it back into copying or sharing.
+`io/consumer_machine._targets_scope_and_profile` was recomputing the expected destination from the
+*authored* name, which made `marketplace status` list nothing after any delivered install. It asks
+the delivery for its projected name now. That regression was invisible in the delivery tests and
+visible only end to end -- when changing what a destination is called, check the readers that
+rebuild it, not only the writer.
+
+`make unit` is 4728 green with one skip; lint, format-check and typecheck pass. Four targeted
+mutations were red on their named tests and restored: the destination name, the executor's write,
+the projected digest and the status view's lookup. Scoped mutmut over `skill_projection.py` left
+32 survivors; the two that were real became tests, and one of them found a genuine defect -- rows
+were written with `\n` into documents whose own rows end `\r\n`. The rest are message-prose
+mutants (D-134).
+
+**The next action.** Replace the remaining shared runtime/payload/receipt placement with one
+harness-owned installation tree and one lifecycle record per owner, which is what D-354's temporary
+refusal for different ordinary values is waiting on; do not turn it back into copying or sharing.
+`domain/installation_tree.py` is still in `DELIBERATE_NON_RUNTIME_MODULES` and is the unwired half.
 
 
 Naming is included in this task (D-349, §169.7, INV-253; issues #26/#28). Harness-visible names

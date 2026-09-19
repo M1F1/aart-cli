@@ -45,7 +45,7 @@ from tests.configured_update_command_e2e_test import (
 )
 from tests.git_backed_consumer_e2e_test import _git, _materialize
 from tests.marketplace_fixtures import configured_source
-from tests.placed_installation_e2e_test import AUTHORED_SKILL, SKILL_BODY
+from tests.placed_installation_e2e_test import AUTHORED_SKILL, SKILL_BODY, as_delivered
 from tests.registry_maintenance_fixtures import empty_registry_snapshot
 
 COORDINATE = "company/skill/code-review"
@@ -199,8 +199,10 @@ class GitPublicationTransitionE2ETest(unittest.TestCase):
 
             self.assertEqual(code, 0, installed)
             self.assertEqual(
-                (lab.project / ".claude/skills/code-review/SKILL.md").read_text(encoding="utf-8"),
-                UPDATED_SKILL_BODY,
+                (lab.project / ".claude/skills/code-review-company-project/SKILL.md").read_text(
+                    encoding="utf-8"
+                ),
+                as_delivered(UPDATED_SKILL_BODY),
             )
             self.assertEqual(installed["receipt"]["artifacts"][0]["source_revision"], merged)
 
@@ -212,7 +214,7 @@ class GitPublicationTransitionE2ETest(unittest.TestCase):
     def test_an_unreviewed_promotion_is_not_installable_from_the_configured_branch(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             lab = _PublicationLab(Path(raw).resolve())
-            delivered = lab.project / ".claude/skills/code-review/SKILL.md"
+            delivered = lab.project / ".claude/skills/code-review-company-project/SKILL.md"
             lab.run("source", "sync", source_transport=True)
 
             code, refused = lab.run(
@@ -229,7 +231,7 @@ class GitPublicationTransitionE2ETest(unittest.TestCase):
             )
 
             self.assertEqual(code, 0, installed)
-            self.assertEqual(delivered.read_text(encoding="utf-8"), SKILL_BODY)
+            self.assertEqual(delivered.read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
 
 
 class PublishedRegistryVersionLoaderTest(unittest.TestCase):

@@ -276,9 +276,9 @@ class ChosenHarnessDeliveryE2ETest(unittest.TestCase):
 
     def test_skill_is_delivered_only_to_the_chosen_opencode_or_tabnine_target(self) -> None:
         destinations = {
-            "claude": ".claude/skills/code-review/SKILL.md",
-            "opencode": ".opencode/skills/code-review/SKILL.md",
-            "tabnine": ".tabnine/agent/skills/code-review/SKILL.md",
+            "claude": ".claude/skills/code-review-company-project/SKILL.md",
+            "opencode": ".opencode/skills/code-review-company-project/SKILL.md",
+            "tabnine": ".tabnine/agent/skills/code-review-company-project/SKILL.md",
         }
         for chosen in ("opencode", "tabnine"):
             with self.subTest(chosen=chosen), _environment(authored=_AUTHORED_SKILL) as env:
@@ -307,9 +307,17 @@ class ChosenHarnessDeliveryE2ETest(unittest.TestCase):
             )
 
             self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
-            self.assertFalse((env.project / ".claude/skills/code-review/SKILL.md").exists())
-            self.assertTrue((env.project / ".opencode/skills/code-review/SKILL.md").is_file())
-            self.assertTrue((env.project / ".tabnine/agent/skills/code-review/SKILL.md").is_file())
+            self.assertFalse(
+                (env.project / ".claude/skills/code-review-company-project/SKILL.md").exists()
+            )
+            self.assertTrue(
+                (env.project / ".opencode/skills/code-review-company-project/SKILL.md").is_file()
+            )
+            self.assertTrue(
+                (
+                    env.project / ".tabnine/agent/skills/code-review-company-project/SKILL.md"
+                ).is_file()
+            )
             stored = LocalReceiptStore(str(env.paths.data_root) + "/state").installations()
             assert isinstance(stored, Ok)
             self.assertEqual(
@@ -336,7 +344,7 @@ class ChosenHarnessDeliveryE2ETest(unittest.TestCase):
                     )
                     if harness == chosen:
                         document = json.loads(path.read_text(encoding="utf-8"))
-                        self.assertIn("dummy", document[server_map])
+                        self.assertIn("dummy-company-project", document[server_map])
 
     def test_execution_boundary_refuses_an_empty_choice_without_mutation(self) -> None:
         with _environment(authored=_AUTHORED_SKILL) as env:

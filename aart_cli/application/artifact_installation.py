@@ -143,6 +143,7 @@ def plan_artifact_installation(
     preferred_installer: PythonInstaller | None = None,
     credential_service_template: str | None = None,
     credential_addresses: tuple[CredentialReference, ...] = (),
+    registration_name: str | None = None,
 ) -> Result[PlannedInstallation]:
     """Everything decided about installing `artifact` here, before anything is touched.
 
@@ -161,6 +162,12 @@ def plan_artifact_installation(
             INSTALLATION_NOT_PLANNABLE,
             "planning an installation needs a resolved artifact and its install description",
         )
+    if registration_name is not None and (
+        not isinstance(registration_name, str)
+        or not registration_name
+        or any(character in registration_name for character in "\r\n")
+    ):
+        return _error(INSTALLATION_NOT_PLANNABLE, "an installed registration needs a safe name")
     contract = description.contract
     if contract is None:
         return _error(
@@ -227,7 +234,7 @@ def plan_artifact_installation(
         registrations = tuple(
             McpRegistration(
                 target,
-                identity.name,
+                registration_name or identity.name,
                 launcher.value.command,
                 (target.harness,) if values else (),
                 transport=contract.transport,

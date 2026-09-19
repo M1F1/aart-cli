@@ -234,6 +234,9 @@ class ArtifactDelivery:
     destination: str
     kind: DeliveryKind
     digest: ObjectDigest
+    projected_name: str | None = None
+    projected_description: str | None = None
+    projected_document: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.harness, str) or not self.harness.strip():
@@ -251,6 +254,26 @@ class ArtifactDelivery:
                 raise ValueError(f"a delivery {label} must be one absolute path")
         if not isinstance(self.kind, DeliveryKind) or not isinstance(self.digest, ObjectDigest):
             raise ValueError("delivery kind or digest is invalid")
+        projected = (self.projected_name, self.projected_description, self.projected_document)
+        if (self.projected_name is None) != (self.projected_description is None) or any(
+            value is not None
+            and (
+                not isinstance(value, str)
+                or not value
+                or any(character in value for character in "\r\n")
+            )
+            for value in projected
+        ):
+            raise ValueError("a delivery projection needs a safe name and description together")
+        if self.projected_document is not None:
+            # The document is where the name is written, so it cannot be recorded without one, and
+            # it is read as a path inside the delivered tree rather than as one of its own.
+            if self.projected_name is None or self.kind is not DeliveryKind.TREE:
+                raise ValueError("a projected document is one file of a delivered tree, named once")
+            if self.projected_document.startswith("/") or ".." in self.projected_document.split(
+                "/"
+            ):
+                raise ValueError("a projected document stays inside the tree it is delivered with")
 
 
 @dataclass(frozen=True, slots=True)
@@ -504,6 +527,19 @@ def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str,
                 "harness": item.harness,
                 "kind": item.kind.value,
                 "source": item.source,
+                **(
+                    {}
+                    if item.projected_name is None
+                    else {
+                        "projected_name": item.projected_name,
+                        "projected_description": item.projected_description,
+                    }
+                ),
+                **(
+                    {}
+                    if item.projected_document is None
+                    else {"projected_document": item.projected_document}
+                ),
             }
             for item in receipt.deliveries
         ],
@@ -563,6 +599,13 @@ def _delivery(value: object) -> ArtifactDelivery:
         str(value["destination"]),
         kind,
         _digest(value["digest"], "delivery digest"),
+        None if value.get("projected_name") is None else str(value["projected_name"]),
+        (
+            None
+            if value.get("projected_description") is None
+            else str(value["projected_description"])
+        ),
+        None if value.get("projected_document") is None else str(value["projected_document"]),
     )
 
 

@@ -238,7 +238,11 @@ class DeliveredPlacementTest(unittest.TestCase):
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         (delivery,) = placed.value.deliveries
         self.assertEqual("claude", delivery.harness)
-        self.assertEqual(f"{self.harness}/.claude/skills/code-review", delivery.destination)
+        self.assertEqual(
+            f"{self.harness}/.claude/skills/code-review-company-project",
+            delivery.destination,
+        )
+        self.assertEqual("code-review-company-project", delivery.projected_name)
         self.assertIs(DeliveryKind.TREE, delivery.kind)
 
     def test_the_delivery_is_made_from_the_copy_this_install_owns(self) -> None:
@@ -276,8 +280,11 @@ class DeliveredPlacementTest(unittest.TestCase):
                 for item in sorted(placed.value.deliveries, key=lambda item: item.harness)
             ],
             [
-                ("claude", f"{self.harness}/.claude/skills/code-review"),
-                ("tabnine", f"{self.harness}/.tabnine/agent/skills/code-review"),
+                ("claude", f"{self.harness}/.claude/skills/code-review-company-project"),
+                (
+                    "tabnine",
+                    f"{self.harness}/.tabnine/agent/skills/code-review-company-project",
+                ),
             ],
         )
 
@@ -306,7 +313,21 @@ class DeliveredPlacementTest(unittest.TestCase):
 
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         (delivery,) = placed.value.deliveries
-        self.assertEqual(f"{home}/.claude/skills/code-review", delivery.destination)
+        self.assertEqual(f"{home}/.claude/skills/code-review-company-user", delivery.destination)
+
+    def test_the_same_skill_at_two_scopes_reaches_two_directories(self) -> None:
+        """`§169.7`: the scope is in the name, so a user install and a project install of one
+        artifact do not compete for one directory under a harness root they happen to share."""
+
+        home = str(self.scope / "home")
+        user = self._place(scope=Scope.USER, harness_root=home)
+        project = self._place(scope=Scope.PROJECT, harness_root=home)
+
+        self.assertIsInstance(user, Ok, getattr(user, "diagnostics", ()))
+        self.assertIsInstance(project, Ok, getattr(project, "diagnostics", ()))
+        self.assertNotEqual(
+            user.value.deliveries[0].destination, project.value.deliveries[0].destination
+        )
 
 
 def _stored_artifact(package, digest: ObjectDigest):

@@ -23,6 +23,7 @@ from __future__ import annotations
 import os
 
 from aart_cli.application.installation_offer import ArtifactPlacement
+from aart_cli.application.skill_projection import SKILL_DOCUMENT, project_skill_document
 from aart_cli.compiler.graph import supported_label
 from aart_cli.domain.artifacts import ArtifactKind
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -37,9 +38,10 @@ from aart_cli.domain.harness import (
     memory_target,
 )
 from aart_cli.domain.hooks import HookEntry
-from aart_cli.domain.identifiers import ArtifactIdentity
+from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity
 from aart_cli.domain.inputs import InputValueSource
 from aart_cli.domain.install_description import InstallDescription
+from aart_cli.domain.installation_owner import installed_name_for
 from aart_cli.domain.managed_blocks import is_block_name
 from aart_cli.domain.placement import artifact_root
 from aart_cli.domain.python_runtime import ArtifactEnvironment, PythonInstaller
@@ -57,6 +59,7 @@ from aart_cli.protocol.authoring import (
     package_payload_root,
     read_package_description,
 )
+from aart_cli.protocol.native_models import ArtifactManifest
 from aart_cli.protocol.native_tree import compile_native_package
 from aart_cli.store.model import ObjectReadRequest, ObjectStorePaths
 
@@ -101,7 +104,7 @@ def _skippable(profile: str, *, requested: bool) -> bool:
 
 
 def _declared_narrowing(
-    entries: object,
+    manifest: ArtifactManifest,
     identity: ArtifactIdentity,
     profiles: tuple[str, ...],
     *,
@@ -120,10 +123,7 @@ def _declared_narrowing(
     the message names the set they can choose from -- the same set Artifact Details showed them.
     """
 
-    package = compile_native_package(entries, expected_identity=identity)  # type: ignore[arg-type]
-    if isinstance(package, Err):
-        return package
-    platforms = package.value.manifest.compatibility.platforms
+    platforms = manifest.compatibility.platforms
     here = platform_name()
     # D-261: the platforms an artifact declares narrow exactly as Artifact Details reads them, and
     # by the same D-231 rule -- an empty declaration is unconstrained. A platform this machine is
@@ -134,7 +134,7 @@ def _declared_narrowing(
             f"machine is {here}",
             "install it on a machine running one of those platforms",
         )
-    declared = package.value.manifest.compatibility.profiles
+    declared = manifest.compatibility.profiles
     if not declared:
         return Ok(profiles)
     for profile in profiles:
@@ -258,9 +258,10 @@ def _settings(
 
 
 def _deliveries(
-    identity: ArtifactIdentity,
+    coordinate: ArtifactCoordinate,
     entries: object,
     *,
+    summary: str,
     scope: Scope,
     profiles: tuple[str, ...],
     profiles_requested: bool,
@@ -273,8 +274,15 @@ def _deliveries(
     installation owns: the store's object is shared with every other installation of the same
     version and may be pruned, so a repair copying from it would depend on somebody else's
     housekeeping.
+
+    What the harness reads it under is the installed name, not the authored one (`§169.7`,
+    `D-349`): the same artifact taken from two Registries, or installed at two scopes, reaches two
+    directories rather than overwriting one. The name is composed here from the coordinate and the
+    scope, because this is where the destination is built, and the delivery carries it so the
+    executor writes the same spelling into the Skill's own document.
     """
 
+    identity = coordinate.artifact
     # A coordinate's kind is a plain string; the measured tables are keyed by the enum. Coercing
     # here rather than indexing with the string keeps an unrecognized kind a named refusal instead
     # of a lookup that happens to miss.
@@ -283,7 +291,20 @@ def _deliveries(
     except ValueError:
         return _error(f"{identity} names a kind this build does not know how to deliver")
 
-    packaged = package_delivery(kind, entries)  # type: ignore[arg-type]
+    named = installed_name_for(coordinate, scope)
+    if isinstance(named, Err):
+        return named
+    name = named.value
+    # Only a Skill carries its identity inside its own text; a hook's script and a guideline's
+    # document name nothing, so nothing in them is rewritten and the delivery records no document.
+    document = SKILL_DOCUMENT if kind is ArtifactKind.SKILL else None
+
+    def project(relative: str, content: bytes) -> Result[bytes]:
+        if relative != document:
+            return Ok(content)
+        return project_skill_document(content, installed_name=name, summary=summary)
+
+    packaged = package_delivery(kind, entries, projection=project)  # type: ignore[arg-type]
     if isinstance(packaged, Err):
         return packaged
     payload = ArtifactEnvironment(str(identity), root).payload
@@ -308,7 +329,7 @@ def _deliveries(
                 f"package offers {packaged.value.delivery.value}"
             )
         try:
-            destination = delivery_destination(target, identity.name)
+            destination = delivery_destination(target, name)
         except ValueError as error:
             return _error(f"{identity} cannot be delivered to {profile}: {error}")
         deliveries.append(
@@ -318,6 +339,9 @@ def _deliveries(
                 os.path.join(harness_root, destination),
                 target.delivery,
                 packaged.value.digest,
+                name,
+                summary,
+                document,
             )
         )
     return Ok(tuple(deliveries))
@@ -371,11 +395,20 @@ def placement_for(
     if isinstance(described, Err):
         return described
 
+    # One compilation, read for two separate answers: what the artifact declares it supports, and
+    # the summary the harness is given for it. Compiling twice would let the two disagree.
+    package = compile_native_package(
+        stored.value.candidate.entries, expected_identity=coordinate.artifact
+    )
+    if isinstance(package, Err):
+        return package
+    summary = package.value.manifest.summary
+
     # `QA-078`/`D-231`: what the artifact declares it supports and what it is installed into are
     # one answer. Narrowing happens here, once, rather than inside each per-profile loop, so the
     # two screens read the same set.
     narrowed = _declared_narrowing(
-        stored.value.candidate.entries,
+        package.value.manifest,
         coordinate.artifact,
         profiles,
         profiles_requested=profiles_requested,
@@ -445,8 +478,9 @@ def placement_for(
                 )
         else:
             made = _deliveries(
-                coordinate.artifact,
+                coordinate,
                 stored.value.candidate.entries,
+                summary=summary,
                 scope=scope,
                 profiles=profiles,
                 profiles_requested=profiles_requested,

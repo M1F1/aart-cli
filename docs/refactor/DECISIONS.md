@@ -8943,3 +8943,44 @@ form tests; live installation composition always supplies the owner.
 chooses equal text. Accepting one leaves the other three unanswered. This completes collection, not
 private runtime placement: until each harness owns its runtime projection, D-354 still refuses
 different ordinary values rather than copying one owner's answer to another.
+
+## D-358 — The delivered copy is named, and only the delivered copy
+
+**Context.** `installed_name()` existed and reached nothing. D-349 and §169.7 say a harness lists
+one *installation*, not one artifact, so two Registries offering `code-review` are two directories
+and the Skill's own `name:` has to agree with the directory it sits in. A Skill document names
+itself, and Claude reads the frontmatter rather than the path, so renaming the directory alone
+would install something the harness refuses to discover.
+
+Three things then have to agree that cannot be derived from one another: the destination path, the
+bytes at that path, and the digest a receipt records and a reconciler compares against. Digesting
+the store's published tree while writing a rewritten one makes every clean install read as drift on
+its first reconciliation.
+
+**Decision.** The name is composed once, by `installed_name_for(coordinate, scope)`, which
+`installed_name(owner)` also delegates to; `_deliveries` in `io/artifact_placement.py` calls it and
+uses it for both the destination and the record. `ArtifactDelivery` carries `projected_name`,
+`projected_description` and `projected_document` -- the payload-relative path whose own text names
+the artifact, `SKILL.md` and only for a Skill. A hook's script and a guideline's document name
+nothing, so they are delivered under the installed name and their bytes are untouched.
+
+`package_delivery` takes an optional `projection` applied by payload-relative path *before* the
+digest is taken, so what is recorded is the tree that will be on disk. `DeliveryEffectInterpreter`
+applies the same `project_skill_document` to the same path after copying, borrowing owner write
+access and giving it straight back so a read-only payload stays read-only. The payload this
+installation owns is never rewritten: a repair still compares against the bytes the Registry
+approved, and the test that proves the delivery is a copy now asserts the two differ.
+
+`io/consumer_machine._targets_scope_and_profile` recomputed the expected destination from the
+authored name to decide which installations belong to a status view. It now asks the delivery for
+the name it was delivered under. Without that, `marketplace status` listed nothing at all after any
+delivered install -- the failure was invisible in the delivery tests and visible only end to end.
+
+**Consequence.** `<project>/.claude/skills/code-review-company-project/SKILL.md`, and the same
+artifact at user scope is a second directory rather than a competitor for the first. MCP
+registration keys follow the same name through `registration_name`, so `.mcp.json` holds
+`github-company-project`. Forty-five tests spelled the authored name and were corrected;
+`tests/placed_installation_e2e_test.as_delivered` is the one place that spells what a delivered
+Skill looks like. Line endings are taken from the document rather than assumed: scoped mutmut showed
+the `\r\n` claim unheld, and the fix was a real defect, not a test gap -- a name row written with
+`\n` into a file an author commits with `\r\n`.

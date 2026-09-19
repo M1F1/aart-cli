@@ -82,6 +82,9 @@ _SLUG_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 #: Separates the labels. It cannot appear inside a slug, so the address parses back to exactly one
 #: owner rather than to whichever split happens to fit.
 _SEPARATOR = "."
+#: A harness-visible name carries no version, so composing one from a coordinate needs a stand-in
+#: for the field the join never reads.
+_ANY_VERSION = "0.0.0"
 
 #: Stands in for a harness with no profile. It is not a usable slug, so a profile can never be read
 #: as an absent one, and `claude` at user scope stays distinct from profile `user` at project scope.
@@ -245,6 +248,28 @@ def _refuse(code: DiagnosticCode, message: str, *remediation: str) -> Err:
     return Err((Diagnostic(code, Severity.ERROR, message, remediation=remediation),))
 
 
+def installed_name_for(coordinate: ArtifactCoordinate, scope: Scope) -> Result[str]:
+    """The same name, asked for before any owner exists to ask it of.
+
+    Placement composes the directory a harness discovers before it knows which harnesses will read
+    it, and the join carries no harness and no root, so a coordinate and a scope are the whole of
+    it. Both spellings come from here so a directory cannot be delivered under one name and
+    recorded under another.
+    """
+
+    if not isinstance(coordinate, ArtifactCoordinate) or not isinstance(scope, Scope):
+        raise ValueError("an installed name needs an artifact coordinate and a scope")
+    name = "-".join((coordinate.artifact.name, coordinate.source.value, scope.value))
+    if len(name) > MAX_INSTALLED_NAME_LENGTH or _SLUG_RE.fullmatch(name) is None:
+        return _refuse(
+            INSTALLED_NAME_INVALID,
+            f"{coordinate} cannot be installed as {name!r}: a harness name is lowercase "
+            f"alphanumeric with single hyphens and at most {MAX_INSTALLED_NAME_LENGTH} characters",
+            "Shorten the artifact name or connect the Registry under a shorter alias.",
+        )
+    return Ok(name)
+
+
 def installed_name(owner: InstallationOwner) -> Result[str]:
     """What the harness shows for this installation: artifact, alias and scope, joined once.
 
@@ -259,15 +284,19 @@ def installed_name(owner: InstallationOwner) -> Result[str]:
 
     if not isinstance(owner, InstallationOwner):
         raise ValueError("an installed name needs an installation owner")
-    name = "-".join((owner.artifact.name, owner.source.value, owner.scope.value))
-    if len(name) > MAX_INSTALLED_NAME_LENGTH or _SLUG_RE.fullmatch(name) is None:
+    composed = installed_name_for(
+        ArtifactCoordinate(owner.source, owner.artifact, _ANY_VERSION), owner.scope
+    )
+    if isinstance(composed, Err):
+        # The coordinate this was asked of is a stand-in; the owner is what the person can act on.
         return _refuse(
             INSTALLED_NAME_INVALID,
-            f"{owner} cannot be installed as {name!r}: a harness name is lowercase alphanumeric "
-            f"with single hyphens and at most {MAX_INSTALLED_NAME_LENGTH} characters",
+            f"{owner} cannot be installed under a harness-visible name: a harness name is "
+            f"lowercase alphanumeric with single hyphens and at most "
+            f"{MAX_INSTALLED_NAME_LENGTH} characters",
             "Shorten the artifact name or connect the Registry under a shorter alias.",
         )
-    return Ok(name)
+    return composed
 
 
 def installed_names(
@@ -283,14 +312,18 @@ def installed_names(
     a directory exists to overwrite.
     """
 
-    by_name: dict[str, InstallationOwner] = {}
+    by_slot: dict[tuple[str, str, str, str, str], InstallationOwner] = {}
     named: list[tuple[InstallationOwner, str]] = []
     for owner in owners:
         composed = installed_name(owner)
         if isinstance(composed, Err):
             return composed
         name = composed.value
-        claimed = by_name.get(name)
+        # A visible name occupies one namespace owned by one concrete harness/profile/root and
+        # artifact kind. The same spelling in Claude and Tabnine, or in a Skill directory and an
+        # MCP registration table, cannot overwrite itself because those adapters never meet.
+        slot = (owner.root, owner.harness, owner.profile, owner.artifact.kind, name)
+        claimed = by_slot.get(slot)
         if claimed is not None and claimed != owner:
             return _refuse(
                 INSTALLED_NAME_COLLISION,
@@ -299,7 +332,7 @@ def installed_names(
                 "or install them into different scopes.",
             )
         if claimed is None:
-            by_name[name] = owner
+            by_slot[slot] = owner
             named.append((owner, name))
     return Ok(tuple(named))
 

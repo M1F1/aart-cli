@@ -36,6 +36,7 @@ from aart_cli.domain.installation_owner import (
     credential_service_template,
     installation_owner,
     installed_name,
+    installed_name_for,
     installed_names,
 )
 from aart_cli.domain.result import Err, Ok
@@ -376,6 +377,45 @@ class InstalledNameCollisionTest(unittest.TestCase):
                 owners[2]: "github-other-project",
             },
         )
+
+    def test_the_name_is_available_before_a_harness_is_known(self) -> None:
+        """Placement composes the delivered directory before any owner exists to compose it from.
+
+        The join carries the artifact, the Registry alias and the scope, and no harness and no
+        root, so it can be asked for from a coordinate alone -- and must be the same answer the
+        owner gives, or a directory would be delivered under one name and recorded under another.
+        """
+
+        owner = _owner(artifact=ArtifactIdentity("skill", "code-review"))
+
+        self.assertEqual(
+            installed_name(owner),
+            installed_name_for(
+                ArtifactCoordinate(owner.source, owner.artifact, "1.0.0"), owner.scope
+            ),
+        )
+
+    def test_a_coordinate_that_cannot_be_a_name_is_refused_the_same_way(self) -> None:
+        refused = installed_name_for(
+            ArtifactCoordinate(
+                SourceAlias("company"), ArtifactIdentity("skill", "a" * 80), "1.0.0"
+            ),
+            Scope.PROJECT,
+        )
+
+        assert isinstance(refused, Err), refused
+        self.assertEqual(refused.diagnostics[0].code, INSTALLED_NAME_INVALID)
+
+    def test_the_same_visible_name_in_two_harness_namespaces_is_not_a_collision(self) -> None:
+        owners = (
+            _owner(artifact=ArtifactIdentity("skill", "github"), harness="claude"),
+            _owner(artifact=ArtifactIdentity("skill", "github"), harness="tabnine"),
+        )
+
+        named = installed_names(owners)
+
+        assert isinstance(named, Ok), named
+        self.assertEqual(dict(named.value), {owner: "github-company-project" for owner in owners})
 
     def test_one_owner_named_twice_is_not_a_collision_with_itself(self) -> None:
         owner = _owner(artifact=ArtifactIdentity("skill", "github"))

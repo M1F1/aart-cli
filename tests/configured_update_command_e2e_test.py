@@ -23,6 +23,7 @@ from tests.configured_install_command_e2e_test import COORDINATE, _environment
 from tests.placed_installation_e2e_test import (
     SKILL_BODY,
     STYLE_BODY,
+    as_delivered,
 )
 
 #: The same Skill as the installed fixture, one minor version further on. Only the version and the
@@ -50,7 +51,7 @@ AUTHORED_SKILL_1_1_0 = _authored("1.1.0", "# Code review\n\nAn older body.\n")
 
 
 def _delivered(env) -> pathlib.Path:
-    return env.project / ".claude/skills/code-review/SKILL.md"
+    return env.project / ".claude/skills/code-review-company-project/SKILL.md"
 
 
 class ConfiguredUpdateCommandTest(unittest.TestCase):
@@ -59,7 +60,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
         )
         self.assertEqual(code, 0, payload)
-        self.assertEqual(_delivered(env).read_text(encoding="utf-8"), SKILL_BODY)
+        self.assertEqual(_delivered(env).read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
 
     def test_update_before_any_canonical_install_leaves_the_selection_to_the_legacy_path(
         self,
@@ -87,7 +88,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self.assertEqual(len(payload["items"]), 1)
             self.assertEqual(payload["items"][0]["key"], "company/skill/code-review@1.2.0")
             self.assertEqual(payload["items"][0]["status"], "current")
-            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), SKILL_BODY)
+            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
             self.assertEqual(_delivered(env).stat().st_mtime_ns, before)
 
     def test_review_names_the_newer_approved_version_and_writes_nothing(self) -> None:
@@ -103,7 +104,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self.assertEqual(
                 payload["review"]["items"][0]["key"], "company/skill/code-review@1.3.0"
             )
-            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), SKILL_BODY)
+            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
 
     def test_confirmed_update_converges_the_delivery_in_place_and_records_the_new_version(
         self,
@@ -127,7 +128,9 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["finalized"])
             self.assertEqual(payload["items"][0]["key"], "company/skill/code-review@1.3.0")
-            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), UPDATED_SKILL_BODY)
+            self.assertEqual(
+                _delivered(env).read_text(encoding="utf-8"), as_delivered(UPDATED_SKILL_BODY)
+            )
 
             status_code, status = env.run("marketplace", "status", "--profile", "claude")
             self.assertEqual(status_code, 0, status)
@@ -154,7 +157,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self.assertNotEqual(code, 0)
             self.assertFalse(payload["ok"])
             self.assertFalse(payload["finalized"])
-            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), SKILL_BODY)
+            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
 
     def test_an_approved_version_older_than_the_installed_one_is_refused_as_a_downgrade(
         self,
@@ -170,7 +173,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self.assertNotEqual(code, 0)
             self.assertFalse(payload["ok"])
             self.assertIn("downgrade", payload["diagnostics"][0]["message"])
-            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), SKILL_BODY)
+            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
 
     def test_update_without_a_coordinate_converges_everything_canonically_installed(self) -> None:
         with _environment() as env:
@@ -182,7 +185,9 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["finalized"])
             self.assertEqual(payload["items"][0]["key"], "company/skill/code-review@1.3.0")
-            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), UPDATED_SKILL_BODY)
+            self.assertEqual(
+                _delivered(env).read_text(encoding="utf-8"), as_delivered(UPDATED_SKILL_BODY)
+            )
 
 
 if __name__ == "__main__":

@@ -38,7 +38,7 @@ from aart_cli.sources.model import (
 )
 from tests.configured_installation_draft_e2e_test import AuthoredSetup, _published_registry
 from tests.marketplace_fixtures import configured_source
-from tests.placed_installation_e2e_test import AUTHORED_SKILL, SKILL_BODY
+from tests.placed_installation_e2e_test import AUTHORED_SKILL, SKILL_BODY, as_delivered
 
 COORDINATE = "company/skill/code-review"
 
@@ -226,8 +226,10 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
             self.assertEqual(payload["review_digest"], review["review_digest"])
             self.assertEqual(payload["receipt"]["review_digest"], review["review_digest"])
             self.assertEqual(
-                (env.project / ".claude/skills/code-review/SKILL.md").read_text(encoding="utf-8"),
-                SKILL_BODY,
+                (env.project / ".claude/skills/code-review-company-project/SKILL.md").read_text(
+                    encoding="utf-8"
+                ),
+                as_delivered(SKILL_BODY),
             )
             self.assertFalse(
                 (env.project / ".aart-cli/manifest.json").exists(),
@@ -274,7 +276,7 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
                 "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(installed, 0)
-            delivered = env.project / ".claude/skills/code-review/SKILL.md"
+            delivered = env.project / ".claude/skills/code-review-company-project/SKILL.md"
             delivered.chmod(0o600)
             delivered.write_text("# changed after installation\n", encoding="utf-8")
 

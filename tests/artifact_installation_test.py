@@ -312,6 +312,12 @@ class PlannedFromDescriptionTest(unittest.TestCase):
         self.assertEqual(registration.server, "github")
         self.assertEqual(registration.transport, Transport.STDIO)
 
+    def test_the_harness_registration_uses_the_reviewed_installed_name(self) -> None:
+        planned = _plan(registration_name="github-company-project")
+
+        assert isinstance(planned, Ok)
+        self.assertEqual(planned.value.registrations[0].server, "github-company-project")
+
     def test_the_plan_never_carries_the_secret_it_arranges_to_read(self) -> None:
         planned = _plan()
 

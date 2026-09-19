@@ -290,7 +290,7 @@ class ThePathsSurviveTheSessionThatWroteThemTest(unittest.TestCase):
             ]
 
             self.assertTrue(named, "the Installation section listed no paths")
-            self.assertIn(str(env.project / ".claude/skills/code-review"), named)
+            self.assertIn(str(env.project / ".claude/skills/code-review-company-project"), named)
             for path in named:
                 self.assertTrue(
                     pathlib.Path(path).exists(), f"the view named {path}, which is not there"

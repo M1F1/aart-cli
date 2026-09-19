@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 from dataclasses import replace
 
@@ -465,6 +466,16 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 path = config / f"{harness}.conf"
                 self.assertTrue(path.is_file(), f"{harness} configuration was not written")
                 self.assertIn(f"{ORG}={value}\n", path.read_text(encoding="utf-8"))
+
+            registrations = (
+                json.loads((env.project / "opencode.json").read_text(encoding="utf-8"))["mcp"],
+                json.loads(
+                    (env.project / ".tabnine/agent/settings.json").read_text(encoding="utf-8")
+                )["mcpServers"],
+            )
+            for registered in registrations:
+                self.assertIn("github-company-project", registered)
+                self.assertNotIn("github", registered)
 
             aart_state = env.paths.data_root
             leaked = [

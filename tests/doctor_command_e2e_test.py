@@ -69,7 +69,7 @@ class DoctorCommandE2ETest(unittest.TestCase):
 
         with _environment() as env:
             self._two_installations(env)
-            changed = env.project / ".claude/skills/documentation/SKILL.md"
+            changed = env.project / ".claude/skills/documentation-company-project/SKILL.md"
             changed.chmod(0o600)
             changed.write_text("# changed outside AART\n", encoding="utf-8")
 
@@ -100,7 +100,7 @@ class DoctorCommandE2ETest(unittest.TestCase):
     def test_the_human_report_names_every_artifact_and_explains_the_drift(self) -> None:
         with _environment() as env:
             self._two_installations(env)
-            changed = env.project / ".claude/skills/documentation/SKILL.md"
+            changed = env.project / ".claude/skills/documentation-company-project/SKILL.md"
             changed.chmod(0o600)
             changed.write_text("# changed outside AART\n", encoding="utf-8")
 

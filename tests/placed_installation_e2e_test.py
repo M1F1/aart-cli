@@ -74,6 +74,19 @@ SKILL_MANIFEST = {
 SKILL_BODY = "# Code review\n\nRead reference/style.md before commenting.\n"
 STYLE_BODY = "Prefer naming the failure over describing the code.\n"
 
+
+def as_delivered(body: str, name: str = "code-review-company-project") -> str:
+    """The same Skill as the harness reads it: the authored body under this install's name.
+
+    Every test that asserts which version reached a harness has to spell this, because the
+    delivered copy is not byte-for-byte the authored one -- a Skill's document names the
+    directory it was delivered into (`§169.7`), and the directory is named for the
+    installation rather than for the artifact.
+    """
+
+    return f'---\nname: {name}\ndescription: "Code review"\n---\n\n{body}'
+
+
 AUTHORED_SKILL: tuple[tuple[str, str], ...] = (
     ("code-review/aart-cli.json", json.dumps(SKILL_MANIFEST)),
     ("code-review/SKILL.md", SKILL_BODY),
@@ -160,7 +173,7 @@ class PlacedInstallationTest(unittest.TestCase):
 
     @property
     def delivered(self) -> pathlib.Path:
-        return pathlib.Path(self.project_root) / ".claude/skills/code-review"
+        return pathlib.Path(self.project_root) / ".claude/skills/code-review-company-project"
 
     def _installed_root(self, prepared) -> str:
         return artifact_root(
@@ -187,10 +200,12 @@ class PlacedInstallationTest(unittest.TestCase):
         self.assertFalse(self.delivered.exists(), "planning delivered before anybody confirmed")
         self.assertFalse(pathlib.Path(self._installed_root(prepared)).exists())
 
-    def test_installing_puts_the_authored_files_where_the_harness_reads_them(self) -> None:
+    def test_installing_projects_the_name_only_in_the_private_copy_the_harness_reads(self) -> None:
         self._install()
 
-        self.assertEqual(SKILL_BODY, (self.delivered / "SKILL.md").read_text(encoding="utf-8"))
+        installed = (self.delivered / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("name: code-review-company-project\n", installed)
+        self.assertTrue(installed.endswith(SKILL_BODY))
         self.assertEqual(
             STYLE_BODY,
             (self.delivered / "reference/style.md").read_text(encoding="utf-8"),
@@ -205,9 +220,10 @@ class PlacedInstallationTest(unittest.TestCase):
         payload = pathlib.Path(self._installed_root(prepared)) / "payload"
 
         self.assertFalse(self.delivered.is_symlink())
-        self.assertEqual(
-            (payload / "SKILL.md").read_text(encoding="utf-8"),
-            (self.delivered / "SKILL.md").read_text(encoding="utf-8"),
+        self.assertEqual(SKILL_BODY, (payload / "SKILL.md").read_text(encoding="utf-8"))
+        self.assertNotEqual(
+            (payload / "SKILL.md").read_bytes(),
+            (self.delivered / "SKILL.md").read_bytes(),
         )
 
     def test_nothing_is_launched_registered_or_given_an_interpreter(self) -> None:

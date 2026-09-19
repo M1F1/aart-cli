@@ -61,7 +61,9 @@ class HookInstallationTest(unittest.TestCase):
         self.env = _Environment(pathlib.Path(temporary.name).resolve())
         self.env.publish(AUTHORED_HOOK)
         self.settings = self.env.project / ".claude/settings.json"
-        self.script = self.env.project / ".claude/hooks/guard-bash/run.sh"
+        # The directory is named for the installation rather than for the artifact (`§169.7`):
+        # the same hook taken from two Registries is two scripts, not one overwriting the other.
+        self.script = self.env.project / ".claude/hooks/guard-bash-company-project/run.sh"
 
     def _install(self) -> tuple[int, dict]:
         return self.env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")

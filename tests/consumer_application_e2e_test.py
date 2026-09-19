@@ -49,7 +49,7 @@ OFFERED = "company/skill/code-review@1.2.0"
 
 
 def _delivered(env) -> pathlib.Path:
-    return env.project / ".claude/skills/code-review/SKILL.md"
+    return env.project / ".claude/skills/code-review-company-project/SKILL.md"
 
 
 def _delete_delivery(env) -> None:
@@ -300,7 +300,7 @@ class ConsumerApplicationSettingsTest(unittest.TestCase):
             _drive(env, _at(ConsumerScreen.MARKETPLACE), *_INSTALL, actions=chosen)
 
             self.assertTrue(
-                (env.home / ".claude/skills/code-review/SKILL.md").exists(),
+                (env.home / ".claude/skills/code-review-company-user/SKILL.md").exists(),
                 "the user-scope install never reached the user home",
             )
             self.assertFalse(

@@ -115,7 +115,7 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
             env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
 
             recorded = json.loads((env.project / ".mcp.json").read_text(encoding="utf-8"))
-            command = recorded["mcpServers"]["notes"]["command"]
+            command = recorded["mcpServers"]["notes-company-project"]["command"]
 
             self.assertEqual(
                 command,

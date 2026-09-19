@@ -256,7 +256,11 @@ class ConfiguredInstallationActionTest(unittest.TestCase):
         self.assertIn(coordinate, [view.coordinate for view in completed.value.machine.installed])
         settings = pathlib.Path(self.project_root) / ".tabnine/agent/settings.json"
         self.assertTrue(settings.exists(), "the harness the profile named was never registered")
-        entry = json.loads(settings.read_text(encoding="utf-8"))["mcpServers"]["github"]
+        # The harness lists the installation, not the artifact: alias and scope are part of the
+        # name it exposes (`§169.7`), so two Registries offering `github` stay two servers.
+        entry = json.loads(settings.read_text(encoding="utf-8"))["mcpServers"][
+            "github-company-project"
+        ]
 
         # The install is only real if what it registered is on disk and runnable. A status of
         # COMPLETED is the executor's verdict; this is the machine's.
@@ -317,8 +321,8 @@ class ConfiguredInstallationActionTest(unittest.TestCase):
         project = pathlib.Path(self.project_root)
         claude = json.loads((project / ".mcp.json").read_text(encoding="utf-8"))
         tabnine = json.loads((project / ".tabnine/agent/settings.json").read_text(encoding="utf-8"))
-        self.assertEqual(claude["mcpServers"]["github"]["args"], ["claude"])
-        self.assertEqual(tabnine["mcpServers"]["github"]["args"], ["tabnine"])
+        self.assertEqual(claude["mcpServers"]["github-company-project"]["args"], ["claude"])
+        self.assertEqual(tabnine["mcpServers"]["github-company-project"]["args"], ["tabnine"])
 
         # Nothing AART keeps -- receipts, lock, journal, object store -- holds the value, and
         # neither do the launcher and the harness settings that name the files.

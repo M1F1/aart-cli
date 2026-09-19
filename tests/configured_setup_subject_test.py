@@ -81,7 +81,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
             self.assertEqual(subject.record.scope, "project")
             self.assertEqual(
                 [effect.destination for effect in subject.record.effects],
-                [".claude/skills/code-review"],
+                [".claude/skills/code-review-company-project"],
                 "receipt destinations must be relative to the project root in engine evidence",
             )
             self.assertEqual(

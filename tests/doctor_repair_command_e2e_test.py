@@ -140,7 +140,7 @@ class DoctorRepairCommandE2ETest(unittest.TestCase):
                 "--yes",
             )
             self.assertEqual(code, 0, installed)
-            delivered = env.home / ".claude/skills/code-review/SKILL.md"
+            delivered = env.home / ".claude/skills/code-review-company-user/SKILL.md"
             self.assertTrue(delivered.exists())
             delivered.chmod(0o600)
             delivered.write_text("# user drift\n", encoding="utf-8")

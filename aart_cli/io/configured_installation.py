@@ -30,6 +30,7 @@ from aart_cli.domain.installation_owner import (
     credential_address,
     credential_service_template,
     installation_owner,
+    installed_names,
 )
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.python_runtime import PythonInstaller
@@ -412,6 +413,24 @@ def prepare_configured_installation_draft(
         if isinstance(owned, Err):
             return owned
         owners.extend(owned.value)
+    named = installed_names(owners)
+    if isinstance(named, Err):
+        return named
+    installed_by_owner = dict(named.value)
+    named_placements: list[ArtifactPlacement] = []
+    for placement in placements:
+        names = {
+            installed_by_owner[owner]
+            for owner in owners
+            if owner.artifact == placement.coordinate.artifact
+        }
+        if len(names) != 1:
+            return _error(
+                CONFIGURED_INSTALLATION_INVALID,
+                f"{placement.coordinate} does not have one installed name across its targets",
+            )
+        named_placements.append(replace(placement, installed_name=next(iter(names))))
+    placements = named_placements
     uses = tuple(
         InstallationInputUse(owner, runtime_input)
         for placement in placements

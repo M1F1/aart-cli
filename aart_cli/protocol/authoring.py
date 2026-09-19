@@ -10,7 +10,7 @@ import posixpath
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Literal, cast
+from typing import Callable, Iterable, Literal, cast
 
 from aart_cli.domain.artifacts import (
     ArtifactFormat,
@@ -1150,8 +1150,19 @@ class PackagedDelivery:
     digest: ObjectDigest
 
 
+def _projected(
+    projection: Callable[[str, bytes], Result[bytes]] | None, relative: str, content: bytes
+) -> Result[bytes]:
+    """`content` as the harness will read it at `relative`, or as published when nothing projects."""
+
+    return Ok(content) if projection is None else projection(relative, content)
+
+
 def package_delivery(
-    kind: ArtifactKind, entries: tuple[SnapshotEntry, ...]
+    kind: ArtifactKind,
+    entries: tuple[SnapshotEntry, ...],
+    *,
+    projection: Callable[[str, bytes], Result[bytes]] | None = None,
 ) -> Result[PackagedDelivery]:
     """What installing this package would give a harness to read, from the package itself.
 
@@ -1160,6 +1171,12 @@ def package_delivery(
     more than one payload file is refused rather than resolved by picking one: two candidates is an
     author saying something the format cannot express, and guessing would install a file nobody
     chose under a name it did not have.
+
+    `projection` is how an installation says that what the harness reads is not byte-for-byte what
+    the author published -- a Skill's own document has to name the directory this machine delivered
+    it into (`§169.7`). It is applied by payload-relative path, and the digest is taken afterwards,
+    so the recorded digest is of the tree that will be on disk rather than of the one in the store.
+    Without it the first reconciliation of every projected install would report drift.
     """
 
     delivery = _DELIVERED_KINDS.get(kind)
@@ -1187,11 +1204,11 @@ def package_delivery(
                 f"a {kind.value} is delivered as one file, and this package carries "
                 f"{len(files)} of them",
             )
-        return Ok(
-            PackagedDelivery(
-                str(files[0].path)[len(prefix) :], delivery, sha256_bytes(files[0].content)
-            )
-        )
+        source = str(files[0].path)[len(prefix) :]
+        content = _projected(projection, source, files[0].content)
+        if isinstance(content, Err):
+            return content
+        return Ok(PackagedDelivery(source, delivery, sha256_bytes(content.value)))
     records = []
     for entry in entries:
         path = str(entry.path)
@@ -1200,11 +1217,13 @@ def package_delivery(
         relative = parse_relative_path(path[len(prefix) :])
         if isinstance(relative, Err):
             return relative
-        records.append(
-            directory_entry(relative.value)
-            if entry.kind is SnapshotEntryKind.DIRECTORY
-            else file_entry(relative.value, entry.content, executable=entry.executable)
-        )
+        if entry.kind is SnapshotEntryKind.DIRECTORY:
+            records.append(directory_entry(relative.value))
+            continue
+        content = _projected(projection, str(relative.value), entry.content)
+        if isinstance(content, Err):
+            return content
+        records.append(file_entry(relative.value, content.value, executable=entry.executable))
     digest = tree_digest(records)
     if isinstance(digest, Err):
         return digest

@@ -27,6 +27,7 @@ from aart_cli.application.credential_guidance import (
     credential_prompt_briefing,
     gather_credential_guidance,
 )
+from aart_cli.application.skill_projection import project_skill_document
 from aart_cli.domain.credentials import CredentialReference
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.effects import (
@@ -773,6 +774,8 @@ class DeliveryEffectInterpreter:
         return self._withdraw(effect)
 
     def _deliver(self, effect: DeliverArtifact) -> Result[str]:
+        delivery = self._matching(effect)
+        assert delivery is not None  # `apply` refuses a delivery this interpreter was not given.
         tree = effect.delivery is DeliveryKind.TREE
         present = os.path.isdir(effect.source) if tree else os.path.isfile(effect.source)
         if not present:
@@ -793,6 +796,9 @@ class DeliveryEffectInterpreter:
                 with open(effect.source, "rb") as handle:
                     write_atomic(effect.destination, handle.read())
                 shutil.copymode(effect.source, effect.destination)
+            projected = self._project(delivery)
+            if isinstance(projected, Err):
+                return projected
             _restrict(effect.destination)
         except OSError as error:
             return _error(
@@ -800,6 +806,55 @@ class DeliveryEffectInterpreter:
                 f"cannot deliver to {effect.destination}: {error.strerror or error}",
             )
         return Ok(f"delivered {self.artifact} to {effect.harness} at {effect.destination}")
+
+    def _project(self, delivery: ArtifactDelivery) -> Result[None]:
+        """Rewrite the delivered document so it names the directory it was delivered into.
+
+        Only the private copy is touched; the payload this installation owns stays byte-for-byte
+        what the Registry approved, so a repair still compares against the published tree. The
+        same projection was applied when the delivery's digest was taken, which is what keeps a
+        clean install from reading as drift on the next reconciliation (`§169.7`).
+        """
+
+        if delivery.projected_document is None:
+            return Ok(None)
+        assert delivery.projected_name is not None and delivery.projected_description is not None
+        path = os.path.join(delivery.destination, delivery.projected_document)
+        try:
+            with open(path, "rb") as handle:
+                canonical = handle.read()
+        except OSError as error:
+            return _error(
+                EXECUTION_FAILED,
+                f"cannot read {path} to name it {delivery.projected_name}: "
+                f"{error.strerror or error}",
+            )
+        rewritten = project_skill_document(
+            canonical,
+            installed_name=delivery.projected_name,
+            summary=delivery.projected_description,
+        )
+        if isinstance(rewritten, Err):
+            return rewritten
+        # A payload may be delivered read-only on purpose, and `_restrict` keeps the owner bits it
+        # arrived with. So the write borrows owner access and gives it straight back, leaving the
+        # delivered tree with exactly the permissions the copy gave it.
+        try:
+            directory = os.path.dirname(path)
+            modes = (os.stat(path).st_mode, os.stat(directory).st_mode)
+            os.chmod(path, modes[0] | 0o200)
+            os.chmod(directory, modes[1] | 0o300)
+            try:
+                write_atomic(path, rewritten.value)
+                os.chmod(path, modes[0])
+            finally:
+                os.chmod(directory, modes[1])
+        except OSError as error:
+            return _error(
+                EXECUTION_FAILED,
+                f"cannot name {path} {delivery.projected_name}: {error.strerror or error}",
+            )
+        return Ok(None)
 
     def _withdraw(self, effect: WithdrawArtifact) -> Result[str]:
         if not os.path.lexists(effect.destination):

@@ -178,9 +178,14 @@ def _targets_scope_and_profile(
             target = delivery_target(delivery.harness, scope, kind)
         except KeyError:
             continue
+        # The name the harness reads it under, not the one the author gave it: an installation is
+        # delivered under its own name (`§169.7`), and recomputing the authored one here would
+        # leave every delivered artifact out of the view that lists what is installed.
         expected = os.path.join(
             harness_root,
-            delivery_destination(target, record.coordinate.artifact.name),
+            delivery_destination(
+                target, delivery.projected_name or record.coordinate.artifact.name
+            ),
         )
         if delivery.destination == expected:
             return True

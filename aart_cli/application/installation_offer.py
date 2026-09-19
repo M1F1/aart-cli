@@ -98,6 +98,10 @@ class ArtifactPlacement:
     #: a hook's script is placed where the harness keeps them, and this is what runs it.
     settings: tuple[ArtifactSettingsEntry, ...] = ()
     payload_digest: ObjectDigest | None = None
+    #: The versionless name the harness exposes for this installation (§169.7). Live configured
+    #: installation always supplies it after checking the whole operation for collisions; `None`
+    #: keeps lower-level callers explicit about whether they have crossed that boundary.
+    installed_name: str | None = None
     #: This installation's credential service with its harness left open (D-355), when the
     #: placement reaches more than one harness and each of them addresses its own item. `None` for
     #: a placement whose one launcher can read the address it was given, as it always did.
@@ -122,6 +126,14 @@ class ArtifactPlacement:
             or any(not isinstance(item, ArtifactMerge) for item in self.merges)
             or any(not isinstance(item, ArtifactSettingsEntry) for item in self.settings)
             or not (self.payload_digest is None or isinstance(self.payload_digest, ObjectDigest))
+            or not (
+                self.installed_name is None
+                or (
+                    isinstance(self.installed_name, str)
+                    and bool(self.installed_name)
+                    and not any(character in self.installed_name for character in "\r\n")
+                )
+            )
         ):
             raise ValueError("artifact placement deliveries, merges or settings are invalid")
 
@@ -251,6 +263,7 @@ def offer_installation(
                 preferred_installer=placement.preferred_installer,
                 credential_service_template=placement.credential_service_template,
                 credential_addresses=placement.credential_addresses,
+                registration_name=placement.installed_name,
             )
         if isinstance(planned, Err):
             # Returned as it came: the planner's diagnostic already names the artifact and why,

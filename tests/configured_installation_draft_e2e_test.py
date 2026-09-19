@@ -369,6 +369,7 @@ class ConfiguredInstallationDraftTest(unittest.TestCase):
         assert isinstance(drafted, Ok)
         self.assertTrue(drafted.value.ready)
         self.assertEqual((owner,), drafted.value.owners)
+        self.assertEqual(drafted.value.placements[0].installed_name, "github-company-project")
         placed = drafted.value.prepared_placements()
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         assert isinstance(placed, Ok)

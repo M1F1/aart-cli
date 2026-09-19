@@ -34,7 +34,7 @@ from tests.configured_update_command_e2e_test import (
     UPDATED_SKILL_BODY,
 )
 from tests.marketplace_fixtures import configured_source
-from tests.placed_installation_e2e_test import AUTHORED_SKILL, SKILL_BODY
+from tests.placed_installation_e2e_test import AUTHORED_SKILL, SKILL_BODY, as_delivered
 from tests.registry_maintenance_fixtures import empty_registry_snapshot
 
 COORDINATE = "company/skill/code-review"
@@ -212,8 +212,10 @@ class GitBackedConsumerE2ETest(unittest.TestCase):
 
             self.assertEqual(install_code, 0, installed)
             self.assertEqual(
-                (env.project / ".claude/skills/code-review/SKILL.md").read_text(encoding="utf-8"),
-                SKILL_BODY,
+                (env.project / ".claude/skills/code-review-company-project/SKILL.md").read_text(
+                    encoding="utf-8"
+                ),
+                as_delivered(SKILL_BODY),
             )
             self.assertEqual(installed["receipt"]["artifacts"][0]["source_revision"], env.head)
 
@@ -232,7 +234,7 @@ class GitBackedConsumerE2ETest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as raw:
             env = _Environment(Path(raw).resolve())
-            delivered = env.project / ".claude/skills/code-review/SKILL.md"
+            delivered = env.project / ".claude/skills/code-review-company-project/SKILL.md"
             env.run("source", "sync", source_transport=True)
             env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
             installed_revision = env.head
@@ -247,7 +249,7 @@ class GitBackedConsumerE2ETest(unittest.TestCase):
             self.assertEqual(synchronized["sources"][0]["resolved_revision"], moved)
             # The sync offered the commit and applied nothing: the delivered bytes are the ones
             # reviewed at install, and the record still names the revision they came from.
-            self.assertEqual(delivered.read_text(encoding="utf-8"), SKILL_BODY)
+            self.assertEqual(delivered.read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
 
             review_code, review = env.run(
                 "marketplace", "update", COORDINATE, "--profile", "claude"
@@ -256,7 +258,7 @@ class GitBackedConsumerE2ETest(unittest.TestCase):
             self.assertEqual(review_code, 0, review)
             self.assertFalse(review["finalized"])
             self.assertEqual(review["review"]["items"][0]["key"], "company/skill/code-review@1.3.0")
-            self.assertEqual(delivered.read_text(encoding="utf-8"), SKILL_BODY)
+            self.assertEqual(delivered.read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
 
             update_code, updated = env.run(
                 "marketplace",
@@ -271,7 +273,9 @@ class GitBackedConsumerE2ETest(unittest.TestCase):
 
             self.assertEqual(update_code, 0, updated)
             self.assertTrue(updated["finalized"])
-            self.assertEqual(delivered.read_text(encoding="utf-8"), UPDATED_SKILL_BODY)
+            self.assertEqual(
+                delivered.read_text(encoding="utf-8"), as_delivered(UPDATED_SKILL_BODY)
+            )
             self.assertEqual(updated["receipt"]["artifacts"][0]["source_revision"], moved)
 
             # Both revisions are real, distinct and durable: the audit trail remembers the commit

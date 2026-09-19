@@ -132,7 +132,7 @@ class ConfiguredInstallCommandSetupTest(unittest.TestCase):
             self.assertTrue(payload["ok"])
             self.assertEqual(payload["session_status"], "succeeded")
             self.assertTrue(
-                (env.project / ".claude/skills/code-review/SKILL.md").is_file(),
+                (env.project / ".claude/skills/code-review-company-project/SKILL.md").is_file(),
                 "the Skill never reached the harness, so this proves nothing about setup",
             )
             self.assertTrue((env.project / CONFIGURED).exists())
@@ -316,7 +316,7 @@ class ConsumerShellSetupTest(unittest.TestCase):
 
             self.assertEqual(finished.session.screen, ConsumerScreen.SUCCESS)
             self.assertTrue(
-                (env.project / ".claude/skills/code-review/SKILL.md").is_file(),
+                (env.project / ".claude/skills/code-review-company-project/SKILL.md").is_file(),
                 "the Skill never reached the harness, so this proves nothing about setup",
             )
             self.assertTrue((env.project / CONFIGURED).exists())

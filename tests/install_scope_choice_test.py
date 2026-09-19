@@ -244,11 +244,11 @@ class ThePreferenceLosesToTheChoiceOnThisMachineTest(unittest.TestCase):
             )
 
             self.assertTrue(
-                (env.home / ".claude/skills/code-review/SKILL.md").exists(),
+                (env.home / ".claude/skills/code-review-company-user/SKILL.md").exists(),
                 "the chosen user scope never reached the user home",
             )
             self.assertFalse(
-                (env.project / ".claude/skills/code-review/SKILL.md").exists(),
+                (env.project / ".claude/skills/code-review-company-project/SKILL.md").exists(),
                 "the preference installed into the project despite the choice",
             )
 
@@ -322,11 +322,11 @@ class TheReviewScreenShowsTheChoiceTest(unittest.TestCase):
             )
 
             self.assertTrue(
-                (env.home / ".claude/skills/code-review/SKILL.md").exists(),
+                (env.home / ".claude/skills/code-review-company-user/SKILL.md").exists(),
                 "the scope chosen on the review screen never reached the user home",
             )
             self.assertFalse(
-                (env.project / ".claude/skills/code-review/SKILL.md").exists(),
+                (env.project / ".claude/skills/code-review-company-project/SKILL.md").exists(),
                 "the install went to the project the operator had just moved away from",
             )
 

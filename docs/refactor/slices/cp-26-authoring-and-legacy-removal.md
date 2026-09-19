@@ -1464,6 +1464,49 @@ are now held: the `>`/`>=` boundary of the name length, where §169.7 makes exac
 refusal losing its remediation without any test noticing. The remaining survivors are message prose
 and the credential service's own length boundary, which no test pins deliberately.
 
+**Done so far — the name reaches the harness, and only the copy it reads (D-358).**
+`installed_name_for(coordinate, scope)` is the same join asked for before an owner exists, which is
+what placement has: `io/artifact_placement._deliveries` composes the name there and uses it for the
+destination, so a Skill is delivered to `.claude/skills/code-review-company-project` and the same
+artifact at user scope is a second directory rather than a competitor for the first.
+`installed_name(owner)` delegates to it, so a directory cannot be delivered under one spelling and
+recorded under another.
+
+A Skill also names itself. `application/skill_projection.project_skill_document` rewrites the
+`name:` of the installed `SKILL.md` and supplies a `description:` from the manifest summary when the
+author wrote none, keeping whatever else the frontmatter says and refusing -- rather than guessing
+at -- an unterminated header, a repeated field or bytes that are not UTF-8. `ArtifactDelivery`
+records `projected_name`, `projected_description` and `projected_document`, the payload-relative
+path whose text carries the name; only a Skill has one, because a hook's script and a guideline's
+document name nothing.
+
+Three things had to agree and none follows from the others: the path, the bytes at it, and the
+digest a receipt records. `package_delivery` takes a `projection` applied by payload-relative path
+*before* the tree digest, so the digest is of what will be on disk; `DeliveryEffectInterpreter`
+applies the same function to the same path after copying, borrowing owner write access and giving it
+straight back so a read-only payload stays read-only. Without the first half, every clean install
+reads as drift on its first reconciliation. The payload this installation owns is never rewritten,
+and the test that proves the delivery is a copy asserts the two now differ.
+
+`io/consumer_machine._targets_scope_and_profile` rebuilt the expected destination from the authored
+name to decide which installations a status view holds. After the rename it matched nothing, so
+`marketplace status` listed nothing at all -- green in every delivery test and visible only end to
+end. It asks the delivery for the name it was delivered under.
+
+Evidence: `make unit` 4728 green with one skip; lint, format-check and typecheck pass. Four targeted
+semantic mutations, each red on its named test and restored -- the destination taking the authored
+name, the executor skipping the projection, the digest taken before the projection, and the status
+view looking for the authored name. Scoped `make mutants` over `skill_projection.py` left 32
+survivors; two were real and are now held, and one of them was a defect rather than a test gap: rows
+were written with `\n` into documents whose own rows end `\r\n`, so the installed frontmatter was
+spelled two ways. The rest are message prose (D-134). Hypothesis holds the two universal claims --
+the authored body survives whatever was written, and projecting twice says what projecting once
+says, because a second install re-delivers from the same payload.
+
+Forty-five tests spelled the authored name and were corrected;
+`tests/placed_installation_e2e_test.as_delivered` is now the one place that spells what a delivered
+Skill looks like.
+
 Property-test complete owner keys, composed-name validation and provider-address stability and
 separation across generated owners/input ids. Use existing focused tests where
 possible; record targeted semantic mutation evidence for the material isolation claims and scoped

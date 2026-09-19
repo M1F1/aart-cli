@@ -4,6 +4,29 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-19, CP-26.19 in progress — the harness reads the installation's name (D-358).**
+`installed_name_for(coordinate, scope)` reaches placement, so a delivered Skill lands at
+`.claude/skills/code-review-company-project` and the same artifact at user scope is a second
+directory. The delivery records `projected_name`, `projected_description` and, for a Skill only,
+`projected_document`; `package_delivery` applies that projection before taking the tree digest and
+`DeliveryEffectInterpreter` applies the same function after copying, so the recorded digest
+describes what is on disk and a clean install does not read as drift. The payload stays
+byte-for-byte what the Registry approved. MCP registration keys follow the same name, so `.mcp.json`
+holds `github-company-project`.
+
+One real regression was found and fixed inside the change: `consumer_machine` rebuilt a delivery's
+expected destination from the *authored* name to decide which installations a status view holds, so
+`marketplace status` listed nothing after any delivered install. It was green in every delivery test
+and visible only end to end.
+
+Evidence: `make unit` passes 4728 tests with one skipped; lint, format-check and typecheck pass.
+Four targeted semantic mutations were red on their named tests and restored -- the authored name in
+the destination, the executor skipping the projection, the digest taken before it, and the status
+view's lookup. Scoped mutmut over `skill_projection.py` left 32 survivors; the two real ones are now
+held, and one was a defect rather than a test gap (`\n` rows written into `\r\n` documents).
+Hypothesis holds the universal half: the authored body survives whatever was written, and projecting
+twice says what projecting once says. CP-26 remains 19/23 with step 19 in progress.
+
 **2026-09-19, CP-26.19 in progress — Screen 07 collects once per installation.** D-357 completes
 the visible collection half of D-353. Config and credential rows are keyed and labelled by their
 installation owner; `_one_row_per_input` and `_addressed_to_owners` are deleted, so accepting one
