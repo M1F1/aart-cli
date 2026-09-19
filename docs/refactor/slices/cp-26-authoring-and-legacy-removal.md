@@ -1016,6 +1016,13 @@ gate makes the action unavailable.
 Status: **todo**. Added by the owner on 2026-09-19; execute after 18 and before 19. Names and
 paths must be settled before wiring the new installation identity. Do not renumber task 21.
 
+**Carried in from step 18.** The Push review's branch suggestion is the constant
+`aart-cli/registry-update`. Step 18 requires it to come from the most recent producing action --
+`aart/init-registry`, `aart/rebuild-registry`, `aart/promote-<artifact>-<version>`,
+`aart/bulk-promote` -- which needs the reducer to carry which action produced the commit, because
+the commit subject cannot tell init from rebuild (`publish` writes both). It was left here rather
+than done twice: this step renames that namespace. Implement it with the new names.
+
 Implement Product Specification §169.1–3/5 and INV-244/247. Inventory all active producers and
 consumers: executable/package/import names (`aart-cli`, `aart_cli`), manifest discovery and schema/
 URI identifiers, CLI/help/JSON labels, filenames, managed markers, environment and CI/release

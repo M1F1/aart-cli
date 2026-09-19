@@ -869,7 +869,7 @@
         {
           "id": "18",
           "title": "Registry Maintainer exposes publication readiness and may push its validated local snapshot, never to main or the Registry default",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "18a",
