@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from agent_artifacts import cli, model, wizard
+from agent_artifacts.domain.artifacts import ArtifactKind
 from tests.source_remediation_test import _parse_failure
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +15,22 @@ _README = (_ROOT / "README.md").read_text(encoding="utf-8")
 _SPELLED = {9: "nine", 10: "ten", 11: "eleven", 12: "twelve"}
 #: Substituted for every `<…>` before a route command is handed to the parser.
 _PLACEHOLDER = "placeholder"
+#: The four things §1.6 says a new user has to be able to tell apart.
+_STAGES = ("Source", "Candidate", "Registry", "Marketplace")
+
+
+def _section(heading: str) -> str:
+    """One top-level section, sliced at the next top-level heading rather than at a named one.
+
+    Naming the section that follows would couple these tests to an ordering CP-26 is still free to
+    change, and would turn a reordering into a slice error instead of the ordering failure the
+    tests below are written to report.
+    """
+
+    start = _README.index(f"## {heading}")
+    following = re.search(r"^## ", _README[start + 1 :], re.M)
+    assert following is not None, f"{heading} is the last section"
+    return _README[start : start + 1 + following.start()]
 
 
 def _command_surface() -> dict[str, frozenset[str]]:
@@ -89,17 +106,7 @@ class QuickStartRouteTest(unittest.TestCase):
     ROUTE = ("source add", "marketplace search", "marketplace install", "marketplace status")
 
     def _quick_start(self) -> str:
-        """The section, sliced at the next top-level heading rather than at a named one.
-
-        Naming the section that follows would couple this to an ordering step 14 is still free to
-        change, and would turn a reordering into a slice error instead of the ordering failure
-        above.
-        """
-
-        start = _README.index("## Install an artifact")
-        following = re.search(r"^## ", _README[start + 1 :], re.M)
-        assert following is not None, "the quick start is the last section"
-        return _README[start : start + 1 + following.start()]
+        return _section("Install an artifact")
 
     def test_the_route_is_the_first_thing_after_the_title(self) -> None:
         """Not merely present: first. A new user must not read an architecture section to reach
@@ -151,6 +158,109 @@ class QuickStartRouteTest(unittest.TestCase):
         for address in ("https://github.com/", "http://", "ghe.corp", "nexus.corp"):
             with self.subTest(address=address):
                 self.assertNotIn(address, quick_start)
+
+
+class OrientationTest(unittest.TestCase):
+    """§1.6's second section: what AART is, read by somebody who has already installed something.
+
+    It sits after the route on purpose, and the failure it is written against is the one every
+    README drifts into -- the orientation grows into an architecture chapter, and the page is back
+    to explaining itself before it is of any use.
+    """
+
+    HEADING = "What AART is"
+
+    def test_the_orientation_follows_the_route_rather_than_preceding_it(self) -> None:
+        headings = re.findall(r"^## (.+)$", _README, re.M)
+
+        self.assertEqual(headings[:2], ["Install an artifact", self.HEADING])
+
+    def test_the_orientation_stays_a_fraction_of_the_route_it_explains(self) -> None:
+        """Bounded, held against the thing it introduces rather than against a number chosen here.
+
+        A ceiling written as a line count is a number somebody raises by one. Half the route is a
+        ratio: the orientation has room for another paragraph and no room for a chapter, and the
+        claim survives step 15 moving material off this page.
+
+        Merely `shorter than the route` was the first version of this and it did not hold -- forty
+        lines of invented architecture still fit under the route's length, which is precisely the
+        section §1.6 refuses. A bound that a mutation walks through is not a bound.
+        """
+
+        orientation = _section(self.HEADING).splitlines()
+        route = _section("Install an artifact").splitlines()
+
+        self.assertLess(2 * len(orientation), len(route))
+
+    def test_the_orientation_names_every_artifact_family_this_build_installs(self) -> None:
+        """Read off `ArtifactKind`, because a family AART installs and the page omits is a
+        capability a reader concludes the tool does not have."""
+
+        orientation = _section(self.HEADING).lower()
+
+        for kind in ArtifactKind:
+            with self.subTest(kind=kind.value):
+                self.assertIn(kind.value, orientation)
+
+    def test_the_orientation_names_the_path_an_artifact_travels_in_order(self) -> None:
+        """Source, Candidate, Registry, Marketplace are four different things and a new user who
+        conflates any two of them cannot read a diagnostic that names one of them."""
+
+        orientation = _section(self.HEADING)
+        positions = [orientation.find(stage) for stage in _STAGES]
+
+        self.assertNotIn(-1, positions)
+        self.assertEqual(positions, sorted(positions))
+
+
+class DocumentationIndexTest(unittest.TestCase):
+    """The index is the half of link checking `docs-check` cannot do.
+
+    That gate reads every link in the repository and refuses one whose target is missing. Nothing
+    reads the documents and refuses one that no link reaches -- and unreachable is the more common
+    failure of the two: a page is written, merged, and then found by nobody, while the README goes
+    on sending readers to the handful somebody remembered.
+    """
+
+    HEADING = "Documentation"
+
+    def _public_documents(self) -> list[str]:
+        """Everything this repository publishes. `docs/refactor` is the working record of the
+        migration -- evidence for the next agent, not something a user is offered."""
+
+        return sorted(
+            str(path.relative_to(_ROOT))
+            for path in (_ROOT / "docs").rglob("*.md")
+            if "refactor" not in path.relative_to(_ROOT / "docs").parts
+        )
+
+    def _linked(self) -> set[str]:
+        return set(re.findall(r"\]\((docs/[^)#]+)\)", _section(self.HEADING)))
+
+    def test_this_guard_is_not_vacuous(self) -> None:
+        self.assertGreater(len(self._public_documents()), 20)
+
+    def test_every_public_document_is_reachable_from_the_index(self) -> None:
+        linked = self._linked()
+
+        unreachable = [path for path in self._public_documents() if path not in linked]
+
+        self.assertEqual(unreachable, [], "no link on this page reaches these documents")
+
+    def test_the_index_sends_no_reader_into_the_migration_record(self) -> None:
+        self.assertNotIn("docs/refactor/", _section(self.HEADING))
+
+    def test_the_index_is_grouped_and_no_link_floats_outside_a_group(self) -> None:
+        """Categorized is the point: twenty-five links under one heading is a directory listing,
+        which is what the reader already had."""
+
+        index = _section(self.HEADING)
+        groups = [match.start() for match in re.finditer(r"^\*\*(.+?)\*\*", index, re.M)]
+        links = [match.start() for match in re.finditer(r"\]\(docs/", index)]
+
+        self.assertGreaterEqual(len(groups), 6)
+        self.assertTrue(links)
+        self.assertGreater(min(links), min(groups))
 
 
 class RootDocumentAuthorityTest(unittest.TestCase):

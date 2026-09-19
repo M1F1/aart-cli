@@ -4,6 +4,23 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-19, CP-26.14 complete.** `## What AART is` is the second section and `## One contract`
+is absorbed into it: what AART is a package manager of, all five artifact families, the four places
+an artifact passes through -- Source, Candidate, Registry, Marketplace, introduced and tested in
+that order -- then the three roles on the consumer's side, then the one-interface rule. The
+explanation is bounded as a ratio rather than a number: under half the length of the route it
+explains, 22 lines against 72. `## Documentation` follows, grouping all 25 public documents into
+nine categories; before this step the README linked 15 of them. The index holds the direction
+`docs-check` cannot -- that gate refuses a link with no target, this test refuses a public document
+with no link -- and a separate test refuses any link into `docs/refactor`, which is the migration's
+working record rather than something a reader is offered. Six targeted mutations: five failed
+exactly the test naming the claim they attacked, and moving the orientation above the route failed
+four, correctly, because it breaks the ordering and empties the section at once. One of them found
+a real defect in this step's own test: "shorter than the route" admitted forty lines of invented
+architecture, so the claim is now half the route and the mutation fires. `make unit` also surfaced a drift this step did not cause: the two protocol documents are normative schema inputs, the specification-alignment commit added warning banners to both, and `docs/release/schema-freeze.json` was not recomputed (D-275). `make release-freeze` was run; the diff is those two digests alone. 28 tests in
+`adoption_first_contact_test`, `make unit`, `make typecheck`, `make docs-check`, Ruff check and
+format are green. No broad `make quality` ran, under D-317.
+
 **2026-09-19, contract consistency audit complete.** The Product Specification's ownership,
 Collection aggregation, version identity and input invariants agree with §169. The invariant matrix
 now includes INV-243–247 and withdraws affected historical completion claims. Root execution

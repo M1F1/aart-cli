@@ -75,17 +75,65 @@ The command is **`aart`**, the package you install is **`aart-cli`**, and the im
 someone else** — installing it gives you their code, not this one. The wheel also installs
 `agent-artifacts` as a second name for the `aart` command.
 
-## One contract
+## What AART is
 
-AART is one product with one interface: `source`, `marketplace`, and `registry`. Input outside the
-contract is rejected with a diagnostic; there are no compatibility flags or silent fallbacks.
+A package manager for agent artifacts -- the things an agent is configured with, rather than the
+code it edits. It installs **skills**, **guidelines**, **MCP** servers, **hooks** and **memory**
+into a harness, from a catalog somebody in your organization has reviewed.
 
-`native-source-v1` and `registry-v1` name the document families, and setup v2 is the recipe format.
-The same compiler validates them at both publication and consumption boundaries.
+An artifact reaches you through four places that are deliberately not one place. A **Source** is a
+repository an author writes in. Scanning one produces **Candidates**: compiled and validated, not
+yet approved. A maintainer promotes a Candidate into the **Registry**, the approved and immutable
+catalog. **Marketplace** is your view of that Registry -- what you search, what you install, and
+what `status` later compares your machine against. No Source installs anything directly, and
+nothing enters the Registry without a maintainer putting it there.
 
-The [Product Specification](docs/product-specification/PRODUCT_SPECIFICATION.md) is the product's
-single source of truth. See also the [native source contract](docs/protocol/native-source-v1.md) and
-the [registry contract](docs/protocol/registry-v1.md).
+On your side of that line AART is a Registry client, which acquires and validates a whole snapshot
+before believing any of it; a review surface, which renders the plan an install would apply and
+applies nothing until you accept it; and an installer, which writes the harness's own configuration
+and can reverse what it wrote. The same compiler runs at both ends, so a catalog cannot publish a
+document its consumers would have to work around.
+
+One product, one interface: `source`, `marketplace` and `registry`. Input outside the contract is
+rejected with a diagnostic; there are no compatibility flags and no silent fallbacks.
+
+## Documentation
+
+**The specification** — [the Product Specification](docs/product-specification/PRODUCT_SPECIFICATION.md),
+the product's single source of truth, which every document below is written against
+
+**Using AART** — [with a company registry](docs/tutorials/company-registry-v1.md) ·
+[with direct sources only](docs/tutorials/direct-source-v1.md) ·
+[the environment AART gives Git](docs/configuration/git-environment-v1.md) ·
+[advisory runtime requirements](docs/marketplace/runtime-requirements-v1.md)
+
+**The TUI and the CLI** — [TUI walkthrough](docs/testing/TUI_MANUAL_WALKTHROUGH.md) ·
+[CLI walkthrough](docs/testing/END_TO_END_ACCEPTANCE.md)
+
+**Authoring and vendoring** — [porting an MCP server into the registry](docs/tutorials/mcp-servers-into-the-registry.md) ·
+[vendoring one](docs/tutorials/vendoring-v1.md) ·
+[vendoring the next one](docs/tutorials/vendor-next-mcp-server.md) ·
+[setup recipe v2](docs/protocol/setup-recipe-v2.md)
+
+**Maintaining a registry** — [standing up your first one](docs/tutorials/company-registry-tabnine-v1.md) ·
+[maintainer commands](docs/registry/maintainer-commands-v1.md) ·
+[maintenance planning](docs/registry/maintenance-planning-v1.md)
+
+**Inside a company** — [rolling out on GitHub Enterprise Server](docs/ci/github-enterprise-rollout.md)
+
+**Security and policy** — [installation-risk baseline](docs/security/baseline-v1.md) ·
+[attestations and policy](docs/security/attestations-v1.md) ·
+[optional analyzers](docs/security/analyzers-v1.md)
+
+**Protocol contracts** — [native source v1](docs/protocol/native-source-v1.md) ·
+[registry v1](docs/protocol/registry-v1.md)
+
+**Development and testing** — [manual acceptance](docs/testing/manual-acceptance.md) ·
+[system matrix](docs/testing/system-matrix-v1.md) ·
+[the repository's workflows](docs/ci/workflows-v1.md)
+
+**Releases** — [the release model](docs/release/release-model-v1.md) ·
+[wheel reproducibility](docs/release/wheel-reproducibility-v1.md)
 
 ## Install and quick start
 

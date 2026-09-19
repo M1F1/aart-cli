@@ -2,8 +2,8 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–13 are **done** on `refactor/cp-26-legacy-removal`; **step 14 is next**. B-057 and B-149
-are both closed. The plan now has **22 tasks (13 done)**: the owner added **CP-26.18a** between
+Steps 1–14 are **done** on `refactor/cp-26-legacy-removal`; **step 15 is next**. B-057 and B-149
+are both closed. The plan has **22 tasks (14 done)**: the owner added **CP-26.18a** between
 18 and 19 without renumbering existing ids. Task 21 remains the final broad verification.
 
 ### Accepted installation contract to carry into implementation (2026-09-19)
@@ -27,28 +27,35 @@ reference allowances in D-313 are superseded; B-150 is promoted into 19 with B-1
 prove the same isolation for local/remote Registry aliases. Read the detailed 18a/19 acceptance in
 the slice; do not mark either task done for this specification-only segment.
 
-`aart author init` generates all five kinds; `aart author check` answers both halves of §1.4; and
-the README now opens with the route a new user runs rather than with the architecture.
-`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–13 (D-321 to D-331).
+`aart author init` generates all five kinds; `aart author check` answers both halves of §1.4; the
+README opens with the route a new user runs rather than with the architecture, and a bounded
+`## What AART is` and a `## Documentation` index reaching all 25 public documents follow it.
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–14 (D-321 to D-331).
 
-### Execute CP-26.14 next
+### Execute CP-26.15 next
 
-After the quick start, add a short **What AART is**: a package manager, Registry client,
-policy/review surface and installer for agent artifacts. Name the supported artifact families and
-the Source → Candidate → Registry → Marketplace distinction only as far as a new user needs it.
-This is orientation, not an architecture chapter — `## One contract` already sits directly below
-the quick start and is the natural place for it to land or be absorbed.
+The README's detailed sections move into focused documents. `## Install and quick start` and
+everything below it is still the page it was before CP-26.13: consumer lifecycle, MCP setup and
+credentials, reading/checking/undoing a setup, writing an artifact, maintaining a registry, running
+inside a company, canonical package, interface, verification, development dependencies and the ten
+gates, releasing. The quick start already links down to the install grid for `pip`, `pipx` and the
+private-instance cases, so whatever moves has to leave that route intact.
 
-Then the compact categorized documentation index: everyday use and lifecycle, TUI/CLI, artifact
-authoring, Registry maintenance, Enterprise setup, security/protocol contracts,
-development/testing, releases. **Every target must exist**; `make docs-check` validates links.
-Internal refactor records are not part of the public index.
+**Moved, not discarded** (§1.6.4). Each section lands in a document the index already names, or in
+a new one added to the index — the index test refuses a public document nothing links. **License
+stays last**, with its current MIT wording and the copyright/footer preserved unless the owner asks
+otherwise.
 
-Step 15 moves the detailed current sections into those documents and keeps License last; step 16
-puts a gate on the install lines and the structural promises. Do not pull that work forward.
+Three tests in `adoption_first_contact_test` read sections that will move: `ReadmeAdoptionTest`
+slices on `## Install and quick start`, `### On a private Enterprise instance` and `## Releasing`,
+and holds the install grid, the Enterprise narrowing, the gate table and the release description.
+Whatever survives on the page keeps those claims; whatever moves takes them to a test that reads
+the new document. `ReadmeCommandSurfaceTest` requires every shipped top-level command to be named
+**somewhere in the README**, so a group whose only mention of a command leaves the page breaks it —
+that is the test doing its job, and the fix is a line in the index, not a weaker test.
 
-`tests/adoption_first_contact_test.py::QuickStartRouteTest` slices the quick start at the **next**
-top-level heading, so inserting a section after it is safe by construction.
+Step 16 then executes the install lines and gates the structure; CP-26.18a renames the advertised
+commands and reruns step 16 afterwards. Do not pull either forward.
 
 ### What the evidence said, so it is not re-derived
 

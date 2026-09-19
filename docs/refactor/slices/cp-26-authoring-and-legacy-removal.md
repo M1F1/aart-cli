@@ -877,6 +877,62 @@ down to it for `pip`, `pipx` and the private-instance cases.
 **Evidence.** 20 tests in `adoption_first_contact_test`, `make unit`, `make typecheck`,
 `make docs-check`, Ruff check and format. No broad `make quality` ran, under D-317.
 
+### Step 14 — what AART is, and where everything else is written down (2026-09-19)
+
+`## One contract` is gone as a heading; its three claims are inside `## What AART is`, which is now
+the second section. The orientation says what AART is a package manager *of* -- the things an agent
+is configured with rather than the code it edits -- names all five artifact families, walks the four
+places an artifact passes through, and only then names the three roles the tool plays on the
+consumer's side. Nothing about compilers or effect boundaries; §1.6 asks for orientation and the
+reader has already installed something by the time they reach it.
+
+**Source, Candidate, Registry and Marketplace are introduced in that order**, which is also the
+order a test checks. They are four different things, the diagnostics name them individually, and a
+reader who has conflated any two cannot act on the message they will eventually get.
+
+**Bounded, held as a ratio rather than as a number.** A line ceiling written in a test is a number
+somebody raises by one. The claim is that the orientation stays under half the length of the route
+it explains: 22 lines against 72, so there is room for another paragraph and no room for a chapter.
+The first version of this claim said merely "shorter than the route", and the mutation that was
+supposed to prove it walked straight through -- forty lines of invented architecture still fit under
+72. A bound a mutation walks through is not a bound, and the test now says what it holds.
+
+**The index holds the direction `docs-check` cannot.** That gate reads every link and refuses one
+whose target is missing. Nothing read the documents and refused one that no link reaches, and
+unreachable is the commoner failure of the two: a page is written, merged, and then found by nobody
+while the README goes on pointing at the handful somebody remembered. Before this step the README
+linked 15 of the 25 public documents. It now links all 25, in nine groups, and a new document under
+`docs/` that nothing links fails the test by name. `docs/refactor` is excluded deliberately: it is
+the migration's working record, evidence for the next agent rather than something a reader is
+offered, and a separate test refuses a link into it.
+
+**The Product Specification is a group, not a preamble.** It was first a lead sentence above the
+groups, which made it the one link floating outside the structure and cost the grouping test its
+meaning. It is now the first group of one, so "no link outside a group" is a claim with no
+exception carved into it.
+
+**Targeted semantic mutations (six).** Dropping `hooks` from the families sentence, renaming
+`Candidates` to `Registry` in the path, deleting one document's link, floating a link above the
+first group, and padding the orientation past half the route each failed exactly one test -- the one
+whose name states that claim. Moving the orientation above the route failed four, which is correct:
+that mutation breaks the ordering and empties the section at the same time. All restored green.
+
+**Not in this step.** Step 15 moves the detailed sections into these documents and keeps License
+last; step 16 executes the install lines and holds the section order, the bounded explanation, the
+links and the final License as a gate. CP-26.18a will rename the advertised commands and reruns
+step 16 afterwards. `## Install and quick start` and everything below it is unchanged here.
+
+**A gate repaired on the way through, not caused here.** `make unit` failed on
+`release_test::test_the_committed_freeze_is_the_freeze_of_this_tree`. `docs/protocol/native-source-v1.md`
+and `docs/protocol/registry-v1.md` are normative schema inputs, the specification-alignment commit
+added warning banners to both, and `docs/release/schema-freeze.json` was not recomputed. D-275 puts
+that comparison in the unit gate precisely so the pull request that moved a schema fails, rather
+than the release after it. `make release-freeze` was run and the diff is those two digests and
+nothing else. Nothing in step 14 touches either document.
+
+**Evidence.** 28 tests in `adoption_first_contact_test`, `make unit`, `make typecheck`,
+`make docs-check`, Ruff check and format. No broad `make quality` ran, under D-317.
+
 ### Step 17 — no maintainer identity as a default
 
 The owner explicitly requires generated registries and operational examples to carry no default

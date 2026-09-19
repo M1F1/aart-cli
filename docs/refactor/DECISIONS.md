@@ -8358,3 +8358,32 @@ the target. CONTRACT_ALIGNMENT records the audit scope, resolved conflicts and r
 No blocking product contradiction was found in the reviewed installation contract. No runtime
 change, installation claim, task completion or release readiness follows from this audit. The
 existing implementation order is retained, and no broad suite is run for documentation changes.
+
+## D-336 — A public document nobody links is not documentation
+
+Date: 2026-09-19 · Status: accepted · Scope: CP-26 steps 14–16 / Product Specification §168
+
+**Context.** `scripts/docs_check.py` reads every link in the repository and refuses one whose
+target does not exist. Nothing read the documents and refused one that no link reaches. At the
+start of CP-26.14 the README linked 15 of the 25 documents under `docs/`; the other ten were
+written, reviewed and merged, and no route on the page reached any of them.
+
+Unreachable is the commoner of the two failures and the quieter one. A broken link is reported by
+the person who clicks it. A document nobody links is found by nobody, and the page goes on sending
+readers to the subset somebody remembered while the rest ages out of agreement with the product.
+
+**Decision.** The README's `## Documentation` index links every Markdown document under `docs/`,
+and `DocumentationIndexTest.test_every_public_document_is_reachable_from_the_index` fails by name
+for any that it does not. Adding a public document therefore includes adding its index line.
+
+`docs/refactor/**` is excluded and a separate test refuses any link into it: those files are the
+migration's working record, addressed to the next agent, and are not part of what a reader is
+offered. A document that genuinely has no public reader belongs there, not under a category
+heading — the choice is where it lives, not whether it is indexed.
+
+The index is grouped, and no link sits outside a group: twenty-five links under one heading is a
+directory listing, which the reader already had. The Product Specification is the first group
+rather than a lead sentence, so the rule carries no exception.
+
+**Consequence for step 15.** Moving a README section into a focused document is not complete until
+that document is in the index. Step 16's executed gate inherits both claims.
