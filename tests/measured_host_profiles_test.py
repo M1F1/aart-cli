@@ -28,7 +28,7 @@ from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.domain.harness import Scope, measured_harnesses
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err, Ok
-from aart_cli.io.artifact_placement import PLACEMENT_UNAVAILABLE, placement_for
+from aart_cli.io.artifact_placement import PLACEMENT_UNAVAILABLE, placements_for
 from aart_cli.io.object_store import publish_object
 from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.sources.local import read_local_snapshot
@@ -53,6 +53,24 @@ MEMORY_MANIFEST = {
 
 #: What the persistent shell targets: every harness this build measured, not a list beside them.
 MACHINE = ("claude", "codex", "opencode", "tabnine")
+
+
+def _reached(placed, attribute: str = "") -> list[str]:
+    """Every harness a whole placement result reaches, however it reaches them.
+
+    One placement is one harness's (§169.3), so "which harnesses did this artifact end up in" is a
+    question about the tuple rather than about any member of it.
+    """
+
+    harnesses: list[str] = []
+    for placement in placed.value:
+        items = (
+            getattr(placement, attribute)
+            if attribute
+            else (*placement.targets, *placement.deliveries, *placement.merges)
+        )
+        harnesses.extend(item.harness for item in items)
+    return sorted(harnesses)
 
 
 class _PlacementFixture(unittest.TestCase):
@@ -113,7 +131,7 @@ class _PlacementFixture(unittest.TestCase):
             "store": self.store,
         }
         fields.update(overrides)
-        return placement_for(self.artifact, **fields)  # type: ignore[arg-type]
+        return placements_for(self.artifact, **fields)  # type: ignore[arg-type]
 
 
 class MeasuredHarnessSetTest(unittest.TestCase):
@@ -161,7 +179,7 @@ class MachineProfileMcpPlacementTest(_PlacementFixture):
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         self.assertEqual(
             ["claude", "opencode", "tabnine"],
-            sorted(target.harness for target in placed.value.targets),
+            _reached(placed, "targets"),
         )
 
     def test_the_same_harness_named_by_the_operator_is_still_refused(self) -> None:
@@ -198,7 +216,7 @@ class MachineProfileDeliveryPlacementTest(_PlacementFixture):
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         self.assertEqual(
             ["claude", "codex", "opencode"],
-            sorted(item.harness for item in placed.value.deliveries),
+            _reached(placed, "deliveries"),
         )
 
     def test_the_same_harness_named_by_the_operator_is_still_refused(self) -> None:
@@ -224,7 +242,7 @@ class MachineProfileDeliveryPlacementTest(_PlacementFixture):
         )
 
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        self.assertEqual(["claude"], sorted(item.harness for item in placed.value.deliveries))
+        self.assertEqual(["claude"], _reached(placed, "deliveries"))
 
     def test_and_the_same_pair_typed_is_refused_by_name_rather_than_narrowed(self) -> None:
         """The whole distinction in one pair: same profiles, different origin, different answer.
@@ -266,7 +284,7 @@ class MachineProfileMergePlacementTest(_PlacementFixture):
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         self.assertEqual(
             ["claude", "codex", "opencode"],
-            sorted(item.harness for item in placed.value.merges),
+            _reached(placed, "merges"),
         )
 
     def test_the_same_harness_named_by_the_operator_is_still_refused(self) -> None:
@@ -287,7 +305,7 @@ class MachineProfileMergePlacementTest(_PlacementFixture):
         )
 
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        self.assertEqual(["claude"], sorted(item.harness for item in placed.value.merges))
+        self.assertEqual(["claude"], _reached(placed, "merges"))
 
     def test_and_the_same_pair_typed_is_refused_by_name_rather_than_narrowed(self) -> None:
         placed = self._place(

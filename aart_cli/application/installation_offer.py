@@ -31,6 +31,7 @@ from aart_cli.domain.identifiers import ArtifactCoordinate, ObjectDigest
 from aart_cli.domain.inputs import InputValueSource
 from aart_cli.domain.inspection import EnvironmentFacts
 from aart_cli.domain.install_description import InstallDescription
+from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.plans import PlannedRemediation
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.python_runtime import PythonInstaller
@@ -102,16 +103,19 @@ class ArtifactPlacement:
     #: installation always supplies it after checking the whole operation for collisions; `None`
     #: keeps lower-level callers explicit about whether they have crossed that boundary.
     installed_name: str | None = None
-    #: This installation's credential service with its harness left open (D-355), when the
-    #: placement reaches more than one harness and each of them addresses its own item. `None` for
-    #: a placement whose one launcher can read the address it was given, as it always did.
-    credential_service_template: str | None = None
     #: Every real item this placement would need: one per installation, concrete. The template
     #: above is launcher text and names nothing a provider holds, so what is inspected, stored and
     #: recorded is taken from here instead.
     credential_addresses: tuple[CredentialReference, ...] = ()
+    #: Which installation this placement is (§169.3). A placement is one harness's, so it has one
+    #: owner, and that owner is what its tree, its configuration and its receipt belong to. `None`
+    #: keeps the lower-level callers that never cross that boundary explicit about it, the way
+    #: `installed_name` does.
+    owner: InstallationOwner | None = None
 
     def __post_init__(self) -> None:
+        if not (self.owner is None or isinstance(self.owner, InstallationOwner)):
+            raise ValueError("an artifact placement belongs to one installation owner")
         if (
             not isinstance(self.artifact, ResolvedArtifact)
             or not isinstance(self.description, InstallDescription)
@@ -247,6 +251,7 @@ def offer_installation(
                 deliveries=placement.deliveries,
                 merges=placement.merges,
                 settings=placement.settings,
+                owner=placement.owner,
             )
         else:
             planned = plan_artifact_installation(
@@ -261,9 +266,9 @@ def offer_installation(
                 targets=placement.targets,
                 resolvers=resolvers,  # type: ignore[arg-type]
                 preferred_installer=placement.preferred_installer,
-                credential_service_template=placement.credential_service_template,
                 credential_addresses=placement.credential_addresses,
                 registration_name=placement.installed_name,
+                owner=placement.owner,
             )
         if isinstance(planned, Err):
             # Returned as it came: the planner's diagnostic already names the artifact and why,

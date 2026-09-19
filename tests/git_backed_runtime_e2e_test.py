@@ -76,7 +76,7 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
                 ["copy-tree", "create-python-environment", "write-file", "configure-harness"],
             )
 
-            runtime = env.project / ".aart-cli/runtimes/company/mcp/notes"
+            runtime = env.project / ".claude/aart-cli/mcp/company/notes"
             launcher = runtime / "launch.sh"
 
             self.assertTrue(os.access(launcher, os.X_OK), "the harness could not run this")
@@ -119,7 +119,7 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
 
             self.assertEqual(
                 command,
-                str(env.project / ".aart-cli/runtimes/company/mcp/notes/launch.sh"),
+                str(env.project / ".claude/aart-cli/mcp/company/notes/launch.sh"),
             )
             replies = speak(command, [{"jsonrpc": "2.0", "id": 1, "method": "initialize"}])
             self.assertEqual(replies[0]["result"]["serverInfo"]["name"], "aart-e2e-github")
@@ -182,7 +182,7 @@ class GitBackedDoctorE2ETest(unittest.TestCase):
             "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
         )
         self.assertEqual(code, 0, installed)
-        runtime = env.project / ".aart-cli/runtimes/company/mcp/notes"
+        runtime = env.project / ".claude/aart-cli/mcp/company/notes"
         self.assertTrue((runtime / "payload").is_dir(), "nothing to damage")
         return env, runtime
 
@@ -270,7 +270,7 @@ class GitBackedUninstallE2ETest(unittest.TestCase):
         env.run("source", "sync", source_transport=True)
         code, _ = env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(0, code)
-        runtime = env.project / ".aart-cli/runtimes/company/mcp/notes"
+        runtime = env.project / ".claude/aart-cli/mcp/company/notes"
         # It really runs before it is removed, so what follows is about a working installation.
         started = speak(
             str(runtime / "launch.sh"), [{"jsonrpc": "2.0", "id": 1, "method": "initialize"}]
@@ -378,7 +378,7 @@ class GitBackedUndoE2ETest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as raw:
             env, _ = self._installed(raw)
-            runtime = env.project / ".aart-cli/runtimes/company/mcp/notes"
+            runtime = env.project / ".claude/aart-cli/mcp/company/notes"
 
             code, refused = env.run("marketplace", "receipt", "undo", COORDINATE)
 

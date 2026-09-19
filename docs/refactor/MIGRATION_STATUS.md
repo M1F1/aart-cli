@@ -4,6 +4,37 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-20, CP-26.19 in progress — one installation per harness, and the record is keyed by it.
+NOT VERIFIED: the suite is red.**
+
+`io/artifact_placement.placements_for` replaces `placement_for` and answers with one placement per
+harness, each carrying its own `InstallationOwner`, its own tree composed through
+`installation_tree_root` against that harness's `MANAGED_TREE_TARGETS` directory, and its own
+configuration file. Both receipt shapes carry the owner, through serialization and through
+`DesiredState`, and `LocalReceiptStore` digests the owner into the record path -- so an artifact
+installed into two harnesses is two records rather than one written twice. `records_for(coordinate)`
+is the reader for the questions that are genuinely about the artifact and not about one of its
+installations.
+
+Two coordinate-keyed dicts were found shadowing one installation with another rather than
+theorized: `planned` in `io/configured_installation_action.inspect`, which made both members of a
+two-harness install fail preflight as "installed state changed after Review", and `available` in
+`record_installation_transaction`. Both are keyed by `(coordinate, owner)` now. The first was
+caught by an existing E2E test rather than by a new one, which is the argument for having kept it.
+
+D-354's cross-target refusal and D-355's `HARNESS_PLACEHOLDER` launcher composition were deleted
+rather than disabled, along with `domain/placement.py`: once a placement belongs to one harness the
+address is concrete and there is nothing left to compose at run time. The five tests that described
+that workaround were replaced by tests of what replaced it.
+
+**This entry claims no verification.** Lint, format-check and typecheck pass; `mypy` is clean over
+256 modules. The last full `make unit` was 4669 tests with 25 failures and 6 errors; twelve of
+those modules have since been fixed and verified individually, and the rest are listed by name in
+`NEXT.md` with what each is waiting on. They are all waiting on the same thing: the Installed view
+and the TUI focus key are still keyed by artifact, which with several harnesses makes two of three
+installations unreachable. No targeted mutation has been recorded for any claim in this entry yet;
+`NEXT.md` names the three that are owed.
+
 **2026-09-19, CP-26.19 in progress — the managed tree has a measured base (D-359).**
 `MANAGED_TREE_TARGETS` in `domain/harness.py` records which directory of each harness's own AART
 may keep an installation's payload, launcher, runtime and configuration in: `.claude`, `.tabnine`,

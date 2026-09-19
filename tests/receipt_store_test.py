@@ -70,6 +70,21 @@ def receipt(**override) -> InstallationReceipt:
     return InstallationReceipt(**fields)  # type: ignore[arg-type]
 
 
+def sole_record(store, coordinate):
+    """The one record this artifact has, found by artifact rather than by installation.
+
+    A record is keyed by its installation now (§169.3), so `record(coordinate)` answers only for a
+    caller that already holds the owner. The tests that use this install into one harness, so
+    there is exactly one record, and saying so is part of the assertion: a second would mean the
+    install wrote an installation nobody asked for.
+    """
+
+    records = store.records_for(coordinate)
+    assert isinstance(records, Ok), getattr(records, "diagnostics", ())
+    assert len(records.value) == 1, records.value
+    return Ok(records.value[0])
+
+
 class ReceiptParsingTest(unittest.TestCase):
     def test_a_receipt_survives_being_written_down_and_read_back(self):
         original = receipt()

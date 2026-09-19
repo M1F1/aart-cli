@@ -19,8 +19,26 @@ import unittest
 
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.result import Err, Ok
-from aart_cli.io.artifact_placement import PLACEMENT_UNAVAILABLE, placement_for
+from aart_cli.io.artifact_placement import PLACEMENT_UNAVAILABLE, placements_for
 from tests.measured_host_profiles_test import _PlacementFixture
+
+
+def _reached(placed, attribute: str = "") -> list[str]:
+    """Every harness a whole placement result reaches, however it reaches them.
+
+    One placement is one harness's (§169.3), so "which harnesses did this artifact end up in" is a
+    question about the tuple rather than about any member of it.
+    """
+
+    harnesses: list[str] = []
+    for placement in placed.value:
+        items = (
+            getattr(placement, attribute)
+            if attribute
+            else (*placement.targets, *placement.deliveries, *placement.merges)
+        )
+        harnesses.extend(item.harness for item in items)
+    return sorted(harnesses)
 
 
 def _renamed(artifact, name: str):
@@ -69,7 +87,7 @@ class DeclaredHarnessesNarrowTheMachineSetTest(_PlacementFixture):
     files = _FILES
 
     def _harnesses(self, placed) -> list[str]:
-        return sorted(item.harness for item in placed.value.deliveries)
+        return _reached(placed, "deliveries")
 
     def test_a_declared_harness_set_narrows_what_the_machine_offers(self) -> None:
         placed = self._place(scope=Scope.USER, harness_root=self.home, profiles_requested=False)
@@ -143,7 +161,7 @@ class DeclaredHarnessesNarrowTheMachineSetTest(_PlacementFixture):
 
         artifact = _renamed(self.artifact, "borrowed-check")
 
-        placed = placement_for(
+        placed = placements_for(
             artifact,
             scope=Scope.USER,
             profiles=("claude",),
@@ -170,7 +188,7 @@ class AnAbsentDeclarationIsUnconstrainedTest(_PlacementFixture):
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         self.assertEqual(
             ["claude", "codex", "opencode"],
-            sorted(item.harness for item in placed.value.deliveries),
+            _reached(placed, "deliveries"),
         )
 
 
@@ -186,7 +204,7 @@ class AnEmptyDeclarationMeansTheSameAsAnAbsentOneTest(_PlacementFixture):
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         self.assertEqual(
             ["claude", "codex", "opencode"],
-            sorted(item.harness for item in placed.value.deliveries),
+            _reached(placed, "deliveries"),
         )
 
 

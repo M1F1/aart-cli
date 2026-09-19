@@ -171,7 +171,7 @@ def desired_state_from_receipt(
         )
         for registration in receipt.registrations
     )
-    return DesiredState(coordinate, tuple(components))
+    return DesiredState(coordinate, tuple(components), owner=receipt.owner)
 
 
 def removal_state_from_receipt(
@@ -234,7 +234,7 @@ def removal_state_from_receipt(
                 strict=True,
             )
         )
-    return DesiredState(coordinate, tuple(components))
+    return DesiredState(coordinate, tuple(components), owner=receipt.owner)
 
 
 def desired_state_from_placement(
@@ -312,7 +312,7 @@ def desired_state_from_placement(
         )
         for entry in receipt.settings
     )
-    return DesiredState(coordinate, tuple(components))
+    return DesiredState(coordinate, tuple(components), owner=receipt.owner)
 
 
 def removal_state_from_placement(
@@ -383,7 +383,7 @@ def removal_state_from_placement(
         )
         for entry in receipt.settings
     )
-    return DesiredState(coordinate, tuple(components))
+    return DesiredState(coordinate, tuple(components), owner=receipt.owner)
 
 
 def _payload_state(

@@ -368,23 +368,30 @@ def complete_configured_installation(
     if isinstance(interpreters, Err):
         return interpreters
 
-    planned = {installation.coordinate: installation for installation in action.installations}
-    recorded = dict(previous_receipts)
+    # Keyed by installation, not by artifact. One action legitimately installs one artifact into
+    # two harnesses (§169.3), and keyed by the coordinate alone the second would shadow the first:
+    # both members would then be measured against one of the two trees, and the member measured
+    # against somebody else's tree fails preflight as state that changed after Review.
+    planned = {
+        (installation.coordinate, installation.owner): installation
+        for installation in action.installations
+    }
+    recorded = {(coordinate, receipt.owner): receipt for coordinate, receipt in previous_receipts}
 
     def inspect(desired: DesiredState) -> CurrentState:
-        # Two vocabularies, and which one applies is decided by the state being asked about. A
-        # coordinate this action planned is measured against the plan. The version an update is
+        # Two vocabularies, and which one applies is decided by the state being asked about. An
+        # installation this action planned is measured against the plan. The version an update is
         # leaving was never planned here, so it is measured against the receipt it wrote -- and a
         # state that is neither is a bug in this composition rather than a fact about the machine,
         # which is why it refuses instead of measuring something adjacent and calling it the answer.
-        installation = planned.get(desired.artifact)
+        installation = planned.get((desired.artifact, desired.owner))
         if installation is not None:
             return observe_planned_installation(
                 installation,
                 registry=registry,
                 credential_providers=credential_providers,
             )
-        receipt = recorded.get(desired.artifact)
+        receipt = recorded.get((desired.artifact, desired.owner))
         if receipt is None:
             raise ValueError(
                 f"{desired.artifact} is neither planned by this action nor recorded as the "

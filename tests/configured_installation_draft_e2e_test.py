@@ -19,7 +19,6 @@ from aart_cli.application.promotion import (
     project_lifecycle_update,
     project_promotion,
 )
-from aart_cli.application.runtime_projection import HARNESS_PLACEHOLDER
 from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.candidates import CandidateId, assess_candidate
 from aart_cli.domain.credentials import CredentialProviderRef, CredentialReference
@@ -33,12 +32,11 @@ from aart_cli.domain.identifiers import (
 from aart_cli.domain.inputs import PromptedConfigValue, SecretProviderReference
 from aart_cli.domain.installation_owner import (
     credential_address,
-    credential_service_template,
     installation_owner,
 )
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.registry import PromotionMode, publish_registry_version
-from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.result import Ok
 from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
@@ -395,58 +393,60 @@ class ConfiguredInstallationDraftTest(unittest.TestCase):
             {(field.owner, field.input.id) for field in drafted.value.inputs.fields},
         )
 
-    def test_a_placement_owns_only_its_own_artifact_s_installations(self) -> None:
-        """Another artifact's installations are not this placement's to answer for.
+    def test_two_harnesses_are_two_placements_under_two_trees(self) -> None:
+        """§169.3: an installation's private files belong to the harness that selected it.
 
-        A Selection installs several artifacts at once, and each placement is prepared with the
-        answers of the installations it created. Were the filter to let a neighbour's owner
-        through, this placement would be compared against answers nobody gave it -- refusing a
-        sound install, or applying a value declared for something else.
+        One placement spanning two harnesses had one runtime tree, one launcher and one
+        configuration file between them, which is the sharing §169.3 removes. Two harnesses are two
+        installations, so they are two placements -- each owned by one installation, each rooted
+        under that harness's own directory (D-359), and neither able to reach the other's files.
         """
 
-        drafted = self._draft()
+        drafted = self._draft(profiles=("tabnine", "claude"))
+
+        self.assertIsInstance(drafted, Ok, getattr(drafted, "diagnostics", ()))
+        assert isinstance(drafted, Ok)
+        placements = drafted.value.placements
+        self.assertEqual(2, len(placements))
+        self.assertEqual(
+            {placement.owner for placement in placements},
+            {self._owner("claude"), self._owner("tabnine")},
+        )
+        self.assertEqual(
+            {placement.owner.harness: placement.root for placement in placements},
+            {
+                "claude": f"{self.project_root}/.claude/aart-cli/mcp/company/github",
+                "tabnine": f"{self.project_root}/.tabnine/aart-cli/mcp/company/github",
+            },
+        )
+
+    def test_each_placement_registers_with_the_one_harness_that_owns_it(self) -> None:
+        drafted = self._draft(profiles=("tabnine", "claude"))
 
         assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
-        neighbour = installation_owner(
-            ArtifactCoordinate(self.source.alias, ArtifactIdentity("mcp", "gitlab"), "1.0.0"),
-            scope=Scope.PROJECT,
-            root=self.project_root,
-            harness="tabnine",
-        )
-        widened = dataclasses.replace(drafted.value, owners=(*drafted.value.owners, neighbour))
+        for placement in drafted.value.placements:
+            with self.subTest(harness=placement.owner.harness):
+                self.assertEqual(
+                    tuple(target.harness for target in placement.targets),
+                    (placement.owner.harness,),
+                )
 
-        (placement,) = widened.placements
+    def test_a_placement_is_prepared_with_its_own_installation_s_answers(self) -> None:
+        """Another installation's answers are not this placement's to carry.
 
-        self.assertIn(neighbour, widened.owners)
-        self.assertNotIn(neighbour, widened.owners_for(placement))
-        self.assertEqual((self._owner(),), widened.owners_for(placement))
-
-    def test_each_target_s_own_credential_address_prepares_into_one_open_slot(self) -> None:
-        """§169.4-6 and D-355: separate items are not a disagreement the placement must refuse.
-
-        Two harnesses addressing their own Keychain item is the contract, not a conflict. The one
-        thing that differs between those addresses is the harness, and the launcher composes that
-        at start, so the placement carries the address with its slot open and prepares.
+        A Selection installs several artifacts at once and each of them into several harnesses, so
+        a draft holds answers for installations this placement is not. Were the filter to let one
+        of them through, a value declared for something else would reach this launcher.
         """
 
         claude = self._owner("claude")
         tabnine = self._owner("tabnine")
         drafted = self._draft(
             (
-                OwnedInputSource(claude, PromptedConfigValue(ORG, "acme")),
-                OwnedInputSource(
-                    claude,
-                    SecretProviderReference(
-                        TOKEN, credential_address(claude, TOKEN, provider="test-keychain")
-                    ),
-                ),
-                OwnedInputSource(tabnine, PromptedConfigValue(ORG, "acme")),
-                OwnedInputSource(
-                    tabnine,
-                    SecretProviderReference(
-                        TOKEN, credential_address(tabnine, TOKEN, provider="test-keychain")
-                    ),
-                ),
+                OwnedInputSource(claude, PromptedConfigValue(ORG, "for-claude")),
+                OwnedInputSource(claude, SecretProviderReference(TOKEN, KEYCHAIN)),
+                OwnedInputSource(tabnine, PromptedConfigValue(ORG, "for-tabnine")),
+                OwnedInputSource(tabnine, SecretProviderReference(TOKEN, KEYCHAIN)),
             ),
             profiles=("tabnine", "claude"),
         )
@@ -455,28 +455,65 @@ class ConfiguredInstallationDraftTest(unittest.TestCase):
         prepared = drafted.value.prepared_placements()
 
         assert isinstance(prepared, Ok), getattr(prepared, "diagnostics", ())
-        (placement,) = prepared.value
         self.assertEqual(
-            credential_service_template(claude, HARNESS_PLACEHOLDER),
-            placement.credential_service_template,
+            {
+                placement.owner.harness: next(
+                    item.value
+                    for item in placement.sources
+                    if isinstance(item, PromptedConfigValue)
+                )
+                for placement in prepared.value
+            },
+            {"claude": "for-claude", "tabnine": "for-tabnine"},
         )
-        (secret,) = tuple(
-            item for item in placement.sources if isinstance(item, SecretProviderReference)
+
+    def test_two_harnesses_answering_differently_is_two_installations_not_a_conflict(self) -> None:
+        """What D-354 had to refuse, §169.3 simply installs.
+
+        While one placement spanned both harnesses there was one launcher between them, so two
+        different answers to the same question had no single set of values to carry and the draft
+        refused by name. Each harness now has its own placement, its own launcher and its own
+        configuration, so the disagreement is not one: it is two installations, answered
+        separately, which is what §169.4-6 asked for.
+        """
+
+        claude = self._owner("claude")
+        tabnine = self._owner("tabnine")
+        drafted = self._draft(
+            (
+                OwnedInputSource(claude, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(claude, SecretProviderReference(TOKEN, KEYCHAIN)),
+                OwnedInputSource(tabnine, PromptedConfigValue(ORG, "other")),
+                OwnedInputSource(tabnine, SecretProviderReference(TOKEN, KEYCHAIN)),
+            ),
+            profiles=("tabnine", "claude"),
         )
-        self.assertEqual(placement.credential_service_template, secret.provider.service)
-        # Neither harness's own address is what the placement carries; the open slot is.
-        for owner in (claude, tabnine):
-            self.assertNotEqual(
-                credential_address(owner, TOKEN, provider="test-keychain").service,
-                secret.provider.service,
-            )
 
-    def test_the_placement_still_names_every_real_item_it_would_need(self) -> None:
-        """The open slot is for the launcher's text alone; nothing may be asked of a provider.
+        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
+        self.assertTrue(drafted.value.ready)
+        prepared = drafted.value.prepared_placements()
 
-        The address the launcher composes is not an item anyone holds. What a provider is asked to
-        inspect or store, and what the receipt records, is every installation's own concrete
-        address -- one per harness, which is what §169.4-6 is for.
+        assert isinstance(prepared, Ok), getattr(prepared, "diagnostics", ())
+        self.assertEqual(
+            {
+                placement.owner.harness: next(
+                    item.value
+                    for item in placement.sources
+                    if isinstance(item, PromptedConfigValue)
+                )
+                for placement in prepared.value
+            },
+            {"claude": "acme", "tabnine": "other"},
+        )
+        # Two trees, so the two answers never meet: neither launcher can read the other's file.
+        self.assertEqual(2, len({placement.root for placement in prepared.value}))
+
+    def test_each_installation_names_the_one_item_it_is_entitled_to(self) -> None:
+        """§169.4-6: what a provider is asked for is this installation's own address.
+
+        Composed from the owner rather than taken from what was answered. A reference naming some
+        other installation's item is still stored as an ordinary source, but the address this
+        placement declares it needs -- what is inspected, stored and recorded -- is its own.
         """
 
         claude = self._owner("claude")
@@ -499,49 +536,18 @@ class ConfiguredInstallationDraftTest(unittest.TestCase):
         prepared = drafted.value.prepared_placements()
 
         assert isinstance(prepared, Ok), getattr(prepared, "diagnostics", ())
-        (placement,) = prepared.value
         self.assertEqual(
-            (
-                CredentialReference(TOKEN, credential_address(claude, TOKEN)),
-                CredentialReference(TOKEN, credential_address(tabnine, TOKEN)),
-            ),
-            placement.credential_addresses,
-        )
-        for reference in placement.credential_addresses:
-            self.assertNotIn(HARNESS_PLACEHOLDER, str(reference))
-
-    def test_an_address_that_is_not_the_target_s_own_is_still_a_disagreement(self) -> None:
-        """Only the harness may differ. Anything else two targets disagree about has no slot."""
-
-        claude = self._owner("claude")
-        tabnine = self._owner("tabnine")
-        drafted = self._draft(
-            (
-                OwnedInputSource(claude, PromptedConfigValue(ORG, "acme")),
-                OwnedInputSource(
-                    claude, SecretProviderReference(TOKEN, credential_address(claude, TOKEN))
-                ),
-                OwnedInputSource(tabnine, PromptedConfigValue(ORG, "acme")),
-                # This uses the expected provider but fixes the service to Claude's owner. It must
-                # not be mistaken for the open harness slot that Tabnine is entitled to compose.
-                OwnedInputSource(
-                    tabnine, SecretProviderReference(TOKEN, credential_address(claude, TOKEN))
-                ),
-            ),
-            profiles=("tabnine", "claude"),
+            {
+                placement.owner.harness: placement.credential_addresses
+                for placement in prepared.value
+            },
+            {
+                "claude": (CredentialReference(TOKEN, credential_address(claude, TOKEN)),),
+                "tabnine": (CredentialReference(TOKEN, credential_address(tabnine, TOKEN)),),
+            },
         )
 
-        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
-        refused = drafted.value.prepared_placements()
-
-        assert isinstance(refused, Err), refused
-        self.assertEqual(
-            refused.diagnostics[0].code.value, "configured-installation-per-target-values-differ"
-        )
-
-    def test_one_target_needs_no_slot_left_open(self) -> None:
-        """A single installation's launcher can read the address it was given, as it always did."""
-
+    def test_one_installation_still_names_the_address_it_was_given(self) -> None:
         owner = self._owner()
         drafted = self._draft(
             (
@@ -554,33 +560,15 @@ class ConfiguredInstallationDraftTest(unittest.TestCase):
         prepared = drafted.value.prepared_placements()
 
         assert isinstance(prepared, Ok), getattr(prepared, "diagnostics", ())
-        self.assertIsNone(prepared.value[0].credential_service_template)
-
-    def test_targets_that_answered_differently_refuse_rather_than_pick_one(self) -> None:
-        """One generated launcher carries one set of values, so a disagreement is named (D-354)."""
-
-        claude = self._owner("claude")
-        tabnine = self._owner("tabnine")
-        drafted = self._draft(
-            (
-                OwnedInputSource(claude, PromptedConfigValue(ORG, "acme")),
-                OwnedInputSource(claude, SecretProviderReference(TOKEN, KEYCHAIN)),
-                OwnedInputSource(tabnine, PromptedConfigValue(ORG, "other")),
-                OwnedInputSource(tabnine, SecretProviderReference(TOKEN, KEYCHAIN)),
-            ),
-            profiles=("tabnine", "claude"),
-        )
-
-        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
-        self.assertTrue(drafted.value.ready)
-        refused = drafted.value.prepared_placements()
-
-        assert isinstance(refused, Err), refused
+        (placement,) = prepared.value
         self.assertEqual(
-            refused.diagnostics[0].code.value, "configured-installation-per-target-values-differ"
+            (
+                CredentialReference(
+                    TOKEN, credential_address(owner, TOKEN, provider="macos-keychain")
+                ),
+            ),
+            placement.credential_addresses,
         )
-        self.assertIn("claude", refused.diagnostics[0].message)
-        self.assertIn("tabnine", refused.diagnostics[0].message)
 
 
 if __name__ == "__main__":

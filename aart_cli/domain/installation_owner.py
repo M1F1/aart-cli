@@ -44,8 +44,9 @@ __all__ = [
     "MAX_INSTALLED_NAME_LENGTH",
     "InstallationOwner",
     "credential_address",
-    "credential_service_template",
     "installation_owner",
+    "installation_owner_from_data",
+    "installation_owner_to_data",
     "installed_name",
     "installed_names",
 ]
@@ -89,10 +90,6 @@ _ANY_VERSION = "0.0.0"
 #: Stands in for a harness with no profile. It is not a usable slug, so a profile can never be read
 #: as an absent one, and `claude` at user scope stays distinct from profile `user` at project scope.
 _NO_PROFILE = "-"
-
-#: What a harness placeholder may be. Not a shell expression: the launcher splits the template on
-#: this token and quotes each side, so nothing in it is ever read by a shell.
-_PLACEHOLDER_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 #: How much of the root's digest identifies it. Sixty-four bits: enough that two roots colliding is
 #: not a thing that happens, short enough to stay readable beside the labels.
@@ -201,9 +198,8 @@ def credential_address(
 def _service_labels(owner: InstallationOwner, harness: str) -> tuple[str, ...]:
     """The address's labels in order, with `harness` already decided by the caller.
 
-    One function composes them so `credential_address` and `credential_service_template` cannot
-    drift apart: a launcher that composed a different address from the one this product stored at
-    would read an item that is not there, and the failure would look like a missing credential.
+    One function composes them, so the labels an address is built from cannot drift apart from
+    the labels anything else reads it back by.
     """
 
     return (
@@ -216,32 +212,6 @@ def _service_labels(owner: InstallationOwner, harness: str) -> tuple[str, ...]:
         owner.artifact.name,
         _root_discriminator(owner.root),
     )
-
-
-def credential_service_template(owner: InstallationOwner, placeholder: str) -> str:
-    """This owner's credential service on every harness, with the harness slot left to fill.
-
-    A launcher is generated once for an artifact and told at start which harness started it -- the
-    same argument it already uses to find that harness's configuration file. Giving it the address
-    with one slot open lets it compose its own rather than carry one harness's, which is what keeps
-    one artifact on four harnesses reading four items instead of one.
-
-    Substituting any canonical harness slug yields exactly the service `credential_address` returns
-    for that harness, and that equivalence is a property test rather than a comment.
-
-    The placeholder is a token to split on, never an expression. It is held to letters, digits,
-    underscore and hyphen: a separator in it would make the address parse as a different owner, and
-    anything a shell reads -- a dollar, a quote, a backtick -- would be a way to make a generated
-    launcher run something at start. The caller substitutes; nothing here is evaluated anywhere.
-    """
-
-    if not isinstance(owner, InstallationOwner):
-        raise ValueError("a credential service template needs an installation owner")
-    if not isinstance(placeholder, str) or _PLACEHOLDER_RE.fullmatch(placeholder) is None:
-        raise ValueError(
-            f"a harness placeholder must be letters, digits, underscore or hyphen: {placeholder!r}"
-        )
-    return _SEPARATOR.join(_service_labels(owner, placeholder))
 
 
 def _refuse(code: DiagnosticCode, message: str, *remediation: str) -> Err:
@@ -341,3 +311,56 @@ def _root_discriminator(root: str) -> str:
     """The root as an identifier rather than as a path, because the path is often a client's name."""
 
     return hashlib.sha256(root.encode("utf-8")).hexdigest()[:_ROOT_DISCRIMINATOR_LENGTH]
+
+
+def installation_owner_to_data(owner: InstallationOwner) -> dict[str, object]:
+    """One owner as the record that names it, with every field written out.
+
+    The root is written as the path it is. This is the product's own managed record, not an
+    address in somebody else's store: `credential_address` hides the root because a keychain item's
+    attributes are readable by anything that can list the keychain, and this record is not.
+    """
+
+    if not isinstance(owner, InstallationOwner):
+        raise ValueError("an installation owner record needs an installation owner")
+    return {
+        "artifact": {"kind": owner.artifact.kind, "name": owner.artifact.name},
+        "harness": owner.harness,
+        "profile": owner.profile,
+        "root": owner.root,
+        "scope": owner.scope.value,
+        "source": owner.source.value,
+    }
+
+
+def installation_owner_from_data(data: object) -> InstallationOwner:
+    """Rebuild one owner from its own record, refusing anything that is not one.
+
+    Every field is required. An owner missing one of them would be a different installation from
+    the one that was recorded, and reading it as the recorded one is how two installations become
+    one record.
+    """
+
+    if not isinstance(data, dict):
+        raise ValueError("an installation owner record must be a mapping")
+    artifact = data.get("artifact")
+    if not isinstance(artifact, dict):
+        raise ValueError("an installation owner record names one artifact")
+    try:
+        kind = artifact["kind"]
+        name = artifact["name"]
+        harness = data["harness"]
+        profile = data["profile"]
+        root = data["root"]
+        scope = data["scope"]
+        source = data["source"]
+    except KeyError as error:
+        raise ValueError(f"installation owner record is missing {error.args[0]}") from None
+    if not all(isinstance(value, str) for value in (kind, name, harness, profile, root, source)):
+        raise ValueError("installation owner record has an invalid field")
+    try:
+        return InstallationOwner(
+            SourceAlias(source), ArtifactIdentity(kind, name), Scope(scope), root, harness, profile
+        )
+    except ValueError as error:
+        raise ValueError(f"installation owner record is not an owner: {error}") from None

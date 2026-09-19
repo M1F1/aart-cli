@@ -449,15 +449,18 @@ def _validate_intents(
     intents: tuple[ArtifactInstallIntent, ...],
 ) -> Result[tuple[ArtifactInstallIntent, ...]]:
     expected = {item.version.coordinate: item for item in selection.artifacts}
-    actual = {item.coordinate: item for item in intents}
-    if (
-        len(actual) != len(intents)
-        or set(actual) != set(expected)
-        or any(actual[coordinate].artifact != artifact for coordinate, artifact in expected.items())
+    # One intent per *installation*, not per artifact: an artifact selected for two harnesses is
+    # installed twice, and each of those is its own tree, its own launcher and its own row in the
+    # review (§169.3). What still has to hold is that nothing is reviewed that was not selected,
+    # that every selected artifact is reviewed, and that each intent binds the exact resolved
+    # artifact rather than another version of the same name.
+    if set(item.coordinate for item in intents) != set(expected) or any(
+        expected[item.coordinate] != item.artifact for item in intents
     ):
         return _error(
             PLANNING_INVALID,
-            "install intents must bind every exact resolved artifact exactly once",
+            "install intents must bind every exact resolved artifact at least once, and nothing "
+            "that was not selected",
         )
     return Ok(
         tuple(sorted(intents, key=lambda item: artifact_coordinate_sort_key(item.coordinate)))

@@ -33,7 +33,6 @@ from aart_cli.domain.installation_owner import (
     MAX_INSTALLED_NAME_LENGTH,
     InstallationOwner,
     credential_address,
-    credential_service_template,
     installation_owner,
     installed_name,
     installed_name_for,
@@ -438,72 +437,3 @@ class InstalledNameCollisionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-class CredentialServiceTemplateTest(unittest.TestCase):
-    """A launcher is generated once and told which harness started it, so it composes its own."""
-
-    def test_substituting_a_harness_gives_that_harness_s_own_address(self) -> None:
-        owner = _owner(harness="claude")
-        template = credential_service_template(owner, "PLACEHOLDER")
-
-        composed = template.replace("PLACEHOLDER", "opencode")
-
-        self.assertEqual(
-            credential_address(_owner(harness="opencode"), InputId("token")).service, composed
-        )
-
-    def test_the_placeholder_occupies_the_harness_slot_and_nothing_else(self) -> None:
-        owner = _owner(harness="claude")
-
-        template = credential_service_template(owner, "PLACEHOLDER")
-
-        self.assertEqual(1, template.count("PLACEHOLDER"))
-        self.assertNotIn("claude", template)
-        labels = template.split(".")
-        self.assertEqual("PLACEHOLDER", labels[1])
-        self.assertEqual(
-            len(credential_address(owner, InputId("token")).service.split(".")), len(labels)
-        )
-
-    def test_a_placeholder_that_could_shift_or_escape_the_slots_is_refused(self) -> None:
-        """The separator, the quoting and the line are what keep one address one owner's."""
-
-        owner = _owner()
-        for placeholder in (
-            "",
-            "a.b",
-            'a"b',
-            "a\\b",
-            "a`b",
-            "a\nb",
-            "a b",
-            "$AART_CLI_HARNESS",
-            "$(id)",
-            "${x}",
-            5,
-            None,
-        ):
-            with self.subTest(placeholder=placeholder):
-                with self.assertRaises(ValueError):
-                    credential_service_template(owner, placeholder)  # type: ignore[arg-type]
-
-    def test_a_template_needs_an_installation_owner(self) -> None:
-        with self.assertRaises(ValueError):
-            credential_service_template("claude/project:company/mcp/github", "P")  # type: ignore[arg-type]
-
-
-class CredentialServiceTemplatePropertyTest(unittest.TestCase):
-    _slugs = CredentialAddressPropertyTest._slugs
-
-    @given(harness=_slugs, other=_slugs)
-    @settings(max_examples=60, suppress_health_check=(HealthCheck.differing_executors,))
-    def test_the_template_and_the_address_never_disagree(self, harness: str, other: str) -> None:
-        """Whatever the launcher composes at start is what this product addressed at install."""
-
-        template = credential_service_template(_owner(harness=harness), "PLACEHOLDER")
-
-        self.assertEqual(
-            credential_address(_owner(harness=other), InputId("token")).service,
-            template.replace("PLACEHOLDER", other),
-        )

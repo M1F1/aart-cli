@@ -23,6 +23,7 @@ from typing import TypeAlias
 
 from .effects import Effect
 from .identifiers import ArtifactCoordinate
+from .installation_owner import InstallationOwner
 
 __all__ = [
     "Component",
@@ -206,12 +207,24 @@ def _unique(items: tuple[object, ...], label: str) -> tuple[object, ...]:
 
 @dataclass(frozen=True, slots=True)
 class DesiredState:
+    """What one installation converges on: the artifact, who is installing it, and its components.
+
+    `owner` is the installation this state belongs to (§169.3). It matters because the coordinate
+    no longer identifies one thing on this machine: the same artifact installed into two harnesses
+    is two installations with two trees, two launchers and two sets of components, and a plan that
+    could not tell them apart would report one as the other's drift. `None` for the lower-level
+    callers that never cross that boundary.
+    """
+
     artifact: ArtifactCoordinate
     components: tuple[DesiredComponent, ...] = ()
+    owner: InstallationOwner | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.artifact, ArtifactCoordinate) or any(
-            not isinstance(item, DesiredComponent) for item in self.components
+        if (
+            not isinstance(self.artifact, ArtifactCoordinate)
+            or any(not isinstance(item, DesiredComponent) for item in self.components)
+            or not (self.owner is None or isinstance(self.owner, InstallationOwner))
         ):
             raise ValueError("desired state is invalid")
         object.__setattr__(self, "components", _unique(self.components, "desired state"))

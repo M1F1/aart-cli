@@ -31,9 +31,9 @@ from aart_cli.application.execution import (
 from aart_cli.application.installed_state import removal_state_from_placement
 from aart_cli.application.reconciliation import plan_repair
 from aart_cli.configuration.model import SourceKind
-from aart_cli.domain.harness import Scope
+from aart_cli.domain.harness import Scope, managed_tree_target
 from aart_cli.domain.identifiers import ArtifactIdentity, SourceId
-from aart_cli.domain.placement import artifact_root
+from aart_cli.domain.installation_tree import installation_tree_root
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.reconciliation import Component, ComponentId
 from aart_cli.domain.result import Ok
@@ -175,12 +175,14 @@ class PlacedInstallationTest(unittest.TestCase):
     def delivered(self) -> pathlib.Path:
         return pathlib.Path(self.project_root) / ".claude/skills/code-review-company-project"
 
-    def _installed_root(self, prepared) -> str:
-        return artifact_root(
+    def _installed_root(self, prepared, harness: str = "claude") -> str:
+        """The tree one installation owns, under the harness that selected it (§169.3)."""
+
+        return installation_tree_root(
             prepared.action.installations[0].coordinate,
-            Scope.PROJECT,
-            project_root=self.project_root,
-            data_root=self.data_root,
+            harness_root=os.path.join(
+                self.project_root, managed_tree_target(harness, Scope.PROJECT).directory
+            ),
         )
 
     # -- what the install has to be true of ---------------------------------------------------

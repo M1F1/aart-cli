@@ -25,6 +25,7 @@ from aart_cli.domain.harness import McpRegistration, McpTarget
 from aart_cli.domain.inputs import InputValueSource, SecretInput
 from aart_cli.domain.inspection import EnvironmentFacts
 from aart_cli.domain.install_description import InstallDescription
+from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.launch import launcher_path
 from aart_cli.domain.plans import PlannedRemediation
 from aart_cli.domain.policies import EffectivePolicy
@@ -141,18 +142,15 @@ def plan_artifact_installation(
     targets: tuple[McpTarget, ...] = (),
     resolvers: tuple[CredentialResolutionPort, ...] = (),
     preferred_installer: PythonInstaller | None = None,
-    credential_service_template: str | None = None,
     credential_addresses: tuple[CredentialReference, ...] = (),
     registration_name: str | None = None,
+    owner: InstallationOwner | None = None,
 ) -> Result[PlannedInstallation]:
     """Everything decided about installing `artifact` here, before anything is touched.
 
-    `credential_service_template` is this installation's credential service with its harness left
-    open (D-355). One launcher is registered with every harness the artifact reaches, so the address
-    it reads has to be composed at start rather than written in; the planner carries the template
-    to `generate_launcher` and decides nothing about it. `credential_addresses` are the real items
-    those harnesses would each hold, which is what a provider is asked about and what the receipt
-    records; the template is launcher text and names nothing anyone holds.
+    `credential_addresses` are the real items this installation would hold: what a provider is
+    asked about and what the receipt records. There is one per input rather than one per harness,
+    because a placement is one harness's (§169.3) and this plan is that installation's.
     """
 
     if not isinstance(artifact, ResolvedArtifact) or not isinstance(
@@ -191,7 +189,6 @@ def plan_artifact_installation(
         contract,
         bound.value,
         resolvers=resolvers,
-        credential_service_template=credential_service_template,
     )
     if isinstance(launcher, Err):
         return launcher
@@ -257,6 +254,7 @@ def plan_artifact_installation(
                 description.inputs,
                 tuple(configuration),
                 credential_addresses,
+                owner,
             )
         )
     except ValueError as error:

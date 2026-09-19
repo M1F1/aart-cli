@@ -32,6 +32,11 @@ from .effects import DeliveryKind
 from .harness import McpRegistration, registration_from_data, registration_to_data
 from .hooks import HookEntry, HookEntryShape
 from .identifiers import ArtifactCoordinate, InputId, ObjectDigest
+from .installation_owner import (
+    InstallationOwner,
+    installation_owner_from_data,
+    installation_owner_to_data,
+)
 from .launch import Transport
 from .managed_blocks import is_block_name
 from .result import Err, Ok, Result
@@ -107,8 +112,15 @@ class InstallationReceipt:
     #: Each harness's configuration file and the digest AART wrote it with. The values stay in the
     #: files beside the artifact and never enter this record (D-264, §96 narrowed).
     configuration_files: tuple[ConfigurationFileRecord, ...] = ()
+    #: Which installation this receipt is (§169.3). The coordinate does not identify one thing on
+    #: this machine any more: the same artifact installed into two harnesses is two installations,
+    #: with two trees and two records, and this is what tells them apart. `None` for the
+    #: lower-level callers that never cross that boundary.
+    owner: InstallationOwner | None = None
 
     def __post_init__(self) -> None:
+        if not (self.owner is None or isinstance(self.owner, InstallationOwner)):
+            raise ValueError("an installation receipt belongs to one installation owner")
         for value, label in (
             (self.artifact, "artifact"),
             (self.root, "root"),
@@ -172,6 +184,9 @@ class InstallationReceipt:
 
 
 def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, object]:
+    owned: dict[str, object] = (
+        {} if receipt.owner is None else {"owner": installation_owner_to_data(receipt.owner)}
+    )
     identity: dict[str, object] = (
         {} if receipt.object_digest is None else {"object_digest": str(receipt.object_digest)}
     )
@@ -190,6 +205,7 @@ def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, obje
         else {}
     )
     return {
+        **owned,
         **identity,
         **setup,
         **configuration,
@@ -369,8 +385,15 @@ class PlacedArtifactReceipt:
     object_digest: ObjectDigest | None = None
     #: The setup record belongs to this receipt rather than to the retired install-state manifest.
     setup_state_ref: str | None = None
+    #: Which installation this receipt is (§169.3). The coordinate does not identify one thing on
+    #: this machine any more: the same artifact installed into two harnesses is two installations,
+    #: with two trees and two records, and this is what tells them apart. `None` for the
+    #: lower-level callers that never cross that boundary.
+    owner: InstallationOwner | None = None
 
     def __post_init__(self) -> None:
+        if not (self.owner is None or isinstance(self.owner, InstallationOwner)):
+            raise ValueError("a placed artifact receipt belongs to one installation owner")
         for value, label in ((self.artifact, "artifact"), (self.root, "root")):
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"placed artifact receipt {label} is invalid")
@@ -507,6 +530,9 @@ class InstalledRecord:
 
 
 def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str, object]:
+    owned: dict[str, object] = (
+        {} if receipt.owner is None else {"owner": installation_owner_to_data(receipt.owner)}
+    )
     identity: dict[str, object] = (
         {} if receipt.object_digest is None else {"object_digest": str(receipt.object_digest)}
     )
@@ -514,6 +540,7 @@ def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str,
         {} if receipt.setup_state_ref is None else {"setup_state_ref": receipt.setup_state_ref}
     )
     return {
+        **owned,
         **identity,
         **setup,
         "artifact": receipt.artifact,
@@ -706,6 +733,7 @@ def placed_artifact_receipt_from_data(data: object) -> Result[PlacedArtifactRece
                     else None
                 ),
                 None if data.get("setup_state_ref") is None else str(data["setup_state_ref"]),
+                _owner(data.get("owner")),
             )
         )
     except ValueError as error:
@@ -750,10 +778,17 @@ def installation_receipt_from_data(data: object) -> Result[InstallationReceipt]:
                 ),
                 None if data.get("setup_state_ref") is None else str(data["setup_state_ref"]),
                 tuple(_configuration_file(item) for item in data.get("configuration_files", [])),
+                _owner(data.get("owner")),
             )
         )
     except ValueError as error:
         return _error(str(error))
+
+
+def _owner(data: object) -> InstallationOwner | None:
+    """The installation a record belongs to, or nothing when the record names none."""
+
+    return None if data is None else installation_owner_from_data(data)
 
 
 def _configuration_file(data: object) -> ConfigurationFileRecord:

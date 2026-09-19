@@ -33,6 +33,7 @@ from aart_cli.domain.harness import (
     delivery_target,
     hook_event_path,
     hook_target,
+    managed_tree_target,
     mcp_target,
     measured_harnesses,
     memory_target,
@@ -41,9 +42,9 @@ from aart_cli.domain.hooks import HookEntry
 from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity
 from aart_cli.domain.inputs import InputValueSource
 from aart_cli.domain.install_description import InstallDescription
-from aart_cli.domain.installation_owner import installed_name_for
+from aart_cli.domain.installation_owner import InstallationOwner, installed_name_for
+from aart_cli.domain.installation_tree import installation_tree_root
 from aart_cli.domain.managed_blocks import is_block_name
-from aart_cli.domain.placement import artifact_root
 from aart_cli.domain.python_runtime import ArtifactEnvironment, PythonInstaller
 from aart_cli.domain.receipts import (
     ArtifactDelivery,
@@ -66,7 +67,7 @@ from aart_cli.store.model import ObjectReadRequest, ObjectStorePaths
 from .environment_inspection import platform_name
 from .object_store import read_object
 
-__all__ = ["PLACEMENT_UNAVAILABLE", "placement_for"]
+__all__ = ["PLACEMENT_UNAVAILABLE", "placements_for"]
 
 #: The artifact is selected and this machine cannot place it -- its package is not in the store, or
 #: a requested harness is one nobody has measured.
@@ -347,7 +348,7 @@ def _deliveries(
     return Ok(tuple(deliveries))
 
 
-def placement_for(
+def placements_for(
     artifact: ResolvedArtifact,
     *,
     scope: Scope,
@@ -359,12 +360,18 @@ def placement_for(
     harness_root: str | None = None,
     sources: tuple[InputValueSource, ...] = (),
     preferred_installer: PythonInstaller | None = None,
-) -> Result[ArtifactPlacement]:
-    """Read what this artifact declares, and decide where and into what it would be installed.
+) -> Result[tuple[ArtifactPlacement, ...]]:
+    """One placement per harness this artifact would be installed into.
 
-    `harness_root` is the scope's own root, the one a harness's paths are resolved against. It is
-    needed only by an artifact a harness reads, which is why it is optional -- an MCP server names
-    its settings file relative to that root and the registry adapter applies it later.
+    Not one per artifact. §169.3 makes the *installation* the unit that owns files, and installing
+    the same package into a second harness is a second installation with its own payload, runtime,
+    launcher and separately entered configuration -- so two harnesses are two placements, each with
+    an owner and a tree of its own, and neither able to reach the other's files.
+
+    `harness_root` is the scope's own root, the one every harness's paths are resolved against.
+    Every kind needs it now, not only the ones read off a path: the private tree hangs off the
+    harness's own directory too (D-359), so there is nothing left that can be placed without
+    knowing which root this is.
 
     `profiles_requested` says where the profiles came from. The default is the honest one for a
     command: somebody typed them, so a harness that cannot host this artifact is a refusal naming
@@ -379,6 +386,12 @@ def placement_for(
             "placing an artifact needs at least one harness profile",
             "name a profile, so the installation registers somewhere it can be started from",
         )
+    if harness_root is None or not os.path.isabs(harness_root):
+        return _error(
+            "placing an artifact needs the absolute root its harness's own paths are resolved "
+            "against",
+            "supply the project root for a project install, or the user home for a user one",
+        )
 
     coordinate = artifact.version.coordinate
     stored = read_object(ObjectReadRequest(store, artifact.version.object_digest))
@@ -391,22 +404,26 @@ def placement_for(
             "synchronize the source that publishes it, then plan the install again",
         )
 
-    described = read_package_description(stored.value.candidate.entries)
+    # Bound once, so the closure below reads one already-narrowed object rather than re-proving
+    # every time that the store held it.
+    entries = stored.value.candidate.entries
+    package_root = stored.value.root
+
+    described = read_package_description(entries)
     if isinstance(described, Err):
         return described
 
     # One compilation, read for two separate answers: what the artifact declares it supports, and
     # the summary the harness is given for it. Compiling twice would let the two disagree.
-    package = compile_native_package(
-        stored.value.candidate.entries, expected_identity=coordinate.artifact
-    )
+    package = compile_native_package(entries, expected_identity=coordinate.artifact)
     if isinstance(package, Err):
         return package
     summary = package.value.manifest.summary
 
     # `QA-078`/`D-231`: what the artifact declares it supports and what it is installed into are
-    # one answer. Narrowing happens here, once, rather than inside each per-profile loop, so the
-    # two screens read the same set.
+    # one answer. Narrowing happens once for the whole artifact, before any harness is placed,
+    # because the declaration is a fact about the package rather than about one target -- asking it
+    # per harness would refuse a profile the artifact does not declare instead of leaving it out.
     narrowed = _declared_narrowing(
         package.value.manifest,
         coordinate.artifact,
@@ -415,9 +432,7 @@ def placement_for(
     )
     if isinstance(narrowed, Err):
         return narrowed
-    profiles = narrowed.value
 
-    root = artifact_root(coordinate, scope, project_root=project_root, data_root=data_root)
     delivered = _delivered(described.value)
     # A coordinate's kind is a plain string; the measured tables are keyed by the enum. An
     # unrecognized kind is left as `None` here and named by whichever branch needs it, rather than
@@ -427,9 +442,36 @@ def placement_for(
     except ValueError:
         kind = None
 
-    targets = []
-    if not delivered:
-        for profile in profiles:
+    def placed(profile: str) -> Result[ArtifactPlacement | None]:
+        """This one harness's installation, or nothing when this harness does not host it.
+
+        `None` rather than a refusal, because whether "nowhere" is an error is a question about the
+        whole operation. One harness that reads no Skill at this scope is an ordinary fact when
+        nobody asked for it by name; every harness answering that way is an install with no effect,
+        and only the caller below can see that.
+        """
+
+        try:
+            managed = managed_tree_target(profile, scope)
+        except KeyError as error:
+            if _skippable(profile, requested=profiles_requested):
+                return Ok(None)
+            return _error(str(error).strip("'"))
+        try:
+            owner = InstallationOwner(
+                coordinate.source, coordinate.artifact, scope, harness_root, profile
+            )
+            root = installation_tree_root(
+                coordinate, harness_root=os.path.join(harness_root, managed.directory)
+            )
+        except ValueError as error:
+            return _error(f"{coordinate} cannot be installed into {profile}: {error}")
+
+        targets = []
+        deliveries: tuple[ArtifactDelivery, ...] = ()
+        merges: tuple[ArtifactMerge, ...] = ()
+        settings: tuple[ArtifactSettingsEntry, ...] = ()
+        if not delivered:
             try:
                 targets.append(mcp_target(profile, scope))
             except KeyError as error:
@@ -437,70 +479,47 @@ def placement_for(
                 # success and leaves the harness somebody asked for with no way to start the
                 # server. A harness nobody asked for is left out instead (`_skippable`).
                 if _skippable(profile, requested=profiles_requested):
-                    continue
+                    return Ok(None)
                 return _error(str(error).strip("'"))
-        if not targets:
-            return _error(
-                f"{coordinate} registers with none of {', '.join(profiles)} at {scope.value} scope",
-                "install it at a scope one of these harnesses starts servers from",
-            )
-
-    deliveries: tuple[ArtifactDelivery, ...] = ()
-    merges: tuple[ArtifactMerge, ...] = ()
-    settings: tuple[ArtifactSettingsEntry, ...] = ()
-    if delivered:
-        if harness_root is None or not os.path.isabs(harness_root):
-            return _error(
-                f"{coordinate} is read off a path, so placing it needs the absolute root that "
-                "path is resolved against",
-                "supply the project root for a project install, or the user home for a user one",
-            )
-        if kind in _MERGED_KINDS:
+        elif kind in _MERGED_KINDS:
             assert kind is not None
             blocks = _merges(
                 coordinate.artifact,
-                stored.value.candidate.entries,
+                entries,
                 kind=kind,
                 scope=scope,
-                profiles=profiles,
+                profiles=(profile,),
                 profiles_requested=profiles_requested,
                 root=root,
                 harness_root=harness_root,
             )
             if isinstance(blocks, Err):
                 return blocks
+            if not blocks.value:
+                return Ok(None)
             merges = blocks.value
-            if not merges:
-                return _error(
-                    f"{coordinate} merges into no file of {', '.join(profiles)} at "
-                    f"{scope.value} scope",
-                    "install it at a scope one of these harnesses reads that file at",
-                )
         else:
             made = _deliveries(
                 coordinate,
-                stored.value.candidate.entries,
+                entries,
                 summary=summary,
                 scope=scope,
-                profiles=profiles,
+                profiles=(profile,),
                 profiles_requested=profiles_requested,
                 root=root,
                 harness_root=harness_root,
             )
             if isinstance(made, Err):
                 return made
+            if not made.value:
+                return Ok(None)
             deliveries = made.value
-            if not deliveries:
-                return _error(
-                    f"{coordinate} is read by none of {', '.join(profiles)} at {scope.value} scope",
-                    "install it at a scope one of these harnesses reads it at",
-                )
             if kind is ArtifactKind.HOOK:
                 # Both halves, from one read of one package. A hook whose script is delivered and
                 # whose entry is not is installed and inert, which is worse than not installed.
                 told = _settings(
                     coordinate.artifact,
-                    stored.value.candidate.entries,
+                    entries,
                     deliveries,
                     scope=scope,
                     harness_root=harness_root,
@@ -509,23 +528,51 @@ def placement_for(
                     return told
                 settings = told.value
 
-    try:
-        return Ok(
-            ArtifactPlacement(
-                artifact,
-                described.value,
-                root=root,
-                payload_source=package_payload_root(stored.value.root),
-                targets=tuple(targets),
-                sources=sources,
-                preferred_installer=preferred_installer,
-                deliveries=deliveries,
-                merges=merges,
-                settings=settings,
-                # The registry's attested digest of the payload, not one re-derived here. The
-                # installing machine records what the approved version says it placed.
-                payload_digest=artifact.version.payload_digest if delivered else None,
+        try:
+            return Ok(
+                ArtifactPlacement(
+                    artifact,
+                    described.value,
+                    root=root,
+                    payload_source=package_payload_root(package_root),
+                    targets=tuple(targets),
+                    sources=sources,
+                    preferred_installer=preferred_installer,
+                    deliveries=deliveries,
+                    merges=merges,
+                    settings=settings,
+                    # The registry's attested digest of the payload, not one re-derived here. The
+                    # installing machine records what the approved version says it placed.
+                    payload_digest=artifact.version.payload_digest if delivered else None,
+                    owner=owner,
+                )
             )
+        except ValueError as error:
+            return _error(f"{coordinate} cannot be placed here: {error}")
+
+    placements: list[ArtifactPlacement] = []
+    # Canonical harness order rather than the order somebody typed `--profile` in, so that two
+    # operators asking for the same installation get the same plan, the same review digest and the
+    # same owners to answer for.
+    for profile in sorted(narrowed.value):
+        one = placed(profile)
+        if isinstance(one, Err):
+            return one
+        if one.value is not None:
+            placements.append(one.value)
+    if not placements:
+        # The three ways an artifact can reach a harness, so the refusal says which one this
+        # artifact was offering. Named here rather than per harness: one harness that does not
+        # host it is not a failed install, and every harness answering that way is.
+        verb = (
+            "registers with none of"
+            if not delivered
+            else "merges into no file of"
+            if kind in _MERGED_KINDS
+            else "is read by none of"
         )
-    except ValueError as error:
-        return _error(f"{coordinate} cannot be placed here: {error}")
+        return _error(
+            f"{coordinate} {verb} {', '.join(profiles)} at {scope.value} scope",
+            "install it at a scope one of these harnesses reads it at",
+        )
+    return Ok(tuple(placements))

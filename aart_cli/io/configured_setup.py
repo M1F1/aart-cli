@@ -286,7 +286,9 @@ def configured_setup_subject(
                 # shape that stopped carrying one should fail here, not silently read as unset.
                 setup_state_ref=receipt.setup_state_ref,
             )
-            record_path = receipts.path_for(installed_record.coordinate)
+            record_path = receipts.path_for(
+                installed_record.coordinate, owner=installed_record.receipt.owner
+            )
             return Ok(
                 InstalledSubject(
                     record_path,
@@ -788,11 +790,23 @@ class LocalConfiguredSetupAdapter(LocalInstallAdapter):
                     plan.request.coordinate.artifact,
                     str(plan.installation.artifact.version),
                 )
-                standing = self._receipts.record(exact)
-                if (
-                    not isinstance(standing, Ok)
-                    or self._receipts.path_for(exact) != plan.installation_record_path
-                ):
+                # Found by the record the plan named rather than by the coordinate: the store is
+                # keyed by installation now (§169.3), and one coordinate may have several. The
+                # path is still checked rather than trusted, which is the same guarantee as
+                # before -- that the record Review saw is the record setup is attaching to.
+                standing_records = self._receipts.records_for(exact)
+                standing = next(
+                    (
+                        item
+                        for item in (
+                            standing_records.value if isinstance(standing_records, Ok) else ()
+                        )
+                        if self._receipts.path_for(exact, owner=item.receipt.owner)
+                        == plan.installation_record_path
+                    ),
+                    None,
+                )
+                if standing is None:
                     return _error("configured installation receipt is unavailable during setup")
                 _write_atomic(
                     Path(plan.setup_state_path),
@@ -801,8 +815,8 @@ class LocalConfiguredSetupAdapter(LocalInstallAdapter):
                 wrote_setup = True
                 written = self._receipts.record_installation(
                     exact,
-                    replace(standing.value.receipt, setup_state_ref=plan.setup_state_ref),
-                    ownership=standing.value.ownership,
+                    replace(standing.receipt, setup_state_ref=plan.setup_state_ref),
+                    ownership=standing.ownership,
                 )
                 if isinstance(written, Err):
                     raise OSError("cannot attach setup state to the configured receipt")

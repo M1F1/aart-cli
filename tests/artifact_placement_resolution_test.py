@@ -18,7 +18,7 @@ from aart_cli.domain.effects import DeliveryKind
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
 from aart_cli.domain.result import Err, Ok
-from aart_cli.io.artifact_placement import PLACEMENT_UNAVAILABLE, placement_for
+from aart_cli.io.artifact_placement import PLACEMENT_UNAVAILABLE, placements_for
 from aart_cli.io.object_store import publish_object
 from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.sources.local import read_local_snapshot
@@ -39,7 +39,7 @@ PROFILES = ("tabnine",)
 
 #: An artifact a harness reads rather than starts: no transport, no runtime, no launch, no inputs.
 #: `read_package_description` returns an empty description for it, and that is the discriminator
-#: `placement_for` routes on.
+#: `placements_for` routes on.
 #: No `compatibility.harnesses`, deliberately. This fixture is shared by the tests that map a
 #: *request* onto measured targets; an artifact's own declaration is a separate narrowing held by
 #: `declared_harness_narrowing_test.py` (`QA-078`, `D-231`). It used to declare one harness while
@@ -96,41 +96,55 @@ class PlacementResolutionTest(unittest.TestCase):
             "profiles": PROFILES,
             "project_root": self.project,
             "data_root": self.data,
+            "harness_root": self.project,
             "store": self.store,
         }
         fields.update(overrides)
-        return placement_for(self.artifact, **fields)  # type: ignore[arg-type]
+        return placements_for(self.artifact, **fields)  # type: ignore[arg-type]
+
+    def _one(self, **overrides):
+        """The single placement one profile produces, so a test can speak about it directly."""
+
+        placed = self._place(**overrides)
+        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
+        (placement,) = placed.value
+        return placement
 
     def test_it_reads_what_the_package_declares_rather_than_assuming_it_declares_nothing(
         self,
     ) -> None:
-        placed = self._place()
+        placement = self._one()
 
-        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        self.assertIsNotNone(placed.value.description.contract)
-        self.assertTrue(placed.value.description.inputs)
+        self.assertIsNotNone(placement.description.contract)
+        self.assertTrue(placement.description.inputs)
 
-    def test_the_root_is_the_placement_policy_and_carries_no_harness(self) -> None:
-        placed = self._place()
+    def test_the_root_is_under_the_harness_that_selected_it(self) -> None:
+        """§169.3: the tree belongs to the installation, and the installation is one harness's."""
 
-        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        self.assertTrue(
-            placed.value.root.startswith(f"{self.project}/.aart-cli/runtimes/"),
-            placed.value.root,
-        )
-        self.assertNotIn(".tabnine", placed.value.root)
+        placement = self._one()
+
+        self.assertEqual(f"{self.project}/.tabnine/aart-cli/mcp/company/github", placement.root)
+        self.assertEqual("tabnine", placement.owner.harness)
 
     def test_the_payload_source_is_the_stored_object_this_machine_verified(self) -> None:
-        placed = self._place()
+        placement = self._one()
 
-        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        self.assertTrue(placed.value.payload_source.startswith(self.store.objects))
+        self.assertTrue(placement.payload_source.startswith(self.store.objects))
 
-    def test_every_requested_profile_becomes_a_measured_target(self) -> None:
+    def test_every_requested_profile_becomes_its_own_placement_and_target(self) -> None:
+        """One placement per harness (§169.3), in canonical order rather than the typed one."""
+
         placed = self._place(profiles=("tabnine", "claude"))
 
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        self.assertEqual([target.harness for target in placed.value.targets], ["tabnine", "claude"])
+        self.assertEqual(
+            [
+                (item.owner.harness, *(target.harness for target in item.targets))
+                for item in placed.value
+            ],
+            [("claude", "claude"), ("tabnine", "tabnine")],
+        )
+        self.assertEqual(2, len({item.root for item in placed.value}))
 
     def test_a_harness_nobody_measured_is_named_rather_than_skipped(self) -> None:
         """A profile quietly dropped is an install that reports success and leaves the harness
@@ -149,12 +163,13 @@ class PlacementResolutionTest(unittest.TestCase):
         self.assertIs(placed.diagnostics[0].code, PLACEMENT_UNAVAILABLE)
 
     def test_an_object_this_store_does_not_hold_names_the_digest_it_wanted(self) -> None:
-        placed = placement_for(
+        placed = placements_for(
             _resolved(),
             scope=Scope.PROJECT,
             profiles=PROFILES,
             project_root=self.project,
             data_root=self.data,
+            harness_root=self.project,
             store=self.store,
         )
 
@@ -163,10 +178,19 @@ class PlacementResolutionTest(unittest.TestCase):
         self.assertTrue(placed.diagnostics[0].remediation)
 
     def test_a_user_scope_placement_leaves_the_project_tree_alone(self) -> None:
-        placed = self._place(scope=Scope.USER)
+        home = str(self.scope / "home")
+        placement = self._one(scope=Scope.USER, harness_root=home)
 
-        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        self.assertTrue(placed.value.root.startswith(f"{self.data}/runtimes/"), placed.value.root)
+        self.assertEqual(f"{home}/.tabnine/aart-cli/mcp/company/github", placement.root)
+        self.assertNotIn(self.project, placement.root)
+
+    def test_placing_without_the_root_the_harness_resolves_against_is_refused(self) -> None:
+        """Every kind has a tree under its harness now, so nothing can be placed without it."""
+
+        placed = self._place(harness_root=None)
+
+        self.assertIsInstance(placed, Err)
+        self.assertIs(placed.diagnostics[0].code, PLACEMENT_UNAVAILABLE)
 
 
 class DeliveredPlacementTest(unittest.TestCase):
@@ -230,13 +254,17 @@ class DeliveredPlacementTest(unittest.TestCase):
             "store": self.store,
         }
         fields.update(overrides)
-        return placement_for(self.artifact, **fields)  # type: ignore[arg-type]
+        return placements_for(self.artifact, **fields)  # type: ignore[arg-type]
+
+    def _one(self, **overrides):
+        placed = self._place(**overrides)
+        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
+        (placement,) = placed.value
+        return placement
 
     def test_a_skill_is_placed_with_the_delivery_the_harness_reads_it_from(self) -> None:
-        placed = self._place()
+        (delivery,) = self._one().deliveries
 
-        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        (delivery,) = placed.value.deliveries
         self.assertEqual("claude", delivery.harness)
         self.assertEqual(
             f"{self.harness}/.claude/skills/code-review-company-project",
@@ -249,41 +277,41 @@ class DeliveredPlacementTest(unittest.TestCase):
         """Not from the store. A repair copies from what the installation placed, which is the
         only tree this artifact controls: the store's object is shared and may be pruned."""
 
-        placed = self._place()
+        placement = self._one()
 
-        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        (delivery,) = placed.value.deliveries
-        self.assertTrue(delivery.source.startswith(f"{placed.value.root}/"), delivery.source)
+        (delivery,) = placement.deliveries
+        self.assertTrue(delivery.source.startswith(f"{placement.root}/"), delivery.source)
         self.assertNotIn(self.store.objects, delivery.source)
 
     def test_a_skill_registers_with_nothing(self) -> None:
-        placed = self._place()
-
-        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        self.assertEqual((), placed.value.targets)
+        self.assertEqual((), self._one().targets)
 
     def test_what_is_delivered_is_digested_so_a_later_repair_can_compare_it(self) -> None:
-        placed = self._place()
+        placement = self._one()
 
-        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        (delivery,) = placed.value.deliveries
+        (delivery,) = placement.deliveries
         self.assertEqual("sha256", delivery.digest.algorithm)
-        self.assertEqual(self.package.payload_digest, placed.value.payload_digest)
+        self.assertEqual(self.package.payload_digest, placement.payload_digest)
 
-    def test_every_requested_harness_gets_its_own_delivery(self) -> None:
+    def test_every_requested_harness_gets_its_own_placement_and_delivery(self) -> None:
         placed = self._place(profiles=("claude", "tabnine"))
 
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         self.assertEqual(
             [
-                (item.harness, item.destination)
-                for item in sorted(placed.value.deliveries, key=lambda item: item.harness)
+                (item.owner.harness, item.root, *((one.destination,) for one in item.deliveries))
+                for item in placed.value
             ],
             [
-                ("claude", f"{self.harness}/.claude/skills/code-review-company-project"),
+                (
+                    "claude",
+                    f"{self.harness}/.claude/aart-cli/skill/company/code-review",
+                    (f"{self.harness}/.claude/skills/code-review-company-project",),
+                ),
                 (
                     "tabnine",
-                    f"{self.harness}/.tabnine/agent/skills/code-review-company-project",
+                    f"{self.harness}/.tabnine/aart-cli/skill/company/code-review",
+                    (f"{self.harness}/.tabnine/agent/skills/code-review-company-project",),
                 ),
             ],
         )
@@ -309,10 +337,8 @@ class DeliveredPlacementTest(unittest.TestCase):
 
     def test_a_user_scope_skill_is_delivered_under_the_user_root(self) -> None:
         home = str(self.scope / "home")
-        placed = self._place(scope=Scope.USER, harness_root=home)
+        (delivery,) = self._one(scope=Scope.USER, harness_root=home).deliveries
 
-        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        (delivery,) = placed.value.deliveries
         self.assertEqual(f"{home}/.claude/skills/code-review-company-user", delivery.destination)
 
     def test_the_same_skill_at_two_scopes_reaches_two_directories(self) -> None:
@@ -320,14 +346,10 @@ class DeliveredPlacementTest(unittest.TestCase):
         artifact do not compete for one directory under a harness root they happen to share."""
 
         home = str(self.scope / "home")
-        user = self._place(scope=Scope.USER, harness_root=home)
-        project = self._place(scope=Scope.PROJECT, harness_root=home)
+        user = self._one(scope=Scope.USER, harness_root=home)
+        project = self._one(scope=Scope.PROJECT, harness_root=home)
 
-        self.assertIsInstance(user, Ok, getattr(user, "diagnostics", ()))
-        self.assertIsInstance(project, Ok, getattr(project, "diagnostics", ()))
-        self.assertNotEqual(
-            user.value.deliveries[0].destination, project.value.deliveries[0].destination
-        )
+        self.assertNotEqual(user.deliveries[0].destination, project.deliveries[0].destination)
 
 
 def _stored_artifact(package, digest: ObjectDigest):

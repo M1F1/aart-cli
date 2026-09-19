@@ -27,6 +27,7 @@ from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AuthoredSetup
 from tests.configured_setup_gap_test import AUTHORED, CONFIGURED, COORDINATE, RECIPE
 from tests.consumer_shell_test import ENTER, SPACE, FakeTerminal
+from tests.receipt_store_test import sole_record
 
 TODAY = dt.date(2026, 9, 1)
 
@@ -73,10 +74,11 @@ class ConfiguredInstallCommandReportTest(unittest.TestCase):
             )
 
             store = LocalReceiptStore(str(pathlib.Path(env.paths.data_root) / "state"))
-            record = store.record(
+            record = sole_record(
+                store,
                 ArtifactCoordinate(
                     SourceAlias("company"), ArtifactIdentity("skill", "code-review"), "1.2.0"
-                )
+                ),
             )
             self.assertIsInstance(record, Ok, getattr(record, "diagnostics", ()))
             assert isinstance(record, Ok)

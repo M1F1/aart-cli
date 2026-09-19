@@ -1,6 +1,6 @@
 """Where one installation's private tree goes, under the harness that selected it.
 
-`domain/placement.py` answers the same question the other way round, and says why: one artifact may
+What this replaced answered the same question the other way round, and said why: one artifact may
 register with several harnesses, so its tree is not any one of theirs, and it belongs beside the
 manifest that records it. §169.3 rejects the premise rather than the reasoning. The unit that owns
 a tree is not the artifact, it is the *installation* -- Registry alias, artifact, scope, concrete
@@ -15,13 +15,14 @@ byte-identical packages, are two installations that never share a runtime, a lau
 configuration file or a credential item. Only the immutable canonical object may be shared, and
 that lives in the application home, not here.
 
-The version *is* deliberately absent from the path, for the reason `placement` already gives: an
-update reconciles the one installation that is there rather than installing a second one beside it.
+The version *is* deliberately absent from the path, for the reason the older policy already gave:
+an update reconciles the one installation that is there rather than installing a second one beside
+it.
 
 The harness root is an argument. Which directory each harness tolerates a private subtree in is a
-measured fact per harness and scope, and CP-26.19 is the step that measures and wires it; inventing
-those rows here to make this module self-contained would put a guess where evidence belongs
-(D-346).
+measured fact per harness and scope, and it lives beside the other measured facts in
+`domain/harness.py` as `MANAGED_TREE_TARGETS` (D-346, D-359); inventing those rows here to make
+this module self-contained would put a guess where evidence belongs.
 
 Pure path policy: nothing here consults a filesystem, a working directory or the environment.
 """

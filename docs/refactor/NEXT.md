@@ -141,36 +141,87 @@ other measured table names. No row is a new observation, and a test checks that 
 themselves. `installation_tree_root` can therefore be composed against a real directory instead of
 an argument; the module is still in `DELIBERATE_NON_RUNTIME_MODULES` because nothing calls it yet.
 
-**The next action.** Replace the remaining shared runtime/payload/receipt placement with one
-harness-owned installation tree and one lifecycle record per owner, which is what D-354's temporary
-refusal for different ordinary values is waiting on; do not turn it back into copying or sharing.
+**The split is done; the views are not (2026-09-20).** The three coupled blockers the probe named
+are all resolved, in one working tree, because none of them separates:
 
-*Evidence from a probe, so the next agent does not re-derive it.* Splitting `placement_for` per
-profile inside `prepare_configured_installation_draft` produced seven failures and three structural
-blockers, and they are coupled -- there is no smaller honest order than doing them together:
+1. `io/artifact_placement.placements_for` replaces `placement_for` and returns **one placement per
+   harness**, each with its own `InstallationOwner`, its own tree under
+   `<harness root>/<measured directory>/aart-cli/<kind>/<alias>/<name>`, and its own configuration
+   file. `_declared_narrowing` runs once before the per-harness loop; a harness with no measured
+   support is skipped, and only the whole operation refuses ("registers with none of", "is read by
+   none of", "merges into no file of"). `ConfiguredInstallationDraft` now checks that the
+   placements *cover* the selection rather than matching it one for one.
+2. `PlacedArtifactReceipt` and `InstallationReceipt` carry `owner`, serialized through all four
+   `*_to_data` / `*_from_data` functions with `installation_owner_to_data` /
+   `installation_owner_from_data`. It rides from `ArtifactPlacement` → `PlannedPlacement` /
+   `PlannedInstallation` → `intended_receipt` / `intended_placement_receipt` → `DesiredState.owner`.
+3. `LocalReceiptStore.path_for(coordinate, *, owner=None)` digests the coordinate **and** the
+   owner, so N installations of one coordinate are N records. `record`, `installation` and
+   `forget_installation` take the owner; `record_installation` reads it off the receipt.
+   `records_for(coordinate)` is new, for the readers that legitimately ask about the artifact
+   rather than one of its installations (what package it came from, what that package declares) --
+   `io/installed_setup.py` and `io/configured_setup.py` use it, and `tests/receipt_store_test.py`
+   exports `sole_record` for the tests that install into one harness.
 
-1. `ConfiguredInstallationDraft.__post_init__` asserts
-   `tuple(item.artifact for item in self.placements) == self.selection.artifacts`, which encodes
-   one placement per artifact. It has to become one placement per (artifact, harness), with the
-   artifacts still covering the selection.
-2. `_declared_narrowing` in `io/artifact_placement.py` refuses a single non-declared profile passed
-   alone ("declares support for claude, opencode, tabnine, and this machine measured none of
-   them"). Narrowing has to happen once for the whole selection, before the per-harness loop, and
-   the three "installs nowhere" refusals (`registers with none of`, `is read by none of`,
-   `merges into no file of`) have to move with it: per harness the answer is "this one skips",
-   and only the whole operation can say "nowhere at all".
-3. `LocalReceiptStore.path_for(coordinate)` digests the coordinate alone, so N placements of one
-   coordinate overwrite each other. The key has to be the `InstallationOwner`. The store itself is
-   only about ten call sites (`installed_setup.py:57`, `configured_setup.py:289/791/794`, three
-   `forget_installation` and two `record_installation` in `application/receipt_recording.py`), but
-   the owner is not in scope at any of them: it has to ride on the receipt, which means
-   `PlacedArtifactReceipt` / `InstallationReceipt` carry the owner they belong to, and that is only
-   well-defined once (1) has split the placements.
+D-354's cross-target refusal and D-355's `HARNESS_PLACEHOLDER` launcher composition are **deleted**,
+not disabled: a placement is one harness's now, so its address is concrete and there is nothing to
+compose at run time. `domain/placement.py` is deleted with them.
 
-`prepared_placements`' D-354 refusal disappears as a consequence rather than being removed: once a
-placement is one harness's, each harness gets its own launcher with its own values and there is
-nothing left to compose across targets.
+Two coordinate-keyed dicts were shadowing one installation with another and are now keyed by
+`(coordinate, owner)`: `planned` / `recorded` in `io/configured_installation_action.inspect`, which
+made every member of a two-harness install fail preflight as "state changed after Review", and
+`available` in `application/receipt_recording.record_installation_transaction`.
+`InstallationProposal` is keyed on `(artifact, owner)` and observations are paired member for
+member by position rather than looked up by artifact.
 
+**The suite is NOT green. Do not treat this branch as finished.** Last full `make unit` before the
+last round of fixes: 4669 tests, 25 failures, 6 errors. Since then these are green again and were
+verified by module: `receipt_recording_test`, `installed_object_identity_test`,
+`configured_setup_report_test`, `configured_setup_subject_test`, `git_backed_runtime_e2e_test`,
+`git_backed_bulk_install_e2e_test`, `configured_uninstall_command_e2e_test`,
+`configured_installation_action_e2e_test`, `configured_installation_draft_e2e_test`,
+`consumer_flow_test`, `installed_artifact_paths_test`, `traceability_matrix_test`.
+
+**What is left, in order.**
+
+*(a) The Installed view is still keyed by artifact, and that is now a defect rather than a
+simplification.* `InstalledInspection.coordinate` is `str(record.coordinate)` and is used as the
+TUI **focus key** (`io/consumer_actions.py:1971`, `by_coordinate = {item.coordinate: item ...}`).
+With three harnesses there are three inspections with the same key, so two of them are unreachable
+and configure/repair/uninstall silently act on whichever the dict kept. The view needs one
+actionable row per installation, and the focus key needs the owner in it. Every failing test below
+is waiting on this:
+
+- `tests/configured_configuration_action_e2e_test.py` — 9 failures, all `3 != 1` from
+  `_inspection()` asserting one inspection for three harnesses. This module needs a real rewrite,
+  not a number change: `_inspection(harness)` should select by `record.receipt.owner.harness`, and
+  `_edit` should drive one prepare/complete **per installation** (each with `harnesses=(harness,)`)
+  rather than one call spanning harnesses. `prepare_configured_configuration` itself is already
+  correct per installation -- an installation has one configuration file now, so choosing another
+  harness's is correctly "stale", which is worth asserting as the §169.3 evidence.
+  `test_screen_22a_...`, `test_real_handler_...` and `test_credential_set_...` drive the shell with
+  `focus=str(inspection.coordinate)` and are blocked on the focus key.
+- `tests/install_time_config_form_test.py` — "opencode configuration was not written".
+- `tests/installation_harness_choice_test.py` — the recorded delivery set for several chosen
+  harnesses.
+- `tests/artifact_details_controls_test.py::test_a_declared_platform_including_this_machine_still_places`
+  — error, not yet diagnosed.
+
+*(b)* `propose_installation`'s `previous` / `superseded` is still coordinate-keyed. It resolves
+naturally once (a) makes records per owner reachable; until then a multi-harness **update** can
+forget the wrong record. `record_installation_transaction` already passes `superseded.owner`.
+
+*(c)* Owed at the end of the slice: a new decision superseding **D-354** and **D-355** (both are
+now dead code, deleted), the slice document, `MIGRATION_STATUS.md` and `BACKLOG.md`.
+
+*(d) Backlog candidate, not critical path:* the launcher's harness argument and the per-harness
+configuration **filename** are both redundant now -- one installation has one configuration file --
+but they still function correctly, so leave them until the slice closes.
+
+*Targeted mutations owed.* None of this split has had its mutation evidence recorded yet. The
+claims that need one each: `path_for` including the owner (delete the owner from the digest and
+watch two installations collapse to one record), `placements_for` returning one placement per
+harness, and the `(coordinate, owner)` key in `configured_installation_action.inspect`.
 
 Naming is included in this task (D-349, §169.7, INV-253; issues #26/#28). Harness-visible names
 carry artifact/Registry alias/scope without version, respect discovery paths and adapter grammar,

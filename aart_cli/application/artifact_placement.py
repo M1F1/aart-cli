@@ -23,6 +23,7 @@ from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ObjectDigest
 from aart_cli.domain.inputs import SecretInput
 from aart_cli.domain.install_description import InstallDescription
+from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.python_runtime import ArtifactEnvironment
 from aart_cli.domain.receipts import (
     ArtifactDelivery,
@@ -85,6 +86,7 @@ def plan_artifact_placement(
     deliveries: tuple[ArtifactDelivery, ...],
     merges: tuple[ArtifactMerge, ...] = (),
     settings: tuple[ArtifactSettingsEntry, ...] = (),
+    owner: InstallationOwner | None = None,
 ) -> Result[PlannedPlacement]:
     """Everything decided about placing `artifact` here, before anything is touched."""
 
@@ -127,6 +129,7 @@ def plan_artifact_placement(
                 placement_requirements_for(tuple(deliveries), tuple(merges), tuple(settings)),
                 tuple(merges),
                 tuple(settings),
+                owner,
             )
         )
     except ValueError as error:

@@ -52,7 +52,6 @@ LAUNCHER_PROVIDER_UNRESOLVABLE = DiagnosticCode("launcher-provider-unresolvable"
 LAUNCHER_TRANSPORT_CONFLICT = DiagnosticCode("launcher-transport-conflict")
 #: The provider's resolution command does not name the service anywhere, so this launcher cannot
 #: parameterise it by harness. Refused: one fixed address for every harness is the defect (D-354).
-LAUNCHER_PROVIDER_UNPARAMETERISED = DiagnosticCode("launcher-provider-unparameterised")
 
 # Distinct enough to tell apart in a harness log: the environment is missing versus the provider
 # would not answer. Both are ordinary repair cases, and neither is the artifact failing.
@@ -63,14 +62,8 @@ MISSING_CONFIGURATION_STATUS = 76
 _SECRET_VARIABLE_PREFIX = "AART_CLI_SECRET_"
 _CONFIG_VARIABLE_PREFIX = "AART_CLI_CONFIG_"
 
-#: The token a caller leaves in a credential service template where the harness goes. It is split
-#: on, never evaluated: each side is quoted as a literal and only the validated harness variable is
-#: expanded between them, so nothing in the address can be read by the shell.
-HARNESS_PLACEHOLDER = "AART-CLI-HARNESS-SLOT"
-
 #: The variable the launcher validates as a canonical slug before it composes anything from it.
 _HARNESS_VARIABLE = "AART_CLI_HARNESS"
-_SERVICE_VARIABLE = "AART_CLI_SERVICE"
 
 
 class CredentialResolutionPort(Protocol):
@@ -173,38 +166,6 @@ def _harness_preamble(environment: ArtifactEnvironment) -> list[str]:
     ]
 
 
-def _service_composition(template: str) -> list[str]:
-    """Compose this harness's credential service from the address with its harness slot open.
-
-    The template is split on the placeholder and each side is emitted single-quoted, so no part of
-    the address is ever read by the shell. Only the harness variable is expanded, and the preamble
-    has already held it to a slug.
-    """
-
-    prefix, _, suffix = template.partition(HARNESS_PLACEHOLDER)  # exactly one slot; see the guard
-    return [f'{_SERVICE_VARIABLE}={shell_quote(prefix)}"${_HARNESS_VARIABLE}"{shell_quote(suffix)}']
-
-
-def _with_service_variable(part: str, service: str) -> str:
-    """One argv word with every mention of the service replaced by the composed variable.
-
-    A provider may name the service as its own argument (`-s <service>`) or fold it into a single
-    reference string; both are one word once quoted, so the substitution happens inside the word
-    rather than over the list. Each surrounding fragment stays single-quoted and the fragments are
-    written adjacent, so only the variable is expanded and the result is still one word.
-    """
-
-    pieces = part.split(service)
-    quoted = [shell_quote(piece) for piece in pieces]
-    if len(quoted) > 1:
-        # An empty fragment at either end would quote to '', which is a word this does not need.
-        if not pieces[0]:
-            quoted[0] = ""
-        if not pieces[-1]:
-            quoted[-1] = ""
-    return f'"${_SERVICE_VARIABLE}"'.join(quoted)
-
-
 def _configuration_reader(environment: ArtifactEnvironment, items: list[BoundInput]) -> list[str]:
     """Read each configured value from the starting harness's file, or stop saying which is missing.
 
@@ -276,14 +237,14 @@ def generate_launcher(
     bound: BoundInputs,
     *,
     resolvers: tuple[CredentialResolutionPort, ...] = (),
-    credential_service_template: str | None = None,
 ) -> Result[RuntimeProjection]:
     """Derive the launcher for one installed artifact. Pure: nothing here touches a filesystem.
 
-    Given `credential_service_template` -- the installation's credential address with its harness
-    left as `HARNESS_PLACEHOLDER` -- the launcher composes the item to read from the harness it is
-    started with, so one generated launcher serves every target of one installation without any of
-    them reaching another's secret.
+    One launcher, one installation, one credential item. It was briefly otherwise: while a
+    placement spanned every harness it registered with, one launcher had to compose its item from
+    the harness it was started with (D-355). §169.3 makes each harness its own installation with
+    its own tree and its own launcher, so the address is concrete again and nothing is composed at
+    run time.
     """
 
     if (
@@ -292,16 +253,6 @@ def generate_launcher(
         or not isinstance(bound, BoundInputs)
     ):
         return _error(LAUNCHER_INVALID, "launcher generation needs an environment and a contract")
-    if credential_service_template is not None and (
-        not isinstance(credential_service_template, str)
-        or credential_service_template.count(HARNESS_PLACEHOLDER) != 1
-    ):
-        return _error(
-            LAUNCHER_INVALID,
-            "a credential service template must leave exactly one harness slot open as "
-            f"{HARNESS_PLACEHOLDER}; anything else has no single address to compose",
-        )
-
     declared = {
         item.binding.variable
         for item in bound.inputs
@@ -310,7 +261,6 @@ def generate_launcher(
     exports: list[str] = []
     assignments: list[str] = []
     arguments: list[str] = [shell_quote(argument) for argument in contract.arguments]
-    parameterised = False
     configured = [
         item for item in bound.inputs if not isinstance(item.source, SecretProviderReference)
     ]
@@ -363,24 +313,7 @@ def generate_launcher(
                 )
             unreadable = f"aart: could not read {item.source.reference} from its provider"
             said = f"'%s\\n' {shell_quote(unreadable)}"
-            if credential_service_template is None:
-                command = " ".join(shell_quote(part) for part in argv)
-            else:
-                service = item.source.reference.provider.service
-                if not any(service in part for part in argv):
-                    return _error(
-                        LAUNCHER_PROVIDER_UNPARAMETERISED,
-                        f"resolving {item.input.id} from "
-                        f"{item.source.provider.provider} does not name the credential service, so "
-                        "this launcher could only read one harness's item for every harness",
-                    )
-                command = " ".join(_with_service_variable(part, service) for part in argv)
-                # The composed item, passed as an argument rather than substituted into the
-                # sentence: what the launcher says it could not read is then the item it actually
-                # asked for, and no prose is searched for something that looks like an address.
-                sentence = f"aart: could not read %s from {item.source.provider.provider}" + "\\n"
-                said = f'{shell_quote(sentence)} "${_SERVICE_VARIABLE}"'
-                parameterised = True
+            command = " ".join(shell_quote(part) for part in argv)
             assignments.append(
                 f'if ! {variable}="$({command})"; then\n'
                 f"  printf {said} >&2\n"
@@ -405,9 +338,7 @@ def generate_launcher(
                 f"input {item.input.id} uses a binding this launcher cannot render",
             )
 
-    preamble = _harness_preamble(environment) if configured or parameterised else []
-    if parameterised and credential_service_template is not None:
-        preamble += _service_composition(credential_service_template)
+    preamble = _harness_preamble(environment) if configured else []
     reader = _configuration_reader(environment, configured) if configured else []
     content = _render(environment, contract, preamble + reader + assignments, exports, arguments)
     try:

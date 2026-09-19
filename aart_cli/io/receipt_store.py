@@ -35,6 +35,10 @@ from aart_cli.domain.identifiers import (
     ArtifactKind,
     SourceAlias,
 )
+from aart_cli.domain.installation_owner import (
+    InstallationOwner,
+    installation_owner_to_data,
+)
 from aart_cli.domain.receipts import (
     ArtifactReceipt,
     InstallationReceipt,
@@ -198,16 +202,29 @@ class LocalReceiptStore:
     def actions_directory(self) -> str:
         return str(Path(self.state_root) / "activity")
 
-    def path_for(self, coordinate: ArtifactCoordinate) -> str:
-        """The managed file one coordinate's receipt lives in.
+    def path_for(
+        self, coordinate: ArtifactCoordinate, *, owner: InstallationOwner | None = None
+    ) -> str:
+        """The managed file one installation's receipt lives in.
 
         Named by digest rather than by the coordinate itself, so a source alias or artifact name
         can never decide a path on disk.
+
+        The coordinate alone was the key until §169.3, and it is no longer enough to be one: the
+        same artifact installed into two harnesses is two installations, and two records keyed by
+        the coordinate are one file written twice, where the second install silently erases the
+        first one's paths and the uninstall of either takes the other's. The owner is what makes
+        them distinct. It stays optional for the callers below the boundary that knows one.
         """
 
         if not isinstance(coordinate, ArtifactCoordinate):
             raise ValueError("a receipt path needs an artifact coordinate")
-        name = _digest(_canonical(_coordinate_to_data(coordinate)))
+        if not (owner is None or isinstance(owner, InstallationOwner)):
+            raise ValueError("a receipt path needs an installation owner or none")
+        identity: dict[str, object] = {"coordinate": _coordinate_to_data(coordinate)}
+        if owner is not None:
+            identity["owner"] = installation_owner_to_data(owner)
+        name = _digest(_canonical(identity))
         return str(Path(self.installations_directory) / f"{name}.json")
 
     def record_installation(
@@ -230,7 +247,7 @@ class LocalReceiptStore:
         ):
             return _error(RECEIPT_UNWRITABLE, "an installation is owned by ownership reasons")
         if ownership is None:
-            standing = self.record(coordinate)
+            standing = self.record(coordinate, owner=receipt.owner)
             if isinstance(standing, Err) and standing.diagnostics[0].code is not RECEIPT_ABSENT:
                 return standing
             ownership = () if isinstance(standing, Err) else standing.value.ownership
@@ -246,7 +263,8 @@ class LocalReceiptStore:
                 else installation_receipt_to_data(receipt)
             ),
         }
-        return _write(Path(self.path_for(coordinate)), _canonical(document))
+        # Keyed by the installation the receipt names, not by the coordinate it is for.
+        return _write(Path(self.path_for(coordinate, owner=receipt.owner)), _canonical(document))
 
     def _installed_record(self, path: Path) -> Result[InstalledRecord]:
         read = _read(path)
@@ -271,13 +289,17 @@ class LocalReceiptStore:
             return _unreadable(path, parsed)
         return Ok(InstalledRecord(coordinate, parsed.value, ownership))
 
-    def record(self, coordinate: ArtifactCoordinate) -> Result[InstalledRecord]:
+    def record(
+        self, coordinate: ArtifactCoordinate, *, owner: InstallationOwner | None = None
+    ) -> Result[InstalledRecord]:
         """One recorded installation in full: the receipt and why it is installed."""
 
-        return self._installed_record(Path(self.path_for(coordinate)))
+        return self._installed_record(Path(self.path_for(coordinate, owner=owner)))
 
-    def installation(self, coordinate: ArtifactCoordinate) -> Result[ArtifactReceipt]:
-        record = self._installed_record(Path(self.path_for(coordinate)))
+    def installation(
+        self, coordinate: ArtifactCoordinate, *, owner: InstallationOwner | None = None
+    ) -> Result[ArtifactReceipt]:
+        record = self._installed_record(Path(self.path_for(coordinate, owner=owner)))
         return record if isinstance(record, Err) else Ok(record.value.receipt)
 
     def installations(self) -> Result[tuple[InstalledRecord, ...]]:
@@ -289,10 +311,40 @@ class LocalReceiptStore:
             if isinstance(record, Err):
                 return record
             records.append(record.value)
-        return Ok(tuple(sorted(records, key=lambda item: str(item.coordinate))))
+        # Sorted by installation rather than by artifact: two harnesses' records share a
+        # coordinate, and a tie broken by nothing would order them differently run to run.
+        return Ok(
+            tuple(
+                sorted(
+                    records,
+                    key=lambda item: (
+                        str(item.coordinate),
+                        "" if item.receipt.owner is None else str(item.receipt.owner),
+                    ),
+                )
+            )
+        )
 
-    def forget_installation(self, coordinate: ArtifactCoordinate) -> Result[str]:
-        path = Path(self.path_for(coordinate))
+    def records_for(self, coordinate: ArtifactCoordinate) -> Result[tuple[InstalledRecord, ...]]:
+        """Every installation recorded for one artifact, in the order `installations` gives them.
+
+        A record is keyed by its installation, so an artifact installed into two harnesses has two
+        of them and neither is reachable by the coordinate alone. This is for the readers that ask
+        about the artifact rather than about one of its installations -- what package it came from,
+        what that package declares -- where the answer is the same whichever installation answers.
+        """
+
+        if not isinstance(coordinate, ArtifactCoordinate):
+            raise ValueError("records need an artifact coordinate")
+        records = self.installations()
+        if isinstance(records, Err):
+            return records
+        return Ok(tuple(item for item in records.value if item.coordinate == coordinate))
+
+    def forget_installation(
+        self, coordinate: ArtifactCoordinate, *, owner: InstallationOwner | None = None
+    ) -> Result[str]:
+        path = Path(self.path_for(coordinate, owner=owner))
         try:
             path.unlink(missing_ok=True)
         except OSError as error:

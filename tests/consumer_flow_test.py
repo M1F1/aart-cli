@@ -143,7 +143,9 @@ class BegunFlowTest(unittest.TestCase):
         refused = _begin(observed=())
 
         self.assertIsInstance(refused, Err)
-        self.assertIn("nothing was observed", _reason(refused))
+        # Paired member for member rather than looked up by artifact: one Selection may install
+        # the same artifact into two harnesses (§169.3), so "observed" is per installation.
+        self.assertIn("is not what is planned, member for member", _reason(refused))
 
     def test_a_flow_cannot_be_begun_from_something_that_is_not_an_installation(self) -> None:
         refused = begin_installation(

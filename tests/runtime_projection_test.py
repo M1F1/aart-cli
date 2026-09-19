@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import pathlib
 import re
 import subprocess
@@ -13,10 +12,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from aart_cli.application.runtime_projection import (
-    HARNESS_PLACEHOLDER,
     LAUNCHER_BINDING_UNSUPPORTED,
     LAUNCHER_INVALID,
-    LAUNCHER_PROVIDER_UNPARAMETERISED,
     LAUNCHER_PROVIDER_UNRESOLVABLE,
     LAUNCHER_TRANSPORT_CONFLICT,
     MISSING_CONFIGURATION_STATUS,
@@ -27,12 +24,8 @@ from aart_cli.domain.configuration_files import (
     render_configuration_file,
 )
 from aart_cli.domain.credentials import CredentialProviderRef, CredentialReference
-from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import (
-    ArtifactCoordinate,
-    ArtifactIdentity,
     InputId,
-    SourceAlias,
 )
 from aart_cli.domain.inputs import (
     BoundInput,
@@ -45,11 +38,6 @@ from aart_cli.domain.inputs import (
     SecretInput,
     SecretProviderReference,
     StdinBinding,
-)
-from aart_cli.domain.installation_owner import (
-    credential_address,
-    credential_service_template,
-    installation_owner,
 )
 from aart_cli.domain.launch import (
     LAUNCHER_FILENAME,
@@ -472,167 +460,23 @@ class LauncherSecrecyPropertyTest(unittest.TestCase):
                 self.assertNotIn(f"={name}", content)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class LauncherNamesTheItemItsOwnInstallationHoldsTest(unittest.TestCase):
+    """§169.3: one installation, one launcher, one credential item -- written in, not composed.
 
-
-class LauncherComposesItsOwnCredentialAddressTest(unittest.TestCase):
-    """§169.4-6 and D-354: four harnesses read four items, from one generated launcher.
-
-    The launcher already receives the harness that started it, because that is how it finds the
-    configuration file it reads. Given the address with the harness slot left open, it composes the
-    item to read at start rather than carrying one harness's -- which is what made four
-    installations of one artifact share a single credential.
+    It was briefly otherwise. While a placement spanned every harness it registered with, one
+    launcher served four installations and had to build the item to read from the harness it was
+    started with (D-355), because an address written in would have made four installations share
+    one secret. Each harness now has its own installation, its own tree and its own launcher, so
+    the address is concrete again and nothing about it is assembled at start.
     """
 
-    def setUp(self):
-        self.owner = installation_owner(
-            ArtifactCoordinate(SourceAlias("company"), ArtifactIdentity("mcp", "github"), "1.0.0"),
-            scope=Scope.PROJECT,
-            root="/work/project",
-            harness="claude",
-        )
-        self.template = credential_service_template(self.owner, HARNESS_PLACEHOLDER)
-
-    def _generate(self, bound: BoundInputs):
-        return generate_launcher(
-            ENVIRONMENT,
-            LaunchContract("server.py"),
-            bound,
-            resolvers=(_Resolver(),),
-            credential_service_template=self.template,
-        )
-
-    def test_the_address_is_composed_from_the_harness_rather_than_written_in(self):
-        generated = self._generate(bind(BoundInput(token_input(), token_source())))
-
-        assert isinstance(generated, Ok), generated
-        content = generated.value.content
-        self.assertIn('"$AART_CLI_HARNESS"', content)
-        self.assertIn("AART_CLI_SERVICE=", content)
-        self.assertIn('"$AART_CLI_SERVICE"', content)
-        # The one harness this owner happens to name must not be baked in anywhere.
-        self.assertNotIn(credential_address(self.owner, InputId("github-token")).service, content)
-        self.assertNotIn(HARNESS_PLACEHOLDER, content)
-
-    def test_each_harness_reads_its_own_item(self):
-        """Executed, not inspected: the address the shell composes is the assertion."""
-
-        directory = tempfile.TemporaryDirectory()
-        self.addCleanup(directory.cleanup)
-        root = pathlib.Path(directory.name) / "mcp" / "github"
-        generated = self._generate(bind(BoundInput(token_input(), token_source())))
-        assert isinstance(generated, Ok), generated
-
-        launcher = pathlib.Path(generated.value.path.replace(ROOT, str(root)))
-        launcher.parent.mkdir(parents=True, exist_ok=True)
-        launcher.write_text(generated.value.content.replace(ROOT, str(root)), encoding="utf-8")
-        launcher.chmod(0o700)
-        # Stand in for the provider: report the service it was asked for instead of a secret.
-        security = pathlib.Path(directory.name) / "security"
-        security.write_text(
-            '#!/bin/sh\nwhile [ $# -gt 0 ]; do\n  if [ "$1" = "-s" ]; then printf "%s" "$2"; fi\n'
-            "  shift\ndone\n",
-            encoding="utf-8",
-        )
-        security.chmod(0o700)
-        launcher.write_text(
-            launcher.read_text(encoding="utf-8").replace("/usr/bin/security", str(security)),
-            encoding="utf-8",
-        )
-        interpreter = pathlib.Path(ArtifactEnvironment("mcp/github", str(root)).interpreter)
-        interpreter.parent.mkdir(parents=True, exist_ok=True)
-        interpreter.write_text(
-            '#!/bin/sh\nprintf "service=%s\\n" "${GITHUB_TOKEN-unset}"\n', encoding="utf-8"
-        )
-        interpreter.chmod(0o700)
-
-        asked = {}
-        for harness in ("claude", "opencode"):
-            done = subprocess.run(
-                [str(launcher), harness], capture_output=True, text=True, timeout=30, check=False
-            )
-            self.assertEqual(done.returncode, 0, done.stderr)
-            asked[harness] = done.stdout.strip().removeprefix("service=")
-
-        self.assertNotEqual(asked["claude"], asked["opencode"])
-        for harness, service in asked.items():
-            expected = credential_address(
-                dataclasses.replace(self.owner, harness=harness), InputId("github-token")
-            )
-            self.assertEqual(expected.service, service)
-
-    def test_a_provider_whose_command_does_not_name_the_service_is_refused(self):
-        """Silently installing one fixed address for every harness is the defect, not a fallback."""
-
-        class _Opaque:
-            """Addressed by declared input alone: there is no service in the command to replace."""
-
-            provider = "macos-keychain"
-
-            def resolution_argv(self, reference):
-                return ("/usr/bin/opaque", "read", "--input", reference.input.value)
-
-        refused = generate_launcher(
-            ENVIRONMENT,
-            LaunchContract("server.py"),
-            bind(BoundInput(token_input(), token_source())),
-            resolvers=(_Opaque(),),
-            credential_service_template=self.template,
-        )
-
-        self.assertIsInstance(refused, Err, refused)
-        self.assertEqual(refused.diagnostics[0].code, LAUNCHER_PROVIDER_UNPARAMETERISED)
-        # A code alone leaves the installer with nothing to show; the sentence is the refusal.
-        self.assertIn("credential service", refused.diagnostics[0].message)
-
-    def test_a_template_without_exactly_one_open_slot_is_not_an_address(self):
-        """Two slots have no single harness to fill, and none has no harness at all."""
-
-        for template in (
-            self.template.replace(HARNESS_PLACEHOLDER, HARNESS_PLACEHOLDER * 2),
-            self.template.replace(HARNESS_PLACEHOLDER, "claude"),
-        ):
-            with self.subTest(template=template):
-                refused = generate_launcher(
-                    ENVIRONMENT,
-                    LaunchContract("server.py"),
-                    bind(BoundInput(token_input(), token_source())),
-                    resolvers=(_Resolver(),),
-                    credential_service_template=template,
-                )
-
-                self.assertIsInstance(refused, Err, refused)
-                self.assertEqual(refused.diagnostics[0].code, LAUNCHER_INVALID)
-                self.assertTrue(refused.diagnostics[0].message)
-
-    def test_a_provider_that_folds_the_service_into_one_argument_still_composes(self):
-        """Not every provider names the service on its own; the substitution is inside the word."""
-
-        class _Folded:
-            provider = "macos-keychain"
-
-            def resolution_argv(self, reference):
-                return ("/usr/bin/read-secret", str(reference))
-
-        generated = generate_launcher(
-            ENVIRONMENT,
-            LaunchContract("server.py"),
-            bind(BoundInput(token_input(), token_source())),
-            resolvers=(_Folded(),),
-            credential_service_template=self.template,
-        )
-
-        assert isinstance(generated, Ok), generated
-        self.assertIn('"$AART_CLI_SERVICE"', generated.value.content)
-        self.assertNotIn(HARNESS_PLACEHOLDER, generated.value.content)
-        self.assertNotIn(f"macos-keychain:{KEYCHAIN.service}/", generated.value.content)
-        # The sentence names the item it actually asked for, without a wrong address written in.
-        self.assertIn("could not read %s from macos-keychain", generated.value.content)
-
-    def test_without_a_template_the_address_is_still_written_in_as_before(self):
+    def test_the_address_is_written_in_rather_than_assembled_at_start(self):
         generated = generate(bind(BoundInput(token_input(), token_source())))
 
         assert isinstance(generated, Ok), generated
         self.assertIn(KEYCHAIN.service, generated.value.content)
         self.assertNotIn("AART_CLI_SERVICE=", generated.value.content)
+
+
+if __name__ == "__main__":
+    unittest.main()

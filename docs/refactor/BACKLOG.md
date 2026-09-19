@@ -4033,3 +4033,34 @@ targeted mutation and its focused E2E.
 screen models when that is architecturally justified. This does not block CP-26.19 because the
 required semantic mutation went red and the complete unit suite is green; it becomes critical only
 if a future slice changes this broad module and has no practical mutation-adequacy signal.
+
+## B-159 — the launcher's harness argument and per-harness config filename are now redundant
+
+**Found:** 2026-09-20, CP-26.19 (D-360).
+
+An installation is one harness's now, so its tree holds exactly one configuration file and its
+launcher is started by exactly one harness. The launcher still takes the harness as an argument and
+still resolves its configuration file by that harness's name (`config/<harness>.conf`), which is
+correct but says something the tree already knows. Both date from the shape where one launcher
+served several harnesses (D-264, D-355).
+
+**Noncritical.** Nothing is wrong or unsafe: the argument is passed, the file is found, and the
+value read is the right one. Simplifying it is a rename of a path and a signature, and doing it
+during the split would have mixed a cosmetic change into a commit whose failures need to stay
+readable. It becomes critical only if a future slice needs the launcher to be startable without an
+argument.
+
+## B-160 — `propose_installation` supersession is still keyed by coordinate
+
+**Found:** 2026-09-20, CP-26.19 (D-360).
+
+`previous` / `superseded` in `application/installation_proposal.py` is resolved by unversioned
+coordinate. With several installations of one artifact, a multi-harness **update** can therefore
+pair a member with another harness's previous state and forget the wrong record.
+`record_installation_transaction` already forwards `superseded.owner` to
+`forget_installation`, so the store does the right thing once the proposal names the right
+installation.
+
+**Reclassify to critical if it does not resolve with the Installed view.** The view slice makes
+per-owner records reachable, and this lookup is expected to fall out of that. If it does not, it is
+a wrong-transition bug on an accepted invariant and belongs inside CP-26.19 rather than here.

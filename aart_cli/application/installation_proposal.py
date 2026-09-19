@@ -29,6 +29,7 @@ from aart_cli.domain.harness import McpRegistration
 from aart_cli.domain.identifiers import ArtifactCoordinate, ObjectDigest
 from aart_cli.domain.inputs import BoundInputs, ConfigInput, RuntimeInput, SecretInput
 from aart_cli.domain.inspection import EnvironmentFacts
+from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.launch import LaunchContract
 from aart_cli.domain.plans import InstallPlan
 from aart_cli.domain.policies import EffectivePolicy
@@ -113,15 +114,18 @@ class PlannedInstallation:
     #: Empty where a single set is addressed the same way for every harness, and the bound inputs
     #: already name it.
     credential_addresses: tuple[CredentialReference, ...] = ()
+    #: Which installation this is (§169.3). It travels to the receipt, which is what the store is
+    #: keyed by: the same artifact in two harnesses is two installations, two trees and two
+    #: records, and without this they are one record written twice.
+    owner: InstallationOwner | None = None
 
     @property
     def credentials(self) -> tuple[CredentialReference, ...]:
         """What a provider is asked about and what the receipt records.
 
-        A launcher registered with several harnesses composes its address from the one it is
-        started with (D-355), so the reference bound into it names no item on its own. Where that
-        is what happened, the concrete per-harness addresses are carried beside it and are what
-        this answers with.
+        Each installation is one harness's (§169.3), so its addresses are concrete. They are still
+        carried beside the bound inputs rather than read out of them, because the bound reference
+        is launcher text and the address is what a provider is actually asked for.
         """
 
         return self.credential_addresses or self.bound.credential_references
@@ -252,6 +256,8 @@ def intended_receipt(planned: PlannedInstallation) -> InstallationReceipt:
         object_digest=planned.artifact.version.object_digest,
         # Where each harness's configuration is and its digest; never the values (D-264).
         configuration_files=tuple(item.record for item in planned.configuration),
+        # Which installation this receipt belongs to, so the store can key by it (§169.3).
+        owner=planned.owner,
     )
 
 
@@ -295,12 +301,17 @@ class PlannedPlacement:
     #: The entries in harness settings files this artifact owns. A hook has these beside the
     #: delivery of the script they run; nothing else has any.
     settings: tuple[ArtifactSettingsEntry, ...] = ()
+    #: Which installation this is (§169.3). It travels to the receipt, which is what the store is
+    #: keyed by: the same artifact in two harnesses is two installations, two trees and two
+    #: records, and without this they are one record written twice.
+    owner: InstallationOwner | None = None
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.artifact, ResolvedArtifact)
             or not isinstance(self.environment, ArtifactEnvironment)
             or not isinstance(self.payload_digest, ObjectDigest)
+            or not (self.owner is None or isinstance(self.owner, InstallationOwner))
         ):
             raise ValueError("a planned placement is invalid")
         if (
@@ -384,6 +395,8 @@ def intended_placement_receipt(planned: PlannedPlacement) -> PlacedArtifactRecei
         # than deriving anything; without it the receipt cannot get back to the manifest, and a
         # declared setup is invisible to everything downstream of the install (B-044).
         object_digest=planned.artifact.version.object_digest,
+        # Which installation this receipt belongs to, so the store can key by it (§169.3).
+        owner=planned.owner,
     )
 
 
@@ -458,8 +471,14 @@ class InstallationProposal:
                 key=lambda item: artifact_coordinate_sort_key(item.intent.desired.artifact),
             )
         )
-        if len({item.intent.desired.artifact for item in ordered}) != len(ordered):
-            raise ValueError("an installation proposal plans the same artifact twice")
+        # Keyed by the installation rather than the artifact: one artifact selected for two
+        # harnesses is two installations with two trees, and planning both is the point (§169.3).
+        # What would still be a mistake is planning the same *installation* twice, because the two
+        # plans would converge on the same files and the second would undo the first.
+        if len({(item.intent.desired.artifact, item.intent.desired.owner) for item in ordered}) != (
+            len(ordered)
+        ):
+            raise ValueError("an installation proposal plans the same installation twice")
         reviewed = {item.effect for item in self.plan.mutation.effects}
         running = {step.effect for item in ordered for step in item.repair.steps}
         unreviewed = running - reviewed
@@ -520,9 +539,14 @@ def propose_installation(
         return _error("proposing an installation needs planned installations")
     if not isinstance(selection, ResolvedSelection) or not isinstance(policy, EffectivePolicy):
         return _error("proposing an installation needs a resolved selection and a policy")
-    states = dict(observed)
-    if len(states) != len(observed):
-        return _error("an artifact was observed twice")
+    # Paired by position rather than keyed, because one artifact is legitimately installed several
+    # times over: one installation per harness (§169.3), each with a tree and a current state of
+    # its own. What has to hold is that the observations are *these* installations' -- the same
+    # coordinates, in the same order -- which is a stronger claim than a key being unique.
+    if tuple(coordinate for coordinate, _ in observed) != tuple(
+        item.coordinate for item in installations
+    ):
+        return _error("what was observed is not what is planned, member for member")
     superseded = dict(previous)
     if len(superseded) != len(previous):
         return _error("an artifact was superseded twice")
@@ -541,16 +565,9 @@ def propose_installation(
             + ", ".join(sorted(unplanned))
             + ", which is not being installed"
         )
-    missing = tuple(str(item.coordinate) for item in installations if item.coordinate not in states)
-    if missing:
-        return _error(
-            "nothing was observed for " + ", ".join(sorted(missing)) + "; an installation is "
-            "planned against what is there, not against an assumption that nothing is"
-        )
-
     lifecycle: list[LifecyclePlan] = []
     intents: list[ArtifactInstallIntent] = []
-    for planned in installations:
+    for planned, (_, state) in zip(installations, observed, strict=True):
         # A placement names no runtime and no transport. Leaving both absent is the fact rather
         # than a default: nothing starts, so there is no interpreter it runs under and no channel
         # a harness would speak to it over.
@@ -572,7 +589,7 @@ def propose_installation(
                 intent = install_lifecycle_intent(planned)
         except ValueError as error:
             return _error(f"{planned.coordinate} cannot be installed: {error}")
-        reconciled = plan_lifecycle_intent(intent, states[planned.coordinate], policy=policy)
+        reconciled = plan_lifecycle_intent(intent, state, policy=policy)
         if isinstance(reconciled, Err):
             return reconciled
         lifecycle.append(reconciled.value)

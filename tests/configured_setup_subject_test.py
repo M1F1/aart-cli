@@ -33,6 +33,7 @@ from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AuthoredSetup
 from tests.configured_setup_gap_test import AUTHORED, COORDINATE, RECIPE
 from tests.marketplace_fixtures import effective_configuration
+from tests.receipt_store_test import sole_record
 
 
 class ConfiguredSetupSubjectTest(unittest.TestCase):
@@ -169,7 +170,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
             exact = ArtifactCoordinate(
                 SourceAlias("company"), ArtifactIdentity("skill", "code-review"), "1.2.0"
             )
-            stored = LocalReceiptStore(host.state_root).record(exact)
+            stored = sole_record(LocalReceiptStore(host.state_root), exact)
             self.assertIsInstance(stored, Ok, getattr(stored, "diagnostics", ()))
             assert isinstance(stored, Ok)
             self.assertEqual(stored.value.receipt.setup_state_ref, planned.value.setup_state_ref)
@@ -222,7 +223,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
             exact = ArtifactCoordinate(
                 SourceAlias("company"), ArtifactIdentity("skill", "code-review"), "1.2.0"
             )
-            before = LocalReceiptStore(host.state_root).record(exact)
+            before = sole_record(LocalReceiptStore(host.state_root), exact)
             assert isinstance(before, Ok)
             setup_path = pathlib.Path(planned.value.setup_state_path)
             setup_before = setup_path.read_bytes() if setup_path.exists() else None
@@ -253,7 +254,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
             self.assertIsInstance(completed, Ok)
             assert isinstance(completed, Ok)
             self.assertIs(completed.value.setup_status, SetupExecutionStatus.FAILED)
-            standing = LocalReceiptStore(host.state_root).record(exact)
+            standing = sole_record(LocalReceiptStore(host.state_root), exact)
             assert isinstance(standing, Ok)
             self.assertEqual(
                 standing.value.receipt.setup_state_ref,

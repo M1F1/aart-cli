@@ -309,7 +309,11 @@ class ThePathsSurviveTheSessionThatWroteThemTest(unittest.TestCase):
             )
             drawn = terminal.screen_containing("Installation") or ""
 
-            self.assertNotIn(f"- payload: {env.project / '.claude'}", drawn)
+            # The harness's directory itself, not a path under it: §169.3 puts this
+            # installation's own tree inside `.claude/aart-cli/`, which is exactly what it owns.
+            # What would be wrong is naming `.claude` -- everything the harness has -- as payload,
+            # so the space is the assertion and dropping it would make this pass on nothing.
+            self.assertNotIn(f"- payload: {env.project / '.claude'} ", drawn)
             self.assertNotIn(str(env.home / ".claude/settings.json"), drawn)
 
 

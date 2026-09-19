@@ -54,10 +54,15 @@ def read_declared_setup(
     paths = object_store_paths(data_root)
     declared: list[DeclaredArtifactSetup] = []
     for coordinate in coordinates:
-        record = store.record(coordinate)
-        if isinstance(record, Err):
-            return record
-        digest = record.value.receipt.object_digest
+        records = store.records_for(coordinate)
+        if isinstance(records, Err):
+            return records
+        if not records.value:
+            return _error(f"nothing is recorded as installed for {coordinate}")
+        # Any of them: what an artifact declares is a property of the package it came from, and
+        # every installation of one coordinate came from the same approved version. Which harness
+        # it was installed into is not a question setup asks.
+        digest = records.value[0].receipt.object_digest
         if digest is None:
             continue
         loaded = read_object(ObjectReadRequest(paths, digest))

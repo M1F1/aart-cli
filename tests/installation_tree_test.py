@@ -1,14 +1,14 @@
 """An installation's own tree lives under the harness that selected it, and owns nothing else.
 
-§169.3 reverses what `domain/placement.py` assumed. The tree used to sit beside the receipt, on the
+§169.3 reverses what the policy this replaced assumed. The tree used to sit beside the receipt, on the
 argument that one artifact may register with several harnesses and the tree is not any one of
 theirs. The accepted contract is the opposite: each *installation* is its own owner, a second
 harness is a second installation with its own tree, and a tree under the harness is what lets that
 harness's own uninstall take its own files and nothing more.
 
-This module holds the rule. Which directory each harness tolerates is measured per harness and
-wired by CP-26.19; here the base is an argument, so the policy can be held without inventing a
-harness fact (D-346).
+This module holds the rule. Which directory each harness tolerates is measured per harness in
+`MANAGED_TREE_TARGETS` (D-359); here the base is an argument, so the policy is held without this
+module knowing any harness fact (D-346).
 """
 
 from __future__ import annotations

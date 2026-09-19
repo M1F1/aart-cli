@@ -460,7 +460,7 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
             )
 
             self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
-            config = env.project / ".aart-cli/runtimes/company/mcp/github/config"
+            config = env.project / ".claude/aart-cli/mcp/company/github/config"
             self.assertFalse((config / "claude.conf").exists())
             for harness in ("opencode", "tabnine"):
                 path = config / f"{harness}.conf"

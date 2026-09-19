@@ -26,7 +26,6 @@ from aart_cli.application.installation_planning import (
     inspect_requirements,
     prepare_install_plan,
 )
-from aart_cli.application.runtime_projection import HARNESS_PLACEHOLDER
 from aart_cli.domain.credentials import CredentialProviderRef, CredentialReference
 from aart_cli.domain.harness import Scope, mcp_target
 from aart_cli.domain.identifiers import InputId
@@ -46,7 +45,6 @@ from aart_cli.domain.inspection import (
     RemediationCapabilityKind,
 )
 from aart_cli.domain.install_description import InstallDescription
-from aart_cli.domain.installation_owner import credential_service_template, installation_owner
 from aart_cli.domain.launch import LaunchContract, Transport
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.python_runtime import PyProjectSpec, RequirementsFile
@@ -426,46 +424,3 @@ class OfferedRemediationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-class PlanCarriesTheHarnessSlotToTheLauncherTest(unittest.TestCase):
-    """§169.4-6 and D-355: the plan hands the launcher an address it can compose per harness.
-
-    The planner is what knows the artifact, its root and the harnesses it registers with; the owner
-    that completes that address is known one layer up. So the template arrives as an argument and
-    the planner's only job is to carry it intact to the launcher it generates.
-    """
-
-    def setUp(self):
-        self.owner = installation_owner(
-            _resolved().version.coordinate,
-            scope=Scope.PROJECT,
-            root=ROOT,
-            harness="tabnine",
-        )
-        self.template = credential_service_template(self.owner, HARNESS_PLACEHOLDER)
-
-    def test_a_planned_launcher_composes_the_address_it_was_given_a_template_for(self):
-        planned = _plan(credential_service_template=self.template)
-
-        assert isinstance(planned, Ok), planned
-        content = planned.value.launcher.content
-        self.assertIn("AART_CLI_SERVICE=", content)
-        self.assertIn('"$AART_CLI_HARNESS"', content)
-        self.assertNotIn(HARNESS_PLACEHOLDER, content)
-        # The service the answer happened to carry is not what the launcher reads any more.
-        self.assertNotIn("-s aart ", content)
-
-    def test_without_a_template_the_plan_is_what_it_was(self):
-        planned = _plan()
-
-        assert isinstance(planned, Ok), planned
-        self.assertNotIn("AART_CLI_SERVICE=", planned.value.launcher.content)
-
-    def test_a_template_the_launcher_refuses_refuses_the_plan(self):
-        """The planner does not rescue an address the launcher will not compose."""
-
-        refused = _plan(credential_service_template="no-slot-here")
-
-        self.assertIsInstance(refused, Err, refused)
-        self.assertTrue(_reason(refused))

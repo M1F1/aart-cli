@@ -9033,3 +9033,44 @@ one per coordinate, and one placement per (artifact, harness) rather than one pe
 module stays in `DELIBERATE_NON_RUNTIME_MODULES` until those land. A redundant trailing-separator
 guard was dropped from the validator when a targeted mutation showed the empty-path-part check
 already covered it -- unheld code, removed rather than given a test of its own.
+
+## D-360 — One placement per harness, one record per installation; D-354 and D-355 are deleted
+
+**Date:** 2026-09-20. **Status:** accepted, implementation in progress on
+`refactor/cp-26-legacy-removal`. **Supersedes:** D-354, D-355.
+
+§169.3 says the unit that owns a tree is the *installation* -- Registry alias, artifact, scope,
+concrete root and harness together. Until now one placement covered every selected harness, and two
+workarounds existed only to make that shape survive contact with §169.4-6:
+
+- **D-354** refused an install where two harnesses answered the same ordinary input differently,
+  because one placement had one configuration to write.
+- **D-355** left the harness open in the launcher's credential service as `HARNESS_PLACEHOLDER` and
+  composed the concrete address at start time from `$AART_CLI_HARNESS`, because one launcher was
+  registered with several harnesses and could not name one item.
+
+Both are now **deleted**, not deprecated and not disabled. `placements_for` returns one placement
+per harness, so each installation has its own tree, its own launcher, its own configuration file
+and one concrete credential address. There is nothing left for either mechanism to solve, and code
+that solves nothing is code no test can honestly hold. `domain/placement.py` goes with them: its
+`artifact_root` answered "where does this artifact live", which is the question §169.3 rejects.
+
+**The consequence that had to be accepted, not worked around.** A coordinate no longer identifies
+one thing on this machine. Every structure that keyed by it had to say which installation it meant,
+and the ones that did not were not theoretical: two coordinate-keyed dicts were shadowing one
+installation with another before any of this was written down. So `InstallationOwner` rides on
+`PlacedArtifactReceipt`, `InstallationReceipt`, `DesiredState`, `PlannedPlacement`,
+`PlannedInstallation` and `ArtifactPlacement`, and `LocalReceiptStore` digests it into the record
+path. It is optional on each of them, and that is deliberate: `None` marks a caller below the
+boundary that knows an installation, the same way `installed_name` already did, rather than a
+default that would quietly make two installations one.
+
+**What stays keyed by the artifact, and why.** What a package declares -- which object it came
+from, what setup that object's manifest names -- is a property of the package, not of the
+installation, and every installation of one coordinate came from one approved version.
+`LocalReceiptStore.records_for(coordinate)` serves those readers. A reader that wants one
+installation asks with the owner.
+
+**Not yet done.** The Installed view and the TUI focus key are still keyed by artifact, which with
+several harnesses makes two of three installations unreachable from the shell. That is tracked as
+the next action in `NEXT.md`, and the suite is red until it lands.

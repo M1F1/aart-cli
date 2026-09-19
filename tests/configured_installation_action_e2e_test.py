@@ -34,11 +34,11 @@ from aart_cli.domain.credentials import (
     CredentialState,
     ProviderState,
 )
-from aart_cli.domain.harness import Scope
+from aart_cli.domain.harness import Scope, managed_tree_target
 from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceId
 from aart_cli.domain.inputs import PromptedConfigValue, SecretProviderReference
 from aart_cli.domain.installation_owner import installation_owner
-from aart_cli.domain.placement import artifact_root
+from aart_cli.domain.installation_tree import installation_tree_root
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.result import Err, Ok
 from aart_cli.domain.selection import (
@@ -198,12 +198,14 @@ class ConfiguredInstallationActionTest(unittest.TestCase):
             offline=True,
         )
 
-    def _installed_root(self, prepared) -> str:
-        return artifact_root(
+    def _installed_root(self, prepared, harness: str = "tabnine") -> str:
+        """The tree one installation owns, under the harness that selected it (§169.3)."""
+
+        return installation_tree_root(
             prepared.action.installations[0].coordinate,
-            Scope.PROJECT,
-            project_root=self.project_root,
-            data_root=self.data_root,
+            harness_root=os.path.join(
+                self.project_root, managed_tree_target(harness, Scope.PROJECT).directory
+            ),
         )
 
     def test_unanswered_inputs_stop_at_the_form_rather_than_at_a_refusal(self) -> None:
@@ -311,9 +313,15 @@ class ConfiguredInstallationActionTest(unittest.TestCase):
         completed = self._complete(prepared.value)
         self.assertIsInstance(completed, Ok, getattr(completed, "diagnostics", ()))
 
-        root = pathlib.Path(self._installed_root(prepared.value))
-        files = sorted((root / "config").iterdir())
-        self.assertEqual([path.name for path in files], ["claude.conf", "tabnine.conf"])
+        # Two harnesses are two installations, so there are two trees and each holds the one
+        # configuration file of its own (§169.3). What used to be two files side by side under one
+        # tree was the shape that made one uninstall take the other harness's answers with it.
+        files = []
+        for harness in ("claude", "tabnine"):
+            root = pathlib.Path(self._installed_root(prepared.value, harness))
+            written = sorted((root / "config").iterdir())
+            self.assertEqual([path.name for path in written], [f"{harness}.conf"])
+            files.extend(written)
         for path in files:
             self.assertIn(f"{ORG}={value}\n", path.read_text(encoding="utf-8"))
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)

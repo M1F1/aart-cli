@@ -19,17 +19,14 @@ from aart_cli.application.installation_inputs import (
 from aart_cli.application.installation_offer import ArtifactPlacement
 from aart_cli.application.marketplace_resolution import ResolutionPolicy
 from aart_cli.application.promotion import load_published_registry_versions
-from aart_cli.application.runtime_projection import HARNESS_PLACEHOLDER
 from aart_cli.configuration.policy import EffectiveConfiguration
 from aart_cli.domain.credentials import CredentialReference
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.harness import Scope
-from aart_cli.domain.inputs import InputValueSource, SecretProviderReference
+from aart_cli.domain.inputs import SecretProviderReference
 from aart_cli.domain.installation_owner import (
     InstallationOwner,
     credential_address,
-    credential_service_template,
-    installation_owner,
     installed_names,
 )
 from aart_cli.domain.policies import EffectivePolicy
@@ -53,7 +50,7 @@ from aart_cli.store.model import (
     object_store_paths,
 )
 
-from .artifact_placement import placement_for
+from .artifact_placement import placements_for
 from .configured_selection import resolve_configured_selection
 from .object_store import publish_object, read_object
 from .source_store import read_current_source
@@ -61,63 +58,34 @@ from .source_store import read_current_source
 __all__ = [
     "CONFIGURED_INSTALLATION_INVALID",
     "CONFIGURED_INSTALLATION_INPUTS_REQUIRED",
-    "CONFIGURED_INSTALLATION_VALUES_DIFFER",
     "ConfiguredInstallationDraft",
-    "placement_owners",
     "configured_object_candidate",
     "object_candidate_from_registry_snapshot",
+    "placement_owner",
     "prepare_configured_installation_draft",
 ]
 
 CONFIGURED_INSTALLATION_INVALID = DiagnosticCode("configured-installation-invalid")
 CONFIGURED_INSTALLATION_INPUTS_REQUIRED = DiagnosticCode("configured-installation-inputs-required")
-#: One placement's targets answered the same input differently in something other than the
-#: credential each addresses, and a single generated launcher carries one set of configuration
-#: values. Refused rather than installed with whichever came first (D-354, narrowed by D-355).
-CONFIGURED_INSTALLATION_VALUES_DIFFER = DiagnosticCode(
-    "configured-installation-per-target-values-differ"
-)
 
 
 def _error(code: DiagnosticCode, message: str) -> Err:
     return Err((Diagnostic(code, Severity.ERROR, message),))
 
 
-def _harness_slot_template(owners: tuple[InstallationOwner, ...]) -> str | None:
-    """The credential service these installations share, with the harness they differ in left open.
+def _selected(placements: tuple[ArtifactPlacement, ...]) -> tuple[ResolvedArtifact, ...]:
+    """The artifacts a draft's placements cover, each named once and in the order they appear.
 
-    `None` where there is nothing to compose: one installation's launcher can read the address it
-    was given, and owners that differ in anything but the harness have no single template between
-    them. Every owner of one placement shares its alias, artifact, scope and root by construction,
-    so in practice the second case is the profile, which nothing sets yet.
+    A placement is one harness's, so an artifact selected for four harnesses appears four times.
+    What the draft has to account for is still the Selection: every artifact resolved, none added,
+    and in the order the Selection resolved them.
     """
 
-    if len(owners) < 2:
-        return None
-    templates = {credential_service_template(owner, HARNESS_PLACEHOLDER) for owner in owners}
-    return templates.pop() if len(templates) == 1 else None
-
-
-def _with_open_harness_slot(
-    source: InputValueSource,
-    owner: InstallationOwner,
-    template: str | None,
-) -> InputValueSource:
-    """An installation's own credential address, written as the template it composes from.
-
-    Only the address this owner is entitled to is folded: a reference pointing anywhere else is
-    left as it is, so two targets naming different arbitrary items still read as the disagreement
-    they are rather than being quietly unified.
-    """
-
-    if (
-        template is None
-        or not isinstance(source, SecretProviderReference)
-        or source.provider
-        != credential_address(owner, source.input, provider=source.provider.provider)
-    ):
-        return source
-    return replace(source, provider=replace(source.provider, service=template))
+    covered: list[ResolvedArtifact] = []
+    for placement in placements:
+        if placement.artifact not in covered:
+            covered.append(placement.artifact)
+    return tuple(covered)
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,11 +93,13 @@ class ConfiguredInstallationDraft:
     """Resolved and placed immutable content plus the current aggregate input form."""
 
     selection: ResolvedSelection
+    #: One per installation this draft would create: an artifact selected for two harnesses is two
+    #: placements, because §169.3 gives each of them its own payload, runtime, launcher and
+    #: configuration. The artifacts they cover are still exactly the selection's, in its order.
     placements: tuple[ArtifactPlacement, ...]
     inputs: InstallationInputComposition
-    #: Every installation this draft would create: one per placement per harness it reaches. This
-    #: is the unit configuration and credentials belong to (§169.4-6), and it is deliberately not
-    #: derivable from a placement alone, which spans its targets.
+    #: Every installation this draft would create, one per placement and in the same order. This is
+    #: the unit configuration and credentials belong to (§169.4-6).
     owners: tuple[InstallationOwner, ...] = ()
 
     def __post_init__(self) -> None:
@@ -138,7 +108,7 @@ class ConfiguredInstallationDraft:
             or any(not isinstance(item, ArtifactPlacement) for item in self.placements)
             or any(not isinstance(item, InstallationOwner) for item in self.owners)
             or not isinstance(self.inputs, InstallationInputComposition)
-            or tuple(item.artifact for item in self.placements) != self.selection.artifacts
+            or _selected(self.placements) != self.selection.artifacts
         ):
             raise ValueError("a configured installation draft is inconsistent")
 
@@ -147,15 +117,13 @@ class ConfiguredInstallationDraft:
         return self.inputs.ready
 
     def prepared_placements(self) -> Result[tuple[ArtifactPlacement, ...]]:
-        """Apply each installation's own answers to the placement whose declarations asked for them.
+        """Apply each installation's own answers to the placement that is that installation.
 
-        A placement spans every harness it registers with, and each of those is its own
-        installation with its own answers (D-353). The one thing those answers are *meant* to
-        differ in is the credential each addresses: separate items are §169.4-6's contract, not a
-        conflict. So each installation's own address is folded back to the template it composes
-        from (D-355), and what remains has to agree -- one generated launcher still carries one set
-        of configuration values, and a disagreement about those is refused by name rather than
-        settled by whichever came first (D-354).
+        A placement is one harness's (§169.3), so there is exactly one set of answers to apply and
+        nothing left to reconcile across targets. That is the point of the split: what used to be
+        one launcher carrying one set of values for every harness it registered with -- and a
+        refusal when two harnesses answered differently (D-354) -- is now one launcher per
+        installation, each carrying its own.
         """
 
         if not self.ready:
@@ -168,55 +136,31 @@ class ConfiguredInstallationDraft:
             )
         prepared: list[ArtifactPlacement] = []
         for placement in self.placements:
-            owners = self.owners_for(placement)
-            template = _harness_slot_template(owners)
-            answered = {
-                owner: tuple(
-                    _with_open_harness_slot(source, owner, template)
-                    for source in self.inputs.sources_for(owner)
-                )
-                for owner in owners
-            }
-            distinct = {tuple(values) for values in answered.values()}
-            if len(distinct) > 1:
+            owner = placement.owner
+            if owner is None:
                 return _error(
-                    CONFIGURED_INSTALLATION_VALUES_DIFFER,
-                    f"{placement.coordinate} is registered with "
-                    + ", ".join(sorted(owner.harness for owner in answered))
-                    + ", which answered its inputs differently in something other than the "
-                    "credential each addresses; one generated launcher carries one set of values, "
-                    "so there is nothing here to compose per harness",
+                    CONFIGURED_INSTALLATION_INVALID,
+                    f"{placement.coordinate} is placed without naming the installation it is",
                 )
-            sources = next(iter(distinct), ())
-            composed = tuple(
-                item
-                for item in sources
-                if isinstance(item, SecretProviderReference) and item.provider.service == template
-            )
+            sources = self.inputs.sources_for(owner)
+            secrets = tuple(item for item in sources if isinstance(item, SecretProviderReference))
             prepared.append(
                 replace(
                     placement,
                     sources=sources,
-                    credential_service_template=template if composed else None,
-                    # What the launcher composes is text; what a provider is asked for is an item.
-                    # So every installation's own address is carried beside the template, because
-                    # the template itself names nothing anyone holds.
+                    # The item this installation is entitled to, composed from its own owner rather
+                    # than taken from what was answered: what a provider is asked for, and what the
+                    # receipt records, is an address nobody typed.
                     credential_addresses=tuple(
                         CredentialReference(
                             item.input,
                             credential_address(owner, item.input, provider=item.provider.provider),
                         )
-                        for owner in owners
-                        for item in composed
+                        for item in secrets
                     ),
                 )
             )
         return Ok(tuple(prepared))
-
-    def owners_for(self, placement: ArtifactPlacement) -> tuple[InstallationOwner, ...]:
-        """The installations this one placement would create, in canonical order."""
-
-        return tuple(item for item in self.owners if item.artifact == placement.coordinate.artifact)
 
 
 def _configured_snapshot(
@@ -387,12 +331,13 @@ def prepare_configured_installation_draft(
     if isinstance(resolved, Err):
         return resolved
     store = object_store_paths(data_root)
+    owner_root = harness_root if harness_root is not None else project_root
     placements: list[ArtifactPlacement] = []
     for artifact in resolved.value.artifacts:
         materialized = _materialize(effective, artifact, data_root=data_root, store=store)
         if isinstance(materialized, Err):
             return materialized
-        placed = placement_for(
+        placed = placements_for(
             artifact,
             scope=scope,
             profiles=profiles,
@@ -400,42 +345,29 @@ def prepare_configured_installation_draft(
             project_root=project_root,
             data_root=data_root,
             store=store,
-            harness_root=harness_root,
+            harness_root=owner_root,
             preferred_installer=preferred_installer,
         )
         if isinstance(placed, Err):
             return placed
-        placements.append(placed.value)
-    owner_root = harness_root if harness_root is not None else project_root
+        placements.extend(placed.value)
     owners: list[InstallationOwner] = []
     for placement in placements:
-        owned = placement_owners(placement, scope=scope, root=owner_root)
+        owned = placement_owner(placement)
         if isinstance(owned, Err):
             return owned
-        owners.extend(owned.value)
-    named = installed_names(owners)
+        owners.append(owned.value)
+    named = installed_names(tuple(owners))
     if isinstance(named, Err):
         return named
     installed_by_owner = dict(named.value)
-    named_placements: list[ArtifactPlacement] = []
-    for placement in placements:
-        names = {
-            installed_by_owner[owner]
-            for owner in owners
-            if owner.artifact == placement.coordinate.artifact
-        }
-        if len(names) != 1:
-            return _error(
-                CONFIGURED_INSTALLATION_INVALID,
-                f"{placement.coordinate} does not have one installed name across its targets",
-            )
-        named_placements.append(replace(placement, installed_name=next(iter(names))))
-    placements = named_placements
+    placements = [
+        replace(placement, installed_name=installed_by_owner[owner])
+        for placement, owner in zip(placements, owners, strict=True)
+    ]
     uses = tuple(
         InstallationInputUse(owner, runtime_input)
-        for placement in placements
-        for owner in owners
-        if owner.artifact == placement.coordinate.artifact
+        for placement, owner in zip(placements, owners, strict=True)
         for runtime_input in placement.description.inputs
     )
     inputs = compose_installation_inputs(uses, sources, policy)
@@ -451,20 +383,17 @@ def prepare_configured_installation_draft(
         return _error(CONFIGURED_INSTALLATION_INVALID, f"installation draft is invalid: {error}")
 
 
-def placement_owners(
-    placement: ArtifactPlacement,
-    *,
-    scope: Scope,
-    root: str,
-) -> Result[tuple[InstallationOwner, ...]]:
-    """The installations one placement would create: one per harness it actually reaches.
+def placement_owner(placement: ArtifactPlacement) -> Result[InstallationOwner]:
+    """The one installation this placement is, checked against the harness it actually reaches.
 
-    A harness reaches an artifact in one of two ways, and a placement records exactly one of them.
-    An artifact that starts a process is registered with a target; one that is read off a path is
-    delivered, merged or given a settings entry. Both name the harness, and that harness with this
-    scope and this root is the installation (§169.4).
+    A placement is one harness's (§169.3), and it says so twice: the owner it carries and the
+    targets, deliveries, merges and settings that name a harness. Those two have to be the same
+    harness. If they ever came apart, the configuration and the credential item would belong to one
+    installation while the files went to another, and nothing downstream would notice.
     """
 
+    if not isinstance(placement, ArtifactPlacement):
+        return _error(CONFIGURED_INSTALLATION_INVALID, "an installation owner needs a placement")
     harnesses = {item.harness for item in placement.targets}
     harnesses.update(item.harness for item in placement.deliveries)
     harnesses.update(item.harness for item in placement.merges)
@@ -475,19 +404,16 @@ def placement_owners(
             f"{placement.coordinate} is placed but reaches no harness, so there is nothing to own "
             "its configuration",
         )
-    try:
-        return Ok(
-            tuple(
-                sorted(
-                    installation_owner(
-                        placement.coordinate, scope=scope, root=root, harness=harness
-                    )
-                    for harness in harnesses
-                )
-            )
-        )
-    except ValueError as error:
+    owner = placement.owner
+    if owner is None:
         return _error(
             CONFIGURED_INSTALLATION_INVALID,
-            f"{placement.coordinate} cannot name its installations: {error}",
+            f"{placement.coordinate} is placed without naming the installation it is",
         )
+    if harnesses != {owner.harness}:
+        return _error(
+            CONFIGURED_INSTALLATION_INVALID,
+            f"{placement.coordinate} is owned by {owner.harness} and reaches "
+            + ", ".join(sorted(harnesses)),
+        )
+    return Ok(owner)

@@ -20,6 +20,7 @@ from typing import Protocol
 
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactCoordinate
+from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.receipts import (
     ArtifactReceipt,
     InstallationReceipt,
@@ -70,7 +71,9 @@ class ReceiptStorePort(Protocol):
         ownership: tuple[OwnershipReason, ...] | None = None,
     ) -> Result[str]: ...
 
-    def forget_installation(self, coordinate: ArtifactCoordinate) -> Result[str]: ...
+    def forget_installation(
+        self, coordinate: ArtifactCoordinate, *, owner: InstallationOwner | None = None
+    ) -> Result[str]: ...
 
     def record_action(self, receipt: ReceiptDetailView) -> Result[str]: ...
 
@@ -144,7 +147,7 @@ def record_lifecycle_outcome(
         return action
 
     if releasing and outcome.primary.status is ExecutionStatus.CONVERGED:
-        forgotten = store.forget_installation(coordinate)
+        forgotten = store.forget_installation(coordinate, owner=intent.desired.owner)
         if isinstance(forgotten, Err):
             return forgotten
         return Ok(RecordedOutcome(detail, action.value, forgotten=True))
@@ -173,7 +176,10 @@ class RecordedTransaction:
     def __post_init__(self) -> None:
         if not isinstance(self.receipt, ReceiptDetailView) or not isinstance(self.action, str):
             raise ValueError("a recorded transaction needs the receipt it recorded")
-        if len({coordinate for coordinate, _ in self.installations}) != len(self.installations):
+        # By the record it wrote, not by the artifact it wrote it for. One Selection may install
+        # the same artifact into two harnesses, which is two installations and two records; what
+        # would be a mistake is writing one record twice, and the path is that record's identity.
+        if len({path for _, path in self.installations}) != len(self.installations):
             raise ValueError("a transaction records each installation once")
 
 
@@ -194,12 +200,16 @@ def record_installation_transaction(
 
     if not isinstance(outcome, InstallationExecutionOutcome):
         return _error("recording needs an installation execution outcome")
-    available = dict(receipts)
+    # Keyed by installation rather than by artifact. One Selection legitimately installs the same
+    # artifact into two harnesses (§169.3); keyed by the coordinate alone the second receipt would
+    # replace the first here and one of the two installations would be recorded with the other's
+    # paths.
+    available = {(coordinate, receipt.owner): receipt for coordinate, receipt in receipts}
     if len(available) != len(receipts):
-        return _error("a transaction was given the same artifact's receipt twice")
+        return _error("a transaction was given the same installation's receipt twice")
 
     keeping: list[tuple[ArtifactCoordinate, ArtifactReceipt, LifecycleExecutionOutcome]] = []
-    releasing: list[ArtifactCoordinate] = []
+    releasing: list[tuple[ArtifactCoordinate, InstallationOwner | None]] = []
     for member in outcome.artifacts:
         if member.outcome is None:
             continue
@@ -211,11 +221,11 @@ def record_installation_transaction(
         # leftovers are on the machine either way.
         if intent.kind is LifecycleIntentKind.UNINSTALL and not intent.retained:
             if member.outcome.primary.status is ExecutionStatus.CONVERGED:
-                releasing.append(coordinate)
+                releasing.append((coordinate, intent.desired.owner))
             continue
         if not _keeps_installation(member.outcome):
             continue
-        installed = available.get(coordinate)
+        installed = available.get((coordinate, intent.desired.owner))
         if installed is None:
             return _error(
                 f"recording {coordinate} needs the installation receipt the action applied, "
@@ -252,11 +262,11 @@ def record_installation_transaction(
         # recorded twice rather than not at all.
         superseded = intent.previous
         if superseded is not None and superseded.artifact != coordinate:
-            forgotten = store.forget_installation(superseded.artifact)
+            forgotten = store.forget_installation(superseded.artifact, owner=superseded.owner)
             if isinstance(forgotten, Err):
                 return forgotten
-    for coordinate in releasing:
-        dropped = store.forget_installation(coordinate)
+    for coordinate, owner in releasing:
+        dropped = store.forget_installation(coordinate, owner=owner)
         if isinstance(dropped, Err):
             return dropped
     return Ok(RecordedTransaction(detail, action.value, tuple(recorded)))

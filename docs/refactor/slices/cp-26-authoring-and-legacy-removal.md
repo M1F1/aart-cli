@@ -1880,3 +1880,42 @@ carry which action last produced the commit -- the durable alternative, the comm
 tell init from rebuild, since both are written by `publish`. Step 18a renames that whole namespace,
 so implementing the scheme now means writing strings 18a rewrites. The field is editable and the
 constant is correct, so nothing is unsafe meanwhile. Do it in 18a, with the new names.
+
+### Step 19 — the split itself: one placement per harness, one record per installation (2026-09-20, D-360)
+
+Until this, one placement covered every selected harness and two mechanisms existed only to hold
+that shape together against §169.4-6: D-354's refusal when two harnesses answered one input
+differently, and D-355's `HARNESS_PLACEHOLDER` launcher composing its credential address at start
+time from `$AART_CLI_HARNESS`. Both were correct descriptions of a workaround, which is why both
+had tests. Both are gone: `io/artifact_placement.placements_for` answers with one placement per
+harness, each with its own `InstallationOwner`, its own tree under that harness's measured
+`MANAGED_TREE_TARGETS` directory, its own launcher, its own configuration file and one concrete
+credential address. `domain/placement.py` is deleted with them.
+
+**What the split actually cost, which is the part worth recording.** A coordinate stopped
+identifying one thing on this machine, and every structure that keyed by one had to say which
+installation it meant. Three did not, and none of the three was found by reasoning about it:
+
+- `LocalReceiptStore.path_for` digested the coordinate alone, so the second harness's record
+  overwrote the first's. The key is the owner now, which is why the owner had to reach the
+  receipts: nothing at the ten call sites had one in scope.
+- `planned = {installation.coordinate: ...}` in `io/configured_installation_action.inspect` kept
+  one of the two installations, so **both** members were then measured against one tree and both
+  failed preflight as "installed state changed after Review". An existing E2E test caught it.
+- `available = dict(receipts)` in `record_installation_transaction` would have recorded one
+  installation with the other's paths.
+
+The first was predicted by the probe recorded in `NEXT.md`; the other two were not, and they are
+the argument for splitting a shared key by finding its readers rather than by listing them.
+
+**The narrowing had to move, not be repeated.** `_declared_narrowing` refuses a single
+non-declared profile passed alone, so running it per harness turned "this harness skips" into
+"installs nowhere". It runs once for the whole selection before the loop, and the three
+"installs nowhere" refusals -- `registers with none of`, `is read by none of`,
+`merges into no file of` -- belong to the operation rather than to a harness.
+
+**Where this stops.** The Installed view and the TUI focus key are still
+`str(record.coordinate)`. With three harnesses that is three inspections with one key, so two are
+unreachable and an action takes whichever the dict kept -- a defect the split created and has not
+yet repaid. The suite is red on it, and `NEXT.md` names each failing module and what it waits on.
+No targeted mutation is recorded for this step yet; three are owed and named there.

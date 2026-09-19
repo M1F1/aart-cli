@@ -36,6 +36,7 @@ from aart_cli.domain.identifiers import (
     ObjectDigest,
     SourceAlias,
 )
+from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.receipts import InstallationReceipt
 from aart_cli.domain.reconciliation import (
@@ -122,8 +123,11 @@ class FakeStore:
         self.ownership[str(key)] = ownership
         return Ok(f"/store/{key}.json")
 
-    def forget_installation(self, key: ArtifactCoordinate) -> Result[str]:
-        self.forgotten.append(str(key))
+    def forget_installation(
+        self, key: ArtifactCoordinate, *, owner: InstallationOwner | None = None
+    ) -> Result[str]:
+        # Keyed the way the real store is: the installation, not the artifact (§169.3).
+        self.forgotten.append(str(key) if owner is None else f"{key}@{owner}")
         return Ok(f"/store/{key}.json")
 
     def record_action(self, value: object) -> Result[str]:
