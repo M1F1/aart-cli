@@ -8629,3 +8629,115 @@ behavior honest: after process state is gone, Push offers the stable generic nam
 missing context and any promotion subject that cannot compose a valid Git branch use the same
 fallback. Nothing reads a wizard flag or commit prose, and no durable metadata is added for a UI
 default.
+
+## D-348 — local smoke verification keeps the full hierarchy and permits only declared reads
+
+**Accepted by the owner, 2026-09-19; Product Specification §170; CP-26.20a; issue #27.** The first
+surface is a CLI command for all or selected already installed MCPs in the local environment.
+Candidate Test Installs and local Registry installs support author validation; ordinary installed
+MCPs from remote Registries support consumer batch diagnostics. Uninstalled artifacts cannot be
+tested by this command. No TUI, scheduled CI, implicit setup mutation or publication gate is added.
+
+Keep separately evidenced configuration, MCP startup/protocol, MCP/service, harness/model-provider
+and actual harness/MCP/service stages. OpenCode CLI and Tabnine CLI are mandatory acceptance
+targets; Claude Code is an additional adapter, not a substitute for their proof. Model-provider
+failure does not erase independent direct-MCP evidence.
+
+The safety boundary is an explicit artifact-owned smoke declaration with a reviewed read-only
+tool, explicit arguments, bounded timeout and deterministic assertions. Both execution routes
+enforce it before calling tools; no name guessing, readOnlyHint-only authorization, model-chosen
+substitutes or shell/HTTP bypass. Missing declarations are not configured, not automatically
+replaced with arbitrary reads. Read-only is not a technical guarantee about arbitrary server
+code; testing must not silently substitute another token or installation to claim safety.
+
+The same installed owner supplies its launcher, config and provider references. Results contain
+safe metadata and assertion outcomes, never secret/config values or raw response/transcript data.
+Pure planning and result evaluation remain separate from execution; zero runtime dependencies
+remain a constraint. Author/maintainer guidance recommends local install → smoke → public Registry
+publication and retesting changed content; consumer guidance covers installed-MCP batches.
+
+Insert 20a after 20 and before 21; existing statuses and ids are unchanged. B-073 remains open for
+scheduled live CI, which this user-triggered command does not implement. No other GitHub issue is
+promoted into CP-26 by this decision; those need a separate product discussion.
+
+## D-349 — Versionless installed names and Keychain addresses belong to CP-26.19
+
+**Accepted by the owner, 2026-09-19; Product Specification §169.7, INV-253; issues #26/#28.**
+Extend the existing installation/lifecycle task 19; do not add a new task or mark implementation
+complete. Harness-visible installed names carry artifact, Registry alias and scope. Version is
+shown in AART CLI/TUI and metadata, never part of installed naming identity. Canonical artifact
+names/content remain unchanged; private installed projections and their digests are recorded.
+
+Actual external harness contracts constrain the spelling and location. A skill example is
+`github-company-project`, not `github--company--project`: OpenCode/Agent Skills disallow consecutive
+hyphens, limit names to 64 characters and require directory/frontmatter agreement. Keep supported
+Tabnine/OpenCode discovery roots and depth; measure supported versions rather than inheriting stale
+adapter tables. MCP registration keys carry the namespace while private runtime trees may retain
+their structured paths. Fixed filenames use supported owned fragments/keys. Reject length and
+collision conflicts before writes; readable names cannot replace the full installation owner.
+
+The owner explicitly extends this convention to Keychain. Deterministic service/account addresses
+identify the complete Registry-alias/artifact/scope/root/harness-profile owner plus input id.
+Readable labels expose artifact/alias/scope/harness/profile/input with an opaque owner discriminator;
+raw roots, versions and secret-derived material are excluded. Implementation records the exact
+collision-resistant encoding and refuses conflicting existing ownership before provider mutation.
+Same-owner updates preserve references; independent owners and inputs remain separate even for
+equal secret values. Rotate/delete/retain only the selected owner's item, never copy credentials
+or share provider items. Other providers keep equivalent isolation within their own contracts.
+
+Acceptance includes actual discovery, canonical-versus-installed verification, length/join
+collisions, independent owner/input addresses, stable updates and isolated credential lifecycle.
+These are pending proof obligations, not evidence from documentation changes. The plan retains
+23 tasks / 19 done and execution 19 → 20 → 20a → 21. Enterprise index release customization
+(issue #24) is deferred by the owner until that release is pursued; track it in B-157 outside CP-26.
+
+## D-350 — Local Registry testing uses an ordinary connection to a selected local branch
+
+**Owner clarification, 2026-09-19; CP-26.20/20a; issue #23 and B-143.** The intended workflow is
+to commit a candidate's canonical artifact to a branch of a local Registry repo, add that repo and
+branch as a Registry, install through the normal consumer path and test the installed MCP with
+the smoke command. Do not introduce or require a separate Candidate Test Install process for this
+work. References in D-348 to candidate test installs do not schedule implementing that feature;
+already supported installation origins remain eligible without adding a new installation flow.
+
+The local Registry connection stores alias, normalized repo path and selected local branch.
+Add/Sync resolves that branch to an exact commit and reads its canonical snapshot without checkout,
+fetch, worktree mutation or inclusion of uncommitted edits. This supersedes current-HEAD-only local
+acquisition wording. Missing branches and invalid successors preserve the last known valid state;
+never silently substitute HEAD or the default branch. Record branch/commit provenance and retain
+the same admission, policy, Marketplace, installation and ownership rules as remote Registries.
+
+After committing changes, explicitly Sync/update the installation and rerun smoke tests. No push
+or merge is needed to test locally, and local consumption is not evidence of remote publication.
+Documentation and task acceptance now reflect this flow. Task ids, statuses and execution order
+are unchanged; no runtime implementation or live smoke result is claimed by this planning update.
+
+## D-351 — Minimal smoke declaration and generic MCP result evaluation
+
+**Accepted by the owner, 2026-09-19; CP-26.20a; Product Specification §170.3–6.** Do not require
+authors to change a tool's output or create a dedicated connectivity tool. The optional top-level
+`smoke_test` manifest block requires only an exact `tool` and `read_only: true`. Omitted arguments
+are an empty object, validated before invocation; the default tool-call timeout is 15 seconds.
+Arguments, a bounded timeout override and deterministic `expect` conditions are optional. This
+supersedes D-348's mandatory author-specified assertions, not its read-only execution boundary.
+
+The default verdict uses tool discovery/input validation, bounded completion, valid MCP results,
+absence of transport/JSON-RPC/tool errors, and declared output-schema validation. Missing
+`isError` follows the protocol default; malformed results or unsupported required validation
+never silently pass. Supported text, structured data, images and empty results are valid without
+any `{"ok": true}` convention. Optional expectations inspect existing output with a small bounded
+parser-owned vocabulary; implementation records the exact syntax. No scripts, automatic resource
+fetches, keyword heuristics or LLM judge are introduced.
+
+The same evaluator judges both direct and harness calls; harness evidence must identify the actual
+current call/arguments/completed result, not a final prose answer. Protocol success, optional
+expectations and external-service evidence are distinct. A hidden textual error, cached data or
+static result can satisfy the protocol without proving service access. Insufficient evidence is
+NOT VERIFIED for that claim, preserving successful call evidence; a full-run pass still requires
+all requested claims. Expectations prove only what they assert, not arbitrary service permissions
+or a fresh request merely from output shape. Keep all hierarchy stages, owner-specific credentials,
+read-only enforcement and safe reports. No new runtime dependency or installation flow is added.
+
+§170, task 20a, author guidance and handoff now carry this contract and pending negative/property
+acceptance. Existing task ids, statuses and order are unchanged; this is documentation, not a
+shipped parser/runner. No noncritical implementation discovery arose in this planning segment.

@@ -6,8 +6,36 @@ Steps 1–18a are **done** on `refactor/cp-26-legacy-removal`; **step 19 is next
 import and filesystem namespace is `aart-cli` / `aart_cli`, the product has one portable
 `~/.aart-cli` / `AART_CLI_HOME`, the harness-owned installation-tree policy is defined, and Push
 suggests a review branch from the action that produced the current commit (D-347). B-057 and B-149
-are both closed. The plan has **22 tasks (19 done)**: the owner added **CP-26.18a** between 18 and
-19 without renumbering existing ids. Task 21 remains the final broad verification.
+are both closed. The plan has **23 tasks (19 done)**: additions **CP-26.18a** and **CP-26.20a**
+preserve existing ids. Execution remains **19 → 20 → 20a → 21**; task 21 is the final broad gate.
+
+### Accepted local MCP smoke verification (2026-09-19)
+
+D-348 and Product Specification §170 add **CP-26.20a**, still **todo**, after local Registry
+consumption. Deliver one CLI command for all or selected **already installed** MCPs in the local
+environment: ordinary installations from a local Registry repo/branch or a remote Registry,
+using existing installation-owned configuration and credentials. Uninstalled content is refused. Keep
+the full hierarchy: installation configuration → MCP startup/protocol → external service, plus
+harness/model-provider access → actual harness/MCP/service execution. Only an explicitly declared
+read-only tool with fixed arguments or installation-local non-secret references may run.
+D-351 makes the top-level `smoke_test` block minimal: required `tool` and `read_only: true`,
+empty arguments and a 15-second tool-call timeout by default, optional `expect`. Evaluate MCP
+errors/results and declared schemas generically; no dedicated tool or custom response format.
+Keep invocation success, optional assertions and service proof separate; insufficient service
+evidence is NOT VERIFIED. No guessing tools, shell/HTTP substitution or model-prose success.
+
+OpenCode CLI and Tabnine CLI require real execution evidence; Claude Code uses an additional
+adapter. A missing declaration, login, supported harness or setup is visible, not green. No TUI,
+scheduled CI or implicit install/repair is added. Read step 20a in the CP-26 slice and INV-248–252;
+document local install → smoke test → public Registry publication as the preferred author workflow,
+and bulk checks of a user's installed MCPs. This acceptance does not implement the command or
+change step 19's priority. GitHub issue #27 is tracked by this task; it is not closed by planning.
+
+**D-350 clarification:** task 20 takes a local Registry path and selected branch alongside its
+alias. Add/Sync reads that branch's exact committed snapshot, independent of the checked-out branch
+and without modifying the worktree. Install normally from the alias, then run task 20a's smoke
+command. Neither task adds or requires a separate Candidate Test Install process. Missing branches
+and invalid snapshots retain last-known-good state without fallback to HEAD/default branch.
 
 ### Accepted installation contract to carry into implementation (2026-09-19)
 
@@ -37,6 +65,13 @@ nothing else, because step 15 moved the detail into eight linked documents.
 `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–17 (D-321 to D-341).
 
 ### Execute CP-26.19 next
+
+Naming is included in this task (D-349, §169.7, INV-253; issues #26/#28). Harness-visible names
+carry artifact/Registry alias/scope without version, respect discovery paths and adapter grammar,
+and preserve canonical content when projecting installed skill names. Keychain service/account
+pairs use the complete installation owner plus input id, with readable labels and opaque root
+discriminators; update keeps addresses stable and rotation/deletion cannot cross owners. Validate
+lengths/collisions before mutation. This is accepted scope, not implemented behavior.
 
 *Each installation owns its files and inputs.* The full acceptance contract is in this slice's
 **Step 19** section and Product Specification §169.3–5 with INV-243–247. Measure the supported

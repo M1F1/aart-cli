@@ -267,6 +267,14 @@ This audit reclassifies affected claims; it is not a rerun of every historical e
 | INV-246 | New targets require separate input entry | `application/installation_inputs.py`; B-144 and B-150 | No acceptance evidence for the new four-target claim yet | CP-26.19: four eligible targets, independent fields/provider items, target-specific headless bindings, same-owner-only retention | CONFLICT |
 | INV-247 | The active namespace is aart-cli | Current executable/import package and generated content still use old names | Specification-only acceptance does not rename the shipped product | CP-26.18a: distribution, executable, imports, manifests, schema identifiers, templates and public guides; no aliases or fallback readers | CONFLICT |
 
+| INV-248 | Smoke selection is installed-only and owner-qualified | Planned in Product Specification §170 / CP-26.20a | No implementation evidence yet | Prove all/selected local targets, Candidate/local/remote Registry origins, uninstalled refusal and owner/content isolation | CONFLICT |
+| INV-249 | Only predeclared read-only smoke calls may execute | Planned minimal smoke declaration and invocation boundary, CP-26.20a / D-351 | No implementation evidence yet | Only tool/read_only required; optional expect and generic results; block unsafe declarations and substituted operations before invocation; no hint-only authorization | CONFLICT |
+| INV-250 | Full dependency-aware verification hierarchy | Planned verification plan/result evaluator, CP-26.20a / D-351 | No implementation evidence yet | Separate stage claims and protocol/assertion/service evidence; valid arbitrary content is not service proof; skipped/blocked/empty/unverified is not aggregate success | CONFLICT |
+| INV-251 | Harness success requires current execution evidence | Planned OpenCode CLI, Tabnine CLI and Claude Code adapters, CP-26.20a | No implementation evidence yet | Real call/result through discovered installation; reject model prose, old evidence and substituted config; mandatory OpenCode/Tabnine proof | CONFLICT |
+| INV-252 | Smoke execution is bounded and protects installation values | Planned explicit execution ports and safe reports, CP-26.20a | No implementation evidence yet | Bound effects/model use/output, preserve trust and zero runtime dependencies, report no secrets/config values/raw transcripts | CONFLICT |
+
+| INV-253 | Installed names and credential addresses preserve complete ownership | Planned in Product Specification §169.7 / CP-26.19 | No implementation evidence yet | Prove valid versionless harness names, canonical/installed projection, collision refusal, complete Keychain owner/input addresses with opaque roots, stable updates and isolated rotation/deletion | CONFLICT |
+
 ## CP-01 reading rule
 
 The repeated owner and gap entries are intentional: invariants are individually traceable while

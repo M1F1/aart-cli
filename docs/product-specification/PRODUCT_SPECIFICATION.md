@@ -6,6 +6,9 @@
 > `~/.aart-cli` home, harness-owned installations and independently entered inputs for every
 > installation. Implementation is pending in CP-26.18a and CP-26.19; accepted examples are the
 > target contract, not a claim that the current binary already implements these names or paths.
+> **2026-09-19 accepted addition:** §170 defines local CLI-only MCP smoke verification across
+> installation, protocol, external service, model provider and harness execution. CP-26.20a
+> implements it; this acceptance is not evidence that the command already exists.
 >
 > **Target repository:** `M1F1/aart-cli`
 >
@@ -8986,14 +8989,23 @@ Registry Details summarize counts and last update. Verbose may expose protocol/s
 Add Registry accepts two transports for the same canonical Registry contract:
 
 - **Remote Git** — a credential-free Git URL plus a branch or tag;
-- **Local Git checkout** — a normalized absolute path whose containing worktree root is a canonical
-  Registry and whose current `HEAD` is the revision to synchronize.
+- **Local Git checkout** — a normalized absolute repository path plus an explicitly selected local
+  branch containing a canonical Registry. Persist that branch with the connection's alias.
 
 Transport does not change Registry authority. Before either connection is saved, aart-cli snapshots the
 exact revision, runs the same Registry validation and records the same stable snapshot identity.
 Sync repeats that acquisition and validation; a local connection performs no network operation and
-reads the checkout's new `HEAD`. An invalid successor never replaces the last known valid snapshot.
+resolves the configured local branch to its exact commit, independently of the currently checked-out
+branch. Read committed content from that revision, without switching branches, modifying the
+worktree, including uncommitted edits or falling back to `HEAD`/the default branch. A missing branch
+or invalid successor never replaces the last known valid snapshot.
 Both transports contribute equally to Marketplace, resolution and installation.
+
+The local testing flow is ordinary Registry consumption: commit the candidate's canonical package
+to a branch in a local Registry repo → Add Registry with alias, local path and branch → synchronize
+and install through Marketplace or the normal CLI → run MCP smoke tests on that installation.
+This requires neither pushing/merging the branch nor a separate Candidate Test Install process.
+CP-26.20/20a do not introduce or require a new direct-from-Source installation workflow (D-350).
 
 Making a local Registry available to that explicitly configured Marketplace does not claim that its
 commit was merged into a remote consumer-visible branch. Versions retain their recorded lifecycle,
@@ -10618,3 +10630,267 @@ or provider items across installations; compatible reuse is confined to the same
 protocol identifiers, environment variables and generated/public guidance use the accepted
 namespace, with no compatibility aliases or old-path fallback. Literal history and external
 harness contracts remain identifiable as such.
+
+## 169.7 Versionless installed names and credential addresses
+
+Accepted 2026-09-19 (D-349), implemented by CP-26.19. Harness-visible installed names include
+artifact name, Registry alias and scope (`project` or `user`), without the artifact version.
+Version remains available in AART CLI/TUI and installation metadata; updating one owner preserves
+its installed name, path and credential address. The full owner in §169.4 remains authoritative;
+a readable name alone is not sufficient to identify a project root, harness/profile or input.
+
+Adapters preserve the harness's supported discovery root, directory depth, filename and name
+grammar. For a skill named `github` from alias `company`, the portable spelling is
+`github-company-project` or `github-company-user`, not `github--company--project`. Examples:
+
+```text
+<project>/.tabnine/agent/skills/github-company-project/SKILL.md
+~/.tabnine/agent/skills/github-company-user/SKILL.md
+<project>/.opencode/skills/github-company-project/SKILL.md
+~/.config/opencode/skills/github-company-user/SKILL.md
+```
+
+The installed skill's frontmatter `name` matches its directory where the harness requires this.
+Canonical Source/Registry content retains its original name; only the private installed copy is
+projected. Receipts distinguish canonical content from projected installed digests so verify and
+repair recognize intentional transformations. Additional alias/scope directory levels must not
+break discovery. Characterize supported installed harness versions, including Tabnine CLI user
+scope, rather than treating an old adapter capability table as authority.
+
+The [OpenCode skill contract](https://opencode.ai/docs/skills/#validate-names) and
+[Agent Skills specification](https://agentskills.io/specification) require lowercase alphanumeric
+names with single hyphen separators, 1–64 characters, and a matching parent directory. Follow
+the [Tabnine CLI discovery contract](https://docs.tabnine.com/main/getting-started/tabnine-cli/features/agent-skills)
+for its supported roots and depth. Validate composed names, lengths and collisions before writes,
+including ambiguous joins of hyphenated names/aliases and conflicts with unmanaged entries. Never
+silently truncate, overwrite or use encounter-order counters. If valid distinct names cannot be
+represented by the adapter, refuse the conflicting target with an actionable explanation.
+
+For MCPs the visible registration key follows this versionless artifact/alias/scope convention;
+the private runtime tree in §169.3 may retain its structured kind/alias/artifact directories.
+Guidelines, hooks and memory use supported keys or owned markers where an external contract fixes
+the filename. Required harness filenames are not renamed to impose an invalid convention.
+
+Keychain uses the same installation ownership model. Its deterministic, collision-resistant
+`service`/`account` pair incorporates the complete §169.4 owner plus `input_id`, with opaque
+identifiers for concrete roots and no artifact version. A readable label identifies artifact,
+Registry alias, scope, harness/profile and input; a stable opaque owner discriminator distinguishes
+otherwise identical labels from different roots. The implementation records its exact encoding
+and checks collisions before any provider mutation. Neither labels nor identifiers contain secret
+values or derive from secret material. Do not concatenate only the readable artifact/alias/scope
+label as the provider lookup key, and do not put raw absolute roots in Keychain labels.
+
+Separate roots, aliases, harnesses/profiles and input ids get distinct provider items even if the
+user independently enters equal secret values. Same-owner compatible updates preserve references;
+configure, rotation, retention and deletion operate only on that owner's item. Other providers
+preserve equivalent ownership through their supported addressing contracts. No cross-target
+credential copying or shared item is introduced by a naming convention.
+
+**INV-253 — Installed names and credential addresses preserve complete ownership.** Installed
+names expose artifact, Registry alias and scope within actual harness naming/discovery contracts;
+version is metadata, not naming identity. Canonical content remains unchanged by installation
+projection. Credential addresses additionally distinguish concrete root, harness/profile and
+input id, with opaque roots and no secret material. Collisions fail before mutation; updates of
+the same owner retain stable names/references and cannot affect another owner.
+
+# 170. Local MCP smoke verification through the CLI
+
+Status: **ACCEPTED 2026-09-19 — implementation pending in CP-26.20a**.
+This is an addition to CP-26 before its final verification task, not a reduction to connectivity
+alone. It preserves §169's installation and credential ownership boundaries.
+
+## 170.1 Scope and selection
+
+Provide one CLI command, `aart-cli mcp test`, exclusively for already installed MCP artifacts in
+the local environment. The author testing route is an ordinary installation from a configured
+local Registry repository and branch; consumers can also test installations from remote Registries.
+Other already supported installation origins may be selected, but this command does not require
+implementing Candidate Test Install or another direct-from-Source flow. Source files, uninstalled
+Candidates and Registry packages alone are not runnable test targets.
+
+The caller explicitly selects all installed MCPs in the chosen local target scope or particular
+installed MCPs, and the harness installation target(s) to test. Local Source/Registry provenance
+may narrow that selection; a Source or Registry path does not authorize launching uninstalled
+content. Selection resolves to concrete existing installation owners and tested content identities
+before any server or harness is started. Ambiguous selectors and an empty selection are explicit
+non-success results. When testing a particular Candidate/Registry version, an older or changed
+installation cannot silently supply its evidence. `--all` stays inside the selected local scope.
+
+The command does not implicitly install, update, configure, promote, publish, rotate credentials
+or repair. Missing local setup or bindings are `NOT CONFIGURED`. Source and Registry checkouts
+remain unchanged. Local describes the setup and invocation: explicit probes may contact that
+installation's configured remote service and the harness's model provider. Internal enterprise
+endpoints, proxy/CA settings and approved providers must work without assuming public egress.
+
+This increment has no new TUI flow, background monitor, scheduled CI job or production-wide scan.
+It provides human-readable and structured JSON reports for the same operation. Exact selector
+syntax follows the repository's existing origin/installation selection conventions; the command
+must expose explicit all-versus-selected MCP and harness selection rather than infer them.
+
+Author and maintainer documentation should recommend installing a new MCP locally, running this
+command for the intended harnesses, reviewing every stage and fixing failures before publishing
+that tested content to a public remote Registry. Document adding the local Registry repo and the
+branch containing the committed canonical artifact, ordinary installation from that alias, then
+smoke testing. No additional candidate-install process is required. This is a recommended
+pre-publication workflow, not an
+implicit publication gate or an automatic promotion. A changed artifact must be reinstalled or
+updated and retested; old evidence does not cover its new content. Consumer guidance also shows
+how to check several already installed MCPs without involving authoring or publication.
+
+## 170.2 The full verification hierarchy
+
+Each selected installation receives independently evidenced stage results:
+
+| Stage | Claim |
+| --- | --- |
+| Installation configuration | The selected owner's registration, launcher/runtime, ordinary configuration and credential references are usable and identify the intended content |
+| MCP startup and protocol | Its actual installed launcher or configured remote transport responds using a supported MCP protocol and expected capabilities |
+| MCP to external service | Evidence establishes that the declared read reached the configured service using this installation's credentials; protocol success alone is insufficient |
+| Harness to model provider | The selected harness/profile can authenticate and obtain the bounded model response needed for the smoke run |
+| Harness to MCP to external service | Separately report actual harness discovery/call/result evidence and any established external-service evidence; apply optional result expectations identically to the direct route |
+
+Stages form a dependency graph, not an unconditional stop-on-first-failure sequence. Failure to
+authenticate to a model provider must not suppress the independent direct MCP/service checks.
+Dependent work is `NOT RUN` with the failed prerequisite named. Successful configuration, protocol
+negotiation, tool enumeration or MCP ping never proves external-service access. A successful
+identity read proves authentication; access to another protected resource or permission requires
+its own declared assertion. Do not claim all service permissions were verified by one read.
+
+## 170.3 Predeclared read-only smoke operation
+
+**Minimal declaration (D-351).** An MCP author manifest may contain this optional top-level block:
+
+```yaml
+smoke_test:
+  tool: get_current_user
+  read_only: true
+```
+
+The exact existing tool name and explicit `read_only: true` are required when the block is present.
+Omitted `arguments` means the empty argument object; validate it against the discovered tool's
+input schema, and fail before invocation if required arguments are missing. Optional `arguments`
+contains fixed values or explicit references to this installation's non-secret configuration.
+An optional bounded timeout overrides the default 15-second tool-call deadline; server startup
+and harness/model execution also have separate bounded budgets. Optional `expect` adds deterministic
+checks against the tool's existing result. It is not required for a valid smoke declaration.
+
+The default evaluator checks tool existence, valid arguments, completion before the deadline,
+a valid MCP result without transport/JSON-RPC errors or `isError: true`, and conformance to the
+tool's `outputSchema` when declared. An omitted `isError` follows MCP's non-error default; a
+malformed flag or result is not a pass. Respect the negotiated MCP/schema contract. If a required
+schema cannot be validated, report unsupported validation rather than silently skipping it.
+Accept every supported MCP content type, including text, structured data, images and valid empty
+results. Do not demand JSON, a nonempty payload, a dedicated health tool or `{"ok": true}` from
+either the server or the harness. These checks concern the protocol envelope and declared schemas,
+not the arbitrary business meaning of its content. See the
+[MCP tools contract](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
+
+`expect` checks existing output without requiring the tool to change, for example presence of a
+field in structured data or an explicit condition on text. Keep its parser-owned vocabulary
+small, deterministic and bounded; record the exact syntax/defaults during implementation. Do not
+execute user scripts, fetch linked resources, evaluate content as instructions or use an LLM as
+the success judge. Both routes use the same evaluator. Without `expect`, no content guessing,
+keyword-based error detector or model interpretation is added implicitly.
+
+Reports distinguish protocol-level tool-call success from result expectations and evidence of
+external-service access. An error disguised as normal text, cached data or a static response may
+pass the protocol checks; that cannot alone produce a service-access PASS. If the selected tool's
+reviewed behavior and the observed result do not establish the claimed service read, report that
+claim as `NOT VERIFIED` while preserving the successful call evidence. Optional expectations
+strengthen only the claims they actually test: output shape alone does not prove a fresh network
+request, authentication or all permissions. A full hierarchy run cannot hide this qualification.
+
+The manifest/parser owns the contract; compilation, canonical packaging, validation and authoring
+guidance preserve it. It belongs to the selected content version/digest, not an unrelated side file
+or another installation. Secret values are never arguments or expected values in the contract.
+
+A dedicated author-provided `check_connection` tool is suitable but is not a new standard MCP
+method and is not mandatory. A reviewed existing read-only tool with explicit arguments is also
+valid. For example, the server can use its normal API client and credentials to read its identity
+or a known protected test resource. The probe must perform the declared read, not simply return
+a constant healthy flag. It must not create, update, delete or perform create-then-delete cleanup
+of service data. Any parameters that can select such modes are refused by the test contract.
+
+Only the declared operation is eligible. The runner never guesses from names such as `get_*`,
+chooses a tool with an LLM, invokes all tools, or treats MCP `readOnlyHint` alone as authorization.
+Absent declaration is `NOT CONFIGURED` for operation-dependent stages; an unsafe or malformed
+declaration is refused before invocation. Other independent stages may still run. Both the direct
+client and the harness route enforce the same allowed tool and arguments. The harness must not
+substitute shell commands, direct HTTP or another MCP. Unexpected operations are blocked, not
+merely noticed after they execute; inability to enforce that boundary is visible as unsupported.
+
+Read-only is a reviewed implementation contract, not proof of arbitrary server behavior. Starting
+a server also executes its code. AART must not promise that a flag makes unknown code harmless.
+Service-side read-only privileges provide stronger enforcement where available, but the test
+must not silently substitute different credentials and claim it verified the selected setup.
+Existing trust and execution policies still govern launching local Candidate content.
+
+## 170.4 Harness adapters and execution evidence
+
+OpenCode CLI and Tabnine CLI are the priority, mandatory end-to-end acceptance targets. Claude
+Code uses the same contract through an additional adapter; Claude-only success cannot satisfy
+acceptance for the two enterprise targets. IDE automation is outside this increment.
+
+Detect the actual executable, implementation and version before choosing supported flags, config
+discovery and event formats. A command name alone does not establish the implementation. Do not
+implicitly upgrade, migrate or reconfigure a harness to make a test pass. A headless run must read
+the real selected installation through the harness's supported configuration path. A substitute
+test-only MCP configuration proves only the adapter fixture, not the user's installation.
+
+The harness supplies execution evidence; the runner judges the result. Correlate the current
+run/session, expected server/tool identity, arguments and completed tool result. Neither model
+prose, a process exit code, tool discovery nor an old transcript is proof of execution. Validate
+protocol/tool errors, declared output schemas and any optional `expect` conditions deterministically.
+Successful harness invocation and external-service proof remain separate claims. Use supported structured events or
+verified hook contracts; do not infer success from terminal prose. Bound process lifetime, model
+usage, calls and captured output, and clean up only resources owned by this test run. Prevent
+unrelated hooks or agents from starting background work; any required execution overrides and
+resulting coverage limits must be explicit rather than silently testing a different setup.
+
+Use pure selection/planning and result evaluation with explicit process, network, harness and
+credential-provider boundaries. Preserve zero installed runtime dependencies; any external test
+driver must be an explicit, policy-governed capability rather than a hidden SDK dependency or an
+automatic installation during verification.
+
+## 170.5 Results and evidence ownership
+
+Reports name the installation owner, local origin/content identity, harness/version, stage,
+timestamp, outcome and actionable reason. At minimum distinguish `PASS`, `FAIL`, `BLOCKED`,
+`NOT CONFIGURED`, `NOT RUN`, `NOT VERIFIED` and `UNSUPPORTED`. `NOT VERIFIED` means a call may
+have completed but the available evidence does not establish the requested claim. A full-run
+success/zero exit requires evidence for every requested stage and target; empty, skipped, blocked,
+unverified or unsupported runs never masquerade as
+passed. A model-provider login failure is distinct from an MCP credential or service failure.
+
+Use only the selected installation's existing configuration and credential bindings. The model
+provider's authentication is separate from the MCP service's authentication. No cross-target
+prefill, secret copying, shared provider-item binding or global artifact configuration pool is
+introduced. Persistent output contains safe metadata and assertion outcomes, not secret values,
+ordinary artifact configuration values, raw service responses or unredacted harness transcripts.
+Verification results are time- and content-qualified observations, not permanent health promises.
+
+## 170.6 Acceptance invariants
+
+**INV-248 — Local smoke selection is explicit and installation-qualified.** Only already installed
+MCPs may be selected, individually or in bulk within the chosen local scope, including Candidate
+test installs and local/remote Registry-origin installations. Verification resolves their owners
+and tested content, neither changes setup nor borrows another target's inputs.
+
+**INV-249 — Smoke operations are predeclared read-only calls.** Only the declared tool and
+arguments may execute through either route; missing/unsafe contracts never trigger heuristic
+fallback, and declarations are not represented as a sandbox guarantee. The minimal declaration
+requires only tool and read-only fields; optional expectations never impose a custom tool response.
+
+**INV-250 — Verification preserves the full dependency-aware hierarchy.** Configuration, MCP
+protocol, external service, model-provider access and actual harness execution have separate
+evidence and honest non-success states; a lower-level pass never implies a higher-level pass.
+Protocol-level call success is separate from optional result assertions and service-access proof.
+
+**INV-251 — Harness smoke success requires current execution evidence.** The current run proves
+the intended tool call and result, including any optional expectations, through the selected harness installation; model prose,
+old events and substituted configurations cannot produce an end-to-end pass. OpenCode CLI and
+Tabnine CLI are mandatory acceptance targets; Claude Code is an additional adapter.
+
+**INV-252 — Smoke execution is bounded and does not expose installation values.** Explicit effect
+boundaries preserve trust, secret isolation, zero runtime dependencies and bounded execution;
+reports retain only safe, installation-qualified evidence.

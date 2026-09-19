@@ -1853,6 +1853,12 @@ Evidence/links: D-155; B-070; INV-001 (`PRODUCT_SPECIFICATION.md:5577`); the pri
 
 Found: CP-18 step 5 (2026-09-04) · Severity: low · Status: open
 
+**2026-09-19 scope clarification (D-348).** CP-26.20a / Product Specification §170 adds an
+owner-invoked local CLI for already installed MCPs and requires direct/harness live acceptance.
+It does not add scheduled CI or automatically test uninstalled Candidates. That accepted product
+work is mandatory in CP-26, while this scheduled/CI automation finding remains open and
+noncritical; completion of 20a alone must not close B-073.
+
 INV-123 asks that mandatory PR verification "retain a fast feedback path with selected live smoke
 scenarios", with broader expensive matrices allowed to run in "deep-quality, scheduled or
 release-candidate workflows".
@@ -3577,14 +3583,20 @@ two acquisition adapters for the same configured canonical Registry abstraction:
 
 ```
 remote: URL + ref       -> acquire exact commit -> validate -> save snapshot -> Marketplace
-local:  absolute path   -> read current HEAD     -> validate -> save snapshot -> Marketplace
+local:  path + branch   -> read exact commit     -> validate -> save snapshot -> Marketplace
 ```
 
 Once admitted, both are equally valid Registry connections and use the same Marketplace,
 resolution, policy and installation paths. The local adapter performs no clone or fetch. Add reads
-and validates its exact `HEAD` before configuration is committed; Sync reads the current `HEAD`,
-validates the successor and atomically advances the cached snapshot. A failed local read or invalid
+and validates the configured branch's exact commit before configuration is committed; Sync resolves
+that same branch, validates the successor and atomically advances the cached snapshot. A failed local read or invalid
 successor leaves the last known valid snapshot active, exactly like a failed remote Sync.
+
+**Owner clarification, 2026-09-19 (D-350).** Save the selected local branch with the path and alias;
+read committed content independently of checked-out HEAD and dirty worktree edits. Do not switch
+branches or fall back if the configured branch is missing. The intended flow is committed artifact
+on a local Registry branch → Add Registry for that repo/branch → ordinary install → MCP smoke
+tests. No separate Candidate Test Install process is introduced or required by CP-26.20/20a.
 
 **Alias and collision rule.** A remote and local connection to the same Registry may coexist only
 under different configured aliases, for example `company` and `company-local`; alias uniqueness is
@@ -3613,9 +3625,9 @@ the identical state-key rule before `registry-local` exists.
 **Shape of the work.** Implement it as a vertical capability, not as a `file://` exception:
 
 - add a `registry-local` configuration kind and a Remote Git / Local checkout choice to Add
-  Registry; CLI accepts the same normalized absolute path;
+  Registry; CLI accepts the same normalized absolute path and selected local branch;
 - require the path to resolve to the root of a Git worktree carrying a valid canonical Registry;
-  bind each synchronized snapshot to its exact commit, content digest and configured alias;
+  bind each synchronized snapshot to its configured branch, exact commit, content digest and alias;
 - route both adapters into one Registry validation/admission service and one source-store snapshot
   representation, so later Marketplace and installation code does not branch on transport;
 - include canonical versions carried by the local snapshot through the same Marketplace projection
@@ -3996,3 +4008,12 @@ visible string. CP-26.18 moved the gate list into `registry_commands/publication
 other operator-facing command still living in a `bytes` template is invisible to the guard. Making
 `_visible_strings` decode `bytes` constants would close it, and would need the false positives
 measured first -- most `bytes` literals in the package are file content, not advice.
+
+## B-157 — Enterprise index release customization is deferred
+
+**Owner decision, 2026-09-19; issue #24; D-349.** Revisit configurable distribution/release naming
+when the owner starts the actual Enterprise package-index release. Do not add this work to CP-26
+installation naming or local smoke verification. Preserve the accepted `aart-cli` executable,
+`aart_cli` import and application-home contract; any eventual distribution customization needs its
+own scoped acceptance and release evidence. This deferral does not remove CP-26.21's existing
+verification obligations. **Open, noncritical; explicitly deferred.**

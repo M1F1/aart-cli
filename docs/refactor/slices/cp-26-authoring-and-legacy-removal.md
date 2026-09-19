@@ -1,10 +1,11 @@
 # CP-26 — Canonical Registry maintenance, authoring tools and local consumption
 
-Status: **active**. Steps 1–17 are done; step 18 is next. The plan has **22 tasks** after the
-2026-09-19 addition of CP-26.18a (D-332); task 21 remains the final broad gate. D-333 requires
+Status: **active**. Steps 1–18a are done; step 19 is next. The plan has **23 tasks** after the
+2026-09-19 additions of CP-26.18a (D-332) and CP-26.20a (D-348); task 21 remains the final broad gate. D-333 requires
 independent input entry for each installation and withdraws all cross-installation sharing.
-Product Specification §169 defines the accepted layout and namespace; runtime implementation is
-still pending. Historical step records below retain the command names actually verified then.
+Product Specification §169 defines the accepted layout and namespace; step 19's ownership wiring
+is pending. §170 adds installed-MCP smoke verification, also pending. Historical step records
+below retain the command names actually verified then.
 The machine plan keeps an unfinished step as `todo` until completion evidence is recorded.
 
 PR #21 follow-up (2026-09-18): D-308's authoring refusal now points to the runnable `--help`
@@ -292,11 +293,12 @@ no migration command, and no deprecation period.
 | 17 | Remove `M1F1` as a generated or operational default | Registry workflow/README, CLI guidance, release defaults and public configuration docs; no organization or repository baked into a generated registry |
 | 18 | Registry Maintainer may push its publish-ready local snapshot | workspace-scoped action; visible readiness and blockers; current branch or a new review branch, never `main` or the default branch |
 | 18a | Use `aart-cli` throughout active names and one portable application home | D-332; `~/.aart-cli` / `AART_CLI_HOME`, central canonical content/receipts, harness-owned installation path contract; no compatibility aliases |
-| 19 | Each installation owns its runtime, receipt, configuration and credentials | D-333; B-144/B-150; alias + artifact + scope/root + harness/profile + input id; separately entered values, no sharing even across four selected harnesses |
-| 20 | Add Registry synchronizes a canonical Registry from a local Git checkout | B-143; one admission/snapshot/Marketplace path for remote and local transports |
+| 19 | Each installation owns its runtime, names, receipt, configuration and credentials | D-333/D-349; B-144/B-150; full owner and input id; versionless harness names and Keychain addresses; separately entered values, no sharing |
+| 20 | Add Registry synchronizes a canonical Registry from a local repo and selected branch | B-143/D-350; normal admission/Marketplace/install path, then installed-MCP smoke tests |
+| 20a | CLI smoke verification of all or selected locally installed MCPs | D-348, §170, issue #27; declared read-only calls, full hierarchy, mandatory OpenCode/Tabnine CLI evidence and an additional Claude adapter |
 | 21 | Run the full CP-26 verification only after every implementation task is complete | full quality, integration/E2E, packaging/docs/secret gates and final acceptance evidence |
 
-The numbered order is the execution order and is grouped into six dependency phases:
+The numbered order is the execution order and is grouped into seven dependency phases:
 
 1. **Canonicalize Registry maintenance (1–5).** Refuse mixed state, remove only `scaffold` and the
    older representation, then delete its now-unreachable schemas and fixtures. Canonical
@@ -316,7 +318,9 @@ The numbered order is the execution order and is grouped into six dependency pha
    unifies names/home resolution and defines harness-owned destinations. Step 19 wires those
    destinations and complete ownership through runtime, receipts, inputs and lifecycle, requiring
    separate entry for every target. Step 20 reuses that contract for local Registry acquisition.
-6. **Verify the whole slice once (21).** Only after all implementation tasks, including 18a, are complete, run the broad repository
+6. **Verify installed MCPs locally (20a).** Build the safe probe contract and the direct/harness
+   runners on 19's installation identity and 20's local Registry route. Keep the full hierarchy.
+7. **Verify the whole slice once (21).** Only after all implementation tasks, including 18a and 20a, are complete, run the broad repository
    quality and integration/E2E suites and record the final acceptance evidence.
 
 Command survival is an acceptance invariant: step 3 must leave canonical `lock`, `build`,
@@ -333,7 +337,7 @@ or new test per renamed string is required. A namespace-only substitution is not
 semantic mutation claim. Runtime identity/isolation and new command/path behavior remain the
 material checks; no broad or unrelated test/mutation campaign runs during implementation.
 
-Implementation tasks 2–20, including 18a, use the smallest evidence set that holds their claim:
+Implementation tasks 2–20a, including 18a, use the smallest evidence set that holds their claim:
 
 - run the named red/green test module for the changed behavior;
 - run format, lint and type checks over changed files and production/test files inside the measured
@@ -348,7 +352,7 @@ Do not run the whole repository quality suite, every integration/E2E module or a
 cross-family set after each task. Task 21 owns those expensive checks once the implementation scope
 is complete: full `make quality`, the full standalone integration/E2E gate where it is not already
 included, packaging, docs and secret-shape verification, plus the final acceptance tests for the
-five product phases. A failure is repaired at its owning layer and the affected focused set is run
+six product phases. A failure is repaired at its owning layer and the affected focused set is run
 before repeating the necessary closing gate. CP-26 is not verified until task 21 is green and its
 results are recorded here.
 
@@ -1176,10 +1180,10 @@ typecheck`, `make packaging-check`, `make docs-check` and `make secret-shape-che
 noncritical finding was discovered, so `BACKLOG.md` needs no entry. No broad `make quality` ran,
 under D-317/D-334.
 
-### Step 19 — private installation trees, input entry and lifecycle (B-144/B-150, D-333)
+### Step 19 — private installation trees, names, input entry and lifecycle (B-144/B-150, D-333/D-349)
 
 Status: **todo**, depends on 18a. Implement Product Specification §§38–39, 84–85, 96, 161.5–8 and
-169 with INV-243/245/246. Stable owner fields are Registry alias, artifact kind/name, scope,
+169 with INV-243/245/246/253. Stable owner fields are Registry alias, artifact kind/name, scope,
 normalized concrete project/user target root and harness/profile; `input_id` is unique only inside
 that owner. Version is excluded so compatible updates can retain that owner's inputs.
 
@@ -1192,8 +1196,39 @@ Ordinary values remain in the installation tree, secrets in its provider; centra
 paths/digests/references only. macOS Keychain derives distinct deterministic, collision-resistant
 service/account pairs from complete keys with opaque roots. Provider items cannot serve two owners.
 
+**Naming acceptance added 2026-09-19 (D-349, issues #26/#28); implementation pending.** Apply
+§169.7 within this task, not a separate release task. Harness-visible names expose artifact,
+Registry alias and scope, without version. Respect each adapter's actual naming grammar, discovery
+depth and fixed filenames. For skills, use a valid spelling such as `github-company-project` in
+both the installed directory and frontmatter; preserve canonical content and record the installed
+projection for verify/repair. For MCPs namespace registration keys; the private runtime tree can
+keep §169.3's structured layout. Other artifact kinds use supported keys/owned markers when their
+filenames are fixed. Characterize installed OpenCode and Tabnine CLI capabilities, including user
+skill discovery, before replacing existing adapter assumptions.
+
+Keychain is part of this same acceptance: derive deterministic collision-resistant service/account
+pairs from the complete owner plus input id, never only the readable harness name. Use readable
+artifact/alias/scope/harness/profile/input labels with an opaque root discriminator; no version,
+raw root paths or secret-derived material. Document the exact encoding as an implementation
+decision. Preserve same-owner references on compatible update and isolate rotation/deletion.
+
 Acceptance (red first):
 
+- Install a skill from `company` in eligible OpenCode/Tabnine CLI project and user targets;
+  prove actual discovery at the supported depth and matching directory/frontmatter names.
+  Assert canonical bytes remain unchanged and verify/repair accepts the recorded projection.
+  Exercise MCP registration keys and fixed-filename owned fragments for other artifact kinds.
+- Show version in AART CLI/TUI and metadata, but not installed naming identity. A compatible
+  version update preserves paths, registration names and that owner's credential references.
+- Validate actual harness name grammars and length limits. Cover hyphenated artifact/alias join
+  collisions, oversized names and unmanaged entries; fail before filesystem/settings/provider
+  mutation without silent truncation, overwrite or encounter-order renaming.
+- With one artifact/input, vary Registry alias, project/user scope, concrete root and harness/
+  profile independently: Keychain service/account pairs remain distinct; a second input id is
+  distinct too. Independently entered equal values do not merge items. Labels reveal no raw roots
+  or secret material, and retries derive the same address for the same owner/input. Rotation or
+  deletion of one item leaves the others untouched; force an address collision and assert refusal
+  before a provider write. Use equivalent ownership cases for other supported providers.
 - One MCP into Tabnine/project and Claude/user produces two private trees, two registrations and
   two independently actionable Installed rows with exact roots, versions and health.
 - One MCP with two config variables and one secret on four eligible harnesses collects eight
@@ -1225,7 +1260,8 @@ Acceptance (red first):
   effects produce honest recorded health. Launch succeeds without the installer or central object
   store; cache pruning never deletes private runtime state.
 
-Property-test complete owner keys and provider-item uniqueness. Use existing focused tests where
+Property-test complete owner keys, composed-name validation and provider-address stability and
+separation across generated owners/input ids. Use existing focused tests where
 possible; record targeted semantic mutation evidence for the material isolation claims and scoped
 mutmut over their changed modules. Do not build a broad compatibility or cross-product matrix. B-144 and B-150 close only after this
 acceptance, before step 20 consumes the model. No sharing feature is part of this task.
@@ -1233,11 +1269,18 @@ acceptance, before step 20 consumes the model. No sharing feature is part of thi
 ### Step 20 — local Git checkout as a configured canonical Registry (B-143)
 
 Add `registry-local` beside `registry-git`, with a Remote Git / Local checkout choice in Add
-Registry and the same capability in the deterministic CLI. A local path must normalize to the root
-of a Git worktree containing a valid canonical Registry. Add snapshots its exact `HEAD`, commit and
-content digest before saving configuration; Sync reads the successor without network access and
-atomically advances only after the same validation used for remote Git. Failure preserves the last
-known valid snapshot.
+Registry and the same capability in the deterministic CLI. Collect alias, normalized local repo
+path and selected local branch. Persist the branch and resolve it to an exact commit on Add/Sync;
+read its committed canonical Registry content independently of the checked-out branch. Record
+commit and content digest before saving configuration. Never switch branches, include uncommitted
+worktree edits, fetch, or fall back to `HEAD`/the default branch. Sync atomically advances only
+after the same validation used for remote Git. Missing branches and invalid successors preserve
+the last known valid snapshot.
+
+**Owner clarification, D-350:** commit the candidate's canonical artifact to a local Registry
+branch → add that repo/branch as a normal Registry → install from its alias → run step 20a's
+smoke command on the installed MCP. This task introduces no separate candidate installation
+process and has no dependency on implementing Candidate Test Install.
 
 Both transports feed one Registry admission service, source-store snapshot representation,
 Marketplace projection, resolver, policy evaluator and installation path. Local transport neither
@@ -1247,12 +1290,103 @@ under distinct aliases. Qualified coordinates remain distinct, and an equal unqu
 explicitly ambiguous.
 
 Acceptance covers coexistence, alias-qualified selection, unqualified ambiguity, dependency and
-Collection closure, install/update/status, receipts containing alias/snapshot/commit/origin, and an
+Collection closure, install/update/status, receipts containing alias/branch/snapshot/commit/origin, and an
 invalid local successor retaining last-known-good state. Reuse step 19's independent project/user/
 harness configuration and credential cases through the local and remote aliases, including
 refusal of cross-installation provider-item binding and separate target-qualified input entry. Local Sync is read-only with respect to the checkout and proves
-it performs no network operation. This closes B-143; it remains distinct from Candidate Test
-Install, which exercises pre-promotion candidate content rather than the canonical Registry.
+it performs no network operation. Exercise a selected test branch while another branch is checked
+out and the worktree has edits; only the selected branch's committed content is installed and the
+worktree stays unchanged. Advance that branch and prove explicit Sync/update adopts its successor;
+delete it or commit an invalid Registry and prove last-known-good preservation without fallback.
+Step 20a then proves the normal installed MCP can be smoke-tested. This closes B-143.
+
+### Step 20a — local CLI smoke verification of installed MCPs (D-348/D-350/D-351, issue #27)
+
+Status: **todo**, after 19 and 20, before final gate 21. Implement Product Specification §170 and
+INV-248–252. This records accepted scope only; no command, probe schema or harness adapter is
+implemented by this planning segment.
+
+**Selection and ownership.** One CLI command tests all or selected already installed MCPs in an
+explicit local target scope. Include ordinary installs from a configured local Registry repo/branch
+and remote Registries. Already supported installation origins remain eligible, but implementing a
+separate Candidate Test Install flow is not part of this task (D-350). Uninstalled Source/Candidate/Registry content is not a test
+target. Optional provenance filters do not bypass installation requirements. Resolve exact owner,
+content and harness/profile; ambiguous or empty selections are non-success. Do not install,
+update, configure, repair, sync or publish as a side effect of testing. Existing configuration and
+secrets remain installation-owned; selecting several MCPs or harnesses does not join their inputs.
+
+**Implement in bounded parts, retaining the full hierarchy:**
+
+1. Define the parser-owned optional top-level `smoke_test` block. Only `tool` and
+   `read_only: true` are required; omitted arguments are an empty object, the default tool-call
+   timeout is 15 seconds, and `expect` is optional. Optional arguments are fixed values or explicit
+   installation-local non-secret references. Carry this through canonical compilation/validation
+   and generated author guidance; do not create a second schema authority or embed secret values.
+   Implement §170.3's generic protocol evaluator and a small deterministic optional expectation
+   vocabulary; document its exact syntax/defaults as an implementation decision. Existing tools
+   and their existing content formats work without a dedicated health tool or `{"ok": true}`.
+2. Add pure selection, verification planning and stage-result evaluation. Configuration,
+   startup/protocol, MCP/service, harness/model-provider and harness/MCP/service claims remain
+   distinct. Failed prerequisites suppress only dependent stages. Empty, unconfigured, blocked,
+   unverified or unsupported runs never return an aggregate pass. Report protocol-level invocation,
+   optional result expectations and service evidence separately. A normal response containing an
+   application error or cached data must not by itself yield an external-service PASS.
+3. Execute the installed launch/transport contract directly with explicit effects. Call only the
+   declared operation; validate completion, MCP/JSON-RPC errors, `isError`, declared output schema
+   and optional `expect`. Do not infer business success from arbitrary content. Preserve successful
+   call evidence while reporting service access as NOT VERIFIED when it lacks adequate evidence.
+   Missing declarations leave independent checks available and operation stages not configured.
+4. Add version-aware OpenCode CLI and Tabnine CLI adapters and an additional Claude Code adapter.
+   Headless tests use the real selected installation's discovery path. Verify current-session
+   call identity, arguments and completed result. Enforce allowed operations before invocation;
+   deny shell/direct-HTTP/other-tool substitutes and unbounded or unrelated background work.
+   A fixture config is adapter evidence, not evidence that the user's installation was discovered.
+5. Present one human/JSON result model with safe owner/content/version/time metadata and bounded
+   diagnostics. Never persist config values, secrets, raw service payloads or harness transcripts.
+   Preserve zero installed runtime dependencies and existing enterprise network/provider policy.
+6. Document the preferred author flow: commit canonical artifact to local Registry branch → add
+   that repo/branch under an alias → install normally → run
+   smoke checks on the intended harnesses → fix/retest → publish the tested content to the public
+   remote Registry. Also document a consumer checking a batch of existing installed MCPs. Do not
+   turn this recommendation into a new implicit publication gate.
+
+**Evidence required before completion.** Characterize both CLI implementations/versions. A local
+controlled MCP plus protected fixture service first proves genuine execution and negative cases;
+then run a declared read against a configured real service for OpenCode CLI and Tabnine CLI.
+Claude-only success is insufficient. If an enterprise executable, account or endpoint is absent,
+record that pending live obligation; do not count a skipped case as final acceptance. No new
+scheduled workflow or broad hosted compatibility matrix is required.
+
+Negative coverage includes uninstalled/ambiguous/stale targets, cross-owner credentials, missing
+or unsafe declarations, undeclared calls/changed arguments blocked before execution, missing
+credentials, explicit authentication/authorization failure, timeout/tool errors, unavailable
+model provider, an answer without a tool call, old-session evidence and a substitute MCP config.
+Dependency tests prove direct service checks still run when model login fails. Property tests hold
+selection boundaries, owner isolation, allowlist narrowing and result aggregation where universal.
+Targeted semantic mutations must make the relevant assertions red; run scoped mutmut for changed
+modules. Focused checks belong here; the full repository gates stay in 21.
+
+**D-351 minimal-manifest acceptance.** A two-field smoke block survives parsing, compilation,
+packaging and installation unchanged in meaning; no additional expectation or custom response is
+required. Prove valid text, structured, image and empty results are accepted at protocol level,
+including omitted `isError`. Reject malformed results, `isError: true`, transport/JSON-RPC errors,
+timeouts, missing required arguments and output-schema violations. Unsupported schema validation
+is explicit. Optional expectations can fail an otherwise successful call and are evaluated equally
+through direct MCP and harness routes. Missing expectations do not enable keyword/LLM heuristics.
+Fixtures with a disguised textual error or cached response prove that successful invocation alone
+cannot make the service stage green. Preserve the full hierarchy and current-session harness
+evidence; a harness's final prose never supplies the tool result. Exercise bounded/malformed
+expectations and prove neither scripts nor resource-link fetches are executed by the evaluator.
+
+Read-only is a reviewed server/tool contract, not a promise that arbitrary startup/tool code is
+incapable of mutation. Do not silently swap credentials to strengthen that claim. This distinction
+and the declaration-required behavior must be visible in operator documentation.
+
+**2026-09-19 planning record.** Added 20a without renumbering or changing existing statuses:
+23 tasks, 19 done, 19 next. Canonical §170, INV-248–252, D-348, execution/NEXT/status records and
+author guidance carry the same installed-only/full-hierarchy scope. GitHub issue #27 is covered
+by this implementation task but remains open; B-073's scheduled live CI scope remains separate.
+Documentation/plan checks are recorded in MIGRATION_STATUS; no runtime test/mutation claim is made.
 
 ## Settled authoring boundary for this slice
 

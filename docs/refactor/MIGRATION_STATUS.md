@@ -4,6 +4,61 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-19, CP-26.20a minimal smoke contract accepted — implementation pending.** D-351
+records the two-field `smoke_test` declaration, optional arguments/expectations, default 15-second
+tool-call deadline and generic MCP error/schema evaluation. Existing tool outputs need no custom
+format. Separate invocation success from optional assertions and actual service evidence; an
+unproven service claim is NOT VERIFIED. The full hierarchy, real harness execution evidence and
+read-only boundary remain. Specification, task acceptance, traceability, author guidance and active
+handoff are updated; no task/status or runtime code changes. No new backlog item was necessary.
+
+Verification passed: `make docs-check`, all five `tests.traceability_matrix_test` cases,
+`handoff-plan validate` (27 epics / 161 units / 157 done), `git diff --check` and a focused scan
+for superseded mandatory-assertion wording in active specification/task/handoff sections.
+No runtime tests or mutations apply to this documentation-only contract update.
+
+**2026-09-19, CP-26.20/20a local Registry flow clarified — implementation pending.** D-350
+records local repo path + selected branch + alias → ordinary installation → installed-MCP smoke
+tests. No new Candidate Test Install process is required. Add/Sync uses the selected branch's
+committed snapshot independently of checked-out HEAD/worktree edits; missing branches and invalid
+successors preserve last-known-good state. Specification, slice, author guidance, B-143 and active
+handoff agree. No task/status changes or runtime implementation are claimed.
+
+Verification passed: `make docs-check`, five `tests.traceability_matrix_test` cases,
+`handoff-plan validate` (27 epics / 161 units / 157 done) and `git diff --check`.
+
+**2026-09-19, CP-26.19 naming scope accepted — implementation pending.** D-349, §169.7 and
+INV-253 add versionless artifact/Registry-alias/scope names within actual harness discovery and
+name grammars, installed-only skill projection, and collision refusal. The owner explicitly
+includes Keychain: complete owner plus input id determines service/account addresses; readable
+labels use opaque root discriminators, and same-owner updates keep stable references. Acceptance
+covers independent projects/profiles/aliases/inputs, no raw roots or secret material, and isolated
+rotation/deletion. Issues #26/#28 map to existing task 19. No task/status change, runtime code
+change or implementation evidence is claimed; order remains 19 → 20 → 20a → 21, 23 tasks / 19 done.
+Enterprise index release customization is explicitly deferred in B-157.
+
+Verification passed: `make docs-check`, five `tests.traceability_matrix_test` cases,
+`handoff-plan validate` and `git diff --check`. A before/after plan comparison confirms only task
+19's title changed in this segment, preserving all ids/statuses and the 23/19 counts; INV-253 has
+one definition and one pending traceability row. No runtime tests or broad quality gate apply.
+
+**2026-09-19, CP-26.20a accepted — installed-MCP smoke verification, implementation pending.**
+The owner added CLI-only testing of all or selected already installed MCPs, both local
+Candidate/Registry test installations and ordinary user installations from remote Registries.
+§170, INV-248–252 and D-348 retain the full configuration/protocol/service/model-provider/harness
+hierarchy. Only the predeclared read-only operation and arguments may execute. OpenCode CLI and
+Tabnine CLI require real acceptance evidence; Claude Code is an additional adapter. Documentation
+recommends local install/test before public Registry publication and consumer batch verification.
+No TUI, scheduled CI or implicit setup mutation is included. Issue #27 maps to this task; B-073
+remains open for scheduled live CI. Plan order is 19 → 20 → 20a → 21, **23 tasks / 19 done**;
+existing statuses are unchanged and step 19 remains next. This segment changes documentation and
+planning only; no smoke runner or new runtime behavior is claimed.
+
+Verification passed: `make docs-check`, all five `tests.traceability_matrix_test` cases,
+`handoff-plan validate`, a comparison preserving every pre-existing task/status and all other
+epics, five unique new invariant definitions with pending traceability rows, and `git diff --check`.
+No broad quality suite or runtime mutation testing applies to this documentation-only segment.
+
 **2026-09-19, CP-26.18a complete — Push names the action that produced its commit.** The final
 18a carry-over is implemented. Successful Registry init, rebuild, single promotion and bulk
 promotion leave typed origin context in the reducer; a single promotion derives

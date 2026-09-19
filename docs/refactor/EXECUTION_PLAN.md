@@ -188,7 +188,7 @@ reports nothing while it runs. The slice ends by cutting the release that carrie
 ordered tasks and completion criteria are in
 `docs/refactor/slices/CP-24-post-release-field-reports.md`; start at task 01.
 
-### CP-26 — Canonical Registry removal, authoring tools and local consumption
+### CP-26 — Canonical Registry removal, authoring tools, local consumption and MCP verification
 
 Remove the older unversioned Registry representation without a compatibility window, retain
 `registry publish` as the canonical approved-Registry aggregate, and add parser-derived author
@@ -204,8 +204,14 @@ harness-owned installation paths. It precedes CP-26.19, which makes runtime tree
 credential items, setup state, receipts and lifecycle ownership specific to a complete installation
 (Registry alias + artifact + scope/root + harness/profile). Every new target collects its own
 inputs; four harnesses mean four sets, with no sharing or copy option (D-333, B-144/B-150).
-CP-26.20 then adds local Git checkout acquisition through the same canonical Registry pipeline
-(B-143) and proves the same isolation for local and remote aliases.
+Task 19 also owns versionless artifact/Registry-alias/scope names under each harness's discovery
+and naming rules, installed skill-name projection, and Keychain addresses derived from complete
+owner/input identity with readable labels and opaque roots (D-349, §169.7, INV-253; issues #26/#28).
+Updates preserve these addresses; collisions are refused before mutation. Enterprise index
+release customization remains deferred outside this task (B-157).
+CP-26.20 then adds local repository + selected branch acquisition through the same canonical
+Registry pipeline (B-143/D-350), proves the same isolation for local and remote aliases and uses
+ordinary installation before smoke testing. No separate Candidate Test Install flow is required.
 
 D-334 accepts breaking changes throughout CP-26: no backward-compatibility aliases, fallback
 formats, migrations or transition periods are required. Implementation checks are focused and
@@ -213,8 +219,22 @@ proportionate, especially for mechanical namespace changes; accepted isolation a
 remain tested. Remote/local aliases are separate installation entities and filesystem namespaces
 even for identical package bytes.
 
-The ordered plan has 22 tasks; existing ids are preserved, with 18a between 18 and 19.
-Implementation tasks, including 18a, use focused tests and measured damage-radius gates.
+The owner added CP-26.20a (D-348, Product Specification §170): CLI-only smoke verification of all
+or selected already installed MCPs in the local environment, including ordinary installations from
+local Registry repositories/branches and remote Registries. Preserve configuration,
+protocol, external-service, model-provider and actual harness-execution stages. Only a predeclared
+read-only tool with fixed arguments may execute, both directly and through the harness. D-351
+requires only `tool` and `read_only: true` in `smoke_test`; arguments default to empty, the
+tool-call timeout to 15 seconds, and result expectations are optional. Generic MCP success is
+distinct from external-service proof; no dedicated health tool or custom response is required.
+OpenCode CLI and Tabnine CLI are mandatory acceptance targets; Claude Code is an
+additional adapter. No new TUI, scheduled CI, automatic setup mutation or production-wide scan
+belongs to this increment. Document the recommended install → smoke test → publish workflow for
+new MCPs and bulk checking of a user's installed MCPs. B-073's scheduled live CI work stays separate.
+
+The ordered plan has 23 tasks; existing ids are preserved, with 18a between 18 and 19 and 20a
+between 20 and 21. Implementation tasks, including 18a and 20a, use focused tests and measured
+damage-radius gates. Execution remains 19 → 20 → 20a → 21 after completed step 18a.
 CP-26.21 remains the sole broad quality/integration/E2E closeout after all implementation tasks.
 The full order and acceptance criteria are in
 `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`; `NEXT.md` names the current task.
