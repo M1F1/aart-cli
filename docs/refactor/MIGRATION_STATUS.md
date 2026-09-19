@@ -4,6 +4,38 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-19, CP-26.18a in progress — the filesystem's names, and one portable home.** Two more
+commits on `refactor/cp-26-legacy-removal`. `0fadd69` moved every name the filesystem sees: author
+manifests `aart-cli.yaml`/`aart-cli.json`, generated `aart-cli-registry.json`,
+`aart-cli-source.json` and `.github/workflows/aart-cli-registry.yml`, the managed marker
+`<!-- >>> aart-cli memory:<name> >>> -->`, the project state directory `.aart-cli`, payload formats
+`aart-cli-<kind>-v1`, compliance levels `aart-cli-native`/`aart-cli-compatible`, schema ids
+`aart-cli.dev/<kind>/v1`, the `aart-cli-baseline` security provider and every `AART_CLI_*`
+environment and CI variable. Three of those are content-addressed, so the rename is a format change
+and is meant to be; a regular expression cannot see an assembled name, and the two places that
+assembled one (`f"aart-{kind}-v1"` in a security fixture, the marker's literal text in two block
+tests) were caught by the gates rather than by the sweep. `AART_DUMMY_USER`/`AART_DUMMY_TOKEN`
+stayed: they belong to a fixture artifact, and an artifact binding whatever variable it likes is
+what they demonstrate. `d113812` gave the product one home — `AART_CLI_HOME` if set, otherwise
+`<user-home>/.aart-cli`, identical on macOS and Linux, no XDG or platform root anywhere near it.
+Machine policy deliberately did not move with it, because a rule an environment variable can step
+around is not a rule (D-344). `plan_factory_reset` was rewritten rather than renamed: it names the
+managed entries and the configuration lock and never the home itself, so a reset cannot delete
+whatever a variable pointed at, and a file the tool did not write inside its own home survives one
+(D-345). `domain/installation_tree.py` holds §169.3's
+`<harness root>/aart-cli/<kind>/<alias>/<name>` with the harness root as an argument, because which
+directory each harness tolerates is measured in step 19 (D-346), and it is named in
+`DELIBERATE_NON_RUNTIME_MODULES` with that dated reason until 19 wires it.
+`docs/configuration/application-home-v1.md` documents the home and what the variable cannot move;
+nothing documented it before, and the documentation-index gate is what noticed. Evidence: `make
+unit` (4590 tests), `make integration` (402), `lint`, `typecheck`, `format-check`,
+`packaging-check`, `docs-check`, `secret-shape-check`, `validate`, and four targeted semantic
+mutations each red then restored; scoped `make mutants` over `configuration/paths.py` left fifteen
+survivors, none of them a claim the slice makes. No broad `make quality` (D-317). Still open in the
+step: the Push review's branch suggestion carried in from step 18 — its seam is traced and its
+design written into the slice, with nothing implemented and a clean tree — and step 16's executed
+installation/README contract re-run against the changed advertised commands.
+
 **2026-09-19, CP-26.18a in progress — the name the machine sees.** The import package is
 `aart_cli` (254 modules moved; nothing imports `agent_artifacts` any more), the single console
 script is `aart-cli`, `prog` matches it, and every command line the product prints, documents or

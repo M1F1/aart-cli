@@ -1089,6 +1089,46 @@ beside-the-receipt authority until the same step replaces it.
 the commit subject cannot tell init from rebuild (`publish` writes both). It was left here rather
 than done twice: this step renames that namespace. Implement it with the new names.
 
+**The mechanism, already traced (2026-09-19).** The Push review's branch field is not a placeholder
+the suggestion merely decorates. `[p] Push` on screen 46's ready workspace row navigates to 46j and
+issues `PREPARE_ACTION` with an empty `publication_branch`; `_prepare_registry_push` answers with
+`command.publication_branch or workspace.suggested_branch`; and `_action_prepared` writes that
+answer back into `state.publication_branch`, which is what the field draws, what the status names as
+the target, and what `_request_action` refuses to push without. The suggestion therefore has exactly
+one seam -- that fallback -- and the session's knowledge has to reach it on the command rather than
+through `publication_branch`, because that field means *the maintainer chose this*, and a non-empty
+one is refused when the checkout already stands on its own eligible branch.
+
+The shape that follows:
+
+- `domain/publication.py` gains `RegistryCommitOrigin` (`init-registry`, `rebuild-registry`,
+  `promote`, `bulk-promote`), `PUBLICATION_BRANCH_NAMESPACE = "aart-cli"`,
+  `DEFAULT_PUBLICATION_BRANCH = "aart-cli/registry-update"` and
+  `suggested_publication_branch(origin, *, subject="") -> PublicationBranch`. It returns the default
+  for no origin and for any subject that would not compose a usable Git branch name -- refused
+  rather than encoded, the way `installation_tree` refuses a path component it cannot compose, since
+  an encoded branch is a name nobody can read back to the run that produced it.
+- `ConsumerUiState` carries `registry_commit_origin` and `registry_commit_subject`, set in
+  `_action_recorded` from `event.action` -- which is the one thing that tells init from rebuild, and
+  the reason this item needed the reducer at all. Both of its return paths have to set them: a
+  promotion recorded on screen 45 takes the early `registry_commit_applied` branch.
+- The promotion subject is the only part the reducer cannot derive, so `ConsumerUiEvent` carries it
+  and `_execute_candidate_promotion` fills it from `pending.transaction.plan.versions` when there is
+  exactly one, as `<artifact>-<version>`. Bulk promotion runs through the same executor and is told
+  apart by `command.action`; it names itself and needs no subject.
+- `ConsumerUiCommand` gains `suggested_branch`, set by `_request_action` on the navigation to 46j,
+  and `_prepare_registry_push` reads `command.publication_branch or command.suggested_branch or
+  workspace.suggested_branch`. `MaintainerRegistryWorkspaceView.suggested_branch` keeps the constant
+  as the answer for a session that knows nothing, which is exactly what §169's "otherwise" names.
+
+Tests first: the domain suggestion per origin and both fallbacks in
+`tests/registry_publication_branch_test.py`, with a Hypothesis property that every suggestion is a
+usable branch name under the product namespace whatever subject it is handed; and the session
+carrying each producing action through to the prepare command in
+`tests/registry_commit_manual_publication_test.py`, whose `_on` helper and recorded screen case
+already build 46j. Targeted mutation: return the constant from `suggested_publication_branch` for a
+known origin, and watch the per-origin assertions turn red and nothing else.
+
 Implement Product Specification §169.1–3/5 and INV-244/247. Inventory all active producers and
 consumers: executable/package/import names (`aart-cli`, `aart_cli`), manifest discovery and schema/
 URI identifiers, CLI/help/JSON labels, filenames, managed markers, environment and CI/release

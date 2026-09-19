@@ -2,8 +2,9 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–18 are **done** on `refactor/cp-26-legacy-removal`; **step 18a is in progress** — its
-first half, the executable and import namespace, is on the branch and green. Step 18 carried one
+Steps 1–18 are **done** on `refactor/cp-26-legacy-removal`; **step 18a is in progress** — three
+of its four parts, the executable and import namespace, the names the filesystem sees and one
+portable application home, are committed and green. Step 18 carried one
 item into it rather than doing it twice: the Push review's branch suggestion is still the constant
 `aart-cli/registry-update`, and 18a renames that namespace. The carry-over is written into 18a's own
 section of the slice. B-057 and B-149 are both closed. The plan has **22 tasks (17 done)**: the
@@ -51,22 +52,33 @@ because the rename moved every normative schema input path (D-275). `unit`, `int
 `typecheck`, `format-check`, `packaging-check`, `docs-check` and `secret-shape-check` are green over
 that state.
 
-**What is left, in order.** First the names the *filesystem* sees, which the rename above
-deliberately did not touch: manifest discovery (`aart.yaml`/`aart.json` -> `aart-cli.yaml`/
-`aart-cli.json`), generated files (`aart-registry.json`, `aart-source.json`,
-`.github/workflows/aart-registry.yml`), managed block markers `>>> agent-artifacts ...`, the project
-state directory `.agent-artifacts`, the `AART_*` environment and CI variables -> `AART_CLI_*`,
-schema/URI identifiers and the branch prefix. Then one normalized absolute `AART_CLI_HOME`
-defaulting to `<user-home>/.aart-cli`, resolved once at the process boundary, with the §169.2 layout
-and no XDG or platform root anywhere near it, plus the adapter-owned path policy for private
-installation trees under harness directories. Then step 16's executed installation/README contract
-re-run against the changed advertised commands.
+**Also on the branch and green.** The names the *filesystem* sees moved in `0fadd69`: author
+manifests `aart-cli.yaml`/`aart-cli.json`, generated `aart-cli-registry.json`,
+`aart-cli-source.json` and `.github/workflows/aart-cli-registry.yml`, the managed marker
+`>>> aart-cli memory:<name> >>>`, the project state directory `.aart-cli`, payload formats
+`aart-cli-<kind>-v1`, schema ids `aart-cli.dev/<kind>/v1` and every `AART_CLI_*` variable. One
+portable home followed in `d113812`: `AART_CLI_HOME` or `<user-home>/.aart-cli`, identical on both
+platforms, machine policy deliberately left outside it, a factory reset that names the managed
+entries and never the home, `domain/installation_tree.py` for §169.3, and
+`docs/configuration/application-home-v1.md`. D-344, D-345 and D-346 record the choices.
 
-**Carried in from step 18.** The Push review's branch suggestion is still the constant
-`aart-cli/registry-update`. It must come from the most recent producing action, which needs the
-reducer to carry which action produced the commit -- the commit subject cannot tell init from
-rebuild, since `publish` writes both. It waited for this step because this step renames that
-namespace; implement it with the new names.
+**What is left, in order.** The branch suggestion below, then step 16's executed installation/README
+contract re-run against the changed advertised commands -- the install-route gate passed in
+`make integration` over the renamed state, so this may already be satisfied; confirm it and record
+that, rather than assuming it either way. Then the handoff documents, `handoff-plan done CP-26.18a`,
+and the proportionate gates before the commit.
+
+**Carried in from step 18 -- the one functional item left.** The Push review's branch suggestion is
+still the constant `aart-cli/registry-update`. It must come from the most recent producing action,
+which needs the reducer to carry which action produced the commit -- the commit subject cannot tell
+init from rebuild, since `publish` writes both. The seam was traced on 2026-09-19 and the whole
+design, down to which field carries what and which tests to write first, is in the slice's **Step
+18a** section under *The mechanism, already traced*. The short version: the suggestion's only seam
+is `_prepare_registry_push`'s `command.publication_branch or workspace.suggested_branch` fallback,
+the session's knowledge must arrive on a new `ConsumerUiCommand.suggested_branch` rather than in
+`publication_branch` (a non-empty one there is refused on an eligible current branch), and
+`domain/publication.py` is where the origin-to-branch policy belongs. Nothing is implemented yet;
+the working tree is clean.
 
 **Delete, do not bridge.** No fallback reader, no old-path probe, no dual write, no migration
 command and no alias survives a rename here (D-334, §169.1). A guard that fails because a name moved
