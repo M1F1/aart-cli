@@ -823,6 +823,45 @@ B-155.
 **Evidence.** 65 tests across the three author modules, `make unit`, `make integration`, `make
 typecheck`, `make docs-check`, Ruff check and format. No broad `make quality` ran, under D-317.
 
+### Step 13 — the README opens with the route, not with the architecture (2026-09-19)
+
+`## Install an artifact` is now the first section after the title, and it is the whole of §1.6's
+sequence: install AART, connect a Registry, find the artifact, install it into a selected harness,
+verify. The TUI follows as the route for a person, stated as what it is -- the same canonical
+requests, not a second command engine. `## One contract` and the three-names warning moved below
+it; nothing was discarded.
+
+**Everything unknown stays a placeholder.** `<repository>`, `<alias>`, `<registry-url>`,
+`<kind>/<name>` and `<harness>`, with the four built-in profiles named once. The route names no
+host, for the same reason the install grid does not: a markdown file cannot know which instance it
+is being read on, so an address written here is wrong in every fork (D-277).
+
+**The route is held as commands, not as prose.** `QuickStartRouteTest` slices the section and hands
+every `aart …` line in it to the shipped parser with the placeholders substituted. A flag the
+parser does not have is the failure this is written against -- the reader is at a shell, and prose
+that reads well and does not run costs them the afternoon the page was meant to save. The other
+claims are the ordering (§1.6 fixes that a new user does not read an architecture section first),
+completeness of the five steps, that the reviewing command is shown before the one that applies it,
+and that no address a fork would correct appears.
+
+**A test that failed as an error, fixed.** The section was first sliced between two named
+headings, so reordering it raised a slice error in five tests instead of failing the one that
+names the claim. It now slices at the next top-level heading, which also leaves step 14 free to put
+something else after it.
+
+**Targeted semantic mutations (three).** Replacing `--profile` with a flag the parser does not have
+failed only the parser test, naming the offending line; showing only the `--yes` form failed only
+the review-before-apply test; moving `## One contract` above the route failed only the ordering
+test. All restored green.
+
+**Not in this step.** Step 14 owns the bounded "What AART is" and the documentation index; step 15
+moves the detailed sections into focused documents; step 16 executes the install lines themselves.
+`## Install and quick start` therefore keeps its heading and its content, and the quick start links
+down to it for `pip`, `pipx` and the private-instance cases.
+
+**Evidence.** 20 tests in `adoption_first_contact_test`, `make unit`, `make typecheck`,
+`make docs-check`, Ruff check and format. No broad `make quality` ran, under D-317.
+
 ### Step 17 — no maintainer identity as a default
 
 The owner explicitly requires generated registries and operational examples to carry no default

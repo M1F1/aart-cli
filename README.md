@@ -1,11 +1,76 @@
 # AART
 
 AART installs reviewed **skills, guidelines, MCP servers, hooks, and memory** from canonical,
-validated registry snapshots into a selected harness. It uses only the Python standard library and
-has zero runtime dependencies.
+validated registry snapshots into a selected harness.
 
-Three names, because they differ and the difference has cost someone an afternoon: the command is
-**`aart`**, the package you install is **`aart-cli`**, and the import package is
+## Install an artifact
+
+One route, end to end: no AART on the machine, to an installed artifact you can verify. You need
+Python 3.10 or later, the address of a Registry somebody maintains, and the harness you are
+installing into — `claude`, `opencode`, `tabnine` or `vibe`. Everything in angle brackets is yours
+to fill in.
+
+**1. Install AART.** The exact command for the repository you are reading this in is on its
+[Releases page](../../releases), already filled in with the right address and version; from a
+checkout, `python scripts/install_commands.py` prints the same lines. The shape, where
+`<repository>` is that address and `X.Y.Z` is the release you want:
+
+```sh
+uv tool install "git+<repository>.git@vX.Y.Z"
+```
+
+`pip` and `pipx`, private Enterprise instances and the case where a release cannot be installed
+from its URL at all are in [Install and quick start](#install-and-quick-start) below.
+
+**2. Connect a Registry.** `source add` acquires, compiles and validates the snapshot *before* it
+saves anything, so a Registry that does not answer or does not validate never becomes
+configuration:
+
+```sh
+cd /path/to/your-project
+aart source add --alias <alias> --kind registry-git --location <registry-url> --ref main --default
+```
+
+**3. Find the artifact.** `list` prints the whole catalog; `search` is how you find one thing in
+it. Every word must match, so a second word narrows rather than widens, and the coordinate it
+prints is the one `install` takes:
+
+```sh
+aart marketplace search <word>
+```
+
+**4. Install it.** Every mutation is two commands on purpose. The first renders the plan and
+changes nothing; the second finalizes exactly that plan:
+
+```sh
+aart marketplace install <alias>/<kind>/<name> --profile <harness>
+aart marketplace install <alias>/<kind>/<name> --profile <harness> --yes
+```
+
+**5. Verify.** `status` reports what is installed and whether it still matches the Registry —
+`current`, `update_available`, `removed_upstream`, `source_unavailable` or `local_drift`:
+
+```sh
+aart marketplace status --profile <harness>
+```
+
+### Or do all five in the TUI
+
+Running `aart` with no subcommand on a terminal opens the human-oriented interface, which is the
+primary route for a person rather than a script:
+
+```sh
+aart
+```
+
+It adds the Source, lists and searches the catalog (press `/` and keep typing), shows the same
+reviewed plan before anything is applied, and reports the same status. It submits the identical
+canonical requests as the flags above — it is not a second command engine, so nothing is available
+in one and missing from the other.
+
+### Three names, one tool
+
+The command is **`aart`**, the package you install is **`aart-cli`**, and the import package is
 **`agent_artifacts`**. `agent-artifacts` on a package index is a **different project, belonging to
 someone else** — installing it gives you their code, not this one. The wheel also installs
 `agent-artifacts` as a second name for the `aart` command.

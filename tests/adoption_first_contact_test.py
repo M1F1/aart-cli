@@ -7,10 +7,13 @@ import unittest
 from pathlib import Path
 
 from agent_artifacts import cli, model, wizard
+from tests.source_remediation_test import _parse_failure
 
 _ROOT = Path(__file__).resolve().parents[1]
 _README = (_ROOT / "README.md").read_text(encoding="utf-8")
 _SPELLED = {9: "nine", 10: "ten", 11: "eleven", 12: "twelve"}
+#: Substituted for every `<…>` before a route command is handed to the parser.
+_PLACEHOLDER = "placeholder"
 
 
 def _command_surface() -> dict[str, frozenset[str]]:
@@ -71,6 +74,83 @@ class ReadmeCommandSurfaceTest(unittest.TestCase):
         self.assertGreater(len(surface), 5)
         self.assertIn("marketplace", surface)
         self.assertIn("install", surface["marketplace"])
+
+
+class QuickStartRouteTest(unittest.TestCase):
+    """The README's first section is a route somebody runs, so it is held as commands, not prose.
+
+    CP-26 §1.6 fixes what a new reader meets first: the shortest supported sequence from no AART
+    installation to an installed artifact they can verify. A route that reads well and does not
+    run is the failure this is written against -- the reader is at a shell, and a flag the parser
+    does not have costs them the afternoon the page was meant to save.
+    """
+
+    #: The five steps §1.6 names, as the command that performs each one.
+    ROUTE = ("source add", "marketplace search", "marketplace install", "marketplace status")
+
+    def _quick_start(self) -> str:
+        """The section, sliced at the next top-level heading rather than at a named one.
+
+        Naming the section that follows would couple this to an ordering step 14 is still free to
+        change, and would turn a reordering into a slice error instead of the ordering failure
+        above.
+        """
+
+        start = _README.index("## Install an artifact")
+        following = re.search(r"^## ", _README[start + 1 :], re.M)
+        assert following is not None, "the quick start is the last section"
+        return _README[start : start + 1 + following.start()]
+
+    def test_the_route_is_the_first_thing_after_the_title(self) -> None:
+        """Not merely present: first. A new user must not read an architecture section to reach
+        the commands, which is the ordering §1.6 fixes."""
+
+        headings = re.findall(r"^## (.+)$", _README, re.M)
+
+        self.assertEqual(headings[0], "Install an artifact")
+
+    def test_the_route_is_complete(self) -> None:
+        quick_start = self._quick_start()
+
+        for step in self.ROUTE:
+            with self.subTest(step=step):
+                self.assertIn(f"aart {step}", quick_start)
+
+    def test_the_review_step_is_shown_before_the_step_that_applies_it(self) -> None:
+        """Every mutation is two commands, and a route that showed only `--yes` would teach a
+        reader to skip the half where nothing has happened yet."""
+
+        quick_start = self._quick_start()
+        reviewed = quick_start.index("aart marketplace install")
+        finalized = quick_start.index("--yes")
+
+        self.assertLess(reviewed, finalized)
+        self.assertNotIn("--yes", quick_start[reviewed : quick_start.index("\n", reviewed)])
+
+    def test_the_tui_is_offered_as_the_route_for_a_person(self) -> None:
+        self.assertIn("aart\n", self._quick_start())
+
+    def test_every_command_in_the_route_is_one_the_parser_accepts(self) -> None:
+        """The claim worth holding. Placeholders are substituted with a token that is merely a
+        value, so what is parsed is the reader's command with their answers in it."""
+
+        commands = re.findall(r"^aart .+$", self._quick_start(), re.M)
+        self.assertGreaterEqual(len(commands), len(self.ROUTE))
+
+        for command in commands:
+            with self.subTest(command=command):
+                rejected = _parse_failure(re.sub(r"<[^>]+>", _PLACEHOLDER, command))
+
+                self.assertIsNone(rejected, rejected)
+
+    def test_the_route_names_no_address_a_fork_would_have_to_correct(self) -> None:
+        """The same rule as the install grid: nothing here can know which instance it is read on."""
+
+        quick_start = self._quick_start()
+
+        for address in ("https://github.com/", "http://", "ghe.corp", "nexus.corp"):
+            with self.subTest(address=address):
+                self.assertNotIn(address, quick_start)
 
 
 class RootDocumentAuthorityTest(unittest.TestCase):

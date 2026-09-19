@@ -1,5 +1,17 @@
 # AART Refactor Migration Status
 
+**2026-09-19, CP-26.13 complete.** The README opens with the route a new user runs: install AART,
+connect a Registry, find the artifact, install it into a harness, verify -- then the TUI as the
+route for a person. `## One contract` and the three-names warning moved below it; nothing was
+discarded, and `## Install and quick start` keeps its heading and content because step 16 still
+gates it. Everything unknown is a placeholder and the section names no host, for the reason D-277
+gives. The route is held as commands rather than prose: `QuickStartRouteTest` hands every `aart …`
+line in the section to the shipped parser with placeholders substituted, and also holds the
+ordering, the five steps, review-before-apply, and the absence of any address a fork would correct.
+Three targeted mutations each failed only the test naming its claim. 20 tests in
+`adoption_first_contact_test`, `make unit`, `make typecheck`, `make docs-check`, Ruff check and
+format are green. No broad `make quality` ran, under D-317.
+
 **2026-09-19, CP-26.12 complete.** `aart author init` now
 generates all five kinds the parser accepts: `guideline`, `hook` and `memory` joined `mcp` and
 `skill`, and `GENERATED_KINDS == tuple(sorted(get_args(AuthorKind)))` is now a test. Evidence for

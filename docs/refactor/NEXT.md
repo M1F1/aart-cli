@@ -2,54 +2,57 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–12 are **done** on `refactor/cp-26-legacy-removal`; **step 13 is next**. B-057 and B-149
+Steps 1–13 are **done** on `refactor/cp-26-legacy-removal`; **step 14 is next**. B-057 and B-149
 are both closed.
 
-`aart author init` now generates all five kinds and `aart author check` answers both halves of
-§1.4 — every discovered manifest parses, and each one compiles to the package `registry scan` would
-accept, reported as `ok  <path>  ->  <kind>/<name>@<version>`.
-`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–12 (D-321 to D-331).
+`aart author init` generates all five kinds; `aart author check` answers both halves of §1.4; and
+the README now opens with the route a new user runs rather than with the architecture.
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–13 (D-321 to D-331).
 
-### CP-26.12 evidence
+### Execute CP-26.14 next
 
-The generated hook compiles and is accepted by `package_hook`; its `run.sh` reaches disk with an
-executable bit. Each generated guideline and memory carries exactly one `.md`. Five targeted
-mutations proved those tests load-bearing. Scoped mutation of `skeleton.py` killed 771 of 1045; two
-survivors were real and became tests (nothing asserted `AuthorSkeleton.kind`/`.name`; the
-unknown-kind refusal could stop naming what this build generates), and B-155 records the rest. The
-65 author tests are green. The integration
-gate passed 398 tests in the sandbox and its one real-Keychain test passed outside it after macOS
-refused sandboxed Keychain creation. README now documents all five kinds.
+After the quick start, add a short **What AART is**: a package manager, Registry client,
+policy/review surface and installer for agent artifacts. Name the supported artifact families and
+the Source → Candidate → Registry → Marketplace distinction only as far as a new user needs it.
+This is orientation, not an architecture chapter — `## One contract` already sits directly below
+the quick start and is the natural place for it to land or be absorbed.
+
+Then the compact categorized documentation index: everyday use and lifecycle, TUI/CLI, artifact
+authoring, Registry maintenance, Enterprise setup, security/protocol contracts,
+development/testing, releases. **Every target must exist**; `make docs-check` validates links.
+Internal refactor records are not part of the public index.
+
+Step 15 moves the detailed current sections into those documents and keeps License last; step 16
+puts a gate on the install lines and the structural promises. Do not pull that work forward.
+
+`tests/adoption_first_contact_test.py::QuickStartRouteTest` slices the quick start at the **next**
+top-level heading, so inserting a section after it is safe by construction.
 
 ### What the evidence said, so it is not re-derived
 
 - A **guideline** and a **memory** payload must be **exactly one** Markdown document and nothing
   else (`native_tree._payload_shape`). That is why neither skeleton offers a dependency file: the
-  file it would name cannot be in the payload. Both notes say so rather than leaving an author to
-  find out from a refusal.
+  file it would name cannot be in the payload.
 - A **hook**'s `hook.json` is **authored**, unlike `mcp.json`, which `parse_author_manifest`
   reserves for the compiler. `package_hook` requires non-empty `name`, `command`, `event` and
   `matcher`, `command` to begin `${SCRIPT_DIR}/`, and the script to be executable. **Compilation
-  does not check the executable bit; installation does**, which is why `PayloadFile` carries it.
-- `launch` on a guideline is refused by compilation (`launch.entrypoint run.py is outside the
-  declared payload`), but `transport` and `runtime` are accepted on every kind — so all three are
-  named in a `#?` note rather than generated.
+  does not check the executable bit; installation does** (D-331).
+- `launch` on a guideline is refused by compilation; `transport` and `runtime` are accepted on
+  every kind — so all three are named in a `#?` note rather than generated.
 
-### Execute CP-26.13 next
+### Two traps worth carrying
 
-Make the README open, immediately after the title and at most one outcome sentence, with the fastest
-complete normal-user route: install AART, connect and synchronize a Registry, find or select an
-artifact in Marketplace, install it into a selected harness, and verify the result. The TUI is the
-primary route; a compact deterministic CLI equivalent may follow. Keep unknown repository,
-Registry, artifact and harness values as explicit placeholders. Step 14 owns the short product
-explanation and documentation index, so do not broaden this task into the later README moves.
+- A targeted mutation that does not change a file's length leaves a `__pycache__` entry CPython
+  considers current. Clear `__pycache__` after reverting one (CP-26.10 record).
+- Never run `ruff format .` repo-wide: it rewrites Python code blocks inside Markdown, including
+  the Product Specification. Scope it to `agent_artifacts tests scripts` (B-153).
 
-Three open findings:
+Four open findings:
 
 - **B-151** — seven shipped documents still describe `aart.lock.json` and `aart.index.json` as files
   AART writes. Not gated by `make docs-check`. A precondition of CP-26.21.
 - **B-154** — `aart author check` reports a Collection manifest as `skip` rather than checking it.
-  Noncritical; `registry scan` passes over one too.
+- **B-155** — 274 mutants survive in `authoring/skeleton.py`, almost all in generated prose.
 - **B-150** — the owner's installation-identity principle: an installation is
   (artifact, harness, user-or-project scope), and no artifact shares global state with any other.
   Input to CP-26 task 19, and to the Product Specification before it.
