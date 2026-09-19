@@ -4,6 +4,33 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-19, CP-26.19 in progress — the managed tree has a measured base (D-359).**
+`MANAGED_TREE_TARGETS` in `domain/harness.py` records which directory of each harness's own AART
+may keep an installation's payload, launcher, runtime and configuration in: `.claude`, `.tabnine`,
+`.codex`, `.opencode` and `.config/opencode`, one row for every (harness, scope) pair any other
+measured table in that module names. `domain/installation_tree.py` has held the §169.3 policy
+against a `harness_root` argument since 18a precisely so the rule could be written without
+inventing a harness fact (D-346); this is the fact, and it is the prerequisite for wiring the
+module.
+
+Two claims are held by tests rather than by prose. No row names a directory nobody measured --
+each managed root is checked, over the tables themselves, to be a directory some existing measured
+target for the *same* harness and scope already sits in. And every harness this build can place
+into has a row, because a pair another table names and this one does not would be an installation
+with nowhere to keep half of itself. Tabnine's row is `.tabnine` at both scopes rather than
+`.tabnine/agent`, which is that build's agent-settings directory and is evidenced at project scope
+only.
+
+Evidence: `make unit` passes; lint, format-check, typecheck, docs-check and secret-shape-check pass.
+Three targeted semantic mutations were red on their named tests and restored -- narrowing Tabnine's
+row to a directory nothing evidences at user scope, dropping the Codex project row, and pointing
+OpenCode's user row at `.opencode`. A fourth survived and was read as the finding it is: the
+validator's trailing-separator guard was already covered by its empty-path-part check, so the dead
+branch was removed rather than given a test. Scoped mutmut over `domain/harness.py` killed every
+mutant of the new code; the survivors elsewhere in that module are outside this slice and are
+pre-existing. Nothing calls `installation_tree_root` yet, so it stays in
+`DELIBERATE_NON_RUNTIME_MODULES`. CP-26 remains 19/23 with step 19 in progress.
+
 **2026-09-19, CP-26.19 in progress — the harness reads the installation's name (D-358).**
 `installed_name_for(coordinate, scope)` reaches placement, so a delivered Skill lands at
 `.claude/skills/code-review-company-project` and the same artifact at user scope is a second

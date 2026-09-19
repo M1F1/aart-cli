@@ -134,10 +134,42 @@ the projected digest and the status view's lookup. Scoped mutmut over `skill_pro
 were written with `\n` into documents whose own rows end `\r\n`. The rest are message-prose
 mutants (D-134).
 
+**The managed tree now has a base (D-359).** `MANAGED_TREE_TARGETS` in `domain/harness.py` says
+which directory of each harness's own an installation may keep its private files in -- `.claude`,
+`.tabnine`, `.codex`, `.opencode`, `.config/opencode` -- one row for every (harness, scope) pair any
+other measured table names. No row is a new observation, and a test checks that over the tables
+themselves. `installation_tree_root` can therefore be composed against a real directory instead of
+an argument; the module is still in `DELIBERATE_NON_RUNTIME_MODULES` because nothing calls it yet.
+
 **The next action.** Replace the remaining shared runtime/payload/receipt placement with one
 harness-owned installation tree and one lifecycle record per owner, which is what D-354's temporary
 refusal for different ordinary values is waiting on; do not turn it back into copying or sharing.
-`domain/installation_tree.py` is still in `DELIBERATE_NON_RUNTIME_MODULES` and is the unwired half.
+
+*Evidence from a probe, so the next agent does not re-derive it.* Splitting `placement_for` per
+profile inside `prepare_configured_installation_draft` produced seven failures and three structural
+blockers, and they are coupled -- there is no smaller honest order than doing them together:
+
+1. `ConfiguredInstallationDraft.__post_init__` asserts
+   `tuple(item.artifact for item in self.placements) == self.selection.artifacts`, which encodes
+   one placement per artifact. It has to become one placement per (artifact, harness), with the
+   artifacts still covering the selection.
+2. `_declared_narrowing` in `io/artifact_placement.py` refuses a single non-declared profile passed
+   alone ("declares support for claude, opencode, tabnine, and this machine measured none of
+   them"). Narrowing has to happen once for the whole selection, before the per-harness loop, and
+   the three "installs nowhere" refusals (`registers with none of`, `is read by none of`,
+   `merges into no file of`) have to move with it: per harness the answer is "this one skips",
+   and only the whole operation can say "nowhere at all".
+3. `LocalReceiptStore.path_for(coordinate)` digests the coordinate alone, so N placements of one
+   coordinate overwrite each other. The key has to be the `InstallationOwner`. The store itself is
+   only about ten call sites (`installed_setup.py:57`, `configured_setup.py:289/791/794`, three
+   `forget_installation` and two `record_installation` in `application/receipt_recording.py`), but
+   the owner is not in scope at any of them: it has to ride on the receipt, which means
+   `PlacedArtifactReceipt` / `InstallationReceipt` carry the owner they belong to, and that is only
+   well-defined once (1) has split the placements.
+
+`prepared_placements`' D-354 refusal disappears as a consequence rather than being removed: once a
+placement is one harness's, each harness gets its own launcher with its own values and there is
+nothing left to compose across targets.
 
 
 Naming is included in this task (D-349, §169.7, INV-253; issues #26/#28). Harness-visible names
