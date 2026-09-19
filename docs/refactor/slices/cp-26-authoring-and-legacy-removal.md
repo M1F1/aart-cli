@@ -1294,6 +1294,31 @@ as `TypeError`, which is not a refusal), and the rest are message arguments, an 
 `UTF-8`, mutmut's own `X` padding inside the newline set, and the `>`/`>=` boundary of the length
 refusal, which no test pins deliberately.
 
+**Done so far — the name the harness shows, and the collision it must not resolve by itself.**
+`installed_name()` projects the same owner to §169.7's harness-visible spelling: artifact name,
+Registry alias and scope joined once, `github-company-project` and `github-company-user`. The
+version is absent deliberately -- a name that moved with every update would rename a directory the
+harness had already discovered -- and so are the harness and the root, because the name lives inside
+that harness's own root and a readable name is not an identity. `credential_address` remains the
+thing that carries the complete owner. The composed name is held to the published skill contract
+(lowercase alphanumeric, single hyphens, 1-64 characters), which OpenCode, Agent Skills and Tabnine
+CLI all discover, so one bound holds for every adapter instead of each carrying its own.
+
+`installed_names()` names a whole operation at once because the join is ambiguous by construction:
+the separator between labels is also legal inside them, so the split can move. `github` from
+`company-user` and `github-company` from `user` both spell `github-company-user-project`. Neither
+name is wrong and neither can be disambiguated silently -- a counter would depend on encounter order
+and truncation is worse -- so the set is refused by name before any directory exists to overwrite.
+An owner listed twice is not a collision with itself.
+
+Evidence: four targeted semantic mutations, each red then restored -- dropping the scope from the
+join, removing the length bound so an 81-character name is accepted, accepting a collision so the
+last owner wins, and counting a repeated owner twice. Each turned red on the test that names it.
+Scoped `make mutants` over the module surfaced two survivors inside these claims that were real and
+are now held: the `>`/`>=` boundary of the name length, where §169.7 makes exactly 64 legal, and a
+refusal losing its remediation without any test noticing. The remaining survivors are message prose
+and the credential service's own length boundary, which no test pins deliberately.
+
 Property-test complete owner keys, composed-name validation and provider-address stability and
 separation across generated owners/input ids. Use existing focused tests where
 possible; record targeted semantic mutation evidence for the material isolation claims and scoped

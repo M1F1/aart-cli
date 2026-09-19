@@ -27,11 +27,17 @@ from aart_cli.domain.identifiers import (
 )
 from aart_cli.domain.installation_owner import (
     CREDENTIAL_SERVICE_PREFIX,
+    INSTALLED_NAME_COLLISION,
+    INSTALLED_NAME_INVALID,
     MAX_CREDENTIAL_SERVICE_LENGTH,
+    MAX_INSTALLED_NAME_LENGTH,
     InstallationOwner,
     credential_address,
     installation_owner,
+    installed_name,
+    installed_names,
 )
+from aart_cli.domain.result import Err, Ok
 
 TOKEN = InputId("api-token")
 
@@ -248,6 +254,145 @@ class CredentialAddressPropertyTest(unittest.TestCase):
 
         self.assertLessEqual(len(address.service), MAX_CREDENTIAL_SERVICE_LENGTH)
         self.assertNotIn(owner.root, address.service)
+
+
+class InstalledNameTest(unittest.TestCase):
+    """§169.7: what the harness shows is the artifact, the alias and the scope, never the version."""
+
+    def test_the_portable_spelling_is_the_three_labels_joined_once(self) -> None:
+        named = installed_name(_owner(artifact=ArtifactIdentity("skill", "github")))
+
+        assert isinstance(named, Ok), named
+        self.assertEqual("github-company-project", named.value)
+
+    def test_user_scope_is_spelled_out_rather_than_left_off(self) -> None:
+        named = installed_name(
+            _owner(artifact=ArtifactIdentity("skill", "github"), scope=Scope.USER, root="/users/a")
+        )
+
+        assert isinstance(named, Ok), named
+        self.assertEqual("github-company-user", named.value)
+
+    def test_the_version_never_reaches_the_name(self) -> None:
+        owner = installation_owner(
+            ArtifactCoordinate(
+                SourceAlias("company"), ArtifactIdentity("skill", "github"), "9.9.9"
+            ),
+            scope=Scope.PROJECT,
+            root="/work/project",
+            harness="opencode",
+        )
+
+        named = installed_name(owner)
+
+        assert isinstance(named, Ok), named
+        self.assertNotIn("9", named.value)
+
+    def test_the_harness_and_root_are_not_in_the_visible_name(self) -> None:
+        """A readable name is not an identity; §169.4's owner stays the authority."""
+
+        first = installed_name(_owner(artifact=ArtifactIdentity("skill", "github")))
+        second = installed_name(
+            _owner(artifact=ArtifactIdentity("skill", "github"), harness="tabnine")
+        )
+
+        assert isinstance(first, Ok) and isinstance(second, Ok)
+        self.assertEqual(first.value, second.value)
+
+    def test_a_name_the_harness_contract_would_reject_is_refused(self) -> None:
+        for owner in (
+            _owner(artifact=ArtifactIdentity("skill", "a" + "-b" * 40)),
+            _owner(source=SourceAlias("a" + "-b" * 40)),
+        ):
+            with self.subTest(owner=owner):
+                refused = installed_name(owner)
+                self.assertIsInstance(refused, Err, refused)
+                diagnostic = refused.diagnostics[0]
+                self.assertEqual(diagnostic.code.value, INSTALLED_NAME_INVALID.value)
+                self.assertTrue(diagnostic.remediation, "a refusal must say what to do instead")
+
+    def test_the_longest_name_the_contract_allows_is_still_a_name(self) -> None:
+        """1-64 characters, so 64 is accepted and 65 is not. The bound is the contract's, exactly."""
+
+        fixed = len("-company-project")
+        longest = _owner(
+            artifact=ArtifactIdentity("skill", "a" * (MAX_INSTALLED_NAME_LENGTH - fixed))
+        )
+        over = _owner(
+            artifact=ArtifactIdentity("skill", "a" * (MAX_INSTALLED_NAME_LENGTH - fixed + 1))
+        )
+
+        named = installed_name(longest)
+
+        assert isinstance(named, Ok), named
+        self.assertEqual(MAX_INSTALLED_NAME_LENGTH, len(named.value))
+        self.assertIsInstance(installed_name(over), Err)
+
+    def test_every_composed_name_matches_the_published_skill_grammar(self) -> None:
+        named = installed_name(_owner(artifact=ArtifactIdentity("skill", "github-mcp")))
+
+        assert isinstance(named, Ok), named
+        self.assertRegex(named.value, r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+        self.assertLessEqual(len(named.value), MAX_INSTALLED_NAME_LENGTH)
+
+
+class InstalledNameCollisionTest(unittest.TestCase):
+    """The join is ambiguous by construction, so the set is checked before anything is written."""
+
+    def test_two_owners_that_would_spell_the_same_name_are_refused_together(self) -> None:
+        """The hyphen that joins the labels is also a hyphen inside them, so the split can move."""
+
+        plain = _owner(
+            source=SourceAlias("company-user"), artifact=ArtifactIdentity("skill", "github")
+        )
+        hyphenated = _owner(
+            source=SourceAlias("user"), artifact=ArtifactIdentity("skill", "github-company")
+        )
+
+        refused = installed_names((plain, hyphenated))
+
+        self.assertIsInstance(refused, Err, refused)
+        diagnostic = refused.diagnostics[0]
+        self.assertEqual(diagnostic.code.value, INSTALLED_NAME_COLLISION.value)
+        self.assertIn("github-company-user-project", diagnostic.message)
+        self.assertTrue(diagnostic.remediation)
+
+    def test_distinct_owners_with_distinct_names_are_all_returned(self) -> None:
+        owners = (
+            _owner(artifact=ArtifactIdentity("skill", "github")),
+            _owner(artifact=ArtifactIdentity("skill", "gitlab")),
+            _owner(artifact=ArtifactIdentity("skill", "github"), source=SourceAlias("other")),
+        )
+
+        named = installed_names(owners)
+
+        assert isinstance(named, Ok), named
+        self.assertEqual(
+            dict(named.value),
+            {
+                owners[0]: "github-company-project",
+                owners[1]: "gitlab-company-project",
+                owners[2]: "github-other-project",
+            },
+        )
+
+    def test_one_owner_named_twice_is_not_a_collision_with_itself(self) -> None:
+        owner = _owner(artifact=ArtifactIdentity("skill", "github"))
+
+        named = installed_names((owner, owner))
+
+        assert isinstance(named, Ok), named
+        self.assertEqual(1, len(named.value))
+
+    def test_a_name_that_cannot_be_composed_refuses_the_whole_set(self) -> None:
+        refused = installed_names(
+            (
+                _owner(artifact=ArtifactIdentity("skill", "github")),
+                _owner(artifact=ArtifactIdentity("skill", "a" + "-b" * 40)),
+            )
+        )
+
+        self.assertIsInstance(refused, Err, refused)
 
 
 if __name__ == "__main__":

@@ -27,19 +27,38 @@ from __future__ import annotations
 import hashlib
 import posixpath
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from .credentials import CredentialProviderRef
+from .diagnostics import Diagnostic, DiagnosticCode, Severity
 from .harness import Scope
 from .identifiers import ArtifactCoordinate, ArtifactIdentity, InputId, SourceAlias
+from .result import Err, Ok, Result
 
 __all__ = [
     "CREDENTIAL_SERVICE_PREFIX",
+    "INSTALLED_NAME_COLLISION",
+    "INSTALLED_NAME_INVALID",
     "MAX_CREDENTIAL_SERVICE_LENGTH",
+    "MAX_INSTALLED_NAME_LENGTH",
     "InstallationOwner",
     "credential_address",
     "installation_owner",
+    "installed_name",
+    "installed_names",
 ]
+
+#: The composed name could not be a name the harness would discover. Refused rather than shortened.
+INSTALLED_NAME_INVALID = DiagnosticCode("installed-name-invalid")
+#: Two owners in one operation spell the same installed name. Refused before anything is written.
+INSTALLED_NAME_COLLISION = DiagnosticCode("installed-name-collision")
+
+#: The published skill contract: lowercase alphanumeric with single hyphens, 1-64 characters, and
+#: a directory whose name matches. OpenCode and the Agent Skills specification both say so, and
+#: Tabnine CLI discovers the same shape, so one bound holds for every adapter rather than each
+#: carrying its own.
+MAX_INSTALLED_NAME_LENGTH = 64
 
 #: The product's own namespace in somebody else's credential store, so an operator reading a
 #: keychain can tell at a glance which items are not their own.
@@ -180,6 +199,69 @@ def credential_address(
             f"credential service exceeds {MAX_CREDENTIAL_SERVICE_LENGTH} characters: {len(service)}"
         )
     return CredentialProviderRef(provider, service, input_id.value)
+
+
+def _refuse(code: DiagnosticCode, message: str, *remediation: str) -> Err:
+    return Err((Diagnostic(code, Severity.ERROR, message, remediation=remediation),))
+
+
+def installed_name(owner: InstallationOwner) -> Result[str]:
+    """What the harness shows for this installation: artifact, alias and scope, joined once.
+
+    The version is absent on purpose. A harness-visible name is what a person reads in their own
+    directory listing, and one that moved with every update would rename a directory the harness
+    had already discovered. The version stays in AART's own views and in the receipt.
+
+    The harness is not in it either, because the name lives *inside* that harness's own root, and
+    the root is not in it because a name is not an identity -- §169.4's owner remains the authority
+    and `credential_address` is what carries it.
+    """
+
+    if not isinstance(owner, InstallationOwner):
+        raise ValueError("an installed name needs an installation owner")
+    name = "-".join((owner.artifact.name, owner.source.value, owner.scope.value))
+    if len(name) > MAX_INSTALLED_NAME_LENGTH or _SLUG_RE.fullmatch(name) is None:
+        return _refuse(
+            INSTALLED_NAME_INVALID,
+            f"{owner} cannot be installed as {name!r}: a harness name is lowercase alphanumeric "
+            f"with single hyphens and at most {MAX_INSTALLED_NAME_LENGTH} characters",
+            "Shorten the artifact name or connect the Registry under a shorter alias.",
+        )
+    return Ok(name)
+
+
+def installed_names(
+    owners: Iterable[InstallationOwner],
+) -> Result[tuple[tuple[InstallationOwner, str], ...]]:
+    """Name every owner in one operation, refusing the set if two of them spell the same thing.
+
+    The join is ambiguous by construction: the separator between the labels is also a character
+    allowed inside them, so the split can move. `github` from `company-user` and `github-company`
+    from `user` both spell `github-company-user` at project scope. Nothing about either name is
+    wrong, and neither can be silently disambiguated -- a counter would depend on which was
+    encountered first, and truncation is worse. So the whole operation is refused by name, before
+    a directory exists to overwrite.
+    """
+
+    by_name: dict[str, InstallationOwner] = {}
+    named: list[tuple[InstallationOwner, str]] = []
+    for owner in owners:
+        composed = installed_name(owner)
+        if isinstance(composed, Err):
+            return composed
+        name = composed.value
+        claimed = by_name.get(name)
+        if claimed is not None and claimed != owner:
+            return _refuse(
+                INSTALLED_NAME_COLLISION,
+                f"{claimed} and {owner} would both be installed as {name!r}",
+                "Connect one of them under a different Registry alias, "
+                "or install them into different scopes.",
+            )
+        if claimed is None:
+            by_name[name] = owner
+            named.append((owner, name))
+    return Ok(tuple(named))
 
 
 def _root_discriminator(root: str) -> str:

@@ -68,10 +68,14 @@ nothing else, because step 15 moved the detail into eight linked documents.
 
 ### Execute CP-26.19 next — it is already underway
 
-**On the branch.** `domain/installation_owner.py` holds the complete owner and
-`credential_address()` derives the per-owner item address (D-352, slice §"Done so far — who an
-installation is"). It is deliberately not reachable from the runtime yet and is recorded in
-`DELIBERATE_NON_RUNTIME_MODULES` with the reason.
+**On the branch.** `domain/installation_owner.py` holds the complete owner,
+`credential_address()` derives the per-owner item address (D-352), and `installed_name()` /
+`installed_names()` project that owner to §169.7's harness-visible name and refuse an ambiguous
+set before anything is written (slice §"Done so far — who an installation is" and §"Done so far —
+the name the harness shows"). The module is deliberately not reachable from the runtime yet and is
+recorded in `DELIBERATE_NON_RUNTIME_MODULES` with the reason. What remains in the naming half is
+applying that projection at the adapters: installed skill directories and their frontmatter, and
+MCP registration keys, with the collision check run before provider mutation rather than after.
 
 **The next increment, and the fact that decides it.**
 `application/installation_inputs.py` composes `InstallationInputField` as "one semantic form field

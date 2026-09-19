@@ -92,6 +92,26 @@ red then restored, and scoped mutmut killing 44 of 62 — one survivor was a rea
 root returning `TypeError` instead of a refusal, and is now held. `lint`, `format-check`,
 `typecheck`, `docs-check` and `validate` green. No broad `make quality` (D-317).
 
+**2026-09-19, CP-26.19 in progress — the name the harness shows.** `installed_name()` projects the
+same owner to §169.7's harness-visible spelling: artifact name, Registry alias and scope joined
+once — `github-company-project`, `github-company-user`. No version, because a name that moved with
+every update would rename a directory the harness had already discovered; no harness and no root,
+because the name lives inside that harness's root and a readable name is not an identity, which is
+what `credential_address` carries. The composed name is held to the published skill contract that
+OpenCode, Agent Skills and Tabnine CLI all discover — lowercase alphanumeric, single hyphens, 1-64
+characters — so one bound serves every adapter. `installed_names()` names a whole operation at once
+because the join is ambiguous by construction: the separator is legal inside the labels, so `github`
+from `company-user` and `github-company` from `user` both spell `github-company-user-project`.
+Neither is wrong and neither can be disambiguated silently, so the set is refused before a directory
+exists to overwrite; an owner listed twice is not a collision with itself. Evidence: 26 tests, four
+targeted semantic mutations each red then restored (scope dropped from the join, the length bound
+removed, a collision accepted, a repeated owner counted twice), and scoped mutmut, whose two real
+survivors inside these claims are now held — the `>`/`>=` boundary where §169.7 makes exactly 64
+legal, and a refusal that could lose its remediation unnoticed. `lint`, `format-check`, `typecheck`,
+`docs-check` and `validate` green; focused tests across the credential and input seam green. No
+broad `make quality` (D-317). Still not runtime-reachable: the per-owner split of
+`application/installation_inputs.py` is what removes the exception, and it is the next commit.
+
 **2026-09-19, CP-26.18a in progress — the filesystem's names, and one portable home.** Two more
 commits on `refactor/cp-26-legacy-removal`. `0fadd69` moved every name the filesystem sees: author
 manifests `aart-cli.yaml`/`aart-cli.json`, generated `aart-cli-registry.json`,
