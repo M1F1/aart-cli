@@ -24,12 +24,14 @@ from agent_artifacts.authoring.skeleton import (
     PROSE_PREFIX,
     author_skeleton,
 )
+from agent_artifacts.domain.artifacts import ArtifactKind
 from agent_artifacts.domain.identifiers import SourceAlias
 from agent_artifacts.domain.result import Err, Ok
 from agent_artifacts.protocol.authoring import (
     AuthorKind,
     DiscoveredAuthorManifest,
     compile_author_snapshot,
+    package_hook,
     parse_author_manifest,
 )
 from agent_artifacts.protocol.paths import parse_relative_path
@@ -289,6 +291,18 @@ class ShapeTest(unittest.TestCase):
         self.assertIsNotNone(parsed.value.entrypoint)
         self.assertIn(str(parsed.value.entrypoint), [file.path for file in skeleton.payload])
 
+    def test_the_skeleton_reports_the_kind_and_name_it_was_asked_for(self) -> None:
+        """What the writer names its files and the command prints comes from these two fields.
+
+        Found by mutation: either could be replaced with `None` and every other test still passed,
+        because they all read the manifest text rather than the value carrying it.
+        """
+
+        for kind, skeleton in _every():
+            with self.subTest(kind=kind):
+                self.assertEqual(skeleton.kind, kind)
+                self.assertEqual(skeleton.name, _name_for(kind))
+
     def test_the_name_the_caller_gave_is_the_artifact_name(self) -> None:
         parsed = _parsed(_skeleton(name="atlassian").manifest)
         assert isinstance(parsed, Ok), parsed
@@ -335,6 +349,32 @@ class SkillTest(unittest.TestCase):
         self.assertIsNone(compiled.package.protocol)
 
 
+class DocumentArtifactTest(unittest.TestCase):
+    """Guidelines and memories are installed as one Markdown document."""
+
+    def test_each_document_kind_carries_exactly_one_markdown_payload(self) -> None:
+        for kind in ("guideline", "memory"):
+            with self.subTest(kind=kind):
+                payload = _skeleton(kind).payload
+
+                self.assertEqual(len(payload), 1)
+                self.assertTrue(payload[0].path.endswith(".md"))
+
+
+class HookTest(unittest.TestCase):
+    """The generated declaration and script form an installable hook package."""
+
+    def test_the_generated_hook_is_accepted_by_the_install_time_reader(self) -> None:
+        compiled = CompilationTest()._compiled("hook")
+
+        packaged = package_hook(ArtifactKind.HOOK, compiled.canonical_entries)
+
+        assert isinstance(packaged, Ok), packaged
+        self.assertEqual(packaged.value.event, "PreToolUse")
+        self.assertEqual(packaged.value.matcher, "Bash")
+        self.assertEqual(packaged.value.command, "run.sh")
+
+
 class RefusalTest(unittest.TestCase):
     def test_this_build_generates_every_kind_the_parser_accepts(self) -> None:
         """The refusal path is still reachable; there is simply no accepted kind left in it.
@@ -350,6 +390,20 @@ class RefusalTest(unittest.TestCase):
 
         assert isinstance(result, Err), result
         self.assertIn("plugin", result.diagnostics[0].message)
+
+    def test_the_refusal_names_the_kinds_this_build_does_generate(self) -> None:
+        """Naming the kind that failed without naming the alternatives is half an answer.
+
+        Found by mutation: the list could be replaced with `None` and nothing noticed, because the
+        only assertion on this message was about the rejected kind.
+        """
+
+        result = author_skeleton("plugin", _NAME)
+
+        assert isinstance(result, Err), result
+        for kind in GENERATED_KINDS:
+            with self.subTest(kind=kind):
+                self.assertIn(kind, result.diagnostics[0].message)
 
     def test_a_name_that_is_not_a_slug_is_refused_before_anything_is_written(self) -> None:
         result = author_skeleton("mcp", "Not A Slug")

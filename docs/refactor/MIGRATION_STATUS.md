@@ -1,6 +1,6 @@
 # AART Refactor Migration Status
 
-**2026-09-19, CP-26.12 IN FLIGHT — code green, slice NOT verified.** `aart author init` now
+**2026-09-19, CP-26.12 complete.** `aart author init` now
 generates all five kinds the parser accepts: `guideline`, `hook` and `memory` joined `mcp` and
 `skill`, and `GENERATED_KINDS == tuple(sorted(get_args(AuthorKind)))` is now a test. Evidence for
 each shape was taken from the compiler rather than chosen: `native_tree` requires a guideline and a
@@ -10,14 +10,16 @@ skeleton can offer a dependency file and the closing note says so; a hook's `hoo
 to begin `${SCRIPT_DIR}/` and the file it names to be in the payload **and executable**.
 Compilation does not catch a non-executable script -- installation does -- so `AuthorSkeleton`
 payload entries became a `PayloadFile` value carrying an `executable` flag and
-`write_author_skeleton` chmods it.
-
-**What is still owed before CP-26.12 may be called done:** the targeted semantic mutations and
-their record; hook-, guideline- and memory-specific tests (that `hook.json` is what `package_hook`
-accepts, that the script is written executable, that a document kind's payload is one `.md`);
-`make mutants` on `skeleton.py`; `make integration`; the README; the slice record; and
-`handoff-plan done CP-26.12`. 60 tests in the three author modules, `make unit`, `make typecheck`,
-Ruff check and format are green as committed. No broad `make quality` ran, under D-317.
+`write_author_skeleton` chmods it. Three kind-specific tests now hold those downstream shapes, and
+five targeted semantic mutations each failed the tests naming their claim. Scoped mutation of
+`skeleton.py` killed 771 of 1045; of the 274 survivors, 245 are case flips on generated prose and
+the rest are about where a disabled block is *placed*, which the parsed-document oracles cannot
+see (B-155). Two survivors were real and became tests rather than backlog: nothing asserted
+`AuthorSkeleton.kind`/`.name`, and the refusal for an unknown kind could stop naming the kinds this
+build does generate. The 65 tests in the three author modules are green. `make integration` passed 398 tests in the
+sandbox; its sole macOS Keychain test was blocked there by `security create-keychain` exit 206 and
+passed when rerun outside the sandbox. The README now names all five generated kinds. No broad
+`make quality` ran, under D-317.
 
 **2026-09-19, CP-26.11 complete.** `aart author check` now answers §1.4's second claim: every
 manifest that parses is compiled through `compile_author_manifests` and the check prints the

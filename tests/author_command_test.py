@@ -94,6 +94,12 @@ class InitTest(unittest.TestCase):
             for file in skeleton.payload:
                 self.assertEqual((root / file.path).read_text(encoding="utf-8"), file.content)
 
+    def test_a_hook_script_is_written_executable(self) -> None:
+        with _workspace() as root:
+            self.assertEqual(_init(root, kind="hook", name="guard-bash"), OK)
+
+            self.assertTrue(os.access(root / "run.sh", os.X_OK))
+
     def test_the_written_manifest_parses(self) -> None:
         with _workspace() as root:
             _init(root)

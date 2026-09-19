@@ -776,6 +776,53 @@ pin in a test.
 **Evidence.** 17 tests in `author_check_test`, `make unit`, `make integration`, `make typecheck`,
 `make docs-check`, Ruff check and format. No broad `make quality` ran, under D-317.
 
+### Step 12 — the generator covers every kind the parser accepts (2026-09-19)
+
+`guideline`, `hook` and `memory` joined `mcp` and `skill`, and `GENERATED_KINDS ==
+tuple(sorted(get_args(AuthorKind)))` is now a test: a kind the parser accepts with no blueprint
+behind it would be a `--kind` the CLI offers and the generator refuses, and this turns red the day
+that happens.
+
+**Each shape was taken from the compiler, not chosen.** `native_tree` refuses a `guideline` or a
+`memory` package whose payload is not *exactly one* Markdown document and nothing else. That is why
+neither skeleton can offer a dependency file: the file such a descriptor would name could not be in
+the payload at all. The closing note says so, rather than leaving an author to discover it from a
+promotion refusal. A `hook`'s `hook.json` is *authored*, unlike `mcp.json`, which
+`parse_author_manifest` reserves for the compiler; `package_hook` requires non-empty `name`,
+`command`, `event` and `matcher`, requires `command` to begin `${SCRIPT_DIR}/`, and requires the
+file it names to be in the payload **and executable**.
+
+**The executable bit is why a payload entry became a value.** Compilation does *not* check it --
+probed directly, a hook with a non-executable script compiles and would be promoted -- and
+`package_hook` refuses at install time with "the harness could not run it". An `init` that wrote
+`run.sh` unexecutable would therefore hand an author a workspace that compiles, promotes, and then
+refuses to install, which is exactly the failure §1.3 exists to prevent. So `AuthorSkeleton.payload`
+is now a `tuple[PayloadFile, ...]` carrying `executable`, and `write_author_skeleton` chmods it
+(D-331).
+
+**`launch` on a document kind is refused; `transport` and `runtime` are not.** Probed: a guideline
+declaring a launch fails compilation with `launch.entrypoint run.py is outside the declared
+payload`, because the payload is one Markdown file. `transport` and `runtime` are accepted on every
+kind. All three are therefore named in a `#?` note rather than generated, which keeps §1.5's
+requirement intact.
+
+**Targeted semantic mutations (five).** Writing the hook script non-executable failed both the
+install-time reader test and the on-disk test; giving a memory a second payload file failed the
+one-document, compilation and payload-matches-`include` tests; a hook `command` that does not name
+the delivered script failed the install-time reader test; returning the wrong `kind` on the
+skeleton failed the new identity test for four kinds; and emptying the list of generated kinds in
+the refusal failed the new refusal test. All restored green.
+
+**`make mutants` findings, acted on.** Scoped mutation of `skeleton.py` killed 771 of 1045; 274
+survived, 29 of them in the generator's logic and the rest in literal template text. Two were real
+unheld claims and are now tests rather than backlog: nothing asserted `AuthorSkeleton.kind` or
+`.name` (every other test read the manifest text instead of the value carrying it), and the
+ungenerated-kind refusal could stop naming the kinds it *does* generate unnoticed. The remainder is
+B-155.
+
+**Evidence.** 65 tests across the three author modules, `make unit`, `make integration`, `make
+typecheck`, `make docs-check`, Ruff check and format. No broad `make quality` ran, under D-317.
+
 ### Step 17 — no maintainer identity as a default
 
 The owner explicitly requires generated registries and operational examples to carry no default

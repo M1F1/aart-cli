@@ -3939,3 +3939,28 @@ Collection refusal to its path needs either a per-manifest variant or attributio
 **Noncritical.** No Product Specification invariant, acceptance test or security boundary depends
 on it, and no CP-26 slice needs it. It becomes critical only if a mandatory acceptance test
 requires a Collection verdict from `author check`.
+
+## B-155 — 274 mutants survive in `authoring/skeleton.py`, almost all in template text
+
+**Found:** 2026-09-19, CP-26.12.
+
+`make mutants ONLY=agent_artifacts/authoring/skeleton.py TESTS="tests/author_skeleton_test.py"`
+kills 771 of 1045. Of the 274 survivors, 245 are in the blueprint, payload and guidance builders --
+case flips and `"XX...XX"` wrappers on the prose a skeleton carries, plus the placeholder harness
+and platform names in `compatibility`. The repository does not pin generated prose in a test, so
+these are noise by design.
+
+The remaining 29 are in `_anchored`, `author_skeleton`, `_disabled` and `_live_document`, and are
+about **where** a disabled block is placed rather than whether it is correct: the anti-drift and
+uncommenting oracles compare parsed documents, and `JsonObject` sorts its entries, so a block that
+moves from above the next live key to the end of its mapping produces the same document. Several
+are equivalent mutants outright (`>` to `>=` against a key that is by construction absent from the
+live set; `continue` to `break` on a branch no current blueprint reaches).
+
+Two survivors *were* real and are already closed as tests rather than left here: nothing asserted
+`AuthorSkeleton.kind`/`.name`, and the ungenerated-kind refusal could stop naming the kinds it does
+generate.
+
+**Noncritical.** Closing the rest would mean asserting generated prose, which the repository
+deliberately does not do. It becomes critical only if the *placement* of a disabled block becomes a
+contract -- for instance if a shipped example were diffed against a generated one byte for byte.

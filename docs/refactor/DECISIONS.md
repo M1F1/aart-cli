@@ -8193,3 +8193,24 @@ synthetic `ConfiguredSource`. The command holds no walk of its own.
 change to snapshot limits reaches both at once. The cost is that the author's root is described as
 a local source for the duration of one read, which is a value built in memory and never written to
 configuration.
+
+## D-331
+
+**A generated payload entry carries its executable bit.**
+
+**Context.** `aart author init --kind hook` writes a `run.sh` that the generated `hook.json` names
+as `${SCRIPT_DIR}/run.sh`. `package_hook` refuses a package whose script is not executable -- "the
+harness could not run it" -- and that check happens at install time. Compilation does not perform
+it: probed directly, a hook with an unexecutable script compiles cleanly and would be promoted into
+a Registry. An `init` that wrote the file without the bit would hand an author a workspace that
+passes `author check`, passes `registry scan`, and then fails on somebody else's machine.
+
+**Decision.** `AuthorSkeleton.payload` and `_Blueprint.payload` hold `PayloadFile(path, content,
+executable)` rather than a `(path, content)` pair, and `write_author_skeleton` chmods the file when
+the flag is set. The alternative -- telling the author in a comment to run `chmod +x` -- moves a
+requirement AART can satisfy into a step an author can skip.
+
+**Consequence.** One more field on a value that several tests unpack, which is why the change
+touched them. The writer now makes a mode decision, which is a filesystem concern and belongs in
+`io/` where it now lives; the generator only declares the intent. No other kind sets the flag
+today.

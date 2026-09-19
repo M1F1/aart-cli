@@ -334,15 +334,19 @@ a schema. A payload skeleton is written beside it, and nothing already in the di
 replaced.
 
 ```sh
+aart author init --kind guideline --name commit-style --into ./commit-style
+aart author init --kind hook --name guard-bash --into ./guard-bash
 aart author init --kind mcp --name github-mcp --into ./github-mcp
+aart author init --kind memory --name team-context --into ./team-context
 aart author init --kind skill --name code-review --into ./code-review
 aart author check --source ./github-mcp
 aart author check --source . --json
 ```
 
-This build generates the `mcp` and `skill` skeletons. Each carries the payload file its package
-format requires — an entrypoint for an MCP server, a `SKILL.md` for a skill — and names the blocks
-it deliberately leaves to you.
+This build generates `guideline`, `hook`, `mcp`, `memory`, and `skill` skeletons. Each carries the
+payload its package format requires: one Markdown document for a guideline or memory, an executable
+script and `hook.json` for a hook, an entrypoint for an MCP server, or `SKILL.md` for a skill. Each
+skeleton also names the blocks it deliberately leaves to you.
 
 `aart author check` reads the directory the way a Source Sync reads one and puts every `aart.yaml`
 and `aart.json` it finds through the parser *and* the compiler a Registry uses. A manifest that

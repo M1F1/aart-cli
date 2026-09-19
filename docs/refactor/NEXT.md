@@ -2,38 +2,24 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–11 are **done** on `refactor/cp-26-legacy-removal`; **step 12 is in flight** and committed
-green but not verified. B-057 and B-149 are both closed.
+Steps 1–12 are **done** on `refactor/cp-26-legacy-removal`; **step 13 is next**. B-057 and B-149
+are both closed.
 
 `aart author init` now generates all five kinds and `aart author check` answers both halves of
 §1.4 — every discovered manifest parses, and each one compiles to the package `registry scan` would
 accept, reported as `ok  <path>  ->  <kind>/<name>@<version>`.
-`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–11 (D-321 to D-330).
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–12 (D-321 to D-331).
 
-### Finish CP-26.12 first
+### CP-26.12 evidence
 
-The code is written and green (60 tests in `author_skeleton_test`, `author_command_test`,
-`author_check_test`; `make unit`, `make typecheck`, Ruff). What the contract still owes:
-
-1. **Kind-specific tests.** Nothing yet holds the three new shapes:
-   - the generated `hook.json` is what `package_hook` accepts (compile the workspace, then call
-     `package_hook(ArtifactKind.HOOK, compiled.canonical_entries)` — it is `Ok` only when
-     `command` begins `${SCRIPT_DIR}/` and the script it names is present **and executable**);
-   - `write_author_skeleton` actually sets the executable bit on `run.sh` (`os.access(..., os.X_OK)`
-     after `aart author init --kind hook`);
-   - a `guideline` and a `memory` payload is exactly one `.md` file, because `native_tree` refuses
-     the package otherwise.
-2. **Targeted semantic mutations**, one per claim, recorded in the slice. Suggested: make
-   `_hook_payload` write the script non-executable (must fail the install-time claim); point
-   `_memory_blueprint` at a second payload file (must fail the one-document claim); drop
-   `arguments`/`pyproject`/`lock` from a closing note (must fail the anti-drift oracle for that
-   kind). **Clear `__pycache__` after reverting any mutation that does not change the file's
-   length** — see the CP-26.10 record for why.
-3. `make mutants ONLY=agent_artifacts/authoring/skeleton.py TESTS="tests/author_skeleton_test.py"`,
-   read as findings.
-4. `make integration`, the README (the "Writing an artifact" section still says "This build
-   generates the `mcp` and `skill` skeletons"), the slice record, `handoff-plan done CP-26.12`,
-   a staged-diff privacy scan, and a commit.
+The generated hook compiles and is accepted by `package_hook`; its `run.sh` reaches disk with an
+executable bit. Each generated guideline and memory carries exactly one `.md`. Five targeted
+mutations proved those tests load-bearing. Scoped mutation of `skeleton.py` killed 771 of 1045; two
+survivors were real and became tests (nothing asserted `AuthorSkeleton.kind`/`.name`; the
+unknown-kind refusal could stop naming what this build generates), and B-155 records the rest. The
+65 author tests are green. The integration
+gate passed 398 tests in the sandbox and its one real-Keychain test passed outside it after macOS
+refused sandboxed Keychain creation. README now documents all five kinds.
 
 ### What the evidence said, so it is not re-derived
 
@@ -49,7 +35,14 @@ The code is written and green (60 tests in `author_skeleton_test`, `author_comma
   declared payload`), but `transport` and `runtime` are accepted on every kind — so all three are
   named in a `#?` note rather than generated.
 
-**Then step 13** — the README/docs contract, per the numbered plan.
+### Execute CP-26.13 next
+
+Make the README open, immediately after the title and at most one outcome sentence, with the fastest
+complete normal-user route: install AART, connect and synchronize a Registry, find or select an
+artifact in Marketplace, install it into a selected harness, and verify the result. The TUI is the
+primary route; a compact deterministic CLI equivalent may follow. Keep unknown repository,
+Registry, artifact and harness values as explicit placeholders. Step 14 owns the short product
+explanation and documentation index, so do not broaden this task into the later README moves.
 
 Three open findings:
 
