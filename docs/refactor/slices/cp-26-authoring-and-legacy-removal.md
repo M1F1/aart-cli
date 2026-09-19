@@ -1013,7 +1013,7 @@ gate makes the action unavailable.
 
 ### Step 18a — aart-cli namespace, portable home and harness path contract (D-332)
 
-Status: **in progress**. Added by the owner on 2026-09-19; execute after 18 and before 19. Names
+Status: **complete**. Added by the owner on 2026-09-19; executed after 18 and before 19. Names
 and paths must be settled before wiring the new installation identity. Do not renumber task 21.
 
 **Done so far — the name the machine sees.** The import package is `aart_cli` (254 modules moved,
@@ -1075,21 +1075,21 @@ message arguments, dead `else` branches under the narrowed test scope, or -- in 
 so the refusal still happens for the reason the test names. None is a claim the slice makes and
 nobody holds.
 
-**Still open in this step.** Step 16's executed installation/README contract re-run against the
-changed advertised commands, and the branch suggestion carried in below. `install_state/paths.py`
-still writes a project-scope receipt store at `<project>/.aart-cli`, which §169.2 replaces with a
-project-root-qualified record in the application home; that is receipt identity, which step 19 owns
-("Step 19 connects that policy to every lifecycle writer"), and `domain/placement.py` keeps its
-beside-the-receipt authority until the same step replaces it.
+**Deferred by contract to step 19.** `install_state/paths.py` still writes a project-scope receipt
+store at `<project>/.aart-cli`, which §169.2 replaces with a project-root-qualified record in the
+application home; that is receipt identity, which step 19 owns ("Step 19 connects that policy to
+every lifecycle writer"), and `domain/placement.py` keeps its beside-the-receipt authority until
+the same step replaces it.
 
-**Carried in from step 18.** The Push review's branch suggestion is the constant
-`aart-cli/registry-update`. Step 18 requires it to come from the most recent producing action --
-`aart/init-registry`, `aart/rebuild-registry`, `aart/promote-<artifact>-<version>`,
-`aart/bulk-promote` -- which needs the reducer to carry which action produced the commit, because
-the commit subject cannot tell init from rebuild (`publish` writes both). It was left here rather
-than done twice: this step renames that namespace. Implement it with the new names.
+**Carried in from step 18, now complete.** The Push review's branch suggestion used to be the
+constant `aart-cli/registry-update`. Step 18 required it to come from the most recent producing
+action -- `aart-cli/init-registry`, `aart-cli/rebuild-registry`,
+`aart-cli/promote-<artifact>-<version>`, `aart-cli/bulk-promote` -- which needs the reducer to carry
+which action produced the commit, because the commit subject cannot tell init from rebuild
+(`publish` writes both). It was left here rather than done twice because this step renamed that
+namespace, and is implemented with the new names below.
 
-**The mechanism, already traced (2026-09-19).** The Push review's branch field is not a placeholder
+**The implemented mechanism (traced 2026-09-19).** The Push review's branch field is not a placeholder
 the suggestion merely decorates. `[p] Push` on screen 46's ready workspace row navigates to 46j and
 issues `PREPARE_ACTION` with an empty `publication_branch`; `_prepare_registry_push` answers with
 `command.publication_branch or workspace.suggested_branch`; and `_action_prepared` writes that
@@ -1121,7 +1121,7 @@ The shape that follows:
   workspace.suggested_branch`. `MaintainerRegistryWorkspaceView.suggested_branch` keeps the constant
   as the answer for a session that knows nothing, which is exactly what §169's "otherwise" names.
 
-Tests first: the domain suggestion per origin and both fallbacks in
+Tests were written first: the domain suggestion per origin and both fallbacks in
 `tests/registry_publication_branch_test.py`, with a Hypothesis property that every suggestion is a
 usable branch name under the product namespace whatever subject it is handed; and the session
 carrying each producing action through to the prepare command in
@@ -1153,6 +1153,28 @@ intact. A reset must expose the effect of forgetting receipts without silently d
 files or credentials. Unsupported harness destinations refuse before effects. Focused unit/property tests and packaging/docs/reset/CI checks appropriate to changed boundaries,
 one recorded targeted semantic mutation for material behavior and scoped mutmut
 hold these boundaries. No full `make quality` until task 21.
+
+**Completed branch suggestion.** `RegistryCommitOrigin` records init, rebuild, single promotion or
+bulk promotion in session state when the corresponding action succeeds. A single promotion also
+carries `<artifact>-<version>` from the reviewed transaction. Opening Push passes the resulting
+suggestion on `ConsumerUiCommand.suggested_branch`; an explicit edit remains distinct, and an
+eligible current branch remains authoritative. A restarted session, an absent origin or an
+unusable promotion subject falls back to `aart-cli/registry-update`. D-347 records why this state is
+session context rather than inferred from commit text or persisted as another authority.
+
+The branch policy has example and Hypothesis coverage, the reducer carries all four origins through
+to Push, the adapter boundary proves the session suggestion wins over the restart fallback, and the
+promotion executor is held to deriving the single-promotion subject from the transaction. The
+targeted mutation returned the default for init and made the named per-origin test red, then was
+restored. Scoped mutmut over `aart_cli/domain/publication.py` with
+`tests/registry_publication_branch_test.py` killed all 135 mutants.
+
+**Step 16 re-run and final evidence.** Both `make unit` (4596 tests, one skipped) and `make
+integration` (402 tests) passed, so the renamed install lines and README contract were executed
+again rather than assumed from the earlier rename segment. `make lint`, `make format-check`, `make
+typecheck`, `make packaging-check`, `make docs-check` and `make secret-shape-check` passed. No new
+noncritical finding was discovered, so `BACKLOG.md` needs no entry. No broad `make quality` ran,
+under D-317/D-334.
 
 ### Step 19 — private installation trees, input entry and lifecycle (B-144/B-150, D-333)
 

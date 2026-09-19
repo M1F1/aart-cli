@@ -2,14 +2,12 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–18 are **done** on `refactor/cp-26-legacy-removal`; **step 18a is in progress** — three
-of its four parts, the executable and import namespace, the names the filesystem sees and one
-portable application home, are committed and green. Step 18 carried one
-item into it rather than doing it twice: the Push review's branch suggestion is still the constant
-`aart-cli/registry-update`, and 18a renames that namespace. The carry-over is written into 18a's own
-section of the slice. B-057 and B-149 are both closed. The plan has **22 tasks (17 done)**: the
-owner added **CP-26.18a** between 18 and 19 without renumbering existing ids. Task 21 remains the
-final broad verification.
+Steps 1–18a are **done** on `refactor/cp-26-legacy-removal`; **step 19 is next**. The executable,
+import and filesystem namespace is `aart-cli` / `aart_cli`, the product has one portable
+`~/.aart-cli` / `AART_CLI_HOME`, the harness-owned installation-tree policy is defined, and Push
+suggests a review branch from the action that produced the current commit (D-347). B-057 and B-149
+are both closed. The plan has **22 tasks (19 done)**: the owner added **CP-26.18a** between 18 and
+19 without renumbering existing ids. Task 21 remains the final broad verification.
 
 ### Accepted installation contract to carry into implementation (2026-09-19)
 
@@ -38,53 +36,27 @@ README opens with the route a new user runs, followed by a bounded `## What AART
 nothing else, because step 15 moved the detail into eight linked documents.
 `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–17 (D-321 to D-341).
 
-### Execute CP-26.18a next — it is already underway
+### Execute CP-26.19 next
 
-*Use `aart-cli` throughout active names, and give the product one portable home.* Plan step 18a,
-added by the owner on 2026-09-19 between 18 and 19 without renumbering. The full acceptance contract
-is in this slice's **Step 18a** section and in Product Specification §169.1-3/5 with INV-244/247.
+*Each installation owns its files and inputs.* The full acceptance contract is in this slice's
+**Step 19** section and Product Specification §169.3–5 with INV-243–247. Measure the supported
+project and user roots for every harness/profile, then connect the installation-tree policy from
+18a to install, update, verify/repair, uninstall, receipts and Installed. The installation identity
+is Registry alias + artifact + scope + concrete root + harness/profile; local and remote aliases
+remain distinct even when their package bytes match.
 
-**Already on the branch, uncommitted history aside.** The import package is `aart_cli`, the single
-console script is `aart-cli`, and every command line the product prints, documents or runs starts
-`aart-cli `. The Enterprise shim, the pin file `.aart-cli-version`, the unsupported-version
-diagnostic and `scripts/distribution_smoke.py` moved with it, and the schema freeze was regenerated
-because the rename moved every normative schema input path (D-275). `unit`, `integration`, `lint`,
-`typecheck`, `format-check`, `packaging-check`, `docs-check` and `secret-shape-check` are green over
-that state.
+Expand selected targets before collecting inputs. Every target gets separately entered ordinary
+configuration and a separate secret-provider item; four harness targets mean four complete input
+rounds. Do not add a global input pool, cross-target prefill, copy-answers flow or sharing option.
+An update or repair may retain an existing value only for the exact same installation owner.
+Central `~/.aart-cli` metadata may describe an installation and its provider references, but it may
+not contain secret values or ordinary artifact configuration. Replace the remaining project-local
+receipt placement and the old beside-the-receipt runtime authority in this step.
 
-**Also on the branch and green.** The names the *filesystem* sees moved in `0fadd69`: author
-manifests `aart-cli.yaml`/`aart-cli.json`, generated `aart-cli-registry.json`,
-`aart-cli-source.json` and `.github/workflows/aart-cli-registry.yml`, the managed marker
-`>>> aart-cli memory:<name> >>>`, the project state directory `.aart-cli`, payload formats
-`aart-cli-<kind>-v1`, schema ids `aart-cli.dev/<kind>/v1` and every `AART_CLI_*` variable. One
-portable home followed in `d113812`: `AART_CLI_HOME` or `<user-home>/.aart-cli`, identical on both
-platforms, machine policy deliberately left outside it, a factory reset that names the managed
-entries and never the home, `domain/installation_tree.py` for §169.3, and
-`docs/configuration/application-home-v1.md`. D-344, D-345 and D-346 record the choices.
-
-**What is left, in order.** The branch suggestion below, then step 16's executed installation/README
-contract re-run against the changed advertised commands -- the install-route gate passed in
-`make integration` over the renamed state, so this may already be satisfied; confirm it and record
-that, rather than assuming it either way. Then the handoff documents, `handoff-plan done CP-26.18a`,
-and the proportionate gates before the commit.
-
-**Carried in from step 18 -- the one functional item left.** The Push review's branch suggestion is
-still the constant `aart-cli/registry-update`. It must come from the most recent producing action,
-which needs the reducer to carry which action produced the commit -- the commit subject cannot tell
-init from rebuild, since `publish` writes both. The seam was traced on 2026-09-19 and the whole
-design, down to which field carries what and which tests to write first, is in the slice's **Step
-18a** section under *The mechanism, already traced*. The short version: the suggestion's only seam
-is `_prepare_registry_push`'s `command.publication_branch or workspace.suggested_branch` fallback,
-the session's knowledge must arrive on a new `ConsumerUiCommand.suggested_branch` rather than in
-`publication_branch` (a non-empty one there is refused on an eligible current branch), and
-`domain/publication.py` is where the origin-to-branch policy belongs. Nothing is implemented yet;
-the working tree is clean.
-
-**Delete, do not bridge.** No fallback reader, no old-path probe, no dual write, no migration
-command and no alias survives a rename here (D-334, §169.1). A guard that fails because a name moved
-is a guard doing its job: fix the name, not the guard. The one exception so far is recorded in
-`tests/adoption_first_contact_test.py` -- the Product Specification names commands the executable
-does not have yet, on purpose, so it is not instructions to a reader.
+Use TDD on the ownership and lifecycle boundaries, including property tests for identity/path
+separation and refusals before effects. Record a targeted semantic mutation for each material
+claim and run scoped mutmut over changed modules. Keep checks proportionate; task 21 owns the full
+quality run.
 
 ### What the evidence said, so it is not re-derived
 

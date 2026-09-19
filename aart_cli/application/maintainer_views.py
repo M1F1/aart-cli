@@ -60,6 +60,7 @@ from aart_cli.domain.collection_candidates import CollectionCandidate
 from aart_cli.domain.identifiers import ArtifactCoordinate, SourceAlias
 from aart_cli.domain.inputs import ConfigInput, RuntimeInput, SecretInput
 from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.publication import DEFAULT_PUBLICATION_BRANCH
 from aart_cli.domain.python_runtime import (
     PyProjectSpec,
     RequirementsFile,
@@ -3566,7 +3567,7 @@ class MaintainerRegistryWorkspaceView:
     content_digest: str | None = None
     remote: str = "origin"
     default_branch: str = "main"
-    suggested_branch: str = "aart-cli/registry-update"
+    suggested_branch: str = DEFAULT_PUBLICATION_BRANCH
     push_ready: bool = False
     push_blockers: tuple[str, ...] = ()
     publication_review_digest: str | None = None
@@ -3624,7 +3625,7 @@ def project_registry_workspace(
     content_digest: str | None = None,
     remote: str = "origin",
     default_branch: str = "main",
-    suggested_branch: str = "aart-cli/registry-update",
+    suggested_branch: str = DEFAULT_PUBLICATION_BRANCH,
     push_blockers: tuple[str, ...] = ("publication readiness has not been established",),
     publication_review_digest: str | None = None,
 ) -> MaintainerRegistryWorkspaceView:

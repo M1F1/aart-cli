@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import Enum
 
 from .diagnostics import Diagnostic, DiagnosticCode, Severity
 from .result import Err, Ok, Result
@@ -24,6 +25,19 @@ from .result import Err, Ok, Result
 DEFAULT_BRANCH_PUBLICATION = DiagnosticCode("registry-default-branch-publication")
 #: The requested target is not a name Git would carry, so no remote could hold it.
 PUBLICATION_BRANCH_INVALID = DiagnosticCode("registry-publication-branch-invalid")
+
+PUBLICATION_BRANCH_NAMESPACE = "aart-cli"
+DEFAULT_PUBLICATION_BRANCH = f"{PUBLICATION_BRANCH_NAMESPACE}/registry-update"
+
+
+class RegistryCommitOrigin(str, Enum):
+    """The local action that produced the commit now eligible for a review branch."""
+
+    INIT_REGISTRY = "init-registry"
+    REBUILD_REGISTRY = "rebuild-registry"
+    PROMOTE = "promote"
+    BULK_PROMOTE = "bulk-promote"
+
 
 _HEADS_PREFIX = "refs/heads/"
 #: `git check-ref-format --branch` in the shape this product needs: one or more slash-separated
@@ -80,6 +94,31 @@ def _refuse(code: DiagnosticCode, message: str, *remedy: str) -> Err:
     )
 
 
+def suggested_publication_branch(
+    origin: RegistryCommitOrigin | None,
+    *,
+    subject: str = "",
+) -> PublicationBranch:
+    """Name the review branch after the producing action, falling back on unusable input."""
+
+    suffix = (
+        None
+        if origin is None
+        else {
+            RegistryCommitOrigin.INIT_REGISTRY: "init-registry",
+            RegistryCommitOrigin.REBUILD_REGISTRY: "rebuild-registry",
+            RegistryCommitOrigin.BULK_PROMOTE: "bulk-promote",
+            RegistryCommitOrigin.PROMOTE: f"promote-{subject}" if subject else None,
+        }[origin]
+    )
+    candidate = (
+        DEFAULT_PUBLICATION_BRANCH if suffix is None else f"{PUBLICATION_BRANCH_NAMESPACE}/{suffix}"
+    )
+    if not _is_usable_branch_name(candidate):
+        candidate = DEFAULT_PUBLICATION_BRANCH
+    return PublicationBranch(candidate)
+
+
 def resolve_publication_branch(*, requested: str, default_branch: str) -> Result[PublicationBranch]:
     """Answer which branch a registry publishes to, refusing the branch consumers read (`D-228`).
 
@@ -125,8 +164,12 @@ def resolve_publication_branch(*, requested: str, default_branch: str) -> Result
 
 
 __all__ = [
+    "DEFAULT_PUBLICATION_BRANCH",
     "DEFAULT_BRANCH_PUBLICATION",
+    "PUBLICATION_BRANCH_NAMESPACE",
     "PUBLICATION_BRANCH_INVALID",
     "PublicationBranch",
+    "RegistryCommitOrigin",
     "resolve_publication_branch",
+    "suggested_publication_branch",
 ]

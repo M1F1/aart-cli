@@ -874,7 +874,7 @@
         {
           "id": "18a",
           "title": "Use aart-cli everywhere in active interfaces and one portable ~/.aart-cli home; define harness-owned installation paths",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "19",

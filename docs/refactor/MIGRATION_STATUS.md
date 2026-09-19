@@ -4,6 +4,18 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-19, CP-26.18a complete — Push names the action that produced its commit.** The final
+18a carry-over is implemented. Successful Registry init, rebuild, single promotion and bulk
+promotion leave typed origin context in the reducer; a single promotion derives
+`<artifact>-<version>` from its reviewed transaction. Push turns that context into
+`aart-cli/init-registry`, `aart-cli/rebuild-registry`, `aart-cli/promote-<artifact>-<version>` or
+`aart-cli/bulk-promote` without treating the suggestion as an operator-selected target. Restarted
+sessions and unusable subjects fall back to `aart-cli/registry-update` (D-347). The per-origin
+targeted mutation went red and was restored; scoped mutmut killed all 135 mutants in
+`domain/publication.py`. `make unit` (4596 tests, one skipped) and `make integration` (402 tests)
+reran step 16's executable install/README contract; lint, format, type, packaging, documentation and
+secret-shape gates also passed. Step 19 is next. No broad `make quality` ran (D-317/D-334).
+
 **2026-09-19, CP-26.18a in progress — the filesystem's names, and one portable home.** Two more
 commits on `refactor/cp-26-legacy-removal`. `0fadd69` moved every name the filesystem sees: author
 manifests `aart-cli.yaml`/`aart-cli.json`, generated `aart-cli-registry.json`,

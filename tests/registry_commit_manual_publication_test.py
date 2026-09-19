@@ -12,10 +12,13 @@ from __future__ import annotations
 import dataclasses
 import inspect
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 from aart_cli import tui_consumer
 from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
+    ConsumerUiCommand,
     ConsumerUiCommandKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
@@ -31,7 +34,12 @@ from aart_cli.application.maintainer_views import (
     MaintainerRegistryCommitView,
     MaintainerScreen,
     project_maintainer_registry_commit,
+    project_registry_workspace,
 )
+from aart_cli.domain.publication import RegistryCommitOrigin
+from aart_cli.domain.result import Ok
+from aart_cli.io.consumer_actions import LocalConsumerActions
+from aart_cli.io.maintainer_promotion import PreparedConfiguredCandidatePromotion
 from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     ConsumerScreens,
@@ -206,6 +214,146 @@ class RegistryMaintainerOwnsPushTest(unittest.TestCase):
         assert event is not None
         _prepared, prepare_commands = reduce_consumer_ui(continued, event)
         self.assertEqual("review/registry-update", prepare_commands[0].publication_branch)
+
+    def test_each_producing_action_carries_its_branch_suggestion_to_push(self) -> None:
+        cases = (
+            (
+                ConsumerActionKind.REGISTRY_INIT,
+                MaintainerScreen.REGISTRY_INIT_REVIEW,
+                "",
+                RegistryCommitOrigin.INIT_REGISTRY,
+                "aart-cli/init-registry",
+            ),
+            (
+                ConsumerActionKind.REGISTRY_REBUILD,
+                MaintainerScreen.REGISTRY_REBUILD_REVIEW,
+                "",
+                RegistryCommitOrigin.REBUILD_REGISTRY,
+                "aart-cli/rebuild-registry",
+            ),
+            (
+                ConsumerActionKind.CANDIDATE_PROMOTION,
+                MaintainerScreen.REGISTRY_COMMIT,
+                "github-mcp-1.0.0",
+                RegistryCommitOrigin.PROMOTE,
+                "aart-cli/promote-github-mcp-1.0.0",
+            ),
+            (
+                ConsumerActionKind.BULK_PROMOTION,
+                MaintainerScreen.REGISTRY_COMMIT,
+                "",
+                RegistryCommitOrigin.BULK_PROMOTE,
+                "aart-cli/bulk-promote",
+            ),
+        )
+        for action, screen, subject, origin, expected in cases:
+            with self.subTest(action=action):
+                state = _on(screen, action=action)
+                recorded, _commands = reduce_consumer_ui(
+                    state,
+                    ConsumerUiEvent(
+                        ConsumerUiEventKind.ACTION_RECORDED,
+                        action=action,
+                        text="2026-09-19T12:00:00+00:00",
+                        registry_commit_subject=subject,
+                    ),
+                )
+                self.assertIs(recorded.registry_commit_origin, origin)
+                self.assertEqual(recorded.registry_commit_subject, subject)
+                ready = dataclasses.replace(
+                    recorded,
+                    session=dataclasses.replace(recorded.session, screen=MaintainerScreen.REGISTRY),
+                    rows=(REGISTRY_WORKSPACE_READY_ROW,),
+                    cursor=0,
+                )
+                event = key_event("p", ready)
+                assert event is not None
+                _moved, commands = reduce_consumer_ui(ready, event)
+                self.assertEqual(expected, commands[0].suggested_branch)
+
+    def test_push_preparation_prefers_the_session_suggestion_and_keeps_the_restart_fallback(
+        self,
+    ) -> None:
+        workspace = project_registry_workspace(
+            "company",
+            commit="a" * 12,
+            branch="main",
+            root="/registry",
+            revision="a" * 40,
+            content_digest="sha256:" + "b" * 64,
+            publication_review_digest="sha256:" + "c" * 64,
+            push_blockers=(),
+        )
+        for suggested, expected in (
+            ("aart-cli/init-registry", "aart-cli/init-registry"),
+            ("", "aart-cli/registry-update"),
+        ):
+            with self.subTest(suggested=suggested):
+                actions = LocalConsumerActions.__new__(LocalConsumerActions)
+                actions._context = SimpleNamespace(host=SimpleNamespace(project_root="/registry"))
+                actions._pending = None
+                actions._pending_action = None
+                actions.source = lambda **_views: SimpleNamespace()
+                command = ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.REGISTRY_PUSH,
+                    suggested_branch=suggested,
+                )
+
+                with mock.patch(
+                    "aart_cli.io.consumer_actions.read_registry_workspace",
+                    return_value=workspace,
+                ):
+                    actions._prepare_registry_push(command)
+
+                assert actions._pending is not None
+                self.assertEqual(expected, actions._pending.command.branch.value)
+
+    def test_single_promotion_execution_records_the_artifact_and_version_as_its_subject(
+        self,
+    ) -> None:
+        transaction = _prepared()
+        pending = PreparedConfiguredCandidatePromotion(transaction, "/registry", "/data")
+        actions = LocalConsumerActions.__new__(LocalConsumerActions)
+        actions._context = SimpleNamespace(
+            effective=object(),
+            host=SimpleNamespace(project_root="/registry"),
+            maintainer=None,
+        )
+        actions._data_root = "/data"
+        actions._promotion_transaction = None
+        actions._promotion_result = None
+        actions._now = lambda: SimpleNamespace(timestamp=lambda: 0)
+        actions._moment = lambda: ("2026-09-19T12:00:00+00:00", object())
+        actions._recorded = mock.Mock(return_value=object())
+
+        def replace_context(context, **changes):
+            fields = vars(context).copy()
+            fields.update(changes)
+            return SimpleNamespace(**fields)
+
+        command = ConsumerUiCommand(
+            ConsumerUiCommandKind.EXECUTE_ACTION,
+            action=ConsumerActionKind.CANDIDATE_PROMOTION,
+            review_digest=str(transaction.review_digest),
+        )
+        with (
+            mock.patch(
+                "aart_cli.io.consumer_actions.complete_configured_candidate_promotion",
+                return_value=Ok(_completed(transaction)),
+            ),
+            mock.patch(
+                "aart_cli.io.consumer_actions.read_maintainer_views",
+                return_value=Ok(object()),
+            ),
+            mock.patch("aart_cli.io.consumer_actions.replace", side_effect=replace_context),
+        ):
+            actions._execute_candidate_promotion(command, pending)
+
+        self.assertEqual(
+            "github-mcp-1.0.0",
+            actions._recorded.call_args.kwargs["registry_commit_subject"],
+        )
 
 
 class RegistryPushReviewFrameTest(unittest.TestCase):

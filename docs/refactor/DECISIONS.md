@@ -8608,3 +8608,24 @@ would leave every lifecycle writer pointing at nothing.
 The alias and the artifact name are operator and Registry input, so both are held to the same slug
 the configuration and protocol schemas already validate them against, and refused rather than
 encoded -- an encoded component is a path nobody can read back to the installation it belongs to.
+
+## D-347 — Push branch suggestions come from the producing action in session
+
+The commit subject cannot identify the action that produced a Registry commit: init and rebuild
+both finish through `publish`, and a subject is prose rather than product state. Persisting another
+origin marker would create a second authority in the Registry solely to improve an editable branch
+suggestion.
+
+**Decision.** A successful init, rebuild, single promotion or bulk promotion records a typed
+`RegistryCommitOrigin` in the current reducer state. Single promotion additionally carries the
+artifact name and version from the reviewed transaction. `domain/publication.py` maps that context
+to the `aart-cli/` branch namespace, while the command field for an explicitly chosen publication
+branch stays separate. The adapter uses the explicit choice first, the session suggestion second
+and `aart-cli/registry-update` last. An eligible current branch remains the target regardless of a
+suggestion.
+
+This makes the useful name precise during the run that created the commit and makes restart
+behavior honest: after process state is gone, Push offers the stable generic name. Missing origin,
+missing context and any promotion subject that cannot compose a valid Git branch use the same
+fallback. Nothing reads a wizard flag or commit prose, and no durable metadata is added for a UI
+default.

@@ -891,7 +891,9 @@ class LocalConsumerActions:
         branch = (
             workspace.branch
             if not workspace.needs_a_new_branch and workspace.branch is not None
-            else (command.publication_branch or workspace.suggested_branch)
+            else (
+                command.publication_branch or command.suggested_branch or workspace.suggested_branch
+            )
         )
         current_is_target = not workspace.needs_a_new_branch
         if current_is_target and command.publication_branch not in {"", workspace.branch}:
@@ -1957,6 +1959,7 @@ class LocalConsumerActions:
         recorded_at: str,
         *,
         completion: ConsumerActionCompletion | None = None,
+        registry_commit_subject: str = "",
         **views,
     ) -> ConsumerActionUpdate:
         self._pending, self._pending_action = None, None
@@ -1966,6 +1969,7 @@ class LocalConsumerActions:
                 ConsumerUiEventKind.ACTION_RECORDED,
                 action=command.action,
                 text=recorded_at,
+                registry_commit_subject=registry_commit_subject,
             ),
             completion,
         )
@@ -2415,9 +2419,16 @@ class LocalConsumerActions:
         if isinstance(refreshed, Ok):
             self._context = replace(self._context, maintainer=refreshed.value)
         recorded_at, _today = self._moment()
+        versions = pending.transaction.plan.versions
+        registry_commit_subject = (
+            f"{versions[0].coordinate.artifact.name}-{versions[0].coordinate.version}"
+            if len(versions) == 1
+            else ""
+        )
         return self._recorded(
             command,
             recorded_at,
+            registry_commit_subject=registry_commit_subject,
             promotion_validation=project_maintainer_registry_validation(pending.transaction),
             promotion_commit=project_maintainer_registry_commit(
                 pending.transaction,

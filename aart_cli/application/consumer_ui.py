@@ -18,6 +18,7 @@ from enum import Enum
 
 from aart_cli.domain.configuration_files import configuration_value_problem
 from aart_cli.domain.inputs import InputValidation, validate_config_value
+from aart_cli.domain.publication import RegistryCommitOrigin, suggested_publication_branch
 from aart_cli.domain.registry import PromotionMode
 
 from .consumer_views import (
@@ -376,6 +377,7 @@ class ConsumerUiEvent:
     selection_identity: str = ""
     review_digest: str = ""
     config_draft: InstallationConfigDraft | None = None
+    registry_commit_subject: str = ""
 
     def __post_init__(self) -> None:
         if (
@@ -394,6 +396,7 @@ class ConsumerUiEvent:
             or not _safe_identity(self.semantic_identity)
             or not _safe_identity(self.selection_identity)
             or not _safe_identity(self.review_digest)
+            or not _safe_identity(self.registry_commit_subject)
             or (
                 self.config_draft is not None
                 and not isinstance(self.config_draft, InstallationConfigDraft)
@@ -426,6 +429,7 @@ class ConsumerUiCommand:
     #: questions, and answering one is not answering the other (issue #11b).
     python_installer: str = ""
     publication_branch: str = ""
+    suggested_branch: str = ""
 
     def __post_init__(self) -> None:
         if (
@@ -433,6 +437,7 @@ class ConsumerUiCommand:
             or self.install_scope not in ("", "project", "user")
             or self.python_installer not in ("", "pip", "uv")
             or not _safe_identity(self.publication_branch)
+            or not _safe_identity(self.suggested_branch)
             or (
                 self.screen is not None
                 and not isinstance(self.screen, (ConsumerScreen, MaintainerScreen))
@@ -579,6 +584,8 @@ class ConsumerUiState:
     #: Screen 46j's editable new-branch target. It is used only when HEAD is detached or names a
     #: protected/default branch; an eligible current branch remains the only possible target.
     publication_branch: str = ""
+    registry_commit_origin: RegistryCommitOrigin | None = None
+    registry_commit_subject: str = ""
     repository_scan_draft: RepositoryScanDraft = RepositoryScanDraft()
     #: The directory this session was launched from, already written for a reader. It is context
     #: for every screen -- an install and a Registry edit land relative to it -- so it is carried
@@ -609,6 +616,11 @@ class ConsumerUiState:
             or self.install_scope not in ("", "project", "user")
             or self.python_installer not in ("", "pip", "uv")
             or not _safe_identity(self.publication_branch)
+            or (
+                self.registry_commit_origin is not None
+                and not isinstance(self.registry_commit_origin, RegistryCommitOrigin)
+            )
+            or not _safe_identity(self.registry_commit_subject)
             or not _rows_valid(self.rows)
             or not isinstance(self.cursor, int)
             or isinstance(self.cursor, bool)
@@ -1263,6 +1275,10 @@ def _request_action(
                 action=action,
                 focus=state.focus,
                 publication_branch=state.publication_branch,
+                suggested_branch=suggested_publication_branch(
+                    state.registry_commit_origin,
+                    subject=state.registry_commit_subject,
+                ).value,
             ),
         )
     if action is ConsumerActionKind.CONFIGURE and (
@@ -1400,6 +1416,14 @@ def _request_action(
             )
         ),
         publication_branch="",
+        suggested_branch=(
+            suggested_publication_branch(
+                state.registry_commit_origin,
+                subject=state.registry_commit_subject,
+            ).value
+            if action is ConsumerActionKind.REGISTRY_PUSH
+            else ""
+        ),
     )
     return prepared, (command, *navigation)
 
@@ -1663,6 +1687,20 @@ def _action_recorded(
     action = event.action
     if action is None or action is not state.action or not event.text:
         return state, ()
+    origins = {
+        ConsumerActionKind.REGISTRY_INIT: RegistryCommitOrigin.INIT_REGISTRY,
+        ConsumerActionKind.REGISTRY_REBUILD: RegistryCommitOrigin.REBUILD_REGISTRY,
+        ConsumerActionKind.CANDIDATE_PROMOTION: RegistryCommitOrigin.PROMOTE,
+        ConsumerActionKind.BULK_PROMOTION: RegistryCommitOrigin.BULK_PROMOTE,
+    }
+    commit_origin = origins.get(action, state.registry_commit_origin)
+    commit_subject = (
+        event.registry_commit_subject
+        if action is ConsumerActionKind.CANDIDATE_PROMOTION
+        else ""
+        if action in origins
+        else state.registry_commit_subject
+    )
     if (
         action in (ConsumerActionKind.CANDIDATE_PROMOTION, ConsumerActionKind.BULK_PROMOTION)
         and state.session.screen is MaintainerScreen.REGISTRY_COMMIT
@@ -1673,6 +1711,8 @@ def _action_recorded(
             quit_pending=False,
             action=None,
             registry_commit_applied=True,
+            registry_commit_origin=commit_origin,
+            registry_commit_subject=commit_subject,
         ), (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, state.session.screen),)
     target = _owning_screen(action, state.session.screen)
     if target is None:
@@ -1692,6 +1732,8 @@ def _action_recorded(
         focus=focus,
         quit_pending=False,
         action=None,
+        registry_commit_origin=commit_origin,
+        registry_commit_subject=commit_subject,
     ), commands
 
 
