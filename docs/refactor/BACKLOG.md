@@ -4017,3 +4017,19 @@ installation naming or local smoke verification. Preserve the accepted `aart-cli
 `aart_cli` import and application-home contract; any eventual distribution customization needs its
 own scoped acceptance and release evidence. This deferral does not remove CP-26.21's existing
 verification obligations. **Open, noncritical; explicitly deferred.**
+
+## B-158 — mutmut cannot scope a large module to the changed callable
+
+**Found:** 2026-09-19, CP-26.19.
+
+`make mutants ONLY=aart_cli/application/consumer_ui.py
+TESTS="tests/install_time_config_form_test.py"` generated 2502 mutants across every consumer screen,
+although the slice changed only the installation-config draft and row handling. The runner writes
+mutmut's file-only `only_mutate` setting and cannot select a class or callable. The run was stopped
+after 253 mutants as disproportionate; the slice's owner-key claim is instead held by a recorded
+targeted mutation and its focused E2E.
+
+**Noncritical.** Add callable or line-level scoping to `scripts/mutants.py`, or extract cohesive
+screen models when that is architecturally justified. This does not block CP-26.19 because the
+required semantic mutation went red and the complete unit suite is green; it becomes critical only
+if a future slice changes this broad module and has no practical mutation-adequacy signal.

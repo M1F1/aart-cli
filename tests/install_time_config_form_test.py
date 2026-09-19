@@ -201,6 +201,48 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
         self.assertIn("- Credentials", blocks.status)
         self.assertIn("- GitHub token: Enter securely during installation", blocks.status)
 
+    def test_each_installation_has_its_own_visible_config_and_credential_row(self) -> None:
+        owners = (
+            "claude/project:company/mcp/github",
+            "tabnine/project:company/mcp/github",
+        )
+        base = screens()
+        source = CanonicalScreenSource(
+            replace(
+                base,
+                installation_inputs=tuple(
+                    item
+                    for owner in owners
+                    for item in (
+                        replace(_config_view(), owner=owner),
+                        replace(_credential_view(), owner=owner),
+                    )
+                ),
+            )
+        )
+        draft = InstallationConfigDraft(
+            tuple(
+                InstallationConfigField(
+                    "organization",
+                    "acme",
+                    InputValidation("identifier"),
+                    owner=owner,
+                )
+                for owner in owners
+            )
+        )
+        state = replace(_state(draft), rows=source.rows(_state(draft)))
+
+        drawn = "\n".join(frame(source, state))
+
+        self.assertEqual(
+            source.rows(state),
+            tuple(f"{owner}\torganization" for owner in owners) + (CONFIG_CONTINUE_ROW,),
+        )
+        for owner in owners:
+            self.assertIn(f"GitHub organization — {owner}", drawn)
+            self.assertIn(f"GitHub token — {owner}: Enter securely during installation", drawn)
+
     def test_verbose_describes_what_the_field_under_the_cursor_binds_to(self) -> None:
         source = self._source()
         state = _state()
@@ -299,7 +341,7 @@ class _MemoryCredentialProvider:
         )
 
     def resolution_argv(self, reference) -> tuple[str, ...]:
-        return ("/usr/bin/false",)
+        return ("/usr/bin/false", "--service", reference.provider.service)
 
     def store(self, reference, secret=None, *, replace: bool = False) -> Ok:
         if secret is not None:
@@ -331,35 +373,58 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
             self.assertFalse(first.event.review_digest)
             self.assertIsNotNone(first.event.config_draft)
             assert first.event.config_draft is not None
-            self.assertEqual(first.event.config_draft.value(ORG.value), "acme")
+            config_views = tuple(
+                item
+                for item in first.source.screens.installation_inputs
+                if isinstance(item, ConfigInputView)
+            )
+            config_rows = tuple(item.row for item in config_views)
+            self.assertGreater(len(config_rows), 1)
+            self.assertEqual(len(config_rows), len(set(config_rows)))
+            for row in config_rows:
+                self.assertEqual(first.event.config_draft.value(row), "acme")
             self.assertFalse(first.event.config_draft.ready)
             self.assertTrue(first.source.screens.installation_inputs)
-            credential = next(
+            credentials = tuple(
                 item
                 for item in first.source.screens.installation_inputs
                 if isinstance(item, CredentialInputView)
             )
-            self.assertIsNotNone(credential.provider_reference)
+            self.assertEqual(len(credentials), len(config_views))
+            self.assertEqual(len({item.owner for item in credentials}), len(credentials))
+            self.assertTrue(all(item.provider_reference is not None for item in credentials))
+
+            incomplete = handler.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.INSTALL,
+                    selection=("company/mcp/github@1.5.0",),
+                    config_answers=((config_rows[0], "platform-team"),),
+                )
+            )
+            self.assertFalse(incomplete.event.review_digest)
 
             second = handler.handle(
                 ConsumerUiCommand(
                     ConsumerUiCommandKind.PREPARE_ACTION,
                     action=ConsumerActionKind.INSTALL,
                     selection=("company/mcp/github@1.5.0",),
-                    config_answers=((ORG.value, "platform-team"),),
+                    config_answers=tuple((row, "platform-team") for row in config_rows),
                 )
             )
 
         self.assertTrue(second.event.review_digest)
         pending = handler._pending  # noqa: SLF001 - held reviewed action is the assertion subject
         self.assertIsNotNone(pending)
-        # The one answer typed on screen 07 reaches every installation the selection would create,
-        # each addressed separately (D-353) rather than shared by input id.
+        # Each answer typed on screen 07 reaches only the installation named by its row (D-353).
         composed = pending.prepared.draft.inputs  # type: ignore[union-attr]
-        owners = {owner for owner in pending.prepared.draft.owners}  # type: ignore[union-attr]
-        self.assertGreater(len(owners), 1)
+        owners = tuple(pending.prepared.draft.owners)  # type: ignore[union-attr]
+        self.assertEqual(len(owners), len(config_rows))
         for owner in owners:
-            self.assertIn(PromptedConfigValue(ORG, "platform-team"), composed.sources_for(owner))
+            self.assertIn(
+                PromptedConfigValue(ORG, "platform-team"),
+                composed.sources_for(owner),
+            )
 
     def test_form_to_success_writes_only_the_two_chosen_harness_files(self) -> None:
         value = "platform-team-form-e2e"
@@ -375,6 +440,10 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 _at(ConsumerScreen.MARKETPLACE),
                 SPACE,
                 ord("i"),
+                value,
+                ENTER,
+                value,
+                ENTER,
                 value,
                 ENTER,
                 ENTER,

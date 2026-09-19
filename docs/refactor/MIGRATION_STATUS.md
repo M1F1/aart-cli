@@ -4,6 +4,21 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-19, CP-26.19 in progress — Screen 07 collects once per installation.** D-357 completes
+the visible collection half of D-353. Config and credential rows are keyed and labelled by their
+installation owner; `_one_row_per_input` and `_addressed_to_owners` are deleted, so accepting one
+row cannot answer another installation. The action maps an owner-qualified row back to exactly one
+fresh draft field and creates one `OwnedInputSource`; stale rows are dropped. The TUI E2E enters a
+value three times and installs only the two selected harnesses. Different ordinary values still
+meet D-354's explicit refusal until the private runtime projection is per owner.
+
+Evidence: the red-first multiple-row assertion failed against the collapsed screen; an owner-key
+mutation made exactly the named E2E red and was restored. The focused set passes 61 tests and
+`make unit` passes 4654 tests with one skipped. The previously owed address/component mutations and
+scoped runs were completed; one test-provider gap was closed. File-scoped mutmut for
+`consumer_ui.py` expanded to 2502 unrelated mutants and was stopped after 253; B-158 records that
+tooling limitation. CP-26 remains 19/23 with step 19 in progress.
+
 **2026-09-19, CP-26.20a minimal smoke contract accepted — implementation pending.** D-351
 records the two-field `smoke_test` declaration, optional arguments/expectations, default 15-second
 tool-call deadline and generic MCP error/schema evaluation. Existing tool outputs need no custom
@@ -94,9 +109,10 @@ the one that said it: two artifacts declaring one input were asked for once with
 single briefing and are now asked for separately, each in front of its own author's guidance. The
 recording provider double held one `present` flag for every address, so storing one installation's
 item made every other look ready and the second of two artifacts failed its pre-execution check
-with "installed state changed after Review"; it now holds state per item, as a provider does. Evidence: focused suites, `lint`, `format-check` and `typecheck`
-green; **`make unit` was started and stopped unfinished when the segment ended and is the next
-agent's first action**, together with the targeted mutation and scoped mutmut this slice owes.
+with "installed state changed after Review"; it now holds state per item, as a provider does.
+Evidence: focused suites, `lint`, `format-check` and `typecheck` green. The later Screen 07 segment
+completed the owed targeted mutations and scoped runs and reran `make unit`: 4654 tests pass with
+one skipped.
 
 **2026-09-19, CP-26.19 in progress — one launcher, four addresses.** `generate_launcher` composes
 its credential address instead of carrying one (D-355). Given `credential_service_template` — the
@@ -154,17 +170,14 @@ one id differently were a conflict only while the id was the key, and
 made four installations share one value. §165.19's "a contract change must not touch credentials
 owned by any other installation" is now held by separation instead of by refusing the pair.
 
-Planning is not per installation yet and the gap is named (D-354): `generate_launcher` renders the
-credential reference into the launcher text, so one launcher carries one address. Where one
-placement's owners answered differently, `prepared_placements()` refuses by name. Screen 07 still
-shows one row per declared input, with `InputView.owner`/`.row` in place for the row identity it
-will need, and the typed answer is addressed to every owner that declared it. `credential_address`
-stays unwired at `io/consumer_actions.py` for the same reason -- adopting it before launchers are
-per harness would make every multi-harness install refuse. Evidence: `make unit` green (4628
-tests); five targeted semantic mutations each red then restored, one of which survived first and
-was a real hole (a placement claiming every owner, invisible because no test used two artifacts);
-scoped mutmut killing 73 of 94 with one real survivor now held (the argument guard). `lint`,
-`format-check`, `typecheck`, `docs-check` and `validate` green. No broad `make quality` (D-317).
+Planning is not per installation yet and the gap is named (D-354). Where one placement's owners
+answer ordinary configuration differently, `prepared_placements()` refuses by name until the
+runtime projection becomes per owner. Screen 07 now uses `InputView.row`, shows one row per owner
+and sends each answer only to that owner (D-357); `credential_address` is live and the launcher
+composes its harness-specific service. Evidence: the original composition segment's `make unit`
+passed 4628 tests; five targeted semantic mutations each went red then restored, one after exposing
+a real multi-artifact hole; scoped mutmut killed 73 of 94 with one real argument-guard survivor now
+held. The later form segment passes 4654 unit tests. No broad `make quality` (D-317).
 `domain/installation_owner.py` is runtime-reachable and its reachability exception is removed.
 
 **2026-09-19, CP-26.19 in progress — the name the harness shows.** `installed_name()` projects the

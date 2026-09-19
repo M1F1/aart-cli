@@ -469,7 +469,7 @@ class ConfigInputView:
     def row(self) -> str:
         """The key that identifies this field on screen 07, unique where `id` is not."""
 
-        return f"{self.owner}\t{self.id}"
+        return f"{self.owner}\t{self.id}" if self.owner else self.id
 
 
 def config_input_value_problem(view: ConfigInputView, value: str) -> str | None:
@@ -506,7 +506,7 @@ class CredentialInputView:
     def row(self) -> str:
         """The key that identifies this field on screen 07, unique where `id` is not."""
 
-        return f"{self.owner}\t{self.id}"
+        return f"{self.owner}\t{self.id}" if self.owner else self.id
 
 
 InputView = ConfigInputView | CredentialInputView

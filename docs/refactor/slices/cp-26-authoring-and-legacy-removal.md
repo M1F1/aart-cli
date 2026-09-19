@@ -1313,12 +1313,10 @@ Planning is not per installation yet, and the gap is named rather than papered o
 `generate_launcher` renders the credential reference into the launcher text, so one launcher carries
 one address, and `PlannedInstallation` requires every harness's configuration file to hold the one
 reviewed set. Where one placement's owners answered differently, `prepared_placements()` refuses by
-name (`configured-installation-per-target-values-differ`). Screen 07 still shows one row per declared
-input -- `InputView.owner`/`.row` exist for the row identity it will need -- and the answer typed
-there is addressed to every owner that declared it. That is the shipped behaviour, now written down
-instead of implied by a shared key. `credential_address` is deliberately still not wired at
-`io/consumer_actions.py` for the same reason: adopting it before launchers are per harness would
-make every multi-harness install refuse.
+name (`configured-installation-per-target-values-differ`). Screen 07 now shows and collects one row
+per installation as recorded below. `credential_address` is wired at `io/consumer_actions.py`, and
+the launcher composes the harness-specific service at startup. The remaining refusal concerns
+different ordinary values reaching the still-shared runtime projection; it does not merge answers.
 
 Evidence: `make unit` green (4628 tests). Five targeted semantic mutations, each red then restored
 -- the field key dropping the owner, one owner's answers handed to every owner, an answer accepted
@@ -1373,11 +1371,35 @@ Review". A provider holds state per item, and the double now does too.
 
 Evidence: focused suites green -- `tests/runtime_projection_test.py` (32), the configured-draft,
 planning, proposal, reconciliation, credential-guidance and credential-action-row suites. `lint`,
-`format-check`, `typecheck` green. **`make unit` was started and stopped unfinished when this
-segment ended; it is the first thing the next agent runs**, because this slice changed the
-reconciliation vocabulary and the receipt's credential list, which reach further than the suites
-listed here. Targeted mutation and scoped `make mutants` over `domain/credentials.py` and
-`io/configured_installation.py` are owed with it.
+`format-check`, `typecheck` green. The later Screen 07 segment reran `make unit`: 4654 tests pass
+with one skipped. Both owed targeted mutations were red and restored. Scoped mutmut over
+`domain/credentials.py` killed the owner-collapsing change; its twelve survivors are
+message/encoding/name-width details outside the claim. The configured-installation run killed 212
+of 276 after the test was strengthened to retain a non-default provider; its 64 survivors are in
+older snapshot/materialization/draft branches and are findings rather than this claim.
+
+**Done so far — Screen 07 asks every installation separately (D-357).**
+`InstallationConfigField`, `ConfigInputView` and `CredentialInputView` expose the same
+owner-qualified row key. The form uses that key for navigation, editing, acceptance and submitted
+answers; it draws the owner beside both the ordinary field and the provider-backed credential
+status. Existing ownerless unit fixtures retain the plain input-id key, while live installation
+composition always supplies an owner.
+
+The two temporary sharing helpers are deleted. `_one_row_per_input` no longer hides all but the
+first installation, and `_addressed_to_owners` no longer broadcasts one answer. The action handler
+recomposes the authoritative draft, maps each submitted row to exactly one field, and creates one
+`OwnedInputSource`. A stale row matches nothing and is dropped rather than rebound to a different
+installation. One accepted row leaves every other owner unanswered. A whole TUI walk enters the
+ordinary value independently for three targets, narrows to two harnesses and proves only those two
+configuration files are written; a rendering test proves both owners remain visible.
+
+Red-first evidence: the E2E assertion for multiple distinct owner rows failed against the collapsed
+screen. The targeted mutation replaced the owner-qualified action key with `input_id`; exactly
+`test_answer_reissues_the_real_preparation_as_a_prompted_source` went red and was restored. The
+focused Screen 07/configured-draft/reconciliation set passes 61 tests. A file-scoped mutmut attempt
+on `application/consumer_ui.py` generated 2502 mutants for unrelated screens because the runner can
+scope only by file; it was stopped after 253 as disproportionate and recorded as B-158. Full
+`make unit` passes 4654 tests with one skip.
 
 **Done so far — one launcher, four addresses (D-355).**
 The launcher already receives the harness that started it, because D-264 is why it can find its own

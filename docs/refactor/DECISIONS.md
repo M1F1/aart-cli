@@ -8918,3 +8918,28 @@ The recording provider in `tests/credential_action_rows_test.py` was corrected i
 it held one `present` flag for every address, so storing one installation's item made every other
 installation look ready. Per-reference state is what a provider actually has, and without it the
 second of two artifacts failed its pre-execution check with "installed state changed after Review".
+
+## D-357 — Screen 07 addresses an answer to one installation row
+
+**Context.** D-353 made the application draft one field per installation owner, but Screen 07 still
+collapsed those fields by input id and broadcast its one answer back to every owner. The visible
+form therefore continued to collect once even though the domain model had already separated the
+questions. Two fields legitimately share an input id, so the id cannot identify a cursor row or a
+submitted answer.
+
+**Decision.** Screen 07's internal row key is `<installation-owner>\t<input-id>`. The owner grammar
+rejects tabs, and `InputId` cannot contain one, so the split is unambiguous. The same `row` property
+is carried by the draft field and both input views. Navigation, editing, acceptance, rendering and
+submission use it; the display spells out the owner beside both ordinary configuration and
+credential status.
+
+The action handler first composes the current authoritative installation draft, then resolves every
+submitted row against that draft and creates one `OwnedInputSource` for the matched field. A stale
+row is ignored rather than rebound to an installation that did not answer it. The collapsing and
+broadcast helpers are deleted. Ownerless row keys remain only for isolated fixtures and generic
+form tests; live installation composition always supplies the owner.
+
+**Consequence.** Four selected installations require four independent entries even when the person
+chooses equal text. Accepting one leaves the other three unanswered. This completes collection, not
+private runtime placement: until each harness owns its runtime projection, D-354 still refuses
+different ordinary values rather than copying one owner's answer to another.

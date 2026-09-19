@@ -1540,18 +1540,20 @@ def render_installation_config_form(
         or not isinstance(current_row, str)
     ):
         raise ValueError("installation config form needs projected inputs and a safe draft")
-    projected = {item.id: item for item in inputs if isinstance(item, ConfigInputView)}
+    projected = {item.row: item for item in inputs if isinstance(item, ConfigInputView)}
     lines = ["Configuration"] if draft.fields else []
     for field in draft.fields:
-        view = projected.get(field.id)
+        view = projected.get(field.row)
         label = field.id if view is None else view.label
+        if view is not None and view.owner:
+            label = f"{label} — {view.owner}"
         problem = field.problem
         shown = (
             "<credential-shaped value refused>"
             if problem is not None and "credential" in problem
             else field.value
         )
-        mark = ">" if current_row == field.id else " "
+        mark = ">" if current_row == field.row else " "
         accepted = "  accepted" if field.accepted and problem is None else ""
         lines.append(f"{mark} {label} ({field.id}): [{shown}]{accepted}")
         if view is not None and view.example:
@@ -1591,7 +1593,10 @@ def installation_config_status(inputs: tuple[InputView, ...]) -> tuple[str, ...]
                 else "Required"
             )
         )
-        statements.append((*credential_guidance_lines(item.guidance), f"{item.label}: {status}"))
+        owner = f" — {item.owner}" if item.owner else ""
+        statements.append(
+            (*credential_guidance_lines(item.guidance), f"{item.label}{owner}: {status}")
+        )
     return separate(*statements)
 
 
@@ -1601,7 +1606,7 @@ def installation_config_purpose(
     """What the field under the cursor binds to, which Verbose describes rather than drawing."""
 
     view = next(
-        (item for item in inputs if isinstance(item, ConfigInputView) and item.id == current_row),
+        (item for item in inputs if isinstance(item, ConfigInputView) and item.row == current_row),
         None,
     )
     return () if view is None else (f"Binding: {_human(view.binding)} ({_human(view.exposure)})",)
@@ -3005,10 +3010,11 @@ class CanonicalScreenSource:
                 else ()
             )
         if screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
+            draft_rows = {item.row for item in state.config_draft.fields}
             fields = tuple(
-                item.id
+                item.row
                 for item in self._screens.installation_inputs
-                if isinstance(item, ConfigInputView)
+                if isinstance(item, ConfigInputView) and item.row in draft_rows
             )
             return (*fields, CONFIG_CONTINUE_ROW) if fields else ()
         if screen is ConsumerScreen.REVIEW_SELECTION:

@@ -434,11 +434,17 @@ class ConfiguredInstallationDraftTest(unittest.TestCase):
             (
                 OwnedInputSource(claude, PromptedConfigValue(ORG, "acme")),
                 OwnedInputSource(
-                    claude, SecretProviderReference(TOKEN, credential_address(claude, TOKEN))
+                    claude,
+                    SecretProviderReference(
+                        TOKEN, credential_address(claude, TOKEN, provider="test-keychain")
+                    ),
                 ),
                 OwnedInputSource(tabnine, PromptedConfigValue(ORG, "acme")),
                 OwnedInputSource(
-                    tabnine, SecretProviderReference(TOKEN, credential_address(tabnine, TOKEN))
+                    tabnine,
+                    SecretProviderReference(
+                        TOKEN, credential_address(tabnine, TOKEN, provider="test-keychain")
+                    ),
                 ),
             ),
             profiles=("tabnine", "claude"),
@@ -459,7 +465,10 @@ class ConfiguredInstallationDraftTest(unittest.TestCase):
         self.assertEqual(placement.credential_service_template, secret.provider.service)
         # Neither harness's own address is what the placement carries; the open slot is.
         for owner in (claude, tabnine):
-            self.assertNotEqual(credential_address(owner, TOKEN).service, secret.provider.service)
+            self.assertNotEqual(
+                credential_address(owner, TOKEN, provider="test-keychain").service,
+                secret.provider.service,
+            )
 
     def test_the_placement_still_names_every_real_item_it_would_need(self) -> None:
         """The open slot is for the launcher's text alone; nothing may be asked of a provider.
@@ -512,7 +521,11 @@ class ConfiguredInstallationDraftTest(unittest.TestCase):
                     claude, SecretProviderReference(TOKEN, credential_address(claude, TOKEN))
                 ),
                 OwnedInputSource(tabnine, PromptedConfigValue(ORG, "acme")),
-                OwnedInputSource(tabnine, SecretProviderReference(TOKEN, KEYCHAIN)),
+                # This uses the expected provider but fixes the service to Claude's owner. It must
+                # not be mistaken for the open harness slot that Tabnine is entitled to compose.
+                OwnedInputSource(
+                    tabnine, SecretProviderReference(TOKEN, credential_address(claude, TOKEN))
+                ),
             ),
             profiles=("tabnine", "claude"),
         )

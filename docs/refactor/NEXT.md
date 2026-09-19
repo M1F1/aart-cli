@@ -2,10 +2,10 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–18a are **done** on `refactor/cp-26-legacy-removal`; **step 19 is in progress** — its
-first commit is the installation owner and the credential address derived from it (D-352), and the
-next one splits input composition per owner and wires that address into the live call site. The executable,
-import and filesystem namespace is `aart-cli` / `aart_cli`, the product has one portable
+Steps 1–18a are **done** on `refactor/cp-26-legacy-removal`; **step 19 is in progress**. Installation
+owners, per-owner input composition, concrete credential addresses, launcher-side harness address
+composition, reconciliation names and Screen 07's per-installation rows are now implemented
+(D-352–D-357). The executable, import and filesystem namespace is `aart-cli` / `aart_cli`, the product has one portable
 `~/.aart-cli` / `AART_CLI_HOME`, the harness-owned installation-tree policy is defined, and Push
 suggests a review branch from the action that produced the current commit (D-347). B-057 and B-149
 are both closed. The plan has **23 tasks (19 done)**: additions **CP-26.18a** and **CP-26.20a**
@@ -99,18 +99,25 @@ address back to the template and refuses only what still disagrees; and
 `domain.credentials.credential_component_names` (D-356) keeps the reconciliation vocabulary able to
 name four installations of one artifact.
 
-**The next action, before anything else.** Run `make unit`. It was started for this slice and
-stopped unfinished when the work segment ended, so the broad gate has not passed over a change that
-touched the reconciliation vocabulary and the receipt's credential list. The focused suites,
-`lint`, `format-check` and `typecheck` were green. Owed with it: targeted semantic mutations for
-this slice's two claims -- a composed address that names a fixed harness, and a credential
-component name that falls back to the input id alone -- each red on exactly the test that names it,
-plus scoped `make mutants` over `aart_cli/domain/credentials.py` and
-`aart_cli/io/configured_installation.py`.
+**Done since: Screen 07 collects per installation (D-357).** The form now uses the owner-qualified
+`InputView.row` as its editable key and visibly names the owner beside ordinary configuration and
+credential status. `_one_row_per_input` and `_addressed_to_owners` are deleted. A submitted answer
+resolves to exactly one field in the freshly composed installation draft; one accepted row leaves
+the other owners unanswered, and stale rows are ignored rather than rebound. Three target rows must
+therefore be accepted three times even when the person enters equal values. `make unit` passes 4654
+tests with one skip. The two previously owed targeted mutations were red and restored; scoped mutmut
+over `domain/credentials.py` killed the owner-collapsing change, and the configured-installation run
+went from 65 to 64 survivors after a provider-preservation hole in the test was closed. The Screen
+07 owner-key mutation was red on its exact E2E test and restored. A file-scoped mutmut attempt on
+`consumer_ui.py` generated 2502 mutants across unrelated screens and was stopped after 253 as
+disproportionate; B-158 records the runner limitation.
 
-Screen 07 collecting per installation rather than per declared input follows; `InputView.owner` and
-`InputView.row` are already in place for that row identity, and `_one_row_per_input` /
-`_addressed_to_owners` in `io/consumer_actions.py` are the two functions it removes.
+**The next action.** Apply `installed_name()` at the adapters before any provider or filesystem
+mutation: skill directory/frontmatter names and MCP registration keys first, with the operation-wide
+collision check. Then replace the remaining shared runtime/payload/receipt placement with one
+harness-owned installation tree and one lifecycle record per owner. D-354's temporary refusal for
+different ordinary values remains until that projection can carry each owner's own value; do not
+turn it back into copying or sharing.
 
 
 Naming is included in this task (D-349, §169.7, INV-253; issues #26/#28). Harness-visible names

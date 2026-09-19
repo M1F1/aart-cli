@@ -195,7 +195,7 @@ class SourceDraft:
 
 
 #: Screen 07's final control is not an input id. Angle brackets cannot occur in an InputId, so an
-#: authored field can never collide with it while rows remain the actual config input ids.
+#: authored field can never collide with it while rows contain an owner and config input id.
 CONFIG_CONTINUE_ROW = "<continue>"
 
 
@@ -207,6 +207,7 @@ class InstallationConfigField:
     value: str = ""
     validation: InputValidation | None = None
     accepted: bool = False
+    owner: str = ""
 
     def __post_init__(self) -> None:
         if (
@@ -217,8 +218,16 @@ class InstallationConfigField:
             or any(character in self.value for character in "\r\n")
             or not (self.validation is None or isinstance(self.validation, InputValidation))
             or not isinstance(self.accepted, bool)
+            or not isinstance(self.owner, str)
+            or any(character in self.owner for character in "\r\n\t")
         ):
             raise ValueError("installation config field is invalid")
+
+    @property
+    def row(self) -> str:
+        """The owner-qualified screen row, retaining the old shape for ownerless fixtures."""
+
+        return f"{self.owner}\t{self.id}" if self.owner else self.id
 
     @property
     def problem(self) -> str | None:
@@ -235,7 +244,7 @@ class InstallationConfigDraft:
 
     def __post_init__(self) -> None:
         if any(not isinstance(item, InstallationConfigField) for item in self.fields) or len(
-            {item.id for item in self.fields}
+            {item.row for item in self.fields}
         ) != len(self.fields):
             raise ValueError("installation config draft is invalid")
 
@@ -247,36 +256,36 @@ class InstallationConfigDraft:
 
     @property
     def answers(self) -> tuple[tuple[str, str], ...]:
-        return tuple((item.id, item.value) for item in self.fields if item.accepted)
+        return tuple((item.row, item.value) for item in self.fields if item.accepted)
 
     def value(self, identifier: str) -> str:
-        field = next((item for item in self.fields if item.id == identifier), None)
+        field = next((item for item in self.fields if item.row == identifier), None)
         if field is None:
             raise ValueError(f"installation config has no field {identifier}")
         return field.value
 
     def problem(self, identifier: str) -> str | None:
-        field = next((item for item in self.fields if item.id == identifier), None)
+        field = next((item for item in self.fields if item.row == identifier), None)
         if field is None:
             raise ValueError(f"installation config has no field {identifier}")
         return field.problem
 
     def edit(self, identifier: str, value: str) -> "InstallationConfigDraft":
-        if all(item.id != identifier for item in self.fields):
+        if all(item.row != identifier for item in self.fields):
             raise ValueError(f"installation config has no field {identifier}")
         return InstallationConfigDraft(
             tuple(
-                replace(item, value=value, accepted=False) if item.id == identifier else item
+                replace(item, value=value, accepted=False) if item.row == identifier else item
                 for item in self.fields
             )
         )
 
     def accept(self, identifier: str) -> "InstallationConfigDraft":
-        if all(item.id != identifier for item in self.fields):
+        if all(item.row != identifier for item in self.fields):
             raise ValueError(f"installation config has no field {identifier}")
         return InstallationConfigDraft(
             tuple(
-                replace(item, accepted=item.problem is None) if item.id == identifier else item
+                replace(item, accepted=item.problem is None) if item.row == identifier else item
                 for item in self.fields
             )
         )
@@ -1804,12 +1813,12 @@ def reduce_consumer_ui(
         if (
             state.session.screen is not ConsumerScreen.REQUIRED_INPUTS
             or not state.config_form_active
-            or all(item.id != event.key for item in state.config_draft.fields)
+            or all(item.row != event.key for item in state.config_draft.fields)
         ):
             return state, ()
         if event.accepted is True:
             edited_config = state.config_draft.accept(event.key)
-            if not any(item.id == event.key and item.accepted for item in edited_config.fields):
+            if not any(item.row == event.key and item.accepted for item in edited_config.fields):
                 return replace(state, config_draft=edited_config, quit_pending=False), ()
             return (
                 replace(
@@ -2123,7 +2132,7 @@ def _form_text_rows(state: ConsumerUiState) -> frozenset[str] | None:
         return frozenset(item.id for item in state.configuration_draft.fields)
     if screen is ConsumerScreen.REQUIRED_INPUTS:
         return (
-            frozenset(item.id for item in state.config_draft.fields)
+            frozenset(item.row for item in state.config_draft.fields)
             if state.config_form_active
             else None
         )
@@ -2456,20 +2465,20 @@ def key_event(
                     if state.config_draft.ready
                     else None
                 )
-            if any(item.id == row for item in state.config_draft.fields):
+            if any(item.row == row for item in state.config_draft.fields):
                 return ConsumerUiEvent(
                     ConsumerUiEventKind.EDIT_INSTALL_CONFIG,
                     key=row,
                     accepted=True,
                 )
             return None
-        if any(item.id == row for item in state.config_draft.fields) and key == "backspace":
+        if any(item.row == row for item in state.config_draft.fields) and key == "backspace":
             return ConsumerUiEvent(
                 ConsumerUiEventKind.EDIT_INSTALL_CONFIG,
                 key=row,
                 text=state.config_draft.value(row)[:-1],
             )
-        if any(item.id == row for item in state.config_draft.fields) and key.isprintable():
+        if any(item.row == row for item in state.config_draft.fields) and key.isprintable():
             value = key if len(key) > 1 else state.config_draft.value(row) + key
             return ConsumerUiEvent(
                 ConsumerUiEventKind.EDIT_INSTALL_CONFIG,
