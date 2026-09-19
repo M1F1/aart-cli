@@ -8112,8 +8112,19 @@ generator the site accepts no field, which is the one answer that produces a sil
 manifest. It lives in `tests/`: runtime code never reads its own Python source.
 
 **Consequence.** Seventeen sites are reported, three of them unresolved, all in the dynamically
-dispatched input and descriptor parsing. Steps 8 onward must handle those three explicitly rather
-than emit nothing for them. A new parser field, helper or call site turns the surface tests red.
+dispatched input and descriptor parsing. A new parser field, helper or call site turns the surface
+tests red.
+
+**Amended 2026-09-19, while starting step 8.** "Unresolved" first meant "reports nothing", and that
+lost real field names: `_parse_input` builds its optional set with `|`, and `_parse_dependencies`
+assigns `required` in three branches and passes the variable, so `required`, `help`, `default`,
+`validation`, `pyproject`, `lock` and `path` were reported by no site at all -- exactly the names a
+skeleton could omit with nothing failing. An unresolved site now reports every name the reader
+*could* see, including the literals inside a computed expression and the literals assigned to a
+local variable anywhere in the function that passes it. The union over branches is an
+over-approximation, which is why the site stays marked unresolved: the names are what could be
+read, not a promise that there are no others. Reporting nothing was the worse error, because it
+reads as "this site accepts no field".
 
 ## D-328 — the YAML emitter refuses rather than writes something that reads back differently
 

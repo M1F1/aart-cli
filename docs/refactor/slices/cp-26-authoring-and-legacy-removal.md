@@ -537,6 +537,17 @@ failed `test_every_field_helper_call_in_the_parser_reaches_the_surface` and noth
 computed field set read as the empty tuple failed `test_a_computed_field_set_is_marked_unresolved`
 and nothing else. Both restored green.
 
+**Amended while starting step 8.** An unresolved site reported no names at all, which lost
+`required`, `help`, `default`, `validation` from `_parse_input` and `pyproject`, `lock`, `path` from
+`_parse_dependencies` — every one a field a generated skeleton could have omitted with nothing going
+red. An unresolved site now reports the literals it can see inside the computed expression, and,
+when the keyword is a bare name, the literals assigned to that name anywhere in the function that
+passes it. It stays marked unresolved because the union over branches is an over-approximation.
+Two further targeted mutations: reporting no visible literals failed
+`test_a_computed_set_still_reports_the_names_it_could_read`; dropping the branch-assignment lookup
+failed `test_a_field_set_assigned_in_branches_is_read_from_those_branches` and the test that names
+the seven fields directly.
+
 ### Step 7 — a deterministic YAML emitter for the generated subset (2026-09-19)
 
 `aart author init` writes `aart.yaml`, and zero runtime dependencies means AART writes it itself.

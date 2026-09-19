@@ -126,6 +126,48 @@ class UnresolvedSiteTest(unittest.TestCase):
         self.assertEqual(site.unresolved, ("label",))
         self.assertEqual(site.required, ("id",))
 
+    def test_a_computed_set_still_reports_the_names_it_could_read(self) -> None:
+        """Unresolved means "maybe more", not "none" -- the visible names still have to come out."""
+
+        source = self._BASE + (
+            "def parse(value, extra, path):\n"
+            "    return base(value, required=frozenset({'type'} | extra), path=path, label='t')\n"
+        )
+
+        (site,) = [item for item in accepted_fields(source) if item.owner == "parse"]
+
+        self.assertEqual(site.required, ("type",))
+        self.assertEqual(site.unresolved, ("required",))
+
+    def test_a_field_set_assigned_in_branches_is_read_from_those_branches(self) -> None:
+        """`required = frozenset({...})` in one branch or another is where the names actually are."""
+
+        source = self._BASE + (
+            "def parse(value, kind, path):\n"
+            "    if kind == 'a':\n"
+            "        required = frozenset({'type', 'path'})\n"
+            "    else:\n"
+            "        required = frozenset({'type', 'pyproject', 'lock'})\n"
+            "    return base(value, required=required, path=path, label='t')\n"
+        )
+
+        (site,) = [item for item in accepted_fields(source) if item.owner == "parse"]
+
+        self.assertEqual(site.required, ("lock", "path", "pyproject", "type"))
+        self.assertEqual(site.unresolved, ("required",))
+
+    def test_the_parser_input_and_dependency_names_are_not_lost_to_a_computed_set(self) -> None:
+        """The two sites CP-26.8 would otherwise generate a skeleton without."""
+
+        names = {
+            name
+            for item in parser_field_surface()
+            for name in (*item.required, *item.optional)
+        }
+
+        self.assertLessEqual({"required", "help", "default", "validation"}, names)
+        self.assertLessEqual({"pyproject", "lock", "path"}, names)
+
     def test_every_unresolved_parser_site_names_what_could_not_be_read(self) -> None:
         for item in parser_field_surface():
             with self.subTest(owner=item.owner, label=item.label):

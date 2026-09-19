@@ -33,8 +33,12 @@ class FieldSet:
     owner: str
     helper: str
     label: str | None
+    #: Every field name the reader could see at this site. When the matching keyword appears in
+    #: `unresolved` these are what could be read, not necessarily all of them.
     required: tuple[str, ...]
     optional: tuple[str, ...]
+    #: The parts of this site -- "required", "optional", "label" -- that are computed rather than
+    #: written out, so the reader cannot promise the set above is complete.
     unresolved: tuple[str, ...]
 
 
@@ -65,6 +69,50 @@ def _literal_names(node: ast.expr | None) -> tuple[str, ...] | None:
             names.append(element.value)
         return tuple(sorted(set(names)))
     return None
+
+
+def _visible_names(node: ast.expr | None) -> tuple[str, ...]:
+    """Every string literal anywhere inside a computed field set.
+
+    `frozenset({"type"} | extra)` resolves to nothing exact, but `type` is still a field this site
+    accepts. Reporting it alongside the `unresolved` marker is strictly better than reporting the
+    empty set, which reads as "accepts no field" -- the one answer a generator must not be handed.
+    """
+
+    if node is None:
+        return ()
+    return tuple(
+        sorted(
+            {
+                item.value
+                for item in ast.walk(node)
+                if isinstance(item, ast.Constant) and isinstance(item.value, str)
+            }
+        )
+    )
+
+
+def _assigned_names(owner: ast.FunctionDef | None, target: str) -> tuple[str, ...]:
+    """The field names a local variable is assigned anywhere in the function that passes it.
+
+    `_parse_dependencies` picks `required` in three branches and passes the variable. The names are
+    literals in the same body, one branch apart from the call, so the union over the branches is
+    what that site may demand. It is an over-approximation, which is why the site stays unresolved.
+    """
+
+    if owner is None:
+        return ()
+    found: set[str] = set()
+    for node in ast.walk(owner):
+        targets: list[ast.expr] = []
+        if isinstance(node, ast.Assign):
+            targets = list(node.targets)
+        elif isinstance(node, ast.AnnAssign | ast.AugAssign):
+            targets = [node.target]
+        if not any(isinstance(item, ast.Name) and item.id == target for item in targets):
+            continue
+        found.update(_visible_names(node.value))
+    return tuple(sorted(found))
 
 
 def _definitions(tree: ast.Module) -> tuple[ast.FunctionDef, ...]:
@@ -142,6 +190,10 @@ def accepted_fields(source: str) -> tuple[FieldSet, ...]:
         for node in ast.walk(definition):
             if isinstance(node, ast.Call) and _call_name(node) in helpers:
                 owners[node] = definition.name
+
+    def owner_of(call: ast.Call) -> str:
+        return owners.get(call, "<module>")
+
     found: list[FieldSet] = []
     for node in sorted(
         (item for item in ast.walk(tree) if isinstance(item, ast.Call)),
@@ -167,11 +219,18 @@ def accepted_fields(source: str) -> tuple[FieldSet, ...]:
             FIELD_KEYWORDS, (inherited_required, inherited_optional), strict=True
         ):
             expression = bound.get(keyword, defaults.get(keyword))
-            names = _literal_names(expression)
-            if names is None and keyword in bound:
+            exact = _literal_names(expression)
+            if exact is not None:
+                names: tuple[str, ...] = exact
+            elif keyword in bound:
                 unresolved.append(keyword)
-                names = ()
-            elif names is None:
+                names = _visible_names(expression)
+                if isinstance(expression, ast.Name):
+                    names = (
+                        *names,
+                        *_assigned_names(definitions.get(owner_of(node)), expression.id),
+                    )
+            else:
                 names = ()
             resolved[keyword] = tuple(sorted({*names, *carried}))
         label_node = bound.get("label")
@@ -184,7 +243,7 @@ def accepted_fields(source: str) -> tuple[FieldSet, ...]:
             unresolved.append("label")
         found.append(
             FieldSet(
-                owners.get(node, "<module>"),
+                owner_of(node),
                 helper,
                 label,
                 resolved["required"],
