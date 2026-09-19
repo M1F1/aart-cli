@@ -2,7 +2,9 @@
 
 ## Where CP-26 is (2026-09-19)
 
-Steps 1–18a are **done** on `refactor/cp-26-legacy-removal`; **step 19 is next**. The executable,
+Steps 1–18a are **done** on `refactor/cp-26-legacy-removal`; **step 19 is in progress** — its
+first commit is the installation owner and the credential address derived from it (D-352), and the
+next one splits input composition per owner and wires that address into the live call site. The executable,
 import and filesystem namespace is `aart-cli` / `aart_cli`, the product has one portable
 `~/.aart-cli` / `AART_CLI_HOME`, the harness-owned installation-tree policy is defined, and Push
 suggests a review branch from the action that produced the current commit (D-347). B-057 and B-149
@@ -64,7 +66,23 @@ README opens with the route a new user runs, followed by a bounded `## What AART
 nothing else, because step 15 moved the detail into eight linked documents.
 `docs/refactor/slices/cp-26-authoring-and-legacy-removal.md` records steps 5–17 (D-321 to D-341).
 
-### Execute CP-26.19 next
+### Execute CP-26.19 next — it is already underway
+
+**On the branch.** `domain/installation_owner.py` holds the complete owner and
+`credential_address()` derives the per-owner item address (D-352, slice §"Done so far — who an
+installation is"). It is deliberately not reachable from the runtime yet and is recorded in
+`DELIBERATE_NON_RUNTIME_MODULES` with the reason.
+
+**The next increment, and the fact that decides it.**
+`application/installation_inputs.py` composes `InstallationInputField` as "one semantic form field
+and every artifact whose launch contract depends on it", and refuses duplicates by `InputId`. That
+is the global grouping §169 rejects: it is why one artifact with two config variables and one
+secret on four harnesses collects three fields rather than the twelve the acceptance names, and why
+`io/consumer_actions.py` can still address a Keychain item by the user home alone. Split that
+composition per owner first; everything else in 19 — placement, receipts, Installed, provider
+references, lifecycle — reads the owner that split produces. Wiring it removes the reachability
+exception, which is the signal that the step's foundation is real rather than written.
+
 
 Naming is included in this task (D-349, §169.7, INV-253; issues #26/#28). Harness-visible names
 carry artifact/Registry alias/scope without version, respect discovery paths and adapter grammar,

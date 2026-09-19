@@ -8741,3 +8741,40 @@ read-only enforcement and safe reports. No new runtime dependency or installatio
 §170, task 20a, author guidance and handoff now carry this contract and pending negative/property
 acceptance. Existing task ids, statuses and order are unchanged; this is documentation, not a
 shipped parser/runner. No noncritical implementation discovery arose in this planning segment.
+
+## D-352 — the credential address is the whole owner, with the root as a discriminator
+
+Date: 2026-09-19 · Status: accepted · Scope: CP-26.19 / §169.4-6, D-333, D-349
+
+**Context.** §169 requires "deterministic collision-resistant service/account pairs from complete
+keys with opaque roots", and asks for the exact encoding to be recorded here. What was shipped
+derived the service as `aart.<first 12 hex of sha256(user home)>` with the declared input id as the
+account, so every installation of one artifact on one machine addressed one item regardless of
+harness, scope, Registry alias or project. Rotating or deleting a credential for one installation
+silently did it for the others, which is the sharing D-333 removed.
+
+**Decision.** `domain/installation_owner.py` composes
+
+```text
+service = aart-cli.<harness>.<profile|->.<scope>.<alias>.<kind>.<name>.<16 hex of sha256(root)>
+account = <input id>
+```
+
+with every label held to the canonical slug the configuration and protocol schemas already use, and
+the `.` separator chosen because no slug can contain one, so the address parses back to exactly one
+owner. The profile keeps a slot even when the harness has none: a fixed label count is what stops
+the components shifting, and `-` is not a usable slug so it can never be read as a profile.
+
+The root is the one field that is hashed rather than written. A credential item's attributes are
+readable by anything that can list the store, and a project directory is frequently the name of a
+client; sixteen hex characters is sixty-four bits, which separates roots without naming them. No
+version appears, so a compatible update keeps the values that owner already entered. Nothing in the
+address derives from a value, so it can be computed before the secret exists and identically on
+every retry.
+
+An address longer than 255 characters is refused rather than shortened, because truncation is
+exactly how two owners quietly become one item.
+
+**Consequence.** The claim is held by property test over generated owners: two addresses are equal
+if and only if the owners are. Wiring the live call site is the next commit in this step and is
+what removes `domain.installation_owner` from the reachability exception list.

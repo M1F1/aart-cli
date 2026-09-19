@@ -1182,7 +1182,7 @@ under D-317/D-334.
 
 ### Step 19 — private installation trees, names, input entry and lifecycle (B-144/B-150, D-333/D-349)
 
-Status: **todo**, depends on 18a. Implement Product Specification §§38–39, 84–85, 96, 161.5–8 and
+Status: **in progress**, depends on 18a. Implement Product Specification §§38–39, 84–85, 96, 161.5–8 and
 169 with INV-243/245/246/253. Stable owner fields are Registry alias, artifact kind/name, scope,
 normalized concrete project/user target root and harness/profile; `input_id` is unique only inside
 that owner. Version is excluded so compatible updates can retain that owner's inputs.
@@ -1259,6 +1259,40 @@ Acceptance (red first):
 - Canonical object availability alone creates no Installed row. Verification failure and partial
   effects produce honest recorded health. Launch succeeds without the installer or central object
   store; cache pruning never deletes private runtime state.
+
+**Done so far — who an installation is, and where its credential therefore lives.**
+`domain/installation_owner.py` holds the complete owner: Registry alias, artifact kind and name,
+scope, the normalized concrete root, and the harness with its profile. `installation_owner()` drops
+the version there rather than at each call site, so no caller can decide to keep it and turn every
+compatible update into a fresh installation with nothing entered.
+
+`credential_address()` composes
+`aart-cli.<harness>.<profile|->.<scope>.<alias>.<kind>.<name>.<16 hex of sha256(root)>` with the
+declared input as the account (D-352). Every label is held to the canonical slug, the separator is
+one no slug can contain, the profile keeps a slot even when the harness has none so the components
+cannot shift, the root is hashed because a project directory is frequently a client's name, and an
+address over 255 characters is refused rather than shortened -- truncation being exactly how two
+owners quietly become one item.
+
+What this replaces is still live and is the reason it was written first: `io/consumer_actions.py`
+addresses a Keychain item as `aart.<12 hex of the user home>` with the input id, which is one item
+for every harness, scope and Registry alias on the machine. That call site cannot adopt the new
+address yet, because `application/installation_inputs.py` still composes one field per `InputId`
+across artifacts -- "one semantic form field and every artifact whose launch contract depends on
+it", with an explicit duplicate check -- which is the global grouping this step rejects and the
+reason the acceptance asks for eight ordinary fields and four secure entries from one artifact on
+four harnesses. Splitting that composition per owner is the next commit, and it is what removes
+`domain.installation_owner` from `DELIBERATE_NON_RUNTIME_MODULES`, where it is recorded with that
+dated reason.
+
+Evidence: two targeted semantic mutations, each red then restored -- dropping the profile's empty
+slot (1 red, the test that names it) and making the root discriminator a constant (2 red, the
+per-field separation subtest for `root` and the property). Scoped
+`make mutants ONLY=aart_cli/domain/installation_owner.py` killed 44 of 62; of the eighteen
+survivors, one was a real hole and is now held (a non-string root reached `posixpath` and came back
+as `TypeError`, which is not a refusal), and the rest are message arguments, an encoding spelled
+`UTF-8`, mutmut's own `X` padding inside the newline set, and the `>`/`>=` boundary of the length
+refusal, which no test pins deliberately.
 
 Property-test complete owner keys, composed-name validation and provider-address stability and
 separation across generated owners/input ids. Use existing focused tests where

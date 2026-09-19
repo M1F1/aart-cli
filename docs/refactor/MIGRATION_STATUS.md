@@ -71,6 +71,27 @@ targeted mutation went red and was restored; scoped mutmut killed all 135 mutant
 reran step 16's executable install/README contract; lint, format, type, packaging, documentation and
 secret-shape gates also passed. Step 19 is next. No broad `make quality` ran (D-317/D-334).
 
+**2026-09-19, CP-26.19 in progress — who an installation is.** `domain/installation_owner.py` is
+the complete owner §169.4-6 names: Registry alias, artifact kind and name, scope, normalized
+concrete root, harness and profile. The version is dropped inside `installation_owner()` so no
+caller can keep it, because an owner that moved with the version would make every compatible update
+ask for every value again. `credential_address()` derives
+`aart-cli.<harness>.<profile|->.<scope>.<alias>.<kind>.<name>.<16 hex of sha256(root)>` with the
+declared input as the account (D-352): readable labels for everything an operator needs to
+recognize, the root hashed because a project directory is frequently a client's name, a slot the
+profile keeps even when empty so the labels cannot shift, and a refusal rather than a truncation
+above 255 characters. What it replaces is live and is why it exists — `io/consumer_actions.py`
+addresses one Keychain item as `aart.<12 hex of the user home>` per declared input, so one artifact
+in two harnesses, two scopes or from two Registry aliases reaches the same item, and rotating or
+deleting for one installation silently does it for the others. That call site cannot adopt this
+until the same step stops composing one field per `InputId` across artifacts, so the module is
+recorded in `DELIBERATE_NON_RUNTIME_MODULES` with that dated reason and the next commit removes it.
+Evidence: 15 tests including two Hypothesis properties (two addresses are equal exactly when the
+owners are; no address holds the root or outgrows the bound), two targeted semantic mutations each
+red then restored, and scoped mutmut killing 44 of 62 — one survivor was a real hole, a non-string
+root returning `TypeError` instead of a refusal, and is now held. `lint`, `format-check`,
+`typecheck`, `docs-check` and `validate` green. No broad `make quality` (D-317).
+
 **2026-09-19, CP-26.18a in progress — the filesystem's names, and one portable home.** Two more
 commits on `refactor/cp-26-legacy-removal`. `0fadd69` moved every name the filesystem sees: author
 manifests `aart-cli.yaml`/`aart-cli.json`, generated `aart-cli-registry.json`,
