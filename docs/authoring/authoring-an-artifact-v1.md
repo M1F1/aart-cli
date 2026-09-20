@@ -32,29 +32,30 @@ ok    github-mcp/aart-cli.yaml  ->  mcp/github-mcp@0.1.0
 
 It is the command to run in a loop while editing; `--json` makes the verdict machine-readable.
 
-## Planned local MCP smoke verification
+## Local MCP smoke verification
 
-**Accepted for CP-26.20a; not implemented yet.** Before publishing a new MCP to a public remote
-Registry, the recommended workflow will be: commit its canonical package to a branch in your local
+CP-26.20a now provides the local command and its direct MCP, OpenCode CLI, and Claude Code routes;
+final Tabnine CLI acceptance remains pending. Before publishing a new MCP to a public remote
+Registry, the recommended workflow is: commit its canonical package to a branch in your local
 Registry repository, add that local repo and branch as a Registry under its own alias, install the
-artifact through the normal Marketplace/CLI flow, then run the planned `aart-cli mcp test`
+artifact through the normal Marketplace/CLI flow, then run `aart-cli mcp test`
 command for the intended harness installations, review all stage results, then publish the tested
 content. After changing and committing the content, synchronize that Registry, update the local
 installation and test again. No separate Candidate Test Install process or remote push is required.
 
-The command will operate only on already installed MCPs, individually or in batches, and will
+The command operates only on already installed MCPs, individually or in batches, and
 also let a consumer check existing installations without an authoring workflow. It will report
 installation configuration, MCP startup/protocol, service access, harness/model-provider access
 and actual harness/MCP/service execution separately. Only a predeclared, reviewed read-only tool
 and arguments may be called; absent declarations cannot trigger guessed operations. OpenCode CLI
 and Tabnine CLI are priority acceptance targets, with Claude Code as an additional adapter.
 
-This recommendation does not introduce an automatic publication gate. See the accepted
+This recommendation does not introduce an automatic publication gate. See
 [Product Specification §170](../product-specification/PRODUCT_SPECIFICATION.md#170-local-mcp-smoke-verification-through-the-cli)
 and the [CP-26 execution slice](../refactor/slices/cp-26-authoring-and-legacy-removal.md) for the
-pending contract; do not treat the planned command as available in the current build.
+implementation contract and remaining acceptance obligation.
 
-The accepted minimal declaration for that future command is a top-level manifest block:
+The minimal declaration is a top-level manifest block:
 
 ```yaml
 smoke_test:
@@ -63,11 +64,35 @@ smoke_test:
 ```
 
 Choose an existing reviewed read-only tool; no special health tool or `{"ok": true}` response
-is required. Optional `arguments` supplies required parameters; otherwise an empty argument object
-is used and checked against the tool's schema. Tool calls default to a 15-second timeout. Optional
-`expect` will add deterministic checks against existing output, with its exact syntax documented
-when implemented. The generic evaluator checks protocol completion/errors and declared schemas,
+is required. Optional `arguments` supplies fixed JSON values or an explicit installation-local
+non-secret configuration reference such as `tenant: {configuration: tenant}`. Otherwise an empty
+argument object is used and checked against the tool's schema. Tool calls default to a 15-second
+timeout; `timeout_seconds` may be from 1 through 60. Optional `expect` is exactly one of:
+
+```yaml
+expect:
+  text_contains: expected text
+```
+
+or:
+
+```yaml
+expect:
+  structured_path: user.login
+  equals: expected-login
+```
+
+The generic evaluator checks protocol completion/errors and declared schemas,
 accepting supported text, structured, image and empty results. It does not guess business meaning
 from keywords or ask a model to decide success. Successful invocation is reported separately from
 external-service evidence; cached output or an error disguised as normal text cannot alone prove
 service access. The read-only flag is a reviewed declaration, not a sandbox guarantee.
+
+## Accepted smoke revision — implementation pending
+
+D-365 revises the behavior above: harnesses without enforceable allowed tools receive direct MCP
+checks only; the excluded harness stage does not fail direct coverage. Eligible harnesses return
+a bounded English JSON assessment (`status`, `summary`, `possible_error`) within 120 seconds.
+The assessment is separate from protocol and service evidence. Default-off `--show-response` will
+permit bounded inspection of the server response in current output, without application persistence.
+These revised behaviors are specified in Product Specification §170 and still need implementation.

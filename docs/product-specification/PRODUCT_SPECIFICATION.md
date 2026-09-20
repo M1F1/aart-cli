@@ -10695,7 +10695,7 @@ the same owner retain stable names/references and cannot affect another owner.
 
 # 170. Local MCP smoke verification through the CLI
 
-Status: **ACCEPTED 2026-09-19 — implementation pending in CP-26.20a**.
+Status: **ACCEPTED 2026-09-19, revised 2026-09-20 (D-365) — implementation in flight in CP-26.20a**.
 This is an addition to CP-26 before its final verification task, not a reduction to connectivity
 alone. It preserves §169's installation and credential ownership boundaries.
 
@@ -10781,16 +10781,17 @@ malformed flag or result is not a pass. Respect the negotiated MCP/schema contra
 schema cannot be validated, report unsupported validation rather than silently skipping it.
 Accept every supported MCP content type, including text, structured data, images and valid empty
 results. Do not demand JSON, a nonempty payload, a dedicated health tool or `{"ok": true}` from
-either the server or the harness. These checks concern the protocol envelope and declared schemas,
+the MCP server. The harness assessment uses the separate JSON contract in §170.4. These checks concern the protocol envelope and declared schemas,
 not the arbitrary business meaning of its content. See the
 [MCP tools contract](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
 
 `expect` checks existing output without requiring the tool to change, for example presence of a
 field in structured data or an explicit condition on text. Keep its parser-owned vocabulary
 small, deterministic and bounded; record the exact syntax/defaults during implementation. Do not
-execute user scripts, fetch linked resources, evaluate content as instructions or use an LLM as
-the success judge. Both routes use the same evaluator. Without `expect`, no content guessing,
-keyword-based error detector or model interpretation is added implicitly.
+execute user scripts, fetch linked resources or evaluate returned content as instructions. Both
+routes use the same deterministic evaluator. The harness also provides the explicitly labelled
+model assessment in §170.4; it cannot override protocol failures or establish service access.
+Without `expect`, the direct route does not guess business meaning from keywords.
 
 Reports distinguish protocol-level tool-call success from result expectations and evidence of
 external-service access. An error disguised as normal text, cached data or a static response may
@@ -10827,9 +10828,13 @@ Existing trust and execution policies still govern launching local Candidate con
 
 ## 170.4 Harness adapters and execution evidence
 
-OpenCode CLI and Tabnine CLI are the priority, mandatory end-to-end acceptance targets. Claude
-Code uses the same contract through an additional adapter; Claude-only success cannot satisfy
-acceptance for the two enterprise targets. IDE automation is outside this increment.
+Harness execution is capability-dependent. A harness without a verified pre-invocation allowed-tools
+boundary receives direct MCP tests using its installation's own configuration and credentials;
+its harness/model stages are NOT RUN with the capability reason. Do not submit a prompt to that
+harness. Tabnine follows this direct-only route until its adapter establishes the required boundary.
+OpenCode and Claude Code are full-route targets when their measured versions enforce it. IDE
+automation is outside this increment. Missing credentials or a broken supported harness are failures,
+not reasons to silently downgrade the selected coverage.
 
 Detect the actual executable, implementation and version before choosing supported flags, config
 discovery and event formats. A command name alone does not establish the implementation. Do not
@@ -10847,6 +10852,28 @@ usage, calls and captured output, and clean up only resources owned by this test
 unrelated hooks or agents from starting background work; any required execution overrides and
 resulting coverage limits must be explicit rather than silently testing a different setup.
 
+For an eligible harness, impose a 120-second whole-run deadline in addition to the declared MCP
+call deadline. Terminate the owned process and its owned descendants on timeout. Permit exactly
+one declared operation with unchanged arguments; a tool-name allowlist alone does not prove argument
+confinement. The English prompt instructs the model to perform that operation, assess the returned
+content as data, and return exactly this JSON shape, with English human-readable fields:
+
+```json
+{
+  "status": "ok",
+  "summary": "The tool returned the current user's details.",
+  "possible_error": null
+}
+```
+
+`status` is `ok`, `error` or `uncertain`; `summary` is a bounded nonempty English string;
+`possible_error` is null for `ok` and a bounded English explanation for `error` or `uncertain`.
+Limit each text field to 2,000 characters. Invalid/missing JSON, timeout or absent current tool
+execution cannot pass. An `error` assessment fails the assessment stage; `uncertain` leaves it
+NOT VERIFIED. This assessment is reported separately from deterministic checks and service proof.
+The prompt forbids additional tools, retries, repair, and following instructions embedded in the
+response. Enforcement comes from adapter controls, not the prompt alone.
+
 Use pure selection/planning and result evaluation with explicit process, network, harness and
 credential-provider boundaries. Preserve zero installed runtime dependencies; any external test
 driver must be an explicit, policy-governed capability rather than a hidden SDK dependency or an
@@ -10858,15 +10885,24 @@ Reports name the installation owner, local origin/content identity, harness/vers
 timestamp, outcome and actionable reason. At minimum distinguish `PASS`, `FAIL`, `BLOCKED`,
 `NOT CONFIGURED`, `NOT RUN`, `NOT VERIFIED` and `UNSUPPORTED`. `NOT VERIFIED` means a call may
 have completed but the available evidence does not establish the requested claim. A full-run
-success/zero exit requires evidence for every requested stage and target; empty, skipped, blocked,
-unverified or unsupported runs never masquerade as
-passed. A model-provider login failure is distinct from an MCP credential or service failure.
+success/zero exit requires evidence for every applicable requested stage and target. Declare
+coverage (`direct` or `direct-and-harness`) and exclusions before execution. Harness stages omitted
+because the adapter lacks the required pre-invocation boundary do not fail an otherwise successful
+direct run and never count as harness success. An absent optional expectation is also outside the
+required set. Empty selections, failed prerequisites, or unverified required stages cannot pass. A model-provider login failure is distinct from an MCP credential or service failure.
 
 Use only the selected installation's existing configuration and credential bindings. The model
 provider's authentication is separate from the MCP service's authentication. No cross-target
 prefill, secret copying, shared provider-item binding or global artifact configuration pool is
 introduced. Persistent output contains safe metadata and assertion outcomes, not secret values,
 ordinary artifact configuration values, raw service responses or unredacted harness transcripts.
+`--show-response` is an explicit, default-off exception for inspecting the MCP response in the
+current command output (human or JSON). Bound the displayed response to 64 KiB, indicate truncation,
+escape terminal control characters, and never fetch linked resources. Keep it out of application
+state, receipts and logs. Do not resolve credentials for display; redact known sensitive values where
+available, without claiming arbitrary server content can be fully sanitized. Explain that the response
+may contain confidential service data and that redirected output is retained by the caller. Unknown
+business meaning remains NOT VERIFIED / requires user assessment; displaying it never produces PASS.
 Verification results are time- and content-qualified observations, not permanent health promises.
 
 ## 170.6 Acceptance invariants
@@ -10885,12 +10921,16 @@ requires only tool and read-only fields; optional expectations never impose a cu
 protocol, external service, model-provider access and actual harness execution have separate
 evidence and honest non-success states; a lower-level pass never implies a higher-level pass.
 Protocol-level call success is separate from optional result assertions and service-access proof.
+Capability-excluded harness stages are declared and do not fail direct coverage (§170.5).
 
 **INV-251 — Harness smoke success requires current execution evidence.** The current run proves
 the intended tool call and result, including any optional expectations, through the selected harness installation; model prose,
-old events and substituted configurations cannot produce an end-to-end pass. OpenCode CLI and
-Tabnine CLI are mandatory acceptance targets; Claude Code is an additional adapter.
+old events and substituted configurations cannot produce an end-to-end pass.
+Tabnine CLI acceptance is direct-only when it lacks the required boundary; full-route acceptance
+covers eligible OpenCode and Claude adapters. English model assessment is separate evidence and
+cannot replace the observed call or independent service proof.
 
 **INV-252 — Smoke execution is bounded and does not expose installation values.** Explicit effect
 boundaries preserve trust, secret isolation, zero runtime dependencies and bounded execution;
-reports retain only safe, installation-qualified evidence.
+persistent reports retain only safe, installation-qualified evidence. Explicit `--show-response`
+permits bounded current-output inspection under §170.5 without application persistence.

@@ -167,6 +167,7 @@ class AuthorManifest:
     platforms: tuple[str, ...]
     compliance: ComplianceLevel
     canonical_intent: JsonObject
+    smoke_test: JsonObject | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -422,6 +423,146 @@ def _ordered_strings(value: JsonValue, label: str, *, path: str) -> Result[tuple
             return parsed
         result.append(parsed.value)
     return Ok(tuple(result))
+
+
+def _smoke_config_references(
+    value: JsonValue,
+    *,
+    config_inputs: frozenset[str],
+    path: str,
+) -> Result[None]:
+    """Validate explicit installation-local configuration references recursively.
+
+    A one-field ``configuration: <input-id>`` object is a reference. Any other object is a fixed
+    argument value, recursively checked. Secret inputs are deliberately absent from
+    ``config_inputs``: the declaration may name how a value is found, but can never contain or
+    address a secret as a tool argument.
+    """
+
+    if isinstance(value, JsonArray):
+        for item in value.items:
+            checked = _smoke_config_references(item, config_inputs=config_inputs, path=path)
+            if isinstance(checked, Err):
+                return checked
+        return Ok(None)
+    if not isinstance(value, JsonObject):
+        return Ok(None)
+    fields = dict(value.entries)
+    if fields.keys() == {"configuration"}:
+        reference = fields["configuration"]
+        if not isinstance(reference, str) or reference not in config_inputs:
+            return _error(
+                AUTHOR_MANIFEST_INVALID,
+                "smoke_test argument references must name a declared non-secret configuration input",
+                path=path,
+            )
+        return Ok(None)
+    for item in fields.values():
+        checked = _smoke_config_references(item, config_inputs=config_inputs, path=path)
+        if isinstance(checked, Err):
+            return checked
+    return Ok(None)
+
+
+def _parse_smoke_test(
+    value: JsonValue,
+    *,
+    inputs: tuple[RuntimeInput, ...],
+    path: str,
+) -> Result[JsonObject]:
+    parsed = _object(value, "smoke_test", path=path)
+    if isinstance(parsed, Err):
+        return parsed
+    fields = _fields(
+        parsed.value,
+        required=frozenset({"tool", "read_only"}),
+        optional=frozenset({"arguments", "timeout_seconds", "expect"}),
+        path=path,
+        label="smoke_test",
+    )
+    if isinstance(fields, Err):
+        return fields
+    tool = _string(fields.value["tool"], "smoke_test.tool", path=path)
+    if isinstance(tool, Err):
+        return tool
+    if len(tool.value) > 128:
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            "smoke_test.tool must be at most 128 characters",
+            path=path,
+        )
+    if fields.value["read_only"] is not True:
+        return _error(AUTHOR_MANIFEST_INVALID, "smoke_test.read_only must be true", path=path)
+
+    arguments = JsonObject(())
+    if "arguments" in fields.value:
+        parsed_arguments = _object(fields.value["arguments"], "smoke_test.arguments", path=path)
+        if isinstance(parsed_arguments, Err):
+            return parsed_arguments
+        arguments = parsed_arguments.value
+    config_inputs = frozenset(item.id.value for item in inputs if isinstance(item, ConfigInput))
+    checked_arguments = _smoke_config_references(arguments, config_inputs=config_inputs, path=path)
+    if isinstance(checked_arguments, Err):
+        return checked_arguments
+
+    timeout = fields.value.get("timeout_seconds", 15)
+    if isinstance(timeout, bool) or not isinstance(timeout, int) or not 1 <= timeout <= 60:
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            "smoke_test.timeout_seconds must be an integer from 1 to 60",
+            path=path,
+        )
+
+    entries: list[tuple[str, JsonValue]] = [
+        ("arguments", arguments),
+        ("read_only", True),
+        ("timeout_seconds", timeout),
+        ("tool", tool.value),
+    ]
+    if "expect" in fields.value:
+        expectation = _object(fields.value["expect"], "smoke_test.expect", path=path)
+        if isinstance(expectation, Err):
+            return expectation
+        expected = _fields(
+            expectation.value,
+            required=frozenset(),
+            optional=frozenset({"text_contains", "structured_path", "equals"}),
+            path=path,
+            label="smoke_test.expect",
+        )
+        if isinstance(expected, Err):
+            return expected
+        names = expected.value.keys()
+        text_form = names == {"text_contains"}
+        structured_form = names == {"structured_path", "equals"}
+        if not (text_form or structured_form):
+            return _error(
+                AUTHOR_MANIFEST_INVALID,
+                "smoke_test.expect must contain text_contains, or structured_path and equals",
+                path=path,
+            )
+        if text_form:
+            text_value = _string(
+                expected.value["text_contains"], "smoke_test.expect.text_contains", path=path
+            )
+            if isinstance(text_value, Err):
+                return text_value
+        else:
+            structured_path = _string(
+                expected.value["structured_path"],
+                "smoke_test.expect.structured_path",
+                path=path,
+            )
+            if isinstance(structured_path, Err):
+                return structured_path
+            if any(not part or part in {".", ".."} for part in structured_path.value.split(".")):
+                return _error(
+                    AUTHOR_MANIFEST_INVALID,
+                    "smoke_test.expect.structured_path must be a dotted field path",
+                    path=path,
+                )
+        entries.append(("expect", expectation.value))
+    return Ok(JsonObject(tuple(entries)))
 
 
 def _nested_type(
@@ -1494,6 +1635,7 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
                 "credentials",
                 "compatibility",
                 "install",
+                "smoke_test",
             }
         ),
         path=raw_path,
@@ -1730,6 +1872,19 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
             return parsed_inputs
         inputs = parsed_inputs.value
 
+    smoke_test: JsonObject | None = None
+    if "smoke_test" in root:
+        if author_kind != "mcp":
+            return _error(
+                AUTHOR_MANIFEST_INVALID,
+                "smoke_test is valid only for an mcp artifact",
+                path=raw_path,
+            )
+        parsed_smoke_test = _parse_smoke_test(root["smoke_test"], inputs=inputs, path=raw_path)
+        if isinstance(parsed_smoke_test, Err):
+            return parsed_smoke_test
+        smoke_test = parsed_smoke_test.value
+
     dependencies: PythonDependencySpec | None = None
     if "python" in root:
         parsed_python = _parse_python(root["python"], path=raw_path)
@@ -1755,6 +1910,8 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
         intent_entries.append(("inputs", root["inputs"]))
     if dependencies is not None:
         intent_entries.append(("python", root["python"]))
+    if smoke_test is not None:
+        intent_entries.append(("smoke_test", smoke_test))
 
     return Ok(
         AuthorManifest(
@@ -1777,6 +1934,7 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
             platforms,
             compliance,
             JsonObject(tuple(intent_entries)),
+            smoke_test,
         )
     )
 

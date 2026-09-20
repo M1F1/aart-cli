@@ -1556,9 +1556,9 @@ Step 20a then proves the normal installed MCP can be smoke-tested. This closes B
 
 ### Step 20a — local CLI smoke verification of installed MCPs (D-348/D-350/D-351, issue #27)
 
-Status: **todo**, after 19 and 20, before final gate 21. Implement Product Specification §170 and
-INV-248–252. This records accepted scope only; no command, probe schema or harness adapter is
-implemented by this planning segment.
+Status: **in flight**, after 19 and 20, before final gate 21. Implement Product Specification §170
+and INV-248–252 as revised by D-365. The implementation checkpoint and current owner revision below
+identify existing code and outstanding work.
 
 **Selection and ownership.** One CLI command tests all or selected already installed MCPs in an
 explicit local target scope. Include ordinary installs from a configured local Registry repo/branch
@@ -1606,8 +1606,9 @@ secrets remain installation-owned; selecting several MCPs or harnesses does not 
 
 **Evidence required before completion.** Characterize both CLI implementations/versions. A local
 controlled MCP plus protected fixture service first proves genuine execution and negative cases;
-then run a declared read against a configured real service for OpenCode CLI and Tabnine CLI.
-Claude-only success is insufficient. If an enterprise executable, account or endpoint is absent,
+then run a declared read against a configured real service through eligible full-route adapters.
+For Tabnine without the required allowed-tools boundary, prove direct MCP/credential coverage and
+that no harness prompt runs (D-365). If an enterprise executable, account or endpoint is absent,
 record that pending live obligation; do not count a skipped case as final acceptance. No new
 scheduled workflow or broad hosted compatibility matrix is required.
 
@@ -2055,3 +2056,44 @@ and no URL anywhere in its configuration.
   `marketplace-graph-invalid: duplicate source ID: company-registry`.
 
 Scoped `make mutants` over the changed modules has **not** been run for this step and is owed.
+
+### Step 20a — implementation checkpoint (2026-09-20, D-363/D-364)
+
+**In flight; do not mark the plan task done.** `smoke_test` is parser-owned and canonical, with
+`tool` plus literal `read_only: true`, empty arguments and 15 seconds by default, a 1–60 second
+bound, fixed values or installation-local non-secret configuration references, and the two exact
+expectation forms recorded in D-363. `aart-cli mcp test` addresses existing installation owners in
+one scope/root/harness set. It validates installed bytes, performs schema preflight before sending
+the sole declared `tools/call`, evaluates protocol/expectation/service separately, and emits only
+safe metadata and bounded reasons. OpenCode and Claude use real discovery plus current structured
+events and a one-tool permission ceiling. Tabnine refuses before a prompt because the required
+allowlist contract is not available (D-364, B-162).
+
+Focused evidence: 58 tests across authoring, skeleton, selection, evaluation, stdio, harness and CLI
+modules, including Hypothesis properties for selection confinement and aggregate results. Ruff and
+mypy are green. Four semantic mutations were killed: accepting `read_only: false`; bypassing the
+preflight refusal; accepting an extra/old OpenCode session and call; and promoting cached ordinary
+content to service PASS. The report test proves neither a configuration value nor raw tool payload
+appears in its result.
+
+Still required: a protected fixture observer that can honestly set service PASS; live declared
+reads through OpenCode and Tabnine; the remaining focused/unit/docs gates; and scoped mutmut on the
+new modules. Tabnine's missing pre-invocation restriction makes its live obligation currently
+blocked, so CP-26.20a and GitHub issue #27 remain open.
+
+### Current owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
+
+This supersedes earlier requirements for mandatory Tabnine harness execution, blanket prohibition
+of model assessment and unconditional suppression of response display. Implement revised Product
+Specification §170 / INV-250–252. Unsupported allowed-tools capability means direct MCP testing with
+that installation's credentials and an explicit excluded harness stage; it does not block completion.
+Eligible harnesses have a 120-second deadline, exact operation/argument enforcement and an English
+prompt requesting `status` (`ok`, `error`, `uncertain`), `summary`, and `possible_error`. Human-readable
+fields are English. Assessments remain separate from deterministic checks and service evidence.
+Add default-off `--show-response` for bounded current-output inspection, without application
+persistence. Keep zero runtime dependencies; use Python's standard library.
+
+Implementation is pending for this revision. Required evidence includes direct-only Tabnine coverage,
+capability-based aggregation, deadline/process cleanup, malformed assessment and uncertain/error
+cases, argument enforcement, bounded opt-in display and default non-disclosure. Existing tests do not
+establish these new claims. CP-26.20a remains in flight; do not mark it done.

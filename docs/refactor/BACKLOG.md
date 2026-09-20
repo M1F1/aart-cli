@@ -4094,3 +4094,31 @@ front door, not a break. CP-26.20's claim is the re-addressing itself, which
 test that installs a closure end to end, or decide deliberately that dependencies are a
 registry-maintenance concept only and delete the unreachable half. The decision belongs with the
 authoring-surface owner, not with this slice.
+
+## B-162 — Tabnine CLI has no verified pre-invocation MCP tool allowlist
+
+**Found:** 2026-09-20, CP-26.20a (D-364). **Resolved by owner scope decision D-365.**
+
+Tabnine now requires direct MCP/credential testing only while its adapter lacks the capability.
+The missing allowlist no longer blocks CP-26.20a; implementing the revised coverage remains part
+of that task. The original finding below records why no Tabnine prompt is allowed.
+
+Product Specification §170 and INV-250 require allowed operations to be enforced before a harness
+prompt runs, and completion requires a live declared read through Tabnine. The documented headless
+Tabnine CLI exposes JSON output and MCP discovery, but no verified option equivalent to OpenCode's
+permission overlay or Claude's `--allowedTools`. The implementation therefore detects the version
+and returns `UNSUPPORTED` without submitting a prompt. Completion needs a supported Tabnine
+contract, an upstream capability, or a Product Specification decision changing the acceptance
+target; post-run transcript inspection is insufficient.
+
+## B-163 — file-only mutmut scoping is disproportionate for CP-26.20's Git source module
+
+**Found:** 2026-09-20 while paying CP-26.20's remaining advisory mutation debt. **Open,
+noncritical.**
+
+The required file-scoped run generated 549 mutants in `aart_cli/sources/git.py`; it was stopped at
+256 after 199 killed and 57 survived because most of the module is outside the changed
+`_resolved_expressions` claim. A callable selector was attempted, but the current runner accepts
+only file globs and mutated zero files. Step 20 already has its targeted semantic mutation and full
+focused/broad test evidence. Extend `scripts/mutants.py` with callable or line scoping before this
+large-module advisory run is repeated.

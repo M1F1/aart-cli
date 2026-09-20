@@ -2,7 +2,7 @@
 
 ## Where CP-26 is (2026-09-20)
 
-**Steps 1–20 are done** on `refactor/cp-26-legacy-removal`. **Next is CP-26.20a.** Read "What is
+**Steps 1–20 are done** on `refactor/cp-26-legacy-removal`. **CP-26.20a is in flight.** Read "What is
 left, in order" below; any older handoff naming step 18, 19 or 20 as next is stale, and so is
 anything describing the suite as red.
 
@@ -24,13 +24,32 @@ namespace is `aart-cli` / `aart_cli`, the product has one portable
 suggests a review branch from the action that produced the current commit (D-347). A Registry
 repository already on this machine is a fourth `SourceKind` read one committed branch at a time
 (D-350, D-362), and a local and a remote connection to one Registry coexist as two aliases, two
-installations and two trees. B-057, B-149 and B-160 are closed; **B-161** is new and noncritical.
+installations and two trees. B-057, B-149 and B-160 are closed; **B-162 is resolved by the owner’s scope decision D-365**; B-161/B-163 are noncritical.
 The plan has **23 tasks (21 done)**: additions **CP-26.18a** and **CP-26.20a** preserve existing
 ids. Execution is now **20a → 21**; task 21 is the final broad gate.
 
+
+### Current owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
+
+This supersedes earlier requirements for mandatory Tabnine harness execution, blanket prohibition
+of model assessment and unconditional suppression of response display. Implement revised Product
+Specification §170 / INV-250–252. Unsupported allowed-tools capability means direct MCP testing with
+that installation's credentials and an explicit excluded harness stage; it does not block completion.
+Eligible harnesses have a 120-second deadline, exact operation/argument enforcement and an English
+prompt requesting `status` (`ok`, `error`, `uncertain`), `summary`, and `possible_error`. Human-readable
+fields are English. Assessments remain separate from deterministic checks and service evidence.
+Add default-off `--show-response` for bounded current-output inspection, without application
+persistence. Keep zero runtime dependencies; use Python's standard library.
+
+Implementation is pending for this revision. Required evidence includes direct-only Tabnine coverage,
+capability-based aggregation, deadline/process cleanup, malformed assessment and uncertain/error
+cases, argument enforcement, bounded opt-in display and default non-disclosure. Existing tests do not
+establish these new claims. CP-26.20a remains in flight; do not mark it done.
+
 ### Accepted local MCP smoke verification (2026-09-19)
 
-D-348 and Product Specification §170 add **CP-26.20a**, still **todo**, after local Registry
+D-348 and Product Specification §170 add **CP-26.20a**, still **todo in `plan.json` and now in
+flight**, after local Registry
 consumption. Deliver one CLI command for all or selected **already installed** MCPs in the local
 environment: ordinary installations from a local Registry repo/branch or a remote Registry,
 using existing installation-owned configuration and credentials. Uninstalled content is refused. Keep
@@ -47,8 +66,12 @@ OpenCode CLI and Tabnine CLI require real execution evidence; Claude Code uses a
 adapter. A missing declaration, login, supported harness or setup is visible, not green. No TUI,
 scheduled CI or implicit install/repair is added. Read step 20a in the CP-26 slice and INV-248–252;
 document local install → smoke test → public Registry publication as the preferred author workflow,
-and bulk checks of a user's installed MCPs. This acceptance does not implement the command or
-change step 19's priority. GitHub issue #27 is tracked by this task; it is not closed by planning.
+and bulk checks of a user's installed MCPs. The parser/canonical declaration, direct stdio route,
+safe report, selection, OpenCode and Claude adapters are implemented and focused tests are green.
+The next implementation work is D-365: direct-only coverage for harnesses without enforceable
+allowed tools (including Tabnine), bounded English model assessments for eligible harnesses,
+capability-based aggregation and opt-in response display. Service evidence remains a separate claim. GitHub
+issue #27 remains open.
 
 **D-350 clarification:** task 20 takes a local Registry path and selected branch alongside its
 alias. Add/Sync reads that branch's exact committed snapshot, independent of the checked-out branch
@@ -239,12 +262,34 @@ the author manifest has no `requires` field, so the whole `requires` mechanism b
 only from hand-built native packages. Found writing step 20's evidence; the decision it needs
 belongs with the authoring surface, not with a consumption slice.
 
-*(b)* **CP-26.20 is done** (D-350, D-362), less the gates and the scoped mutants named above.
-INV-243's remaining "PARTIAL" is closed by it in behaviour; confirm the traceability row when the
-gates run.
+*(a3)* **B-162 is critical and open**, and **B-163** is not: see the newest `MIGRATION_STATUS.md`
+entry. B-162 is CP-26.20a's own acceptance gap; B-163 is step 20's disproportionate partial mutmut
+result.
 
-*(c)* **CP-26.20a** — CLI-only smoke verification of installed MCPs (GitHub issue #27, D-348/D-351,
-§170).
+*(b)* **CP-26.20 is done** (D-350, D-362). Gates ran green -- `unit` 4705, `integration` 424,
+lint/format-check/typecheck/docs-check/validate/secret-shape-check clean. INV-243's remaining
+"PARTIAL" is closed by it in behaviour; confirm the traceability row at CP-26.21. The scoped
+`make mutants` is the one piece of its evidence not produced, and is now B-163.
+
+*(c)* **CP-26.20a is in flight and is the next executable work** (GitHub issue #27, D-348/D-351,
+D-363/D-364, §170). The implemented half is in the working tree: a parser-owned optional
+`smoke_test` block on the author manifest, `aart-cli mcp test` over concrete installed owners, and
+the OpenCode and Claude adapters; 58 focused tests, four recorded semantic mutations, ruff and mypy
+green.
+
+**What CP-26.20a still needs, exactly** -- the revised §170 / INV-250–252 under **D-365**, which
+supersedes mandatory Tabnine harness execution, the blanket prohibition on model assessment and the
+unconditional suppression of response display. An unsupported allowed-tools capability means direct
+MCP testing with that installation's credentials plus an explicit excluded harness stage, and does
+not block completion. Eligible harnesses get a 120-second deadline, exact operation/argument
+enforcement, and an English prompt asking for `status` (`ok`, `error`, `uncertain`), `summary` and
+`possible_error`. Assessments stay separate from deterministic checks and service evidence. Add a
+default-off `--show-response` for bounded inspection with no application persistence. Zero runtime
+dependencies; standard library only. Required evidence: direct-only Tabnine coverage,
+capability-based aggregation, deadline and process cleanup, malformed-assessment and
+uncertain/error cases, argument enforcement, bounded opt-in display, and default non-disclosure.
+**Existing tests do not establish these claims, and B-162 -- missing live OpenCode/Tabnine and
+protected-service evidence -- is still open. Do not mark 20a done.**
 
 *(d)* **CP-26.21** — the only task that runs the full quality suite.
 

@@ -70,6 +70,12 @@ def _run_author(request: Request) -> int:
     return author.run(request)
 
 
+def _run_mcp(request: Request) -> int:
+    from .commands import mcp
+
+    return mcp.run(request)
+
+
 # Command name -> handler. Value-keyed dispatch, not a class hierarchy.
 DISPATCH: dict[str, Callable[[Request], int]] = {
     "upgrade": upgrade.run,
@@ -80,6 +86,7 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "doctor": _run_doctor,
     "reset": _run_reset,
     "author": _run_author,
+    "mcp": _run_mcp,
 }
 
 # Structured results used by interactive frontends. Flag mode retains ``DISPATCH`` and its
@@ -575,6 +582,46 @@ def build_parser() -> argparse.ArgumentParser:
 
     for setup_capable in (p_marketplace_install, p_marketplace_update, p_marketplace_setup):
         _add_setup_controls(setup_capable)
+
+    # installed MCP verification --------------------------------------------- #
+    p = sub.add_parser(
+        "mcp",
+        formatter_class=_HELP_FORMATTER,
+        help="verify declared read-only operations of already installed MCPs",
+        description=(
+            "Test already installed MCPs in one explicit local scope. The command never installs, "
+            "updates, repairs, configures, synchronizes or publishes content."
+        ),
+    )
+    mcp_sub = p.add_subparsers(dest="mcp_action", metavar="ACTION", required=True)
+    p_mcp_test = mcp_sub.add_parser(
+        "test",
+        formatter_class=_HELP_FORMATTER,
+        help="run the declared smoke operation directly and through selected harnesses",
+    )
+    p_mcp_test.add_argument("names", nargs="*", metavar="INSTALLED")
+    p_mcp_test.add_argument(
+        "--all",
+        dest="all_installed",
+        action="store_true",
+        help="test every installed MCP in the selected scope and harnesses",
+    )
+    p_mcp_test.add_argument(
+        "--harness",
+        dest="profile",
+        action="append",
+        required=True,
+        metavar="NAME[,NAME...]",
+        help="installed harness target(s): opencode, tabnine or claude",
+    )
+    p_mcp_test.add_argument(
+        "--show-response",
+        action="store_true",
+        help="show a bounded current MCP response; it may contain confidential service data",
+    )
+    _add_scope(p_mcp_test)
+    _add_project(p_mcp_test)
+    _add_json(p_mcp_test)
 
     # `receipt` lives under `marketplace` rather than under a top-level `setup` group, because
     # `marketplace setup` already owns that word: a second `aart setup` would name two different
@@ -1499,6 +1546,9 @@ def _to_request(args: argparse.Namespace) -> Request:
         source_location=getattr(args, "source_location", None),
         source_make_default=getattr(args, "source_make_default", None),
         marketplace_action=getattr(args, "marketplace_action", None),
+        mcp_action=getattr(args, "mcp_action", None),
+        all_installed=bool(getattr(args, "all_installed", False)),
+        show_response=bool(getattr(args, "show_response", False)),
         query=tuple(getattr(args, "query", ()) or ()),
         search_limit=getattr(args, "search_limit", None),
         receipt_action=getattr(args, "receipt_action", None),

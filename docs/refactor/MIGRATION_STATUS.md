@@ -4,6 +4,37 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+
+### Current owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
+
+This supersedes earlier requirements for mandatory Tabnine harness execution, blanket prohibition
+of model assessment and unconditional suppression of response display. Implement revised Product
+Specification §170 / INV-250–252. Unsupported allowed-tools capability means direct MCP testing with
+that installation's credentials and an explicit excluded harness stage; it does not block completion.
+Eligible harnesses have a 120-second deadline, exact operation/argument enforcement and an English
+prompt requesting `status` (`ok`, `error`, `uncertain`), `summary`, and `possible_error`. Human-readable
+fields are English. Assessments remain separate from deterministic checks and service evidence.
+Add default-off `--show-response` for bounded current-output inspection, without application
+persistence. Keep zero runtime dependencies; use Python's standard library.
+
+Implementation is pending for this revision. Required evidence includes direct-only Tabnine coverage,
+capability-based aggregation, deadline/process cleanup, malformed assessment and uncertain/error
+cases, argument enforcement, bounded opt-in display and default non-disclosure. Existing tests do not
+establish these new claims. CP-26.20a remains in flight; do not mark it done.
+
+**2026-09-20, CP-26.20a in flight — installed MCP smoke verification (D-363/D-364).** The author
+manifest now has one parser-owned optional `smoke_test` block, carried through canonical content;
+`aart-cli mcp test` selects only concrete installed owners, validates the exact installed launcher
+and configuration, executes one declared stdio tool call after schema preflight, and reports each
+claim separately without raw values or transcripts. OpenCode and Claude adapters use their real
+project discovery and one-operation permission ceilings. The focused set is 58 tests, including
+Hypothesis properties; four recorded semantic mutations went red. Ruff and mypy are green.
+
+The task is not done: Tabnine has no verified documented pre-invocation tool allowlist, so its
+adapter returns `UNSUPPORTED` before sending a prompt, and required live OpenCode/Tabnine plus
+protected-service evidence remains. This critical acceptance gap is B-162. Step 20's
+disproportionate partial mutmut result is recorded as B-163.
+
 **2026-09-20, CP-26.20 — a Registry repository on this disk is a Registry (D-350, D-362).**
 `registry-local` is a fourth `SourceKind` carrying an absolute repository path and a *required*
 branch, and it runs the same acquisition, validation, source store, Marketplace projection,

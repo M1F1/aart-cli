@@ -888,7 +888,7 @@
         },
         {
           "id": "20a",
-          "title": "CLI-only smoke verification of installed MCPs: all or selected local targets, declared read-only probes and the full OpenCode/Tabnine harness hierarchy",
+          "title": "CLI-only smoke verification of installed MCPs: direct credential checks, capability-dependent harness runs, English assessment and opt-in response display",
           "status": "todo"
         },
         {

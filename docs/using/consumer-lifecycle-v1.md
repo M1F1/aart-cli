@@ -60,6 +60,32 @@ A human supplies credentials in an approved interactive session. AART never writ
 registry, state, JSON output, or logs. Registries may use safe placeholders such as
 `${GITHUB_PERSONAL_ACCESS_TOKEN}`; container images should be pinned by digest.
 
+### Checking installed MCPs
+
+`mcp test` is a read-only verification command for installations that already exist in one explicit
+scope, root and harness set. It does not install, update, repair, configure, synchronize or publish.
+
+```sh
+# One exact installed coordinate in this project and harness
+aart-cli mcp test company/mcp/github@1.0.0 \
+  --harness opencode --scope project --project "$PWD"
+
+# Every installed MCP for two user-scope harnesses
+aart-cli mcp test --all --harness opencode,claude --scope user --json
+```
+
+The report keeps installation/configuration, MCP protocol, optional output expectation, external
+service, model provider, and full harness route as separate stages. `PASS` for a tool invocation
+does not prove the tool reached its external service: without independent evidence that stage is
+`NOT VERIFIED`, and the aggregate exits nonzero. A missing declaration, credential, executable or
+supported harness safety contract is also visible and cannot produce an aggregate pass. Reports do
+not retain configuration values, secrets, raw service payloads or harness transcripts.
+
+OpenCode and Claude Code runs restrict the current headless process to the declared tool and verify
+its current structured event. Tabnine is reported `UNSUPPORTED` and no prompt is sent until its CLI
+offers a verified pre-invocation tool allowlist. The manifest's `read_only: true` is a reviewed
+server/tool contract; it is not an operating-system sandbox for arbitrary startup code.
+
 ## Reading, checking, and undoing a setup
 
 Every setup run writes a complete account of itself — the plan hash, the installer hash, when it ran,
@@ -153,3 +179,12 @@ repairs everything.
 
 What it cannot repair, it still reports: an artifact whose payload is missing or divergent is named
 with what is wrong, rather than being omitted because no repair for it exists.
+
+## Accepted smoke revision — implementation pending
+
+D-365 revises the behavior above: harnesses without enforceable allowed tools receive direct MCP
+checks only; the excluded harness stage does not fail direct coverage. Eligible harnesses return
+a bounded English JSON assessment (`status`, `summary`, `possible_error`) within 120 seconds.
+The assessment is separate from protocol and service evidence. Default-off `--show-response` will
+permit bounded inspection of the server response in current output, without application persistence.
+These revised behaviors are specified in Product Specification §170 and still need implementation.

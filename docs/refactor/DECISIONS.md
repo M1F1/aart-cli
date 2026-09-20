@@ -9189,3 +9189,53 @@ the origin, the branch, the resolved commit and the snapshot digest. Branch and 
 configured connection rather than to one installation, and re-pointing an alias at another ref
 produces a different `source_instance_id` and therefore a different managed store, so the two cannot
 silently swap under a recorded installation.
+
+## D-363 — MCP smoke declarations are parser-owned, bounded and evidence-separated
+
+**Date:** 2026-09-20. **Status:** accepted and implemented in CP-26.20a, whose live acceptance is
+still pending.
+
+The optional MCP-only `smoke_test` block requires `tool` and literal `read_only: true`. It defaults
+to `{}` arguments and 15 seconds, accepts 1–60 seconds, and permits fixed JSON values or explicit
+references to installation-local non-secret configuration inputs. Its optional expectation is
+exactly `text_contains`, or `structured_path` plus `equals`; scripts, fetches and model judgement
+are outside the vocabulary. The parser normalizes this into `aart-cli.authoring`, so compilation,
+installation and testing do not create a second schema authority.
+
+Protocol completion, expectation and external-service evidence remain separate. A normal or cached
+response can pass protocol and expectation while service stays `NOT VERIFIED`. Only an explicit
+controlled observer can make service PASS. Reports retain owner/content/version/time and bounded
+reasons, never configuration values, secrets, raw payloads or harness transcripts.
+
+## D-364 — A harness prompt runs only behind a verified pre-invocation operation ceiling
+
+**Date:** 2026-09-20. **Status:** accepted; OpenCode and Claude implemented, Tabnine blocked.
+
+OpenCode runs against real project discovery with a deny-all permission overlay granting only the
+declared server/tool. Claude disables its general tool set and grants only the exact MCP tool. Both
+require a current structured event with exact arguments and completed result; prose cannot supply
+evidence. Tabnine's documented headless CLI currently exposes no verified equivalent. Therefore
+AART detects its version but returns `UNSUPPORTED` before submitting a prompt. Prompting and
+checking afterward would violate INV-250 rather than satisfy it. B-162 tracks the critical live
+acceptance obligation.
+
+## D-365 — Capability-dependent MCP smoke coverage and English harness assessment
+
+**Owner decision, 2026-09-20; accepted, implementation pending.** Supersedes D-348/D-364 where
+they require a Tabnine harness run, and D-351/D-363 where they prohibit a separate model assessment
+or opt-in current response output. Product Specification §170 is updated accordingly.
+
+This supersedes earlier requirements for mandatory Tabnine harness execution, blanket prohibition
+of model assessment and unconditional suppression of response display. Implement revised Product
+Specification §170 / INV-250–252. Unsupported allowed-tools capability means direct MCP testing with
+that installation's credentials and an explicit excluded harness stage; it does not block completion.
+Eligible harnesses have a 120-second deadline, exact operation/argument enforcement and an English
+prompt requesting `status` (`ok`, `error`, `uncertain`), `summary`, and `possible_error`. Human-readable
+fields are English. Assessments remain separate from deterministic checks and service evidence.
+Add default-off `--show-response` for bounded current-output inspection, without application
+persistence. Keep zero runtime dependencies; use Python's standard library.
+
+Implementation is pending for this revision. Required evidence includes direct-only Tabnine coverage,
+capability-based aggregation, deadline/process cleanup, malformed assessment and uncertain/error
+cases, argument enforcement, bounded opt-in display and default non-disclosure. Existing tests do not
+establish these new claims. CP-26.20a remains in flight; do not mark it done.

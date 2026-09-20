@@ -484,6 +484,9 @@ class Request:
     source_location: Optional[str] = None
     source_make_default: Optional[bool] = None
     marketplace_action: Optional[str] = None
+    mcp_action: Optional[str] = None
+    all_installed: bool = False
+    show_response: bool = False
     # The words `marketplace search` was given, kept apart from `names`.  `names` holds
     # coordinates, which are parsed and must resolve; these are free text, which matches or does
     # not.  One field for both would make a typo in a coordinate look like a search that found

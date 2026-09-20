@@ -172,13 +172,23 @@ def _mcp_blueprint(name: str) -> _Blueprint:
                 ),
             ),
         ),
+        (
+            "smoke_test",
+            _object(
+                ("arguments", _object(("limit", 1))),
+                ("expect", _object(("text_contains", "expected text"))),
+                ("read_only", True),
+                ("timeout_seconds", 15),
+                ("tool", "get_current_user"),
+            ),
+        ),
     )
     # `summary`, `exclude` and `arguments` are optional inside blocks the parser requires, so they
     # are commented individually rather than with their parent.
     return _Blueprint(
         "mcp",
         document,
-        optional=("compatibility", "inputs", "python"),
+        optional=("compatibility", "inputs", "python", "smoke_test"),
         nested_optional=(("artifact", "summary"), ("launch", "arguments"), ("payload", "exclude")),
         notes=_UNREAD_NOTE,
         payload=_mcp_payload(entrypoint),
@@ -278,6 +288,7 @@ _EXPLANATIONS: dict[str, str] = {
     "exclude": "Payload files to leave out of the package, applied after `include`.",
     "inputs": "Values AART collects from the installer and keeps for this artifact.",
     "python": "How the payload's Python dependencies are resolved at install time.",
+    "smoke_test": "A reviewed read-only MCP tool call used by `aart-cli mcp test`.",
     "summary": "One line shown wherever the artifact is listed. Derived from the name if absent.",
 }
 
@@ -308,6 +319,12 @@ _ALTERNATIVES: dict[str, tuple[str, ...]] = {
         "#?     inject:",
         "#?       type: stdin",
     ),
+    "smoke_test": (
+        "## Or check one deterministic field in structuredContent instead of text:",
+        "#?   expect:",
+        "#?     structured_path: user.login",
+        "#?     equals: expected-login",
+    ),
 }
 
 #: Root keys `parse_author_manifest` accepts and builds nothing from. There is no shape to
@@ -318,6 +335,19 @@ _UNREAD_NOTE: tuple[str, ...] = (
     "## `parse_author_manifest` accepts these three at the top level and builds nothing from",
     "## them, so `null` is the whole of what this build would do with a value you wrote here:",
     *(f"#? {key}: null" for key in _ACCEPTED_UNREAD),
+)
+
+_SMOKE_NOT_GENERATED: tuple[str, ...] = (
+    "## MCP-only smoke fields are not valid for this artifact kind:",
+    "#? smoke_test:",
+    "#?   arguments: null",
+    "#?   expect:",
+    "#?     equals: null",
+    "#?     structured_path: field",
+    "#?     text_contains: text",
+    "#?   read_only: true",
+    "#?   timeout_seconds: 15",
+    "#?   tool: tool-name",
 )
 
 
@@ -509,7 +539,7 @@ def _skill_blueprint(name: str) -> _Blueprint:
         document,
         optional=("compatibility", "inputs"),
         nested_optional=(("artifact", "summary"), ("payload", "exclude")),
-        notes=(*_SKILL_NOT_GENERATED, *_UNREAD_NOTE),
+        notes=(*_SKILL_NOT_GENERATED, *_SMOKE_NOT_GENERATED, *_UNREAD_NOTE),
         payload=_skill_payload(name),
     )
 
@@ -648,7 +678,7 @@ def _document_blueprint(
         ),
         optional=("compatibility", "inputs"),
         nested_optional=(("artifact", "summary"), ("payload", "exclude")),
-        notes=(*_DOCUMENT_NOT_GENERATED, *_UNREAD_NOTE),
+        notes=(*_DOCUMENT_NOT_GENERATED, *_SMOKE_NOT_GENERATED, *_UNREAD_NOTE),
         payload=payload,
     )
 
@@ -738,7 +768,7 @@ def _hook_blueprint(name: str) -> _Blueprint:
         ),
         optional=("compatibility", "inputs"),
         nested_optional=(("artifact", "summary"), ("payload", "exclude")),
-        notes=(*_HOOK_NOT_GENERATED, *_UNREAD_NOTE),
+        notes=(*_HOOK_NOT_GENERATED, *_SMOKE_NOT_GENERATED, *_UNREAD_NOTE),
         payload=_hook_payload(name),
     )
 

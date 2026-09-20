@@ -227,8 +227,8 @@ read-only tool with fixed arguments may execute, both directly and through the h
 requires only `tool` and `read_only: true` in `smoke_test`; arguments default to empty, the
 tool-call timeout to 15 seconds, and result expectations are optional. Generic MCP success is
 distinct from external-service proof; no dedicated health tool or custom response is required.
-OpenCode CLI and Tabnine CLI are mandatory acceptance targets; Claude Code is an
-additional adapter. No new TUI, scheduled CI, automatic setup mutation or production-wide scan
+D-365 requires direct-only Tabnine acceptance while its adapter lacks the allowed-tools boundary,
+and full-route acceptance for eligible OpenCode and Claude adapters. No new TUI, scheduled CI, automatic setup mutation or production-wide scan
 belongs to this increment. Document the recommended install → smoke test → publish workflow for
 new MCPs and bulk checking of a user's installed MCPs. B-073's scheduled live CI work stays separate.
 
@@ -269,3 +269,20 @@ A critical-path slice is not complete until:
 - quality gates for touched code are green;
 - migration status, next work, decisions and backlog are updated;
 - remaining legacy authority/removal criteria are explicit.
+
+### Current owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
+
+This supersedes earlier requirements for mandatory Tabnine harness execution, blanket prohibition
+of model assessment and unconditional suppression of response display. Implement revised Product
+Specification §170 / INV-250–252. Unsupported allowed-tools capability means direct MCP testing with
+that installation's credentials and an explicit excluded harness stage; it does not block completion.
+Eligible harnesses have a 120-second deadline, exact operation/argument enforcement and an English
+prompt requesting `status` (`ok`, `error`, `uncertain`), `summary`, and `possible_error`. Human-readable
+fields are English. Assessments remain separate from deterministic checks and service evidence.
+Add default-off `--show-response` for bounded current-output inspection, without application
+persistence. Keep zero runtime dependencies; use Python's standard library.
+
+Implementation is pending for this revision. Required evidence includes direct-only Tabnine coverage,
+capability-based aggregation, deadline/process cleanup, malformed assessment and uncertain/error
+cases, argument enforcement, bounded opt-in display and default non-disclosure. Existing tests do not
+establish these new claims. CP-26.20a remains in flight; do not mark it done.
