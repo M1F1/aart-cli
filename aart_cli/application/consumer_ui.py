@@ -145,25 +145,42 @@ class KeyBinding:
             raise ValueError("a key binding needs a safe key and label")
 
 
+#: The two transports screen 21a offers, in the order Space cycles them (D-350).  Both reach an
+#: approved Registry and neither changes what approval means; what differs is where the bytes are
+#: read from.  Authoring Sources are screen 31a's and stay out of this set.
+REGISTRY_SOURCE_KINDS: tuple[str, ...] = ("registry-git", "registry-local")
+
+
 @dataclass(frozen=True, slots=True)
 class RegistryDraft:
-    """Credential-free input for one approved Git registry subscription."""
+    """Credential-free input for one approved registry subscription, by either transport."""
 
     alias: str = ""
     location: str = ""
     ref: str = ""
     make_default: bool = True
+    kind: str = REGISTRY_SOURCE_KINDS[0]
 
     def __post_init__(self) -> None:
-        if any(
-            not isinstance(value, str) or any(char in value for char in "\r\n")
-            for value in (
-                self.alias,
-                self.location,
-                self.ref,
+        if (
+            any(
+                not isinstance(value, str) or any(char in value for char in "\r\n")
+                for value in (
+                    self.alias,
+                    self.location,
+                    self.ref,
+                )
             )
-        ) or not isinstance(self.make_default, bool):
+            or not isinstance(self.make_default, bool)
+            or self.kind not in REGISTRY_SOURCE_KINDS
+        ):
             raise ValueError("registry draft is invalid")
+
+    @property
+    def is_local_checkout(self) -> bool:
+        """Whether this draft connects a repository already on this machine (D-350)."""
+
+        return self.kind == "registry-local"
 
 
 #: The two authoring kinds screen 31a offers, in the order Space cycles them.  `registry-git` is
@@ -1863,6 +1880,13 @@ def reduce_consumer_ui(
             draft = replace(draft, ref=event.text)
         elif event.key == "default" and event.accepted is not None:
             draft = replace(draft, make_default=event.accepted)
+        elif event.key == "kind":
+            # Space cycles the two transports rather than accepting typed text, for the same
+            # reason screen 31a does: the set is closed, and a typed kind is one nobody built.
+            offset = REGISTRY_SOURCE_KINDS.index(draft.kind)
+            draft = replace(
+                draft, kind=REGISTRY_SOURCE_KINDS[(offset + 1) % len(REGISTRY_SOURCE_KINDS)]
+            )
         else:
             return state, ()
         return replace(state, registry_draft=draft, quit_pending=False), ()
@@ -2597,6 +2621,8 @@ def key_event(
             return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
         if key == "down":
             return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if key == " " and row == "kind":
+            return ConsumerUiEvent(ConsumerUiEventKind.EDIT_REGISTRY, key="kind")
         if key == " " and row == "default":
             return ConsumerUiEvent(
                 ConsumerUiEventKind.EDIT_REGISTRY,

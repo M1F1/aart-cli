@@ -16,10 +16,10 @@ from aart_cli.application.marketplace_resolution import (
     aggregate_approved_marketplace,
     resolve_selection,
 )
-from aart_cli.application.promotion import load_published_registry_versions
-from aart_cli.configuration.model import SourceKind
+from aart_cli.application.promotion import load_configured_registry_versions
 from aart_cli.configuration.policy import EffectiveConfiguration
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import (
@@ -108,18 +108,18 @@ def _approved_artifact(
 
 
 def _approved_snapshot(
-    alias,
+    alias: SourceAlias,
     snapshot: SourceSnapshot,
     resolved_revision: str | None = None,
 ) -> Result[ApprovedRegistrySnapshot | None]:
-    loaded = load_published_registry_versions(snapshot)
+    loaded = load_configured_registry_versions(snapshot, alias)
     if isinstance(loaded, Err):
         return loaded
     versions = loaded.value
     if not versions:
         return Ok(None)
     registry_snapshots = {item.registry_snapshot for item in versions}
-    if len(registry_snapshots) != 1 or any(item.coordinate.source != alias for item in versions):
+    if len(registry_snapshots) != 1:
         return _error(f"configured registry {alias} has inconsistent approved version identity")
     artifacts: list[ApprovedMarketplaceArtifact] = []
     for version in versions:
@@ -158,7 +158,7 @@ def load_configured_approved_marketplace(
         )
     snapshots: list[ApprovedRegistrySnapshot] = []
     for configured in effective.configuration.sources:
-        if not configured.enabled or configured.kind is not SourceKind.REGISTRY_GIT:
+        if not configured.enabled or not configured.is_registry:
             continue
         paths = source_store_paths(data_root, source_instance_id(configured))
         current = read_current_source(CurrentSourceRequest(paths, configured.alias))

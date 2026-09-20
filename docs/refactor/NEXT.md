@@ -2,10 +2,18 @@
 
 ## Where CP-26 is (2026-09-20)
 
-**Steps 1–19 are done** on `refactor/cp-26-legacy-removal`, with the suite green: `unit` 4671 OK,
-`integration` 410 OK, lint/format-check/typecheck clean. **Next is CP-26.20.** Read "What is left,
-in order" below; the older handoff naming `4fe1fe4`, 17/22 and step 18 as next is stale and so is
-anything that describes step 19 as in progress or the suite as red.
+**Steps 1–20 are done** on `refactor/cp-26-legacy-removal`. **Next is CP-26.20a.** Read "What is
+left, in order" below; any older handoff naming step 18, 19 or 20 as next is stale, and so is
+anything describing the suite as red.
+
+**State of the gates for step 20, exactly.** `unit` 4705 OK, `integration` 424 OK, and
+lint/format-check/typecheck/docs-check/validate/secret-shape-check all clean. `unit` was red twice
+before it was green: once on a Hypothesis case in `compiler_graph_test` that held the
+duplicate-source-ID rule D-362 deletes, and once on `docs/release/schema-freeze.json`, regenerated
+here for the one input that moved (`configuration/schema.py`). Three targeted mutations are
+recorded in the slice with the test each one turned red. **Owed for step 20:** a scoped
+`make mutants` over the modules it changed, which is advisory under D-134 and is the one piece of
+step 20's evidence not yet produced.
 
 Installation owners, per-owner input composition, concrete credential addresses, one placement and one record
 per installation, the installation key the Installed view and the TUI address a row by,
@@ -13,10 +21,12 @@ reconciliation names and Screen 07's per-installation rows are implemented
 (D-352–D-353, D-356–D-361; D-354 and D-355 are deleted). The executable, import and filesystem
 namespace is `aart-cli` / `aart_cli`, the product has one portable
 `~/.aart-cli` / `AART_CLI_HOME`, the harness-owned installation-tree policy is defined, and Push
-suggests a review branch from the action that produced the current commit (D-347). B-057 and B-149
-are both closed, and so is B-160. The plan has **23 tasks (20 done)**: additions **CP-26.18a** and
-**CP-26.20a** preserve existing ids. Execution is now **20 → 20a → 21**; task 21 is the final broad
-gate.
+suggests a review branch from the action that produced the current commit (D-347). A Registry
+repository already on this machine is a fourth `SourceKind` read one committed branch at a time
+(D-350, D-362), and a local and a remote connection to one Registry coexist as two aliases, two
+installations and two trees. B-057, B-149 and B-160 are closed; **B-161** is new and noncritical.
+The plan has **23 tasks (21 done)**: additions **CP-26.18a** and **CP-26.20a** preserve existing
+ids. Execution is now **20a → 21**; task 21 is the final broad gate.
 
 ### Accepted local MCP smoke verification (2026-09-19)
 
@@ -224,9 +234,14 @@ has gained a function, or its mutants report "no tests" from the stale cache.
 `config/<harness>.conf` filename say what the tree already knows. Correct, redundant, and a rename
 worth doing when nothing else is in flight.
 
-*(b)* **CP-26.20** — Add a Registry from a local repository path and a selected branch (D-350),
-then prove local and remote aliases stay distinct installation owners. INV-243's remaining
-"PARTIAL" is this.
+*(a2)* **B-161 is new and noncritical:** an authored artifact cannot declare a dependency, because
+the author manifest has no `requires` field, so the whole `requires` mechanism below it is reachable
+only from hand-built native packages. Found writing step 20's evidence; the decision it needs
+belongs with the authoring surface, not with a consumption slice.
+
+*(b)* **CP-26.20 is done** (D-350, D-362), less the gates and the scoped mutants named above.
+INV-243's remaining "PARTIAL" is closed by it in behaviour; confirm the traceability row when the
+gates run.
 
 *(c)* **CP-26.20a** — CLI-only smoke verification of installed MCPs (GitHub issue #27, D-348/D-351,
 §170).

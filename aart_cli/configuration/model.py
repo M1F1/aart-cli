@@ -20,6 +20,10 @@ TRUST_CLASSES = frozenset(
 
 class SourceKind(str, Enum):
     REGISTRY_GIT = "registry-git"
+    #: A canonical Registry read out of a Git repository already on this machine (D-350). It is a
+    #: Registry in every way that matters downstream -- admission, projection, resolution,
+    #: installation -- and differs only in where its committed bytes are read from.
+    REGISTRY_LOCAL = "registry-local"
     SOURCE_GIT = "source-git"
     SOURCE_LOCAL = "source-local"
 
@@ -49,11 +53,39 @@ class ConfiguredSource:
 
     @property
     def is_registry(self) -> bool:
-        return self.kind is SourceKind.REGISTRY_GIT
+        """Whether this source publishes approved Registry content, by either transport."""
+
+        return self.kind in {SourceKind.REGISTRY_GIT, SourceKind.REGISTRY_LOCAL}
 
     @property
     def is_git(self) -> bool:
+        """Whether this source has a remote Git origin -- a host and a repository path.
+
+        This is what the organization policy's host allowlist and repository prefixes are applied
+        to, so a local checkout is deliberately not one: it has a filesystem path where a host
+        would be, and asking an allowlist about it can only produce a denial that means nothing.
+        What governs a local checkout is `allow_direct_sources`, since content a person can write
+        themselves has not come through the approved remote.
+        """
+
         return self.kind in {SourceKind.REGISTRY_GIT, SourceKind.SOURCE_GIT}
+
+    @property
+    def is_local_checkout(self) -> bool:
+        """Whether this source is read out of a repository already on this machine (D-350)."""
+
+        return self.kind is SourceKind.REGISTRY_LOCAL
+
+    @property
+    def tracks_one_origin(self) -> bool:
+        """Whether two entries naming this location and ref would be one tracked origin.
+
+        True for everything read through Git, remote or local: the source store keys a mirror and
+        a pointer by origin and ref, so two aliases on one origin at one ref are one snapshot with
+        two names and the second would move the first's pin.
+        """
+
+        return self.is_git or self.is_local_checkout
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +120,7 @@ class UserConfiguration:
         git_origins = tuple(
             (*git_origin_key(item.kind, item.location), item.ref or "")
             for item in ordered
-            if item.is_git
+            if item.tracks_one_origin
         )
         if len(set(git_origins)) != len(git_origins):
             # Source-store identity is ref-aware (SRC02), so one origin may be tracked at several

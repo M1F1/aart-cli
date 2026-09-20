@@ -884,7 +884,7 @@
         {
           "id": "20",
           "title": "Add Registry synchronizes a local repo and selected branch through normal Marketplace/install, ready for installed-MCP smoke tests",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "20a",

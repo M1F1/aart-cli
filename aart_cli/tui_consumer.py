@@ -1949,7 +1949,10 @@ _REGISTRY_EXPLANATION: tuple[str, ...] = (
 
 _REGISTRY_ADD_INTRO: tuple[str, ...] = (
     "Connect an approved registry. AART validates a fresh snapshot before saving it.",
-    "Local folders are authoring Sources, not Marketplace registries.",
+    # D-350: a Registry repository checked out on this machine is still that Registry, read over
+    # a shorter path. What a local *folder of authored files* is has not changed: that is an
+    # authoring Source, and it still belongs in Maintainer Mode.
+    "A local checkout reads one branch's committed content; your worktree is never read.",
     "",
     # `QA-028`: the empty form says a new one is being made; this says the old ones are not being
     # replaced by it, which is the question the operator actually asked.
@@ -2088,7 +2091,9 @@ def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[s
             return ()
         return (
             f"Connect {draft.alias} from {draft.location}",
-            f"Branch or tag: {draft.ref or 'repository default'}",
+            f"Branch: {draft.ref}"
+            if draft.is_local_checkout
+            else f"Branch or tag: {draft.ref or 'repository default'}",
             "",
             "It becomes the default registry."
             if draft.make_default
@@ -3209,7 +3214,7 @@ class CanonicalScreenSource:
                 item.alias for item in self._screens.registries if _matches(query, item.alias)
             )
         if screen is ConsumerScreen.REGISTRY_ADD:
-            return ("alias", "url", "ref", "default", "connect")
+            return ("alias", "kind", "url", "ref", "default", "connect")
         if screen is MaintainerScreen.SOURCE_ADD:
             return ("alias", "kind", "location", "ref", "connect")
         if screen is MaintainerScreen.REGISTRY_INIT:
@@ -4273,17 +4278,28 @@ class CanonicalScreenSource:
             )
         if screen is ConsumerScreen.REGISTRY_ADD:
             draft = state.registry_draft
+            local = draft.is_local_checkout
             values = {
                 "alias": draft.alias or "<type a short name>",
-                "url": draft.location or "<type an HTTPS or SSH Git URL>",
-                "ref": draft.ref or "<repository default>",
+                "kind": "Local checkout" if local else "Remote Git",
+                "url": draft.location
+                or (
+                    "<type an absolute path to a checkout>"
+                    if local
+                    else "<type an HTTPS or SSH Git URL>"
+                ),
+                # A local checkout has no default branch to fall back to and no tag to accept:
+                # the branch is named or the source is refused (D-350).
+                "ref": draft.ref
+                or ("<type the branch to read>" if local else "<repository default>"),
                 "default": "yes" if draft.make_default else "no",
                 "connect": "Validate and review",
             }
             labels = {
                 "alias": "Alias",
-                "url": "Registry URL",
-                "ref": "Branch or tag",
+                "kind": "Transport",
+                "url": "Repository path" if local else "Registry URL",
+                "ref": "Branch" if local else "Branch or tag",
                 "default": "Make default registry",
                 "connect": "Continue",
             }

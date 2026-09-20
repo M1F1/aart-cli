@@ -1512,3 +1512,42 @@ def load_published_registry_versions(
             for version in loaded.value
         )
     )
+
+
+def load_configured_registry_versions(
+    snapshot: SourceSnapshot,
+    alias: SourceAlias,
+) -> Result[tuple[RegistryArtifactVersion, ...]]:
+    """The published versions of one configured registry, addressed by the alias it is configured
+    under.
+
+    A version record names the registry that approved it.  That name is content: the maintainer
+    writes it once, and every branch, mirror and checkout of the repository carries it unchanged.
+    An alias is the other thing entirely -- this consumer's own name for one configured connection
+    to that registry -- and D-350 requires a local checkout and its remote to be configured under
+    *distinct* aliases.  So the two cannot be required to agree, or the stored name would decide
+    what a consumer may call a registry and the second connection to it would be refused.
+
+    The alias therefore wins, and it wins here rather than at each reader, because a version
+    addressed one way where it is resolved and another way where it is installed is a version no
+    install can find.  What is browsed, what is resolved and what is fetched all say one name.
+    """
+
+    if not isinstance(alias, SourceAlias):
+        raise ValueError("configured registry versions need the alias they are configured under")
+    published = load_published_registry_versions(snapshot)
+    if isinstance(published, Err):
+        return published
+    return Ok(
+        tuple(
+            version
+            if version.coordinate.source == alias
+            else replace(
+                version,
+                coordinate=ArtifactCoordinate(
+                    alias, version.coordinate.artifact, version.coordinate.version
+                ),
+            )
+            for version in published.value
+        )
+    )

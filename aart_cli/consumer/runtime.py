@@ -213,7 +213,11 @@ def _project_graph_source(
     materialize_objects: bool = True,
 ) -> Result[_GraphProjection]:
     snapshot = current.candidate.snapshot
-    if configured.kind is not SourceKind.REGISTRY_GIT:
+    # By what the source is rather than how its bytes arrived: a Registry read out of a local
+    # checkout projects as a Registry (D-350). It carries `aart-cli-source.json` too, so the
+    # native branch below would otherwise compile it as an authoring Source and refuse it for
+    # missing the package layout a Registry does not have.
+    if not configured.is_registry:
         # An authoring Source holds Candidates, and a Candidate is by definition not approved
         # content (INV-199).  It contributes nothing to the consumer Marketplace -- and, because
         # the loop that calls this returns on the first Err, "nothing" has to mean an empty

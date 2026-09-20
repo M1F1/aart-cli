@@ -337,7 +337,9 @@ def _error(message: str, *remediation: str, interactive: tuple[str, ...] = ()) -
 
 
 def _origin(source: ConfiguredSource) -> str:
-    if source.kind is SourceKind.SOURCE_LOCAL:
+    # A source read off this machine shows the path it is read from; only one with a remote origin
+    # has a host and a repository to name (D-350).
+    if source.kind is SourceKind.SOURCE_LOCAL or source.is_local_checkout:
         return source.location
     parsed = git_location_parts(source.location)
     return "invalid Git origin" if parsed is None else f"{parsed[0]}/{parsed[1]}"
@@ -395,7 +397,7 @@ def _availability_reason(
         return (
             "source state is invalid; run `aart-cli source sync --alias <alias>` before enabling it"
         )
-    if source.kind is not SourceKind.SOURCE_LOCAL and git_location_parts(source.location) is None:
+    if source.is_git and git_location_parts(source.location) is None:
         return "source has an invalid Git origin"
     return ""
 
@@ -460,7 +462,7 @@ def _default_registry(
     registries = tuple(
         row.source.alias
         for row in view.rows
-        if row.source.alias in selected and row.source.kind is SourceKind.REGISTRY_GIT
+        if row.source.alias in selected and row.source.is_registry
     )
     return registries[0] if registries else None
 
@@ -503,7 +505,7 @@ def plan_source_management(
     default = None if no_source else _default_registry(view, aliases, default_registry)
     if default is not None:
         row = rows.get(default)
-        if row is None or default not in aliases or row.source.kind is not SourceKind.REGISTRY_GIT:
+        if row is None or default not in aliases or not row.source.is_registry:
             return _error("default registry must name one selected registry source")
 
     selected = set(aliases)
@@ -666,6 +668,10 @@ def plan_source_removal(view: SourceStageView, alias: SourceAlias) -> Result[Sou
 def _source_kind(source: ConfiguredSource) -> str:
     if source.kind is SourceKind.REGISTRY_GIT:
         return "registry"
+    # Named for the two things that differ from a remote registry and matter to somebody reading
+    # the row: the content is a registry's, and it is read out of a checkout here (D-350).
+    if source.kind is SourceKind.REGISTRY_LOCAL:
+        return "local registry checkout"
     if source.kind is SourceKind.SOURCE_GIT:
         return "direct Git source"
     return "mutable local source"

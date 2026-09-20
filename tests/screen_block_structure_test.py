@@ -531,6 +531,7 @@ class AddRegistryFormBlockTest(TestCase):
             _spoken(blocks[1]),
             (
                 "> Alias: <type a short name>",
+                "  Transport: Remote Git",
                 "  Registry URL: <type an HTTPS or SSH Git URL>",
                 "  Branch or tag: <repository default>",
                 "  Make default registry: yes",
@@ -545,7 +546,8 @@ class AddRegistryFormBlockTest(TestCase):
             _statements(blocks[2]),
             (
                 "Connect an approved registry. AART validates a fresh snapshot before saving it.",
-                "Local folders are authoring Sources, not Marketplace registries.",
+                "A local checkout reads one branch's committed content; your worktree is never "
+                "read.",
                 "This adds another registry. Nothing already connected is changed.",
             ),
         )

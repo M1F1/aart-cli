@@ -43,8 +43,10 @@ from aart_cli.sources.model import (
 )
 from aart_cli.tui_sources import (
     build_source_stage,
+    plan_source_management,
     plan_source_removal,
     render_source_removal_review,
+    render_source_row,
     render_source_stage,
     render_source_sync_outcome,
     render_source_sync_review,
@@ -365,6 +367,50 @@ class SourceRefusalWayOutTests(unittest.TestCase):
         self.assertEqual(
             _refusal((wrapped,)), ("first line", "", "second line", "", "do the thing")
         )
+
+
+class LocalRegistryCheckoutRowTest(unittest.TestCase):
+    """A Registry read out of a checkout is a registry on the source screen too (D-350).
+
+    The screen used to ask `kind is REGISTRY_GIT` wherever it meant "is this a registry", which
+    was the same question while there was only one transport. With two, that spelling answers a
+    different question, and a local checkout came out of it as a direct source with a broken Git
+    origin that could never be the default.
+    """
+
+    def _local(self, alias: str = "candidate") -> ConfiguredSource:
+        return ConfiguredSource(
+            SourceAlias(alias),
+            SourceKind.REGISTRY_LOCAL,
+            "/srv/registry",
+            "test/candidate",
+            True,
+        )
+
+    def _row(self, source: ConfiguredSource):
+        view = _view(_configuration(source))
+        return next(item for item in view.rows if item.source.alias == source.alias)
+
+    def test_its_row_is_selectable_and_names_no_broken_git_origin(self) -> None:
+        row = self._row(self._local())
+
+        self.assertEqual(row.reason, "")
+        self.assertTrue(row.selectable)
+
+    def test_its_row_says_which_kind_of_registry_it_is(self) -> None:
+        rendered = render_source_row(self._row(self._local()))
+
+        self.assertIn("local registry checkout", rendered)
+        self.assertIn("/srv/registry", rendered)
+
+    def test_it_can_be_the_default_registry(self) -> None:
+        source = self._local()
+        view = _view(_configuration(source))
+
+        planned = plan_source_management(view, (source.alias,), default_registry=source.alias)
+
+        self.assertIsInstance(planned, Ok, planned)
+        self.assertEqual(planned.value.request.after.default_registry, source.alias)
 
 
 if __name__ == "__main__":

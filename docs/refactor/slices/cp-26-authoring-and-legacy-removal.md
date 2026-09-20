@@ -1982,3 +1982,76 @@ text on a programming-error guard, which is the same class as the survivors alre
 `credential_address` and `installed_name_for` and is not a claim worth asserting. The first run
 reported `installation_key` as "no tests" because `mutants/` held a cache from before the function
 existed — clear `mutants/` and `mutmut-stats.json` when mutating a module that has gained one.
+
+### Step 20 — a Registry repository on this disk is a Registry (2026-09-20, D-350, D-362)
+
+**Done — a Registry repository on this disk is a Registry (D-350, D-362).**
+`registry-local` is a fourth `SourceKind`, carrying an absolute normalized repository path and the
+branch to read, which is required rather than defaulted: a local checkout has no remote default to
+fall back to. Both transports run the same acquisition, validation, source-store representation,
+Marketplace projection, resolver, policy evaluator and installation path; what differs is a flag on
+one request. `GitSnapshotRequest.allow_local_transport` lets the bare managed mirror fetch from a
+filesystem path, and `ref_is_branch` says the ref is a selected branch rather than one somebody
+typed. A bare-mirror `git fetch` from a local path reads only committed refs, resolves
+`refs/remotes/origin/<branch>` exactly, touches no worktree and needs no network, so "never switch
+branches, never read worktree edits, never fall back to HEAD" is a property of the existing
+acquisition rather than a new code path; what had to be added is the refusal of the *tag* that would
+otherwise answer for a deleted branch.
+
+Three questions were being asked with the wrong spelling and are now asked with `is_registry`,
+`is_git` or `is_local_checkout` on `ConfiguredSource`: "does this publish approved Registry
+content", "does this have a remote Git origin", "is this read out of a checkout here". The
+consumption path (selection, offers, installation, offline readiness, the install-routing alias
+sets, the Marketplace origin, the native-source branch in `consumer/runtime`) asks the first.
+`configuration/policy.py` and the `allow_direct_sources` checks deliberately still ask
+`kind is REGISTRY_GIT`, because they mean *reviewed remote* (D-362).
+
+Screen 21a gains a Transport row that Space cycles, and relabels itself for a local checkout:
+`Repository path` and `Branch`, and a review line that says branch rather than branch-or-tag. The
+source stage shows a local checkout's path instead of "invalid Git origin", lets it be selected and
+lets it be the default registry.
+
+Evidence: `tests/local_registry_checkout_e2e_test.py` (14 tests) drives the whole thing through the
+real CLI against a real repository that holds three different answers at once -- `main`'s 1.2.0, the
+selected branch's 1.3.0, and an uncommitted worktree edit -- and asserts that only the second is
+ever installed and that the repository's HEAD, status, worktree and refs are unchanged afterwards.
+It covers add resolving the branch to its exact commit, the branch that was named rather than the
+one checked out, the committed body rather than the edited one, an advanced branch adopted by
+explicit sync, a deleted branch and an invalid successor each keeping the last snapshot that
+validated, a tag of the branch's name refusing to stand in for it, coexistence of the local and
+remote aliases, alias-qualified install, unqualified ambiguity, update converging on the branch
+successor, two aliases producing two installations with two trees and two delivered names, the five
+provenance facts, and a no-network claim made the only honest way -- the repository has no remote
+and no URL anywhere in its configuration.
+
+**Two corrections to what this slice believed while it was being written.**
+
+- The duplicate-source-ID refusal in `compiler/graph.py` was removed on the reasoning that no test
+  held it. One did: a case inside
+  `compiler_graph_test.test_duplicate_or_mismatched_sources_and_collections_fail_closed`, which the
+  broad `unit` gate caught after the focused suites were green. That case is now the positive claim
+  `test_one_registry_reached_two_ways_compiles_under_its_two_aliases`; the other five fail-closed
+  cases, including duplicate *aliases*, are untouched. `docs/release/schema-freeze.json` was
+  regenerated in the same run, for the one input that changed: `configuration/schema.py`.
+- The dependency closure through a local alias was planned as an end-to-end test and is not one.
+  `requires` is a field of the published native artifact manifest, and the authoring manifest has
+  no such field -- `protocol/authoring` neither parses nor emits it -- so no artifact a maintainer
+  can author ever reaches a registry carrying a dependency, and the e2e fixture would have had to
+  write content promotion does not. What the re-addressing actually changes is held instead by
+  `tests/configured_registry_alias_test.py`, against the real reader and a Registry whose content
+  calls it `company` while this machine calls it `local-registry`; the authoring gap is B-161.
+
+**Targeted mutations, each red in exactly the test that names the claim, each restored.**
+
+- `load_configured_registry_versions` returns the published versions unchanged (no re-aliasing):
+  `configured_registry_alias_test` fails with `approved registry snapshot is inconsistent`, and the
+  companion test, where the alias happens to equal the registry's own name, stays green -- which is
+  what makes it the discriminating pair rather than one test run twice.
+- `_resolved_expressions` ignores `branch_only`: the deleted branch resolves to the tag of its name
+  and `source sync` reports success, so
+  `test_a_tag_named_like_the_branch_does_not_stand_in_for_it` fails `0 != 1`.
+- The duplicate-source-ID refusal is put back in `compile_marketplace_graph`:
+  `test_one_registry_reached_two_ways_compiles_under_its_two_aliases` fails with
+  `marketplace-graph-invalid: duplicate source ID: company-registry`.
+
+Scoped `make mutants` over the changed modules has **not** been run for this step and is owed.

@@ -68,7 +68,10 @@ def _error(
 
 def _origin(state: MarketplaceSourceState) -> str:
     configured = state.configured
-    if configured.kind is SourceKind.SOURCE_LOCAL:
+    # A path is its own origin, for both kinds read off this machine. What a remote origin reduces
+    # to -- host and repository -- has no counterpart here, and inventing one would put a
+    # filesystem path where a person reads a host.
+    if configured.kind is SourceKind.SOURCE_LOCAL or configured.is_local_checkout:
         return configured.location
     parts = git_location_parts(configured.location)
     if parts is None:

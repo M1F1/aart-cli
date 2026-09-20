@@ -12,7 +12,6 @@ from aart_cli.application.store import (
     ReferenceUpdateRequest,
     replace_references,
 )
-from aart_cli.configuration.model import SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.consumer.model import (
     ConsumerActionRequest,
@@ -222,7 +221,7 @@ def configured_setup_subject(
                 item
                 for item in effective.configuration.sources
                 if item.enabled
-                and item.kind is SourceKind.REGISTRY_GIT
+                and item.is_registry
                 and item.alias == installed_record.coordinate.source
             ),
             None,

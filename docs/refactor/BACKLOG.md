@@ -4068,3 +4068,29 @@ because `dict(previous)` collapsed the two entries that name one coordinate. Not
 with the wrong state and nothing was forgotten -- the whole update stopped. That is §169.3's update
 acceptance failing, so it moved into CP-26.19. The key is now the installation owner the previous
 state already carries, and `tests/configured_update_command_e2e_test.py` converges both trees.
+
+## B-161 — an authored artifact cannot declare a dependency, so `requires` is unreachable in practice
+
+**Found:** 2026-09-20, while writing CP-26.20's dependency-closure evidence (D-362).
+
+`requires` exists on the published native artifact manifest, is validated by
+`protocol/registry_index.validate_registry_graph` (a dependency the registry does not publish is
+refused, and the refusal explains that `requires` resolves inside one registry), is carried into
+the Marketplace graph by `compiler/graph.py`, and becomes an install-time `ArtifactRequest` in
+`io/configured_selection._dependency`. None of that can be reached from the authoring surface: the
+author manifest's field set in `protocol/authoring.py` does not include `requires`, and
+`compile_author_snapshot` emits `artifact.json` with `requires=()` every time. So the whole
+dependency mechanism is exercised only by tests that construct a `NativeArtifactPackage` directly
+(`tests/registry_index_test.py`, `tests/registry_dependency_scope_test.py`), and no end-to-end path
+-- promote, publish, resolve, install a closure -- exists to hold it.
+
+**Why it is not critical.** No Product Specification invariant on CP-26's critical path requires an
+authored dependency, and nothing regressed: this is a capability that was never wired to its own
+front door, not a break. CP-26.20's claim is the re-addressing itself, which
+`tests/configured_registry_alias_test.py` holds against the real reader.
+
+**What closing it needs.** Either add `requires` to the authoring manifest surface (schema, parser,
+`author init` skeleton, `author check`, and the emitted `artifact.json`) and then one acceptance
+test that installs a closure end to end, or decide deliberately that dependencies are a
+registry-maintenance concept only and delete the unreachable half. The decision belongs with the
+authoring-surface owner, not with this slice.

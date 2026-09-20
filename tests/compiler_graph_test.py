@@ -493,14 +493,6 @@ class CompilerGraphTest(unittest.TestCase):
         missing_nested = _collection("tools", collections=("missing",))
         cases = (
             (_source("company", artifacts=(artifact,)), _source("company", artifacts=(artifact,))),
-            (
-                _source("company", artifacts=(artifact,)),
-                _source(
-                    "other-alias",
-                    artifacts=(),
-                    source_id="company-registry",
-                ),
-            ),
             (duplicate_artifact,),
             (wrong_source_artifact,),
             (
@@ -523,6 +515,30 @@ class CompilerGraphTest(unittest.TestCase):
             with self.subTest(sources=sources):
                 result = compile_marketplace_graph(sources, available_capabilities=())
                 self.assertIsInstance(result, Err)
+
+    def test_one_registry_reached_two_ways_compiles_under_its_two_aliases(self) -> None:
+        """One Registry may be configured twice, and the alias is what must differ (D-350, D-362).
+
+        A ``SourceId`` is the Registry's own identity, written into its content, so a checkout of a
+        Registry on this disk and its remote declare the same one.  What a coordinate addresses, and
+        what every row, install tree, configuration and credential below is keyed by, is the alias
+        (§169.3), so the alias is what the graph holds unique.
+        """
+
+        artifact = _artifact("review")
+        compiled = compile_marketplace_graph(
+            (
+                _source("company", artifacts=(artifact,)),
+                _source("local-registry", artifacts=(artifact,), source_id="company-registry"),
+            ),
+            available_capabilities=(),
+        )
+
+        assert isinstance(compiled, Ok), compiled
+        self.assertEqual(
+            [(item.source_alias.value, item.source_id.value) for item in compiled.value.artifacts],
+            [("company", "company-registry"), ("local-registry", "company-registry")],
+        )
 
     def test_missing_and_empty_selection_returns_explicit_reasons(self) -> None:
         compiled = compile_marketplace_graph(

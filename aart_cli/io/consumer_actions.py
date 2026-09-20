@@ -33,6 +33,7 @@ from typing import Callable, Literal, Protocol
 from aart_cli.application.consumer_session import ConsumerMachine, InstalledInspection
 from aart_cli.application.consumer_ui import (
     AUTHORING_SOURCE_KINDS,
+    REGISTRY_SOURCE_KINDS,
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -1154,9 +1155,11 @@ class LocalConsumerActions:
         draft = command.registry_draft
         if draft is None or self._registry_connection is None:
             return self._declined(command, _lines("registry connection is unavailable"))
+        if draft.kind not in REGISTRY_SOURCE_KINDS:
+            return self._declined(command, _lines(f"{draft.kind} is not a registry transport"))
         parsed = configured_source_from_input(
             draft.alias,
-            SourceKind.REGISTRY_GIT,
+            SourceKind(draft.kind),
             draft.location,
             draft.ref or None,
         )
@@ -1182,10 +1185,18 @@ class LocalConsumerActions:
                 notice=(
                     "Registry connection review:",
                     f"  alias: {parsed.value.alias.value}",
-                    f"  URL: {parsed.value.location}",
-                    f"  branch or tag: {parsed.value.ref}",
+                    f"  repository path: {parsed.value.location}"
+                    if parsed.value.is_local_checkout
+                    else f"  URL: {parsed.value.location}",
+                    f"  branch: {parsed.value.ref}"
+                    if parsed.value.is_local_checkout
+                    else f"  branch or tag: {parsed.value.ref}",
                     f"  make default: {default}",
-                    "  next: download and validate a fresh snapshot, then save the subscription",
+                    "  next: read and validate a fresh snapshot of that branch, then save the "
+                    "subscription"
+                    if parsed.value.is_local_checkout
+                    else "  next: download and validate a fresh snapshot, then save the "
+                    "subscription",
                 )
             ),
             ConsumerUiEvent(

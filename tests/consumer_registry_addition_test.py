@@ -53,17 +53,81 @@ class RegistryAdditionInteractionTest(unittest.TestCase):
         self.assertIn("Branch or tag", drawn)
         self.assertIn("default registry", drawn)
 
+    def test_the_form_offers_both_transports_and_space_cycles_between_them(self) -> None:
+        """One Registry, two ways to reach it, chosen on the form that connects it (D-350).
+
+        Space cycles a closed pair rather than accepting typed text, exactly as the authoring
+        source form does: the two transports are the whole set, and a typed kind is a kind nobody
+        implemented.
+        """
+
+        state = _state(
+            ConsumerScreen.REGISTRY_ADD,
+            rows=("alias", "kind", "url", "ref", "default", "connect"),
+            cursor=1,
+        )
+
+        self.assertEqual(state.registry_draft.kind, "registry-git")
+        event = key_event(" ", state)
+        self.assertIsNotNone(event)
+        local, _ = reduce_consumer_ui(state, event)  # type: ignore[arg-type]
+        self.assertEqual(local.registry_draft.kind, "registry-local")
+        back, _ = reduce_consumer_ui(local, key_event(" ", local))  # type: ignore[arg-type]
+        self.assertEqual(back.registry_draft.kind, "registry-git")
+
+    def test_a_local_checkout_form_asks_for_a_path_and_a_branch(self) -> None:
+        state = _state(
+            ConsumerScreen.REGISTRY_ADD,
+            rows=("alias", "kind", "url", "ref", "default", "connect"),
+            registry_draft=RegistryDraft(kind="registry-local"),
+        )
+        source = CanonicalScreenSource(screens())
+
+        drawn = "\n".join(frame(source, state))
+
+        # A local checkout has no URL and no tag: it has a path on this machine and the branch
+        # whose committed content is read (D-350). Labelling it otherwise asks for the wrong thing.
+        self.assertIn("Local checkout", drawn)
+        self.assertIn("Repository path", drawn)
+        self.assertIn("Branch", drawn)
+        self.assertNotIn("Registry URL", drawn)
+        self.assertNotIn("Branch or tag", drawn)
+
+    def test_a_local_checkout_reaches_the_canonical_transaction_as_registry_local(self) -> None:
+        from aart_cli import tui
+        from tests.configured_install_command_e2e_test import _environment
+
+        draft = RegistryDraft(
+            "candidate", "/srv/registry", "test/candidate", False, "registry-local"
+        )
+        with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
+            composed = tui._canonical_consumer_actions(
+                project=str(env.project), user_home=str(env.home), today=tui.date.today()
+            )
+            self.assertIsInstance(composed, Ok, composed)
+            with mock.patch(
+                "aart_cli.commands.source.add_configured_source",
+                return_value=Ok(object()),
+            ) as add:
+                refreshed = composed.value._registry_connection(draft)  # type: ignore[misc]
+
+        self.assertIsInstance(refreshed, Ok, refreshed)
+        request = add.call_args.args[0]
+        self.assertEqual(request.source_kind, "registry-local")
+        self.assertEqual(request.source_location, "/srv/registry")
+        self.assertEqual(request.ref, "test/candidate")
+
     def test_entering_the_form_binds_exact_values_to_the_review_command(self) -> None:
         state = _state(
             ConsumerScreen.REGISTRY_ADD,
-            rows=("alias", "url", "ref", "default", "connect"),
+            rows=("alias", "kind", "url", "ref", "default", "connect"),
             registry_draft=RegistryDraft(
                 "company",
                 "https://git.example.test/company/registry.git",
                 "stable",
                 True,
             ),
-            cursor=4,
+            cursor=5,
         )
 
         event = key_event("enter", state)
@@ -87,7 +151,7 @@ class RegistryAdditionInteractionTest(unittest.TestCase):
     def test_printable_navigation_hotkeys_remain_text_inside_the_form(self) -> None:
         state = _state(
             ConsumerScreen.REGISTRY_ADD,
-            rows=("alias", "url", "ref", "default", "connect"),
+            rows=("alias", "kind", "url", "ref", "default", "connect"),
         )
 
         for character in "project-kit":

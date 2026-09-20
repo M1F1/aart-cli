@@ -37,7 +37,6 @@ from aart_cli.application.credential_guidance import (
     guidance_by_input,
 )
 from aart_cli.application.installed_setup import declared_setup_to_data
-from aart_cli.configuration.model import SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration
 from aart_cli.consumer.application import (
     CONSUMER_REVIEW_MISMATCH,
@@ -779,7 +778,7 @@ def _configured_registry_selection(
     registry_aliases = {
         source.alias
         for source in effective.configuration.sources
-        if source.enabled and source.kind is SourceKind.REGISTRY_GIT
+        if source.enabled and source.is_registry
     }
     default = effective.configuration.default_registry
     if not registry_aliases or any(item.identity.kind == "collection" for item in selectors):
@@ -1088,7 +1087,7 @@ def _configured_update(request: Request, selectors: tuple[ArtifactSelector, ...]
     registry_aliases = {
         source.alias
         for source in effective.configuration.sources
-        if source.enabled and source.kind is SourceKind.REGISTRY_GIT
+        if source.enabled and source.is_registry
     }
     if not registry_aliases:
         return None
@@ -1347,7 +1346,7 @@ def _configured_status(request: Request, selectors: tuple[ArtifactSelector, ...]
     registry_aliases = {
         source.alias
         for source in effective.configuration.sources
-        if source.enabled and source.kind is SourceKind.REGISTRY_GIT
+        if source.enabled and source.is_registry
     }
     if selectors:
         if _configured_registry_selection(selectors, effective) is None:

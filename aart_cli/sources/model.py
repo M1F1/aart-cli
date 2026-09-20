@@ -27,7 +27,7 @@ from aart_cli.protocol.native_tree import (
 from aart_cli.protocol.paths import parse_relative_path
 from aart_cli.protocol.semver import SemVer
 
-_INSTANCE_RE = re.compile(r"^(?:git|local|registry)-[0-9a-f]{32}$")
+_INSTANCE_RE = re.compile(r"^(?:checkout|git|local|registry)-[0-9a-f]{32}$")
 _HEX_64_RE = re.compile(r"^[0-9a-f]{64}$")
 _MAX_SNAPSHOT_LIMITS = (10_000, 10 * 1024 * 1024, 100 * 1024 * 1024, 64)
 SOURCE_INVALID = DiagnosticCode("source-invalid")
@@ -95,6 +95,11 @@ class SnapshotLimits:
 
 _INSTANCE_PREFIX = {
     SourceKind.REGISTRY_GIT: "registry",
+    # Its own prefix, not `registry`: a local checkout and a remote connection to the same
+    # Registry are two aliases with two stores, and a shared prefix would only make the two
+    # directories harder to tell apart for the person looking at both (D-350). It carries no
+    # hyphen, because the prefix is what the instance id is read back by.
+    SourceKind.REGISTRY_LOCAL: "checkout",
     SourceKind.SOURCE_GIT: "git",
     SourceKind.SOURCE_LOCAL: "local",
 }
@@ -362,6 +367,10 @@ class GitSnapshotRequest:
     limits: SnapshotLimits
     timeout_seconds: int
     allow_local_transport: bool = False
+    #: Whether `ref` was selected as a branch rather than typed as a ref of any kind.  A local
+    #: Registry checkout configures its *branch* (D-350), so nothing else may answer for it; an
+    #: ordinary Git source takes whatever somebody wrote, where a tag is a legitimate reading.
+    ref_is_branch: bool = False
 
     def __post_init__(self) -> None:
         if (
@@ -380,6 +389,7 @@ class GitSnapshotRequest:
             or isinstance(self.timeout_seconds, bool)
             or self.timeout_seconds <= 0
             or not isinstance(self.allow_local_transport, bool)
+            or not isinstance(self.ref_is_branch, bool)
         ):
             raise ValueError("Git snapshot timeout/transport value is invalid")
 

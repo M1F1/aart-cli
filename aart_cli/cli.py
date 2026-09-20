@@ -239,21 +239,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_add_source.add_argument(
         "--kind",
         dest="source_kind",
-        choices=("registry-git", "source-git", "source-local"),
+        choices=("registry-git", "registry-local", "source-git", "source-local"),
         required=True,
-        help="registry-git, source-git, or source-local",
+        help="registry-git, registry-local, source-git, or source-local",
     )
     p_add_source.add_argument(
         "--location",
         dest="source_location",
         required=True,
         metavar="URL_OR_PATH",
-        help="credential-free Git URL or normalized absolute local path",
+        help="credential-free Git URL, or a normalized absolute local path",
     )
     p_add_source.add_argument(
         "--ref",
         metavar="REF",
-        help="Git ref (defaults to main; not valid for source-local)",
+        help=(
+            "Git ref: defaults to main for registry-git and source-git, required as the selected "
+            "branch for registry-local, not valid for source-local"
+        ),
     )
     source_default = p_add_source.add_mutually_exclusive_group()
     source_default.add_argument(

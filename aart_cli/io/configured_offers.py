@@ -21,12 +21,12 @@ import dataclasses
 import time
 
 from aart_cli.application.promotion import (
-    load_published_registry_versions,
+    load_configured_registry_versions,
     load_registry_promotions,
 )
 from aart_cli.application.sources import SourceStatusRequest, source_status
 from aart_cli.compiler.graph import GraphSource, compile_marketplace_graph
-from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.configuration.model import ConfiguredSource
 from aart_cli.configuration.policy import EffectiveConfiguration
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactIdentity
@@ -156,7 +156,7 @@ def project_configured_registry(
     """Every artifact this registry currently offers, compiled from what it published."""
 
     snapshot = current.candidate.snapshot
-    loaded = load_published_registry_versions(snapshot)
+    loaded = load_configured_registry_versions(snapshot, configured.alias)
     if isinstance(loaded, Err):
         return loaded
     promotions = load_registry_promotions(snapshot)
@@ -248,7 +248,7 @@ def read_configured_marketplace(
             read_current_source,
         )
         states.append(MarketplaceSourceState(configured, health, order))
-        if configured.kind is not SourceKind.REGISTRY_GIT or health.current is None:
+        if not configured.is_registry or health.current is None:
             continue
         projected = project_configured_registry(configured, health.current)
         if isinstance(projected, Err):

@@ -18,7 +18,7 @@ from aart_cli.application.installation_inputs import (
 )
 from aart_cli.application.installation_offer import ArtifactPlacement
 from aart_cli.application.marketplace_resolution import ResolutionPolicy
-from aart_cli.application.promotion import load_published_registry_versions
+from aart_cli.application.promotion import load_configured_registry_versions
 from aart_cli.configuration.policy import EffectiveConfiguration
 from aart_cli.domain.credentials import CredentialReference
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -192,7 +192,7 @@ def _configured_snapshot(
             CONFIGURED_INSTALLATION_INVALID,
             f"configured registry {alias} has no synchronized current snapshot",
         )
-    loaded = load_published_registry_versions(current.value.candidate.snapshot)
+    loaded = load_configured_registry_versions(current.value.candidate.snapshot, alias)
     if isinstance(loaded, Err):
         return loaded
     exact = next(

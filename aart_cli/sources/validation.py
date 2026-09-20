@@ -6,7 +6,7 @@ from aart_cli.application.promotion import (
     load_registry_versions,
     validate_promoted_registry,
 )
-from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.configuration.model import ConfiguredSource
 from aart_cli.domain.diagnostics import Diagnostic, Severity
 from aart_cli.domain.identifiers import SourceId
 from aart_cli.domain.result import Err, Ok, Result
@@ -306,6 +306,9 @@ def validate_configured_source_candidate(
         or request.candidate.instance_id != source_instance_id(source)
     ):
         return _error("source validator received a candidate for another configured source")
-    if source.kind is SourceKind.REGISTRY_GIT:
+    # By what the source *is*, not by how its bytes arrived. A Registry read out of a checkout is
+    # admitted through the canonical Registry contract and nothing else (D-350): the whole value of
+    # testing an artifact this way is that what passes here is what a remote Registry would publish.
+    if source.is_registry:
         return validate_registry_source_candidate(request)
     return validate_authoring_source_candidate(source, request)

@@ -9112,3 +9112,80 @@ canonical document with a stray carriage return in its prose therefore had its w
 written with `\r` as the row terminator -- one header no parser reads. Detection is now `\r\n` or
 `\n` and nothing else. A Hypothesis property in `tests/skill_projection_test.py` found it; an
 example test pins it.
+
+## D-362 — A Registry is addressed by the alias it is configured under, not by the name inside it
+
+**Date:** 2026-09-20. **Status:** accepted and implemented on `refactor/cp-26-legacy-removal`.
+**Implements:** CP-26.20 (B-143) under D-350.
+
+D-350 allows one Registry to be configured twice on one machine -- a checkout of it on this disk
+and its remote -- and requires the two to be *distinct aliases*. Implementing that turned out to be
+mostly about one confusion the second connection makes visible: three places treated a Registry's
+own identity, which is content, as the name this machine calls it by.
+
+**A version record's `registry` field is content.** `registry/versions/<kind>/<name>/<v>.json`
+names the registry that approved it. The maintainer writes it once; every branch, mirror and
+checkout of that repository carries it unchanged. `io/configured_selection._approved_snapshot`
+required it to equal the configured alias and refused the source otherwise -- so a Registry could
+be configured only under the name its own content happened to use, and the second connection to it
+was refused as "inconsistent approved version identity". The alias now wins, which is what the
+Marketplace path already did: `project_configured_registry` re-roots every offered artifact under
+`configured.alias` without consulting the stored name.
+
+**Re-addressed in one place.** `application/promotion.load_configured_registry_versions(snapshot,
+alias)` is the only reader of a configured Registry's published versions; all four consumers --
+selection, offers, installation and offline readiness -- go through it. A version addressed one way
+where it is resolved and another way where it is installed is a version no install can find, and
+that is exactly what happened first: with only the resolver re-aliased, `marketplace install`
+refused with "configured registry local-registry no longer contains the resolved approved version".
+Dependency requests take their source from the same coordinate, so they still resolve inside the
+alias the request came in through -- the containment the equality check used to give.
+
+**The duplicate source-ID rule is deleted.** `compiler/graph.compile_marketplace_graph` refused two
+configured sources declaring one `source_id`, which is the same confusion one level up: two
+connections to one Registry legitimately declare it. Nothing keyed anything by it -- the graph keys
+`(alias, identity)`, and `source_id` is used for trust and attestation matching, where both
+connections genuinely *are* that registry. One test did hold the rule, as a case in
+`compiler_graph_test.test_duplicate_or_mismatched_sources_and_collections_fail_closed`; that case is
+now the positive claim `test_one_registry_reached_two_ways_compiles_under_its_two_aliases`, and the
+other five fail-closed cases are untouched. The alias remains unique, and that is still held there.
+
+**A selected branch resolves only as a branch.** `sources/git._resolved_expressions` resolves an
+unqualified ref as a remote branch *or* a tag, which is the right reading of a ref somebody typed.
+For a local checkout the configured field *is* the branch, so `GitSnapshotRequest.ref_is_branch`
+(set from `is_local_checkout`) drops the tag expression. Without it, deleting the selected branch
+was not the end of it: a tag of the same name resolved in its place, `source sync` reported success,
+and the last-known-good snapshot D-350 requires was replaced by content nobody selected.
+
+**Both transports are offered where a Registry is connected.** Screen 21a gains a Transport row
+that Space cycles over `REGISTRY_SOURCE_KINDS`, exactly as screen 31a cycles the authoring kinds,
+and the form relabels itself: `Repository path` and `Branch` rather than `Registry URL` and `Branch
+or tag`, because a local checkout has no default branch to fall back to and no tag to accept. The
+source stage's "is this a registry" questions were spelled `kind is REGISTRY_GIT` while there was
+only one transport; the ones that mean *registry* now ask `is_registry`, so a local checkout is
+selectable, can be the default, and shows its path instead of "invalid Git origin".
+
+**What is deliberately still `REGISTRY_GIT`.** `configuration/policy.py` and the two
+`allow_direct_sources` checks in `tui_sources.py` ask whether a source is a *reviewed remote*
+Registry, and a local checkout is not one: an organization that forbids direct sources is forbidding
+content read off a developer's disk, whatever approves it. `marketplace/catalog._company_identity`
+likewise needs a host and a repository, which a path does not have.
+
+**What re-addressing does for dependencies, and what cannot yet be shown end to end.** `requires`
+resolves inside one Registry -- `registry build` refuses a dependency the registry does not publish
+-- and `io/configured_selection._dependency` takes a request's source from the coordinate of the
+version that declared it. Re-addressing therefore keeps a closure inside the connection it arrived
+through rather than sending it to whichever alias carries the same content. That consequence cannot
+be demonstrated through the product's own authoring path today: the authoring manifest has no
+`requires` field (`protocol/authoring` neither parses nor emits one), so no artifact a maintainer
+can author reaches a registry carrying a dependency, and a test would have to invent content
+promotion never writes. `tests/configured_registry_alias_test.py` holds the re-addressing itself
+against the real reader, and the authoring gap is recorded as a backlog finding rather than papered
+over with a fabricated fixture.
+
+**Where the five provenance facts live.** The installation record names the alias and the
+`marketplace install` receipt names the exact commit; `source list` names, for that alias, the kind,
+the origin, the branch, the resolved commit and the snapshot digest. Branch and origin belong to the
+configured connection rather than to one installation, and re-pointing an alias at another ref
+produces a different `source_instance_id` and therefore a different managed store, so the two cannot
+silently swap under a recorded installation.

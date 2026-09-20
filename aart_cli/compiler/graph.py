@@ -654,7 +654,6 @@ def compile_marketplace_graph(
     available = frozenset(available_capabilities)
     diagnostics: list[Diagnostic] = []
     aliases: set[SourceAlias] = set()
-    source_ids: set[SourceId] = set()
     artifacts: dict[tuple[SourceAlias, ArtifactIdentity], MarketplaceArtifact] = {}
     for source in ordered_sources:
         if source.alias in aliases:
@@ -666,15 +665,11 @@ def compile_marketplace_graph(
                 )
             )
         aliases.add(source.alias)
-        if source.source_id in source_ids:
-            diagnostics.append(
-                _diagnostic(
-                    MARKETPLACE_GRAPH_INVALID,
-                    f"duplicate source ID: {source.source_id}",
-                    alias=source.alias,
-                )
-            )
-        source_ids.add(source.source_id)
+        # Two sources may declare one source ID, and that is not a mistake to catch here: the ID
+        # is the Registry's own identity, written into its content, and D-350 has one Registry
+        # reached two ways -- a local checkout of it and its remote -- configured side by side.
+        # What must stay unique is the alias, because the alias is what a coordinate addresses and
+        # what every row, install tree, configuration and credential below is keyed by (§169.3).
         missing = tuple(
             capability for capability in source.required_capabilities if capability not in available
         )

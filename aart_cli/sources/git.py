@@ -231,13 +231,19 @@ def _snapshot_from_archive(
     return Ok(SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries.values())))
 
 
-def _resolved_expressions(ref: str) -> tuple[str, ...]:
+def _resolved_expressions(ref: str, *, branch_only: bool = False) -> tuple[str, ...]:
     if ref.startswith("refs/heads/"):
         # The bare managed mirror fetches ordinary remote branches under
         # ``refs/remotes/origin/*``.  Users may still provide the familiar fully qualified local
         # branch spelling, so resolve it against the fetched remote tracking ref rather than a
         # non-existent local branch ref.
         return (f"refs/remotes/origin/{ref.removeprefix('refs/heads/')}^{{commit}}",)
+    if branch_only:
+        # The configured field is a branch, so a branch is the only thing that may answer for it
+        # (D-350).  Without this, deleting the selected branch would not be the end of it: a tag
+        # of the same name would quietly resolve in its place, and the last-known-good snapshot
+        # this source is supposed to keep would be replaced by content nobody selected.
+        return (f"refs/remotes/origin/{ref}^{{commit}}",)
     if ref.startswith("refs/") or _COMMIT_RE.fullmatch(ref) is not None:
         return (f"{ref}^{{commit}}",)
     return (
@@ -324,7 +330,7 @@ def acquire_git_snapshot(
     if isinstance(fetched, Err):
         return fetched
     resolved: Result[GitProcessReceipt] | None = None
-    for expression in _resolved_expressions(request.ref):
+    for expression in _resolved_expressions(request.ref, branch_only=request.ref_is_branch):
         resolved = _run(
             runner,
             _command(

@@ -92,3 +92,64 @@ class ConfiguredSourceFromInputTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LocalRegistryCheckoutTest(unittest.TestCase):
+    """A Registry read out of a repository already on this machine (CP-26.20, D-350).
+
+    It is a Registry, so it is admitted, projected, resolved and installed from through exactly
+    the machinery `registry-git` uses. What separates it is where the bytes come from and what is
+    therefore promised about them: one named branch's committed content, read without touching the
+    checkout, so a repository whose worktree is mid-edit and whose HEAD is some other branch still
+    publishes only what was committed to the branch that was named.
+    """
+
+    def _local(self, location: str = "/work/registry", ref: str | None = "test/candidate"):
+        return configured_source_from_input(
+            "local-registry", SourceKind.REGISTRY_LOCAL, location, ref
+        )
+
+    def test_a_path_and_a_branch_make_one_configured_registry(self) -> None:
+        parsed = self._local()
+
+        self.assertIsInstance(parsed, Ok, getattr(parsed, "diagnostics", ()))
+        assert isinstance(parsed, Ok)
+        self.assertEqual(parsed.value.location, "/work/registry")
+        self.assertEqual(parsed.value.ref, "test/candidate")
+        self.assertTrue(parsed.value.is_registry)
+        self.assertTrue(parsed.value.is_local_checkout)
+
+    def test_the_branch_is_required_rather_than_defaulted_to_the_checked_out_one(self) -> None:
+        """`registry-git` defaults its ref to `main`; this cannot.
+
+        A remote origin has one obvious default and no other candidate. A checkout has a branch
+        somebody happens to have open, and silently reading `main` when they meant the branch they
+        are on -- or the other way round -- installs content nobody selected. It is named or it is
+        refused.
+        """
+
+        refused = self._local(ref=None)
+
+        self.assertIsInstance(refused, Err)
+        assert isinstance(refused, Err)
+        self.assertIn("branch", refused.diagnostics[0].message)
+
+    def test_it_is_not_governed_by_the_remote_git_host_rules(self) -> None:
+        """`is_git` means an origin a host allowlist can be applied to, and a path is not one."""
+
+        parsed = self._local()
+
+        assert isinstance(parsed, Ok)
+        self.assertFalse(parsed.value.is_git)
+
+    def test_a_relative_or_unnormalized_path_is_refused(self) -> None:
+        for location in ("work/registry", "/work/../registry", "/work/registry/"):
+            with self.subTest(location=location):
+                refused = self._local(location=location)
+
+                self.assertIsInstance(refused, Err, location)
+
+    def test_an_unsafe_branch_name_is_refused(self) -> None:
+        for ref in ("--upload-pack=x", "branch with space", "-", "refs/heads/../x"):
+            with self.subTest(ref=ref):
+                self.assertIsInstance(self._local(ref=ref), Err, ref)

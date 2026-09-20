@@ -292,6 +292,15 @@ def _candidate(
             paths.temporary_root,
             request.limits,
             request.timeout_seconds,
+            # A local checkout is read through the same Git transport, which is the point: one
+            # acquisition, one validation, one snapshot representation, whatever the bytes
+            # travelled over (D-350). The flag says a filesystem path is an allowed origin here,
+            # and it is allowed only because the configuration schema already refused anything
+            # that is not one absolute normalized path.
+            allow_local_transport=request.source.is_local_checkout,
+            # And the ref it carries is that checkout's *branch*, not a ref somebody typed, so a
+            # tag of the same name is not a second reading of it (D-350).
+            ref_is_branch=request.source.is_local_checkout,
         )
     )
 

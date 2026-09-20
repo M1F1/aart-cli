@@ -145,6 +145,21 @@ def _safe_ref(raw: str) -> bool:
     )
 
 
+def _local_path(location: JsonValue, label: str) -> Result[str]:
+    """One absolute, already-normalized filesystem path, or a refusal naming what it is for.
+
+    Normalizing it here instead would accept two spellings of one directory as two sources, and
+    the second would take the first's place in a store keyed by what was written down.
+    """
+
+    parsed = _string(location, CONFIG_INVALID, label)
+    if isinstance(parsed, Err):
+        return parsed
+    if not posixpath.isabs(parsed.value) or posixpath.normpath(parsed.value) != parsed.value:
+        return _error(CONFIG_INVALID, f"{label} must be normalized and absolute")
+    return parsed
+
+
 def configured_source_from_input(
     alias: str,
     kind: SourceKind,
@@ -163,17 +178,30 @@ def configured_source_from_input(
     parsed_alias = _alias(alias, CONFIG_INVALID, "source alias")
     if isinstance(parsed_alias, Err):
         return parsed_alias
+    if kind is SourceKind.REGISTRY_LOCAL:
+        # The branch is named or the source is refused, with no default. A remote origin has one
+        # obvious default and no other candidate; a checkout has a branch somebody happens to have
+        # open, so guessing either `main` or HEAD installs content nobody selected (D-350).
+        if ref is None:
+            return _error(CONFIG_INVALID, "a local Registry checkout must name its branch")
+        parsed_branch = _string(ref, CONFIG_INVALID, "registry branch")
+        if isinstance(parsed_branch, Err):
+            return parsed_branch
+        if not _safe_ref(parsed_branch.value):
+            return _error(CONFIG_INVALID, "registry branch is unsafe")
+        parsed_root = _local_path(location, "local Registry path")
+        if isinstance(parsed_root, Err):
+            return parsed_root
+        return Ok(
+            ConfiguredSource(parsed_alias.value, kind, parsed_root.value, parsed_branch.value, True)
+        )
+
     if kind is SourceKind.SOURCE_LOCAL:
         if ref is not None:
             return _error(CONFIG_INVALID, "local sources do not have Git refs")
-        parsed_location = _string(location, CONFIG_INVALID, "source path")
+        parsed_location = _local_path(location, "local source path")
         if isinstance(parsed_location, Err):
             return parsed_location
-        if (
-            not posixpath.isabs(parsed_location.value)
-            or posixpath.normpath(parsed_location.value) != parsed_location.value
-        ):
-            return _error(CONFIG_INVALID, "local source path must be normalized and absolute")
         return Ok(
             ConfiguredSource(
                 parsed_alias.value,
@@ -302,7 +330,7 @@ def _sources(value: JsonValue) -> Result[tuple[ConfiguredSource, ...]]:
     git_origins = tuple(
         (*git_origin_key(source.kind, source.location), source.ref or "")
         for source in sources
-        if source.is_git
+        if source.tracks_one_origin
     )
     if len(set(git_origins)) != len(git_origins):
         return _error(

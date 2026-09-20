@@ -8,8 +8,7 @@ from aart_cli.application.offline_readiness import (
     OfflineSourceReadiness,
     artifact_readiness,
 )
-from aart_cli.application.promotion import load_published_registry_versions
-from aart_cli.configuration.model import SourceKind
+from aart_cli.application.promotion import load_configured_registry_versions
 from aart_cli.configuration.policy import EffectiveConfiguration
 from aart_cli.domain.registry import RegistryLifecycle
 from aart_cli.domain.result import Err, Ok, Result
@@ -47,7 +46,7 @@ def read_offline_readiness(
                 )
             )
             continue
-        if configured.kind is not SourceKind.REGISTRY_GIT:
+        if not configured.is_registry:
             sources.append(
                 OfflineSourceReadiness(
                     configured.alias,
@@ -57,7 +56,7 @@ def read_offline_readiness(
             continue
 
         snapshot = current.value.candidate.snapshot
-        loaded = load_published_registry_versions(snapshot)
+        loaded = load_configured_registry_versions(snapshot, configured.alias)
         if isinstance(loaded, Err):
             return loaded
         artifacts = []

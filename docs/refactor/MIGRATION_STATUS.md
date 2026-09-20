@@ -4,6 +4,47 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-20, CP-26.20 — a Registry repository on this disk is a Registry (D-350, D-362).**
+`registry-local` is a fourth `SourceKind` carrying an absolute repository path and a *required*
+branch, and it runs the same acquisition, validation, source store, Marketplace projection,
+resolver, policy evaluation and installation as a remote Registry. What differs is two flags on one
+snapshot request: `allow_local_transport`, which lets the bare managed mirror fetch from a
+filesystem path, and `ref_is_branch`, which stops a tag of the branch's name answering for a branch
+that was deleted. Because a bare mirror fetch reads only committed refs, "never switch branches,
+never read the worktree, never fall back to HEAD" is a property of the acquisition already there.
+
+Three questions had been spelled `kind is REGISTRY_GIT` while there was only one transport. They
+are now `is_registry`, `is_git` and `is_local_checkout` on `ConfiguredSource`, and the two
+`allow_direct_sources` checks and `configuration/policy.py` deliberately keep asking `REGISTRY_GIT`,
+because they mean *reviewed remote*. Screen 21a gains a Transport row that Space cycles and relabels
+itself for a local checkout.
+
+Two rules that treated a Registry's own identity as this machine's name for it are gone (D-362):
+`_approved_snapshot` required a version record's `registry` field to equal the configured alias, and
+`compile_marketplace_graph` refused two sources declaring one `source_id`. Both made D-350's two
+coexisting aliases impossible. Re-addressing now happens in exactly one function,
+`load_configured_registry_versions`, which all four readers go through.
+
+**Evidence, and what is still owed.** `tests/local_registry_checkout_e2e_test.py` (14 tests) drives
+the CLI against a real repository holding three answers at once -- `main`'s 1.2.0, the selected
+branch's 1.3.0 and an uncommitted worktree edit -- and asserts only the second is ever installed and
+that the repository's HEAD, status, worktree and refs are unchanged afterwards.
+`tests/configured_registry_alias_test.py` holds the re-addressing against a Registry whose content
+calls it `company` while this machine calls it `local-registry`. Three targeted mutations are
+recorded in the slice, each red in exactly the test that names its claim. The broad `unit` gate
+(4702) caught two things the focused suites could not: a Hypothesis case in `compiler_graph_test`
+that held the duplicate-source-ID rule, now the positive claim, and
+`docs/release/schema-freeze.json`, regenerated for the one input that moved. After both fixes the
+gates are green: `unit` 4705 OK, `integration` 424 OK, and
+lint/format-check/typecheck/docs-check/validate/secret-shape-check clean. A scoped `make mutants`
+over the changed modules has not been run and is the one outstanding piece; it is advisory under
+D-134, and CP-26.21 owns the full release-facing verification.
+
+**Found, not fixed:** an authored artifact cannot declare a dependency at all -- the author manifest
+has no `requires` field -- so the dependency machinery below it is reachable only from hand-built
+native packages. Recorded as **B-161** rather than papered over with a fixture that writes content
+promotion never writes; it is why step 20's closure evidence is the re-addressing itself.
+
 **2026-09-20, stale CP-26.18 handoff reconciled; focused verification only.** The supplied
 handoff described `4fe1fe4`, steps 1–17 done and a 17/22 plan. The clean checkout was actually
 `64db5c0` on `refactor/cp-26-legacy-removal`, with 18/18a done and 19 in progress (19/23 done).

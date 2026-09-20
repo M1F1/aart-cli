@@ -990,7 +990,7 @@ def _canonical_consumer_actions(
                 user_home=home,
                 source_action="add",
                 source_alias=draft.alias,
-                source_kind="registry-git",
+                source_kind=draft.kind,
                 source_location=draft.location,
                 source_make_default=draft.make_default,
                 ref=draft.ref or None,
