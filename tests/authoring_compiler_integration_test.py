@@ -57,7 +57,7 @@ class AuthorCompilerIntegrationTest(unittest.TestCase):
             compiled = compile_author_snapshot(
                 acquired.value.snapshot,
                 source_alias=alias,
-                source="https://git.example/agent-mcp-servers.git",
+                source="https://git.example/example-mcp-servers.git",
                 revision="b" * 40,
             )
 

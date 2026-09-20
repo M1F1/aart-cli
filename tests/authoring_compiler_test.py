@@ -100,7 +100,7 @@ def _compile(snapshot: SourceSnapshot):
     return compile_author_snapshot(
         snapshot,
         source_alias=SourceAlias("internal"),
-        source="https://git.example/agent-mcp-servers.git",
+        source="https://git.example/example-mcp-servers.git",
         revision="a" * 40,
     )
 

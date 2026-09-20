@@ -50,7 +50,7 @@ Reported in issue #8:
 
 ```
 The local AART state could not be loaded.
-  error [maintainer-composition-invalid]: cannot bind Candidate history for agent-mcp-servers:
+  error [maintainer-composition-invalid]: cannot bind Candidate history for example-mcp-servers:
   maintainer Source scan does not bind the current pinned Source
 ```
 

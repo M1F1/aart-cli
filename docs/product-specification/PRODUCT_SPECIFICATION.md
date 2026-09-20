@@ -2331,7 +2331,7 @@ aart-cli must not require an MCP author to redesign the internal implementation 
 An author repository may remain completely usable on its own:
 
 ```text
-agent-mcp-servers/
+example-mcp-servers/
 └── github/
     ├── server.py
     ├── launcher.sh
@@ -2454,7 +2454,7 @@ each manifest defines one artifact boundary
 For example:
 
 ```text
-agent-mcp-servers/
+example-mcp-servers/
 │
 ├── github/
 │   ├── server.py
@@ -3184,8 +3184,8 @@ Example:
 
 ```yaml
 sources:
-  - id: agent-mcp-servers
-    repo: git.company/agent-mcp-servers
+  - id: example-mcp-servers
+    repo: git.company/example-mcp-servers
     discovery:
       manifests:
         - "**/aart-cli.yaml"
@@ -3242,7 +3242,7 @@ Instead, registry CI produces an update proposal, preferably as a pull request.
 Example:
 
 ```text
-Registry sync: agent-mcp-servers
+Registry sync: example-mcp-servers
 
 Added
 + company/mcp/foo@1.0.0
@@ -3344,7 +3344,7 @@ For approved enterprise registries, aart-cli should default to materializing the
 Example upstream:
 
 ```text
-agent-mcp-servers/
+example-mcp-servers/
 └── github/
     ├── aart-cli.yaml
     ├── server.py
@@ -9278,7 +9278,7 @@ Source ≠ Candidate ≠ Registry ≠ Marketplace
 │ Credentials       │ Ready for promotion             3                          │
 │ Activity          │                                                          │
 │ Settings          │ Recent maintainer activity                                  │
-│                   │ ✓ Synced agent-mcp-servers                                │
+│                   │ ✓ Synced example-mcp-servers                              │
 │ Maintainer        │ ⚠ github-mcp candidate has validation warning             │
 │ › Overview        │ ✓ Promoted jira-mcp 2.3.0                                │
 │   Sources         │                                                          │
@@ -9306,8 +9306,8 @@ or repository layout.
 Source list:
 
 ```text
-✓ agent-mcp-servers                                          Synced
-  git@github.company:ai/agent-mcp-servers.git
+✓ example-mcp-servers                                          Synced
+  git@github.company:ai/example-mcp-servers.git
   branch: main
   12 manifests
 
@@ -9329,8 +9329,8 @@ promotion.
 ```text
 STATUS        ARTIFACT              VERSION      SOURCE
 
-Ready         github-mcp            1.6.0        agent-mcp-servers
-Ready         jira-mcp              2.3.0        agent-mcp-servers
+Ready         github-mcp            1.6.0        example-mcp-servers
+Ready         jira-mcp              2.3.0        example-mcp-servers
 Changed       database-mcp          1.4.0        data-science-agent-tools
 Warning       notebook-review       2.0.0        ds-agent-tools
 Invalid       legacy-search-mcp     0.9.0        legacy-agent-tools

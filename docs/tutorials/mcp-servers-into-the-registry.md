@@ -1,6 +1,6 @@
 # Porting an MCP server into the company registry
 
-This is the procedure for turning one MCP server from `agent-mcp-servers` into an AART artifact that
+This is the procedure for turning one MCP server from `example-mcp-servers` into an AART artifact that
 a colleague installs and sets up in two commands. It was written by porting `company-atlassian`
 first, and every command and error message below was run rather than
 recalled.
@@ -21,7 +21,7 @@ artifacts/mcp/<name>/
   provenance.json        written by vendoring, never by hand
   payload/
     mcp.json             the descriptor; the only file a consumer receives anything from
-    server.py            vendored from agent-mcp-servers
+    server.py            vendored from example-mcp-servers
     requirements.txt     vendored
     Dockerfile           authored here
   setup/
@@ -191,7 +191,7 @@ So the rule is precise:
 So the sequence is: write `payload/mcp.json`, write `payload/Dockerfile`, then
 
 ```bash
-aart-cli registry vendor mcp <name> --source . --url https://github.example.com/your-org/agent-mcp-servers.git --ref main --path servers/<name> --artifact-version 1.0.0 --summary "…" --profile claude,tabnine --platform darwin --install-scope user --install-scope project --setup-recipe setup/installer.json --yes
+aart-cli registry vendor mcp <name> --source . --url https://github.example.com/your-org/example-mcp-servers.git --ref main --path servers/<name> --artifact-version 1.0.0 --summary "…" --profile claude,tabnine --platform darwin --install-scope user --install-scope project --setup-recipe setup/installer.json --yes
 ```
 
 Pass `--setup-recipe` only once `setup/installer.json` and `SETUP.md` are both there — it checks for
@@ -216,7 +216,7 @@ afterwards, and what to add. Write it by hand only for a package with no upstrea
   "version": "1.0.0",
   "summary": "Jira and Confluence access for the company Atlassian instance, over a locally built MCP server.",
   "authors": ["Platform Team"],
-  "homepage": "https://github.example.com/your-org/agent-mcp-servers",
+  "homepage": "https://github.example.com/your-org/example-mcp-servers",
   "license": "LicenseRef-company-internal",
   "compatibility": {
     "platforms": ["darwin"],
@@ -465,7 +465,7 @@ copies them.
 **5. Vendor.**
 
 ```bash
-aart-cli registry vendor mcp company-atlassian --source . --url https://github.example.com/your-org/agent-mcp-servers.git --ref main --path servers/atlassian --artifact-version 1.0.0 --summary "Jira and Confluence access for the company Atlassian instance." --profile claude,tabnine --platform darwin --install-scope user --install-scope project --setup-recipe setup/installer.json --yes
+aart-cli registry vendor mcp company-atlassian --source . --url https://github.example.com/your-org/example-mcp-servers.git --ref main --path servers/atlassian --artifact-version 1.0.0 --summary "Jira and Confluence access for the company Atlassian instance." --profile claude,tabnine --platform darwin --install-scope user --install-scope project --setup-recipe setup/installer.json --yes
 ```
 
 What happens: `vendor` adopts everything already sitting at `artifacts/mcp/company-atlassian/`,
@@ -517,7 +517,7 @@ like.
 
 ### If the extra files genuinely bother you
 
-The only way to not take them today is a layout change in `agent-mcp-servers`: a subdirectory holding
+The only way to not take them today is a layout change in `example-mcp-servers`: a subdirectory holding
 what should be copied.
 
 ```
@@ -562,7 +562,7 @@ install and a dead server.
 
 ## 8. Per-server checklist
 
-For each new server in `agent-mcp-servers`:
+For each new server in `example-mcp-servers`:
 
 | | In order | What changes |
 |---|---|---|
