@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/M1F1/aart-cli/compare/v0.4.0...v0.4.1) (2026-09-20)
+
+
+### Fixed
+
+* **docs:** the documented download names the repository it downloads from ([6e9f466](https://github.com/M1F1/aart-cli/commit/6e9f4660605ad552f2fb5f2ad9db162fc7f8f7df))
+* **release:** run the console script by the name the wheel installs ([6e9f466](https://github.com/M1F1/aart-cli/commit/6e9f4660605ad552f2fb5f2ad9db162fc7f8f7df))
+
 ## [0.4.0](https://github.com/M1F1/aart-cli/compare/v0.3.0...v0.4.0) (2026-09-20)
 
 
