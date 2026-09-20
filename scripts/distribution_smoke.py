@@ -822,7 +822,9 @@ def run_install_routes(source_root: Path) -> dict[str, Any]:
                 declined.append({"command": command, "route": route})
                 continue
             installer = installer_of(command)
-            if installer != "python -m pip" and shutil.which(installer) is None:
+            # pip belongs to the isolated venv and gh is supplied by _stand_ins. Only optional
+            # real installers depend on what the host has on PATH.
+            if installer not in ("python -m pip", "gh") and shutil.which(installer) is None:
                 unavailable.append({"command": command, "route": route, "installer": installer})
                 continue
             outcome = _run_route(

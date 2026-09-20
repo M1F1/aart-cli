@@ -5,6 +5,16 @@ contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
 
+**2026-09-20, CP-26.21 — CI install-route failure fixed (D-369), matrix rerun pending.**
+Runs 35504777445 and 35504840836 failed the documented-install route case on all three interpreters:
+only clipboard installation executed without optional host tools. Added the pip disk-install block
+and allowed the driver to use its own gh stand-in without requiring a host gh. The existing E2E
+case now simulates missing optional executables. It reproduced the original failure, passed with
+the fix, failed after deliberately restoring the gh prerequisite, and passed after restoration.
+Scoped Ruff/format, docs and diff checks passed. File-scoped mutmut was attempted but failed stats
+collection because its isolated copy lacked the install document (B-166); no mutant score is claimed.
+The full suite remains on CI, and CP-26.21 remains in progress pending the fixed branch's result.
+
 **2026-09-20, CP-26.21 — B-151 closed, CI verification pending.** Updated public Registry
 protocol and maintenance planning to approved records under `registry/versions/`, versioned
 packages/references and the two derived catalogs. Fixed lock/build/publish/workflow descriptions

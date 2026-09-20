@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import io
 import unittest
+from unittest.mock import patch
 
 from tests.packaging_test import REPO_ROOT, _load_script
 
@@ -25,7 +26,10 @@ class DocumentedInstallRouteTest(unittest.TestCase):
     def test_every_documented_install_line_is_classified_and_the_runnable_ones_run(self) -> None:
         smoke = _load_script("distribution_smoke")
 
-        receipt = smoke.run_install_routes(REPO_ROOT)
+        # The CI image need not contain optional installers or GitHub CLI. The download route
+        # supplies its own authenticated-download stand-in; pip must still cover the disk route.
+        with patch.object(smoke.shutil, "which", return_value=None):
+            receipt = smoke.run_install_routes(REPO_ROOT)
 
         self.assertEqual(receipt["schema_version"], 1)
         # Every fenced command is accounted for. A new line nobody classified fails here, which is

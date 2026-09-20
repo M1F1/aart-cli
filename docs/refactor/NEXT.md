@@ -6,6 +6,13 @@
 step, is in flight.** Read "What is left, in order" below; any older handoff naming step 18, 19, 20
 or 20a as next is stale, and so is anything describing the suite as red or 20a as open.
 
+**CI follow-up, D-369:** the matrix exposed a missing pip disk-install example and an unnecessary
+host-gh requirement in the documented-install test driver. Both are fixed; the existing E2E case
+now simulates absent optional tools and passed after reproducing CI's failure. A targeted mutation
+restoring the host-gh requirement failed on authenticated-download coverage, then passed restored.
+Scoped mutmut could not collect because its copy omitted the install document (B-166); no adequacy
+claim is made. Wait for PR #29 checks on the fix before marking step 21 done.
+
 **State of the gates for step 20, exactly.** `unit` 4705 OK, `integration` 424 OK, and
 lint/format-check/typecheck/docs-check/validate/secret-shape-check all clean. `unit` was red twice
 before it was green: once on a Hypothesis case in `compiler_graph_test` that held the

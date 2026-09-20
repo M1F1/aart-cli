@@ -82,6 +82,13 @@ gh release download vX.Y.Z --pattern 'aart_cli-*-py3-none-any.whl' --dir .
 Then install the path:
 
 ```sh
+python -m pip install --no-deps --force-reinstall ./aart_cli-X.Y.Z-py3-none-any.whl
+```
+
+This installs into the active Python environment. For an isolated tool environment, use either
+of the following installers if available:
+
+```sh
 uv tool install --force ./aart_cli-X.Y.Z-py3-none-any.whl
 ```
 

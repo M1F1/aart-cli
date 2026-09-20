@@ -9357,3 +9357,17 @@ and it is where "does this MCP work, with these credentials" is actually answere
 
 Pydantic and pydantic-ai were considered for the report schema and are refused by §26
 (`dependencies = []`). `protocol/json` and the repository's own schema validation cover it.
+
+## D-369 — Installation-route verification must work without optional host tools
+
+**2026-09-20, CP-26.21 CI finding.** PR #29's Python 3.10/3.11/3.14 unit jobs exposed a host
+assumption in the documented-install route gate: only clipboard installation ran on images without
+uv, pipx and gh. The install guide's disk commands covered only uv/pipx, despite pip being the
+portable required installer. Add the explicit pip-from-downloaded-wheel block. The download route
+already injects a bounded gh stand-in, so its execution must not depend on a real host gh.
+
+Keep optional real installers optional, and keep both disk and authenticated-download coverage
+mandatory. The existing E2E case now simulates absent optional executables on every host while
+building/installing the real wheel through pip and executing the documented download flags through
+the stand-in. This proves command execution, not live authentication to a GitHub instance. No
+product behavior, runtime dependency or quality threshold changes.

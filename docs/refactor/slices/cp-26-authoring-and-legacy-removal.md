@@ -2201,3 +2201,14 @@ release-facing gates (D-317), and by the owner's standing instruction they run o
 interpreters through the pull request rather than locally, where the same answer arrives hours
 later. The local checks for this step are the ones that verify the change it made:
 `tests.traceability_matrix_test` plus `docs-check`.
+
+### Step 21 CI finding — portable documented install routes (D-369)
+
+The first matrix failed on all interpreters because only clipboard installation executed on hosts
+without uv/pipx/gh. The disk instructions now include pip, and the download test uses its existing
+gh stand-in without requiring a host executable. The existing route E2E case explicitly removes
+optional tool availability: red before the fix, green after. Restoring the gh prerequisite as a
+targeted mutation made authenticated-download coverage fail; restored, it passed. Scoped lint,
+format, documentation and diff checks passed. Scoped mutmut could not collect the E2E case because
+its copy lacked the install document, recorded as advisory B-166. The full matrix is rerun on CI;
+this finding does not weaken either mandatory route assertion or the required gate set.

@@ -4232,3 +4232,13 @@ skill to install and no allowlist to enforce -- `aart-cli mcp test --prompt` pri
 person runs it, and `--report` grades the JSON that comes back. The trust concern recorded above is
 answered the way this entry predicted: the report transports the observation and the runner keeps
 the verdict, with D-366's declared `expect` making a fabricated report fail rather than pass.
+
+## B-166 — scoped mutation workspace omits documentation used by installation-route E2E
+
+**Found 2026-09-20, CP-26.21; noncritical advisory tooling gap.** Running
+`make mutants ONLY=scripts/distribution_smoke.py TESTS="tests/install_routes_e2e_test.py"`
+generated mutants but failed during stats collection: the isolated copy lacks
+`docs/install/installing-aart-v1.md`. No mutations were evaluated. The script/E2E also depends on
+build and documentation assets outside the copied scripts/tests roots. Add explicit fixture-copy
+support before claiming mutation adequacy for this gate. D-369 has real red/green E2E evidence and
+a targeted semantic mutation; this advisory runner limitation does not replace or block CI gates.
