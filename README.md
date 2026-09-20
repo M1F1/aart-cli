@@ -5,10 +5,24 @@ validated registry snapshots into a selected harness.
 
 ## Install an artifact
 
-One route, end to end: no aart-cli on the machine, to an installed artifact you can verify. You
-need Python 3.10 or later, the address of a Registry somebody maintains, and the harness you are
-installing into — `claude`, `opencode`, `tabnine` or `vibe`. Everything in angle brackets is yours
-to fill in.
+This page goes from a machine with no aart-cli on it to an artifact installed in your agent, and
+one command that proves it worked.
+
+**What you need:**
+
+- **Python 3.10 or later** — and nothing else. aart-cli has no dependencies of its own.
+- **aart-cli itself.** Steps 1 and 2 below install it.
+- **The address of a Registry.** A Registry is a Git repository of approved artifacts that somebody
+  in your organization maintains. Ask whoever runs it for the URL — this is not a value you can
+  invent.
+- **An artifact in that Registry** that you want. Finding one is step 4.
+- **A harness to install it into** — one of `claude`, `opencode`, `tabnine` or `vibe`. This is the
+  agent tool whose own configuration aart-cli writes.
+
+**The angle brackets.** Commands on this page contain blanks written like `<registry-url>` and
+`<alias>`. Replace each one with your own value, brackets and all: `--alias <alias>` typed for real
+becomes `--alias company`. They are left blank because none of these values is the same at two
+organizations.
 
 ### 1. Download the wheel
 
@@ -149,8 +163,10 @@ into a harness, from a catalog somebody in your organization has reviewed.
 An artifact reaches you through four places that are deliberately not one place. A **Source** is a
 repository an author writes in. Scanning one produces **Candidates**: compiled and validated, not
 yet approved. A maintainer promotes a Candidate into the **Registry**, the approved and immutable
-catalog. **Marketplace** is your view of that Registry -- what you search, what you install, and
-what `status` later compares your machine against. No Source installs anything directly, and
+catalog. **Marketplace** is your view across every registry you have connected -- one, or several
+at once -- and it is what you search, what you install from, and what `status` later compares your
+machine against. An artifact keeps the alias of the registry it came from, so the same name in two
+registries stays two different things. No Source installs anything directly, and
 nothing enters the Registry without a maintainer putting it there.
 
 On your side of that line AART is a Registry client, which acquires and validates a whole snapshot

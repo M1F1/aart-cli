@@ -9464,3 +9464,25 @@ and compares. A picture of the product is the claim on an adoption page most lik
 renaming a field is not a change anyone expects to break a README. A targeted mutation -- one field
 label altered in the pasted block -- fails the comparison. No screenshot or recording is committed:
 none can be produced here, and an image would be the one thing on the page no gate could check.
+
+**Amended after the owner read it.** Three things the page said badly. The opening was one
+sentence carrying four prerequisites and a note about angle brackets, and it is now a list of what
+you need, with aart-cli named as an item and pointed at the steps that install it -- the reader
+asked for it in the list rather than inferred from the absence of it. "Everything in angle brackets
+is yours to fill in" said nothing to the person it was written for: the page now says they are
+blanks, says to replace them brackets and all, shows `--alias <alias>` becoming `--alias company`,
+and says why they are left blank.
+
+The harness list is no longer transcribed. `adoption_first_contact_test` reads `profiles.builtin`
+and compares it to the line that offers the harnesses -- both halves, because completeness alone
+would pass a page that also offered a harness this build does not have. Dropping `vibe` from the
+page fails it. The owner asked whether the README should parameterize such things; this is that,
+without templating the file, which would cost the page its plain readability on a repository front.
+
+The orientation said Marketplace was "your view of that Registry", which reads as though there can
+only be one. Several can be connected, and the catalog spans them: `load_read_only_marketplace`
+iterates every enabled source into one graph, and `compile_marketplace_graph` keys artifacts by
+`(SourceAlias, ArtifactIdentity)`. Verified rather than read -- two sources holding the *same*
+`skill/reviewer` compile to two entries with no diagnostic, and reusing one alias is refused with
+`duplicate source alias`. So the page now says one or several, and says an artifact keeps its
+registry's alias, which is the question "several" immediately raises.
