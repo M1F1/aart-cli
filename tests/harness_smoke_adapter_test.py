@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+import signal
+import subprocess
 import unittest
+from unittest import mock
 
 from aart_cli.application.mcp_smoke import SmokeDeclaration
+from aart_cli.io import harness_smoke
 from aart_cli.io.harness_smoke import HarnessProcessResult, run_harness_smoke
 from aart_cli.protocol.json import JsonObject
 
@@ -153,9 +157,7 @@ class HarnessSmokeAdapterTest(unittest.TestCase):
                 },
                 {
                     "type": "assistant",
-                    "message": {
-                        "content": [{"type": "text", "text": assessment()}]
-                    },
+                    "message": {"content": [{"type": "text", "text": assessment()}]},
                 },
             ]
         )
@@ -178,6 +180,105 @@ class HarnessSmokeAdapterTest(unittest.TestCase):
         self.assertEqual(run.coverage, "direct")
         self.assertEqual(len(runner.calls), 0)
 
+    def test_a_completed_call_with_changed_arguments_is_not_the_declared_operation(self) -> None:
+        """A tool-name allowlist alone does not prove argument confinement (§170.4).
+
+        The declaration permits exactly one operation with unchanged arguments. A run that called
+        the right tool with different arguments read something nobody declared, and read-only is a
+        property of the declared call, not of the tool's name.
+        """
+
+        runner = Runner(
+            [
+                {
+                    "type": "tool_use",
+                    "sessionID": "current",
+                    "part": {
+                        "tool": "identity_read_identity",
+                        "state": {
+                            "status": "completed",
+                            "input": {"user": "someone-else"},
+                            "output": "Ada",
+                        },
+                    },
+                },
+                {"type": "text", "sessionID": "current", "part": {"text": assessment()}},
+            ]
+        )
+
+        run = run_harness_smoke(
+            "opencode", "/bin/opencode", "identity", DECLARATION, cwd="/work", runner=runner
+        )
+
+        self.assertEqual(run.outcome, "FAIL")
+        self.assertIsNone(run.result)
+        # The model said "ok" about a call that was not the declared one, which is exactly why the
+        # assessment is separate evidence and cannot stand in for the observed call (INV-251).
+        self.assertEqual(run.assessment.outcome, "NOT RUN")
+
+    def test_the_whole_run_has_a_deadline_and_a_timeout_cannot_pass(self) -> None:
+        """A 120-second whole-run deadline sits above the declared MCP call deadline (§170.4)."""
+
+        class Slow(Runner):
+            def __call__(self, argv, *, cwd, env, timeout):
+                self.calls.append((argv, cwd, env, timeout))
+                if argv[1:] == ("--version",):
+                    return HarnessProcessResult(0, b"1.18.29\n")
+                raise subprocess.TimeoutExpired(argv, timeout)
+
+        runner = Slow([])
+
+        run = run_harness_smoke(
+            "opencode", "/bin/opencode", "identity", DECLARATION, cwd="/work", runner=runner
+        )
+
+        self.assertEqual(run.outcome, "FAIL")
+        self.assertEqual(run.assessment.outcome, "NOT RUN")
+        # The deadline handed to the harness is the whole-run one, not the declaration's 15
+        # seconds, and it is the bound the spec names.
+        self.assertEqual(runner.calls[-1][3], 120)
+        self.assertGreater(runner.calls[-1][3], DECLARATION.timeout_seconds)
+
+    def test_a_timed_out_run_kills_the_process_group_it_owns(self) -> None:
+        """Terminate the owned process *and its owned descendants* on timeout (§170.4).
+
+        An MCP server started by the harness is a child of the harness, so killing the harness
+        alone leaves a stdio server holding the installation's credentials. `start_new_session`
+        makes the run its own process group precisely so that one signal reaches all of it.
+        """
+
+        killed: list[tuple[int, int]] = []
+
+        class Process:
+            pid = 4242
+            returncode = 0
+
+            def __init__(self) -> None:
+                self.communicated = 0
+
+            def communicate(self, timeout=None):
+                self.communicated += 1
+                if self.communicated == 1:
+                    raise subprocess.TimeoutExpired("opencode", timeout)
+                return (b"", b"")
+
+        process = Process()
+        with (
+            mock.patch.object(harness_smoke.subprocess, "Popen", return_value=process) as popen,
+            mock.patch.object(
+                harness_smoke.os, "killpg", side_effect=lambda pid, sig: killed.append((pid, sig))
+            ),
+        ):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                harness_smoke.HarnessRunner()(
+                    ("/bin/opencode", "run"), cwd="/work", env={}, timeout=120
+                )
+
+        self.assertEqual(killed, [(process.pid, signal.SIGKILL)])
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+        # Reaped after the signal, so the run owns no zombie it started.
+        self.assertEqual(process.communicated, 2)
+
     def test_model_assessment_is_bounded_and_has_three_explicit_outcomes(self) -> None:
         base = [
             {
@@ -190,8 +291,18 @@ class HarnessSmokeAdapterTest(unittest.TestCase):
             }
         ]
         cases = (
-            (assessment("error", "The response reports an authentication error.", "Unauthorized"), "FAIL"),
-            (assessment("uncertain", "The response format is unknown.", "Manual review is required."), "NOT VERIFIED"),
+            (
+                assessment(
+                    "error", "The response reports an authentication error.", "Unauthorized"
+                ),
+                "FAIL",
+            ),
+            (
+                assessment(
+                    "uncertain", "The response format is unknown.", "Manual review is required."
+                ),
+                "NOT VERIFIED",
+            ),
             ('{"status":"ok","summary":"missing field"}', "FAIL"),
             (assessment(summary="x" * 2001), "FAIL"),
         )

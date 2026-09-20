@@ -4099,6 +4099,16 @@ authoring-surface owner, not with this slice.
 
 **Found:** 2026-09-20, CP-26.20a (D-364). **Resolved by owner scope decision D-365.**
 
+**Update, 2026-09-20 (later the same day).** D-365's revised coverage is implemented and its test
+evidence is in: capability route, whole-run deadline and process-group cleanup, argument
+confinement, the English assessment contract, capability-based aggregation and default-off
+`--show-response`, each with a test and a recorded targeted mutation. What is left under this id is
+**only the live evidence**: a real OpenCode run, a real Tabnine run and independent
+protected-service proof. That cannot be produced by an agent or a fixture -- §170.4 says a
+substitute MCP configuration proves the adapter fixture and not the user's installation -- so it is
+owner/manual evidence gathered on a machine with those CLIs and that service. CP-26.20a stays in
+flight until it exists.
+
 Tabnine now requires direct MCP/credential testing only while its adapter lacks the capability.
 The missing allowlist no longer blocks CP-26.20a; implementing the revised coverage remains part
 of that task. The original finding below records why no Tabnine prompt is allowed.

@@ -5,6 +5,40 @@ contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
 
+**2026-09-20, CP-26.20a — D-365's evidence is in, and what remains is not writable here.** The
+entry below said the revision's implementation was pending and that existing tests did not
+establish its claims. The first half is stale: the capability route, the 120-second whole-run
+deadline, argument confinement, the English assessment contract and the default-off
+`--show-response` are implemented. Tabnine returns `NOT RUN` with the capability reason and
+coverage `direct` -- not `UNSUPPORTED`, as the entry below still describes it. The second half was
+accurate, and is now addressed: five claims D-365 names had no test, and have one each.
+
+- **Capability-based aggregation.** A capability-excluded harness does not fail an otherwise
+  successful direct run, and its three stages are present as `NOT RUN` rather than absent or
+  quietly green. Its companion holds the exclusion *narrow*: an unverified service stage still
+  fails a direct run, so the first test cannot pass merely because `ok` ignored everything.
+- **Argument enforcement.** A completed call to the declared tool with *different* arguments is
+  not the declared operation, and the model's `ok` assessment about it does not rescue it -- which
+  is the case that shows why the assessment is separate evidence (INV-251).
+- **Deadline and process cleanup.** The deadline handed to the harness is the whole-run 120
+  seconds rather than the declaration's call timeout, a timeout cannot pass, and the runner signals
+  the *process group* it owns and reaps it, because an MCP server started by the harness is its
+  child and killing the harness alone would leave a stdio server holding the installation's
+  credentials.
+- **Default non-disclosure.** No response reaches the report unless `--show-response` asked for it.
+
+Five targeted mutations, each red in exactly the test that names its claim and each restored:
+dropping OpenCode's argument comparison; killing the harness instead of its process group;
+`coverage == "direct"` no longer excluding the harness stages; disclosing the response without the
+flag; and collapsing the whole-run deadline to the call deadline. Lint and typecheck are clean and
+the focused set is 37 tests.
+
+**Still open, and still critical: B-162.** Live OpenCode and Tabnine runs and protected-service
+evidence need real harness CLIs and a real protected service on the machine that runs them. That is
+not something a test double can stand in for -- a substitute MCP configuration proves the adapter
+fixture and not the user's installation (§170.4) -- so it is owner/manual evidence, not work a
+further agent run can close. **CP-26.20a stays in flight; do not mark it done.**
+
 ### Current owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
 
 This supersedes earlier requirements for mandatory Tabnine harness execution, blanket prohibition
@@ -31,8 +65,9 @@ project discovery and one-operation permission ceilings. The focused set is 58 t
 Hypothesis properties; four recorded semantic mutations went red. Ruff and mypy are green.
 
 The task is not done: Tabnine has no verified documented pre-invocation tool allowlist, so its
-adapter returns `UNSUPPORTED` before sending a prompt, and required live OpenCode/Tabnine plus
-protected-service evidence remains. This critical acceptance gap is B-162. Step 20's
+adapter reports its harness stages `NOT RUN` under coverage `direct` before sending a prompt (this
+said `UNSUPPORTED` when written; the entry above corrects it), and required live OpenCode/Tabnine
+plus protected-service evidence remains. This critical acceptance gap is B-162. Step 20's
 disproportionate partial mutmut result is recorded as B-163.
 
 **2026-09-20, CP-26.20 — a Registry repository on this disk is a Registry (D-350, D-362).**

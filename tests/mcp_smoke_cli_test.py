@@ -105,11 +105,7 @@ class McpSmokeCliTest(unittest.TestCase):
     def test_show_response_is_explicit_bounded_and_redacts_known_configuration(self) -> None:
         result = McpCallResult(
             content=JsonArray(
-                (
-                    JsonObject(
-                        (("type", "text"), ("text", "tenant-private\n" + "x" * 70000))
-                    ),
-                )
+                (JsonObject((("type", "text"), ("text", "tenant-private\n" + "x" * 70000))),)
             )
         )
         preview = mcp._response_preview(result, sensitive=("tenant-private",))
@@ -134,9 +130,7 @@ class McpSmokeCliTest(unittest.TestCase):
             ),
             patch.object(mcp, "run_harness_smoke") as harness,
         ):
-            report = mcp._target(
-                installed("local", "tabnine"), "/managed", show_response=True
-            )
+            report = mcp._target(installed("local", "tabnine"), "/managed", show_response=True)
 
         harness.assert_not_called()
         self.assertEqual(report["coverage"], "direct")
@@ -144,6 +138,102 @@ class McpSmokeCliTest(unittest.TestCase):
         self.assertEqual(stages["mcp-startup-and-protocol"], "PASS")
         self.assertEqual(stages["harness-to-model-provider"], "NOT RUN")
         self.assertIn("response", report)
+
+    def test_a_capability_excluded_harness_does_not_fail_an_otherwise_successful_direct_run(
+        self,
+    ) -> None:
+        """Declared exclusions do not fail direct coverage, and never count as harness success.
+
+        §170.5 and INV-250: a harness without a verified pre-invocation allowed-tools boundary is
+        tested directly, its harness stages are NOT RUN with the capability reason, and that is an
+        honest non-success rather than a failure. The distinction matters because the alternative
+        readings are both wrong -- failing the run punishes the user for their harness, and
+        counting the stages as passes would claim evidence nobody gathered.
+        """
+
+        declaration = SmokeDeclaration("read_identity", JsonObject(()), 15)
+        tool = McpTool("read_identity", JsonObject((("type", "object"),)))
+        # `service_observed` is what a direct run needs to pass: without independent proof the
+        # service stage is NOT VERIFIED and no run passes, capability or not.
+        result = McpCallResult(
+            content=JsonArray((JsonObject((("type", "text"), ("text", "Ada"))),)),
+            service_observed=True,
+        )
+        with (
+            patch.object(mcp, "_configuration_values", return_value=({}, None)),
+            patch.object(mcp, "_declaration", return_value=(declaration, None)),
+            patch.object(
+                mcp,
+                "execute_stdio_smoke",
+                return_value=Ok(DirectSmokeRun("2025-11-25", (tool,), result)),
+            ),
+            patch.object(mcp, "run_harness_smoke") as harness,
+        ):
+            report = mcp._target(installed("local", "tabnine"), "/managed")
+
+        harness.assert_not_called()
+        self.assertEqual(report["coverage"], "direct")
+        self.assertIs(report["ok"], True)
+        stages = {stage["stage"]: stage["outcome"] for stage in report["stages"]}
+        self.assertEqual(stages["mcp-startup-and-protocol"], "PASS")
+        self.assertEqual(stages["mcp-to-external-service"], "PASS")
+        # Present and honest, rather than absent or quietly green.
+        for excluded in (
+            "harness-to-model-provider",
+            "harness-to-mcp-to-external-service",
+            "model-assessment",
+        ):
+            self.assertEqual(stages[excluded], "NOT RUN")
+
+    def test_an_unverified_service_stage_still_fails_a_direct_run(self) -> None:
+        """The exclusion is narrow: it drops the harness stages and nothing else.
+
+        Without this, the previous test could pass because `ok` ignored every non-PASS stage
+        rather than because it ignored exactly the three that capability excluded.
+        """
+
+        declaration = SmokeDeclaration("read_identity", JsonObject(()), 15)
+        tool = McpTool("read_identity", JsonObject((("type", "object"),)))
+        result = McpCallResult(
+            content=JsonArray((JsonObject((("type", "text"), ("text", "Ada"))),))
+        )
+        with (
+            patch.object(mcp, "_configuration_values", return_value=({}, None)),
+            patch.object(mcp, "_declaration", return_value=(declaration, None)),
+            patch.object(
+                mcp,
+                "execute_stdio_smoke",
+                return_value=Ok(DirectSmokeRun("2025-11-25", (tool,), result)),
+            ),
+            patch.object(mcp, "run_harness_smoke"),
+        ):
+            report = mcp._target(installed("local", "tabnine"), "/managed")
+
+        self.assertIs(report["ok"], False)
+        stages = {stage["stage"]: stage["outcome"] for stage in report["stages"]}
+        self.assertEqual(stages["mcp-to-external-service"], "NOT VERIFIED")
+
+    def test_the_response_preview_is_absent_unless_it_was_asked_for(self) -> None:
+        """Default non-disclosure: `--show-response` is the only way a response reaches output."""
+
+        declaration = SmokeDeclaration("read_identity", JsonObject(()), 15)
+        tool = McpTool("read_identity", JsonObject((("type", "object"),)))
+        result = McpCallResult(
+            content=JsonArray((JsonObject((("type", "text"), ("text", "Ada"))),))
+        )
+        with (
+            patch.object(mcp, "_configuration_values", return_value=({}, None)),
+            patch.object(mcp, "_declaration", return_value=(declaration, None)),
+            patch.object(
+                mcp,
+                "execute_stdio_smoke",
+                return_value=Ok(DirectSmokeRun("2025-11-25", (tool,), result)),
+            ),
+            patch.object(mcp, "run_harness_smoke"),
+        ):
+            report = mcp._target(installed("local", "tabnine"), "/managed")
+
+        self.assertNotIn("response", report)
 
 
 if __name__ == "__main__":

@@ -277,7 +277,16 @@ D-363/D-364, §170). The implemented half is in the working tree: a parser-owned
 the OpenCode and Claude adapters; 58 focused tests, four recorded semantic mutations, ruff and mypy
 green.
 
-**What CP-26.20a still needs, exactly** -- the revised §170 / INV-250–252 under **D-365**, which
+**D-365's implementation and its test evidence are done** (see the newest `MIGRATION_STATUS.md`
+entry): capability route, 120-second whole-run deadline and process-group cleanup, argument
+confinement, the English assessment contract with its three outcomes, capability-based aggregation
+and the default-off `--show-response` all have a test and a recorded mutation. **What is left for
+20a is B-162 alone, and it is not agent-writable:** live OpenCode and Tabnine runs plus
+protected-service evidence need the real harness CLIs and a real protected service on the machine,
+and a substitute MCP configuration would prove the adapter fixture rather than the user's
+installation (§170.4). That is owner/manual evidence. Until it exists, 20a stays in flight.
+
+**The original statement of what 20a needs, kept for reference** -- the revised §170 / INV-250–252 under **D-365**, which
 supersedes mandatory Tabnine harness execution, the blanket prohibition on model assessment and the
 unconditional suppression of response display. An unsupported allowed-tools capability means direct
 MCP testing with that installation's credentials plus an explicit excluded harness stage, and does
