@@ -76,8 +76,16 @@ with something that does authenticate -- the instance's own web UI, or a CLI you
 in to. `gh` is already signed in to the instance you set it up for:
 
 ```sh
-gh release download vX.Y.Z --pattern 'aart_cli-*-py3-none-any.whl' --dir .
+gh release download vX.Y.Z --repo "<repository>" --pattern 'aart_cli-*-py3-none-any.whl' --dir .
 ```
+
+`--repo` is not optional here, and it is the one flag worth understanding. Without it `gh` reads
+the git remotes of the directory you are standing in -- so outside a checkout the command fails
+with `not a git repository`, and inside a checkout of something else it asks that project for a
+wheel it does not have. This section is the one for a reader who has no clone, so the address has
+to be said out loud. `<repository>` is the same thing it is everywhere else on this page: the
+address of the repository you are reading this in, which `gh` accepts as a full URL. Quote it,
+as every other placeholder on this page is quoted: bare `<` is a redirection to the shell.
 
 Then install the path:
 

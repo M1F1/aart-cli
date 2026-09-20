@@ -9404,3 +9404,32 @@ The v0.4.0 tag is left as it is. The release job checks out the tag it builds, s
 would rebuild the same broken tree, and moving a published tag to make an old release whole is a
 worse trade than one release without a wheel. The owner decided this on 2026-09-20; the first
 attached wheel is the next release's.
+
+## D-371 — The documented download names the repository it downloads from
+
+**2026-09-20, owner's reading of the install guide.** The page's one authenticated-download line was
+`gh release download vX.Y.Z --pattern '...' --dir .`, with no repository anywhere in it. `gh` then
+resolves the repository from the git remotes of the current directory: outside a checkout the
+command fails with `not a git repository`, and inside a checkout of another project it asks that
+project for a wheel it does not have. The section is explicitly the one for a reader installing
+*without* a clone, so the one thing it could not rely on was the reader standing in a clone.
+
+Every other line on that page already answers this, and the page says why it must: an address
+written into the file would be wrong in a fork on a company instance. So the fix is the page's own
+convention rather than a new one — `--repo "<repository>"`, the same placeholder the git and URL
+rows use, which `gh` accepts as a full URL. It is quoted because a bare `<` is a redirection; the
+E2E caught that on the first attempt, which is the second defect this change closes.
+
+**Why no gate caught the original.** `_stand_ins` builds a `gh` whose parser knows `tag`,
+`--pattern` and `--dir` and copies from a fixed local directory. It has no concept of a repository,
+so it could not notice one was never named. Requiring `--repo` in that parser makes the omission a
+red, which is how this was fixed: the stub refused the documented line before the page was touched.
+
+**The ordering trap.** `classify_command` tested `<repository>` first and returned `network`, which
+is not runnable. Adding the placeholder to the download line would therefore have deleted the only
+executed download route while leaving the suite green -- a silent loss of coverage as the price of
+a documentation fix. The `gh release download` test now runs before the placeholder test, with a
+comment saying so. A targeted mutation restoring the old order reclassifies the line as `network`.
+
+What the stand-in still cannot prove is unchanged: that a real instance answers, or that the
+address is the right one. What it now proves is that the documented line names an address at all.

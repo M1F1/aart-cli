@@ -4,6 +4,18 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-20, install guide — the documented download named no repository (D-371).** The owner
+read the page and asked how a reader is supposed to know which project the wheel comes from. They
+could not: `gh release download` with no `--repo` resolves the repository from the current
+directory's git remotes, and that section is the one for a reader with no clone. Verified by
+running the documented line outside a checkout, which fails with `not a git repository`. The line
+now carries `--repo "<repository>"`, the placeholder the rest of the page already uses. The `gh`
+stand-in requires the flag, so the omission is a red -- it refused the documented line before the
+page was edited -- and `classify_command` tests the download before the placeholder, or the fix
+would have silently made the one executed download route unrunnable. `install_routes_e2e_test`
+red then green; ruff, mypy, `docs-check` and `source_remediation_test` pass.
+
+
 **2026-09-20, post-release — the v0.4.0 wheel was never attached (D-370).** The `artifact /
 release` job of run 35516056590 failed after the tag was cut: the release smoke installed the wheel
 into a clean environment and ran `aart`, the pre-§169 executable, so it died with `[Errno 2] No
