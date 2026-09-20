@@ -505,9 +505,9 @@ credential.** This is the failure that reports success at every layer.
 
 Two structural facts behind that table, worth internalizing:
 
-- **A registry never marks its own packages as reviewed.** The `review` record lives on `entries/`
-  references only; owned packages are indexed with `review: null`, which the consumer reads as
-  `unverified`. Setup from your own registry therefore always needs the authorization flag.
+- **A Registry cannot assign itself effective trust.** Approved version and promotion records
+  carry review/provenance evidence; consumer policy determines the resulting trust and setup
+  authorization. The historical authoring-entry review model no longer applies.
 - **`source remove` does not remove installations.** The install record survives, keeps owning its
   destination, and blocks the next install under a different alias.
 

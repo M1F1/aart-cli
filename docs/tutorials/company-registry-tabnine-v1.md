@@ -292,13 +292,14 @@ Then finalize the reviewed cycle:
 aart-cli registry publish --source . --yes
 ```
 
-The command plans `lock` then `build` in memory, validates and audits that exact projected
-snapshot, writes the reviewed `aart.lock.json` and `aart.index.json`, and creates one commit. A
-failed lock, build, validation, or audit stops before the commit. It never pushes.
+The command prepares the shared publication gates, rebuilds `registry/index.json` and
+`registry/snapshot.json` from approved records under `registry/versions/`, validates and audits
+that projected snapshot, then writes the reviewed changes and creates one commit. A failed gate
+stops before the commit. It never pushes.
 
-The lock file only has to be valid and present for a standalone `registry build`; it does not have
-to be committed first. Its diagnostic and remediation say exactly that. `registry publish` removes
-the ordering trap entirely and commits the lock and index together.
+Approved version records already carry their pins; `lock` writes no separate lock file. Standalone
+`build` derives the catalogs from those records, and `publish` reviews and commits its changes in
+one operation.
 
 Every pre-existing Git change is listed alongside the generated files because finalization uses
 `git add -A`. Keep unrelated work out of the registry checkout. Use `--message TEXT` to state the

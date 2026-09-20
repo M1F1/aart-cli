@@ -32,7 +32,7 @@ security/attestations/<attestation-sha256>.json
 
 The canonical index binds each document path and byte digest to its full cache key. Every
 registry-CI attestation also names the registry source ID, exact registry-inputs digest, and
-resolved revision. `aart-cli registry audit` verifies those bindings against `aart.index.json`, requires
+resolved revision. `aart-cli registry audit` verifies those bindings against the canonical approved Registry catalogs and version records, requires
 evidence coverage for every compiled object, rejects evidence for unknown objects, rejects critical
 installation risk, and reports high or unknown risk for explicit review.
 
@@ -58,9 +58,9 @@ evidence rather than making optional analyzers runtime dependencies.
 ## CLI
 
 ```console
-# Run the zero-dependency baseline over an exact object selected from a compiled index.
-aart-cli security scan object.json --index aart.index.json --artifact skill/review \
-  --lock aart.lock.json --cache /path/to/aart-security-cache
+# Run the zero-dependency baseline over an exact object selected from an approved Registry.
+aart-cli security scan object.json --registry /path/to/company-registry --artifact skill/review \
+  --cache /path/to/aart-security-cache
 
 # Inspect canonical assessment or attestation evidence.
 aart-cli security show /path/to/attestation.json --json
@@ -74,7 +74,7 @@ aart-cli security analyzers
 aart-cli security suites
 ```
 
-`scan` reads bounded real files, verifies the canonical object/index/optional lock, runs the pure
+`scan` reads bounded real files, verifies the canonical object against the approved Registry, runs the pure
 baseline, and optionally publishes a local attestation cache entry. `show` exposes provider
 version, rules digest, coverage, risk, findings remediation, and status through the normalized
 projection. `verify` returns non-zero for stale evidence. Publisher trust flags must supply source

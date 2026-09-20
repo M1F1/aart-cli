@@ -233,9 +233,10 @@ git push -u origin main
 git remote set-head origin --auto
 ```
 
-`publish` locks, builds, validates and audits one snapshot, then commits `aart.lock.json` and
-`aart.index.json`. It never pushes. A registry does not pass its own gates without those two files,
-so the first `main` has to carry them.
+`publish` prepares the shared publication gates, rebuilds `registry/index.json` and
+`registry/snapshot.json` from approved version records, validates and audits the projected snapshot,
+then commits the reviewed changes. It never pushes. The first published Registry snapshot must
+carry valid derived catalogs, including when it has no approved versions yet.
 
 This first push is the only one you make by hand. `git remote set-head origin --auto` records which
 branch the remote calls default; `aart-cli registry push` reads it to know which branch it must refuse.

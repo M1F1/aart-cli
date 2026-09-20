@@ -3882,7 +3882,7 @@ Evidence/links: CP-26 task 19; B-150 raised by the owner; `docs/product-specific
 
 ## B-151 — Seven shipped documents still describe `aart.lock.json` and `aart.index.json` as files AART writes
 
-Status: OPEN, NONCRITICAL for CP-26.05 — becomes critical for CP-26.21
+Status: CLOSED in CP-26.21 (2026-09-20). The report below is historical.
 
 Found while executing CP-26.05, 2026-09-18.
 
@@ -3913,6 +3913,14 @@ their Registry refuse every gate. Treat this as a precondition of task 21, not a
 
 Evidence/links: D-318, D-321, D-322, D-324; CP-26 tasks 13–16 and 21;
 `aart_cli/registry_maintenance/promoted.py::legacy_registry_paths`.
+
+**Resolution.** Rewrote protocol/maintenance guidance around approved version records,
+versioned packages or references and derived Registry catalogs. Corrected publication and security
+scan examples; labeled QA-032's old representation/dual-reader account as historical. Audited all
+nine requested documents: README already lacked the obsolete layout section and required no edit.
+The same scan found and corrected the authoring-entry trust explanation in the vendoring tutorial.
+Regenerated the normative schema freeze; its guard was red after a deliberate unrecorded document
+change and green after restoration. Historical refactor records retain their original wording.
 
 ## B-152 — Four registry diagnostic codes have had no user since CP-26.05
 

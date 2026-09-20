@@ -2148,6 +2148,16 @@ validate, docs-check, packaging-check, secret-shape-check and the release gate c
 
 ## Step 21 — the closeout: what the repository still claimed, and where the suite runs
 
+**2026-09-20 closeout update:** B-151 is closed. Protocol/maintenance/publication guidance uses
+`registry/versions/`, versioned packages or references and derived `registry/index.json` /
+`registry/snapshot.json`; security scan takes `--registry`. QA-032 explicitly preserves its old
+failure as history. README required no edit; the vendoring tutorial's additional obsolete entry
+trust claim was corrected. Historical refactor records were not rewritten. The normative schema
+freeze was regenerated. Its exact guard passed, failed on a deliberate unfrozen document change,
+and passed after restoration; documentation and diff checks passed. PR #29 CI remains the required
+full-suite evidence; this step stays in flight pending its result on the updated branch.
+
+
 The last step of CP-26 is its broad verification, and the first thing broad verification found was
 in the repository's own record rather than in the code.
 

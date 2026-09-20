@@ -5,6 +5,19 @@ contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
 
+**2026-09-20, CP-26.21 — B-151 closed, CI verification pending.** Updated public Registry
+protocol and maintenance planning to approved records under `registry/versions/`, versioned
+packages/references and the two derived catalogs. Fixed lock/build/publish/workflow descriptions
+and the security scan example (`--registry`); marked QA-032's retired representation story as
+historical. README already contained no obsolete layout prose. Corrected the same retired-entry
+trust claim found in the vendoring tutorial. No runtime behavior or migration path was added.
+
+Regenerated `docs/release/schema-freeze.json` because the protocol document is a normative input.
+The exact freeze guard passed; appending an unrecorded normative change made it fail, and restoring
+the document made it pass. `make docs-check` and `git diff --check` passed. Full quality, integration
+and release-facing checks remain on PR #29 CI per owner instruction; no local full suite ran.
+Step 21 is not complete until the required matrix succeeds on the updated branch.
+
 **2026-09-20, CP-26.21 — the traceability closeout, and what the matrix was still claiming.**
 Eleven rows had been carrying pending CP-26 proof. INV-243 and INV-246 read `PARTIAL`; INV-244,
 INV-247 and INV-248 through INV-253 read `CONFLICT`, six of them with the words "No

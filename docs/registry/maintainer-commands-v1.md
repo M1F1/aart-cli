@@ -10,9 +10,9 @@ audits, and commits every listed Git change. Only `push` touches a remote, and o
 |---|---|---|
 | `init` | writes | Add protocol markers, `.aart-cli-version`, a README, and registry CI |
 | `format` | writes, or reads with `--check` | Canonicalize every managed JSON document |
-| `validate` | reads | Validate protocol, compatibility, lock/index, native packages, and graph |
-| `lock` | writes, or reads with `--check` | Resolve every approved native reference to an exact commit and digests |
-| `build` | writes, or reads with `--check` | Compile the payload-free marketplace index from owned and locked artifacts |
+| `validate` | reads | Validate approved version records, catalogs, packages, compatibility and graph |
+| `lock` | writes, or reads with `--check` | Read-only check: approved version records already carry their pins |
+| `build` | writes, or reads with `--check` | Rebuild registry/index.json and registry/snapshot.json from approved versions |
 | `audit` | reads | Check review, provenance, setup, license, and currently available risk evidence |
 | `publish` | writes and commits with `--yes` | Plan lock/build, validate/audit the projection, list all Git paths, and create one commit without pushing |
 | `push` | pushes | Push the reviewed commit to a named branch; the remote's default branch is refused |
@@ -45,7 +45,7 @@ aart-cli registry init --source company-registry \
 
 The generated quality workflow puts the AART version pinned in `.aart-cli-version` on the runner — from
 an index, a wheel, a path or a Git clone, chosen by repository variables — and proves the version
-it got matches the pin. It then runs format, strict/frozen validation, lock, build, audit, and
+it got matches the pin. It then runs format, validation, reproducible build, audit, and
 minimum/latest compatibility checks. The workflow has read-only repository permissions and contains
 no commit or push step. [Rolling out AART on GitHub Enterprise Server](../ci/github-enterprise-rollout.md)
 lists the variables.
@@ -64,13 +64,13 @@ The Registry stores that compiled package and provenance; it does not author the
 
 ## Lock, build, and audit
 
-Registry entries remain authored references to credential-free Git URLs. `lock` acquires each ref
-through the bounded, hook-free Git snapshot adapter, verifies the referenced native package, and
-records its resolved commit and content digests. `build` reacquires the sources, rejects any lock
-mismatch, compiles registry-owned packages and references, and writes no payload bytes into
-`aart.index.json`.
+Approved records under `registry/versions/` retain each version's source/content pins. `lock`
+checks that representation with nothing to resolve; it writes no separate lock file. `build`
+rebuilds `registry/index.json` and `registry/snapshot.json` deterministically. Vendored packages
+live under `artifacts/<kind>/<name>/<version>/`; reference-mode versions use pinned records under
+`references/<kind>/<name>/<version>.json`. Removed authoring-workspace files are refused.
 
-An entry whose review status is not `approved` cannot be locked and fails `audit`. Audit warnings
+Audit warnings
 are evidence gaps, not installation-risk conclusions: missing license/provenance and absent
 per-object assessment evidence are reported explicitly. When `security/index.json` exists, audit
 verifies every canonical attestation byte digest, publisher/registry-input identity, exact compiled

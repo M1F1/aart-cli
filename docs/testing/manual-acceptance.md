@@ -345,7 +345,11 @@ Each entry records:
       Retest: add one Source, press `a` on screen 31 again, and confirm the form is empty; then
       let a preparation refuse and confirm the typed values are still there.
 
-- [ ] **QA-032 — A Registry produced by TUI promotion fails its generated GitHub Actions.**
+- [x] **QA-032 — Historical: a Registry produced by TUI promotion failed its generated GitHub Actions.**
+      Current contract (CP-26): only the approved `registry/versions/` representation is supported;
+      build derives `registry/index.json` and `registry/snapshot.json`, and lock produces no file.
+      The reproduction and D-208 fix below record the earlier defect and intermediate dual-reader
+      implementation. CP-26 removed that legacy reader; these are not current maintenance steps.
       Stage: publishing the first promoted artifact through Registry PR #1
       Surface: generated `.github/workflows/aart-cli-registry.yml`
       Severity: blocking

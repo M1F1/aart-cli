@@ -2,12 +2,13 @@
 
 ## Canonical package
 
-A package lives at `<artifact-root>/<type>/<name>/` and contains `artifact.json` and `payload/`.
+A vendored Registry package lives at `artifacts/<kind>/<name>/<version>/` and contains
+`artifact.json` and `payload/`.
 Its manifest defines SemVer, compatibility, installation, optional `setup`, `requires_aart`, and
 `requires`. When it declares setup, `setup/installer.json` must be v2 and `SETUP.md` must be at
 the package root; the modules a recipe may use are listed in the
 [setup recipe reference](../protocol/setup-recipe-v2.md). An invalid hook, setup, dependency, symlink, or unknown file fails compilation
-before lock, index, or installation.
+before publication or installation.
 
 ```json
 {
@@ -17,8 +18,10 @@ before lock, index, or installation.
 }
 ```
 
-`aart.lock.json` binds references to commits and digests. `aart.index.json` is a deterministic,
-payload-free consumer projection. Both are generated and must pass their gates before publication.
+Approved records under `registry/versions/` bind versions to commits and content digests.
+`registry/index.json` and `registry/snapshot.json` are deterministic derived catalogs, validated
+against those records before publication. Reference-mode versions use `references/`; no separate
+authoring-workspace lock/index is generated.
 
 ## Interface
 
@@ -33,7 +36,7 @@ aart-cli security scan|show|verify|analyzers|suites
 aart-cli upgrade --wheel FILE | --source-checkout DIR
 ```
 
-Running `aart` without a subcommand on a TTY opens the human-oriented TUI (curses or text
+Running `aart-cli` without a subcommand on a TTY opens the human-oriented TUI (curses or text
 fallback). The TUI submits the same canonical requests as flag mode; it is not a second command
 engine.
 

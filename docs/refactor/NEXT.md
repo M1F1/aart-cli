@@ -25,8 +25,8 @@ suggests a review branch from the action that produced the current commit (D-347
 repository already on this machine is a fourth `SourceKind` read one committed branch at a time
 (D-350, D-362), and a local and a remote connection to one Registry coexist as two aliases, two
 installations and two trees. B-057, B-149 and B-160 are closed; **B-162 is resolved by the owner’s scope decision D-365**; B-161/B-163 are noncritical.
-The plan has **23 tasks (21 done)**: additions **CP-26.18a** and **CP-26.20a** preserve existing
-ids. Execution is now **20a → 21**; task 21 is the final broad gate.
+The plan has **23 tasks (22 done)**: additions **CP-26.18a** and **CP-26.20a** preserve existing
+ids. Execution is now **21**; task 21 is the final broad gate.
 
 
 ### Current owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
@@ -312,16 +312,11 @@ case name turns it red, which is the targeted mutation recorded for this step.
 authoring tools and installed-MCP smoke verification`, with a curated `BEGIN_COMMIT_OVERRIDE` block
 in the body. Read `gh pr checks 29` rather than re-running the suite here.
 
-**B-151 is what is left of step 21.** Nine documents still describe `aart.lock.json`,
-`aart.index.json` and `entries/` as files AART writes, and nothing in the product has written them
-since CP-26.05: `docs/protocol/registry-v1.md` (a normative schema input -- editing it needs
-`make release-freeze` in the same change, D-275), `docs/registry/maintainer-commands-v1.md`,
-`docs/registry/maintenance-planning-v1.md`, `docs/security/attestations-v1.md`,
-`docs/ci/github-enterprise-rollout.md`, `docs/testing/manual-acceptance.md`,
-`docs/tutorials/company-registry-tabnine-v1.md`, `docs/development/packaging-and-interface-v1.md`
-and README's "Registry layout" prose. `make docs-check` validates fences and links, not whether
-prose matches the product, which is why this survived every gate. The `docs/refactor/*` files are
-the historical record and are supposed to name what was removed; leave them.
+**B-151 is closed (2026-09-20).** Public protocol, maintenance, security and publication prose
+now describes approved version records and derived Registry catalogs. The schema freeze is updated;
+its single-case guard passed and a deliberate stale-freeze mutation failed as expected. README
+already had no obsolete layout section. Historical refactor records remain intact. Step 21 now
+awaits the PR #29 CI matrix on the updated branch; do not mark it done before required checks pass.
 
 **The naming scope described below is implemented, not pending** (D-349, §169.7, INV-253; issues
 #26/#28). Harness-visible names carry artifact, Registry alias and scope without version and match
