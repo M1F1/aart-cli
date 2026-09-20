@@ -277,6 +277,14 @@ D-363/D-364, §170). The implemented half is in the working tree: a parser-owned
 the OpenCode and Claude adapters; 58 focused tests, four recorded semantic mutations, ruff and mypy
 green.
 
+**Live harness evidence exists for Claude Code** (2026-09-20): `make live-harness HARNESS=claude`
+drives the real CLI against a real MCP server and passes, with a live mutation proving the test
+holds. OpenCode is blocked by its own provider (free tier refuses headless, HTTP 403), which is an
+account matter rather than a code gap; Tabnine is direct-only by design. **New and blocking:
+B-164** -- nothing in the product ever sets `service_observed`, so the service stage is always
+`NOT VERIFIED` and `aart-cli mcp test` can never exit 0. That needs an owner decision, recorded in
+the backlog with the two defensible readings.
+
 **D-365's implementation and its test evidence are done** (see the newest `MIGRATION_STATUS.md`
 entry): capability route, 120-second whole-run deadline and process-group cleanup, argument
 confinement, the English assessment contract with its three outcomes, capability-based aggregation

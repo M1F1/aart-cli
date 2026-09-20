@@ -9,7 +9,7 @@ PYTHON ?= python
 REGISTRY ?=
 QUALITY = $(PYTHON) scripts/quality.py
 
-.PHONY: check test unit integration system-matrix release-freeze release-check wheel validate clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality mutants manual-test-setup manual-test-setup-empty manual-test-reset manual-test-maintainer manual-test-consumer manual-test-shell-maintainer manual-test-shell-consumer
+.PHONY: check test unit integration system-matrix release-freeze release-check wheel validate clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality mutants manual-test-setup manual-test-setup-empty manual-test-reset manual-test-maintainer manual-test-consumer manual-test-shell-maintainer manual-test-shell-consumer live-harness
 
 # Aggregate. The Python discovery is the broad unit/regression gate; integration is end to end.
 test: unit integration
@@ -113,6 +113,12 @@ manual-test-maintainer:
 
 manual-test-consumer:
 	$(PYTHON) scripts/manual_test.py open consumer
+
+# Live harness evidence for installed-MCP smoke verification. Opt-in and local only: it spends a
+# real model call and needs a provider that answers, which CI has neither of. Name the harnesses
+# whose providers work on this machine, e.g. `make live-harness HARNESS=claude`.
+live-harness:
+	AART_CLI_LIVE_HARNESS=$(or $(HARNESS),claude) $(PYTHON) -m unittest tests.live_harness_smoke_test -v
 
 # Remove build leftovers (safe: only the dist/ wheels and build/ tree).
 clean:

@@ -4109,6 +4109,23 @@ substitute MCP configuration proves the adapter fixture and not the user's insta
 owner/manual evidence gathered on a machine with those CLIs and that service. CP-26.20a stays in
 flight until it exists.
 
+**Update, 2026-09-20 (live evidence, partial).** Claude Code is done: `tests/live_harness_smoke_test.py`
+drives the real CLI (2.1.278) against a real stdio MCP server through the harness's own discovery
+path, and the tool result carries an identity only that server's configured environment supplies --
+so it is evidence of reach, not merely of a call. A live mutation confirms it: pointing the
+allowlist at a tool nobody declared turns it red with "current run did not prove the exact completed
+MCP tool call". Run it with `make live-harness HARNESS=claude`; it is opt-in and skips everywhere it
+is not named, so CI runs nothing.
+
+**OpenCode is blocked by its provider, not by this code.** 1.18.29 is installed and the adapter
+drives it correctly, but the free tier refuses a headless run -- "OpenCode's free tier can only be
+used from within OpenCode", HTTP 403 -- which §170.5 classes as a model-provider failure distinct
+from an MCP credential or service failure. It needs a provider that answers headlessly, which is an
+account matter. Tabnine stays direct-only by design and is not installed here.
+
+What remains under this id is therefore the OpenCode live run and independent protected-service
+proof; the latter is blocked outright by **B-164**.
+
 Tabnine now requires direct MCP/credential testing only while its adapter lacks the capability.
 The missing allowlist no longer blocks CP-26.20a; implementing the revised coverage remains part
 of that task. The original finding below records why no Tabnine prompt is allowed.
@@ -4132,3 +4149,30 @@ The required file-scoped run generated 549 mutants in `aart_cli/sources/git.py`;
 only file globs and mutated zero files. Step 20 already has its targeted semantic mutation and full
 focused/broad test evidence. Extend `scripts/mutants.py` with callable or line scoping before this
 large-module advisory run is repeated.
+
+## B-164 — no code path ever establishes external-service evidence, so `mcp test` cannot exit 0
+
+**Found:** 2026-09-20, producing CP-26.20a's live evidence (§170.2, §170.5, INV-250).
+
+`McpCallResult.service_observed` is the only thing that turns the `mcp-to-external-service` stage
+from `NOT VERIFIED` into `PASS`, and **nothing in the product ever sets it**. `io/mcp_smoke.py`
+builds every direct result without it, and the harness route's `_as_call_result` does the same. The
+only assignments in the tree are in tests.
+
+Measured rather than reasoned: a real stdio server, a real `execute_stdio_smoke`, a fully
+successful call. `mcp-startup-and-protocol` PASS, `mcp-to-external-service` **NOT VERIFIED**. Since
+the service stage is always in the required set, `aggregate_success` is always false, so
+`aart-cli mcp test` returns a non-zero exit for every installation that works perfectly.
+
+**Why it matters.** §170.5 says a full-run success requires evidence for every applicable requested
+stage. As built, no run can ever succeed, so the command cannot serve as the check §170 describes.
+
+**The decision this needs, which is the owner's.** The specification deliberately separates three
+claims -- protocol success, optional result assertions, and service-access proof -- so the fix is
+not simply to set the flag when a call succeeds. Either (a) a declared expectation that only the
+real service could satisfy is what upgrades the service stage, which keeps the claim honest but
+merges two of the three; or (b) `NOT VERIFIED` on the service stage is an honest outcome that does
+not block a zero exit, with service proof remaining an explicit opt-in. (b) matches the
+specification's own language that `NOT VERIFIED` means the available evidence does not establish
+the claim, rather than that something failed. Not chosen here, because either reading changes what
+a passing `mcp test` asserts.
