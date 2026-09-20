@@ -4138,6 +4138,11 @@ and returns `UNSUPPORTED` without submitting a prompt. Completion needs a suppor
 contract, an upstream capability, or a Product Specification decision changing the acceptance
 target; post-run transcript inspection is insufficient.
 
+**Dissolved 2026-09-20 by D-368.** AART no longer launches a harness, so there is no live run for
+it to perform and nothing for this item to unblock. The OpenCode provider refusal and Tabnine's
+missing allowed-tools boundary both stop mattering: no harness is driven, so none needs a boundary,
+and the evidence this item was waiting for is now produced by a person running the generated prompt.
+
 ## B-163 — file-only mutmut scoping is disproportionate for CP-26.20's Git source module
 
 **Found:** 2026-09-20 while paying CP-26.20's remaining advisory mutation debt. **Open,
@@ -4213,5 +4218,9 @@ only reads the report removes that too, but changes what a `mcp test` exit code 
 refused by §26 (`dependencies = []`); the repository's own `protocol/json` and schema validation
 cover it. A dev-group package would not help code that has to parse the report at runtime.
 
-This is a §170.4 specification change, not an implementation gap, so it is not critical-path work
-for CP-26. Reclassify only if evidence shows a mandatory invariant cannot be met without it.
+**Closed 2026-09-20 by D-368, in a simpler form than proposed here.** The owner cut further: the
+harness leg is not driven by AART at all, in either mode. There is no headless path, so there is no
+skill to install and no allowlist to enforce -- `aart-cli mcp test --prompt` prints a prompt, a
+person runs it, and `--report` grades the JSON that comes back. The trust concern recorded above is
+answered the way this entry predicted: the report transports the observation and the runner keeps
+the verdict, with D-366's declared `expect` making a fabricated report fail rather than pass.

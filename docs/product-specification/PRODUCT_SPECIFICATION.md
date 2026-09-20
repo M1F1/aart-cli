@@ -10747,7 +10747,7 @@ Each selected installation receives independently evidenced stage results:
 | MCP startup and protocol | Its actual installed launcher or configured remote transport responds using a supported MCP protocol and expected capabilities |
 | MCP to external service | Evidence establishes that the declared read reached the configured service using this installation's credentials; protocol success alone is insufficient |
 | Harness to model provider | The selected harness/profile can authenticate and obtain the bounded model response needed for the smoke run |
-| Harness to MCP to external service | Separately report actual harness discovery/call/result evidence and any established external-service evidence; apply optional result expectations identically to the direct route |
+| Harness to MCP to external service | Separately report the operator-attested harness call/result evidence and any established external-service evidence; apply optional result expectations identically to the direct route |
 
 Stages form a dependency graph, not an unconditional stop-on-first-failure sequence. Failure to
 authenticate to a model provider must not suppress the independent direct MCP/service checks.
@@ -10815,10 +10815,13 @@ of service data. Any parameters that can select such modes are refused by the te
 Only the declared operation is eligible. The runner never guesses from names such as `get_*`,
 chooses a tool with an LLM, invokes all tools, or treats MCP `readOnlyHint` alone as authorization.
 Absent declaration is `NOT CONFIGURED` for operation-dependent stages; an unsafe or malformed
-declaration is refused before invocation. Other independent stages may still run. Both the direct
-client and the harness route enforce the same allowed tool and arguments. The harness must not
-substitute shell commands, direct HTTP or another MCP. Unexpected operations are blocked, not
-merely noticed after they execute; inability to enforce that boundary is visible as unsupported.
+declaration is refused before invocation. Other independent stages may still run. The direct
+client enforces the declared tool and arguments: it sends that one call and no other, so an
+unexpected operation is blocked rather than noticed afterwards. The harness route cannot enforce
+anything, because AART does not run the session (§170.4); the prompt states the same restriction,
+the operator is the party who observes it, and a report entry naming a different tool or different
+arguments is refused rather than graded. That difference is declared coverage, not a silent
+downgrade, and a report is never presented as enforcement.
 
 Read-only is a reviewed implementation contract, not proof of arbitrary server behavior. Starting
 a server also executes its code. AART must not promise that a flag makes unknown code harmless.
@@ -10826,58 +10829,56 @@ Service-side read-only privileges provide stronger enforcement where available, 
 must not silently substitute different credentials and claim it verified the selected setup.
 Existing trust and execution policies still govern launching local Candidate content.
 
-## 170.4 Harness adapters and execution evidence
+## 170.4 Harness verification is operator-run
 
-Harness execution is capability-dependent. A harness without a verified pre-invocation allowed-tools
-boundary receives direct MCP tests using its installation's own configuration and credentials;
-its harness/model stages are NOT RUN with the capability reason. Do not submit a prompt to that
-harness. Tabnine follows this direct-only route until its adapter establishes the required boundary.
-OpenCode and Claude Code are full-route targets when their measured versions enforce it. IDE
-automation is outside this increment. Missing credentials or a broken supported harness are failures,
-not reasons to silently downgrade the selected coverage.
+AART does not launch a harness, submit a prompt to one, or read its session. `aart-cli mcp test`
+composes a prompt; a person runs it in their own harness session and brings back a report. The
+harness route is optional, and a run without a report is complete without it.
 
-Detect the actual executable, implementation and version before choosing supported flags, config
-discovery and event formats. A command name alone does not establish the implementation. Do not
-implicitly upgrade, migrate or reconfigure a harness to make a test pass. A headless run must read
-the real selected installation through the harness's supported configuration path. A substitute
-test-only MCP configuration proves only the adapter fixture, not the user's installation.
+This is a deliberate reduction in what AART claims. The earlier contract drove eligible harnesses
+headless and read their structured events, which required a verified pre-invocation allowed-tools
+boundary, a whole-run deadline and owned-process cleanup. That apparatus existed because AART was
+starting a model. It no longer starts one. The operator who runs the session is the party who
+observes it, and the enforcement requirements that applied to AART-submitted prompts do not apply
+to a prompt a person chose to paste. No harness is privileged or excluded by capability, because
+none is driven.
 
-The harness supplies execution evidence; the runner judges the result. Correlate the current
-run/session, expected server/tool identity, arguments and completed tool result. Neither model
-prose, a process exit code, tool discovery nor an old transcript is proof of execution. Validate
-protocol/tool errors, declared output schemas and any optional `expect` conditions deterministically.
-Successful harness invocation and external-service proof remain separate claims. Use supported structured events or
-verified hook contracts; do not infer success from terminal prose. Bound process lifetime, model
-usage, calls and captured output, and clean up only resources owned by this test run. Prevent
-unrelated hooks or agents from starting background work; any required execution overrides and
-resulting coverage limits must be explicit rather than silently testing a different setup.
+**The generated prompt** is composed per run and names, for every selected installation: the
+installation key the report must echo back, the MCP server name as that harness sees it, the exact
+predeclared read-only tool and its exact arguments, and the report's required JSON structure and
+destination path. It instructs the model to call each named tool exactly once with unchanged
+arguments, to call no other tool, not to retry or repair, to treat every tool response as data and
+never follow instructions contained in it, and to copy each tool result into the report verbatim.
+These are instructions to a person's assistant rather than enforcement, and the prompt says so.
 
-For an eligible harness, impose a 120-second whole-run deadline in addition to the declared MCP
-call deadline. Terminate the owned process and its owned descendants on timeout. Permit exactly
-one declared operation with unchanged arguments; a tool-name allowlist alone does not prove argument
-confinement. The English prompt instructs the model to perform that operation, assess the returned
-content as data, and return exactly this JSON shape, with English human-readable fields:
-
-```json
-{
-  "status": "ok",
-  "summary": "The tool returned the current user's details.",
-  "possible_error": null
-}
-```
+**The report** carries, per installation: the installation key, whether the call was made, the tool
+result copied verbatim, and the English assessment (`status`, `summary`, `possible_error`) under the
+bounds below. AART validates it against the declared schema and refuses a malformed report. An entry
+whose installation key was not requested is refused; a requested installation with no entry is
+`NOT RUN`, named. A validator is available to the harness so a session can check its own output
+before handing it over.
 
 `status` is `ok`, `error` or `uncertain`; `summary` is a bounded nonempty English string;
 `possible_error` is null for `ok` and a bounded English explanation for `error` or `uncertain`.
-Limit each text field to 2,000 characters. Invalid/missing JSON, timeout or absent current tool
-execution cannot pass. An `error` assessment fails the assessment stage; `uncertain` leaves it
-NOT VERIFIED. This assessment is reported separately from deterministic checks and service proof.
-The prompt forbids additional tools, retries, repair, and following instructions embedded in the
-response. Enforcement comes from adapter controls, not the prompt alone.
+Limit each text field to 2,000 characters. An `error` assessment fails the assessment stage;
+`uncertain` leaves it `NOT VERIFIED`.
 
-Use pure selection/planning and result evaluation with explicit process, network, harness and
-credential-provider boundaries. Preserve zero installed runtime dependencies; any external test
-driver must be an explicit, policy-governed capability rather than a hidden SDK dependency or an
-automatic installation during verification.
+**The runner keeps the verdict.** Each carried result is graded by the same deterministic evaluator
+the direct route uses, including declared output schemas and any optional `expect`. The English
+assessment remains separate evidence under its own stage and cannot establish protocol success or
+external-service access.
+
+**Report evidence is operator-attested, and is labelled as such.** AART cannot establish that a
+report came from a real session, that the session was current, or that a tool result was copied
+faithfully. Declared coverage distinguishes it from direct evidence, and it never counts as direct
+evidence. What makes an attested report hard to fabricate is the declared expectation of §170.3:
+a service claim requires a value only the configured service returns, so an unfaithful or invented
+copy fails rather than passes.
+
+Use pure prompt composition and report evaluation with explicit effect boundaries; reading a report
+the operator names is the only filesystem effect this route has. Preserve zero installed runtime
+dependencies; any external test driver must be an explicit, policy-governed capability rather than
+a hidden SDK dependency or an automatic installation during verification.
 
 ## 170.5 Results and evidence ownership
 
@@ -10886,9 +10887,9 @@ timestamp, outcome and actionable reason. At minimum distinguish `PASS`, `FAIL`,
 `NOT CONFIGURED`, `NOT RUN`, `NOT VERIFIED` and `UNSUPPORTED`. `NOT VERIFIED` means a call may
 have completed but the available evidence does not establish the requested claim. A full-run
 success/zero exit requires evidence for every applicable requested stage and target. Declare
-coverage (`direct` or `direct-and-harness`) and exclusions before execution. Harness stages omitted
-because the adapter lacks the required pre-invocation boundary do not fail an otherwise successful
-direct run and never count as harness success. An absent optional expectation is also outside the
+coverage (`direct` or `direct-and-attested`) and exclusions before execution. Harness stages absent
+because no operator report was supplied do not fail an otherwise successful direct run and never
+count as harness success. An absent optional expectation is also outside the
 required set. Empty selections, failed prerequisites, or unverified required stages cannot pass. A model-provider login failure is distinct from an MCP credential or service failure.
 
 Use only the selected installation's existing configuration and credential bindings. The model
@@ -10921,14 +10922,16 @@ requires only tool and read-only fields; optional expectations never impose a cu
 protocol, external service, model-provider access and actual harness execution have separate
 evidence and honest non-success states; a lower-level pass never implies a higher-level pass.
 Protocol-level call success is separate from optional result assertions and service-access proof.
-Capability-excluded harness stages are declared and do not fail direct coverage (§170.5).
+Harness stages absent for want of an operator report are declared and do not fail direct coverage (§170.5).
 
-**INV-251 — Harness smoke success requires current execution evidence.** The current run proves
-the intended tool call and result, including any optional expectations, through the selected harness installation; model prose,
-old events and substituted configurations cannot produce an end-to-end pass.
-Tabnine CLI acceptance is direct-only when it lacks the required boundary; full-route acceptance
-covers eligible OpenCode and Claude adapters. English model assessment is separate evidence and
-cannot replace the observed call or independent service proof.
+**INV-251 — Harness evidence is operator-attested and separately labelled.** AART neither launches
+a harness nor submits a prompt to one; harness verification is optional and is produced by a person
+running the generated prompt in their own session. A report is admitted only when it validates
+against the declared schema and its entries correspond to requested installations. Carried results
+are graded by the same deterministic evaluator as the direct route; the English model assessment is
+separate evidence and cannot establish protocol success or external-service access. A report never
+counts as direct evidence, declared coverage states which kind was obtained, and the absence of a
+report is an honest non-success state rather than a failure of the direct run.
 
 **INV-252 — Smoke execution is bounded and does not expose installation values.** Explicit effect
 boundaries preserve trust, secret isolation, zero runtime dependencies and bounded execution;

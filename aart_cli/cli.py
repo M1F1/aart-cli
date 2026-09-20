@@ -597,7 +597,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_mcp_test = mcp_sub.add_parser(
         "test",
         formatter_class=_HELP_FORMATTER,
-        help="run the declared smoke operation directly and through selected harnesses",
+        help="run the declared smoke operation directly, and grade an operator harness report",
     )
     p_mcp_test.add_argument("names", nargs="*", metavar="INSTALLED")
     p_mcp_test.add_argument(
@@ -618,6 +618,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--show-response",
         action="store_true",
         help="show a bounded current MCP response; it may contain confidential service data",
+    )
+    p_mcp_test.add_argument(
+        "--prompt",
+        dest="prompt_only",
+        action="store_true",
+        help="print the harness prompt to run yourself, and test nothing",
+    )
+    p_mcp_test.add_argument(
+        "--report",
+        dest="report_path",
+        metavar="PATH",
+        help="grade a harness report you produced with --prompt",
     )
     _add_scope(p_mcp_test)
     _add_project(p_mcp_test)
@@ -1549,6 +1561,8 @@ def _to_request(args: argparse.Namespace) -> Request:
         mcp_action=getattr(args, "mcp_action", None),
         all_installed=bool(getattr(args, "all_installed", False)),
         show_response=bool(getattr(args, "show_response", False)),
+        prompt_only=bool(getattr(args, "prompt_only", False)),
+        report_path=getattr(args, "report_path", None),
         query=tuple(getattr(args, "query", ()) or ()),
         search_limit=getattr(args, "search_limit", None),
         receipt_action=getattr(args, "receipt_action", None),

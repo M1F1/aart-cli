@@ -5,11 +5,16 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
 from aart_cli import command_outcome as _common
+from aart_cli.application.harness_report import (
+    HarnessSmokeRequest,
+    SmokeReportEntry,
+    compose_smoke_prompt,
+    parse_smoke_report,
+)
 from aart_cli.application.mcp_smoke import (
     McpCallResult,
     McpTool,
@@ -25,17 +30,18 @@ from aart_cli.application.mcp_smoke import (
 from aart_cli.configuration.policy import redact_text
 from aart_cli.domain.configuration_files import parse_configuration_file
 from aart_cli.domain.credentials import CredentialState, ProviderState
+from aart_cli.domain.diagnostics import Diagnostic, Severity
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.installation_owner import installation_key
 from aart_cli.domain.receipts import InstallationReceipt, InstalledRecord
 from aart_cli.domain.result import Err
 from aart_cli.io.credentials import MacOsKeychainProvider
-from aart_cli.io.harness_smoke import run_harness_smoke
 from aart_cli.io.mcp_smoke import execute_stdio_smoke
 from aart_cli.io.object_store import read_object
 from aart_cli.io.receipt_store import LocalReceiptStore
 from aart_cli.model import Request
 from aart_cli.protocol.authoring import AUTHORING_EXTENSION
+from aart_cli.protocol.codes import MCP_SMOKE_REPORT_INVALID
 from aart_cli.protocol.json import JsonArray, JsonObject, JsonValue
 from aart_cli.protocol.native_schema import parse_artifact_manifest
 from aart_cli.protocol.native_tree import SnapshotEntryKind
@@ -45,6 +51,8 @@ from aart_cli.store.model import ObjectReadRequest, object_store_paths
 from ._configured_runtime import load_runtime_configuration
 
 _OPERATION = "mcp.test"
+#: Where the generated prompt asks the operator's harness to write its report.
+_REPORT_PATH = "aart-cli-smoke-report.json"
 _HARNESSES = frozenset({"opencode", "tabnine", "claude"})
 _MAX_RESPONSE_BYTES = 64 * 1024
 
@@ -200,148 +208,90 @@ def _declaration(
 def _harness_stages(
     receipt: InstallationReceipt,
     declaration_and_tools: tuple[SmokeDeclaration, tuple[McpTool, ...]] | None,
+    entry: SmokeReportEntry | None,
 ) -> tuple[SmokeStageResult, SmokeStageResult, SmokeStageResult, str | None, str]:
+    """Grade the operator's harness report, or say plainly that none was supplied (D-368, §170.4).
+
+    AART runs no harness, so there is nothing here to start, time out or clean up. What arrives is
+    a report a person brought back, and the only thing this function decides is what that report
+    honestly establishes -- which is why the carried result is handed to the same evaluator the
+    direct route uses rather than being read for its verdict.
+    """
+
     assert receipt.owner is not None
-    harness = receipt.owner.harness
-    if harness == "tabnine":
-        reason = "Tabnine has no verified pre-invocation allowed-tools boundary"
-        excluded = SmokeStageResult(SmokeStage.MODEL_PROVIDER, SmokeOutcome.NOT_RUN, reason)
+    if entry is None:
+        reason = "harness verification is operator-run and no report was supplied"
         return (
-            excluded,
+            SmokeStageResult(SmokeStage.MODEL_PROVIDER, SmokeOutcome.NOT_RUN, reason),
             SmokeStageResult(SmokeStage.HARNESS, SmokeOutcome.NOT_RUN, reason),
             SmokeStageResult(SmokeStage.MODEL_ASSESSMENT, SmokeOutcome.NOT_RUN, reason),
             None,
             "direct",
         )
-    executable = shutil.which(harness)
-    if executable is None:
-        blocked = SmokeStageResult(
-            SmokeStage.MODEL_PROVIDER,
-            SmokeOutcome.BLOCKED,
-            f"{harness} CLI is not installed",
-        )
-        return (
-            blocked,
-            SmokeStageResult(
-                SmokeStage.HARNESS,
-                SmokeOutcome.NOT_RUN,
-                f"depends on {SmokeStage.MODEL_PROVIDER.value}",
-            ),
-            SmokeStageResult(
-                SmokeStage.MODEL_ASSESSMENT,
-                SmokeOutcome.NOT_RUN,
-                f"depends on {SmokeStage.MODEL_PROVIDER.value}",
-            ),
-            None,
-            "direct-and-harness",
-        )
+    assessment = SmokeStageResult(
+        SmokeStage.MODEL_ASSESSMENT,
+        SmokeOutcome(entry.assessment.outcome),
+        entry.assessment.reason,
+    )
+    # A report came back at all, which is the bounded model response this stage claims. Attested
+    # rather than observed, like everything else that reaches us by this route.
+    model = SmokeStageResult(
+        SmokeStage.MODEL_PROVIDER,
+        SmokeOutcome.PASS,
+        "the operator's harness session returned a bounded model response",
+    )
+    coverage = "direct-and-attested"
     if declaration_and_tools is None:
+        reason = "the installed content has no executable smoke operation"
         return (
-            SmokeStageResult(
-                SmokeStage.MODEL_PROVIDER,
-                SmokeOutcome.NOT_RUN,
-                "the installed content has no executable smoke operation",
-            ),
+            model,
+            SmokeStageResult(SmokeStage.HARNESS, SmokeOutcome.NOT_CONFIGURED, reason),
+            assessment,
+            None,
+            coverage,
+        )
+    if not entry.called or entry.result is None:
+        return (
+            model,
             SmokeStageResult(
                 SmokeStage.HARNESS,
-                SmokeOutcome.NOT_RUN,
-                "the installed content has no executable smoke operation",
+                SmokeOutcome.FAIL,
+                "the report does not carry a completed call to the declared tool",
             ),
-            SmokeStageResult(
-                SmokeStage.MODEL_ASSESSMENT,
-                SmokeOutcome.NOT_RUN,
-                "the installed content has no executable smoke operation",
-            ),
+            assessment,
             None,
-            "direct-and-harness",
+            coverage,
         )
     declaration, tools = declaration_and_tools
-    registration = next(
-        (item for item in receipt.registrations if item.target.harness == harness), None
-    )
-    if registration is None:
-        return (
-            SmokeStageResult(
-                SmokeStage.MODEL_PROVIDER,
-                SmokeOutcome.NOT_RUN,
-                "the selected harness registration is absent",
-            ),
-            SmokeStageResult(
-                SmokeStage.HARNESS,
-                SmokeOutcome.NOT_CONFIGURED,
-                "the selected harness registration is absent",
-            ),
-            SmokeStageResult(
-                SmokeStage.MODEL_ASSESSMENT,
-                SmokeOutcome.NOT_RUN,
-                "the selected harness registration is absent",
-            ),
-            None,
-            "direct-and-harness",
-        )
-    run = run_harness_smoke(
-        harness,
-        executable,
-        registration.server,
-        declaration,
-        cwd=receipt.owner.root,
-    )
-    try:
-        outcome = SmokeOutcome(run.outcome)
-    except ValueError:
-        outcome = SmokeOutcome.FAIL
-    if run.result is None or outcome is not SmokeOutcome.PASS:
-        model_outcome = SmokeOutcome.BLOCKED if outcome is SmokeOutcome.BLOCKED else outcome
-        return (
-            SmokeStageResult(SmokeStage.MODEL_PROVIDER, model_outcome, run.reason),
-            SmokeStageResult(
-                SmokeStage.HARNESS,
-                SmokeOutcome.NOT_RUN if outcome is SmokeOutcome.BLOCKED else outcome,
-                run.reason,
-            ),
-            SmokeStageResult(
-                SmokeStage.MODEL_ASSESSMENT,
-                SmokeOutcome(run.assessment.outcome),
-                run.assessment.reason,
-            ),
-            run.version,
-            run.coverage,
-        )
-    evaluated = evaluate_tool_call(declaration, tools, run.result)
-    route_outcome: SmokeOutcome
+    evaluated = evaluate_tool_call(declaration, tools, entry.result)
+    outcome: SmokeOutcome
     if evaluated.protocol.outcome is not SmokeOutcome.PASS:
-        route_outcome = evaluated.protocol.outcome
+        outcome = evaluated.protocol.outcome
         reason = evaluated.protocol.reason
     elif evaluated.expectation.outcome is SmokeOutcome.FAIL:
-        route_outcome = SmokeOutcome.FAIL
+        outcome = SmokeOutcome.FAIL
         reason = evaluated.expectation.reason
     elif evaluated.service.outcome is SmokeOutcome.NOT_VERIFIED:
-        route_outcome = SmokeOutcome.NOT_VERIFIED
-        reason = (
-            "the harness call completed, but external-service access is not independently proven"
-        )
+        outcome = SmokeOutcome.NOT_VERIFIED
+        reason = "the reported call completed, but external-service access is not proven"
     else:
-        route_outcome = SmokeOutcome.PASS
-        reason = run.reason
+        outcome = SmokeOutcome.PASS
+        reason = "the reported call is the declared operation and its declared checks hold"
     return (
-        SmokeStageResult(
-            SmokeStage.MODEL_PROVIDER,
-            SmokeOutcome.PASS,
-            "the harness obtained a current model response and completed the allowed tool call",
-        ),
-        SmokeStageResult(SmokeStage.HARNESS, route_outcome, reason),
-        SmokeStageResult(
-            SmokeStage.MODEL_ASSESSMENT,
-            SmokeOutcome(run.assessment.outcome),
-            run.assessment.reason,
-        ),
-        run.version,
-        run.coverage,
+        model,
+        SmokeStageResult(SmokeStage.HARNESS, outcome, reason),
+        assessment,
+        None,
+        coverage,
     )
 
 
 def _target(
-    record: InstalledRecord, data_root: str, *, show_response: bool = False
+    record: InstalledRecord,
+    data_root: str,
+    *,
+    show_response: bool = False,
+    entry: SmokeReportEntry | None = None,
 ) -> dict[str, object]:
     receipt = record.receipt
     assert isinstance(receipt, InstallationReceipt) and receipt.owner is not None
@@ -465,7 +415,7 @@ def _target(
                     harness_context = (resolved, run.value.tools)
                     direct_result = run.value.result
     model, harness, assessment, harness_version, coverage = _harness_stages(
-        receipt, harness_context
+        receipt, harness_context, entry
     )
     stages.extend((model, harness, assessment))
     required = [
@@ -499,6 +449,73 @@ def _target(
     return target
 
 
+def _requests(
+    records: tuple[InstalledRecord, ...], data_root: str
+) -> tuple[HarnessSmokeRequest, ...]:
+    """Build one prompt line's worth of fact per selected installation.
+
+    Arguments are resolved here rather than left as configuration references, because the operator's
+    harness has to send what the direct route would send. The contract already forbids a secret from
+    being an argument (§170.3), so what lands in the prompt is non-secret by construction.
+    """
+
+    built: list[HarnessSmokeRequest] = []
+    for record in records:
+        receipt = record.receipt
+        assert isinstance(receipt, InstallationReceipt) and receipt.owner is not None
+        declaration, _ = _declaration(record, data_root)
+        if declaration is None:
+            continue
+        registration = next(
+            (
+                item
+                for item in receipt.registrations
+                if item.target.harness == receipt.owner.harness
+            ),
+            None,
+        )
+        if registration is None:
+            continue
+        config, failure = _configuration_values(receipt)
+        if failure is not None:
+            continue
+        try:
+            arguments = _resolve_arguments(declaration.arguments, config)
+        except KeyError:
+            continue
+        assert isinstance(arguments, JsonObject)
+        built.append(
+            HarnessSmokeRequest(
+                installation_key(record.coordinate, receipt.owner),
+                registration.server,
+                SmokeDeclaration(
+                    declaration.tool,
+                    arguments,
+                    declaration.timeout_seconds,
+                    declaration.expect,
+                    declaration.reaches_service,
+                ),
+            )
+        )
+    return tuple(built)
+
+
+def _load_report(path: str, requested: tuple[str, ...]):
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return Err(
+            (
+                Diagnostic(
+                    MCP_SMOKE_REPORT_INVALID,
+                    Severity.ERROR,
+                    f"the harness report at {path} could not be read",
+                ),
+            )
+        )
+    return parse_smoke_report(text, requested=requested)
+
+
 def run(request: Request) -> int:
     if request.mcp_action != "test":
         return _failure(request, "unsupported MCP command action")
@@ -530,11 +547,26 @@ def run(request: Request) -> int:
     )
     if selection.failure is not None:
         return _failure(request, selection.failure)
+    data_root = runtime.value.paths.data_root
+    if request.prompt_only:
+        requests = _requests(selection.targets, data_root)
+        if not requests:
+            return _failure(request, "no selected installation has an executable smoke operation")
+        print(compose_smoke_prompt(requests, report_path=_REPORT_PATH))
+        return 0
+    entries: dict[str, SmokeReportEntry] = {}
+    if request.report_path is not None:
+        requested = tuple(item.installation for item in _requests(selection.targets, data_root))
+        report = _load_report(request.report_path, requested)
+        if isinstance(report, Err):
+            return _failure(request, report.diagnostics[0].message)
+        entries = {item.installation: item for item in report.value.entries}
     targets = tuple(
         _target(
             record,
-            runtime.value.paths.data_root,
+            data_root,
             show_response=request.show_response,
+            entry=entries.get(installation_key(record.coordinate, record.receipt.owner)),
         )
         for record in selection.targets
     )

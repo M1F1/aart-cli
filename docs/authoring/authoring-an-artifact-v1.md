@@ -96,11 +96,22 @@ from keywords or ask a model to decide success. Successful invocation is reporte
 external-service evidence; cached output or an error disguised as normal text cannot alone prove
 service access. The read-only flag is a reviewed declaration, not a sandbox guarantee.
 
-## Smoke revision under D-365
+## The harness leg is run by the operator (D-368)
 
-D-365 revises the behavior above: harnesses without enforceable allowed tools receive direct MCP
-checks only; the excluded harness stage does not fail direct coverage. Eligible harnesses return
-a bounded English JSON assessment (`status`, `summary`, `possible_error`) within 120 seconds.
-The assessment is separate from protocol and service evidence. Default-off `--show-response` will
-permit bounded inspection of the server response in current output, without application persistence.
-These behaviors are specified in Product Specification §170 and are implemented.
+AART does not launch a harness or submit a prompt to one. `aart-cli mcp test --prompt` composes a
+prompt naming every selected installation, the declared tool and arguments for each, and the JSON
+report shape it asks for; a person runs that in their own harness session, and
+`aart-cli mcp test --report <path>` grades what comes back.
+
+The report carries the observation, not the verdict: each tool result it holds is graded by the
+same deterministic evaluator the direct route uses, and the English assessment (`status`,
+`summary`, `possible_error`, each text field bounded to 2,000 characters) stays a separate stage
+that cannot establish protocol success or service access. Such evidence is declared as coverage
+`direct-and-attested` and never counts as direct evidence.
+
+For an author this means one thing in practice: **a `reaches_service` claim is only as good as its
+`expect`.** That expectation is what a fabricated or carelessly copied report cannot satisfy, on
+either route. Choose a value only the real service can return.
+
+Default-off `--show-response` permits bounded inspection of the server response in current output,
+without application persistence. These behaviors are specified in Product Specification §170.

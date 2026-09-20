@@ -289,8 +289,10 @@ refuses the other, and the specification supplies the third itself.
 **D-365's implementation and its test evidence are done** (see the newest `MIGRATION_STATUS.md`
 entry): capability route, 120-second whole-run deadline and process-group cleanup, argument
 confinement, the English assessment contract with its three outcomes, capability-based aggregation
-and the default-off `--show-response` all have a test and a recorded mutation. **What is left for
-20a, before the owner's redesign below:** B-162, which needs the real harness CLIs on this machine: live OpenCode and Tabnine runs plus
+and the default-off `--show-response` all have a test and a recorded mutation. **Superseded by D-368 (2026-09-20):** AART no longer drives a harness at all, so B-162 dissolved
+and the paragraph below describes machinery that has been deleted. Kept for the history of how 20a
+got here. The remaining 20a work is the harness-report validator a session can call on its own
+output, then 20a's own slice write-up. The old statement follows: live OpenCode and Tabnine runs plus
 protected-service evidence need the real harness CLIs and a real protected service on the machine,
 and a substitute MCP configuration would prove the adapter fixture rather than the user's
 installation (§170.4). That is owner/manual evidence. Until it exists, 20a stays in flight.

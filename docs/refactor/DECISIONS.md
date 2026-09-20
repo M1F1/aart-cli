@@ -9285,3 +9285,72 @@ declaration present and does not reach it with the expectation removed. Targeted
 relaxing `expectation.outcome is not PASS` to `is FAIL` in `_service` — which would let the author's
 word alone carry the stage — turns exactly two tests red, the evaluation test that names the claim
 and the CLI test that keeps the exclusion narrow, and nothing else.
+
+## D-368 — Harness verification is operator-run: AART composes a prompt and grades a report
+
+**Date:** 2026-09-20. **Owner-directed.** Revises §170.2/§170.3/§170.4/§170.5 and replaces INV-251.
+Supersedes D-364 entirely and the adapter half of D-365. Closes B-165; dissolves B-162.
+
+### The change
+
+AART no longer launches a harness, submits a prompt to one, or reads its session. `aart-cli mcp test`
+composes a prompt naming which installations to verify and which predeclared read-only tool to call
+for each; a person runs it in their own harness session; the harness writes a JSON report; a single
+command parses that report and shows what works and what has a problem. The harness route is
+optional and a run without a report is complete without it.
+
+### Why this is better than the design it replaces
+
+The whole enforcement apparatus existed because AART was starting a model: the verified
+pre-invocation allowed-tools boundary, the 120-second whole-run deadline, owned-process-group
+cleanup, per-harness event parsing, and the capability gate that made Tabnine a special case. None
+of it is needed by a prompt a person chose to paste into their own session. The party running the
+session is the party observing it.
+
+Measured on `aart_cli/io/harness_smoke.py` (381 lines): `run_harness_smoke` (101), `_claude_result`
+(35), `HarnessRunner` (28), `_opencode_result` (24), `_events` (17), `_version` (10) and
+`HarnessProcessResult` (5) are removed outright -- **220 lines**. The remaining 140 (prompt
+composition, assessment parsing, result conversion) have no effects and move to the application
+layer, so the module stops being an IO module. Adding a harness stops costing code entirely,
+because no harness is driven.
+
+*Corrected while measuring:* an earlier note in this session claimed `_thaw`/`_freeze`/
+`_as_call_result` (38 lines) were deleted too. They are not. The report still carries an MCP result
+that must become an `McpCallResult`, so that conversion survives and merely moves; it is now
+exercised by one path instead of two. The honest figure is 220 removed, not 258.
+
+### What is given up, stated plainly
+
+Report evidence is **operator-attested**. AART cannot establish that a report came from a real
+session, that the session was current, or that a tool result was copied faithfully. This is a real
+reduction in assurance against the previous contract, which observed the call itself. It is carried
+by a distinct declared coverage value (`direct-and-attested`), never conflated with direct evidence,
+and INV-251 is replaced rather than quietly reinterpreted.
+
+`aart-cli mcp test` can no longer produce harness evidence on its own. The harness stages are
+`NOT RUN` until a report is supplied, and that absence never fails an otherwise successful direct
+run.
+
+### What keeps it honest
+
+A fabricated or careless report is caught by D-366: an external-service claim requires
+`reaches_service` plus a declared `expect`, and `expect` must carry a value only the configured
+service returns. An invented or unfaithfully copied result fails rather than passes. The runner
+also keeps the verdict -- carried results are graded by the same deterministic evaluator the direct
+route uses, and the model's English assessment stays separate evidence under its own stage.
+
+The direct route is untouched. It remains the only part of this subsystem that observes anything,
+and it is where "does this MCP work, with these credentials" is actually answered.
+
+### Shape
+
+* `aart-cli mcp test --prompt` prints the generated prompt (installations, tool and arguments per
+  installation, the required report structure and its destination path).
+* `aart-cli mcp report validate <path>` validates a report against the schema, so a harness session
+  can check its own output before handing it over.
+* `aart-cli mcp test --report <path>` grades the report and renders the result.
+
+### Not a runtime dependency
+
+Pydantic and pydantic-ai were considered for the report schema and are refused by §26
+(`dependencies = []`). `protocol/json` and the repository's own schema validation cover it.

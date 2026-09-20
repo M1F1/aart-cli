@@ -75,16 +75,38 @@ aart-cli mcp test --all --harness opencode,claude --scope user --json
 ```
 
 The report keeps installation/configuration, MCP protocol, optional output expectation, external
-service, model provider, and full harness route as separate stages. `PASS` for a tool invocation
-does not prove the tool reached its external service: without independent evidence that stage is
-`NOT VERIFIED`, and the aggregate exits nonzero. A missing declaration, credential, executable or
-supported harness safety contract is also visible and cannot produce an aggregate pass. Reports do
-not retain configuration values, secrets, raw service payloads or harness transcripts.
+service, model provider, and harness route as separate stages. `PASS` for a tool invocation does
+not prove the tool reached its external service: that stage needs the manifest's `reaches_service`
+claim *and* a declared `expect` that holds, and it reports `NOT CONFIGURED` when the manifest makes
+no such claim. A missing declaration, credential or executable is also visible and cannot produce
+an aggregate pass. Reports do not retain configuration values, secrets, raw service payloads or
+harness transcripts.
 
-OpenCode and Claude Code runs restrict the current headless process to the declared tool and verify
-its current structured event. Tabnine is reported `UNSUPPORTED` and no prompt is sent until its CLI
-offers a verified pre-invocation tool allowlist. The manifest's `read_only: true` is a reviewed
-server/tool contract; it is not an operating-system sandbox for arbitrary startup code.
+### Verifying through your harness, which you run yourself
+
+AART does not launch a harness or submit a prompt to one. The harness leg is optional and you run
+it:
+
+```sh
+# 1. Get the prompt: which installations, which tool per installation, and the report shape
+aart-cli mcp test --all --harness claude --scope user --prompt
+
+# 2. Paste it into your own harness session. It writes aart-cli-smoke-report.json.
+
+# 3. Grade what came back, alongside the direct checks
+aart-cli mcp test --all --harness claude --scope user --report aart-cli-smoke-report.json
+```
+
+The report only *carries* the observation. Each tool result it holds is graded by the same
+deterministic evaluator the direct route uses, and the model's English assessment stays a separate
+stage that cannot establish protocol success or service access. Because AART did not watch the
+session, this evidence is declared as coverage `direct-and-attested` and never counts as direct
+evidence; what makes it hard to fabricate is the declared `expect`, which asks for a value only the
+real service returns. Supplying no report is an honest `NOT RUN`, never a failure of the direct run.
+
+The manifest's `read_only: true` is a reviewed server/tool contract; it is not an operating-system
+sandbox for arbitrary startup code, and the prompt's restrictions are instructions to your
+assistant rather than something AART enforces.
 
 ## Reading, checking, and undoing a setup
 

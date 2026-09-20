@@ -5,6 +5,45 @@ contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
 
+**2026-09-20, CP-26.20a — the harness leg stops being something AART drives (D-368).**
+Owner-directed. AART no longer launches a harness, submits a prompt to one, or reads its session.
+`aart-cli mcp test --prompt` composes a prompt naming every selected installation, its MCP server
+name as that harness sees it, the declared tool with resolved arguments, and the JSON report shape;
+a person runs it in their own session; `aart-cli mcp test --report <path>` grades what comes back.
+
+`aart_cli/io/harness_smoke.py` is deleted: `run_harness_smoke` (101 lines), `_claude_result` (35),
+`HarnessRunner` (28), `_opencode_result` (24), `_events` (17), `_version` (10) and
+`HarnessProcessResult` (5) -- **220 lines** -- had no reason to exist once nothing is driven. The
+verified pre-invocation allowed-tools boundary, the 120-second whole-run deadline and owned-process
+cleanup went with them, along with the capability gate that made Tabnine a special case. The
+remaining 140 lines (prompt composition, assessment parsing, result conversion) have no effects and
+now live in `aart_cli/application/harness_report.py`. Adding a harness costs no code at all.
+
+*Corrected while measuring:* an earlier claim in this session that `_thaw`/`_freeze`/
+`_as_call_result` were also deleted was wrong. A report still carries an MCP result that must become
+an `McpCallResult`, so that conversion survives and merely moves. 220 removed, not 258.
+
+**What is given up, and it is real.** Report evidence is operator-attested: AART cannot establish
+that a report came from a real session, that the session was current, or that a tool result was
+copied faithfully. It carries a distinct coverage value, `direct-and-attested`, is never conflated
+with direct evidence, and INV-251 was replaced rather than quietly reinterpreted. §170.2, §170.3,
+§170.4 and §170.5 were amended with it, including the enforcement paragraph -- the harness route can
+no longer claim "unexpected operations are blocked", so it now says plainly that the direct client
+blocks and the operator observes.
+
+What keeps it honest is D-366, committed an hour earlier: a service claim needs `reaches_service`
+plus a declared `expect`, and `expect` must carry a value only the configured service returns. An
+invented or unfaithfully copied result fails rather than passes. The runner also keeps the verdict,
+grading every carried result with the same evaluator the direct route uses.
+
+Evidence: 12 tests on the new pure module and 12 on the command route, all green, plus 94 across the
+MCP and authoring modules. Six targeted mutations, each restored. **Three of them first survived,
+and each exposed a test that did not hold its own name:** taking the first JSON object rather than
+the last passed because the fixture had only one object (fixed with a decoy the model would
+plausibly emit); dropping `entry.called` passed because no fixture carried the self-contradictory
+`called: false` with a result. Both tests were corrected and the mutations then died in exactly the
+test that names the claim.
+
 **2026-09-20, CP-26.20a — the service stage can now be reached, and the specification chose how.**
 B-164 was blocking: `McpCallResult.service_observed` was the only thing that could turn
 `mcp-to-external-service` into a `PASS`, nothing in the product ever set it, and the stage sat

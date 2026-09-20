@@ -44,6 +44,23 @@ class McpSmokeCliTest(unittest.TestCase):
         self.assertFalse(selected.all_installed)
         self.assertTrue(selected.show_response)
 
+        self.assertFalse(selected.prompt_only)
+        self.assertIsNone(selected.report_path)
+
+        operator = cli._to_request(
+            cli.build_parser().parse_args(
+                ["mcp", "test", "--all", "--harness", "claude", "--prompt"]
+            )
+        )
+        self.assertTrue(operator.prompt_only)
+
+        graded = cli._to_request(
+            cli.build_parser().parse_args(
+                ["mcp", "test", "--all", "--harness", "claude", "--report", "out.json"]
+            )
+        )
+        self.assertEqual(graded.report_path, "out.json")
+
         bulk = cli._to_request(
             cli.build_parser().parse_args(
                 ["mcp", "test", "--all", "--harness", "opencode", "--scope", "user"]
@@ -114,7 +131,13 @@ class McpSmokeCliTest(unittest.TestCase):
         self.assertTrue(preview["truncated"])
         self.assertLessEqual(len(preview["content"].encode("utf-8")), 65536)
 
-    def test_tabnine_runs_the_direct_route_without_starting_its_harness(self) -> None:
+    def test_no_harness_is_started_and_coverage_says_so(self) -> None:
+        """D-368: AART drives no harness, so every installation is direct until a report arrives.
+
+        This replaces a test that singled Tabnine out for lacking an allowed-tools boundary. That
+        distinction existed only because AART used to submit the prompt itself.
+        """
+
         declaration = SmokeDeclaration("read_identity", JsonObject(()), 15)
         tool = McpTool("read_identity", JsonObject((("type", "object"),)))
         result = McpCallResult(
@@ -128,27 +151,23 @@ class McpSmokeCliTest(unittest.TestCase):
                 "execute_stdio_smoke",
                 return_value=Ok(DirectSmokeRun("2025-11-25", (tool,), result)),
             ),
-            patch.object(mcp, "run_harness_smoke") as harness,
         ):
             report = mcp._target(installed("local", "tabnine"), "/managed", show_response=True)
 
-        harness.assert_not_called()
         self.assertEqual(report["coverage"], "direct")
         stages = {stage["stage"]: stage["outcome"] for stage in report["stages"]}
         self.assertEqual(stages["mcp-startup-and-protocol"], "PASS")
         self.assertEqual(stages["harness-to-model-provider"], "NOT RUN")
         self.assertIn("response", report)
 
-    def test_a_capability_excluded_harness_does_not_fail_an_otherwise_successful_direct_run(
+    def test_an_absent_harness_report_does_not_fail_an_otherwise_successful_direct_run(
         self,
     ) -> None:
-        """Declared exclusions do not fail direct coverage, and never count as harness success.
+        """§170.5 and INV-251: no report is an honest non-success, not a failure.
 
-        §170.5 and INV-250: a harness without a verified pre-invocation allowed-tools boundary is
-        tested directly, its harness stages are NOT RUN with the capability reason, and that is an
-        honest non-success rather than a failure. The distinction matters because the alternative
-        readings are both wrong -- failing the run punishes the user for their harness, and
-        counting the stages as passes would claim evidence nobody gathered.
+        The alternative readings are both wrong -- failing the run punishes someone for not having
+        run a harness session, and counting the stages as passes would claim evidence nobody
+        gathered.
         """
 
         # A declared service read plus the expectation that proves it: without both, the service
@@ -172,23 +191,21 @@ class McpSmokeCliTest(unittest.TestCase):
                 "execute_stdio_smoke",
                 return_value=Ok(DirectSmokeRun("2025-11-25", (tool,), result)),
             ),
-            patch.object(mcp, "run_harness_smoke") as harness,
         ):
             report = mcp._target(installed("local", "tabnine"), "/managed")
 
-        harness.assert_not_called()
         self.assertEqual(report["coverage"], "direct")
         self.assertIs(report["ok"], True)
         stages = {stage["stage"]: stage["outcome"] for stage in report["stages"]}
         self.assertEqual(stages["mcp-startup-and-protocol"], "PASS")
         self.assertEqual(stages["mcp-to-external-service"], "PASS")
         # Present and honest, rather than absent or quietly green.
-        for excluded in (
+        for absent in (
             "harness-to-model-provider",
             "harness-to-mcp-to-external-service",
             "model-assessment",
         ):
-            self.assertEqual(stages[excluded], "NOT RUN")
+            self.assertEqual(stages[absent], "NOT RUN")
 
     def test_an_unverified_service_stage_still_fails_a_direct_run(self) -> None:
         """The exclusion is narrow: it drops the harness stages and nothing else.
@@ -211,7 +228,6 @@ class McpSmokeCliTest(unittest.TestCase):
                 "execute_stdio_smoke",
                 return_value=Ok(DirectSmokeRun("2025-11-25", (tool,), result)),
             ),
-            patch.object(mcp, "run_harness_smoke"),
         ):
             report = mcp._target(installed("local", "tabnine"), "/managed")
 
@@ -239,7 +255,6 @@ class McpSmokeCliTest(unittest.TestCase):
                 "execute_stdio_smoke",
                 return_value=Ok(DirectSmokeRun("2025-11-25", (tool,), result)),
             ),
-            patch.object(mcp, "run_harness_smoke"),
         ):
             report = mcp._target(installed("local", "tabnine"), "/managed")
 
@@ -264,11 +279,87 @@ class McpSmokeCliTest(unittest.TestCase):
                 "execute_stdio_smoke",
                 return_value=Ok(DirectSmokeRun("2025-11-25", (tool,), result)),
             ),
-            patch.object(mcp, "run_harness_smoke"),
         ):
             report = mcp._target(installed("local", "tabnine"), "/managed")
 
         self.assertNotIn("response", report)
+
+
+class McpSmokeReportRouteTest(unittest.TestCase):
+    """The harness stages when an operator report is supplied (D-368, §170.4)."""
+
+    def _report(self, **over):
+        from aart_cli.application.harness_report import HarnessAssessment, SmokeReportEntry
+
+        fields = {
+            "installation": "x",
+            "called": True,
+            "result": McpCallResult(
+                content=JsonArray((JsonObject((("type", "text"), ("text", "Ada"))),))
+            ),
+            "assessment": HarnessAssessment("PASS", "It read the user.", None, "bounded"),
+        }
+        fields.update(over)
+        return SmokeReportEntry(**fields)
+
+    def _run(self, declaration, entry):
+        tool = McpTool("read_identity", JsonObject((("type", "object"),)))
+        result = McpCallResult(
+            content=JsonArray((JsonObject((("type", "text"), ("text", "Ada"))),))
+        )
+        with (
+            patch.object(mcp, "_configuration_values", return_value=({}, None)),
+            patch.object(mcp, "_declaration", return_value=(declaration, None)),
+            patch.object(
+                mcp,
+                "execute_stdio_smoke",
+                return_value=Ok(DirectSmokeRun("2025-11-25", (tool,), result)),
+            ),
+        ):
+            return mcp._target(installed("local", "claude"), "/managed", entry=entry)
+
+    def test_a_reported_call_is_graded_by_the_direct_evaluator_and_labelled_attested(self) -> None:
+        """The report transports the observation; the runner keeps the verdict (INV-251)."""
+
+        declaration = SmokeDeclaration(
+            "read_identity", JsonObject(()), 15, JsonObject((("text_contains", "Ada"),)), True
+        )
+        report = self._run(declaration, self._report())
+
+        self.assertEqual(report["coverage"], "direct-and-attested")
+        stages = {stage["stage"]: stage["outcome"] for stage in report["stages"]}
+        self.assertEqual(stages["harness-to-mcp-to-external-service"], "PASS")
+        self.assertEqual(stages["harness-to-model-provider"], "PASS")
+
+    def test_a_reported_result_that_fails_the_declared_expectation_does_not_pass(self) -> None:
+        """A report is not believed. An unfaithful or invented copy fails the declared check."""
+
+        declaration = SmokeDeclaration(
+            "read_identity", JsonObject(()), 15, JsonObject((("text_contains", "Grace"),)), True
+        )
+        report = self._run(declaration, self._report())
+
+        stages = {stage["stage"]: stage["outcome"] for stage in report["stages"]}
+        self.assertEqual(stages["harness-to-mcp-to-external-service"], "FAIL")
+        self.assertIs(report["ok"], False)
+
+    def test_a_report_that_says_the_tool_was_not_called_fails_the_harness_stage(self) -> None:
+        """Both shapes of "not called" fail, including the self-contradictory one.
+
+        A report saying `called: false` while carrying a result is not evidence of a call; it is a
+        report that disagrees with itself, and grading its payload would take the model's word for
+        something it just denied.
+        """
+
+        declaration = SmokeDeclaration("read_identity", JsonObject(()), 15)
+        for label, entry in (
+            ("nothing carried", self._report(called=False, result=None)),
+            ("contradicts itself", self._report(called=False)),
+        ):
+            with self.subTest(label=label):
+                report = self._run(declaration, entry)
+                stages = {stage["stage"]: stage["outcome"] for stage in report["stages"]}
+                self.assertEqual(stages["harness-to-mcp-to-external-service"], "FAIL")
 
 
 if __name__ == "__main__":

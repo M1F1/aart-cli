@@ -487,6 +487,10 @@ class Request:
     mcp_action: Optional[str] = None
     all_installed: bool = False
     show_response: bool = False
+    #: Print the generated harness prompt instead of running anything (D-368, §170.4).
+    prompt_only: bool = False
+    #: An operator-returned harness report to grade alongside the direct route.
+    report_path: str | None = None
     # The words `marketplace search` was given, kept apart from `names`.  `names` holds
     # coordinates, which are parsed and must resolve; these are free text, which matches or does
     # not.  One field for both would make a typo in a coordinate look like a search that found
