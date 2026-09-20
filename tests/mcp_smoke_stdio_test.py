@@ -87,7 +87,13 @@ class McpSmokeStdioTest(unittest.TestCase):
             )
             launcher.chmod(0o700)
             run = execute_stdio_smoke(
-                str(launcher), SmokeDeclaration("read", JsonObject(()), 3), cwd=str(root)
+                str(launcher),
+                # Generous on purpose. What this test claims is that the schema refusal happens
+                # *before* any call, which does not depend on the budget being small -- and a tight
+                # one made it fail under the full suite's load, reporting a timeout instead of the
+                # refusal. The two tests above own the timeout claim and keep their 1 second.
+                SmokeDeclaration("read", JsonObject(()), 30),
+                cwd=str(root),
             )
             self.assertIsInstance(run, Err)
             self.assertIn("before invocation", run.diagnostics[0].message)
