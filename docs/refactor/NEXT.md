@@ -308,6 +308,21 @@ proof -- now cite implementation and named test cases in `INVARIANT_TRACEABILITY
 `EVIDENCED`. The matrix guard (`traceability_matrix_test.py`) holds those citations: a planted stale
 case name turns it red, which is the targeted mutation recorded for this step.
 
+**PR #29 is open** against `main`, titled `feat: one aart-cli namespace, per-installation ownership,
+authoring tools and installed-MCP smoke verification`, with a curated `BEGIN_COMMIT_OVERRIDE` block
+in the body. Read `gh pr checks 29` rather than re-running the suite here.
+
+**B-151 is what is left of step 21.** Nine documents still describe `aart.lock.json`,
+`aart.index.json` and `entries/` as files AART writes, and nothing in the product has written them
+since CP-26.05: `docs/protocol/registry-v1.md` (a normative schema input -- editing it needs
+`make release-freeze` in the same change, D-275), `docs/registry/maintainer-commands-v1.md`,
+`docs/registry/maintenance-planning-v1.md`, `docs/security/attestations-v1.md`,
+`docs/ci/github-enterprise-rollout.md`, `docs/testing/manual-acceptance.md`,
+`docs/tutorials/company-registry-tabnine-v1.md`, `docs/development/packaging-and-interface-v1.md`
+and README's "Registry layout" prose. `make docs-check` validates fences and links, not whether
+prose matches the product, which is why this survived every gate. The `docs/refactor/*` files are
+the historical record and are supposed to name what was removed; leave them.
+
 **The naming scope described below is implemented, not pending** (D-349, §169.7, INV-253; issues
 #26/#28). Harness-visible names carry artifact, Registry alias and scope without version and match
 the published skill grammar; two owners that would spell one name are refused together before
