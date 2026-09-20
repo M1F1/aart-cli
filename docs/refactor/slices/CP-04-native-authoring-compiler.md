@@ -12,7 +12,7 @@ INV-010 through INV-015, INV-018, INV-201 and related manifest/payload sections 
 
 ## Legacy/current paths
 
-`agent_artifacts/protocol/native_models.py`, `native_schema.py`, `native_tree.py` and
+`aart_cli/protocol/native_models.py`, `native_schema.py`, `native_tree.py` and
 `application/compiler.py` already provide substantial native JSON and canonical tree behavior.
 
 ## Target paths/owners
@@ -33,7 +33,7 @@ CP-03 verified canonical Artifact values and serialization.
 ## Characterization / RED evidence
 
 Existing native protocol/compiler tests were retained. The first CP-04 RED run failed because
-`agent_artifacts.protocol.authoring` did not exist. New tests then fixed the contract for exact
+`aart_cli.protocol.authoring` did not exist. New tests then fixed the contract for exact
 manifest basenames, no-manifest/no-candidate behavior, multiple and nested artifact boundaries,
 safe includes/excludes, YAML duplicate-key refusal, input digest stability and canonical lowering.
 

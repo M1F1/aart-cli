@@ -1,6 +1,6 @@
 # Standing up your first company registry, for Tabnine
 
-From an empty Git repository to a colleague running `aart marketplace install` and finding the
+From an empty Git repository to a colleague running `aart-cli marketplace install` and finding the
 skill in their `.tabnine/` directory. Every command below was executed before this document was
 written; the outputs quoted are real. Where something was not walked, it says so.
 
@@ -9,7 +9,7 @@ your own registry id; keep the profile.
 
 **What you need**
 
-- AART installed on your machine. `aart --version` must print a version.
+- AART installed on your machine. `aart-cli --version` must print a version.
 - A Git host you can push to — GitHub Enterprise, GitHub, anything reachable over HTTPS or SSH.
 - Somewhere to put a new repository, and permission to create it.
 - The URL of at least one existing company repository that holds material worth sharing. It does
@@ -40,7 +40,7 @@ mkdir agent-registry && cd agent-registry
 git init -b main .
 ```
 
-**The directory must be a Git checkout before the next step.** Run `aart registry init` anywhere
+**The directory must be a Git checkout before the next step.** Run `aart-cli registry init` anywhere
 else and it refuses:
 
 ```text
@@ -53,7 +53,7 @@ Every mutating AART command runs twice: once to show you what it would do, once 
 it. Look at the first output before you type the second.
 
 ```sh
-aart registry init --source . --source-id company --display-name "Company AART Registry"
+aart-cli registry init --source . --source-id company --display-name "Company AART Registry"
 ```
 
 ```text
@@ -62,20 +62,20 @@ Review canonical Maintainer action: init
   Review digest: sha256:209d2da8…
   Mutation: yes, only on Finalize
   - added: .gitignore
-  - added: .github/workflows/aart-registry.yml
-  - added: aart-registry.json
-  - added: aart-source.json
+  - added: .github/workflows/aart-cli-registry.yml
+  - added: aart-cli-registry.json
+  - added: aart-cli-source.json
   AART will not commit or push; review the working-tree diff afterward.
 ```
 
 ```sh
-aart registry init --source . --source-id company --display-name "Company AART Registry" --yes
+aart-cli registry init --source . --source-id company --display-name "Company AART Registry" --yes
 ```
 
 `--source-id` is the identity every artifact coordinate starts with — your colleagues will type
 `company/skill/release-evidence`. It is stable; changing it later changes every coordinate.
 The generated `.gitignore` excludes AART caches, build output, and the project/user harness targets
-used by the built-in profiles (`.agent-artifacts/`, `.claude/`, `.tabnine/`, `.opencode/`, `.vibe/`,
+used by the built-in profiles (`.aart-cli/`, `.claude/`, `.tabnine/`, `.opencode/`, `.vibe/`,
 and `.mcp.json`), so an acceptance install inside the checkout does not pollute the next publish.
 
 The marker it writes declares which AART versions may read this registry:
@@ -98,7 +98,7 @@ git add -A && git commit -m "Initialize the company AART registry"
 
 This is the step that matters for adoption. Your company already has useful material — a prompt
 somebody keeps pasting into Slack, a checklist in a platform-team repo, a monorepo of MCP servers.
-None of it declares `aart-source.json`, and none of its owners want to be told to add one.
+None of it declares `aart-cli-source.json`, and none of its owners want to be told to add one.
 
 `registry vendor` copies a subtree of any Git repository into your registry as a package **your
 registry owns**, pinned to the exact commit it was taken from, with a `provenance.json` recording
@@ -108,7 +108,7 @@ Suppose `https://ghe.company.example/platform/shared-tools.git` has a directory
 `packages/release-evidence` holding a `SKILL.md`. Review first:
 
 ```sh
-aart registry vendor skill release-evidence --source . \
+aart-cli registry vendor skill release-evidence --source . \
   --url https://ghe.company.example/platform/shared-tools.git \
   --ref main \
   --path packages/release-evidence \
@@ -154,7 +154,7 @@ compares against.
 Then finalize:
 
 ```sh
-aart registry vendor skill release-evidence --source . \
+aart-cli registry vendor skill release-evidence --source . \
   --url https://ghe.company.example/platform/shared-tools.git \
   --ref main --path packages/release-evidence \
   --artifact-version 1.0.0 --summary "Evidence checklist for a release." \
@@ -164,7 +164,7 @@ aart registry vendor skill release-evidence --source . \
 A guideline works the same way, with `guideline` as the kind:
 
 ```sh
-aart registry vendor guideline branch-conventions --source . \
+aart-cli registry vendor guideline branch-conventions --source . \
   --url https://ghe.company.example/platform/shared-tools.git \
   --ref main --path packages/branch-conventions \
   --artifact-version 1.0.0 --summary "How we name and merge branches." \
@@ -189,18 +189,17 @@ aart registry vendor guideline branch-conventions --source . \
 
 ### When *not* to vendor
 
-If the upstream repository already is an AART native source — it has `aart-source.json` and its
-packages sit at `<root>/<kind>/<name>` — use `registry promote-native` instead. That records a
-reference and pins the commit without copying bytes, so upstream keeps ownership and your registry
-stays small. `promote-native` refuses any repository that does not meet that precondition, which is
-why almost everything in a normal company gets vendored.
+If the upstream repository already is an AART native source — it has `aart-cli-source.json` and its
+packages sit at `<root>/<kind>/<name>` — take its reviewed Candidate in with `registry scan` and
+`registry promote` instead of copying bytes by hand. Almost everything in a normal company is not
+a native source, which is why almost everything gets vendored.
 
 ## 3a. Vendoring a whole repository's worth of artifacts
 
 Scan a checkout you already have and write the review manifest:
 
 ```sh
-aart registry discover \
+aart-cli registry discover \
   --checkout ../shared-tools \
   --url https://ghe.company.example/platform/shared-tools.git \
   --ref main \
@@ -218,8 +217,8 @@ never authors registry content.
 Then review the one atomic batch and finalize it:
 
 ```sh
-aart registry vendor-batch --source . --manifest vendor-candidates.json
-aart registry vendor-batch --source . --manifest vendor-candidates.json --yes
+aart-cli registry vendor-batch --source . --manifest vendor-candidates.json
+aart-cli registry vendor-batch --source . --manifest vendor-candidates.json --yes
 ```
 
 The command resolves the manifest's URL and ref once, then runs the same provenance, license,
@@ -238,7 +237,7 @@ The word for a group of artifacts is a **collection**. Compose one only from art
 already holds:
 
 ```sh
-aart registry collection platform-baseline --source . \
+aart-cli registry collection platform-baseline --source . \
   --summary "What every platform-team repository starts with." \
   --include skill/release-evidence \
   --include guideline/branch-conventions
@@ -249,7 +248,7 @@ digest with `--yes`, or use the Maintainer TUI's **Author collection** flow for 
 summary, and member selection. Both interfaces refuse unknown members before writing anything.
 
 ```sh
-aart registry collection platform-baseline --source . \
+aart-cli registry collection platform-baseline --source . \
   --summary "What every platform-team repository starts with." \
   --include skill/release-evidence \
   --include guideline/branch-conventions --yes
@@ -260,26 +259,23 @@ the lock, so a malformed or hand-written collection is rejected at the first pub
 consumer can then install the baseline in one command:
 
 ```sh
-aart marketplace install company/collection/platform-baseline --profile tabnine --yes
+aart-cli marketplace install company/collection/platform-baseline --profile tabnine --yes
 ```
 ## 4. Write an artifact of your own
 
-For material that has no upstream, scaffold a package and fill it in:
+Author new material in a separate Source checkout. Add an explicit `aart-cli.yaml` or `aart-cli.json` beside
+the payload, following the [native Source contract](../protocol/native-source-v1.md) and the
+[example MCP Source](../examples/author-source/example-mcp/aart-cli.yaml), then commit the checkout.
+From the Registry checkout, scan that exact revision and promote the reviewed Candidate:
 
 ```sh
-aart registry scaffold skill onboarding --source . \
-  --summary "How we onboard a new engineer." \
-  --profile tabnine --platform darwin --yes
+aart-cli registry scan --help
+aart-cli registry promote --help
 ```
 
-```text
-  - added: artifacts/skill/onboarding/artifact.json
-  - added: artifacts/skill/onboarding/payload/SKILL.md
-  warning: Review and complete the generated starter payload before publication.
-```
-
-Edit `artifacts/skill/onboarding/payload/SKILL.md`. The starter is a placeholder, and the warning
-means it.
+`scan` never changes the Registry. `promote` re-observes the clean pinned Source checkout and writes
+only the exact Candidate and evidence reviewed by the maintainer. The Registry stores the compiled
+canonical package; it is not the artifact's authoring workspace.
 
 ## 5. Publish one reviewed cycle
 
@@ -287,22 +283,23 @@ Publishing is one command. First review the exact generated files, publisher che
 and every path Git would include:
 
 ```sh
-aart registry publish --source .
+aart-cli registry publish --source .
 ```
 
 Then finalize the reviewed cycle:
 
 ```sh
-aart registry publish --source . --yes
+aart-cli registry publish --source . --yes
 ```
 
-The command plans `lock` then `build` in memory, validates and audits that exact projected
-snapshot, writes the reviewed `aart.lock.json` and `aart.index.json`, and creates one commit. A
-failed lock, build, validation, or audit stops before the commit. It never pushes.
+The command prepares the shared publication gates, rebuilds `registry/index.json` and
+`registry/snapshot.json` from approved records under `registry/versions/`, validates and audits
+that projected snapshot, then writes the reviewed changes and creates one commit. A failed gate
+stops before the commit. It never pushes.
 
-The lock file only has to be valid and present for a standalone `registry build`; it does not have
-to be committed first. Its diagnostic and remediation say exactly that. `registry publish` removes
-the ordering trap entirely and commits the lock and index together.
+Approved version records already carry their pins; `lock` writes no separate lock file. Standalone
+`build` derives the catalogs from those records, and `publish` reviews and commits its changes in
+one operation.
 
 Every pre-existing Git change is listed alongside the generated files because finalization uses
 `git add -A`. Keep unrelated work out of the registry checkout. Use `--message TEXT` to state the
@@ -315,8 +312,8 @@ already-clean registry reports that there is nothing to commit.
 should independently verify what history contains:
 
 ```sh
-aart registry validate --source . --strict --frozen
-aart registry audit --source .
+aart-cli registry validate --source . --strict --frozen
+aart-cli registry audit --source .
 ```
 
 `--frozen` fails when the committed lock or index does not match authored content. Push the commit,
@@ -326,7 +323,7 @@ open a pull request, and review it like any other repository.
 Ask whether upstream has moved. This writes nothing:
 
 ```sh
-aart registry revendor skill release-evidence --source . --check
+aart-cli registry revendor skill release-evidence --source . --check
 ```
 
 ```text
@@ -345,8 +342,8 @@ read is **never** reported as up-to-date, so this is safe to run in a scheduled 
 When it says `changed`, you decide what version the moved copy ships as:
 
 ```sh
-aart registry revendor skill release-evidence --source . --artifact-version 1.1.0        # review
-aart registry revendor skill release-evidence --source . --artifact-version 1.1.0 --yes
+aart-cli registry revendor skill release-evidence --source . --artifact-version 1.1.0        # review
+aart-cli registry revendor skill release-evidence --source . --artifact-version 1.1.0 --yes
 ```
 
 Without `--artifact-version` nothing is planned — deliberately. Then publish the reviewed registry
@@ -359,7 +356,7 @@ They need AART installed and nothing else. In their project:
 ```sh
 cd ~/work/some-project
 
-aart source add \
+aart-cli source add \
   --alias company \
   --kind registry-git \
   --location https://ghe.company.example/platform/agent-registry.git \
@@ -375,7 +372,7 @@ source added: company; snapshot published; default=yes
 registry fails here rather than halfway through an install.
 
 ```sh
-aart marketplace list
+aart-cli marketplace list
 ```
 
 ```text
@@ -390,7 +387,7 @@ came from without opening the registry.
 Install — review, then finalize:
 
 ```sh
-aart marketplace install company/skill/release-evidence --profile tabnine
+aart-cli marketplace install company/skill/release-evidence --profile tabnine
 ```
 
 ```text
@@ -408,8 +405,8 @@ Reviewed only; re-run with --yes to apply this exact plan.
 ```
 
 ```sh
-aart marketplace install company/skill/release-evidence --profile tabnine --yes
-aart marketplace install company/guideline/branch-conventions --profile tabnine --yes
+aart-cli marketplace install company/skill/release-evidence --profile tabnine --yes
+aart-cli marketplace install company/guideline/branch-conventions --profile tabnine --yes
 ```
 
 ### Where the files land for Tabnine
@@ -421,7 +418,7 @@ Walked, not quoted from a design document:
 .tabnine/agent/skills/release-evidence/LICENSE
 .tabnine/agent/skills/release-evidence/references/verification-checklist.md
 .tabnine/guidelines/branch-conventions.md
-.agent-artifacts/manifest.json
+.aart-cli/manifest.json
 ```
 
 | Artifact kind | Where it goes in a project | Walked |
@@ -432,7 +429,7 @@ Walked, not quoted from a design document:
 | `mcp` | `.tabnine/agent/settings.json`, key `mcpServers` | yes — project and user filesystem contract |
 | `hook` | `.tabnine/agent/hooks/<name>/` plus `hooks.BeforeTool`/`AfterTool`/`SessionEnd` in `.tabnine/agent/settings.json` | no |
 
-`.agent-artifacts/manifest.json` is AART's own record of what it installed. Commit it if you want
+`.aart-cli/manifest.json` is AART's own record of what it installed. Commit it if you want
 the project's artifact set to be reproducible for the next person who clones; it contains no
 secrets.
 
@@ -451,10 +448,10 @@ runtime/startup problem and this file-target repair does not claim to fix it.
 ### Day-to-day
 
 ```sh
-aart marketplace status --profile tabnine          # what is installed, and is it current
-aart marketplace update --profile tabnine --yes    # pull newer versions from the registry
-aart source sync --alias company                   # refresh the snapshot explicitly
-aart marketplace uninstall company/skill/release-evidence --profile tabnine --yes
+aart-cli marketplace status --profile tabnine          # what is installed, and is it current
+aart-cli marketplace update --profile tabnine --yes    # pull newer versions from the registry
+aart-cli source sync --alias company                   # refresh the snapshot explicitly
+aart-cli marketplace uninstall company/skill/release-evidence --profile tabnine --yes
 ```
 
 `list` and `status` never fetch. The snapshot only moves when someone runs `source sync` or

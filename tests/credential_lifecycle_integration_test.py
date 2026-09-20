@@ -18,23 +18,23 @@ import unittest
 import uuid
 from pathlib import Path
 
-from agent_artifacts.application.credential_lifecycle import (
+from aart_cli.application.credential_lifecycle import (
     CREDENTIAL_STATE_CONFLICT,
     credential_plan_to_data,
     plan_credential_mutation,
 )
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.credentials import (
     CredentialIntent,
     CredentialProviderRef,
     CredentialReference,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.identifiers import InputId
-from agent_artifacts.domain.inputs import BindingExposure
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.credentials import (
+from aart_cli.domain.identifiers import InputId
+from aart_cli.domain.inputs import BindingExposure
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.credentials import (
     ITEM_NOT_FOUND,
     PROMPT_CEILING_BYTES,
     SECURITY_TOOL,

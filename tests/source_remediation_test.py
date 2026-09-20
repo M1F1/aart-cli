@@ -5,14 +5,14 @@ advised the operator to "review the configured origin before replacing this sour
 no replace.  Rewriting that sentence fixes it once; this file is what keeps it fixed.
 
 The first half of this file works through refusals: each one is produced by the real production
-path, never by a literal written here, and every ``aart …`` command in its remediation is handed to
+path, never by a literal written here, and every ``aart-cli …`` command in its remediation is handed to
 the actual CLI parser.
 
 The second half is wider, and live acceptance v2 is why.  `tui_sources.py` told operators to run
-`source doctor`, removed in `2.0.0`; the setup renderers named `aart setup retry` and
-`aart setup rollback`, one renamed in `2.0.0` and one that never shipped at all.  None of them is a
+`source doctor`, removed in `2.0.0`; the setup renderers named `aart-cli setup retry` and
+`aart-cli setup rollback`, one renamed in `2.0.0` and one that never shipped at all.  None of them is a
 `Diagnostic`, so the narrow guard above could not have seen any of them.  `SourceRemediation…Test`
-scans every user-visible ``aart …`` mention in the package instead — display reasons, TUI hints,
+scans every user-visible ``aart-cli …`` mention in the package instead — display reasons, TUI hints,
 recovery notes — and parses each one.
 """
 
@@ -31,20 +31,20 @@ from pathlib import Path
 from unittest import mock
 from unittest.mock import patch
 
-from agent_artifacts import cli
-from agent_artifacts.application.configuration import ConfigurationRequest, load_configuration
-from agent_artifacts.application.sources import sync_source
-from agent_artifacts.configuration.model import (
+from aart_cli import cli
+from aart_cli.application.configuration import ConfigurationRequest, load_configuration
+from aart_cli.application.sources import sync_source
+from aart_cli.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
     SourceKind,
     UserConfiguration,
     default_user_configuration,
 )
-from agent_artifacts.configuration.policy import RuntimeOverrides
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err
-from agent_artifacts.tui_sources import (
+from aart_cli.configuration.policy import RuntimeOverrides
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err
+from aart_cli.tui_sources import (
     build_source_stage,
     plan_source_addition,
     plan_source_removal,
@@ -52,14 +52,15 @@ from agent_artifacts.tui_sources import (
 from tests.configuration_application_test import _FakePorts as _ConfigurationPorts
 from tests.configuration_application_test import _paths
 from tests.marketplace_lifecycle_e2e_test import _FIXTURE, _environment
+from tests.registry_maintenance_fixtures import approved_registry_snapshot, write_snapshot
 from tests.source_sync_application_test import _candidate, _current, _FakePorts, _request
 
-_COMMAND = re.compile(r"`(aart [^`]+)`")
-_BACKTICKED = re.compile(r"`(aart\s[^`]+)`")
-# The negative lookahead keeps the managed-block marker `# >>> aart setup: <coordinate> >>>` out:
+_COMMAND = re.compile(r"`(aart-cli [^`]+)`")
+_BACKTICKED = re.compile(r"`(aart-cli\s[^`]+)`")
+# The negative lookahead keeps the managed-block marker `# >>> aart-cli setup: <coordinate> >>>` out:
 # a word ending in a colon is a label, and the marker is written into a config file rather than
 # offered to anyone as something to run.
-_BARE = re.compile(r"\baart\s+([a-z][a-z0-9-]*)(?![\w:/-])[^,;`\n]*")
+_BARE = re.compile(r"\baart-cli\s+([a-z][a-z0-9-]*)(?![\w:/-])[^,;`\n]*")
 # Top-level commands the project this repository was cut from removed before `0.0.1`.  They used to
 # be read out of the compatibility tables that removed them; those tables went with the rest of
 # that project's release history (D-275), and these names are what they carried.
@@ -67,7 +68,6 @@ _REMOVED_COMMANDS = frozenset(
     {"check", "install", "list", "migrate", "setup", "status", "uninstall", "update", "upstream"}
 )
 _PACKAGE = Path(cli.__file__).resolve().parent
-_REGISTRY_FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "registry-v1"
 _FINDING_LINE = re.compile(r"^\s+(error|warning): ")
 _PLACEHOLDER = "PLACEHOLDER"
 
@@ -77,7 +77,7 @@ class _Rejected(Exception):
 
 
 def _parse_failure(command: str) -> str | None:
-    """Hand one ``aart …`` command to the shipped parser; return why it was rejected, or ``None``.
+    """Hand one ``aart-cli …`` command to the shipped parser; return why it was rejected, or ``None``.
 
     ``parse_args`` is the shipped surface itself, so this cannot pass against a command the parser
     does not define.  ``error`` is replaced because argparse writes to stderr and exits rather than
@@ -117,7 +117,7 @@ def _refusal(result) -> tuple[str, ...]:
 def _command_names() -> frozenset[str]:
     """Every top-level command the parser defines, plus every one that was removed.
 
-    The removed names carry as much weight as the live ones.  ``aart setup retry`` is prose to a
+    The removed names carry as much weight as the live ones.  ``aart-cli setup retry`` is prose to a
     regex and a dead end to an operator, so ``setup`` has to stay recognisable as a command name
     after the parser stops defining it.
 
@@ -140,8 +140,8 @@ _COMMAND_NAMES = _command_names()
 def _mentions(text: str) -> tuple[str, ...]:
     """Every command claim inside one user-visible string.
 
-    Three shapes are a claim and prose is not: a backticked ``aart …``; a mention whose first word
-    is a command name, live or removed; and a mention carrying a ``--flag``.  "aart installs your
+    Three shapes are a claim and prose is not: a backticked ``aart-cli …``; a mention whose first word
+    is a command name, live or removed; and a mention carrying a ``--flag``.  "aart-cli installs your
     team's artifacts" is none of those.  A claim ends at a comma or a semicolon, because a
     remediation may keep explaining itself after the command it names.
     """
@@ -150,16 +150,31 @@ def _mentions(text: str) -> tuple[str, ...]:
     for match in _BARE.finditer(_BACKTICKED.sub(" ", text)):
         if match.group(1) in _COMMAND_NAMES or " --" in match.group(0):
             found.append(match.group(0))
-    return tuple(mention.strip().rstrip(".") for mention in found)
+    return tuple(_without_sentence_stop(mention.strip()) for mention in found)
+
+
+def _without_sentence_stop(mention: str) -> str:
+    """Drop a full stop that ends the sentence, keep one that is an argument.
+
+    `aart-cli registry audit --source .` ends in a period that names the current directory, and
+    stripping it turned a correct command into `--source: expected one argument` -- the guard
+    reporting a defect it had introduced itself. A period is punctuation only when something other
+    than a space precedes it; `--source .` has a space, and no shell would read that as the end of
+    a sentence either.
+    """
+
+    if mention.endswith(".") and not mention.endswith(" ."):
+        return mention[:-1]
+    return mention
 
 
 def _visible_strings(tree: ast.AST):
     """Every string literal in one module that can reach a user, docstrings excluded.
 
     A docstring explains the code to whoever maintains it; this file's own explanation of why
-    ``aart setup rollback`` had to go would otherwise be a finding about itself.  An f-string is
+    ``aart-cli setup rollback`` had to go would otherwise be a finding about itself.  An f-string is
     rendered whole, with each interpolation replaced by ``PLACEHOLDER`` — reading only its constant
-    pieces would report ``aart source sync --alias`` as a command missing its value.
+    pieces would report ``aart-cli source sync --alias`` as a command missing its value.
     """
 
     documentation = {
@@ -287,7 +302,7 @@ class SourceRemediationNamesRealCommandsTest(unittest.TestCase):
         refused = sync_source(_request(source), ports.ports())
 
         commands = self.assert_runnable(_refusal(refused))
-        self.assertIn("aart source resubscribe --alias registry", commands)
+        self.assertIn("aart-cli source resubscribe --alias registry", commands)
 
     def test_an_already_configured_alias_points_at_commands_that_exist(self) -> None:
         held = _registry("registry", "https://git.example.test/team/registry.git")
@@ -316,7 +331,7 @@ class SourceRemediationNamesRealCommandsTest(unittest.TestCase):
         refused = plan_source_removal(_view(held), SourceAlias("typo"))
 
         commands = self.assert_runnable(_refusal(refused))
-        self.assertTrue(any(command.startswith("aart source list") for command in commands))
+        self.assertTrue(any(command.startswith("aart-cli source list") for command in commands))
 
     def test_a_content_operation_without_any_source_points_at_the_command_that_adds_one(
         self,
@@ -329,13 +344,13 @@ class SourceRemediationNamesRealCommandsTest(unittest.TestCase):
         )
 
         commands = self.assert_runnable(_refusal(refused))
-        self.assertIn("aart source add --help", commands)
+        self.assertIn("aart-cli source add --help", commands)
 
     def test_the_guard_rejects_a_remediation_naming_a_command_that_does_not_exist(self) -> None:
         """The guard is only worth having if it fails on the thing it claims to catch."""
 
         with self.assertRaises(AssertionError):
-            self.assert_runnable(("run `aart source disavow --alias registry`",))
+            self.assert_runnable(("run `aart-cli source disavow --alias registry`",))
 
 
 class EveryVisibleCommandMentionTest(unittest.TestCase):
@@ -363,36 +378,38 @@ class EveryVisibleCommandMentionTest(unittest.TestCase):
             self.assertIn(module, scanned)
 
     def test_a_command_removed_in_2_0_0_is_still_read_as_a_command(self) -> None:
-        """`aart setup rollback` names no live command, so only the removal record makes it legible.
+        """`aart-cli setup rollback` names no live command, so only the removal record makes it legible.
 
         Without it the mention parses as prose, the guard skips it, and the operator is sent to a
         command that has never existed.
         """
 
         self.assertIn("setup", _COMMAND_NAMES)
-        self.assertEqual(_mentions("aart setup rollback"), ("aart setup rollback",))
-        self.assertIsNotNone(_parse_failure("aart setup rollback"))
+        self.assertEqual(_mentions("aart-cli setup rollback"), ("aart-cli setup rollback",))
+        self.assertIsNotNone(_parse_failure("aart-cli setup rollback"))
 
     def test_a_planted_stale_command_is_caught(self) -> None:
         """The removal this package started from, planted back in a string shaped like the original."""
 
-        planted = ast.parse('reason = "source state is invalid; run `aart source doctor` first"')
+        planted = ast.parse(
+            'reason = "source state is invalid; run `aart-cli source doctor` first"'
+        )
 
         mentions = tuple(
             command for text, _line in _visible_strings(planted) for command in _mentions(text)
         )
 
-        self.assertEqual(mentions, ("aart source doctor",))
+        self.assertEqual(mentions, ("aart-cli source doctor",))
         self.assertIsNotNone(_parse_failure(mentions[0]))
 
     def test_prose_about_aart_is_not_read_as_a_command(self) -> None:
         """The wizard explains what AART is; it is not offering a command."""
 
-        self.assertEqual(_mentions("aart installs your team's artifacts for you"), ())
+        self.assertEqual(_mentions("aart-cli installs your team's artifacts for you"), ())
         self.assertEqual(_mentions("press aart to reload Sources."), ())
 
     def test_a_docstring_is_not_a_user_visible_string(self) -> None:
-        module = ast.parse('"""Run `aart source doctor` to fix this."""\n')
+        module = ast.parse('"""Run `aart-cli source doctor` to fix this."""\n')
 
         self.assertEqual(tuple(_visible_strings(module)), ())
 
@@ -439,7 +456,7 @@ class RegistryRefusalRemediationTest(unittest.TestCase):
     def test_rs09_the_guard_sees_a_refusal_that_carries_nothing(self) -> None:
         """The guard is only worth having if it fails on the thing it claims to catch."""
 
-        planted = ast.parse('return _error("registry workspace requires aart-registry.json")\n')
+        planted = ast.parse('return _error("registry workspace requires aart-cli-registry.json")\n')
         calls = [
             node
             for node in ast.walk(planted)
@@ -452,8 +469,10 @@ class RegistryRefusalRemediationTest(unittest.TestCase):
         """The other half: `audit` states its problems in a report, not in a refusal."""
 
         with _environment() as env:
-            workspace = env.root / "registry-under-audit"
-            shutil.copytree(_REGISTRY_FIXTURE, workspace)
+            workspace = write_snapshot(
+                env.root / "registry-under-audit",
+                approved_registry_snapshot(),
+            )
             stdout = io.StringIO()
             with (
                 mock.patch.dict(os.environ, env.xdg, clear=False),
@@ -558,7 +577,7 @@ class RendererParityTest(unittest.TestCase):
             shutil.copytree(_FIXTURE, source)
 
             with _environment(source) as env:
-                marker = source / "aart-source.json"
+                marker = source / "aart-cli-source.json"
                 document = json.loads(marker.read_text(encoding="utf-8"))
                 document["source_id"] = "renamed-reference-source"
                 marker.write_text(json.dumps(document, indent=2), encoding="utf-8")
@@ -566,7 +585,7 @@ class RendererParityTest(unittest.TestCase):
                 text, envelope = self._both_renderers(env, "source", "sync")
 
                 self.assertEqual(len(text), 1, text)
-                self.assertIn("aart source resubscribe --alias reference", text[0])
+                self.assertIn("aart-cli source resubscribe --alias reference", text[0])
                 self.assertEqual(sorted(text), sorted(envelope))
 
     def test_registry_renders_the_same_remediation_in_both(self) -> None:

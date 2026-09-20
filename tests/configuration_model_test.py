@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.configuration.model import (
+from aart_cli.configuration.model import (
     CompanyReviewedSource,
     ConfiguredSource,
     OrganizationPolicy,
@@ -12,7 +12,7 @@ from agent_artifacts.configuration.model import (
     UserConfiguration,
     git_location_parts,
 )
-from agent_artifacts.domain.identifiers import SourceAlias, SourceId
+from aart_cli.domain.identifiers import SourceAlias, SourceId
 from tests.credential_fixtures import credential_url
 
 

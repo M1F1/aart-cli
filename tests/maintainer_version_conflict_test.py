@@ -5,14 +5,14 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer import reconcile_source_scan
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.application.maintainer_views import (
     MaintainerScreen,
     MaintainerViews,
     project_maintainer_candidates,
@@ -20,7 +20,7 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_provenance,
     project_maintainer_version_conflict,
 )
-from agent_artifacts.domain.candidates import (
+from aart_cli.domain.candidates import (
     CandidateId,
     CandidateState,
     assess_candidate,
@@ -28,10 +28,10 @@ from agent_artifacts.domain.candidates import (
     mark_source_removed,
     reject_candidate,
 )
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceAlias
-from agent_artifacts.domain.registry import PromotionMode, registry_version_from_candidate
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias
+from aart_cli.domain.registry import PromotionMode, registry_version_from_candidate
+from aart_cli.domain.result import Ok
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
 from tests.maintainer_candidate_shell_test import _projected_source
 from tests.maintainer_source_scan_test import _compiled, _digest
 

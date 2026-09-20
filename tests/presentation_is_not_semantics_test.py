@@ -5,11 +5,11 @@ import inspect
 import unittest
 from pathlib import Path
 
-from agent_artifacts.application.consumer_views import project_install_plan
-from agent_artifacts.tui_consumer import render_install_plan, render_ready
+from aart_cli.application.consumer_views import project_install_plan
+from aart_cli.tui_consumer import render_install_plan, render_ready
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "agent_artifacts"
+PACKAGE = ROOT / "aart_cli"
 
 # Where a plan is decided.  Presentation must be unknown here, because a layer that can read the
 # preference is a layer that can act on it, and INV-158 is about exactly that reachability.

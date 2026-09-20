@@ -8,19 +8,19 @@ description: >
 runs:
   using: composite
   steps:
-  # `AART_INDEX_URL` and `AART_INDEX_CREDENTIALS` are job-level environment, not inputs: an input
+  # `AART_CLI_INDEX_URL` and `AART_CLI_INDEX_CREDENTIALS` are job-level environment, not inputs: an input
   # would put the credential in the action call, and the job is where the variables live anyway.
   - name: Point pip at the internal index
     shell: bash
     run: |
       set -euo pipefail
-      url="${AART_INDEX_URL:-https://pypi.org/simple}"
+      url="${AART_CLI_INDEX_URL:-https://pypi.org/simple}"
       echo "pip index: $url"
-      if [ -n "${AART_INDEX_CREDENTIALS:-}" ]; then
+      if [ -n "${AART_CLI_INDEX_CREDENTIALS:-}" ]; then
         # GitHub masks the secret it was given, which is the whole `user:pass` string.  Neither
         # half is masked until it is handed back, so both are re-masked before they are used.
-        user="${AART_INDEX_CREDENTIALS%%:*}"
-        held="${AART_INDEX_CREDENTIALS#*:}"
+        user="${AART_CLI_INDEX_CREDENTIALS%%:*}"
+        held="${AART_CLI_INDEX_CREDENTIALS#*:}"
         echo "::add-mask::$user"
         echo "::add-mask::$held"
         scheme="https"

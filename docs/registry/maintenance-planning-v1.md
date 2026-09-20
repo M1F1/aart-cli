@@ -1,57 +1,49 @@
 # Registry maintenance planning v1
 
-This document defines the review boundary for adding native references, promoting them into a registry, and
-checking both native and materialized upstreams. The implementation is a pure functional planner
-over inert snapshots. Filesystem access, Git acquisition, credentials, commit, push, and pull-request
-creation remain outside this bounded context.
+Registry maintenance plans changes over inert snapshots. Filesystem access, Git acquisition,
+credentials and publication effects remain behind explicit ports. Authoring takes place in a
+separate Source checkout; the Registry stores reviewed canonical versions.
 
-## Native entry and promotion
+## Candidate review and promotion
 
-Adding an entry authors one canonical `entries/<type>/<name>.json` document. Pending, rejected, and
-approved review records can be stored for a maintainer workflow, but only an approved entry can be
-promoted into generated consumer outputs.
+Source scan compiles explicit author manifests into Candidates without changing the Registry.
+Promotion checks the selected Candidate, source revision, validation evidence and policy against
+the reviewed state. The resulting plan writes:
 
-Promotion receives an acquisition proof containing the entry's exact credential-free URL and ref,
-a lowercase 40-hex resolved commit, and an immutable Git snapshot. It validates the upstream as a
-native AART source and requires the declared package path and identity to match exactly. The
-resulting change set is limited to:
+- a versioned canonical package under `artifacts/<kind>/<name>/<version>/` for vendored mode,
+  or a pinned document under `references/<kind>/<name>/<version>.json` for reference mode;
+- the approved record at `registry/versions/<kind>/<name>/<version>.json`;
+- the Candidate audit record under `registry/promotions/`;
+- derived `registry/index.json` and `registry/snapshot.json` catalogs.
 
-- the canonical entry document;
-- `aart.lock.json`, with commit, version, manifest, payload, object, review, and provenance digests;
-- `aart.index.json`, with the payload-free package projection and derived collection membership.
+Existing approved versions remain represented. An already approved coordinate/version cannot be
+replaced with different package bytes. Source movement is discovered and reviewed explicitly; it
+does not automatically change approved versions or installed artifacts.
 
-The payload is not copied into the registry. The index retains the upstream native `source_id`;
-registry-owned packages retain the registry's own identity. Existing registry-owned packages are
-revalidated and rebuilt into the projection, so adding an external reference cannot remove them.
-The registry marker and its native-source marker must identify the same source, including when the
-registry declares a non-default artifact root.
+## Build and publication
 
-## Locked native updates
+`build` deterministically derives the two catalogs from approved version records. `lock` checks
+the approved representation without acquiring moving references or producing another file: the
+version records already carry the required pins. `publish` uses the shared publication preparation
+to plan derived changes, validate and audit the projected snapshot, list every Git change and,
+when finalized, create one local commit. It does not push.
 
-An upstream check repeats the same promotion plan against the current workspace. Before proposing
-an update, AART requires authored entries, the committed lock, and the compiled index to agree on
-registry inputs, identities, source, version, manifest/payload/object digests, review evidence, and
-provenance presence. A source-identity change is rejected rather than silently reclassifying an
-artifact.
-
-The same acquisition is an explicit `up-to-date` no-op. A new commit or changed canonical package
-produces a reviewable `changed` plan. Advancing a ref never mutates the workspace automatically.
-
-## Retired foreign layouts
-
-Registry maintenance accepts only native AART sources. A foreign or legacy layout must be
-re-authored outside the normal AART runtime before it can be promoted; there is no importer or
-automatic migration path.
+Registry Maintainer exposes Push separately on its local workspace row. Readiness is derived from
+the exact committed canonical content and all mandatory gates, not a previous wizard result.
+The review shows the target branch; execution rechecks the commit and refuses main/default-branch
+publication and force updates. Review/merge and consumer Registry Sync remain separate actions.
 
 ## Review and apply boundary
 
-Every registry mutation binds the expected registry-input digest, resulting input digest, ordered
-paths, change kinds, prior digests, and resulting bytes' digests into one review digest. Apply
-requires that exact digest. Both changed and no-op finalization recheck the current workspace, and
-the injected output port must return a receipt matching the reviewed digest, resulting input
-digest, and changed-path count.
+Mutation plans bind the expected snapshot, ordered changes, previous digests and resulting bytes
+to a review digest. Finalization rechecks the workspace and applies only the reviewed plan through
+the appropriate effect port. Ordinary file maintenance does not acquire implicit commit or push
+permissions. Explicit publish and Push actions retain their own review boundaries.
 
-The port has no commit or push operation. The `aart registry` maintainer commands and
-registry quality gates expose these planners; Git publication remains an explicit action after reviewing the
-generated diff. The consumer-side lock and index invariants are specified in
-[`registry protocol v1`](../protocol/registry-v1.md).
+A local Registry connection reads the committed branch selected by the user through the same
+admission and consumer path as a remote connection. It does not mutate the checkout, include
+uncommitted files or publish the branch remotely. Local test installation is ordinary installation
+from that Registry alias.
+
+Retired authoring-workspace layouts are refused; there is no importer or automatic migration.
+The canonical representation is specified in [Registry protocol v1](../protocol/registry-v1.md).

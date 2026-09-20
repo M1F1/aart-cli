@@ -9,36 +9,37 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.execution import (
+from aart_cli.application.execution import (
     ExecutionOutcome,
     LifecycleExecutionOutcome,
     StepOutcome,
     StepStatus,
 )
-from agent_artifacts.application.intents import (
+from aart_cli.application.intents import (
     LifecyclePlan,
     install_intent,
     repair_intent,
     uninstall_intent,
     update_intent,
 )
-from agent_artifacts.application.receipt_recording import (
+from aart_cli.application.receipt_recording import (
     RECORDING_INCOMPLETE,
     RecordedOutcome,
     record_lifecycle_outcome,
 )
-from agent_artifacts.application.reconciliation import plan_repair
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.effects import ConfigureHarness, RemoveOwnedPath, WriteFile
-from agent_artifacts.domain.identifiers import (
+from aart_cli.application.reconciliation import plan_repair
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.effects import ConfigureHarness, RemoveOwnedPath, WriteFile
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.receipts import InstallationReceipt
-from agent_artifacts.domain.reconciliation import (
+from aart_cli.domain.installation_owner import InstallationOwner
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.receipts import InstallationReceipt
+from aart_cli.domain.reconciliation import (
     Component,
     ComponentId,
     ComponentState,
@@ -47,8 +48,8 @@ from agent_artifacts.domain.reconciliation import (
     DesiredState,
     ObservedComponent,
 )
-from agent_artifacts.domain.result import Err, Ok, Result
-from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
+from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.domain.selection import OwnershipKind, OwnershipReason
 
 MOMENT = "2026-08-31T14:32:00+00:00"
 ROOT = "/opt/agents/mcp/github"
@@ -122,8 +123,11 @@ class FakeStore:
         self.ownership[str(key)] = ownership
         return Ok(f"/store/{key}.json")
 
-    def forget_installation(self, key: ArtifactCoordinate) -> Result[str]:
-        self.forgotten.append(str(key))
+    def forget_installation(
+        self, key: ArtifactCoordinate, *, owner: InstallationOwner | None = None
+    ) -> Result[str]:
+        # Keyed the way the real store is: the installation, not the artifact (§169.3).
+        self.forgotten.append(str(key) if owner is None else f"{key}@{owner}")
         return Ok(f"/store/{key}.json")
 
     def record_action(self, value: object) -> Result[str]:

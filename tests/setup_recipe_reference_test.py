@@ -13,7 +13,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from agent_artifacts.setup import _CAPABILITIES, _MODULES, parse_installer, render_setup_review
+from aart_cli.setup import _CAPABILITIES, _MODULES, parse_installer, render_setup_review
 from tests.setup_build_review_test import acceptance_plan
 
 _REFERENCE = Path(__file__).resolve().parent.parent / "docs/protocol/setup-recipe-v2.md"

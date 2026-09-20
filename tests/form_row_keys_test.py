@@ -11,7 +11,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     CONFIG_CONTINUE_ROW,
     ConsumerUiEvent,
     ConsumerUiEventKind,
@@ -20,13 +20,13 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
 )
-from agent_artifacts.application.maintainer_views import MaintainerScreen
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
+from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.tui_consumer import CanonicalScreenSource, frame
 from tests.configuration_edit_test import _key, _source_and_state
 from tests.consumer_shell_test import screens
 from tests.frame_contract import (

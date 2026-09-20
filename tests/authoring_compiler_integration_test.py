@@ -7,12 +7,12 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.sources.local import read_local_snapshot
-from agent_artifacts.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
+from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.sources.local import read_local_snapshot
+from aart_cli.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
 
 
 class AuthorCompilerIntegrationTest(unittest.TestCase):
@@ -23,7 +23,7 @@ class AuthorCompilerIntegrationTest(unittest.TestCase):
             (artifact / "src").mkdir(parents=True)
             (artifact / "tests").mkdir()
             manifest = {
-                "schema": "aart.dev/mcp/v1",
+                "schema": "aart-cli.dev/mcp/v1",
                 "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
                 "payload": {
                     "include": ["server.py", "src/**", "requirements.txt"],
@@ -34,7 +34,7 @@ class AuthorCompilerIntegrationTest(unittest.TestCase):
                 "launch": {"type": "python", "entrypoint": "server.py"},
                 "compatibility": {"harnesses": ["codex"]},
             }
-            (artifact / "aart.json").write_text(json.dumps(manifest), encoding="utf-8")
+            (artifact / "aart-cli.json").write_text(json.dumps(manifest), encoding="utf-8")
             (artifact / "server.py").write_text("print('ready')\n", encoding="utf-8")
             (artifact / "src" / "service.py").write_text("READY = True\n", encoding="utf-8")
             (artifact / "requirements.txt").write_text("dependency==1.0\n", encoding="utf-8")
@@ -57,14 +57,14 @@ class AuthorCompilerIntegrationTest(unittest.TestCase):
             compiled = compile_author_snapshot(
                 acquired.value.snapshot,
                 source_alias=alias,
-                source="https://git.example/agent-mcp-servers.git",
+                source="https://git.example/example-mcp-servers.git",
                 revision="b" * 40,
             )
 
             self.assertIsInstance(compiled, Ok)
             assert isinstance(compiled, Ok)
             package = compiled.value[0]
-            self.assertEqual(str(package.manifest_path), "github/aart.json")
+            self.assertEqual(str(package.manifest_path), "github/aart-cli.json")
             self.assertEqual(
                 tuple(
                     str(entry.path)

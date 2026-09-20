@@ -16,7 +16,7 @@ import unittest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConfigInputView,
     ConsumerSession,
     CredentialInputView,
@@ -28,23 +28,23 @@ from agent_artifacts.application.consumer_views import (
     project_required_inputs,
     project_selection,
 )
-from agent_artifacts.domain.candidates import CandidateId
-from agent_artifacts.domain.credentials import CredentialProviderRef
-from agent_artifacts.domain.effects import (
+from aart_cli.domain.candidates import CandidateId
+from aart_cli.domain.credentials import CredentialProviderRef
+from aart_cli.domain.effects import (
     ConfigureHarness,
     CopyTree,
     RiskClass,
     StoreCredential,
     WriteFile,
 )
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     InputId,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.inputs import (
+from aart_cli.domain.inputs import (
     BoundInput,
     BoundInputs,
     ConfigInput,
@@ -53,7 +53,7 @@ from agent_artifacts.domain.inputs import (
     SecretInput,
     SecretProviderReference,
 )
-from agent_artifacts.domain.plans import (
+from aart_cli.domain.plans import (
     InstallPlan,
     MutationPlan,
     OwnedAssessment,
@@ -61,19 +61,19 @@ from agent_artifacts.domain.plans import (
     PlannedEffect,
     PlannedRemediation,
 )
-from agent_artifacts.domain.registry import (
+from aart_cli.domain.registry import (
     PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
 )
-from agent_artifacts.domain.remediations import ConfigureCredential
-from agent_artifacts.domain.requirements import (
+from aart_cli.domain.remediations import ConfigureCredential
+from aart_cli.domain.requirements import (
     CredentialRequirement,
     RequirementId,
     RequirementState,
     RuntimeRequirement,
 )
-from agent_artifacts.domain.selection import (
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     CollectionCoordinate,
@@ -83,7 +83,7 @@ from agent_artifacts.domain.selection import (
     ResolvedSelection,
     VersionConstraint,
 )
-from agent_artifacts.tui_consumer import (
+from aart_cli.tui_consumer import (
     remediation_change,
     render_activity,
     render_install_plan,
@@ -91,7 +91,7 @@ from agent_artifacts.tui_consumer import (
 )
 from tests.consumer_activity_test import lifecycle_outcome
 
-from agent_artifacts.application.consumer_views import ActivityRecord  # isort: skip
+from aart_cli.application.consumer_views import ActivityRecord  # isort: skip
 
 NAME = st.from_regex(r"\A[a-z][a-z0-9]{0,4}(?:-[a-z0-9]{1,4})?\Z")
 VERSION = st.from_regex(r"\A[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}\Z")

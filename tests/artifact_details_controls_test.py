@@ -9,7 +9,7 @@ from dataclasses import replace
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -20,21 +20,21 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     PresentationProfile,
     project_dashboard,
     target_from_row,
 )
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.artifact_placement import PLACEMENT_UNAVAILABLE
-from agent_artifacts.io.environment_inspection import platform_name
-from agent_artifacts.marketplace.catalog import build_marketplace
-from agent_artifacts.protocol.native_models import CompatibilitySpec
-from agent_artifacts.tui_consumer import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.harness import Scope
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.artifact_placement import PLACEMENT_UNAVAILABLE
+from aart_cli.io.environment_inspection import platform_name
+from aart_cli.marketplace.catalog import build_marketplace
+from aart_cli.protocol.native_models import CompatibilitySpec
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     ConsumerActionUpdate,
     ConsumerScreens,
@@ -43,11 +43,12 @@ from agent_artifacts.tui_consumer import (
     render_marketplace_artifact,
     run_consumer_shell,
 )
-from agent_artifacts.tui_marketplace import MarketplaceTarget, project_marketplace_rows
+from aart_cli.tui_marketplace import MarketplaceTarget, project_marketplace_rows
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import OFFERED, _delivered, _drive
 from tests.consumer_marketplace_shell_test import drive, screens
 from tests.consumer_shell_test import ENTER, ESCAPE, SPACE, FakeTerminal, _at
+from tests.declared_harness_narrowing_test import _reached
 from tests.marketplace_fixtures import (
     artifact,
     configured_source,
@@ -264,7 +265,7 @@ def _declaring(profiles: tuple[str, ...], platforms: tuple[str, ...], *detected:
 
 def _skill(harnesses: list[str] | None = None, platforms: list[str] | None = None):
     manifest: dict[str, object] = {
-        "schema": "aart.dev/skill/v1",
+        "schema": "aart-cli.dev/skill/v1",
         "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
         "payload": {"include": ["SKILL.md"]},
     }
@@ -276,7 +277,7 @@ def _skill(harnesses: list[str] | None = None, platforms: list[str] | None = Non
     if compatibility:
         manifest["compatibility"] = compatibility
     return (
-        ("code-review/aart.json", json.dumps(manifest)),
+        ("code-review/aart-cli.json", json.dumps(manifest)),
         ("code-review/SKILL.md", "# Code review\n"),
     )
 
@@ -328,7 +329,7 @@ class OneEligibilityRuleTest(unittest.TestCase):
 
 class ADeclaredPlatformNarrowsInstallationTest(_PlacementFixture):
     manifest = {
-        "schema": "aart.dev/skill/v1",
+        "schema": "aart-cli.dev/skill/v1",
         "artifact": {"name": "elsewhere-check", "kind": "skill", "version": "1.0.0"},
         "payload": {"include": ["SKILL.md"]},
         "compatibility": {"harnesses": ["claude"], "platforms": [_ELSEWHERE]},
@@ -354,7 +355,7 @@ class ADeclaredPlatformNarrowsInstallationTest(_PlacementFixture):
 
 class ThisPlatformIsDeclaredTest(_PlacementFixture):
     manifest = {
-        "schema": "aart.dev/skill/v1",
+        "schema": "aart-cli.dev/skill/v1",
         "artifact": {"name": "here-check", "kind": "skill", "version": "1.0.0"},
         "payload": {"include": ["SKILL.md"]},
         "compatibility": {"harnesses": ["claude"], "platforms": [platform_name(), _ELSEWHERE]},
@@ -371,7 +372,7 @@ class ThisPlatformIsDeclaredTest(_PlacementFixture):
 
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         assert isinstance(placed, Ok)
-        self.assertEqual([item.harness for item in placed.value.deliveries], ["claude"])
+        self.assertEqual(_reached(placed, "deliveries"), ["claude"])
 
 
 class DetailsAgreesWithReviewSelectionE2ETest(unittest.TestCase):

@@ -7,7 +7,7 @@ import unittest
 
 
 def _unwrap(result):
-    from agent_artifacts.domain.result import Ok
+    from aart_cli.domain.result import Ok
 
     if not isinstance(result, Ok):
         raise AssertionError(f"expected Ok, got {result!r}")
@@ -15,7 +15,7 @@ def _unwrap(result):
 
 
 def _codes(result) -> tuple[str, ...]:
-    from agent_artifacts.domain.result import Err
+    from aart_cli.domain.result import Err
 
     if not isinstance(result, Err):
         raise AssertionError(f"expected Err, got {result!r}")
@@ -24,7 +24,7 @@ def _codes(result) -> tuple[str, ...]:
 
 class StrictJsonTest(unittest.TestCase):
     def test_parse_is_immutable_and_canonicalizes_object_order(self):
-        from agent_artifacts.protocol.json import JsonObject, canonical_json_bytes, parse_json
+        from aart_cli.protocol.json import JsonObject, canonical_json_bytes, parse_json
 
         first = _unwrap(parse_json('{"z": [true, null], "a": "żółć"}'))
         second = _unwrap(parse_json(b'{"a":"\xc5\xbc\xc3\xb3\xc5\x82\xc4\x87","z":[true,null]}'))
@@ -39,7 +39,7 @@ class StrictJsonTest(unittest.TestCase):
             first.entries = ()
 
     def test_duplicate_keys_floats_constants_and_out_of_range_integers_have_stable_codes(self):
-        from agent_artifacts.protocol.json import parse_json
+        from aart_cli.protocol.json import parse_json
 
         cases = (
             ('{"a": 1, "a": 2}', "protocol-json-duplicate-key"),
@@ -57,7 +57,7 @@ class StrictJsonTest(unittest.TestCase):
         self.assertEqual(_unwrap(parse_json(str(2**63 - 1))), 2**63 - 1)
 
     def test_invalid_utf8_surrogates_depth_and_string_bounds_fail_closed(self):
-        from agent_artifacts.protocol.json import parse_json
+        from aart_cli.protocol.json import parse_json
 
         self.assertEqual(_codes(parse_json(b'"\xff"')), ("protocol-json-unicode",))
         self.assertEqual(_codes(parse_json('"\\ud800"')), ("protocol-json-unicode",))
@@ -73,8 +73,8 @@ class StrictJsonTest(unittest.TestCase):
 
 class SchemaPrimitiveTest(unittest.TestCase):
     def test_required_unknown_and_namespaced_extension_fields_accumulate(self):
-        from agent_artifacts.protocol.json import JsonObject, parse_json
-        from agent_artifacts.protocol.schema import validate_object_fields
+        from aart_cli.protocol.json import JsonObject, parse_json
+        from aart_cli.protocol.schema import validate_object_fields
 
         document = _unwrap(
             parse_json('{"known": 1, "extra": 2, "bad extension": 3, "Com.acme.preview": 4}')
@@ -109,13 +109,13 @@ class SchemaPrimitiveTest(unittest.TestCase):
         )
 
     def test_schema_type_helpers_report_pointer_aware_diagnostics(self):
-        from agent_artifacts.domain.diagnostics import SourceLocation
-        from agent_artifacts.domain.identifiers import SourceAlias
-        from agent_artifacts.domain.result import Err
-        from agent_artifacts.protocol.json import parse_json
-        from agent_artifacts.protocol.schema import expect_object, expect_string
+        from aart_cli.domain.diagnostics import SourceLocation
+        from aart_cli.domain.identifiers import SourceAlias
+        from aart_cli.domain.result import Err
+        from aart_cli.protocol.json import parse_json
+        from aart_cli.protocol.schema import expect_object, expect_string
 
-        location = SourceLocation(SourceAlias("company"), "aart-source.json", "/display_name")
+        location = SourceLocation(SourceAlias("company"), "aart-cli-source.json", "/display_name")
         wrong_object = expect_object(_unwrap(parse_json("[]")), location=location)
         wrong_string = expect_string(_unwrap(parse_json("42")), location=location)
 

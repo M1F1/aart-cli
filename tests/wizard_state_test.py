@@ -5,17 +5,17 @@ from __future__ import annotations
 import unittest
 from dataclasses import FrozenInstanceError
 
-from agent_artifacts.configuration.model import (
+from aart_cli.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
     SourceKind,
     UserConfiguration,
     default_user_configuration,
 )
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_sources import build_source_stage, plan_source_management
-from agent_artifacts.wizard import (
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Ok
+from aart_cli.tui_sources import build_source_stage, plan_source_management
+from aart_cli.wizard import (
     BasketItem,
     WizardPosition,
     advance,
@@ -94,13 +94,11 @@ class WizardStageGraphTests(unittest.TestCase):
         base = select(initial_session(), "role", "maintainer")
 
         health = select(base, "maintainer_action", "health")
-        promote = select(base, "maintainer_action", "promote-native")
-        scaffold = select(base, "maintainer_action", "scaffold")
+        vendor = select(base, "maintainer_action", "vendor")
         user = select(base, "maintainer_action", "user")
 
         self.assertEqual(stages_for(health)[-2:], ("maintainer_action", "review"))
-        self.assertIn("native_details", stages_for(promote))
-        self.assertIn("native_details", stages_for(scaffold))
+        self.assertIn("native_details", stages_for(vendor))
         self.assertIn("profiles", stages_for(user))
 
     def test_default_maintainer_checkout_skips_sources_and_back_returns_to_role(self):

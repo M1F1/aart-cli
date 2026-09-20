@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -15,8 +15,8 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession, target_row
-from agent_artifacts.application.maintainer_views import MaintainerScreen
+from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession, target_row
+from aart_cli.application.maintainer_views import MaintainerScreen
 
 ARTIFACT = "public/mcp/github@1.6.0"
 OTHER = "public/mcp/jira@2.2.0"

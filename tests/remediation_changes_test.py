@@ -20,20 +20,20 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiCommandKind,
     ConsumerUiState,
     key_bindings,
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     PresentationProfile,
     RemediationView,
     install_flow_screens,
 )
-from agent_artifacts.tui_consumer import CanonicalScreenSource, _reload, frame, render_ready
+from aart_cli.tui_consumer import CanonicalScreenSource, _reload, frame, render_ready
 from tests.consumer_install_flow_shell_test import at, plan_view
 from tests.consumer_install_flow_shell_test import screens as flow_screens
 

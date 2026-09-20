@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
@@ -25,8 +25,8 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerSession, ConsumerSettings
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.consumer_views import ConsumerSession, ConsumerSettings
+from aart_cli.application.maintainer_views import (
     MaintainerScreen,
     maintainer_navigation_targets,
 )

@@ -13,27 +13,27 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.consumer_session import (
+from aart_cli.application.consumer_session import (
     FLOW_INVALID,
     ConsumerFlow,
     begin_installation,
     record_installation,
 )
-from agent_artifacts.application.consumer_views import ConsumerPlanView, ReceiptDetailView
-from agent_artifacts.application.execution import (
+from aart_cli.application.consumer_views import ConsumerPlanView, ReceiptDetailView
+from aart_cli.application.execution import (
     InstallationArtifactExecution,
     InstallationExecutionOutcome,
 )
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialProviderRef,
     CredentialReference,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.inspection import EnvironmentFacts
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.inspection import EnvironmentFacts
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Err, Ok
 from tests.installation_proposal_test import (
     ORG,
     TOKEN,
@@ -143,7 +143,9 @@ class BegunFlowTest(unittest.TestCase):
         refused = _begin(observed=())
 
         self.assertIsInstance(refused, Err)
-        self.assertIn("nothing was observed", _reason(refused))
+        # Paired member for member rather than looked up by artifact: one Selection may install
+        # the same artifact into two harnesses (§169.3), so "observed" is per installation.
+        self.assertIn("is not what is planned, member for member", _reason(refused))
 
     def test_a_flow_cannot_be_begun_from_something_that_is_not_an_installation(self) -> None:
         refused = begin_installation(

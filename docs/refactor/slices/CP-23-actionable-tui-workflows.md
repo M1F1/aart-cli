@@ -1,5 +1,10 @@
 # CP-23 — Actionable TUI workflows after the fourth manual run
 
+> **Historical evidence / CP-26 revision:** Product Specification §169 and D-332–D-335 supersede
+> earlier naming, runtime-placement and cross-installation input-sharing assumptions in this record.
+> VERIFIED below refers to the contract tested then. Current implementation/proof belongs to
+> CP-26.18a/19/20; see `../CONTRACT_ALIGNMENT.md` and `../INVARIANT_TRACEABILITY.md`.
+
 Status: CLOSED BY THE OWNER, 2026-09-16 — TASKS 01–16 DONE IN CODE; THE MANUAL ACCEPTANCE WALK AND A GREEN STANDALONE `make integration` (B-108) WERE NEVER RECORDED
 
 Date: 2026-09-14. Authority: the product owner's manual screen reports and request to create CP-23
@@ -76,6 +81,11 @@ No shortcut removal may bypass policy evaluation or required evidence. Test the 
 journey and the absence of a hidden active `p` binding.
 
 ### 05 — End TUI promotion at the local commit; publication is manual
+
+**Historical contract, superseded by Product Specification §164.7, D-312 and CP-26.18.** This
+records what CP-23 implemented and verified at the time. It is not the current product direction:
+explicit Push is restored on Registry Maintainer's local-workspace row, not on the promotion success
+screen.
 
 The owner explicitly reverses D-228. Remove TUI push configuration, publication actions and
 advertised/hidden key routes that can dispatch a push. Retain local validation, review and commit.
@@ -452,8 +462,8 @@ Evidence:
   successful scopes were:
 
 ```sh
-make mutants ONLY=agent_artifacts/application/consumer_ui.py TESTS="tests/maintainer_source_addition_test.py tests/maintainer_source_onboarding_e2e_test.py tests/maintainer_navigation_test.py"
-make mutants ONLY=agent_artifacts/io/consumer_actions.py TESTS="tests/maintainer_source_addition_test.py tests/maintainer_source_onboarding_e2e_test.py"
+make mutants ONLY=aart_cli/application/consumer_ui.py TESTS="tests/maintainer_source_addition_test.py tests/maintainer_source_onboarding_e2e_test.py tests/maintainer_navigation_test.py"
+make mutants ONLY=aart_cli/io/consumer_actions.py TESTS="tests/maintainer_source_addition_test.py tests/maintainer_source_onboarding_e2e_test.py"
 ```
 
 Gate evidence (2026-09-14, Claude taking over from Codex): `make quality` on the working tree
@@ -614,12 +624,14 @@ Evidence:
 
 ### Task 05 — TUI promotion ends at the local commit (2026-09-14)
 
-Done. D-255 records the choice; B-116 records the default-branch reader left without a caller.
+Done as CP-23 history. D-255 records the choice and B-116 records the default-branch reader left
+without a caller; Product Specification §164.7, D-312 and CP-26.18 later supersede the no-TUI-Push
+product direction by placing explicit Push on Registry Maintainer's local-workspace row.
 
 Characterized first: after the commit, screen 45 said `Git publication: not yet published; press p
 to choose a review branch`. `p` opened a remote/branch form, Enter prepared a
 `RegistryPublicationCommand` through the handler's default-branch port, and a second Enter pushed
-through `publish_registry_commit`. The CLI `aart registry push` uses the same application/IO
+through `publish_registry_commit`. The CLI `aart-cli registry push` uses the same application/IO
 modules through its own path.
 
 After: the TUI vocabulary has no publication action, event, draft, state flag or handler port. The

@@ -1,6 +1,6 @@
 # Installation-risk baseline v1
 
-The `aart-baseline` provider produces deterministic, explainable evidence for one immutable
+The `aart-cli-baseline` provider produces deterministic, explainable evidence for one immutable
 canonical artifact object. It is implemented with the Python standard library, performs no IO,
 network access, process execution, or optional imports, and does not certify an artifact or claim
 general vulnerability coverage.
@@ -75,7 +75,7 @@ clock, host paths, or environment variables. Finding truncation is explicit.
 Callers pass already validated values; the provider never locates or fetches content itself:
 
 ```python
-from agent_artifacts.security import BaselineScanRequest, assess_installation_risk
+from aart_cli.security import BaselineScanRequest, assess_installation_risk
 
 assessment = assess_installation_risk(
     BaselineScanRequest(object_candidate, index_artifact, matching_lock_or_none)
@@ -86,5 +86,5 @@ A reviewed external artifact with provenance requires a matching `LockedArtifact
 objects can still be assessed without a registry; absence or state of review remains visible as
 evidence. Optional analyzer execution is specified in [`analyzers-v1.md`](analyzers-v1.md).
 Digest-bound cache attestations, registry evidence, bundle aggregation, policy enforcement, and
-the `aart security` CLI are specified in [`attestations-v1.md`](attestations-v1.md); none changes
+the `aart-cli security` CLI are specified in [`attestations-v1.md`](attestations-v1.md); none changes
 this pure baseline contract.

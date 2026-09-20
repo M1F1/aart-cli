@@ -19,36 +19,36 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.candidate_validation import validate_candidate
-from agent_artifacts.application.consumer_views import PresentationProfile
-from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
-from agent_artifacts.application.maintainer_promotion import (
+from aart_cli.application.candidate_validation import validate_candidate
+from aart_cli.application.consumer_views import PresentationProfile
+from aart_cli.application.maintainer import CandidateBundle, reconcile_source_scan
+from aart_cli.application.maintainer_promotion import (
     CandidatePromotionRecord,
     candidate_promotion_record,
     prepare_candidate_promotion_transaction,
     prepare_promotion_transaction,
 )
-from agent_artifacts.application.maintainer_sync import ApprovedRegistryState
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer_sync import ApprovedRegistryState
+from aart_cli.application.maintainer_views import (
     project_maintainer_bulk_promotion,
     project_maintainer_candidates,
     project_maintainer_promotion_review,
     project_maintainer_registry_diff,
 )
-from agent_artifacts.application.promotion import (
+from aart_cli.application.promotion import (
     PromotionEvidence,
     load_registry_versions,
     plan_bulk_promotion,
     project_promotion,
 )
-from agent_artifacts.domain.candidates import CandidateState, assess_candidate
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.registry import PromotionMode
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
-from agent_artifacts.sources.model import source_snapshot_digest
-from agent_artifacts.tui_maintainer import maintainer_candidate_detail, render_maintainer_candidates
+from aart_cli.domain.candidates import CandidateState, assess_candidate
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from aart_cli.sources.model import source_snapshot_digest
+from aart_cli.tui_maintainer import maintainer_candidate_detail, render_maintainer_candidates
 from tests.candidate_history_test import _ready_scan
 from tests.maintainer_composition_e2e_test import _two_ready_candidates
 from tests.maintainer_source_scan_test import _compiled

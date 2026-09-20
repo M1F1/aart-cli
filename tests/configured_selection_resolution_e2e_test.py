@@ -12,30 +12,30 @@ import unittest
 from dataclasses import replace
 from typing import cast
 
-from agent_artifacts.application.promotion import (
+from aart_cli.application.promotion import (
     PromotionEvidence,
     plan_registry_lifecycle,
     project_lifecycle_update,
     project_promotion,
 )
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.candidates import CandidateId
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceId
-from agent_artifacts.domain.registry import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.candidates import CandidateId
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceId
+from aart_cli.domain.registry import (
     PublicationStage,
     RegistryArtifactVersion,
     publish_registry_version,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.domain.selection import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     VersionConstraint,
 )
-from agent_artifacts.io.configured_selection import resolve_configured_selection
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
-from agent_artifacts.sources.model import (
+from aart_cli.io.configured_selection import resolve_configured_selection
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from aart_cli.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
     make_source_candidate,
@@ -48,7 +48,7 @@ from tests.promotion_planning_test import _evidence, _ready_bundle
 
 def _approved_snapshot(*, published: bool) -> tuple[SourceSnapshot, RegistryArtifactVersion]:
     bundle = _ready_bundle()
-    from agent_artifacts.application.promotion import plan_bulk_promotion
+    from aart_cli.application.promotion import plan_bulk_promotion
 
     empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
     evidence = cast(tuple[tuple[CandidateId, PromotionEvidence], ...], _evidence(bundle))

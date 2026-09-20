@@ -16,10 +16,10 @@ All `INV-001` through `INV-242`. Detailed ownership and evidence status live in
 
 - Branch baseline: `codex/aart-refactor` from `origin/main` at `90faa96`.
 - Bootstrap commit: `5515e11`.
-- Production package: 169 Python files under `agent_artifacts/`.
+- Production package: 169 Python files under `aart_cli/`.
 - Test suite: 204 `*_test.py` files; 1,903 discovered tests at characterization time.
 - Runtime dependencies: none (`pyproject.toml [project].dependencies = []`).
-- Primary interfaces: `aart` and `agent-artifacts`, both routed to `agent_artifacts.cli:main`.
+- Primary interfaces: `aart` and `agent-artifacts`, both routed to `aart_cli.cli:main`.
 - TUI implementation: stdlib/curses with plain-text fallback; the main `tui.py` is 6,308 lines.
 
 ## Current public command surface
@@ -42,7 +42,7 @@ family. Existing `marketplace setup` is the current configuration/remediation pa
 
 ### Seed domain kernel
 
-`agent_artifacts/domain/` provides frozen identifiers, diagnostics, `Result`, terminal outcomes,
+`aart_cli/domain/` provides frozen identifiers, diagnostics, `Result`, terminal outcomes,
 collection helpers and callable query/command ports. `tests/domain_kernel_test.py` proves frozen
 values and forbids filesystem, subprocess, network and legacy imports from that package.
 
@@ -60,7 +60,7 @@ Requirement, Remediation, Effect and Policy algebras required by CP-03.
 ### Explicit effect adapters already present
 
 Application services accept injected protocols in several subsystems. Concrete filesystem, Git,
-object-store, source and security behavior lives primarily in `agent_artifacts/io/` or subsystem
+object-store, source and security behavior lives primarily in `aart_cli/io/` or subsystem
 `io.py` modules. Registry and installation paths already separate prepare/review from finalize in
 several flows.
 
@@ -125,18 +125,18 @@ not yet CP-17 proof against the new architecture.
 
 ## Legacy/current paths
 
-- Large legacy coordination surfaces: `agent_artifacts/tui.py`, `agent_artifacts/setup.py`,
-  `agent_artifacts/setup_runtime.py`, `agent_artifacts/cli.py`.
-- Parallel historical domain values remain in `agent_artifacts/model.py`,
-  `agent_artifacts/outcomes.py` and subsystem-local model modules.
+- Large legacy coordination surfaces: `aart_cli/tui.py`, `aart_cli/setup.py`,
+  `aart_cli/setup_runtime.py`, `aart_cli/cli.py`.
+- Parallel historical domain values remain in `aart_cli/model.py`,
+  `aart_cli/outcomes.py` and subsystem-local model modules.
 - Manual release scripts/workflows remain active evidence but conflict with the accepted release
   model.
 - Historical `PLAN.md`, `PROGRESS.md`, `TODO.md` and `docs/design/*` remain reference only.
 
 ## Target paths/owners
 
-- Domain ADTs: `agent_artifacts/domain/`.
-- Application orchestration and ports: `agent_artifacts/application/`.
+- Domain ADTs: `aart_cli/domain/`.
+- Application orchestration and ports: `aart_cli/application/`.
 - Concrete effects: adapter/interpreter packages outside the domain.
 - Interfaces: CLI/JSON/TUI as projections over application services.
 - Durable traceability: `docs/refactor/INVARIANT_TRACEABILITY.md` and per-slice records.

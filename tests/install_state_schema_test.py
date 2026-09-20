@@ -6,27 +6,27 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.diagnostics import diagnostic_to_data
-from agent_artifacts.domain.identifiers import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.diagnostics import diagnostic_to_data
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
     SourceId,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.install_state.model import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.install_state.model import (
     ArtifactEvidence,
     EffectProof,
     InstallationRecord,
     InstallState,
     SourceEvidence,
 )
-from agent_artifacts.install_state.schema import install_state_bytes, parse_install_state
-from agent_artifacts.protocol.hashing import json_digest
-from agent_artifacts.protocol.json import JsonArray
-from agent_artifacts.protocol.semver import SemVer
+from aart_cli.install_state.schema import install_state_bytes, parse_install_state
+from aart_cli.protocol.hashing import json_digest
+from aart_cli.protocol.json import JsonArray
+from aart_cli.protocol.semver import SemVer
 
 
 def _digest(character: str) -> ObjectDigest:
@@ -84,8 +84,8 @@ class InstallStateSchemaTests(unittest.TestCase):
 
         payload = (self.fixtures / "legacy-v01-manifest.json").read_bytes()
         for path in (
-            "/fixture/project/.agent-artifacts/manifest.json",
-            "/fixture/user/.agent-artifacts/manifest.json",
+            "/fixture/project/.aart-cli/manifest.json",
+            "/fixture/user/.aart-cli/manifest.json",
         ):
             with self.subTest(path=path):
                 result = parse_install_state(payload, path=path)
@@ -113,7 +113,7 @@ class InstallStateSchemaTests(unittest.TestCase):
                             "column": None,
                         },
                         "remediation": [
-                            "Reinstall the artifacts you need with: aart marketplace install "
+                            "Reinstall the artifacts you need with: aart-cli marketplace install "
                             "<coordinate> --profile <name>",
                             "Remove the retired state file and reinstall: this revision is "
                             "not converted at runtime",
@@ -130,7 +130,7 @@ class InstallStateSchemaTests(unittest.TestCase):
 
         result = parse_install_state(
             (self.fixtures / "malformed-v2-manifest.json").read_bytes(),
-            path="/fixture/project/.agent-artifacts/manifest.json",
+            path="/fixture/project/.aart-cli/manifest.json",
         )
 
         self.assertIsInstance(result, Err)

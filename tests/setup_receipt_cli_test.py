@@ -21,28 +21,28 @@ import unittest
 from dataclasses import replace
 from unittest import mock
 
-from agent_artifacts import cli
-from agent_artifacts.configuration.model import (
+from aart_cli import cli
+from aart_cli.configuration.model import (
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.paths import Platform, resolve_config_paths
-from agent_artifacts.configuration.schema import user_configuration_bytes
-from agent_artifacts.domain.effects import DeliveryKind
-from agent_artifacts.domain.identifiers import (
+from aart_cli.configuration.paths import Platform, resolve_config_paths
+from aart_cli.configuration.schema import user_configuration_bytes
+from aart_cli.domain.effects import DeliveryKind
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.receipts import ArtifactDelivery, PlacedArtifactReceipt
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.install_state.paths import install_state_paths
-from agent_artifacts.io.receipt_store import LocalReceiptStore
-from agent_artifacts.model import SetupState, SetupStateRecord
-from agent_artifacts.setup import dump_setup_state
-from agent_artifacts.setup_receipt import ReceiptLocation, setup_state_file
-from agent_artifacts.setup_render import receipt_payload, render_receipt_payload
+from aart_cli.domain.receipts import ArtifactDelivery, PlacedArtifactReceipt
+from aart_cli.domain.result import Ok
+from aart_cli.install_state.paths import install_state_paths
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.model import SetupState, SetupStateRecord
+from aart_cli.setup import dump_setup_state
+from aart_cli.setup_receipt import ReceiptLocation, setup_state_file
+from aart_cli.setup_render import receipt_payload, render_receipt_payload
 
 SETUP_REF = "setup-" + "e" * 20
 COORDINATE = "registry-a/mcp/github-docker"
@@ -110,8 +110,8 @@ def _record(block_path: str) -> SetupStateRecord:
         started_at="2026-08-15T09:00:00Z",
         finished_at="2026-08-15T09:00:42Z",
         exit_status=0,
-        retry_command=f"aart marketplace setup {COORDINATE}@1.0.0 --yes",
-        rollback_command=f"aart marketplace receipt undo {COORDINATE}",
+        retry_command=f"aart-cli marketplace setup {COORDINATE}@1.0.0 --yes",
+        rollback_command=f"aart-cli marketplace receipt undo {COORDINATE}",
         receipt=(
             {
                 "step_id": "shell-block",
@@ -150,17 +150,13 @@ class ReceiptCommandTests(unittest.TestCase):
         self.project.mkdir()
         self.xdg = {
             "HOME": str(self.home),
-            "XDG_CONFIG_HOME": str(self.home / ".config"),
-            "XDG_DATA_HOME": str(self.home / ".local/share"),
-            "XDG_CACHE_HOME": str(self.home / ".cache"),
+            "AART_CLI_HOME": str(self.home / ".aart-cli"),
         }
         platform = Platform.DARWIN if os.sys.platform == "darwin" else Platform.LINUX
         self.paths = resolve_config_paths(
             platform,
             home=str(self.home),
-            xdg_config_home=self.xdg["XDG_CONFIG_HOME"],
-            xdg_data_home=self.xdg["XDG_DATA_HOME"],
-            xdg_cache_home=self.xdg["XDG_CACHE_HOME"],
+            application_home=self.xdg["AART_CLI_HOME"],
         )
         config = pathlib.Path(self.paths.user_config_file)
         config.parent.mkdir(parents=True, exist_ok=True)
@@ -377,7 +373,7 @@ class CanonicalReceiptAbsenceTests(CanonicalReceiptCommandTests):
 
         self.assertNotEqual(code, 0, text)
         self.assertIn("no installation of mcp/never-installed in project scope", text)
-        self.assertIn("aart marketplace status", text)
+        self.assertIn("aart-cli marketplace status", text)
 
     def test_a_record_belonging_to_the_other_scope_is_refused_not_silently_shown(self) -> None:
         """The receipt store partitions nothing by scope, so only the record knows.

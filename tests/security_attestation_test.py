@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.marketplace.model import TrustClass
-from agent_artifacts.protocol.hashing import sha256_bytes
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.security.application import verify_security_index
-from agent_artifacts.security.attestation_schema import (
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.marketplace.model import TrustClass
+from aart_cli.protocol.hashing import sha256_bytes
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.security.application import verify_security_index
+from aart_cli.security.attestation_schema import (
     attestation_bytes,
     parse_attestation,
     parse_security_index,
     security_index_bytes,
 )
-from agent_artifacts.security.attestations import (
+from aart_cli.security.attestations import (
     AssessmentCacheKey,
     AttestationOrigin,
     AttestationOriginKind,
@@ -28,7 +28,7 @@ from agent_artifacts.security.attestations import (
     cache_key_digest,
     resolve_attestation,
 )
-from agent_artifacts.security.model import (
+from aart_cli.security.model import (
     AssessmentCoverage,
     AssessmentStatus,
     FindingSeverity,
@@ -48,7 +48,7 @@ REGISTRY_INPUTS = sha256_bytes(b"registry-inputs")
 def _assessment() -> SecurityAssessment:
     coverage = AssessmentCoverage(1, 1)
     provider = ProviderAssessment(
-        "aart-baseline",
+        "aart-cli-baseline",
         "1",
         RULES,
         AssessmentStatus.COMPLETE,
@@ -71,7 +71,7 @@ def _key(**changes: object) -> AssessmentCacheKey:
     values: dict[str, object] = {
         "schema_version": 1,
         "object_digest": OBJECT,
-        "provider_id": "aart-baseline",
+        "provider_id": "aart-cli-baseline",
         "provider_version": "1",
         "rules_digest": RULES,
         "options_digest": OPTIONS,

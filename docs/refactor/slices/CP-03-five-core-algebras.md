@@ -14,12 +14,12 @@ through INV-109.
 
 ## Legacy/current paths
 
-`agent_artifacts/model.py`, `policy.py`, setup requirement/remediation vocabulary, install operation
+`aart_cli/model.py`, `policy.py`, setup requirement/remediation vocabulary, install operation
 models and subsystem-local outcome types remain characterization/migration inputs.
 
 ## Target paths/owners
 
-New frozen values under `agent_artifacts/domain/`; application planners consume them only after the
+New frozen values under `aart_cli/domain/`; application planners consume them only after the
 algebra contracts are verified.
 
 ## Dependencies

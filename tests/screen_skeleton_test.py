@@ -16,9 +16,9 @@ from unittest import TestCase
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts import tui
-from agent_artifacts.application.consumer_ui import ConsumerUiState, key_bindings
-from agent_artifacts.application.consumer_views import (
+from aart_cli import tui
+from aart_cli.application.consumer_ui import ConsumerUiState, key_bindings
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
@@ -26,8 +26,8 @@ from agent_artifacts.application.consumer_views import (
     RegistryView,
     project_dashboard,
 )
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
-from agent_artifacts.tui_layout import (
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
+from aart_cli.tui_layout import (
     SECTION_RULE,
     Frame,
     anchor,

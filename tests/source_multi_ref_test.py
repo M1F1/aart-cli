@@ -10,18 +10,18 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.configuration.model import (
+from aart_cli.configuration.model import (
     ConfiguredSource,
     SourceKind,
     SyncSettings,
     UserConfiguration,
     default_organization_policy,
 )
-from agent_artifacts.configuration.schema import parse_user_configuration, user_configuration_bytes
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.sources.model import source_instance_id, source_store_paths
-from agent_artifacts.tui_sources import build_source_stage, plan_source_addition
+from aart_cli.configuration.schema import parse_user_configuration, user_configuration_bytes
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.sources.model import source_instance_id, source_store_paths
+from aart_cli.tui_sources import build_source_stage, plan_source_addition
 
 
 def _git(alias: str, location: str, ref: str) -> ConfiguredSource:

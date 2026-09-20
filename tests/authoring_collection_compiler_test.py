@@ -5,16 +5,16 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot, compile_author_source
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import compile_author_snapshot, compile_author_source
+from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
 from tests.authoring_compiler_test import _file, _json_manifest
 
 
 def _collection(*, version: str | None = "2.1.0") -> dict[str, object]:
     document: dict[str, object] = {
-        "schema": "aart.dev/collection/v1",
+        "schema": "aart-cli.dev/collection/v1",
         "name": "data-engineer",
         "summary": "Approved data engineering tools.",
         "artifacts": ["company/mcp/github@^2", "company/skill/code-review@^1"],
@@ -40,11 +40,11 @@ class AuthoringCollectionCompilerTest(unittest.TestCase):
         snapshot = SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _json_manifest("github/aart.json"),
+                _json_manifest("github/aart-cli.json"),
                 _file("github/server.py", "print('x')\n"),
                 _file("github/src/client.py", "client\n"),
                 _file("github/requirements.txt", "dependency\n"),
-                _file("collections/data-engineer/aart.json", json.dumps(_collection())),
+                _file("collections/data-engineer/aart-cli.json", json.dumps(_collection())),
             ),
         )
 
@@ -69,7 +69,7 @@ class AuthoringCollectionCompilerTest(unittest.TestCase):
             tuple(str(item) for item in collection.members),
             ("company/mcp/github@^2", "company/skill/code-review@^1"),
         )
-        self.assertEqual(str(collection.manifest_path), "collections/data-engineer/aart.json")
+        self.assertEqual(str(collection.manifest_path), "collections/data-engineer/aart-cli.json")
 
     def test_collection_version_is_required_and_semver(self) -> None:
         for version in (None, "latest"):
@@ -78,7 +78,7 @@ class AuthoringCollectionCompilerTest(unittest.TestCase):
                     SnapshotOrigin.IMMUTABLE_GIT,
                     (
                         _file(
-                            "collections/data-engineer/aart.json",
+                            "collections/data-engineer/aart-cli.json",
                             json.dumps(_collection(version=version)),
                         ),
                     ),
@@ -91,9 +91,9 @@ class AuthoringCollectionCompilerTest(unittest.TestCase):
                 self.assertIn("version", compiled.diagnostics[0].message.lower())
 
     def test_collection_compilation_is_deterministic_under_snapshot_order(self) -> None:
-        first = _file("collections/first/aart.json", json.dumps(_collection()))
+        first = _file("collections/first/aart-cli.json", json.dumps(_collection()))
         second_document = _collection(version="3.0.0") | {"name": "second"}
-        second = _file("collections/second/aart.json", json.dumps(second_document))
+        second = _file("collections/second/aart-cli.json", json.dumps(second_document))
 
         left = _compile(SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, (second, first)))
         right = _compile(SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, (first, second)))

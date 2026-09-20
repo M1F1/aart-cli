@@ -8,21 +8,21 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import (
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import (
     ComplianceLevel,
     compile_author_snapshot,
     discover_author_manifests,
 )
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
     compile_native_package,
 )
-from agent_artifacts.protocol.paths import SafeRelativePath, parse_relative_path
+from aart_cli.protocol.paths import SafeRelativePath, parse_relative_path
 from tests.credential_fixtures import assignment
 
 
@@ -43,7 +43,7 @@ def _snapshot(*entries: SnapshotEntry) -> SourceSnapshot:
 
 def _document(*, name: str = "github-mcp") -> dict[str, object]:
     return {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": name, "kind": "mcp", "version": "1.4.0"},
         "payload": {
             "include": ["server.py", "src/**", "requirements.txt"],
@@ -56,14 +56,16 @@ def _document(*, name: str = "github-mcp") -> dict[str, object]:
     }
 
 
-def _json_manifest(path: str = "github/aart.json", *, name: str = "github-mcp") -> SnapshotEntry:
+def _json_manifest(
+    path: str = "github/aart-cli.json", *, name: str = "github-mcp"
+) -> SnapshotEntry:
     return _file(path, json.dumps(_document(name=name), sort_keys=True))
 
 
-def _yaml_manifest(path: str = "github/aart.yaml") -> SnapshotEntry:
+def _yaml_manifest(path: str = "github/aart-cli.yaml") -> SnapshotEntry:
     return _file(
         path,
-        """schema: aart.dev/mcp/v1
+        """schema: aart-cli.dev/mcp/v1
 artifact:
   name: github-mcp
   kind: mcp
@@ -98,7 +100,7 @@ def _compile(snapshot: SourceSnapshot):
     return compile_author_snapshot(
         snapshot,
         source_alias=SourceAlias("internal"),
-        source="https://git.example/agent-mcp-servers.git",
+        source="https://git.example/example-mcp-servers.git",
         revision="a" * 40,
     )
 
@@ -118,11 +120,11 @@ class AuthorManifestDiscoveryTest(unittest.TestCase):
 
     def test_only_supported_manifest_basenames_define_candidates(self) -> None:
         snapshot = _snapshot(
-            _file("README.md", "aart.yaml is documented here"),
+            _file("README.md", "aart-cli.yaml is documented here"),
             _file("server.py", "print('not a candidate')"),
             _file("launcher.sh", "#!/bin/sh"),
-            _json_manifest("jira/aart.json", name="jira-mcp"),
-            _yaml_manifest("github/aart.yaml"),
+            _json_manifest("jira/aart-cli.json", name="jira-mcp"),
+            _yaml_manifest("github/aart-cli.yaml"),
             _file("nested/AART.yaml", "case-sensitive"),
             _file("nested/aart.yml", "unsupported suffix"),
         )
@@ -133,7 +135,7 @@ class AuthorManifestDiscoveryTest(unittest.TestCase):
         assert isinstance(discovered, Ok)
         self.assertEqual(
             tuple(str(item.path) for item in discovered.value),
-            ("github/aart.yaml", "jira/aart.json"),
+            ("github/aart-cli.yaml", "jira/aart-cli.json"),
         )
 
     def test_two_manifests_in_one_directory_are_an_ambiguous_boundary(self) -> None:
@@ -161,19 +163,19 @@ class AuthorCompilerTest(unittest.TestCase):
         entries: list[SnapshotEntry] = []
         for kind, name, filename, content in fixtures:
             document = {
-                "schema": f"aart.dev/{kind}/v1",
+                "schema": f"aart-cli.dev/{kind}/v1",
                 "artifact": {"name": name, "kind": kind, "version": "1.0.0"},
                 "payload": {"include": [filename]},
             }
             entries.extend(
                 (
-                    _file(f"{kind}/aart.json", json.dumps(document)),
+                    _file(f"{kind}/aart-cli.json", json.dumps(document)),
                     _file(f"{kind}/{filename}", content),
                 )
             )
         entries.extend(
             (
-                _json_manifest("mcp/aart.json"),
+                _json_manifest("mcp/aart-cli.json"),
                 _file("mcp/server.py", "server"),
                 _file("mcp/src/client.py", "client"),
                 _file("mcp/requirements.txt", "dependency"),
@@ -214,7 +216,7 @@ class AuthorCompilerTest(unittest.TestCase):
         artifact = compiled.value[0]
         self.assertEqual(str(artifact.package.coordinate), "internal/mcp/github-mcp@1.4.0")
         self.assertEqual(artifact.package.protocol, "stdio")
-        self.assertEqual(artifact.compliance, ComplianceLevel.AART_NATIVE)
+        self.assertEqual(artifact.compliance, ComplianceLevel.AART_CLI_NATIVE)
         self.assertEqual(artifact.package.compatibility.python, ">=3.11")
         self.assertEqual(artifact.package.compatibility.harnesses, ("claude", "codex"))
         self.assertEqual(
@@ -247,7 +249,7 @@ class AuthorCompilerTest(unittest.TestCase):
 
         compiled = _compile(
             _snapshot(
-                _file("github/aart.json", json.dumps(document)),
+                _file("github/aart-cli.json", json.dumps(document)),
                 _file("github/launcher.sh", "#!/bin/sh\nexec server\n", executable=True),
             )
         )
@@ -255,14 +257,14 @@ class AuthorCompilerTest(unittest.TestCase):
         self.assertIsInstance(compiled, Ok)
         assert isinstance(compiled, Ok)
         artifact = compiled.value[0]
-        self.assertEqual(artifact.compliance, ComplianceLevel.AART_COMPATIBLE)
+        self.assertEqual(artifact.compliance, ComplianceLevel.AART_CLI_COMPATIBLE)
         self.assertEqual(artifact.package.compatibility.platforms, ())
         descriptor = next(
             entry.content
             for entry in artifact.canonical_entries
             if str(entry.path) == "payload/mcp.json"
         )
-        self.assertIn(b"${AART_PAYLOAD}/launcher.sh", descriptor)
+        self.assertIn(b"${AART_CLI_PAYLOAD}/launcher.sh", descriptor)
 
     def test_selected_content_and_executable_metadata_change_the_input_digest(self) -> None:
         entries = (
@@ -299,8 +301,8 @@ class AuthorCompilerTest(unittest.TestCase):
         jira = _document(name="jira-mcp")
         compiled = _compile(
             _snapshot(
-                _file("jira/aart.json", json.dumps(jira)),
-                _file("github/aart.json", json.dumps(github)),
+                _file("jira/aart-cli.json", json.dumps(jira)),
+                _file("github/aart-cli.json", json.dumps(github)),
                 _file("github/server.py", "github"),
                 _file("github/src/client.py", "github client"),
                 _file("github/requirements.txt", "github-dep"),
@@ -314,7 +316,7 @@ class AuthorCompilerTest(unittest.TestCase):
         assert isinstance(compiled, Ok)
         self.assertEqual(
             tuple(str(item.manifest_path) for item in compiled.value),
-            ("github/aart.json", "jira/aart.json"),
+            ("github/aart-cli.json", "jira/aart-cli.json"),
         )
         self.assertNotEqual(compiled.value[0].input_digest, compiled.value[1].input_digest)
 
@@ -326,9 +328,9 @@ class AuthorCompilerTest(unittest.TestCase):
         child = _document(name="child-mcp")
         compiled = _compile(
             _snapshot(
-                _file("aart.json", json.dumps(parent)),
+                _file("aart-cli.json", json.dumps(parent)),
                 _file("server.py", "parent"),
-                _file("child/aart.json", json.dumps(child)),
+                _file("child/aart-cli.json", json.dumps(child)),
                 _file("child/server.py", "child"),
                 _file("child/src/client.py", "child client"),
                 _file("child/requirements.txt", "child dependency"),
@@ -356,7 +358,7 @@ class AuthorCompilerTest(unittest.TestCase):
         payload["exclude"] = ["server.py", "src/**", "requirements.txt"]
         compiled = _compile(
             _snapshot(
-                _file("github/aart.json", json.dumps(document)),
+                _file("github/aart-cli.json", json.dumps(document)),
                 _file("github/server.py", "server"),
                 _file("github/src/client.py", "client"),
                 _file("github/requirements.txt", "dependency"),
@@ -374,7 +376,7 @@ class AuthorCompilerTest(unittest.TestCase):
                 payload = document["payload"]
                 assert isinstance(payload, dict)
                 payload["include"] = [unsafe]
-                compiled = _compile(_snapshot(_file("github/aart.json", json.dumps(document))))
+                compiled = _compile(_snapshot(_file("github/aart-cli.json", json.dumps(document))))
                 self.assertIsInstance(compiled, Err)
 
         document = _document()
@@ -383,7 +385,7 @@ class AuthorCompilerTest(unittest.TestCase):
         payload["include"] = ["src/**"]
         compiled = _compile(
             _snapshot(
-                _file("github/aart.json", json.dumps(document)),
+                _file("github/aart-cli.json", json.dumps(document)),
                 SnapshotEntry(_path("github/src/link"), SnapshotEntryKind.SYMLINK),
             )
         )

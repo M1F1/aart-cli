@@ -16,8 +16,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.receipt_store import LocalReceiptStore
+from aart_cli.domain.result import Ok
+from aart_cli.io.receipt_store import LocalReceiptStore
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
 from tests.git_backed_consumer_e2e_test import _Environment
 from tests.mcp_stdio_e2e_test import SERVER_SOURCE, speak
@@ -26,13 +26,13 @@ COORDINATE = "company/mcp/notes"
 
 #: The same server `mcp_stdio_e2e_test` starts, published as an artifact that declares no inputs.
 #:
-#: The artifact declares none deliberately. `aart marketplace install` has no way to answer a
+#: The artifact declares none deliberately. `aart-cli marketplace install` has no way to answer a
 #: declared input -- the form belongs to the persistent shell -- so an artifact that declares one
 #: cannot be installed through the CLI at all, which the refusal test below pins. Credential and
 #: config delivery into a launched server is `mcp_stdio_e2e_test`'s subject and is not restated
 #: here; what this file adds is that the chain in front of the runtime produces a runtime that runs.
 MANIFEST = {
-    "schema": "aart.dev/mcp/v1",
+    "schema": "aart-cli.dev/mcp/v1",
     "artifact": {"name": "notes", "kind": "mcp", "version": "1.0.0"},
     "payload": {"include": ["server.py", "requirements.txt"]},
     "transport": {"type": "stdio"},
@@ -40,7 +40,7 @@ MANIFEST = {
     "launch": {"type": "python", "entrypoint": "server.py", "arguments": ["--strict"]},
 }
 AUTHORED_SERVER: tuple[tuple[str, str], ...] = (
-    ("notes/aart.json", json.dumps(MANIFEST)),
+    ("notes/aart-cli.json", json.dumps(MANIFEST)),
     ("notes/server.py", SERVER_SOURCE),
     ("notes/requirements.txt", "# no third-party packages\n"),
 )
@@ -76,7 +76,7 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
                 ["copy-tree", "create-python-environment", "write-file", "configure-harness"],
             )
 
-            runtime = env.project / ".agent-artifacts/runtimes/company/mcp/notes"
+            runtime = env.project / ".claude/aart-cli/mcp/company/notes"
             launcher = runtime / "launch.sh"
 
             self.assertTrue(os.access(launcher, os.X_OK), "the harness could not run this")
@@ -115,11 +115,11 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
             env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
 
             recorded = json.loads((env.project / ".mcp.json").read_text(encoding="utf-8"))
-            command = recorded["mcpServers"]["notes"]["command"]
+            command = recorded["mcpServers"]["notes-company-project"]["command"]
 
             self.assertEqual(
                 command,
-                str(env.project / ".agent-artifacts/runtimes/company/mcp/notes/launch.sh"),
+                str(env.project / ".claude/aart-cli/mcp/company/notes/launch.sh"),
             )
             replies = speak(command, [{"jsonrpc": "2.0", "id": 1, "method": "initialize"}])
             self.assertEqual(replies[0]["result"]["serverInfo"]["name"], "aart-e2e-github")
@@ -154,7 +154,7 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
                 [("github-org", "config"), ("github-token", "credential")],
             )
             # Nothing was built for an install that cannot complete.
-            self.assertFalse((env.project / ".agent-artifacts").exists(), payload)
+            self.assertFalse((env.project / ".aart-cli").exists(), payload)
             self.assertFalse((env.project / ".mcp.json").exists(), payload)
 
             persisted = LocalReceiptStore(str(Path(env.paths.data_root) / "state")).actions()
@@ -168,7 +168,7 @@ if __name__ == "__main__":
 
 
 class GitBackedDoctorE2ETest(unittest.TestCase):
-    """CP-17 step 4: what `aart doctor` says about the installation the chain just produced.
+    """CP-17 step 4: what `aart-cli doctor` says about the installation the chain just produced.
 
     D-150's subject, proved where an operator meets it. The installation under test is the real
     one -- synchronized from a Git commit and installed through public verbs -- and the damage is
@@ -182,7 +182,7 @@ class GitBackedDoctorE2ETest(unittest.TestCase):
             "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
         )
         self.assertEqual(code, 0, installed)
-        runtime = env.project / ".agent-artifacts/runtimes/company/mcp/notes"
+        runtime = env.project / ".claude/aart-cli/mcp/company/notes"
         self.assertTrue((runtime / "payload").is_dir(), "nothing to damage")
         return env, runtime
 
@@ -270,7 +270,7 @@ class GitBackedUninstallE2ETest(unittest.TestCase):
         env.run("source", "sync", source_transport=True)
         code, _ = env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(0, code)
-        runtime = env.project / ".agent-artifacts/runtimes/company/mcp/notes"
+        runtime = env.project / ".claude/aart-cli/mcp/company/notes"
         # It really runs before it is removed, so what follows is about a working installation.
         started = speak(
             str(runtime / "launch.sh"), [{"jsonrpc": "2.0", "id": 1, "method": "initialize"}]
@@ -378,7 +378,7 @@ class GitBackedUndoE2ETest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as raw:
             env, _ = self._installed(raw)
-            runtime = env.project / ".agent-artifacts/runtimes/company/mcp/notes"
+            runtime = env.project / ".claude/aart-cli/mcp/company/notes"
 
             code, refused = env.run("marketplace", "receipt", "undo", COORDINATE)
 

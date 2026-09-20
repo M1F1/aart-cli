@@ -26,12 +26,12 @@ def _first_sync_states(
         """
         import os, sys
         from pathlib import Path
-        from agent_artifacts.configuration.model import OrganizationPolicy, SourceAlias
-        from agent_artifacts.configuration.paths import Platform, resolve_config_paths
-        from agent_artifacts.configuration.policy import RuntimeOverrides, apply_configuration
-        from agent_artifacts.configuration.schema import parse_user_configuration
-        from agent_artifacts.domain.result import Ok
-        from agent_artifacts.io.maintainer_sync import (
+        from aart_cli.configuration.model import OrganizationPolicy, SourceAlias
+        from aart_cli.configuration.paths import Platform, resolve_config_paths
+        from aart_cli.configuration.policy import RuntimeOverrides, apply_configuration
+        from aart_cli.configuration.schema import parse_user_configuration
+        from aart_cli.domain.result import Ok
+        from aart_cli.io.maintainer_sync import (
             complete_configured_source_sync,
             prepare_configured_source_sync,
         )
@@ -39,9 +39,7 @@ def _first_sync_states(
         paths = resolve_config_paths(
             Platform.DARWIN if sys.platform == "darwin" else Platform.LINUX,
             home=os.environ["HOME"],
-            xdg_config_home=os.environ.get("XDG_CONFIG_HOME"),
-            xdg_data_home=os.environ.get("XDG_DATA_HOME"),
-            xdg_cache_home=os.environ.get("XDG_CACHE_HOME"),
+            application_home=os.environ.get("AART_CLI_HOME") or None,
         )
         parsed = parse_user_configuration(Path(paths.user_config_file).read_bytes())
         effective = apply_configuration(parsed.value, RuntimeOverrides(), OrganizationPolicy(1))
@@ -124,7 +122,7 @@ class ManualTestLabTest(unittest.TestCase):
         self.assertTrue(second.branch.startswith("manual/"))
         self.assertTrue((self.root / "consumer-project").is_dir())
         self.assertFalse((self.root / "consumer-home/.config/agent-artifacts/config.json").exists())
-        manifest = json.loads((self.root / "repositories/mcp/dummy-mcp/aart.json").read_text())
+        manifest = json.loads((self.root / "repositories/mcp/dummy-mcp/aart-cli.json").read_text())
         self.assertEqual(manifest["inputs"][0]["kind"], "secret")
         self.assertEqual(manifest["inputs"][0]["id"], "dummy-token")
         # CP-23 task 13: the lab credential demonstrates complete guidance, including how a
@@ -146,7 +144,7 @@ class ManualTestLabTest(unittest.TestCase):
             "AART_DUMMY_USER", (self.root / "repositories/mcp/dummy-mcp/server.py").read_text()
         )
         skill_manifest = json.loads(
-            (self.root / "repositories/skill/manual-check/aart.json").read_text()
+            (self.root / "repositories/skill/manual-check/aart-cli.json").read_text()
         )
         self.assertEqual(
             skill_manifest["compatibility"]["harnesses"],
@@ -177,10 +175,10 @@ class ManualTestLabTest(unittest.TestCase):
         registry = self.root / "repositories/registry"
         # The author sources still exist: an author publishes independently of any registry, and
         # the maintainer run needs something to discover.
-        self.assertTrue((self.root / "repositories/skill/manual-check/aart.json").is_file())
-        self.assertTrue((self.root / "repositories/mcp/dummy-mcp/aart.json").is_file())
+        self.assertTrue((self.root / "repositories/skill/manual-check/aart-cli.json").is_file())
+        self.assertTrue((self.root / "repositories/mcp/dummy-mcp/aart-cli.json").is_file())
         # The registry does not. Not its manifest, not a promotion, not a published version.
-        self.assertFalse((registry / "aart-registry.json").exists())
+        self.assertFalse((registry / "aart-cli-registry.json").exists())
         self.assertEqual((), tuple((registry / "registry").rglob("*.json")))
         self.assertEqual((), tuple((registry / "artifacts").rglob("*.json")))
         # And no configured Source either: adding them is itself a Maintainer screen under test.
@@ -203,7 +201,7 @@ class ManualTestLabTest(unittest.TestCase):
 
         setup_lab(self.root)
 
-        self.assertTrue((self.root / "repositories/registry/aart-registry.json").is_file())
+        self.assertTrue((self.root / "repositories/registry/aart-cli-registry.json").is_file())
         self.assertTrue(
             tuple((self.root / "repositories/registry/registry/versions").rglob("*.json"))
         )
@@ -232,7 +230,7 @@ class ManualTestLabTest(unittest.TestCase):
                 (
                     sys.executable,
                     "-m",
-                    "agent_artifacts.cli",
+                    "aart_cli.cli",
                     "source",
                     "add",
                     "--alias",
@@ -288,9 +286,7 @@ class ManualTestLabTest(unittest.TestCase):
                 home = str(resolved / f"{role}-home")
                 self.assertEqual(home, env["HOME"])
                 self.assertEqual(str(resolved / project), str(cwd))
-                self.assertTrue(env["XDG_CONFIG_HOME"].startswith(home))
-                self.assertTrue(env["XDG_DATA_HOME"].startswith(home))
-                self.assertTrue(env["XDG_CACHE_HOME"].startswith(home))
+                self.assertTrue(env["AART_CLI_HOME"].startswith(home))
 
     @unittest.skipUnless(sys.platform == "darwin", "the Keychain only exists on macOS")
     def test_each_lab_home_owns_a_keychain_so_no_reset_is_ever_offered(self) -> None:
@@ -411,7 +407,7 @@ class ManualTestLabTest(unittest.TestCase):
         from scripts.manual_test import reset_lab, setup_lab
 
         setup_lab(self.root)
-        payload = self.root / "repositories/registry/.agent-artifacts/runtimes/lab/mcp/payload"
+        payload = self.root / "repositories/registry/.aart-cli/runtimes/lab/mcp/payload"
         payload.mkdir(parents=True)
         (payload / "server.py").write_text("owned\n")
         (payload / "mcp.json").write_text("{}\n")

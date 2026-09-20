@@ -15,17 +15,17 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.domain.identifiers import ArtifactIdentity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.identifiers import ArtifactIdentity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.registry_maintenance.vendoring import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.semver import SemVer
+from aart_cli.registry_maintenance.vendoring import (
     VendoredPackage,
     VendorOptions,
     VendorOrigin,
@@ -34,7 +34,7 @@ from agent_artifacts.registry_maintenance.vendoring import (
     read_vendor_record,
     verify_vendored_copy,
 )
-from agent_artifacts.sources.subtree import take_subtree
+from aart_cli.sources.subtree import take_subtree
 
 _COMMIT = "f" * 40
 _URL = "https://github.com/example/atlassian-mcp.git"

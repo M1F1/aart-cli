@@ -50,13 +50,13 @@ Reported in issue #8:
 
 ```
 The local AART state could not be loaded.
-  error [maintainer-composition-invalid]: cannot bind Candidate history for agent-mcp-servers:
+  error [maintainer-composition-invalid]: cannot bind Candidate history for example-mcp-servers:
   maintainer Source scan does not bind the current pinned Source
 ```
 
-- `project_maintainer_source` (`agent_artifacts/application/maintainer_views.py`) raises when a
+- `project_maintainer_source` (`aart_cli/application/maintainer_views.py`) raises when a
   stored scan's revision is not the pinned revision, and `read_maintainer_views`
-  (`agent_artifacts/io/maintainer_views.py`) turns that into a refusal for **every** view. One
+  (`aart_cli/io/maintainer_views.py`) turns that into a refusal for **every** view. One
   inconsistent Source therefore hides every other Source, every Candidate and every Registry.
 - After this task: a scan that does not bind the pinned revision is **not** projected as Candidate
   data, and that Source reads as needing synchronization, with the remedy named. Every other
@@ -70,7 +70,7 @@ The local AART state could not be loaded.
 - Targeted mutation: make the revision comparison always true; the characterization test must go
   red.
 
-**Done (D-280).** `scan_binds_current_pin` in `agent_artifacts/application/maintainer_views.py`
+**Done (D-280).** `scan_binds_current_pin` in `aart_cli/application/maintainer_views.py`
 decides once whether a stored Scan is Candidate data for the pin. `project_maintainer_source`
 projects only a Scan that binds; an unbound one contributes no manifests, no Candidate states and
 no registries, the Source reads `ATTENTION`, and `UNBOUND_SCAN_DIAGNOSTIC` names the remedy.
@@ -88,15 +88,15 @@ Evidence:
   diagnostics rather than replacing them.
 - Targeted mutations: making the revision comparison always true, and dropping the predicate from
   the reader, each turn the characterization tests red. Verified.
-- Scoped mutants: `agent_artifacts/io/maintainer_views.py` 336 killed, 0 survivors.
-  `agent_artifacts/application/maintainer_views.py` leaves survivors only outside this task's
+- Scoped mutants: `aart_cli/io/maintainer_views.py` 336 killed, 0 survivors.
+  `aart_cli/application/maintainer_views.py` leaves survivors only outside this task's
   claims — the exception texts, the pre-existing type-validation guard, the registry union and the
   published-at field. The last two are in `BACKLOG.md` as B-130 and B-131.
 - Gates: `make unit`, `lint`, `format-check`, `typecheck`.
 
 ### 02 — A Source Sync that fails after pinning must leave a state the tool can still read
 
-- `execute_source_sync` (`agent_artifacts/application/maintainer_sync.py`) advances the pin inside
+- `execute_source_sync` (`aart_cli/application/maintainer_sync.py`) advances the pin inside
   `sync_source_while_locked` and only then compiles, reconciles and writes the Candidate history.
   Every failure between those points leaves exactly the state task 01 has to tolerate, so the two
   tasks are one defect seen from both ends.
@@ -109,7 +109,7 @@ Evidence:
   assert the next `read_maintainer_views` loads.
 - Integration test at the IO boundary, with a real store on disk.
 
-**Done (D-281).** The pin is published last. `agent_artifacts/application/sources.py` splits the
+**Done (D-281).** The pin is published last. `aart_cli/application/sources.py` splits the
 locked synchronization into `resolve_source_while_locked` and `publish_source_while_locked` with
 `ResolvedSourceSnapshot` between them; `sync_source_while_locked` composes the two and behaves as
 before. `execute_source_sync` compiles and reconciles the resolved candidate first, then publishes
@@ -133,12 +133,12 @@ is what covers it; that is why both tasks exist.
 
 ### 03 — A way back from an inconsistent Source without editing files by hand
 
-- `aart source sync` refreshes the managed snapshot and never writes Candidate history, so it
+- `aart-cli source sync` refreshes the managed snapshot and never writes Candidate history, so it
   cannot repair the state in issue #8 — and when the revision has not moved it reports `unchanged`
   and does nothing. The only writer is the Maintainer Sync behind the view that refuses to load.
   The owner was left with `mv …/candidates …/candidates.bak`.
-- After this task: one documented command repairs it. Either `aart source sync` rebuilds the
-  Candidate history when it does not bind the pin, or `aart doctor` reports the disagreement as a
+- After this task: one documented command repairs it. Either `aart-cli source sync` rebuilds the
+  Candidate history when it does not bind the pin, or `aart-cli doctor` reports the disagreement as a
   finding with a repair it can apply. Prefer `doctor`: it already reports and repairs, and Sync's
   contract is deliberately narrow.
 - The repair must be reviewed before it runs, must name what it discards, and must never publish a
@@ -148,19 +148,19 @@ is what covers it; that is why both tasks exist.
 
 **Done (D-282).** Three things were wrong, and the third was the one that left no way back: the
 only writer of Candidate history refused to run over a store it had written. `_bound_history` in
-`agent_artifacts/application/maintainer_sync.py` now decides whether stored history describes the
+`aart_cli/application/maintainer_sync.py` now decides whether stored history describes the
 pin; `_baseline` starts from no baseline when it does not, instead of refusing, and Candidate state
 carries forward only from history that binds. History carrying another Source's alias still
 refuses. `read_unbound_candidate_histories` reads the same disagreement outside the screens, and
-`aart doctor` reports it under `candidate_history.unbound` with both revisions and the remedy,
-exiting non-zero. No new repair kind was added to `aart doctor --repair`: rebuilding Candidate
+`aart-cli doctor` reports it under `candidate_history.unbound` with both revisions and the remedy,
+exiting non-zero. No new repair kind was added to `aart-cli doctor --repair`: rebuilding Candidate
 history is a Maintainer Source Sync, which is already reviewed, leased and refuses registry
 mutations. Doctor names it; Sync performs it.
 
 Evidence:
 - `tests/authoring_source_admission_e2e_test.py` — the whole loop over a real Git repository and a
-  real store: `aart source sync` moves the pin and writes no history (which is how the reported
-  store came about), `aart doctor` exits 1 and names the remedy, Source Sync rebuilds, doctor exits
+  real store: `aart-cli source sync` moves the pin and writes no history (which is how the reported
+  store came about), `aart-cli doctor` exits 1 and names the remedy, Source Sync rebuilds, doctor exits
   0 and the Candidate is back. Nothing under the data root is touched by hand.
 - `tests/maintainer_source_sync_application_test.py` — a Sync can be reviewed over history that
   does not bind the pin, and its baseline is empty rather than the stale one.
@@ -178,7 +178,7 @@ Install its Python dependencies with pip
 Install its Python dependencies with uv
 ```
 
-- `remediation_change` (`agent_artifacts/tui_consumer.py:732`) renders one line per remediation,
+- `remediation_change` (`aart_cli/tui_consumer.py:732`) renders one line per remediation,
   and the planner offers one per available installer. Two mutually exclusive offers read as two
   changes AART will make.
 - After this task: the review names one installer — the one that will run — or, where the reader
@@ -188,7 +188,7 @@ Install its Python dependencies with uv
 - Targeted mutation: collapse the selection so both lines return; the new test must go red.
 
 **Done (D-283).** The planner was offering what the installer never does. `chosen_installer`
-(`agent_artifacts/domain/python_runtime.py`) is now the single rule for which backend runs out of
+(`aart_cli/domain/python_runtime.py`) is now the single rule for which backend runs out of
 every backend that could: `select_python_installer` ends in it, and `allowed_remediations` reduces
 each dependency contract to that one offer (`_one_installer_per_contract`) after the policy filter,
 so narrowing policy narrows which backend is named rather than removing the offer. The rendering was
@@ -203,7 +203,7 @@ Evidence:
 - Targeted mutation: making the reduction a no-op returns both offers and turns the new tests red
   (3 failures, all in `PythonInstallerOfferTest`). Verified.
 - Gates: `lint`, `format-check`, `typecheck`, `docs-check`; `make unit` at the task's close.
-- Scoped mutants: `agent_artifacts/domain/python_runtime.py` with `python_runtime_test.py` and
+- Scoped mutants: `aart_cli/domain/python_runtime.py` with `python_runtime_test.py` and
   `environment_planning_test.py` — 94 mutants, 53 killed, 31 survived, 10 unreached. The two
   survivors inside `chosen_installer` drop the sort key, which is equivalent: `PythonInstaller`
   subclasses `str`, so ordering by name is the default ordering. The rest are the serialization
@@ -217,7 +217,7 @@ Evidence:
 
 Reported in issue #7: installing one MCP server reported `2 launcher(s) written`.
 
-- `_OUTCOMES` (`agent_artifacts/tui_consumer.py:287`) maps one effect kind to one phrase and the
+- `_OUTCOMES` (`aart_cli/tui_consumer.py:287`) maps one effect kind to one phrase and the
   view counts effects. Two written files are two launchers to the counter and one installation to
   the reader.
 - After this task: establish what the two files are. If both are launchers the reader would
@@ -228,7 +228,7 @@ Reported in issue #7: installing one MCP server reported `2 launcher(s) written`
 **Done (D-284).** Both files are `WriteFile` effects and the counter keyed on the effect kind, so it
 called the harness's configuration file a launcher. `EffectView` now carries an `outcome` beside its
 `kind` -- what the change is to the reader -- and `_outcome`
-(`agent_artifacts/application/consumer_views.py`) splits `write-file` on the `executable` flag the
+(`aart_cli/application/consumer_views.py`) splits `write-file` on the `executable` flag the
 plan already carries: the launcher is the file written executable, the configuration file is not.
 `_OUTCOMES` is keyed by outcome and also names the delivery and merge effects a placement plans,
 which had been counted as "other change". The canonical plan is untouched, so no review digest moves.
@@ -307,14 +307,14 @@ Evidence:
   CP-23 run red, did not reproduce.
 - Scoped `make mutants` over the two modules this slice gave new behaviour to, beyond the per-task
   runs already recorded above:
-  - `agent_artifacts/application/execution.py` with `execution_test`, `installation_progress_test`,
+  - `aart_cli/application/execution.py` with `execution_test`, `installation_progress_test`,
     `installation_execution_test` and `lifecycle_execution_test`: 539 mutants, 254 killed, 115
     survived, 170 unreached. 18 survivors were inside task 06's claims -- `_member_observer` could
     be replaced by a no-op, `execute_lifecycle` could drop its observer, and the index and effect on
     a finished step could be anything -- so they became tests, not notes. After them: 327 killed and
     only 57 unreached, and every remaining survivor is a diagnostic string or a guard belonging to
     CP-12's transaction preflight, which this slice did not touch.
-  - `agent_artifacts/application/consumer_views.py` with `consumer_views_test`,
+  - `aart_cli/application/consumer_views.py` with `consumer_views_test`,
     `install_review_counts_test`, `installation_progress_test` and `running_installation_screen_test`:
     2,220 mutants, 510 killed, 375 survived, 1,335 unreached -- the module holds every Consumer
     projection and the scoped test set exercises a few. The 16 survivors in
@@ -383,7 +383,7 @@ Same run: `ValueError: executable requirement is invalid` from
   whitespace, no control character, not empty — while `RequirementId` stays kebab-case. The
   integration test stops assuming the interpreter it runs under is prettily named.
 
-**Done (D-288).** `executable_name(value, label)` in `agent_artifacts/domain/requirements.py` is the
+**Done (D-288).** `executable_name(value, label)` in `aart_cli/domain/requirements.py` is the
 rule a file name really has: one non-empty line, no path separator, no whitespace, no control
 character, and not `.` or `..` — a name a shell could look up on `PATH` by itself. It replaced
 `_ID_RE` in `ExecutableRequirement`, and `RequirementId` was left exactly as it was.

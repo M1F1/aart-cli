@@ -7,20 +7,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts.application.maintainer import reconcile_source_scan
-from agent_artifacts.application.promotion import (
+from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.application.promotion import (
     PromotionEvidence,
     plan_bulk_promotion,
     project_promotion,
 )
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
-from agent_artifacts.domain.candidates import assess_candidate
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.protocol.native_tree import SnapshotEntryKind, SnapshotOrigin, SourceSnapshot
-from agent_artifacts.sources.local import read_local_snapshot
-from agent_artifacts.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
+from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.domain.candidates import assess_candidate
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.protocol.native_tree import SnapshotEntryKind, SnapshotOrigin, SourceSnapshot
+from aart_cli.sources.local import read_local_snapshot
+from aart_cli.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
 
 
 def _digest(character: str) -> ObjectDigest:
@@ -34,14 +34,14 @@ class MaintainerLifecycleIntegrationTest(unittest.TestCase):
             package = author / "github"
             package.mkdir(parents=True)
             manifest = {
-                "schema": "aart.dev/mcp/v1",
+                "schema": "aart-cli.dev/mcp/v1",
                 "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
                 "payload": {"include": ["server.py"]},
                 "transport": {"type": "stdio"},
                 "runtime": {"type": "python", "version": ">=3.11"},
                 "launch": {"type": "python", "entrypoint": "server.py"},
             }
-            (package / "aart.json").write_text(json.dumps(manifest), encoding="utf-8")
+            (package / "aart-cli.json").write_text(json.dumps(manifest), encoding="utf-8")
             (package / "server.py").write_text("print('durable')\n", encoding="utf-8")
             alias = SourceAlias("authors")
             configured = ConfiguredSource(alias, SourceKind.SOURCE_LOCAL, str(author), None, True)

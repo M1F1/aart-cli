@@ -9,7 +9,7 @@ from tests.credential_fixtures import assignment, credential_url
 
 
 def _unwrap(result):
-    from agent_artifacts.domain.result import Ok
+    from aart_cli.domain.result import Ok
 
     if not isinstance(result, Ok):
         raise AssertionError(f"expected Ok, got {result!r}")
@@ -17,7 +17,7 @@ def _unwrap(result):
 
 
 def _codes(result) -> tuple[str, ...]:
-    from agent_artifacts.domain.result import Err
+    from aart_cli.domain.result import Err
 
     if not isinstance(result, Err):
         raise AssertionError(f"expected Err, got {result!r}")
@@ -47,7 +47,7 @@ def _provenance_document(**overrides):
 
 class ProvenanceTest(unittest.TestCase):
     def test_parses_digest_bound_import_provenance(self):
-        from agent_artifacts.protocol.native_schema import parse_provenance
+        from aart_cli.protocol.native_schema import parse_provenance
 
         provenance = _unwrap(parse_provenance(json.dumps(_provenance_document())))
 
@@ -57,7 +57,7 @@ class ProvenanceTest(unittest.TestCase):
         self.assertEqual(str(provenance.importer.version), "1.0.0")
 
     def test_rejects_credentials_unpinned_commits_and_invalid_digests(self):
-        from agent_artifacts.protocol.native_schema import parse_provenance
+        from aart_cli.protocol.native_schema import parse_provenance
 
         for origin_update in (
             {"url": credential_url("github.com", "/example/upstream.git")},
@@ -74,7 +74,7 @@ class ProvenanceTest(unittest.TestCase):
                 )
 
     def test_provenance_schema_and_importer_fields_are_strict(self):
-        from agent_artifacts.protocol.native_schema import parse_provenance
+        from aart_cli.protocol.native_schema import parse_provenance
 
         cases = []
         for origin_update in (
@@ -123,7 +123,7 @@ class ProvenanceTest(unittest.TestCase):
 
 class CollectionTest(unittest.TestCase):
     def test_parses_structured_artifact_selectors_and_collection_references(self):
-        from agent_artifacts.protocol.native_schema import parse_collection_manifest
+        from aart_cli.protocol.native_schema import parse_collection_manifest
 
         document = {
             "schema_version": 1,
@@ -150,7 +150,7 @@ class CollectionTest(unittest.TestCase):
         self.assertEqual(collection.collections, ("base",))
 
     def test_rejects_duplicate_selectors_and_self_reference(self):
-        from agent_artifacts.protocol.native_schema import parse_collection_manifest
+        from aart_cli.protocol.native_schema import parse_collection_manifest
 
         duplicate = {
             "schema_version": 1,
@@ -184,7 +184,7 @@ class CollectionTest(unittest.TestCase):
         )
 
     def test_collection_document_and_selector_fields_are_strict(self):
-        from agent_artifacts.protocol.native_schema import parse_collection_manifest
+        from aart_cli.protocol.native_schema import parse_collection_manifest
 
         base = {
             "schema_version": 1,

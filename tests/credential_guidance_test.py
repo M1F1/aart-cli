@@ -36,50 +36,51 @@ from unittest import mock
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.candidate_validation import (
+from aart_cli.application.candidate_validation import (
     ValidationCheck,
     validate_candidate,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     PresentationProfile,
     project_required_inputs,
 )
-from agent_artifacts.application.credential_guidance import (
+from aart_cli.application.credential_guidance import (
     credential_guidance_lines,
     credential_prompt_briefing,
     gather_credential_guidance,
 )
-from agent_artifacts.application.installation_inputs import (
-    INPUT_DECLARATION_CONFLICT,
+from aart_cli.application.installation_inputs import (
     InstallationInputUse,
     compose_installation_inputs,
 )
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.credentials import (
     CredentialProviderRef,
     CredentialReference,
     CredentialState,
 )
-from agent_artifacts.domain.effects import ReplaceCredential, StoreCredential
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.effects import ReplaceCredential, StoreCredential
+from aart_cli.domain.harness import Scope
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     InputId,
     SourceAlias,
 )
-from agent_artifacts.domain.inputs import (
+from aart_cli.domain.inputs import (
     BindingExposure,
     EnvironmentBinding,
     InputGuidance,
     ObtainFrom,
     SecretInput,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.consumer_actions import LocalConsumerActions
-from agent_artifacts.io.execution import CredentialEffectInterpreter
-from agent_artifacts.tui import _CursesHandover
-from agent_artifacts.tui_consumer import render_required_inputs
+from aart_cli.domain.installation_owner import installation_owner
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.consumer_actions import LocalConsumerActions
+from aart_cli.io.execution import CredentialEffectInterpreter
+from aart_cli.tui import _CursesHandover
+from aart_cli.tui_consumer import render_required_inputs
 from tests.artifact_installation_e2e_test import MANIFEST, SERVER_SOURCE
 from tests.candidate_validation_test import _bundle
 from tests.configured_install_command_e2e_test import _environment
@@ -121,7 +122,7 @@ def _authored(name: str, help_: dict | None):
     """One author tree: an MCP server declaring a single secret with `help_` as its help."""
 
     return (
-        (f"{name}/aart.json", _manifest(name, help_)),
+        (f"{name}/aart-cli.json", _manifest(name, help_)),
         (f"{name}/server.py", SERVER_SOURCE),
         (f"{name}/requirements.txt", "# no third-party packages\n"),
     )
@@ -487,7 +488,7 @@ class ThePromptIsBriefedTest(unittest.TestCase):
         self.assertIn("Where to get it is not stated", "\n".join(briefing))
 
     def test_verifying_or_removing_briefs_nobody(self) -> None:
-        from agent_artifacts.domain.effects import DeleteCredential, VerifyCredential
+        from aart_cli.domain.effects import DeleteCredential, VerifyCredential
 
         interpreter = self._interpreter()
         interpreter.apply(VerifyCredential(str(_reference()), PROVIDER))
@@ -576,11 +577,19 @@ class CursesHandoverBriefingTest(unittest.TestCase):
         self.assertEqual(stream.getvalue(), "AART needs a credential to continue.\n")
 
 
-def _owner(name: str) -> ArtifactCoordinate:
+def _coordinate(name: str) -> ArtifactCoordinate:
     return ArtifactCoordinate(SourceAlias("company"), ArtifactIdentity("mcp", name), "1.0.0")
 
 
-class SharedDeclarationsTest(unittest.TestCase):
+def _owner(name: str):
+    return installation_owner(
+        _coordinate(name), scope=Scope.PROJECT, root="/work/project", harness="claude"
+    )
+
+
+class SeparateDeclarationsTest(unittest.TestCase):
+    """D-263's words, now on D-353's rows: each installation asks in its own author's words."""
+
     def _compose(self, first: SecretInput, second: SecretInput):
         return compose_installation_inputs(
             (
@@ -591,23 +600,27 @@ class SharedDeclarationsTest(unittest.TestCase):
             EffectivePolicy(),
         )
 
-    def test_differing_help_is_not_a_conflict_and_each_owner_keeps_theirs(self) -> None:
+    def test_each_owner_is_asked_separately_and_keeps_its_own_words(self) -> None:
         composed = self._compose(_secret(TOKEN_HELP), _secret(MANUAL_HELP))
 
         self.assertIsInstance(composed, Ok, getattr(composed, "diagnostics", ()))
-        (view,) = composed.value.views()
-        self.assertEqual(
-            [group.owners for group in view.guidance],
-            [("company/mcp/a@1.0.0",), ("company/mcp/b@1.0.0",)],
-        )
+        first, second = composed.value.views()
+        self.assertEqual([group.owners for group in first.guidance], [(str(_owner("a")),)])
+        self.assertEqual([group.owners for group in second.guidance], [(str(_owner("b")),)])
+        self.assertNotEqual(first.row, second.row)
 
-    def test_a_different_delivery_is_still_a_conflict(self) -> None:
+    def test_a_different_delivery_is_two_rows_rather_than_a_refusal(self) -> None:
+        """It was a conflict only while one field served both owners (D-353)."""
+
         other = dataclasses.replace(_secret(TOKEN_HELP), binding=EnvironmentBinding("GH_TOKEN"))
 
         composed = self._compose(_secret(TOKEN_HELP), other)
 
-        self.assertIsInstance(composed, Err)
-        self.assertEqual(composed.diagnostics[0].code, INPUT_DECLARATION_CONFLICT)
+        self.assertIsInstance(composed, Ok, getattr(composed, "diagnostics", ()))
+        self.assertEqual(
+            {"GITHUB_TOKEN", "GH_TOKEN"},
+            {field.input.binding.variable for field in composed.value.fields},
+        )
 
 
 # -- Source to Registry to installation ------------------------------------------------------
@@ -687,7 +700,15 @@ class SourceToPromptE2ETest(unittest.TestCase):
         self.assertEqual(journal.briefings, [])
         self.assertEqual(provider.stored, [])
 
-    def test_two_artifacts_sharing_a_credential_are_asked_once_with_both_owners(self) -> None:
+    def test_two_artifacts_declaring_one_input_are_asked_for_separately(self) -> None:
+        """§169.4-6: two artifacts are two installations, so one declared id is two credentials.
+
+        They were once asked for once, with both owners named in a single briefing, because one
+        item served both. Each installation holding its own means each is entered on its own, in
+        front of the guidance its own author wrote -- the value for one artifact is never quietly
+        the value for another.
+        """
+
         terminal, journal, provider = _install(
             _authored("alpha", TOKEN_HELP),
             _authored("beta", MANUAL_HELP),
@@ -697,13 +718,15 @@ class SourceToPromptE2ETest(unittest.TestCase):
         drawn = _screen_07(terminal)
         self.assertIn("GitHub token — needed by company/mcp/alpha@1.5.0", drawn)
         self.assertIn("Service token — needed by company/mcp/beta@1.5.0", drawn)
-        self.assertEqual(provider.stored, [(None, False)])
-        (briefing,) = journal.briefings
-        self.assertIn("GitHub token — needed by company/mcp/alpha@1.5.0", briefing)
-        self.assertIn("Service token — needed by company/mcp/beta@1.5.0", briefing)
+        self.assertEqual(provider.stored, [(None, False), (None, False)])
+        first, second = journal.briefings
+        self.assertIn("GitHub token — needed by company/mcp/alpha@1.5.0", first)
+        self.assertNotIn("Service token — needed by company/mcp/beta@1.5.0", first)
+        self.assertIn("Service token — needed by company/mcp/beta@1.5.0", second)
+        self.assertNotIn("GitHub token — needed by company/mcp/alpha@1.5.0", second)
 
     def test_no_frame_or_briefing_holds_anything_credential_shaped(self) -> None:
-        from agent_artifacts.redaction import contains_credential_shape
+        from aart_cli.redaction import contains_credential_shape
 
         terminal, journal, _ = _install(_authored("github", TOKEN_HELP))
 
@@ -719,7 +742,7 @@ class CommandLineGuidanceE2ETest(unittest.TestCase):
         with (
             _environment(authored=_authored("github", TOKEN_HELP)) as env,
             mock.patch(
-                "agent_artifacts.commands.marketplace.MacOsKeychainProvider",
+                "aart_cli.commands.marketplace.MacOsKeychainProvider",
                 lambda: _Resolving(journal),
             ),
         ):
@@ -730,18 +753,22 @@ class CommandLineGuidanceE2ETest(unittest.TestCase):
                 "marketplace", "install", "company/mcp/github", "--profile", "claude"
             )
 
+        # Named by installation rather than by coordinate: the question belongs to one target, and
+        # an operator installing onto several is told which one is asking (D-353).
+        installation = "claude/project:company/mcp/github"
         expected = gather_credential_guidance(
-            "github-token", (("company/mcp/github@1.5.0", _guidance(TOKEN_HELP)),)
+            "github-token", ((installation, _guidance(TOKEN_HELP)),)
         )
         self.assertNotEqual(text_code, 0)
         for line in credential_guidance_lines(expected):
             self.assertIn(line, text)
         self.assertNotEqual(json_code, 0)
+        self.assertEqual(payload["inputs"][0]["owner"], installation)
         self.assertEqual(
             payload["inputs"][0]["guidance"],
             [
                 {
-                    "owners": ["company/mcp/github@1.5.0"],
+                    "owners": [installation],
                     "label": "GitHub token",
                     "description": "Lets the server read the repositories you choose.",
                     "obtain_from": {

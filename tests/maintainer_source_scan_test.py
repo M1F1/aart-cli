@@ -9,23 +9,23 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.maintainer import reconcile_source_scan
-from agent_artifacts.domain.candidates import (
+from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.domain.candidates import (
     CandidateState,
     assess_candidate,
     reject_candidate,
 )
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.registry import PromotionMode, registry_version_from_candidate
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.registry import PromotionMode, registry_version_from_candidate
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
+from aart_cli.protocol.paths import parse_relative_path
 
 
 def _digest(character: str) -> ObjectDigest:
@@ -46,7 +46,7 @@ def _compiled(
     version: str = "1.0.0",
 ):
     manifest = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": "github-mcp", "kind": "mcp", "version": version},
         "payload": {"include": ["server.py", "requirements.txt"]},
         "transport": {"type": "stdio"},
@@ -57,7 +57,7 @@ def _compiled(
     snapshot = SourceSnapshot(
         SnapshotOrigin.IMMUTABLE_GIT,
         (
-            _entry("github/aart.json", json.dumps(manifest)),
+            _entry("github/aart-cli.json", json.dumps(manifest)),
             _entry("github/server.py", server),
             _entry("github/requirements.txt", "dependency==1.0\n"),
             _entry("README.md", unrelated),

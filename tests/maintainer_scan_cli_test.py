@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts import cli
+from aart_cli import cli
 
 
 def _git(root: Path, *arguments: str) -> None:
@@ -31,14 +31,14 @@ def _author_checkout(root: Path) -> None:
     package = root / "github"
     package.mkdir()
     manifest = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},
         "launch": {"type": "python", "entrypoint": "server.py"},
     }
-    (package / "aart.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (package / "aart-cli.json").write_text(json.dumps(manifest), encoding="utf-8")
     (package / "server.py").write_text("print('ready')\n", encoding="utf-8")
     _git(root, "add", ".")
     _git(root, "commit", "-qm", "author artifact")

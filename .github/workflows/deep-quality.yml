@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: "Module to mutate, e.g. agent_artifacts/application/consumer_views.py"
+        description: "Module to mutate, e.g. aart_cli/application/consumer_views.py"
         required: true
         type: string
       tests:
@@ -34,41 +34,41 @@ permissions:
   contents: read
 
 env:
-  AART_POETRY: ${{ vars.AART_POETRY }}
+  AART_CLI_POETRY: ${{ vars.AART_CLI_POETRY }}
 
 jobs:
   mutants:
-    if: vars.AART_IMAGE_USERNAME_SECRET == ''
-    runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
-    container: ${{ vars.AART_CI_IMAGE || format('python:{0}', vars.AART_RELEASE_PYTHON_VERSION || '3.11') }}
+    if: vars.AART_CLI_IMAGE_USERNAME_SECRET == ''
+    runs-on: ${{ fromJSON(vars.AART_CLI_RUNNER || '["ubuntu-latest"]') }}
+    container: ${{ vars.AART_CLI_CI_IMAGE || format('python:{0}', vars.AART_CLI_RELEASE_PYTHON_VERSION || '3.11') }}
     env:
-      AART_INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
-      AART_INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
+      AART_CLI_INDEX_URL: ${{ vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple' }}
+      AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET] }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - uses: ./.github/actions/mutants
         with:
-          python: ${{ vars.AART_PYTHON || 'python' }}
+          python: ${{ vars.AART_CLI_PYTHON || 'python' }}
           only: ${{ inputs.only }}
           tests: ${{ inputs.tests }}
 
   mutants-private-image:
-    if: vars.AART_IMAGE_USERNAME_SECRET != ''
-    runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
+    if: vars.AART_CLI_IMAGE_USERNAME_SECRET != ''
+    runs-on: ${{ fromJSON(vars.AART_CLI_RUNNER || '["ubuntu-latest"]') }}
     container:
-      image: ${{ vars.AART_CI_IMAGE }}
+      image: ${{ vars.AART_CLI_CI_IMAGE }}
       credentials:
-        username: ${{ secrets[vars.AART_IMAGE_USERNAME_SECRET] }}
-        password: ${{ secrets[vars.AART_IMAGE_PASSWORD_SECRET] }}
+        username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET] }}
+        password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET] }}
     env:
-      AART_INDEX_URL: ${{ vars.AART_PIP_INDEX_URL || 'https://pypi.org/simple' }}
-      AART_INDEX_CREDENTIALS: ${{ secrets[vars.AART_PIP_INDEX_CREDENTIALS_SECRET] }}
+      AART_CLI_INDEX_URL: ${{ vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple' }}
+      AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET] }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - uses: ./.github/actions/mutants
         with:
-          python: ${{ vars.AART_PYTHON || 'python' }}
+          python: ${{ vars.AART_CLI_PYTHON || 'python' }}
           only: ${{ inputs.only }}
           tests: ${{ inputs.tests }}

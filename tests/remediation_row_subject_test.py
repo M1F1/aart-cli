@@ -18,9 +18,9 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.application.consumer_views import PresentationProfile, RemediationView
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_consumer import render_remediation
+from aart_cli.application.consumer_views import PresentationProfile, RemediationView
+from aart_cli.domain.result import Ok
+from aart_cli.tui_consumer import render_remediation
 from tests.consumer_flow_test import _begin
 
 

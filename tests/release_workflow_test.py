@@ -22,11 +22,13 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
         # No source-gate matrix here any more, on either spelling.  These two are what a
         # reinstated quality job would bring back with it, so their absence is the contract.
-        self.assertNotIn("AART_PYTHON_VERSIONS", workflow)
+        self.assertNotIn("AART_CLI_PYTHON_VERSIONS", workflow)
         self.assertNotIn("uses: ./.github/actions/quality", workflow)
         # No default here on purpose: the variable's presence is what decides whether the
         # reconciliation runs.  `enterprise_ci_template_test` holds that contract.
-        self.assertIn("REFERENCE_REGISTRY_URL: ${{ vars.AART_REFERENCE_REGISTRY_URL }}", workflow)
+        self.assertIn(
+            "REFERENCE_REGISTRY_URL: ${{ vars.AART_CLI_REFERENCE_REGISTRY_URL }}", workflow
+        )
         # The run reads history: it proves the tagged commit is an ancestor of `main`.
         self.assertIn("fetch-depth: 0", workflow)
 
@@ -59,7 +61,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # wheel is attached to the release, which is where anyone installing it looks.
         self.assertNotIn("uses: actions/upload-artifact", release_steps)
         self.assertNotIn("inputs.artifact-v4", release_steps)
-        self.assertNotIn("AART_ARTIFACT_V4", workflow)
+        self.assertNotIn("AART_CLI_ARTIFACT_V4", workflow)
         self.assertIn(
             "git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main",
             release_steps,
@@ -208,11 +210,11 @@ class PublishingToAnIndexIsOptionalTest(unittest.TestCase):
             workflow = path.read_text(encoding="utf-8")
             with self.subTest(workflow=path.name):
                 self.assertIn(
-                    "AART_INDEX_PUBLISH_CREDENTIALS: "
-                    "${{ secrets[vars.AART_INDEX_PUBLISH_CREDENTIALS_SECRET] }}",
+                    "AART_CLI_INDEX_PUBLISH_CREDENTIALS: "
+                    "${{ secrets[vars.AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET] }}",
                     workflow,
                 )
-                self.assertIn("INDEX_PUBLISH_URL: ${{ vars.AART_INDEX_PUBLISH_URL }}", workflow)
+                self.assertIn("INDEX_PUBLISH_URL: ${{ vars.AART_CLI_INDEX_PUBLISH_URL }}", workflow)
 
     def test_both_halves_of_the_credential_are_remasked(self) -> None:
         """GitHub masks the value it was given -- `user:pass` -- and neither half after a split."""

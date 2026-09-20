@@ -20,7 +20,7 @@ import unittest
 from tests.configured_install_command_e2e_test import _Environment
 
 HOOK_MANIFEST = {
-    "schema": "aart.dev/hook/v1",
+    "schema": "aart-cli.dev/hook/v1",
     "artifact": {"name": "guard-bash", "kind": "hook", "version": "1.2.0"},
     "payload": {"include": ["hook.json", "run.sh"]},
     "compatibility": {"harnesses": ["claude"]},
@@ -36,7 +36,7 @@ DECLARATION = {
 SCRIPT = "#!/bin/sh\nexit 0\n"
 
 AUTHORED_HOOK: tuple[tuple[str, str] | tuple[str, str, bool], ...] = (
-    ("guard-bash/aart.json", json.dumps(HOOK_MANIFEST)),
+    ("guard-bash/aart-cli.json", json.dumps(HOOK_MANIFEST)),
     ("guard-bash/hook.json", json.dumps(DECLARATION)),
     ("guard-bash/run.sh", SCRIPT, True),
 )
@@ -61,7 +61,9 @@ class HookInstallationTest(unittest.TestCase):
         self.env = _Environment(pathlib.Path(temporary.name).resolve())
         self.env.publish(AUTHORED_HOOK)
         self.settings = self.env.project / ".claude/settings.json"
-        self.script = self.env.project / ".claude/hooks/guard-bash/run.sh"
+        # The directory is named for the installation rather than for the artifact (`§169.7`):
+        # the same hook taken from two Registries is two scripts, not one overwriting the other.
+        self.script = self.env.project / ".claude/hooks/guard-bash-company-project/run.sh"
 
     def _install(self) -> tuple[int, dict]:
         return self.env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")

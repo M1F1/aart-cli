@@ -2,25 +2,25 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.configuration.model import (
+from aart_cli.configuration.model import (
     ConfiguredSource,
     SourceKind,
     SyncMode,
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.policy import (
+from aart_cli.configuration.policy import (
     RuntimeOverrides,
     apply_configuration,
     apply_configuration_for_source_management,
     redact_text,
 )
-from agent_artifacts.configuration.schema import (
+from aart_cli.configuration.schema import (
     parse_organization_policy,
     parse_user_configuration,
 )
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
 from tests.credential_fixtures import assignment, credential_url
 
 

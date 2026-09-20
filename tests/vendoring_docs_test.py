@@ -14,7 +14,7 @@ import re
 import unittest
 from pathlib import Path
 
-from agent_artifacts.registry_maintenance.vendoring import describe_delivery
+from aart_cli.registry_maintenance.vendoring import describe_delivery
 
 _ROOT = Path(__file__).resolve().parent.parent
 _TUTORIAL = _ROOT / "docs/tutorials/vendoring-v1.md"

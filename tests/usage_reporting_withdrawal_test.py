@@ -6,8 +6,8 @@ import json
 import unittest
 from pathlib import Path
 
-from agent_artifacts.configuration import schema
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.configuration import schema
+from aart_cli.domain.result import Err, Ok
 
 
 def _line(source: str, needle: str) -> int:
@@ -19,13 +19,13 @@ def _line(source: str, needle: str) -> int:
 
 class TheOfferIsGoneTest(unittest.TestCase):
     def test_the_usage_reporting_package_is_gone(self) -> None:
-        package = Path(__file__).parents[1] / "agent_artifacts" / "reporting"
+        package = Path(__file__).parents[1] / "aart_cli" / "reporting"
         self.assertFalse(package.exists())
 
     def test_the_marketplace_command_names_no_usage_report(self) -> None:
         import inspect
 
-        from agent_artifacts.commands import marketplace
+        from aart_cli.commands import marketplace
 
         source = inspect.getsource(marketplace)
         for gone in ("_CliReporting", "_read_reporting_consent", "usage report", "UsageReport"):

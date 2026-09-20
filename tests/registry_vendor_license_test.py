@@ -15,19 +15,19 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts import cli
-from agent_artifacts.curation.runtime import LocalCurationService
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import SourceSnapshot
-from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
+from aart_cli import cli
+from aart_cli.curation.runtime import LocalCurationService
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import SourceSnapshot
+from aart_cli.registry_maintenance.model import NativeReferenceAcquisition
+from tests.registry_maintenance_fixtures import empty_registry_snapshot, write_snapshot
 from tests.registry_revendor_test import _MOVED_COMMIT, _moved_repository
 from tests.registry_vendoring_projection_test import (
     _COMMIT,
@@ -37,8 +37,8 @@ from tests.registry_vendoring_projection_test import (
     _foreign_repository,
 )
 
-_PACKAGE = "artifacts/mcp/atlassian"
-_REGISTRY_FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "registry-v1"
+_STAGING = "artifacts/mcp/atlassian"
+_PACKAGE = f"{_STAGING}/1.0.0"
 _MIT = (
     b"MIT License\n\nCopyright (c) 2024 Example\n\nPermission is hereby granted, free of charge, "
     b"to any person obtaining a copy of this software and associated documentation files.\n"
@@ -101,8 +101,8 @@ def _checks(payload: dict) -> dict[str, dict]:
     return {item["name"]: item for item in review["checks"]}
 
 
-def _manifest(root: Path) -> dict:
-    return json.loads((root / _PACKAGE / "artifact.json").read_text())
+def _manifest(root: Path, *, version: str = "1.0.0") -> dict:
+    return json.loads((root / _STAGING / version / "artifact.json").read_text())
 
 
 def _audit_messages(output: str) -> tuple[str, ...]:
@@ -147,7 +147,7 @@ class _RegistryFixture(unittest.TestCase):
             document.write_bytes(_MCP_JSON)
             service = LocalCurationService(str(root), native_acquirer=_acquire(upstream))
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 code, output = _run(*_vendor(root, "--yes", "--json", *vendor_flags))
@@ -235,7 +235,7 @@ class LicenseCaptureTest(_RegistryFixture):
                 str(root), native_acquirer=_acquire(_moved_repository(), _MOVED_COMMIT)
             )
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 code, output = _run(
@@ -251,8 +251,8 @@ class LicenseCaptureTest(_RegistryFixture):
                 )
 
             self.assertEqual(code, 0, output)
-            self.assertEqual(_manifest(root)["version"], "2.0.0")
-            self.assertEqual(_manifest(root)["license"], "MIT")
+            self.assertEqual(_manifest(root, version="2.0.0")["version"], "2.0.0")
+            self.assertEqual(_manifest(root, version="2.0.0")["license"], "MIT")
 
 
 class VendoredAuditTest(_RegistryFixture):
@@ -292,7 +292,7 @@ class VendoredAuditTest(_RegistryFixture):
             raise AssertionError("registry audit resolved an origin without --check-upstream")
 
         with self._audited(_licensed(("LICENSE", _MIT))) as root:
-            with patch("agent_artifacts.commands.registry.default_native_acquirer", refuse):
+            with patch("aart_cli.commands.registry.default_native_acquirer", refuse):
                 code, output = _run("registry", "audit", "--source", str(root), "--json")
 
             self.assertEqual(code, 0, output)
@@ -301,7 +301,7 @@ class VendoredAuditTest(_RegistryFixture):
     def test_check_upstream_reports_a_copy_behind_upstream_without_failing(self) -> None:
         with self._audited(_licensed(("LICENSE", _MIT))) as root:
             with patch(
-                "agent_artifacts.commands.registry.default_native_acquirer",
+                "aart_cli.commands.registry.default_native_acquirer",
                 _acquire(_moved_repository(), _MOVED_COMMIT),
             ):
                 code, output = _run(
@@ -318,7 +318,7 @@ class VendoredAuditTest(_RegistryFixture):
         self,
     ) -> None:
         with self._audited(_licensed(("LICENSE", _MIT))) as root:
-            with patch("agent_artifacts.commands.registry.default_native_acquirer", _unreachable):
+            with patch("aart_cli.commands.registry.default_native_acquirer", _unreachable):
                 code, output = _run(
                     "registry", "audit", "--source", str(root), "--check-upstream", "--json"
                 )
@@ -333,7 +333,7 @@ class VendoredAuditTest(_RegistryFixture):
 
         with self._audited(_licensed(("LICENSE", _MIT))) as root:
             with patch(
-                "agent_artifacts.commands.registry.default_native_acquirer",
+                "aart_cli.commands.registry.default_native_acquirer",
                 _acquire(_licensed(("LICENSE", _MIT))),
             ):
                 code, output = _run(
@@ -356,7 +356,7 @@ class VendoredAuditTest(_RegistryFixture):
 
         with self._audited(_licensed(("LICENSE", _MIT))) as root:
             with patch(
-                "agent_artifacts.commands.registry.default_native_acquirer",
+                "aart_cli.commands.registry.default_native_acquirer",
                 _acquire(_licensed(("LICENSE", _MIT))),
             ):
                 code, output = _run(
@@ -382,7 +382,7 @@ class VendoredAuditTest(_RegistryFixture):
     def test_laf45_the_summary_counts_a_copy_that_is_behind(self) -> None:
         with self._audited(_licensed(("LICENSE", _MIT))) as root:
             with patch(
-                "agent_artifacts.commands.registry.default_native_acquirer",
+                "aart_cli.commands.registry.default_native_acquirer",
                 _acquire(_moved_repository(), _MOVED_COMMIT),
             ):
                 code, output = _run(
@@ -408,7 +408,7 @@ class VendoredAuditTest(_RegistryFixture):
         """An unreadable origin must not be counted as a copy that was compared and matched."""
 
         with self._audited(_licensed(("LICENSE", _MIT))) as root:
-            with patch("agent_artifacts.commands.registry.default_native_acquirer", _unreachable):
+            with patch("aart_cli.commands.registry.default_native_acquirer", _unreachable):
                 code, output = _run(
                     "registry", "audit", "--source", str(root), "--check-upstream", "--json"
                 )
@@ -441,7 +441,8 @@ class UnvendoredAuditTest(unittest.TestCase):
     def test_laf45_a_registry_with_nothing_vendored_still_says_the_check_ran(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "registry"
-            shutil.copytree(_REGISTRY_FIXTURE, root)
+            root.mkdir()
+            write_snapshot(root, empty_registry_snapshot())
 
             code, output = _run(
                 "registry", "audit", "--source", str(root), "--check-upstream", "--json"

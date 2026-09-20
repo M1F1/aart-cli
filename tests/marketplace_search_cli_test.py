@@ -14,7 +14,7 @@ import os
 import unittest
 from unittest import mock
 
-from agent_artifacts import cli
+from aart_cli import cli
 from tests.marketplace_lifecycle_e2e_test import _environment
 
 

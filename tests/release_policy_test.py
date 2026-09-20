@@ -58,7 +58,7 @@ def _scanned_files() -> tuple[pathlib.Path, ...]:
 
     return (
         ROOT / "pyproject.toml",
-        *sorted((ROOT / "agent_artifacts").rglob("*.py")),
+        *sorted((ROOT / "aart_cli").rglob("*.py")),
         *sorted((ROOT / "scripts").glob("*.py")),
     )
 
@@ -142,7 +142,7 @@ class CommittedReleasePolicyTest(unittest.TestCase):
 
         found = declarations_of(_released_version())
         self.assertIn("pyproject.toml", found)
-        self.assertIn("agent_artifacts/__init__.py", found)
+        self.assertIn("aart_cli/__init__.py", found)
 
     def test_every_line_the_engine_rewrites_holds_exactly_one_version_it_can_rewrite(self) -> None:
         """INV-101: a line the engine rewrites wrongly is worse than a line it never touches.

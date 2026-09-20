@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.store.model import ObjectReference, ReferenceIndex, ReferenceKind
-from agent_artifacts.store.references import parse_reference_index, reference_index_bytes
+from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.domain.result import Err, Ok
+from aart_cli.store.model import ObjectReference, ReferenceIndex, ReferenceKind
+from aart_cli.store.references import parse_reference_index, reference_index_bytes
 
 
 class StoreReferenceSchemaTest(unittest.TestCase):

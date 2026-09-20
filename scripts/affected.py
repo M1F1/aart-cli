@@ -29,7 +29,7 @@ __all__ = ["AffectedSelection", "closure", "module_graph", "opaque_tests", "sele
 _OPAQUE_RE = re.compile(
     r"\bsubprocess\.|\bos\.exec|\bos\.spawn|"
     r"\bimportlib\.import_module|\b__import__\(|"
-    r"\bfrom agent_artifacts\.cli\b|\bagent_artifacts\.cli\.main\b"
+    r"\bfrom aart_cli\.cli\b|\baart_cli\.cli\.main\b"
 )
 
 
@@ -44,7 +44,7 @@ def _module_name(path: Path, root: Path) -> str:
 def _sources(root: Path) -> tuple[Path, ...]:
     return tuple(
         sorted(
-            (*(root / "agent_artifacts").rglob("*.py"), *(root / "tests").glob("*.py")),
+            (*(root / "aart_cli").rglob("*.py"), *(root / "tests").glob("*.py")),
         )
     )
 
@@ -149,7 +149,7 @@ def select(
     tests: set[str] = set()
     for raw in changed:
         path = Path(raw)
-        if path.suffix != ".py" or path.parts[0] not in ("agent_artifacts", "tests"):
+        if path.suffix != ".py" or path.parts[0] not in ("aart_cli", "tests"):
             return _declined(f"{raw} is not a canonical Python module, so nothing can be ruled out")
         if not (root / path).is_file():
             return _declined(f"{raw} no longer exists, so what depended on it cannot be read")

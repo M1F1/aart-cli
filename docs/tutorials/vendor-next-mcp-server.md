@@ -29,7 +29,7 @@ An agent following this document must obey all of these. They are not style pref
 5. **Do not edit files under `payload/` after vendoring.** Those bytes are pinned to an upstream
    commit and their digest is verified. Editing one turns every later check into a copy-integrity
    failure.
-6. **Never delete `.agent-artifacts/` in a consumer project.** It is the only record of what was
+6. **Never delete `.aart-cli/` in a consumer project.** It is the only record of what was
    written and what was overwritten.
 
 ## 1. Inputs to collect before running anything
@@ -54,11 +54,11 @@ Fill these in first. Every later command is a substitution of these values.
 
 **Every command below runs from the root of the registry checkout.** `cd` there once, and the
 registry is `.` from then on: maintainer commands default `--source` to the current directory, so the
-flag never appears in this document. Confirm where you are before starting — `aart-registry.json` must
+flag never appears in this document. Confirm where you are before starting — `aart-cli-registry.json` must
 be in the current directory, and `.git` must be there too, not in a parent.
 
 ```sh
-ls aart-registry.json aart-source.json .git >/dev/null && echo "in the registry root"
+ls aart-cli-registry.json aart-cli-source.json .git >/dev/null && echo "in the registry root"
 ```
 
 **The registry is never `URL`.** `URL` is the foreign repository the bytes are copied *from*: remote,
@@ -309,7 +309,7 @@ do **not** author your own — it is refused as a collision with the taken bytes
 ### 4.2 Vendor, review only
 
 ```sh
-aart registry vendor mcp "$NAME" \
+aart-cli registry vendor mcp "$NAME" \
   --url "$URL" \
   --ref "$REF" \
   --path "$SERVER_FILE" \
@@ -365,7 +365,7 @@ That is only fixable by editing `artifact.json`, bumping the version, and publis
 ### 4.3 Finalize the vendor
 
 ```sh
-aart registry vendor mcp "$NAME" … --yes
+aart-cli registry vendor mcp "$NAME" … --yes
 ```
 
 Same command, `--yes` appended. It writes:
@@ -390,18 +390,18 @@ against `importer.options_digest`.
 ### 4.4 Publish
 
 ```sh
-aart registry format --yes
+aart-cli registry format --yes
 ```
 
 ```sh
-aart registry publish
+aart-cli registry publish
 ```
 
 Review-only. It computes lock and index in memory, runs `validate` and `audit` over that exact
 snapshot, and lists every path it would commit. Read the list. Then:
 
 ```sh
-aart registry publish --yes -m "Add mcp/<NAME> vendored from <URL>@<REF>"
+aart-cli registry publish --yes -m "Add mcp/<NAME> vendored from <URL>@<REF>"
 ```
 
 It commits and does **not** push. Pushing is a separate, human decision.
@@ -420,12 +420,12 @@ cd "$CONSUMER"
 ```
 
 `CONSUMER` must not be the registry checkout, and it must not be a directory you are unwilling to have
-`.tabnine/` and `.agent-artifacts/` written into. A throwaway project is the right kind of place; the
+`.tabnine/` and `.aart-cli/` written into. A throwaway project is the right kind of place; the
 registry itself is the wrong one, because a test install there leaves harness files inside the
 repository you publish. Guard it:
 
 ```sh
-[ -f aart-registry.json ] && echo "REFUSE: this is the registry, not a consumer project"
+[ -f aart-cli-registry.json ] && echo "REFUSE: this is the registry, not a consumer project"
 ```
 
 If `ALIAS` is not configured here yet, add it once. Which kind you choose depends on whether the
@@ -434,13 +434,13 @@ registry commit has been pushed, and the choice has consequences beyond convenie
 After pushing — this is what a colleague uses:
 
 ```sh
-aart source add --alias "$ALIAS" --kind registry-git --location "$REGISTRY_URL" --ref main --default
+aart-cli source add --alias "$ALIAS" --kind registry-git --location "$REGISTRY_URL" --ref main --default
 ```
 
 Before pushing, to test the commit you just made without publishing it:
 
 ```sh
-aart source add --alias "$ALIAS" --kind source-local --location "$REGISTRY_PATH"
+aart-cli source add --alias "$ALIAS" --kind source-local --location "$REGISTRY_PATH"
 ```
 
 `source-local` cannot take `--default` — `only a registry source can become the default registry` —
@@ -449,7 +449,7 @@ registry's own packages carry no review record either, so `registry-git` reads a
 needs the same flag. Expect it in both cases; it is not a symptom of anything being wrong.
 
 `source add` also refuses a second alias for an origin already configured, so switching from local to
-Git means `aart source remove --alias "$ALIAS" --yes` first — and that leaves the installation record
+Git means `aart-cli source remove --alias "$ALIAS" --yes` first — and that leaves the installation record
 behind, which is what produces `installation effect ownership must be unique across the manifest` on
 the next install. Uninstall under the old alias before re-adding.
 
@@ -457,11 +457,11 @@ Then, before every install, re-synchronize. Source health reports the snapshot's
 agreement with the origin, so a registry that moved still reads as healthy until you sync:
 
 ```sh
-aart source sync --alias "$ALIAS"
+aart-cli source sync --alias "$ALIAS"
 ```
 
 ```sh
-aart marketplace install --profile tabnine "$ALIAS/mcp/$NAME"
+aart-cli marketplace install --profile tabnine "$ALIAS/mcp/$NAME"
 ```
 
 Review-only; it prints the destination file. Then append `--yes`.
@@ -505,9 +505,9 @@ credential.** This is the failure that reports success at every layer.
 
 Two structural facts behind that table, worth internalizing:
 
-- **A registry never marks its own packages as reviewed.** The `review` record lives on `entries/`
-  references only; owned packages are indexed with `review: null`, which the consumer reads as
-  `unverified`. Setup from your own registry therefore always needs the authorization flag.
+- **A Registry cannot assign itself effective trust.** Approved version and promotion records
+  carry review/provenance evidence; consumer policy determines the resulting trust and setup
+  authorization. The historical authoring-entry review model no longer applies.
 - **`source remove` does not remove installations.** The install record survives, keeps owning its
   destination, and blocks the next install under a different alias.
 

@@ -12,8 +12,11 @@ flows are implemented, the MCP vertical slice works end-to-end, desired-state re
 lifecycle operations, Git-backed live acceptance passes, legacy paths no longer hold product
 authority, and the repository's full quality/release gates are green.
 
-That definition was met by CP-18. CP-19 is the follow-on post-refactor manual acceptance program;
-its open status does not retroactively reopen the verified refactor or its invariant evidence.
+CP-18 met the product contract in force at its completion. CP-19 through CP-26 add accepted
+requirements and corrections. Historical VERIFIED records remain evidence of their original
+behavior; they do not prove the revised contract. Product Specification §169 and the current
+`INVARIANT_TRACEABILITY.md` identify outstanding CP-26 implementation/proof obligations. Read
+`CONTRACT_ALIGNMENT.md` for superseded decisions and the current-versus-target documentation rule.
 
 ## Non-negotiable execution rules
 
@@ -36,7 +39,7 @@ decision log, next-work file, slice template, Codex goal and discovery backlog. 
 `M1F1/aart-cli`.
 
 ### CP-01 — Repository characterization and invariant map
-Inventory current `agent_artifacts` modules, CLI/TUI behavior, protocols, tests, quality gates and
+Inventory current `aart_cli` modules, CLI/TUI behavior, protocols, tests, quality gates and
 live acceptance. Build a traceability matrix from Product Specification invariants to existing/new
 modules and tests. Add characterization tests where refactoring could change accepted behavior. No
 broad moves yet.
@@ -119,7 +122,7 @@ input/auth contracts, policy drift, multi-registry collision, dev installs, cand
 publication/audit semantics.
 
 ### CP-16 — Global doctor and supportability
-Implement `aart doctor` as environment-wide inspection/reconciliation, readable Activity/Receipt
+Implement `aart-cli doctor` as environment-wide inspection/reconciliation, readable Activity/Receipt
 diagnostics, safe repair entry points and machine-complete JSON. Do not implement reinstall-all as
 repair.
 
@@ -159,8 +162,8 @@ remain in their slice records; closure does not assert a new full-suite run.
 ### CP-23 — Actionable TUI workflows after the fourth manual run
 
 Implement the 2026-09-14 screen reports as fourteen bounded product/audit tasks plus final acceptance:
-Source Sync guidance, Candidate table/detail, Verbose file diffs, Validation progression, manual
-Registry publication outside TUI, functional Success actions, Marketplace descriptions, clear
+Source Sync guidance, Candidate table/detail, Verbose file diffs, Validation progression, the
+historical D-255 manual-publication handoff, functional Success actions, Marketplace descriptions, clear
 Remediation effects, durable post-promotion Candidate state, explicit harness selection, Artifact
 Details controls, navigable credential actions, explicit credential guidance from Source through
 approved metadata to secure entry, and a complete screen/state audit of Frame and `v` semantics.
@@ -168,6 +171,10 @@ Cursor descriptions are Verbose-only throughout; essential input guidance stays 
 Product Specification §167 records the owner's
 revisions. The ordered tasks and completion criteria are in
 `docs/refactor/slices/CP-23-actionable-tui-workflows.md`; start at task 01.
+
+CP-23's manual-publication choice is historical: Product Specification §164.7, D-312 and CP-26.18
+supersede D-255 by restoring explicit Push on Registry Maintainer's local-workspace row. Promotion
+success screens still stop at the local commit.
 
 ### CP-24 — Field reports from the first released version
 
@@ -181,6 +188,57 @@ reports nothing while it runs. The slice ends by cutting the release that carrie
 ordered tasks and completion criteria are in
 `docs/refactor/slices/CP-24-post-release-field-reports.md`; start at task 01.
 
+### CP-26 — Canonical Registry removal, authoring tools, local consumption and MCP verification
+
+Remove the older unversioned Registry representation without a compatibility window, retain
+`registry publish` as the canonical approved-Registry aggregate, and add parser-derived author
+manifest generation/checking plus the focused README paths. Generated Registry content carries no
+maintainer-specific default, and Registry Maintainer exposes publication readiness and safe review-
+branch push from the exact canonical workspace. The canonical maintenance commands themselves
+remain: only their legacy-representation branches are removed. `publish` ends at the reviewed local
+commit; Push is a distinct explicit Registry Maintainer action.
+
+The owner added CP-26.18a on 2026-09-19 (D-332): use `aart-cli` throughout active product
+interfaces and tool-owned names, resolve one portable `~/.aart-cli` / `AART_CLI_HOME`, and define
+harness-owned installation paths. It precedes CP-26.19, which makes runtime trees, configuration,
+credential items, setup state, receipts and lifecycle ownership specific to a complete installation
+(Registry alias + artifact + scope/root + harness/profile). Every new target collects its own
+inputs; four harnesses mean four sets, with no sharing or copy option (D-333, B-144/B-150).
+Task 19 also owns versionless artifact/Registry-alias/scope names under each harness's discovery
+and naming rules, installed skill-name projection, and Keychain addresses derived from complete
+owner/input identity with readable labels and opaque roots (D-349, §169.7, INV-253; issues #26/#28).
+Updates preserve these addresses; collisions are refused before mutation. Enterprise index
+release customization remains deferred outside this task (B-157).
+CP-26.20 then adds local repository + selected branch acquisition through the same canonical
+Registry pipeline (B-143/D-350), proves the same isolation for local and remote aliases and uses
+ordinary installation before smoke testing. No separate Candidate Test Install flow is required.
+
+D-334 accepts breaking changes throughout CP-26: no backward-compatibility aliases, fallback
+formats, migrations or transition periods are required. Implementation checks are focused and
+proportionate, especially for mechanical namespace changes; accepted isolation and secret boundaries
+remain tested. Remote/local aliases are separate installation entities and filesystem namespaces
+even for identical package bytes.
+
+The owner added CP-26.20a (D-348, Product Specification §170): CLI-only smoke verification of all
+or selected already installed MCPs in the local environment, including ordinary installations from
+local Registry repositories/branches and remote Registries. Preserve configuration,
+protocol, external-service, model-provider and actual harness-execution stages. Only a predeclared
+read-only tool with fixed arguments may execute, both directly and through the harness. D-351
+requires only `tool` and `read_only: true` in `smoke_test`; arguments default to empty, the
+tool-call timeout to 15 seconds, and result expectations are optional. Generic MCP success is
+distinct from external-service proof; no dedicated health tool or custom response is required.
+D-365 requires direct-only Tabnine acceptance while its adapter lacks the allowed-tools boundary,
+and full-route acceptance for eligible OpenCode and Claude adapters. No new TUI, scheduled CI, automatic setup mutation or production-wide scan
+belongs to this increment. Document the recommended install → smoke test → publish workflow for
+new MCPs and bulk checking of a user's installed MCPs. B-073's scheduled live CI work stays separate.
+
+The ordered plan has 23 tasks; existing ids are preserved, with 18a between 18 and 19 and 20a
+between 20 and 21. Implementation tasks, including 18a and 20a, use focused tests and measured
+damage-radius gates. Execution remains 19 → 20 → 20a → 21 after completed step 18a.
+CP-26.21 remains the sole broad quality/integration/E2E closeout after all implementation tasks.
+The full order and acceptance criteria are in
+`docs/refactor/slices/cp-26-authoring-and-legacy-removal.md`; `NEXT.md` names the current task.
+
 ## Dependency order
 
 ```text
@@ -192,7 +250,7 @@ CP-08 → CP-09 → CP-10 → CP-11 → CP-12 → CP-13 → CP-14 → CP-15
                                                                      ↓
                                            CP-23 ← CP-22 ← CP-21 ← CP-20
      ↓
-   CP-24
+   CP-24 → CP-26
 ```
 
 Parallelism is allowed only when slices do not share unsettled domain contracts and neither depends
@@ -211,3 +269,20 @@ A critical-path slice is not complete until:
 - quality gates for touched code are green;
 - migration status, next work, decisions and backlog are updated;
 - remaining legacy authority/removal criteria are explicit.
+
+### Current owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
+
+This supersedes earlier requirements for mandatory Tabnine harness execution, blanket prohibition
+of model assessment and unconditional suppression of response display. Implement revised Product
+Specification §170 / INV-250–252. Unsupported allowed-tools capability means direct MCP testing with
+that installation's credentials and an explicit excluded harness stage; it does not block completion.
+Eligible harnesses have a 120-second deadline, exact operation/argument enforcement and an English
+prompt requesting `status` (`ok`, `error`, `uncertain`), `summary`, and `possible_error`. Human-readable
+fields are English. Assessments remain separate from deterministic checks and service evidence.
+Add default-off `--show-response` for bounded current-output inspection, without application
+persistence. Keep zero runtime dependencies; use Python's standard library.
+
+Implementation is pending for this revision. Required evidence includes direct-only Tabnine coverage,
+capability-based aggregation, deadline/process cleanup, malformed assessment and uncertain/error
+cases, argument enforcement, bounded opt-in display and default non-disclosure. Existing tests do not
+establish these new claims. CP-26.20a remains in flight; do not mark it done.

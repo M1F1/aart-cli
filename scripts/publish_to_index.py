@@ -16,7 +16,7 @@ Two things are deliberately not decided by this script:
 
 * **where** to publish, which is `--url` (a repository variable in CI). There is no default: a
   default pointing at PyPI would make an accident out of a company's first mistake.
-* **who** publishes, which is `AART_INDEX_PUBLISH_CREDENTIALS` in the environment, holding the
+* **who** publishes, which is `AART_CLI_INDEX_PUBLISH_CREDENTIALS` in the environment, holding the
   two halves separated by a colon. It is never a command-line argument -- arguments are visible
   in a process list and land in shell history.
 """
@@ -127,11 +127,11 @@ def credentials() -> str:
     Never an argument: arguments are visible in a process list and kept in shell history.
     """
 
-    held = os.environ.get("AART_INDEX_PUBLISH_CREDENTIALS", "")
+    held = os.environ.get("AART_CLI_INDEX_PUBLISH_CREDENTIALS", "")
     separator = ":"
     if separator not in held:
         raise PublishError(
-            "AART_INDEX_PUBLISH_CREDENTIALS is unset or malformed.\n"
+            "AART_CLI_INDEX_PUBLISH_CREDENTIALS is unset or malformed.\n"
             "It holds the publishing account and its password or token, separated by a colon, "
             "and is read from the environment so it never reaches a command line."
         )

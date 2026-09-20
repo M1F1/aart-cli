@@ -13,7 +13,7 @@ schema freeze (D-154).
 The exception list is a claim about each name in it, so each one states its reason:
 
 * ``_commit`` -- written by the build, which stamps a commit into release artifacts.
-* ``profiles.loader`` -- reads ``<project>/.agent-artifacts/profiles.json`` over the built-ins.
+* ``profiles.loader`` -- reads ``<project>/.aart-cli/profiles.json`` over the built-ins.
   Kept, and *not* legacy: INV-001 requires enterprise profiles to live outside the public tool, and
   this is the only mechanism by which a profile defined outside it can get in.  What is wrong is
   that nothing calls it -- ``consumer/runtime.py`` passes ``builtin()`` straight into the consumer
@@ -22,7 +22,12 @@ The exception list is a claim about each name in it, so each one states its reas
 * ``application.activity_telemetry`` -- the deliberately dormant, transport-neutral injection
   boundary for a future explicitly configured Activity telemetry adapter (D-292). The disabled
   adapter is tested now; no runtime imports the module, so its presence cannot opt a user in.
-
+  derived from it, written first in CP-26.19 because the identity has to exist before the input
+  composition can be split per owner. What it replaces is live: ``io/consumer_actions.py`` still
+  addresses a Keychain item as ``aart.<hash of the user home>`` with the declared input id, which
+  is one item for every harness, scope and Registry alias. That call site cannot adopt this until
+  the same step stops grouping one input across artifacts, so this is a dated claim for the
+  interval between those two commits inside 19, and the second one removes it.
 ``application.credential_lifecycle`` was on this list, retained for a credential lifecycle nothing
 could run yet. Screen 24's Verify/Replace/Delete rows plan through it now (CP-23 task 12, D-262).
 
@@ -43,13 +48,13 @@ import pathlib
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "agent_artifacts"
-RUNTIME_ROOTS = frozenset({"agent_artifacts.__main__", "agent_artifacts.cli"})
+PACKAGE = ROOT / "aart_cli"
+RUNTIME_ROOTS = frozenset({"aart_cli.__main__", "aart_cli.cli"})
 DELIBERATE_NON_RUNTIME_MODULES = frozenset(
     {
-        "agent_artifacts._commit",
-        "agent_artifacts.application.activity_telemetry",
-        "agent_artifacts.profiles.loader",
+        "aart_cli._commit",
+        "aart_cli.application.activity_telemetry",
+        "aart_cli.profiles.loader",
     }
 )
 

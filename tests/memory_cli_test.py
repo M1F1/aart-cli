@@ -13,7 +13,7 @@ import io
 import unittest
 from unittest.mock import patch
 
-from agent_artifacts import cli
+from aart_cli import cli
 
 
 def _dispatch(argv, *, command, code=0):
@@ -88,7 +88,7 @@ class TestTuiKnowsMemory(unittest.TestCase):
         a CLI-only one -- but the set that decides it now lives with the marketplace projection.
         """
 
-        from agent_artifacts.tui_marketplace import _KINDS
+        from aart_cli.tui_marketplace import _KINDS
 
         self.assertIn("memory", _KINDS)
 

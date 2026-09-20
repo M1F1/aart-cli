@@ -25,7 +25,7 @@
     ".": {
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
-        { "type": "generic", "path": "agent_artifacts/__init__.py" }
+        { "type": "generic", "path": "aart_cli/__init__.py" }
       ]
     }
   }

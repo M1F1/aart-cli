@@ -6,29 +6,29 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts.application.sources import SourceSyncPorts, SourceSyncRequest, sync_source
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.source_store import (
+from aart_cli.application.sources import SourceSyncPorts, SourceSyncRequest, sync_source
+from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.source_store import (
     acquire_source_lock,
     publish_source_snapshot,
     read_current_source,
     release_source_lock,
 )
-from agent_artifacts.protocol.capabilities import parse_capability
-from agent_artifacts.protocol.semver import parse_semver
-from agent_artifacts.sources.git import acquire_git_snapshot
-from agent_artifacts.sources.local import read_local_snapshot
-from agent_artifacts.sources.model import (
+from aart_cli.protocol.capabilities import parse_capability
+from aart_cli.protocol.semver import parse_semver
+from aart_cli.sources.git import acquire_git_snapshot
+from aart_cli.sources.local import read_local_snapshot
+from aart_cli.sources.model import (
     CurrentSourceRequest,
     SyncDisposition,
     SyncFallback,
     source_instance_id,
     source_store_paths,
 )
-from agent_artifacts.sources.runtime import resubscribe_configured_source
-from agent_artifacts.sources.validation import validate_source_candidate
+from aart_cli.sources.runtime import resubscribe_configured_source
+from aart_cli.sources.validation import validate_source_candidate
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "native-source-v1"
 
@@ -121,7 +121,7 @@ class SourceIdentityChangeRecoveryTest(unittest.TestCase):
         )
 
     def _republish(self, origin: Path, source_id: str) -> None:
-        descriptor = origin / "aart-source.json"
+        descriptor = origin / "aart-cli-source.json"
         document = json.loads(descriptor.read_text(encoding="utf-8"))
         document["source_id"] = source_id
         descriptor.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
@@ -159,7 +159,7 @@ class SourceIdentityChangeRecoveryTest(unittest.TestCase):
             assert isinstance(refused, Err)
             self.assertIn("declared source identity", refused.diagnostics[0].message)
             self.assertIn(
-                "aart source resubscribe --alias registry",
+                "aart-cli source resubscribe --alias registry",
                 refused.diagnostics[0].remediation[0],
             )
 
@@ -268,7 +268,7 @@ class SourceIdentityChangeRecoveryTest(unittest.TestCase):
             assert isinstance(refused, Err)
             self.assertIn("already subscribed to", refused.diagnostics[0].message)
             self.assertIn(
-                "aart source sync --alias registry", refused.diagnostics[0].remediation[0]
+                "aart-cli source sync --alias registry", refused.diagnostics[0].remediation[0]
             )
 
 

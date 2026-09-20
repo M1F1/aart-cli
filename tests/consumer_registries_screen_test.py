@@ -21,23 +21,23 @@ import tempfile
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     project_registries,
 )
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.marketplace.model import MarketplaceCatalog
-from agent_artifacts.sources.model import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.result import Ok
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.marketplace.model import MarketplaceCatalog
+from aart_cli.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
     make_source_candidate,
     source_instance_id,
     source_store_paths,
 )
-from agent_artifacts.tui_consumer import (
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     frame,
     read_consumer_offers,
@@ -45,7 +45,7 @@ from agent_artifacts.tui_consumer import (
     run_consumer_shell,
     screens_from,
 )
-from agent_artifacts.tui_marketplace import MarketplaceTarget
+from aart_cli.tui_marketplace import MarketplaceTarget
 from tests.configured_installation_draft_e2e_test import _published_registry
 from tests.consumer_marketplace_composition_e2e_test import _machine
 from tests.consumer_shell_test import FakeTerminal, _at
@@ -124,7 +124,7 @@ class ConfiguredRegistriesScreenTest(unittest.TestCase):
         self.assertEqual([item.alias for item in rows], ["company"])
 
     def _catalog(self, effective):
-        from agent_artifacts.io.configured_offers import read_configured_marketplace
+        from aart_cli.io.configured_offers import read_configured_marketplace
 
         read = read_configured_marketplace(effective, data_root=self.data_root)
         self.assertIsInstance(read, Ok, getattr(read, "diagnostics", ()))
@@ -191,7 +191,7 @@ class ConfiguredRegistriesScreenTest(unittest.TestCase):
 
         from unittest import mock
 
-        from agent_artifacts import tui
+        from aart_cli import tui
         from tests.configured_install_command_e2e_test import _environment
 
         with _environment() as env:

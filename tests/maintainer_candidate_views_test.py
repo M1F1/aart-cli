@@ -5,19 +5,19 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.application.maintainer import reconcile_source_scan
-from agent_artifacts.application.maintainer_views import project_maintainer_candidates
-from agent_artifacts.domain.candidates import CandidateState
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.application.maintainer_views import project_maintainer_candidates
+from aart_cli.domain.candidates import CandidateState
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
+from aart_cli.protocol.paths import parse_relative_path
 
 
 def _entry(path: str, content: str) -> SnapshotEntry:
@@ -28,7 +28,7 @@ def _entry(path: str, content: str) -> SnapshotEntry:
 
 def _compiled(*, revision: str, version: str, server: str, requirement: str):
     manifest = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": "github-mcp", "kind": "mcp", "version": version},
         "payload": {"include": ["server.py", "requirements.txt"]},
         "transport": {"type": "stdio"},
@@ -61,7 +61,7 @@ def _compiled(*, revision: str, version: str, server: str, requirement: str):
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _entry("github/aart.json", json.dumps(manifest, sort_keys=True)),
+                _entry("github/aart-cli.json", json.dumps(manifest, sort_keys=True)),
                 _entry("github/server.py", server),
                 _entry("github/requirements.txt", requirement),
             ),
@@ -117,7 +117,7 @@ class MaintainerCandidateProjectionTest(unittest.TestCase):
         self.assertEqual(view.version, "1.1.0")
         self.assertEqual(view.source_alias, "authors")
         self.assertEqual(view.source_revision, "b" * 40)
-        self.assertEqual(view.manifest_path, "github/aart.json")
+        self.assertEqual(view.manifest_path, "github/aart-cli.json")
         self.assertEqual(view.runtime, "python >=3.11")
         self.assertEqual(view.transport, "stdio")
         self.assertEqual(view.dependency_descriptor, "requirements: requirements.txt")

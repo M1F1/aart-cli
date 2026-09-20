@@ -7,20 +7,24 @@ import unittest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.installation_verification import InstallationObservation
-from agent_artifacts.application.installed_state import (
+from aart_cli.application.installation_verification import InstallationObservation
+from aart_cli.application.installed_state import (
     current_state_from_observation,
     desired_state_from_receipt,
 )
-from agent_artifacts.application.reconciliation import (
+from aart_cli.application.reconciliation import (
     RECONCILE_INVALID,
     RECONCILE_POLICY_VIOLATION,
     plan_repair,
     repair_converged,
     repair_plan_to_data,
 )
-from agent_artifacts.domain.credentials import CredentialProviderRef, CredentialReference
-from agent_artifacts.domain.effects import (
+from aart_cli.domain.credentials import (
+    CredentialProviderRef,
+    CredentialReference,
+    credential_component_names,
+)
+from aart_cli.domain.effects import (
     ConfigureHarness,
     CopyTree,
     CreatePythonEnvironment,
@@ -31,18 +35,19 @@ from agent_artifacts.domain.effects import (
     StoreCredential,
     WriteFile,
 )
-from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.harness import McpRegistration, Scope, mcp_target
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     InputId,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.launch import Transport
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.receipts import InstallationReceipt
-from agent_artifacts.domain.reconciliation import (
+from aart_cli.domain.installation_owner import credential_address, installation_owner
+from aart_cli.domain.launch import Transport
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.receipts import InstallationReceipt
+from aart_cli.domain.reconciliation import (
     Component,
     ComponentId,
     ComponentState,
@@ -53,7 +58,7 @@ from agent_artifacts.domain.reconciliation import (
     DriftKind,
     compare_states,
 )
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.result import Err, Ok
 
 STATES = (ComponentState.MATCHED, ComponentState.ABSENT, ComponentState.DIVERGENT)
 
@@ -126,7 +131,7 @@ def current_state(**states: ComponentState) -> CurrentState:
 
 
 def _observed(identifier: ComponentId, state: ComponentState):
-    from agent_artifacts.domain.reconciliation import ObservedComponent
+    from aart_cli.domain.reconciliation import ObservedComponent
 
     return ObservedComponent(identifier, state)
 
@@ -562,3 +567,61 @@ class InstalledStateBridgeTest(unittest.TestCase):
                 self.receipt,
                 InstallationObservation(),
             )
+
+
+class CredentialComponentNamesTest(unittest.TestCase):
+    """§169.4-6: one declared input, several installations, and a name that still says which.
+
+    The input id was a name while one artifact held one item for it. Each installation holding its
+    own means the id alone can appear four times in one desired state, where naming the same
+    component twice is refused -- correctly, because nothing downstream could tell the four apart.
+    """
+
+    def _reference(self, harness: str, input_id: str = "github-token"):
+        return CredentialReference(
+            InputId(input_id),
+            credential_address(
+                installation_owner(
+                    ArtifactCoordinate(
+                        SourceAlias("company"), ArtifactIdentity("mcp", "github"), "1.0.0"
+                    ),
+                    scope=Scope.PROJECT,
+                    root="/work/project",
+                    harness=harness,
+                ),
+                InputId(input_id),
+            ),
+        )
+
+    def test_one_item_for_an_input_keeps_the_name_it_always_had(self):
+        names = credential_component_names((self._reference("claude"),))
+
+        self.assertEqual(("github-token",), names)
+
+    def test_installations_holding_their_own_item_are_told_apart(self):
+        references = (self._reference("claude"), self._reference("opencode"))
+
+        names = credential_component_names(references)
+
+        self.assertEqual(2, len(set(names)))
+        for name in names:
+            self.assertTrue(name.startswith("github-token."))
+            self.assertIsNotNone(ComponentId(Component.CREDENTIAL, name))
+
+    def test_a_name_is_the_same_every_time_it_is_asked_for(self):
+        references = (self._reference("claude"), self._reference("opencode"))
+
+        self.assertEqual(
+            credential_component_names(references), credential_component_names(references)
+        )
+
+    def test_a_second_input_is_not_disambiguated_because_another_one_was(self):
+        references = (
+            self._reference("claude"),
+            self._reference("opencode"),
+            self._reference("claude", "github-org"),
+        )
+
+        names = credential_component_names(references)
+
+        self.assertEqual("github-org", names[2])

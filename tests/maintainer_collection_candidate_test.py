@@ -5,34 +5,34 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer_views import (
     MaintainerScreen,
     MaintainerViews,
     project_maintainer_collection_candidate,
     project_maintainer_collection_validation,
     project_maintainer_dashboard,
 )
-from agent_artifacts.domain.candidates import CandidateState
-from agent_artifacts.domain.collection_candidates import (
+from aart_cli.domain.candidates import CandidateState
+from aart_cli.domain.collection_candidates import (
     CollectionCandidate,
     collection_candidate_id_for,
 )
-from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
-from agent_artifacts.domain.registry import PublicationStage
-from agent_artifacts.domain.selection import ArtifactRequest, VersionConstraint
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
+from aart_cli.domain.registry import PublicationStage
+from aart_cli.domain.selection import ArtifactRequest, VersionConstraint
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
 from tests.approved_marketplace_resolution_test import _artifact, _marketplace, _snapshot
 
 
@@ -52,7 +52,7 @@ def _candidate(*members: ArtifactRequest) -> CollectionCandidate:
     source_alias = SourceAlias("authors")
     target = SourceAlias("company")
     input_digest = _digest("a")
-    path = "collections/data-engineer/aart.yaml"
+    path = "collections/data-engineer/aart-cli.yaml"
     return CollectionCandidate(
         collection_candidate_id_for(source_alias, path, input_digest, target),
         source_alias,

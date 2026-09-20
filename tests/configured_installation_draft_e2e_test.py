@@ -9,8 +9,9 @@ import tempfile
 import unittest
 from typing import cast
 
-from agent_artifacts.application.maintainer import reconcile_source_scan
-from agent_artifacts.application.promotion import (
+from aart_cli.application.installation_inputs import OwnedInputSource
+from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.application.promotion import (
     PromotionEvidence,
     load_registry_versions,
     plan_bulk_promotion,
@@ -18,41 +19,50 @@ from agent_artifacts.application.promotion import (
     project_lifecycle_update,
     project_promotion,
 )
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.candidates import CandidateId, assess_candidate
-from agent_artifacts.domain.credentials import CredentialProviderRef
-from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceAlias, SourceId
-from agent_artifacts.domain.inputs import PromptedConfigValue, SecretProviderReference
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.registry import PromotionMode, publish_registry_version
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.domain.selection import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.candidates import CandidateId, assess_candidate
+from aart_cli.domain.credentials import CredentialProviderRef, CredentialReference
+from aart_cli.domain.harness import Scope
+from aart_cli.domain.identifiers import (
+    ArtifactCoordinate,
+    ArtifactIdentity,
+    SourceAlias,
+    SourceId,
+)
+from aart_cli.domain.inputs import PromptedConfigValue, SecretProviderReference
+from aart_cli.domain.installation_owner import (
+    credential_address,
+    installation_owner,
+)
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.registry import PromotionMode, publish_registry_version
+from aart_cli.domain.result import Ok
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     VersionConstraint,
 )
-from agent_artifacts.io.configured_installation import prepare_configured_installation_draft
-from agent_artifacts.io.object_store import read_object
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.protocol.authoring import CompiledAuthorArtifact, compile_author_snapshot
-from agent_artifacts.protocol.json import canonical_json_bytes
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.io.configured_installation import prepare_configured_installation_draft
+from aart_cli.io.object_store import read_object
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.protocol.authoring import CompiledAuthorArtifact, compile_author_snapshot
+from aart_cli.protocol.json import canonical_json_bytes
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
     compile_native_package,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.sources.model import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
     make_source_candidate,
     source_instance_id,
     source_store_paths,
 )
-from agent_artifacts.store.model import ObjectReadRequest, object_store_paths
+from aart_cli.store.model import ObjectReadRequest, object_store_paths
 from tests.artifact_installation_e2e_test import MANIFEST, ORG, SERVER_SOURCE, TOKEN
 from tests.marketplace_fixtures import configured_source, effective_configuration
 from tests.promotion_planning_test import _evidence
@@ -76,7 +86,7 @@ def _authored(item: tuple[str, str] | tuple[str, str, bool]) -> SnapshotEntry:
 
 #: One MCP server, as an author's repository holds it before anything compiles it.
 AUTHORED_MCP: tuple[tuple[str, str] | tuple[str, str, bool], ...] = (
-    ("github/aart.json", json.dumps(MANIFEST)),
+    ("github/aart-cli.json", json.dumps(MANIFEST)),
     ("github/server.py", SERVER_SOURCE),
     ("github/requirements.txt", "# no third-party packages\n"),
 )
@@ -86,7 +96,7 @@ AUTHORED_MCP: tuple[tuple[str, str] | tuple[str, str, bool], ...] = (
 class AuthoredSetup:
     """The setup an artifact declares, as the three files a native package carries it in.
 
-    The authoring format has no setup section -- `aart.json` cannot declare one -- so an artifact
+    The authoring format has no setup section -- `aart-cli.json` cannot declare one -- so an artifact
     that needs configuring after placement acquires its declaration when it is packaged, not when
     it is written. Modelling that here as an injection into the compiled package rather than as a
     field on the author manifest is not a shortcut around the compiler; it is where the declaration
@@ -305,16 +315,24 @@ class ConfiguredInstallationDraftTest(unittest.TestCase):
             )
         )
 
-    def _draft(self, sources=()):
+    def _draft(self, sources=(), profiles=("tabnine",)):
         return prepare_configured_installation_draft(
             self.effective,
             self.selection,
             data_root=self.data_root,
             project_root=self.project_root,
             scope=Scope.PROJECT,
-            profiles=("tabnine",),
+            profiles=profiles,
             sources=sources,
             policy=EffectivePolicy(),
+        )
+
+    def _owner(self, harness="tabnine"):
+        return installation_owner(
+            ArtifactCoordinate(self.source.alias, ArtifactIdentity("mcp", "github"), "1.0.0"),
+            scope=Scope.PROJECT,
+            root=self.project_root,
+            harness=harness,
         )
 
     def test_verified_registry_content_is_materialized_and_exposes_pending_inputs(self) -> None:
@@ -337,21 +355,220 @@ class ConfiguredInstallationDraftTest(unittest.TestCase):
         self.assertIsNotNone(stored.value)
 
     def test_submitted_config_and_provider_reference_make_placements_ready(self) -> None:
+        owner = self._owner()
         drafted = self._draft(
             (
-                PromptedConfigValue(ORG, "acme"),
-                SecretProviderReference(TOKEN, KEYCHAIN),
+                OwnedInputSource(owner, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(owner, SecretProviderReference(TOKEN, KEYCHAIN)),
             )
         )
 
         self.assertIsInstance(drafted, Ok, getattr(drafted, "diagnostics", ()))
         assert isinstance(drafted, Ok)
         self.assertTrue(drafted.value.ready)
+        self.assertEqual((owner,), drafted.value.owners)
+        self.assertEqual(drafted.value.placements[0].installed_name, "github-company-project")
         placed = drafted.value.prepared_placements()
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         assert isinstance(placed, Ok)
-        self.assertEqual(placed.value[0].sources, drafted.value.inputs.sources)
+        self.assertEqual(placed.value[0].sources, drafted.value.inputs.sources_for(owner))
         self.assertFalse(any(hasattr(source, "secret") for source in placed.value[0].sources))
+
+    def test_one_artifact_on_two_harnesses_is_two_installations(self) -> None:
+        """§169.4-6: the harness is part of who owns the configuration, so it is part of the key."""
+
+        drafted = self._draft(profiles=("tabnine", "claude"))
+
+        self.assertIsInstance(drafted, Ok, getattr(drafted, "diagnostics", ()))
+        assert isinstance(drafted, Ok)
+        self.assertEqual((self._owner("claude"), self._owner("tabnine")), drafted.value.owners)
+        self.assertEqual(4, len(drafted.value.inputs.fields))
+        self.assertEqual(
+            {
+                (self._owner("claude"), ORG),
+                (self._owner("claude"), TOKEN),
+                (self._owner("tabnine"), ORG),
+                (self._owner("tabnine"), TOKEN),
+            },
+            {(field.owner, field.input.id) for field in drafted.value.inputs.fields},
+        )
+
+    def test_two_harnesses_are_two_placements_under_two_trees(self) -> None:
+        """§169.3: an installation's private files belong to the harness that selected it.
+
+        One placement spanning two harnesses had one runtime tree, one launcher and one
+        configuration file between them, which is the sharing §169.3 removes. Two harnesses are two
+        installations, so they are two placements -- each owned by one installation, each rooted
+        under that harness's own directory (D-359), and neither able to reach the other's files.
+        """
+
+        drafted = self._draft(profiles=("tabnine", "claude"))
+
+        self.assertIsInstance(drafted, Ok, getattr(drafted, "diagnostics", ()))
+        assert isinstance(drafted, Ok)
+        placements = drafted.value.placements
+        self.assertEqual(2, len(placements))
+        self.assertEqual(
+            {placement.owner for placement in placements},
+            {self._owner("claude"), self._owner("tabnine")},
+        )
+        self.assertEqual(
+            {placement.owner.harness: placement.root for placement in placements},
+            {
+                "claude": f"{self.project_root}/.claude/aart-cli/mcp/company/github",
+                "tabnine": f"{self.project_root}/.tabnine/aart-cli/mcp/company/github",
+            },
+        )
+
+    def test_each_placement_registers_with_the_one_harness_that_owns_it(self) -> None:
+        drafted = self._draft(profiles=("tabnine", "claude"))
+
+        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
+        for placement in drafted.value.placements:
+            with self.subTest(harness=placement.owner.harness):
+                self.assertEqual(
+                    tuple(target.harness for target in placement.targets),
+                    (placement.owner.harness,),
+                )
+
+    def test_a_placement_is_prepared_with_its_own_installation_s_answers(self) -> None:
+        """Another installation's answers are not this placement's to carry.
+
+        A Selection installs several artifacts at once and each of them into several harnesses, so
+        a draft holds answers for installations this placement is not. Were the filter to let one
+        of them through, a value declared for something else would reach this launcher.
+        """
+
+        claude = self._owner("claude")
+        tabnine = self._owner("tabnine")
+        drafted = self._draft(
+            (
+                OwnedInputSource(claude, PromptedConfigValue(ORG, "for-claude")),
+                OwnedInputSource(claude, SecretProviderReference(TOKEN, KEYCHAIN)),
+                OwnedInputSource(tabnine, PromptedConfigValue(ORG, "for-tabnine")),
+                OwnedInputSource(tabnine, SecretProviderReference(TOKEN, KEYCHAIN)),
+            ),
+            profiles=("tabnine", "claude"),
+        )
+
+        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
+        prepared = drafted.value.prepared_placements()
+
+        assert isinstance(prepared, Ok), getattr(prepared, "diagnostics", ())
+        self.assertEqual(
+            {
+                placement.owner.harness: next(
+                    item.value
+                    for item in placement.sources
+                    if isinstance(item, PromptedConfigValue)
+                )
+                for placement in prepared.value
+            },
+            {"claude": "for-claude", "tabnine": "for-tabnine"},
+        )
+
+    def test_two_harnesses_answering_differently_is_two_installations_not_a_conflict(self) -> None:
+        """What D-354 had to refuse, §169.3 simply installs.
+
+        While one placement spanned both harnesses there was one launcher between them, so two
+        different answers to the same question had no single set of values to carry and the draft
+        refused by name. Each harness now has its own placement, its own launcher and its own
+        configuration, so the disagreement is not one: it is two installations, answered
+        separately, which is what §169.4-6 asked for.
+        """
+
+        claude = self._owner("claude")
+        tabnine = self._owner("tabnine")
+        drafted = self._draft(
+            (
+                OwnedInputSource(claude, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(claude, SecretProviderReference(TOKEN, KEYCHAIN)),
+                OwnedInputSource(tabnine, PromptedConfigValue(ORG, "other")),
+                OwnedInputSource(tabnine, SecretProviderReference(TOKEN, KEYCHAIN)),
+            ),
+            profiles=("tabnine", "claude"),
+        )
+
+        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
+        self.assertTrue(drafted.value.ready)
+        prepared = drafted.value.prepared_placements()
+
+        assert isinstance(prepared, Ok), getattr(prepared, "diagnostics", ())
+        self.assertEqual(
+            {
+                placement.owner.harness: next(
+                    item.value
+                    for item in placement.sources
+                    if isinstance(item, PromptedConfigValue)
+                )
+                for placement in prepared.value
+            },
+            {"claude": "acme", "tabnine": "other"},
+        )
+        # Two trees, so the two answers never meet: neither launcher can read the other's file.
+        self.assertEqual(2, len({placement.root for placement in prepared.value}))
+
+    def test_each_installation_names_the_one_item_it_is_entitled_to(self) -> None:
+        """§169.4-6: what a provider is asked for is this installation's own address.
+
+        Composed from the owner rather than taken from what was answered. A reference naming some
+        other installation's item is still stored as an ordinary source, but the address this
+        placement declares it needs -- what is inspected, stored and recorded -- is its own.
+        """
+
+        claude = self._owner("claude")
+        tabnine = self._owner("tabnine")
+        drafted = self._draft(
+            (
+                OwnedInputSource(claude, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(
+                    claude, SecretProviderReference(TOKEN, credential_address(claude, TOKEN))
+                ),
+                OwnedInputSource(tabnine, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(
+                    tabnine, SecretProviderReference(TOKEN, credential_address(tabnine, TOKEN))
+                ),
+            ),
+            profiles=("tabnine", "claude"),
+        )
+
+        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
+        prepared = drafted.value.prepared_placements()
+
+        assert isinstance(prepared, Ok), getattr(prepared, "diagnostics", ())
+        self.assertEqual(
+            {
+                placement.owner.harness: placement.credential_addresses
+                for placement in prepared.value
+            },
+            {
+                "claude": (CredentialReference(TOKEN, credential_address(claude, TOKEN)),),
+                "tabnine": (CredentialReference(TOKEN, credential_address(tabnine, TOKEN)),),
+            },
+        )
+
+    def test_one_installation_still_names_the_address_it_was_given(self) -> None:
+        owner = self._owner()
+        drafted = self._draft(
+            (
+                OwnedInputSource(owner, PromptedConfigValue(ORG, "acme")),
+                OwnedInputSource(owner, SecretProviderReference(TOKEN, KEYCHAIN)),
+            )
+        )
+
+        assert isinstance(drafted, Ok), getattr(drafted, "diagnostics", ())
+        prepared = drafted.value.prepared_placements()
+
+        assert isinstance(prepared, Ok), getattr(prepared, "diagnostics", ())
+        (placement,) = prepared.value
+        self.assertEqual(
+            (
+                CredentialReference(
+                    TOKEN, credential_address(owner, TOKEN, provider="macos-keychain")
+                ),
+            ),
+            placement.credential_addresses,
+        )
 
 
 if __name__ == "__main__":

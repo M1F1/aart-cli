@@ -11,7 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 def _unwrap(result):
-    from agent_artifacts.domain.result import Ok
+    from aart_cli.domain.result import Ok
 
     if not isinstance(result, Ok):
         raise AssertionError(f"expected Ok, got {result!r}")
@@ -19,7 +19,7 @@ def _unwrap(result):
 
 
 def _codes(result) -> tuple[str, ...]:
-    from agent_artifacts.domain.result import Err
+    from aart_cli.domain.result import Err
 
     if not isinstance(result, Err):
         raise AssertionError(f"expected Err, got {result!r}")
@@ -27,8 +27,8 @@ def _codes(result) -> tuple[str, ...]:
 
 
 def _entry(raw_path: str, content: bytes, *, kind=None, executable: bool = False):
-    from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-    from agent_artifacts.protocol.paths import parse_relative_path
+    from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+    from aart_cli.protocol.paths import parse_relative_path
 
     return SnapshotEntry(
         _unwrap(parse_relative_path(raw_path)),
@@ -119,19 +119,19 @@ def _setup_recipe(artifact: str):
 
 def _five_package_entries():
     packages = (
-        ("skill", "review", "aart-skill-v1", "SKILL.md", b"---\nname: review\n---\n"),
-        ("guideline", "python", "aart-guideline-v1", "python.md", b"Use Ruff.\n"),
-        ("memory", "house", "aart-memory-v1", "house.md", b"Remember tests.\n"),
-        ("mcp", "postgres", "aart-mcp-v1", "mcp.json", b'{"servers":{}}'),
+        ("skill", "review", "aart-cli-skill-v1", "SKILL.md", b"---\nname: review\n---\n"),
+        ("guideline", "python", "aart-cli-guideline-v1", "python.md", b"Use Ruff.\n"),
+        ("memory", "house", "aart-cli-memory-v1", "house.md", b"Remember tests.\n"),
+        ("mcp", "postgres", "aart-cli-mcp-v1", "mcp.json", b'{"servers":{}}'),
         (
             "hook",
             "guard",
-            "aart-hook-v1",
+            "aart-cli-hook-v1",
             "hook.json",
             b'{"command":"./guard.sh","event":"PreToolUse","matcher":"Bash","name":"guard"}',
         ),
     )
-    entries = [_json_entry("aart-source.json", _source_document())]
+    entries = [_json_entry("aart-cli-source.json", _source_document())]
     for artifact_type, name, payload_format, payload_name, payload in packages:
         base = f"artifacts/{artifact_type}/{name}"
         entries.append(
@@ -149,13 +149,13 @@ def _replaced(entries, raw_path: str, replacement):
 
 
 def _load(entries, *, origin=None, executable_version: str = "1.5.0"):
-    from agent_artifacts.protocol.capabilities import parse_capability
-    from agent_artifacts.protocol.native_tree import (
+    from aart_cli.protocol.capabilities import parse_capability
+    from aart_cli.protocol.native_tree import (
         SnapshotOrigin,
         SourceSnapshot,
         load_native_source,
     )
-    from agent_artifacts.protocol.semver import parse_semver
+    from aart_cli.protocol.semver import parse_semver
 
     snapshot = SourceSnapshot(
         SnapshotOrigin.LOCAL if origin is None else origin,
@@ -175,7 +175,7 @@ class NativeSourceLoaderTest(unittest.TestCase):
         manifest = _artifact_document(
             "skill",
             "review",
-            "aart-skill-v1",
+            "aart-cli-skill-v1",
             requires_aart={"min_inclusive": "1.1.0"},
         )
         entries = _replaced(entries, manifest_path, _json_entry(manifest_path, manifest))
@@ -185,8 +185,8 @@ class NativeSourceLoaderTest(unittest.TestCase):
         self.assertEqual(len(_unwrap(loaded).artifacts), 5)
 
     def test_documented_reference_fixture_is_executable_protocol_evidence(self):
-        from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-        from agent_artifacts.protocol.paths import parse_relative_path
+        from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+        from aart_cli.protocol.paths import parse_relative_path
 
         fixture = ROOT / "tests" / "fixtures" / "protocol" / "native-source-v1"
         entries = []
@@ -212,7 +212,7 @@ class NativeSourceLoaderTest(unittest.TestCase):
         self.assertIsNotNone(source.artifacts[0].provenance)
 
     def test_local_and_immutable_git_snapshots_compile_identically_for_all_types(self):
-        from agent_artifacts.protocol.native_tree import SnapshotOrigin
+        from aart_cli.protocol.native_tree import SnapshotOrigin
 
         entries = _five_package_entries()
         local = _unwrap(_load(entries, origin=SnapshotOrigin.LOCAL))
@@ -227,7 +227,7 @@ class NativeSourceLoaderTest(unittest.TestCase):
             all(str(package.payload_digest).startswith("sha256:") for package in local.artifacts)
         )
 
-        from agent_artifacts.protocol.native_tree import SnapshotEntryKind
+        from aart_cli.protocol.native_tree import SnapshotEntryKind
 
         with_directories = entries + [
             _entry("artifacts", b"", kind=SnapshotEntryKind.DIRECTORY),
@@ -243,7 +243,7 @@ class NativeSourceLoaderTest(unittest.TestCase):
         review = _artifact_document(
             "skill",
             "review",
-            "aart-skill-v1",
+            "aart-cli-skill-v1",
             requires=[{"type": "guideline", "name": "python"}],
         )
         entries = _replaced(entries, review_path, _json_entry(review_path, review))
@@ -256,7 +256,7 @@ class NativeSourceLoaderTest(unittest.TestCase):
         missing = _artifact_document(
             "skill",
             "review",
-            "aart-skill-v1",
+            "aart-cli-skill-v1",
             requires=[{"type": "skill", "name": "absent"}],
         )
         self.assertEqual(
@@ -267,7 +267,7 @@ class NativeSourceLoaderTest(unittest.TestCase):
         cyclic_python = _artifact_document(
             "guideline",
             "python",
-            "aart-guideline-v1",
+            "aart-cli-guideline-v1",
             requires=[{"type": "skill", "name": "review"}],
         )
         self.assertEqual(
@@ -284,10 +284,10 @@ class NativeSourceLoaderTest(unittest.TestCase):
         )
 
     def test_discovery_requires_the_root_marker_and_uses_only_explicit_artifact_roots(self):
-        from agent_artifacts.protocol.native_tree import SnapshotEntryKind
+        from aart_cli.protocol.native_tree import SnapshotEntryKind
 
         nested = _five_package_entries()
-        nested[0] = _json_entry("nested/aart-source.json", _source_document())
+        nested[0] = _json_entry("nested/aart-cli-source.json", _source_document())
         self.assertEqual(_codes(_load(nested)), ("source-marker-missing",))
 
         entries = _five_package_entries()
@@ -295,7 +295,7 @@ class NativeSourceLoaderTest(unittest.TestCase):
             (
                 _json_entry(
                     "elsewhere/skill/ignored/artifact.json",
-                    _artifact_document("skill", "ignored", "aart-skill-v1"),
+                    _artifact_document("skill", "ignored", "aart-cli-skill-v1"),
                 ),
                 _entry("elsewhere/skill/ignored/payload/SKILL.md", b"ignored"),
             )
@@ -311,15 +311,15 @@ class NativeSourceLoaderTest(unittest.TestCase):
         self.assertEqual(_unwrap(_load(with_unrelated_symlink)), loaded)
 
     def test_rejects_symlinks_special_files_duplicates_and_identity_mismatches(self):
-        from agent_artifacts.protocol.native_tree import (
+        from aart_cli.protocol.native_tree import (
             SnapshotEntry,
             SnapshotEntryKind,
             SnapshotOrigin,
             SourceSnapshot,
             load_native_source,
         )
-        from agent_artifacts.protocol.paths import SafeRelativePath, parse_relative_path
-        from agent_artifacts.protocol.semver import parse_semver
+        from aart_cli.protocol.paths import SafeRelativePath, parse_relative_path
+        from aart_cli.protocol.semver import parse_semver
 
         base = _five_package_entries()
         cases = (
@@ -344,7 +344,7 @@ class NativeSourceLoaderTest(unittest.TestCase):
         mismatched = _five_package_entries()
         mismatched[1] = _json_entry(
             "artifacts/skill/review/artifact.json",
-            _artifact_document("skill", "other", "aart-skill-v1"),
+            _artifact_document("skill", "other", "aart-cli-skill-v1"),
         )
         self.assertEqual(_codes(_load(mismatched)), ("artifact-invalid",))
 
@@ -394,7 +394,7 @@ class NativeSourceLoaderTest(unittest.TestCase):
             _artifact_document(
                 "mcp",
                 "postgres",
-                "aart-mcp-v1",
+                "aart-cli-mcp-v1",
                 setup={"recipe": "setup/installer.json", "platforms": ["darwin"]},
             ),
         )
@@ -518,19 +518,19 @@ class NativeSourceLoaderTest(unittest.TestCase):
         unknown = _five_package_entries() + [_entry("artifacts/widget/example/file.txt", b"data")]
         self.assertEqual(_codes(_load(unknown)), ("source-tree-invalid",))
 
-        empty = [_json_entry("aart-source.json", _source_document())]
+        empty = [_json_entry("aart-cli-source.json", _source_document())]
         self.assertEqual(_codes(_load(empty)), ("source-tree-invalid",))
 
         duplicated = _five_package_entries()
         duplicated[0] = _json_entry(
-            "aart-source.json",
+            "aart-cli-source.json",
             _source_document(["artifacts", "vendor"]),
         )
         duplicated.extend(
             (
                 _json_entry(
                     "vendor/skill/review/artifact.json",
-                    _artifact_document("skill", "review", "aart-skill-v1"),
+                    _artifact_document("skill", "review", "aart-cli-skill-v1"),
                 ),
                 _entry("vendor/skill/review/payload/SKILL.md", b"review"),
             )
@@ -541,18 +541,18 @@ class NativeSourceLoaderTest(unittest.TestCase):
         self.assertEqual(_codes(_load(direct_file)), ("source-tree-invalid",))
 
     def test_invalid_root_marker_and_duplicate_collection_identities_fail(self):
-        from agent_artifacts.protocol.native_tree import SnapshotEntryKind
+        from aart_cli.protocol.native_tree import SnapshotEntryKind
 
         marker_directory = _five_package_entries()
         marker_directory[0] = _entry(
-            "aart-source.json",
+            "aart-cli-source.json",
             b"",
             kind=SnapshotEntryKind.DIRECTORY,
         )
         self.assertEqual(_codes(_load(marker_directory)), ("source-marker-missing",))
 
         invalid_marker = _five_package_entries()
-        invalid_marker[0] = _entry("aart-source.json", b"not-json")
+        invalid_marker[0] = _entry("aart-cli-source.json", b"not-json")
         self.assertEqual(_codes(_load(invalid_marker)), ("protocol-json-invalid",))
 
         source = _source_document()
@@ -564,7 +564,7 @@ class NativeSourceLoaderTest(unittest.TestCase):
             "artifacts": [{"type": "skill", "name": "review"}],
         }
         entries = _five_package_entries()
-        entries[0] = _json_entry("aart-source.json", source)
+        entries[0] = _json_entry("aart-cli-source.json", source)
         entries.extend(
             (
                 _json_entry("collections/base.json", collection),
@@ -574,16 +574,16 @@ class NativeSourceLoaderTest(unittest.TestCase):
         self.assertEqual(_codes(_load(entries)), ("collection-invalid",))
 
     def test_required_version_and_capability_handshake_fail_before_package_loading(self):
-        from agent_artifacts.protocol.native_tree import (
+        from aart_cli.protocol.native_tree import (
             SnapshotOrigin,
             SourceSnapshot,
             load_native_source,
         )
-        from agent_artifacts.protocol.semver import parse_semver
+        from aart_cli.protocol.semver import parse_semver
 
         entries = _five_package_entries()
         entries[0] = _json_entry(
-            "aart-source.json",
+            "aart-cli-source.json",
             _source_document(),
         )
         snapshot = SourceSnapshot(SnapshotOrigin.LOCAL, tuple(entries))

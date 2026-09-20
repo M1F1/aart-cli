@@ -6,8 +6,8 @@ import dataclasses
 import json
 import unittest
 
-from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
-from agent_artifacts.application.promotion import (
+from aart_cli.application.maintainer import CandidateBundle, reconcile_source_scan
+from aart_cli.application.promotion import (
     PromotionApplyReceipt,
     PromotionEvidence,
     PromotionSourceKind,
@@ -21,24 +21,24 @@ from agent_artifacts.application.promotion import (
     project_promotion,
     validate_promoted_registry,
 )
-from agent_artifacts.domain.candidates import assess_candidate
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.registry import (
+from aart_cli.domain.candidates import assess_candidate
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.registry import (
     PromotionMode,
     deprecate_registry_version,
     registry_version_from_candidate,
     revoke_registry_version,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.store.model import make_object_candidate
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.store.model import make_object_candidate
 
 
 def _digest(character: str) -> ObjectDigest:
@@ -59,7 +59,7 @@ def _ready_bundle(
     revision: str = "a" * 40,
 ) -> CandidateBundle:
     manifest = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": name, "kind": "mcp", "version": version},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
@@ -70,7 +70,7 @@ def _ready_bundle(
         SourceSnapshot(
             SnapshotOrigin.LOCAL if revision.startswith("local:") else SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _entry(f"{name}/aart.json", json.dumps(manifest)),
+                _entry(f"{name}/aart-cli.json", json.dumps(manifest)),
                 _entry(f"{name}/server.py", server),
             ),
         ),

@@ -1,10 +1,980 @@
-# AART Refactor Migration Status
+# aart-cli Refactor Migration Status
+
+This file is a chronological evidence log, newest first. Earlier VERIFIED states apply to the
+contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
+`INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
+
+**2026-09-20, CP-26 complete — PR #29 matrix green, step 21 closed.** GitHub Actions run
+`35505543309` passed the full canonical quality, integration/E2E and release-facing gates on all
+required interpreters: Python 3.10 in 20m54s, Python 3.11 in 26m02s and Python 3.14 in 20m51s. The
+aggregate `pr-check` job passed; the conditional private-image job was skipped by design. This is
+the required broad evidence assigned to CP-26.21 by D-317. No local full-suite run duplicated it.
+Together with the closed traceability rows and B-151 documentation correction below, all 23 CP-26
+tasks are done. PR #29 remains open for owner review and the 0.4.0-versus-1.0.0 release decision.
+
+
+**2026-09-20, CP-26.21 — CI install-route failure fixed (D-369), matrix rerun pending.**
+Runs 35504777445 and 35504840836 failed the documented-install route case on all three interpreters:
+only clipboard installation executed without optional host tools. Added the pip disk-install block
+and allowed the driver to use its own gh stand-in without requiring a host gh. The existing E2E
+case now simulates missing optional executables. It reproduced the original failure, passed with
+the fix, failed after deliberately restoring the gh prerequisite, and passed after restoration.
+Scoped Ruff/format, docs and diff checks passed. File-scoped mutmut was attempted but failed stats
+collection because its isolated copy lacked the install document (B-166); no mutant score is claimed.
+The full suite remains on CI, and CP-26.21 remains in progress pending the fixed branch's result.
+
+**2026-09-20, CP-26.21 — B-151 closed, CI verification pending.** Updated public Registry
+protocol and maintenance planning to approved records under `registry/versions/`, versioned
+packages/references and the two derived catalogs. Fixed lock/build/publish/workflow descriptions
+and the security scan example (`--registry`); marked QA-032's retired representation story as
+historical. README already contained no obsolete layout prose. Corrected the same retired-entry
+trust claim found in the vendoring tutorial. No runtime behavior or migration path was added.
+
+Regenerated `docs/release/schema-freeze.json` because the protocol document is a normative input.
+The exact freeze guard passed; appending an unrecorded normative change made it fail, and restoring
+the document made it pass. `make docs-check` and `git diff --check` passed. Full quality, integration
+and release-facing checks remain on PR #29 CI per owner instruction; no local full suite ran.
+Step 21 is not complete until the required matrix succeeds on the updated branch.
+
+**2026-09-20, CP-26.21 — the traceability closeout, and what the matrix was still claiming.**
+Eleven rows had been carrying pending CP-26 proof. INV-243 and INV-246 read `PARTIAL`; INV-244,
+INV-247 and INV-248 through INV-253 read `CONFLICT`, six of them with the words "No
+implementation evidence yet" in their evidence column; INV-245 read `EVIDENCED` but still owed
+CP-26.20 the local-alias half. All eleven were implemented by steps 18a, 19, 20 and 20a. A matrix that
+says a shipped behaviour has no evidence is the same defect as one that cites a deleted test, in the
+other direction: it is wrong about the repository, and a reader cannot tell which rows to trust.
+
+Each row now names the module that owns the clause and the test cases that hold it, and reads
+`EVIDENCED`. Two of them record that the contract itself moved rather than only that it was built.
+INV-250 grades the external-service stage from a declared `reaches_service` plus a declared
+expectation that holds (D-366) -- output shape alone never proved a fresh request, so the product
+stopped implying it did. INV-251 is operator-attested because AART launches no harness at all
+(D-368), which makes "current execution evidence" a thing a person produces, not a thing the tool
+takes.
+
+`traceability_matrix_test.py` holds the citations rather than the prose: cited files, package
+modules and `file::Class::method` cases must all resolve. **Targeted mutation:** renaming one cited
+case (`test_no_harness_is_started_and_coverage_says_so` → `…_said_so`) turned
+`test_every_cited_test_case_exists_under_the_name_it_is_cited_by` red and nothing else; reverted, it
+is green. The guard cannot check that a row's *claim* matches its evidence -- that stays a reading
+job, and is why each row's characterization column says what the cited tests actually establish.
+
+Not run here: the full quality suite. CP-26.21 owns it (D-317), and by the owner's standing
+instruction it runs on CI across three interpreters through the pull request rather than locally.
+
+**2026-09-20, CP-26.20a — the harness can check its own report (`aart-cli mcp report <path>`).**
+Between composing the prompt and grading the file there was a gap: the session writing the report
+had no way to learn its JSON was malformed, so a shape mistake surfaced only after that session was
+gone. The new action runs every shape check the full route runs -- marker, version, entry shapes,
+duplicates -- and skips only the correlation check, which needs a selection it does not have. It
+says so in its own output instead of implying a completeness it lacks. `parse_smoke_report` takes
+`requested=None` for exactly this; `test_the_shape_checks_do_not_ride_on_correlation` pins that
+dropping correlation drops nothing else. `unit` 4762 OK, `integration` 424 OK.
+
+
+**2026-09-20, CP-26.20a — the harness leg stops being something AART drives (D-368).**
+Owner-directed. AART no longer launches a harness, submits a prompt to one, or reads its session.
+`aart-cli mcp test --prompt` composes a prompt naming every selected installation, its MCP server
+name as that harness sees it, the declared tool with resolved arguments, and the JSON report shape;
+a person runs it in their own session; `aart-cli mcp test --report <path>` grades what comes back.
+
+`aart_cli/io/harness_smoke.py` is deleted: `run_harness_smoke` (101 lines), `_claude_result` (35),
+`HarnessRunner` (28), `_opencode_result` (24), `_events` (17), `_version` (10) and
+`HarnessProcessResult` (5) -- **220 lines** -- had no reason to exist once nothing is driven. The
+verified pre-invocation allowed-tools boundary, the 120-second whole-run deadline and owned-process
+cleanup went with them, along with the capability gate that made Tabnine a special case. The
+remaining 140 lines (prompt composition, assessment parsing, result conversion) have no effects and
+now live in `aart_cli/application/harness_report.py`. Adding a harness costs no code at all.
+
+*Corrected while measuring:* an earlier claim in this session that `_thaw`/`_freeze`/
+`_as_call_result` were also deleted was wrong. A report still carries an MCP result that must become
+an `McpCallResult`, so that conversion survives and merely moves. 220 removed, not 258.
+
+**What is given up, and it is real.** Report evidence is operator-attested: AART cannot establish
+that a report came from a real session, that the session was current, or that a tool result was
+copied faithfully. It carries a distinct coverage value, `direct-and-attested`, is never conflated
+with direct evidence, and INV-251 was replaced rather than quietly reinterpreted. §170.2, §170.3,
+§170.4 and §170.5 were amended with it, including the enforcement paragraph -- the harness route can
+no longer claim "unexpected operations are blocked", so it now says plainly that the direct client
+blocks and the operator observes.
+
+What keeps it honest is D-366, committed an hour earlier: a service claim needs `reaches_service`
+plus a declared `expect`, and `expect` must carry a value only the configured service returns. An
+invented or unfaithfully copied result fails rather than passes. The runner also keeps the verdict,
+grading every carried result with the same evaluator the direct route uses.
+
+Evidence: 12 tests on the new pure module and 12 on the command route, all green, plus 94 across the
+MCP and authoring modules. Six targeted mutations, each restored. **Three of them first survived,
+and each exposed a test that did not hold its own name:** taking the first JSON object rather than
+the last passed because the fixture had only one object (fixed with a decoy the model would
+plausibly emit); dropping `entry.called` passed because no fixture carried the self-contradictory
+`called: false` with a result. Both tests were corrected and the mutations then died in exactly the
+test that names the claim.
+
+**2026-09-20, CP-26.20a — the service stage can now be reached, and the specification chose how.**
+B-164 was blocking: `McpCallResult.service_observed` was the only thing that could turn
+`mcp-to-external-service` into a `PASS`, nothing in the product ever set it, and the stage sat
+unconditionally in the required set -- so `aart-cli mcp test` returned non-zero for every
+installation that worked perfectly. Measured against a real stdio server, not reasoned.
+
+The backlog offered two readings and **§170 rules out both**: (a) "any declared expectation upgrades
+the stage" contradicts §170.3's "output shape alone does not prove a fresh network request", and
+(b) "`NOT VERIFIED` does not block a zero exit" contradicts §170.5's "unverified required stages
+cannot pass". The specification supplies the third reading itself -- the stage is graded from "the
+selected tool's reviewed behavior **and** the observed result" -- so D-366 takes both: a new optional
+`smoke_test.reaches_service` (the reviewed behaviour, `true` only) **and** a declared `expect` that
+holds (the observed result). An absent claim is `NOT CONFIGURED` and outside the required set, which
+is what lets a working installation exit zero. `service_observed` is deleted, not deprecated.
+
+Evidence: `tests/mcp_smoke_stdio_test.py` now reaches `PASS` against a real launcher with the
+declaration present, and the same run without the expectation does not. Targeted mutation --
+relaxing `expectation.outcome is not PASS` to `is FAIL` in `_service`, which would let the author's
+word alone carry the stage -- turns exactly two tests red, the evaluation test that names the claim
+and the CLI test that keeps the capability exclusion narrow, and nothing else. The skeleton's
+anti-drift oracle forced the new field into all five kinds' documents, live and disabled.
+
+**2026-09-20, CP-26.20a — D-365's evidence is in, and what remains is not writable here.** The
+entry below said the revision's implementation was pending and that existing tests did not
+establish its claims. The first half is stale: the capability route, the 120-second whole-run
+deadline, argument confinement, the English assessment contract and the default-off
+`--show-response` are implemented. Tabnine returns `NOT RUN` with the capability reason and
+coverage `direct` -- not `UNSUPPORTED`, as the entry below still describes it. The second half was
+accurate, and is now addressed: five claims D-365 names had no test, and have one each.
+
+- **Capability-based aggregation.** A capability-excluded harness does not fail an otherwise
+  successful direct run, and its three stages are present as `NOT RUN` rather than absent or
+  quietly green. Its companion holds the exclusion *narrow*: an unverified service stage still
+  fails a direct run, so the first test cannot pass merely because `ok` ignored everything.
+- **Argument enforcement.** A completed call to the declared tool with *different* arguments is
+  not the declared operation, and the model's `ok` assessment about it does not rescue it -- which
+  is the case that shows why the assessment is separate evidence (INV-251).
+- **Deadline and process cleanup.** The deadline handed to the harness is the whole-run 120
+  seconds rather than the declaration's call timeout, a timeout cannot pass, and the runner signals
+  the *process group* it owns and reaps it, because an MCP server started by the harness is its
+  child and killing the harness alone would leave a stdio server holding the installation's
+  credentials.
+- **Default non-disclosure.** No response reaches the report unless `--show-response` asked for it.
+
+Five targeted mutations, each red in exactly the test that names its claim and each restored:
+dropping OpenCode's argument comparison; killing the harness instead of its process group;
+`coverage == "direct"` no longer excluding the harness stages; disclosing the response without the
+flag; and collapsing the whole-run deadline to the call deadline. Lint and typecheck are clean and
+the focused set is 37 tests.
+
+**Still open, and still critical: B-162.** Live OpenCode and Tabnine runs and protected-service
+evidence need real harness CLIs and a real protected service on the machine that runs them. That is
+not something a test double can stand in for -- a substitute MCP configuration proves the adapter
+fixture and not the user's installation (§170.4) -- so it is owner/manual evidence, not work a
+further agent run can close. **CP-26.20a stays in flight; do not mark it done.**
+
+### Current owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
+
+This supersedes earlier requirements for mandatory Tabnine harness execution, blanket prohibition
+of model assessment and unconditional suppression of response display. Implement revised Product
+Specification §170 / INV-250–252. Unsupported allowed-tools capability means direct MCP testing with
+that installation's credentials and an explicit excluded harness stage; it does not block completion.
+Eligible harnesses have a 120-second deadline, exact operation/argument enforcement and an English
+prompt requesting `status` (`ok`, `error`, `uncertain`), `summary`, and `possible_error`. Human-readable
+fields are English. Assessments remain separate from deterministic checks and service evidence.
+Add default-off `--show-response` for bounded current-output inspection, without application
+persistence. Keep zero runtime dependencies; use Python's standard library.
+
+Implementation is pending for this revision. Required evidence includes direct-only Tabnine coverage,
+capability-based aggregation, deadline/process cleanup, malformed assessment and uncertain/error
+cases, argument enforcement, bounded opt-in display and default non-disclosure. Existing tests do not
+establish these new claims. CP-26.20a remains in flight; do not mark it done.
+
+**2026-09-20, CP-26.20a in flight — installed MCP smoke verification (D-363/D-364).** The author
+manifest now has one parser-owned optional `smoke_test` block, carried through canonical content;
+`aart-cli mcp test` selects only concrete installed owners, validates the exact installed launcher
+and configuration, executes one declared stdio tool call after schema preflight, and reports each
+claim separately without raw values or transcripts. OpenCode and Claude adapters use their real
+project discovery and one-operation permission ceilings. The focused set is 58 tests, including
+Hypothesis properties; four recorded semantic mutations went red. Ruff and mypy are green.
+
+The task is not done: Tabnine has no verified documented pre-invocation tool allowlist, so its
+adapter reports its harness stages `NOT RUN` under coverage `direct` before sending a prompt (this
+said `UNSUPPORTED` when written; the entry above corrects it), and required live OpenCode/Tabnine
+plus protected-service evidence remains. This critical acceptance gap is B-162. Step 20's
+disproportionate partial mutmut result is recorded as B-163.
+
+**2026-09-20, CP-26.20 — a Registry repository on this disk is a Registry (D-350, D-362).**
+`registry-local` is a fourth `SourceKind` carrying an absolute repository path and a *required*
+branch, and it runs the same acquisition, validation, source store, Marketplace projection,
+resolver, policy evaluation and installation as a remote Registry. What differs is two flags on one
+snapshot request: `allow_local_transport`, which lets the bare managed mirror fetch from a
+filesystem path, and `ref_is_branch`, which stops a tag of the branch's name answering for a branch
+that was deleted. Because a bare mirror fetch reads only committed refs, "never switch branches,
+never read the worktree, never fall back to HEAD" is a property of the acquisition already there.
+
+Three questions had been spelled `kind is REGISTRY_GIT` while there was only one transport. They
+are now `is_registry`, `is_git` and `is_local_checkout` on `ConfiguredSource`, and the two
+`allow_direct_sources` checks and `configuration/policy.py` deliberately keep asking `REGISTRY_GIT`,
+because they mean *reviewed remote*. Screen 21a gains a Transport row that Space cycles and relabels
+itself for a local checkout.
+
+Two rules that treated a Registry's own identity as this machine's name for it are gone (D-362):
+`_approved_snapshot` required a version record's `registry` field to equal the configured alias, and
+`compile_marketplace_graph` refused two sources declaring one `source_id`. Both made D-350's two
+coexisting aliases impossible. Re-addressing now happens in exactly one function,
+`load_configured_registry_versions`, which all four readers go through.
+
+**Evidence, and what is still owed.** `tests/local_registry_checkout_e2e_test.py` (14 tests) drives
+the CLI against a real repository holding three answers at once -- `main`'s 1.2.0, the selected
+branch's 1.3.0 and an uncommitted worktree edit -- and asserts only the second is ever installed and
+that the repository's HEAD, status, worktree and refs are unchanged afterwards.
+`tests/configured_registry_alias_test.py` holds the re-addressing against a Registry whose content
+calls it `company` while this machine calls it `local-registry`. Three targeted mutations are
+recorded in the slice, each red in exactly the test that names its claim. The broad `unit` gate
+(4702) caught two things the focused suites could not: a Hypothesis case in `compiler_graph_test`
+that held the duplicate-source-ID rule, now the positive claim, and
+`docs/release/schema-freeze.json`, regenerated for the one input that moved. After both fixes the
+gates are green: `unit` 4705 OK, `integration` 424 OK, and
+lint/format-check/typecheck/docs-check/validate/secret-shape-check clean. A scoped `make mutants`
+over the changed modules has not been run and is the one outstanding piece; it is advisory under
+D-134, and CP-26.21 owns the full release-facing verification.
+
+**Found, not fixed:** an authored artifact cannot declare a dependency at all -- the author manifest
+has no `requires` field -- so the dependency machinery below it is reachable only from hand-built
+native packages. Recorded as **B-161** rather than papered over with a fixture that writes content
+promotion never writes; it is why step 20's closure evidence is the re-addressing itself.
+
+**2026-09-20, stale CP-26.18 handoff reconciled; focused verification only.** The supplied
+handoff described `4fe1fe4`, steps 1–17 done and a 17/22 plan. The clean checkout was actually
+`64db5c0` on `refactor/cp-26-legacy-removal`, with 18/18a done and 19 in progress (19/23 done).
+Read the execution contracts, §164.7, D-312 and the current slice/NEXT; D-347 completed the old
+step-18 branch-suggestion carry-over in 18a. No reopening or duplicate implementation is needed.
+
+Focused verification passed all 76 tests in `registry_publication_readiness_test` (5),
+`registry_publication_io_test` (11), `registry_publication_branch_test` (14),
+`registry_push_cli_test` (12), `registry_publish_command_test` (3) and
+`registry_workspace_lifecycle_test` (31), run through Poetry with `aart_cli.application`
+imported first. The old `agent_artifacts` command is superseded by the completed namespace change.
+These tests use controlled local fixtures; no external Registry was pushed. No runtime code,
+task status, new product decision or backlog item changed. No full quality gate or new mutation
+claim applies to this audit. Step 19's red-suite obligations below remain unresolved.
+
+**2026-09-20, CP-26.19 — the Installed view addresses installations, and step 19 is verified
+(D-361).** `unit` 4671 tests OK, `integration` 410 OK, lint/format-check/typecheck clean.
+
+One function composes the key that addresses one installation:
+`installation_key(coordinate, owner)` in `domain/installation_owner.py`, spelled
+`<coordinate>#<harness>` with `+<profile>` where the harness has profiles and the bare coordinate
+where a record names no owner. `InstalledInspection.installation`, `InstalledArtifactView.row`,
+`ConfigurationFileView.row`, the TUI row list, `screens.artifact()`, `_inspections`,
+`credential_dependants` and the health map read it, so three harnesses are three reachable rows
+and an action is aimed at the one it names instead of at whichever a dictionary kept. This is the
+"where this stops" of the entry below, repaid.
+
+`configured_configuration_action_e2e_test` was rewritten rather than renumbered: an installation
+owns one configuration file, so editing three harnesses is three reviewed edits, and the
+harnesses nobody edited keep their file, their digest and the answer their server reports.
+
+Two defects were found by running it. `marketplace update` on an artifact installed into two
+harnesses was refused outright -- "an artifact was superseded twice" -- because
+`propose_installation` matched previous states by unversioned coordinate; B-160 was reclassified
+critical and closed, and supersession is keyed by the owner the previous state already carries.
+And a Hypothesis property showed `skill_projection` reading a lone `\r` in a body as the
+document's line ending, writing frontmatter no parser reads; detection is `\r\n` or `\n` now.
+
+Five targeted mutations are recorded in the slice document with the test each one turned red,
+covering `path_for`, `placements_for`, `configured_installation_action.inspect`,
+`InstalledArtifactView.row` and `_supersession_key`. Scoped `mutmut` over
+`domain/installation_owner.py` leaves `installation_key` with message-text survivors only.
+
+**2026-09-20, CP-26.19 in progress — one installation per harness, and the record is keyed by it.
+Superseded by the entry above; its "NOT VERIFIED" no longer holds.**
+
+`io/artifact_placement.placements_for` replaces `placement_for` and answers with one placement per
+harness, each carrying its own `InstallationOwner`, its own tree composed through
+`installation_tree_root` against that harness's `MANAGED_TREE_TARGETS` directory, and its own
+configuration file. Both receipt shapes carry the owner, through serialization and through
+`DesiredState`, and `LocalReceiptStore` digests the owner into the record path -- so an artifact
+installed into two harnesses is two records rather than one written twice. `records_for(coordinate)`
+is the reader for the questions that are genuinely about the artifact and not about one of its
+installations.
+
+Two coordinate-keyed dicts were found shadowing one installation with another rather than
+theorized: `planned` in `io/configured_installation_action.inspect`, which made both members of a
+two-harness install fail preflight as "installed state changed after Review", and `available` in
+`record_installation_transaction`. Both are keyed by `(coordinate, owner)` now. The first was
+caught by an existing E2E test rather than by a new one, which is the argument for having kept it.
+
+D-354's cross-target refusal and D-355's `HARNESS_PLACEHOLDER` launcher composition were deleted
+rather than disabled, along with `domain/placement.py`: once a placement belongs to one harness the
+address is concrete and there is nothing left to compose at run time. The five tests that described
+that workaround were replaced by tests of what replaced it.
+
+**This entry claimed no verification when it was written**, and the entry above pays that debt:
+the red modules it listed were all waiting on the Installed view and the TUI focus key, which is
+what `installation_key` fixed. The three targeted mutations it owed are among the five recorded in
+the slice document.
+
+**2026-09-19, CP-26.19 in progress — the managed tree has a measured base (D-359).**
+`MANAGED_TREE_TARGETS` in `domain/harness.py` records which directory of each harness's own AART
+may keep an installation's payload, launcher, runtime and configuration in: `.claude`, `.tabnine`,
+`.codex`, `.opencode` and `.config/opencode`, one row for every (harness, scope) pair any other
+measured table in that module names. `domain/installation_tree.py` has held the §169.3 policy
+against a `harness_root` argument since 18a precisely so the rule could be written without
+inventing a harness fact (D-346); this is the fact, and it is the prerequisite for wiring the
+module.
+
+Two claims are held by tests rather than by prose. No row names a directory nobody measured --
+each managed root is checked, over the tables themselves, to be a directory some existing measured
+target for the *same* harness and scope already sits in. And every harness this build can place
+into has a row, because a pair another table names and this one does not would be an installation
+with nowhere to keep half of itself. Tabnine's row is `.tabnine` at both scopes rather than
+`.tabnine/agent`, which is that build's agent-settings directory and is evidenced at project scope
+only.
+
+Evidence: `make unit` passes; lint, format-check, typecheck, docs-check and secret-shape-check pass.
+Three targeted semantic mutations were red on their named tests and restored -- narrowing Tabnine's
+row to a directory nothing evidences at user scope, dropping the Codex project row, and pointing
+OpenCode's user row at `.opencode`. A fourth survived and was read as the finding it is: the
+validator's trailing-separator guard was already covered by its empty-path-part check, so the dead
+branch was removed rather than given a test. Scoped mutmut over `domain/harness.py` killed every
+mutant of the new code; the survivors elsewhere in that module are outside this slice and are
+pre-existing. Nothing calls `installation_tree_root` yet, so it stays in
+`DELIBERATE_NON_RUNTIME_MODULES`. CP-26 remains 19/23 with step 19 in progress.
+
+**2026-09-19, CP-26.19 in progress — the harness reads the installation's name (D-358).**
+`installed_name_for(coordinate, scope)` reaches placement, so a delivered Skill lands at
+`.claude/skills/code-review-company-project` and the same artifact at user scope is a second
+directory. The delivery records `projected_name`, `projected_description` and, for a Skill only,
+`projected_document`; `package_delivery` applies that projection before taking the tree digest and
+`DeliveryEffectInterpreter` applies the same function after copying, so the recorded digest
+describes what is on disk and a clean install does not read as drift. The payload stays
+byte-for-byte what the Registry approved. MCP registration keys follow the same name, so `.mcp.json`
+holds `github-company-project`.
+
+One real regression was found and fixed inside the change: `consumer_machine` rebuilt a delivery's
+expected destination from the *authored* name to decide which installations a status view holds, so
+`marketplace status` listed nothing after any delivered install. It was green in every delivery test
+and visible only end to end.
+
+Evidence: `make unit` passes 4728 tests with one skipped; lint, format-check and typecheck pass.
+Four targeted semantic mutations were red on their named tests and restored -- the authored name in
+the destination, the executor skipping the projection, the digest taken before it, and the status
+view's lookup. Scoped mutmut over `skill_projection.py` left 32 survivors; the two real ones are now
+held, and one was a defect rather than a test gap (`\n` rows written into `\r\n` documents).
+Hypothesis holds the universal half: the authored body survives whatever was written, and projecting
+twice says what projecting once says. CP-26 remains 19/23 with step 19 in progress.
+
+**2026-09-19, CP-26.19 in progress — Screen 07 collects once per installation.** D-357 completes
+the visible collection half of D-353. Config and credential rows are keyed and labelled by their
+installation owner; `_one_row_per_input` and `_addressed_to_owners` are deleted, so accepting one
+row cannot answer another installation. The action maps an owner-qualified row back to exactly one
+fresh draft field and creates one `OwnedInputSource`; stale rows are dropped. The TUI E2E enters a
+value three times and installs only the two selected harnesses. Different ordinary values still
+meet D-354's explicit refusal until the private runtime projection is per owner.
+
+Evidence: the red-first multiple-row assertion failed against the collapsed screen; an owner-key
+mutation made exactly the named E2E red and was restored. The focused set passes 61 tests and
+`make unit` passes 4654 tests with one skipped. The previously owed address/component mutations and
+scoped runs were completed; one test-provider gap was closed. File-scoped mutmut for
+`consumer_ui.py` expanded to 2502 unrelated mutants and was stopped after 253; B-158 records that
+tooling limitation. CP-26 remains 19/23 with step 19 in progress.
+
+**2026-09-19, CP-26.20a minimal smoke contract accepted — implementation pending.** D-351
+records the two-field `smoke_test` declaration, optional arguments/expectations, default 15-second
+tool-call deadline and generic MCP error/schema evaluation. Existing tool outputs need no custom
+format. Separate invocation success from optional assertions and actual service evidence; an
+unproven service claim is NOT VERIFIED. The full hierarchy, real harness execution evidence and
+read-only boundary remain. Specification, task acceptance, traceability, author guidance and active
+handoff are updated; no task/status or runtime code changes. No new backlog item was necessary.
+
+Verification passed: `make docs-check`, all five `tests.traceability_matrix_test` cases,
+`handoff-plan validate` (27 epics / 161 units / 157 done), `git diff --check` and a focused scan
+for superseded mandatory-assertion wording in active specification/task/handoff sections.
+No runtime tests or mutations apply to this documentation-only contract update.
+
+**2026-09-19, CP-26.20/20a local Registry flow clarified — implementation pending.** D-350
+records local repo path + selected branch + alias → ordinary installation → installed-MCP smoke
+tests. No new Candidate Test Install process is required. Add/Sync uses the selected branch's
+committed snapshot independently of checked-out HEAD/worktree edits; missing branches and invalid
+successors preserve last-known-good state. Specification, slice, author guidance, B-143 and active
+handoff agree. No task/status changes or runtime implementation are claimed.
+
+Verification passed: `make docs-check`, five `tests.traceability_matrix_test` cases,
+`handoff-plan validate` (27 epics / 161 units / 157 done) and `git diff --check`.
+
+**2026-09-19, CP-26.19 naming scope accepted — implementation pending.** D-349, §169.7 and
+INV-253 add versionless artifact/Registry-alias/scope names within actual harness discovery and
+name grammars, installed-only skill projection, and collision refusal. The owner explicitly
+includes Keychain: complete owner plus input id determines service/account addresses; readable
+labels use opaque root discriminators, and same-owner updates keep stable references. Acceptance
+covers independent projects/profiles/aliases/inputs, no raw roots or secret material, and isolated
+rotation/deletion. Issues #26/#28 map to existing task 19. No task/status change, runtime code
+change or implementation evidence is claimed; order remains 19 → 20 → 20a → 21, 23 tasks / 19 done.
+Enterprise index release customization is explicitly deferred in B-157.
+
+Verification passed: `make docs-check`, five `tests.traceability_matrix_test` cases,
+`handoff-plan validate` and `git diff --check`. A before/after plan comparison confirms only task
+19's title changed in this segment, preserving all ids/statuses and the 23/19 counts; INV-253 has
+one definition and one pending traceability row. No runtime tests or broad quality gate apply.
+
+**2026-09-19, CP-26.20a accepted — installed-MCP smoke verification, implementation pending.**
+The owner added CLI-only testing of all or selected already installed MCPs, both local
+Candidate/Registry test installations and ordinary user installations from remote Registries.
+§170, INV-248–252 and D-348 retain the full configuration/protocol/service/model-provider/harness
+hierarchy. Only the predeclared read-only operation and arguments may execute. OpenCode CLI and
+Tabnine CLI require real acceptance evidence; Claude Code is an additional adapter. Documentation
+recommends local install/test before public Registry publication and consumer batch verification.
+No TUI, scheduled CI or implicit setup mutation is included. Issue #27 maps to this task; B-073
+remains open for scheduled live CI. Plan order is 19 → 20 → 20a → 21, **23 tasks / 19 done**;
+existing statuses are unchanged and step 19 remains next. This segment changes documentation and
+planning only; no smoke runner or new runtime behavior is claimed.
+
+Verification passed: `make docs-check`, all five `tests.traceability_matrix_test` cases,
+`handoff-plan validate`, a comparison preserving every pre-existing task/status and all other
+epics, five unique new invariant definitions with pending traceability rows, and `git diff --check`.
+No broad quality suite or runtime mutation testing applies to this documentation-only segment.
+
+**2026-09-19, CP-26.18a complete — Push names the action that produced its commit.** The final
+18a carry-over is implemented. Successful Registry init, rebuild, single promotion and bulk
+promotion leave typed origin context in the reducer; a single promotion derives
+`<artifact>-<version>` from its reviewed transaction. Push turns that context into
+`aart-cli/init-registry`, `aart-cli/rebuild-registry`, `aart-cli/promote-<artifact>-<version>` or
+`aart-cli/bulk-promote` without treating the suggestion as an operator-selected target. Restarted
+sessions and unusable subjects fall back to `aart-cli/registry-update` (D-347). The per-origin
+targeted mutation went red and was restored; scoped mutmut killed all 135 mutants in
+`domain/publication.py`. `make unit` (4596 tests, one skipped) and `make integration` (402 tests)
+reran step 16's executable install/README contract; lint, format, type, packaging, documentation and
+secret-shape gates also passed. Step 19 is next. No broad `make quality` ran (D-317/D-334).
+
+**2026-09-19, CP-26.19 in progress — every installation reaches its own Keychain item.**
+`io/consumer_actions.py` addresses a secret with `credential_address(field.owner, field.input.id)`;
+the per-machine `aart.<sha256(home)[:12]>` service is deleted, not kept beside it (D-334). Three
+things moved with it in one slice, because any alone leaves the product broken. The launcher is one
+file registered with every harness, so `plan_artifact_installation` carries
+`credential_service_template` to `generate_launcher` (D-355) and the substitution happens inside an
+argv word, since a provider may name the service as its own argument or fold it into one reference
+string; the sentence the launcher prints when it cannot read the item passes the composed address
+as a `printf` argument rather than substituting into prose. The placement carries both the template
+(launcher text, naming nothing anyone holds) and `credential_addresses` (every installation's
+concrete item), and the latter is what a provider is inspected for and what the receipt records
+through `PlannedInstallation.credentials`. `prepared_placements()` folds each owner's own address
+back to the template and compares what remains, so separate items stop reading as a disagreement
+while a reference pointing anywhere else still refuses (D-354, narrowed). Reconciliation stopped
+naming a credential component by its declared input alone (D-356): four installations of one
+artifact name one component four times, which `DesiredState` refuses, so
+`credential_component_names` names a whole set — an input still naming one item keeps exactly the
+name it had, one that does not is suffixed with a short digest of its address, and both the desired
+state and the observation take names from that one function. The characterization that changed is
+the one that said it: two artifacts declaring one input were asked for once with both owners in a
+single briefing and are now asked for separately, each in front of its own author's guidance. The
+recording provider double held one `present` flag for every address, so storing one installation's
+item made every other look ready and the second of two artifacts failed its pre-execution check
+with "installed state changed after Review"; it now holds state per item, as a provider does.
+Evidence: focused suites, `lint`, `format-check` and `typecheck` green. The later Screen 07 segment
+completed the owed targeted mutations and scoped runs and reran `make unit`: 4654 tests pass with
+one skipped.
+
+**2026-09-19, CP-26.19 in progress — one launcher, four addresses.** `generate_launcher` composes
+its credential address instead of carrying one (D-355). Given `credential_service_template` — the
+installation's service with its harness left open as `HARNESS_PLACEHOLDER`, built from the same join
+`credential_address` uses so the two cannot drift — the launcher emits the harness preamble it
+already needed to find its configuration file (D-264), composes `AART_CLI_SERVICE` around
+`"$AART_CLI_HARNESS"`, and substitutes it for the service element of the provider's resolution argv.
+One generated file therefore reaches four Keychain items. Nothing composed is evaluated: `$1` is held
+to a canonical slug before anything is built from it, each side of the template is single-quoted, the
+placeholder itself is refused unless it is letters, digits, underscore or hyphen, and a template must
+leave exactly one slot open. A provider whose argv does not name the service is refused
+(`launcher-provider-unparameterised`) rather than silently given one address for every harness.
+Evidence is executed, not inspected: the generated launcher runs against a stub provider that reports
+the service it was asked for, once as `claude` and once as `opencode`, and the two differ and each
+equals `credential_address` for that harness. 31 tests; one targeted semantic mutation — the composed
+address naming a fixed harness — red on exactly the test that names it, then restored; scoped mutmut
+286/316 killed, 28 unreached, two survivors both real and now held (`_error` could drop its message;
+`partition` could become `rpartition`, which the one-slot guard makes equivalent). `lint`,
+`format-check`, `typecheck`, `docs-check` green; dependent projection, proposal, verification and
+planning suites green. No broad `make quality` (D-317). Without a template the launcher is
+byte-for-byte unchanged, which is what lets this land before its call sites move: threading the
+template through `plan_artifact_installation` belongs in one slice with writing the secret at
+`credential_address` and deleting the D-354 divergence refusal, because a launcher reading the new
+address before the secret is written there would find nothing at it.
+
+**2026-09-19, CP-26.19 in progress — who an installation is.** `domain/installation_owner.py` is
+the complete owner §169.4-6 names: Registry alias, artifact kind and name, scope, normalized
+concrete root, harness and profile. The version is dropped inside `installation_owner()` so no
+caller can keep it, because an owner that moved with the version would make every compatible update
+ask for every value again. `credential_address()` derives
+`aart-cli.<harness>.<profile|->.<scope>.<alias>.<kind>.<name>.<16 hex of sha256(root)>` with the
+declared input as the account (D-352): readable labels for everything an operator needs to
+recognize, the root hashed because a project directory is frequently a client's name, a slot the
+profile keeps even when empty so the labels cannot shift, and a refusal rather than a truncation
+above 255 characters. What it replaces is live and is why it exists — `io/consumer_actions.py`
+addresses one Keychain item as `aart.<12 hex of the user home>` per declared input, so one artifact
+in two harnesses, two scopes or from two Registry aliases reaches the same item, and rotating or
+deleting for one installation silently does it for the others. That call site cannot adopt this
+until the same step stops composing one field per `InputId` across artifacts, so the module is
+recorded in `DELIBERATE_NON_RUNTIME_MODULES` with that dated reason and the next commit removes it.
+Evidence: 15 tests including two Hypothesis properties (two addresses are equal exactly when the
+owners are; no address holds the root or outgrows the bound), two targeted semantic mutations each
+red then restored, and scoped mutmut killing 44 of 62 — one survivor was a real hole, a non-string
+root returning `TypeError` instead of a refusal, and is now held. `lint`, `format-check`,
+`typecheck`, `docs-check` and `validate` green. No broad `make quality` (D-317).
+
+**2026-09-19, CP-26.19 in progress — every target collects its own answers.** The unit of
+collection is `InstallationOwner`, not `InputId` (D-353). One field per `(owner, declared input)`,
+one `BoundInputs` per owner, and answers that carry the installation that gave them
+(`OwnedInputSource`). `placement_owners` names those installations from the harnesses a placement
+actually reaches, through a registration target or through a delivery, merge or settings entry.
+Two deletions rather than settings: `INPUT_DECLARATION_CONFLICT`, because two artifacts declaring
+one id differently were a conflict only while the id was the key, and
+`InstallationInputField.dependants`, because a field has exactly one owner and that list was what
+made four installations share one value. §165.19's "a contract change must not touch credentials
+owned by any other installation" is now held by separation instead of by refusing the pair.
+
+Planning is not per installation yet and the gap is named (D-354). Where one placement's owners
+answer ordinary configuration differently, `prepared_placements()` refuses by name until the
+runtime projection becomes per owner. Screen 07 now uses `InputView.row`, shows one row per owner
+and sends each answer only to that owner (D-357); `credential_address` is live and the launcher
+composes its harness-specific service. Evidence: the original composition segment's `make unit`
+passed 4628 tests; five targeted semantic mutations each went red then restored, one after exposing
+a real multi-artifact hole; scoped mutmut killed 73 of 94 with one real argument-guard survivor now
+held. The later form segment passes 4654 unit tests. No broad `make quality` (D-317).
+`domain/installation_owner.py` is runtime-reachable and its reachability exception is removed.
+
+**2026-09-19, CP-26.19 in progress — the name the harness shows.** `installed_name()` projects the
+same owner to §169.7's harness-visible spelling: artifact name, Registry alias and scope joined
+once — `github-company-project`, `github-company-user`. No version, because a name that moved with
+every update would rename a directory the harness had already discovered; no harness and no root,
+because the name lives inside that harness's root and a readable name is not an identity, which is
+what `credential_address` carries. The composed name is held to the published skill contract that
+OpenCode, Agent Skills and Tabnine CLI all discover — lowercase alphanumeric, single hyphens, 1-64
+characters — so one bound serves every adapter. `installed_names()` names a whole operation at once
+because the join is ambiguous by construction: the separator is legal inside the labels, so `github`
+from `company-user` and `github-company` from `user` both spell `github-company-user-project`.
+Neither is wrong and neither can be disambiguated silently, so the set is refused before a directory
+exists to overwrite; an owner listed twice is not a collision with itself. Evidence: 26 tests, four
+targeted semantic mutations each red then restored (scope dropped from the join, the length bound
+removed, a collision accepted, a repeated owner counted twice), and scoped mutmut, whose two real
+survivors inside these claims are now held — the `>`/`>=` boundary where §169.7 makes exactly 64
+legal, and a refusal that could lose its remediation unnoticed. `lint`, `format-check`, `typecheck`,
+`docs-check` and `validate` green; focused tests across the credential and input seam green. No
+broad `make quality` (D-317). Still not runtime-reachable: the per-owner split of
+`application/installation_inputs.py` is what removes the exception, and it is the next commit.
+
+**2026-09-19, CP-26.18a in progress — the filesystem's names, and one portable home.** Two more
+commits on `refactor/cp-26-legacy-removal`. `0fadd69` moved every name the filesystem sees: author
+manifests `aart-cli.yaml`/`aart-cli.json`, generated `aart-cli-registry.json`,
+`aart-cli-source.json` and `.github/workflows/aart-cli-registry.yml`, the managed marker
+`<!-- >>> aart-cli memory:<name> >>> -->`, the project state directory `.aart-cli`, payload formats
+`aart-cli-<kind>-v1`, compliance levels `aart-cli-native`/`aart-cli-compatible`, schema ids
+`aart-cli.dev/<kind>/v1`, the `aart-cli-baseline` security provider and every `AART_CLI_*`
+environment and CI variable. Three of those are content-addressed, so the rename is a format change
+and is meant to be; a regular expression cannot see an assembled name, and the two places that
+assembled one (`f"aart-{kind}-v1"` in a security fixture, the marker's literal text in two block
+tests) were caught by the gates rather than by the sweep. `AART_DUMMY_USER`/`AART_DUMMY_TOKEN`
+stayed: they belong to a fixture artifact, and an artifact binding whatever variable it likes is
+what they demonstrate. `d113812` gave the product one home — `AART_CLI_HOME` if set, otherwise
+`<user-home>/.aart-cli`, identical on macOS and Linux, no XDG or platform root anywhere near it.
+Machine policy deliberately did not move with it, because a rule an environment variable can step
+around is not a rule (D-344). `plan_factory_reset` was rewritten rather than renamed: it names the
+managed entries and the configuration lock and never the home itself, so a reset cannot delete
+whatever a variable pointed at, and a file the tool did not write inside its own home survives one
+(D-345). `domain/installation_tree.py` holds §169.3's
+`<harness root>/aart-cli/<kind>/<alias>/<name>` with the harness root as an argument, because which
+directory each harness tolerates is measured in step 19 (D-346), and it is named in
+`DELIBERATE_NON_RUNTIME_MODULES` with that dated reason until 19 wires it.
+`docs/configuration/application-home-v1.md` documents the home and what the variable cannot move;
+nothing documented it before, and the documentation-index gate is what noticed. Evidence: `make
+unit` (4590 tests), `make integration` (402), `lint`, `typecheck`, `format-check`,
+`packaging-check`, `docs-check`, `secret-shape-check`, `validate`, and four targeted semantic
+mutations each red then restored; scoped `make mutants` over `configuration/paths.py` left fifteen
+survivors, none of them a claim the slice makes. No broad `make quality` (D-317). Still open in the
+step: the Push review's branch suggestion carried in from step 18 — its seam is traced and its
+design written into the slice, with nothing implemented and a clean tree — and step 16's executed
+installation/README contract re-run against the changed advertised commands.
+
+**2026-09-19, CP-26.18a in progress — the name the machine sees.** The import package is
+`aart_cli` (254 modules moved; nothing imports `agent_artifacts` any more), the single console
+script is `aart-cli`, `prog` matches it, and every command line the product prints, documents or
+executes begins `aart-cli ` (125 files). What carried the old name outside the package moved with
+it: the Enterprise CI shim writes and version-checks `$bin/aart-cli`, the pin file is
+`.aart-cli-version`, the diagnostic is `aart-cli-version-unsupported`, and
+`scripts/distribution_smoke.py` looks for `aart-cli` on the routes it installs. The schema freeze
+was regenerated in the same change because the rename moved every normative schema input's path,
+which is exactly the case D-275 put in the unit gate. Two guards earned their keep rather than being
+weakened: the install-route gate reported `documented install line installed no \`aart\``, catching
+the one place the sweep had not reached, and the first-contact guard started reporting five invented
+commands -- all from the Product Specification, which names commands the executable does not have
+yet, on purpose, so it is now the one linked document that is not instructions to a reader, with
+that reason recorded in the test. Nothing bridges: no alias, no fallback reader, no old-path probe
+(D-334). Evidence: `make unit`, `make integration` (402 tests), `lint`, `typecheck`,
+`format-check`, `packaging-check`, `docs-check`, `secret-shape-check`, all green. No broad
+`make quality` (D-317). Still open in the step: manifest and generated-file names, managed block
+markers, `.agent-artifacts`, `AART_*` -> `AART_CLI_*`, schema/URI ids and the branch prefix; then
+`AART_CLI_HOME` with the §169.2 layout and the adapter-owned installation path policy.
+
+**2026-09-19, CP-26.18 in progress.** Push belongs to screen 46's local workspace row and to
+nothing else; the commit screen offers no `p`. Readiness is computed, never asserted: one gate list
+in `registry_commands/publication.py` feeds `registry publish`, `read_registry_workspace` and the
+generated workflow, and the list says where each gate runs -- rendering it whole had put `lock`
+back into every generated registry's CI, the gate CP-26.5 removed because over the approved
+representation it resolves nothing (D-342). Moving the list out of a `bytes` template made
+`EveryVisibleCommandMentionTest` see a command it had never been able to read, and it was wrong:
+`aart-cli registry validate --source . --strict --frozen` has been in every generated registry since
+`0.0.1` and the CLI accepts neither flag, so that CI step has always failed (B-156). Recording
+screen 46j in the frame matrix found three more faults -- labelled facts drawn among the rows,
+`v`/`?`/`q` swallowed on the `continue` row, and four copies of the branch question, now
+`needs_a_new_branch` (D-343). Evidence: `make unit` (4556 tests, green), `make typecheck`, Ruff,
+and four targeted mutations each red then restored. No broad `make quality` (D-317). The slice
+record names what the step's acceptance list still does not cover.
+
+**2026-09-19, CP-26.17 complete.** `M1F1` is no longer an operational default anywhere a
+deployment could inherit it. The generated workflow's `TOOL_URL` no longer carries a repository:
+unset means empty, and the Git arm stops listing `AART_PACKAGE`, `AART_WHEEL_URL`, `AART_TOOL_PATH`
+and `AART_TOOL_URL`/`AART_REPOSITORY` rather than cloning the maintainer's repository from an
+instance where it does not exist (D-341). The generated Registry README, the registry-init
+remediation in `curation/runtime.py` and the Enterprise rollout guide agree with that. The release
+checklist's `approved_registry_origin()` lost its constant, so a fork no longer reconciles against
+somebody else's registry; `release_test` now sets `REFERENCE_REGISTRY_URL` in `setUp`, which is what
+a release run does, and its fixture origin is neutral -- it had been the maintainer's registry and
+the script's default at once, so those tests passed by agreeing with a constant. `pyproject.toml`'s
+project URLs named the predecessor repository and are corrected; the Product Specification's target
+repository, the CHANGELOG and these records are facts rather than defaults, which is the line D-309
+draws. The workflow's refusal is executed by the test, not read. Evidence: 6 tests in
+`maintainer_default_test`, `make unit`, `make typecheck`, `make docs-check`, Ruff. No broad
+`make quality` (D-317).
+
+**2026-09-19, CP-26.16 complete.** The documented install lines are executed.
+`run_install_routes` extends `scripts/distribution_smoke.py`, which already built and validated a
+wheel: it puts that wheel where an authenticated download would leave it and runs the fenced blocks
+of `docs/install/installing-aart-v1.md` with `X.Y.Z` substituted, through a shell, as written. Five
+execute -- `uv`, `pipx` and `python -m pip` from the clipboard, `uv` and `pipx` from a file -- plus
+the `gh release download` line this step added to the page, the concrete authenticating CLI the
+Enterprise section previously only alluded to. Each answers `aart-cli --version` with the built version.
+Four are declined with a reason recorded, and an unrecognised line fails the gate, so a line added
+to the page must be declared runnable or unrunnable by whoever adds it. The `gh` stand-in parses its
+arguments the way the real one does and refuses anything else; what it cannot prove is that a remote
+answers, which is why the URL row stays declined as `network`. `UV_TOOL_DIR`, `PIPX_HOME` and their
+bin directories are redirected into the workspace, so the gate cannot reinstall the developer's own
+`aart` from a throwaway wheel. No eleventh quality gate: `integration` discovers `*e2e_test.py`, and
+the structural half is loaded into the same test so that gate does not prove the lines work on a
+page whose shape it never checked. Four targeted mutations -- a pip flag that does not exist, a `gh`
+flag the real `gh` rejects, an unclassifiable line, a drifted wheel name -- each failed it.
+Evidence: `make integration`, `make unit` (4537), `make typecheck`, `make docs-check`, Ruff check
+and format. No broad `make quality` (D-317).
+
+**2026-09-19, CP-26.15 complete.** The README's detail moved off the page into eight documents the
+index already reaches, verbatim: 639 lines out, 783 down to 152, nothing rewritten. Install and
+quick start, consumer lifecycle with MCP setup and reading/checking/undoing a setup, writing an
+artifact, maintaining a registry, running inside a company, canonical package with interface and
+verification, development dependencies with the ten gates, and releasing now live under
+`docs/install`, `docs/using`, `docs/authoring`, `docs/registry`, `docs/ci`, `docs/development` and
+`docs/release`. The page is the four sections §1.6 asks for, held as the whole ordered list rather
+than as "the licence is last": a section growing back is the failure the move was for and would pass
+a claim that only looked at the end. Moved-not-discarded is held by tests that read the destination
+documents by path -- `InstallDocumentTest`, `QualityGateDocumentTest`, `ReleaseDocumentTest`,
+`RegistryDocumentTest` in place of `ReadmeAdoptionTest` -- with every claim unchanged. The
+command-surface claim widened to the README *and the documents it links* (D-338), read from the
+page's own links: narrowing it would have reported the move as missing documentation, and widening
+to all of `docs/` would let a file no route reaches count as documented, which D-336 refuses. One
+gate would have been wrong at the new depth (D-339): `../../releases` reaches the repository root
+from the README and `blob/branch/` from two directories down, so `docs_check` now computes the
+fork-safe forms per file, red test first, refusing both the too-short and the too-long form. Seven
+targeted mutations each failed the tests that name the claims they attacked; deleting the install
+document failed three, correctly. `INVARIANT_TRACEABILITY.md`'s INV-101 citation was repointed at
+the renamed class, caught by the traceability gate. Evidence: 31 adoption tests, `make unit` (4534),
+`make typecheck`, `make docs-check`, Ruff check and format. No broad `make quality` (D-317).
+
+**2026-09-19, CP-26.14 complete.** `## What AART is` is the second section and `## One contract`
+is absorbed into it: what AART is a package manager of, all five artifact families, the four places
+an artifact passes through -- Source, Candidate, Registry, Marketplace, introduced and tested in
+that order -- then the three roles on the consumer's side, then the one-interface rule. The
+explanation is bounded as a ratio rather than a number: under half the length of the route it
+explains, 22 lines against 72. `## Documentation` follows, grouping all 25 public documents into
+nine categories; before this step the README linked 15 of them. The index holds the direction
+`docs-check` cannot -- that gate refuses a link with no target, this test refuses a public document
+with no link -- and a separate test refuses any link into `docs/refactor`, which is the migration's
+working record rather than something a reader is offered. Six targeted mutations: five failed
+exactly the test naming the claim they attacked, and moving the orientation above the route failed
+four, correctly, because it breaks the ordering and empties the section at once. One of them found
+a real defect in this step's own test: "shorter than the route" admitted forty lines of invented
+architecture, so the claim is now half the route and the mutation fires. `make unit` also surfaced a drift this step did not cause: the two protocol documents are normative schema inputs, the specification-alignment commit added warning banners to both, and `docs/release/schema-freeze.json` was not recomputed (D-275). `make release-freeze` was run; the diff is those two digests alone. 28 tests in
+`adoption_first_contact_test`, `make unit`, `make typecheck`, `make docs-check`, Ruff check and
+format are green. No broad `make quality` ran, under D-317.
+
+**2026-09-19, contract consistency audit complete.** The Product Specification's ownership,
+Collection aggregation, version identity and input invariants agree with §169. The invariant matrix
+now includes INV-243–247 and withdraws affected historical completion claims. Root execution
+instructions, CODEX_GOAL, slice index and local handoff identify the current CP-26 stream and focused
+gates. No implementation task is marked done: 13/22 complete, 14 next, 18a/19/20 pending. See
+`CONTRACT_ALIGNMENT.md` for the reviewed surfaces and remaining implementation/documentation work.
+
+**2026-09-19, installation design accepted; implementation pending.** Product Specification §169
+and D-332–D-334 establish `aart-cli` as the active namespace, `~/.aart-cli` / `AART_CLI_HOME` as
+one portable macOS/Linux home for canonical content and metadata, and harness-owned private
+installation files/runtime/configuration. Each new target collects its own inputs; four harnesses
+mean four configuration/credential sets with no sharing, copying or cross-target prefill. Central
+receipts hold references/digests, never artifact configuration values or secrets. Administrator
+policy and secret providers remain outside the user home authority. CP-26.18a is added before 19;
+19 now owns full target isolation and B-150 as mandatory acceptance. There are 22 tasks, 13 done;
+14 remains next. Remote/local Registry aliases remain distinct entities and path namespaces even
+for identical packages. Breaking changes are accepted throughout CP-26; no compatibility machinery
+is required. Implementation checks stay focused and proportional, with full gates only at task 21.
+This is a planning/specification segment, not an implementation or verification
+claim for 18a/19. Existing task statuses and live installations are untouched.
+
+**2026-09-19, CP-26.13 complete.** The README opens with the route a new user runs: install AART,
+connect a Registry, find the artifact, install it into a harness, verify -- then the TUI as the
+route for a person. `## One contract` and the three-names warning moved below it; nothing was
+discarded, and `## Install and quick start` keeps its heading and content because step 16 still
+gates it. Everything unknown is a placeholder and the section names no host, for the reason D-277
+gives. The route is held as commands rather than prose: `QuickStartRouteTest` hands every `aart …`
+line in the section to the shipped parser with placeholders substituted, and also holds the
+ordering, the five steps, review-before-apply, and the absence of any address a fork would correct.
+Three targeted mutations each failed only the test naming its claim. 20 tests in
+`adoption_first_contact_test`, `make unit`, `make typecheck`, `make docs-check`, Ruff check and
+format are green. No broad `make quality` ran, under D-317.
+
+**2026-09-19, CP-26.12 complete.** `aart-cli author init` now
+generates all five kinds the parser accepts: `guideline`, `hook` and `memory` joined `mcp` and
+`skill`, and `GENERATED_KINDS == tuple(sorted(get_args(AuthorKind)))` is now a test. Evidence for
+each shape was taken from the compiler rather than chosen: `native_tree` requires a guideline and a
+memory payload to be **exactly one** Markdown document and nothing else, which is why neither
+skeleton can offer a dependency file and the closing note says so; a hook's `hook.json` is
+*authored* (unlike `mcp.json`, reserved for the compiler) and `package_hook` requires its `command`
+to begin `${SCRIPT_DIR}/` and the file it names to be in the payload **and executable**.
+Compilation does not catch a non-executable script -- installation does -- so `AuthorSkeleton`
+payload entries became a `PayloadFile` value carrying an `executable` flag and
+`write_author_skeleton` chmods it. Three kind-specific tests now hold those downstream shapes, and
+five targeted semantic mutations each failed the tests naming their claim. Scoped mutation of
+`skeleton.py` killed 771 of 1045; of the 274 survivors, 245 are case flips on generated prose and
+the rest are about where a disabled block is *placed*, which the parsed-document oracles cannot
+see (B-155). Two survivors were real and became tests rather than backlog: nothing asserted
+`AuthorSkeleton.kind`/`.name`, and the refusal for an unknown kind could stop naming the kinds this
+build does generate. The 65 tests in the three author modules are green. `make integration` passed 398 tests in the
+sandbox; its sole macOS Keychain test was blocked there by `security create-keychain` exit 206 and
+passed when rerun outside the sandbox. The README now names all five generated kinds. No broad
+`make quality` ran, under D-317.
+
+**2026-09-19, CP-26.11 complete.** `aart-cli author check` now answers §1.4's second claim: every
+manifest that parses is compiled through `compile_author_manifests` and the check prints the
+coordinate it would be promoted as. `read_author_workspace` returns the root and the
+`local:<sha256>` revision the local reader computed, because compiling needs an identity and the
+tree already has one. Two corrections came out of it. The explicit `parse_author_manifest` call was
+deleted -- `make mutants` showed it survived being stubbed out, because the compiler parses first
+and carries the parser's diagnostics, so the second call only duplicated text and gave §1.4's
+ordering a second place to drift. And a Collection manifest is no longer judged as a broken
+artifact: `registry scan` passes over one, so `check` reports it `skip` with the reason instead of
+"missing required field 'artifact'" about a correct file (B-154 covers checking Collections
+properly). Three targeted mutations each failed only the tests naming their claim; mutmut survivors
+fell from 9 to 4, the rest being prose casing. `make unit`, `make integration`, `make typecheck`,
+`make docs-check`, Ruff check and format are green. No broad `make quality` ran, under D-317.
+
+**2026-09-19, CP-26.10 complete.** `aart-cli author check [--source DIR] [--json]` proves every
+discovered manifest parses. `authoring/check.py` is pure -- snapshot in, one verdict per manifest
+out -- and calls `discover_author_manifests` and `parse_author_manifest` rather than restating
+either. The tree is read through the Source Sync reader (D-330), so `check` sees the file set a
+sync would see. Every manifest is reported rather than the first refusal, and a tree with no
+manifest is a refusal rather than an empty pass. Three targeted mutations each failed only the
+tests naming their claim; M16 also exposed a process trap -- a same-length mutation leaves a
+`__pycache__` entry CPython considers current, so the revert has to clear it or the source and the
+running bytecode disagree. 87 tests across the five affected modules, `make unit`, `make
+typecheck`, Ruff check and format are green. No broad `make quality` ran, under D-317.
+
+**2026-09-19, CP-26.09 complete.** `aart-cli author init --kind skill` writes a skill workspace. The
+generator now holds a `_Blueprint` per kind -- document, disabled keys, nested disabled positions,
+closing notes, payload -- registered in `_BLUEPRINTS`, from which `GENERATED_KINDS` is derived; every
+claim in the skeleton tests runs over every generated kind. A skill is delivered by copying its tree
+into the harness, so the generator writes no `transport`, `runtime` or `launch` for one: the parser
+accepts them and the compiled package then advertises `protocol=stdio`, which is a skill claiming to
+be a server. They are named in a closing `#?` note instead, which keeps the anti-drift oracle
+satisfied -- the mutation removing that note fails it. The payload carries the `SKILL.md` that
+`native_tree` requires of a skill package. The alternatives test caught a real trap: the offered
+`launch.arguments` item `- --once` does not parse, and the test now asks the emitter's own question
+about any sequence item an author might uncomment. Three targeted mutations each failed only the
+tests naming their claim. 43 tests in the two author modules, the CLI damage sweep, `make
+docs-check`, Ruff and Mypy are green. No broad `make quality` ran, under D-317.
+
+**2026-09-19, CP-26.08 amendment.** The generated `mcp` manifest named its payload under
+`payload/`, and `compile_author_snapshot` places the author's files under the package's own
+`payload/` root, so the generated workspace compiled to `payload/payload/server.py`. It parsed and
+it compiled; no gate refuses the doubled form, and the shipped example in
+`docs/examples/author-source` had the right shape all along. The skeleton now names `server.py` and
+`requirements.txt`, and a new test compiles the generated workspace and asserts each payload file
+arrives once, at `payload/<name>`. Two targeted mutations restoring either prefix fail exactly that
+test. The test that had encoded the old convention was corrected to the claim it meant: the written
+payload files and `payload.include` are the same set.
+
+**2026-09-19, CP-26.08 complete.** `aart-cli author init --kind mcp --name <slug> [--into DIR]` writes
+a full-surface authoring workspace: an `aart.yaml` carrying every field `parse_author_manifest`
+accepts, with the optional blocks written out behind `# ` and a line of explanation above each, plus
+the payload the manifest declares. Three prefixes are distinguished -- `# ` a disabled line of the
+document, `## ` prose, `#? ` an alternative rather than an addition -- and uncommenting every `# `
+yields exactly the full document, which a test proves by equality because the commented text is
+produced by `emit_yaml` from the value itself. `author` is a new top-level group: a Registry is
+where an artifact is published to, never where it is written. The generator restates no rule the
+parser owns -- it parses what it just emitted with the real `parse_author_manifest` and returns that
+refusal (D-329), and `--kind` offers `get_args(AuthorKind)` -- so the only thing it declares is
+which kinds it can build, currently `mcp`. The writer checks every target with `lexists` before the
+first byte and removes what it made if a later write fails, so an author's directory is either
+whole or untouched. Two repository gates caught real drift and both were right: the package may not
+name `aart-cli author check` before steps 10-11 ship it, and the README must document a route to every
+shipped top-level command. Eight targeted mutations each failed only the test naming that claim;
+`make mutants` over `io/author_workspace.py` killed 60 of 87 and its three substantive survivors
+became three of those eight. The 127 tests of the affected modules, `make docs-check`, Ruff and
+Mypy are green. No broad `make quality` ran, under D-317.
+
+**2026-09-19, CP-26.07 complete.** `protocol/yaml.py` gained `emit_yaml`, specified and tested as
+`parse_yaml`'s inverse over the finite AART subset: block mappings, sequences, plain scalars and
+path-addressed comments. Quoting is decided by asking `_scalar` whether the plain form returns
+identical, so `true`, `null`, `12` and `---` need no second list to stay in step. The emitter
+refuses rather than writes an empty block, an invalid key, an out-of-range integer or a bare scalar
+document, and a comment aimed at a position the document does not have is a refusal rather than a
+silent drop (D-328). A Hypothesis round-trip property found one real hole -- `str.splitlines` ends a
+line on `\x85`, which `ord(c) < 32` does not catch -- and did not find it again on the next run, so
+that rule is held by a test that derives the breaking set from `str.splitlines` itself. Two targeted
+mutations each failed their own claim. Twenty-one tests are green, as is the existing parser module;
+Ruff and Mypy are green. No broad `make quality` ran, under D-317.
+
+**2026-09-19, CP-26.06 complete.** The authoring-manifest field surface is collected from
+`protocol/authoring.py` by reading it, not transcribed. `tests/authoring_field_surface.py`
+discovers field-accepting helpers from their signatures, reads a wrapper's own fixed fields from its
+body, and reports seventeen sites — including the two `_nested_type(value, "transport", path=path)`
+calls the first draft dropped, which pass no field keyword yet accept `type`. A field set that
+cannot be resolved statically is reported as unresolved rather than as empty, so the generator in
+steps 7 to 12 can never be told a site accepts no field when it accepts a computed one; three sites
+are unresolved today, all in the dynamically dispatched input and descriptor parsing (D-327). Two
+targeted mutations — dropping keyword-less call sites, and reading a computed field set as empty —
+each failed exactly one named test. Eleven tests including a Hypothesis property over new field
+names are green; Ruff and Mypy are green. No broad `make quality` ran, under D-317.
+
+**2026-09-19, B-149 closed.** `aart-cli registry vendor` no longer writes the retired unversioned
+package layout. `project_vendored_package` writes `artifacts/<kind>/<name>/<version>/`, and both
+`vendor` and `revendor` hand the projected package to `plan_bulk_promotion`, so the immutable
+version, its promotion record and the derived catalogs come from one reviewed workspace plan
+(D-326). `read_vendored_artifact` reads the latest approved `VENDORED` version, so drift is reported
+against the copy actually published. `validate_registry_graph` keys duplicate detection by identity
+**and** version, resolves a dependency against any approved version in bounds, and assigns
+collection membership per version; two registries claiming one identity is still a refusal. The
+seven vendoring modules D-323 kept red are green, as is `registry_index_test`. Every test module was
+then run one process at a time and no module outside the repair changed state. Two targeted
+mutations: reverting the package root to the unversioned path failed only the projection claims,
+which showed that the approved layout is now owned by `plan_bulk_promotion` rather than by the
+vendoring writer; writing the staged package instead of the promoted one failed the canonical gates
+and the vendor command, delivery and projection claims together. Ruff and Mypy are green tree-wide. No broad `make quality` ran, under D-317.
+
+**2026-09-18, CP-26.05 complete.** The retired authoring-workspace representation has no schema, no
+fixtures and no planning half left: `protocol/registry_tree.py`, every entry/lock/index parser and
+serializer, `build_registry_index`, the mutation port and its application service, the `registry-v1`
+fixture tree and six test modules are deleted. B-057 closes. Two commands were decided rather than
+dropped: `aart-cli security scan` reads the approved Registry through `--registry DIR` (D-322, closing
+B-147), and `promote-native`/`refresh-native` are withdrawn with the reference mechanism, taking
+`validate --strict --frozen` with them (D-321). One rule was rebound rather than lost:
+`validate_registry_graph` lost its only caller with `build_registry_index`, so
+`registry_native_content` calls it directly and the approved representation is still held to
+`requires`-resolves-inside-one-registry and to derived collection membership (D-325). Two targeted
+mutations — blanking the retired-path refusal, and deleting the new graph call — went red on exactly
+their own tests. Every test module was run one process at a time before and after; Ruff, Mypy and the
+regenerated schema freeze are green. Twenty-six tests across seven vendoring modules remain red on
+B-149, which is critical and is what step 6 has to answer. No broad `make quality` ran, under D-317.
+
+**2026-09-18, CP-26.04 complete.** The consumer projection and the Registry source validator have
+one representation each. Both ask the shared authority whether a snapshot carries a retired path
+and whether it is a canonical approved Registry, and both refuse by name instead of falling through
+to the workspace compiler. The retired external-reference mechanism went with the branch that fed
+it (D-320), and committed registry attestations now bind the recomputed canonical registry state
+rather than `aart.index.json` (D-319). Two targeted mutations — reopening the mixed-checkout hole in
+the validator, and deleting the consumer's retired-path refusal — went red on exactly their own
+tests. 117 focused tests plus 63 consumer install/marketplace E2E tests are green; tree-wide Ruff,
+Mypy over both changed production modules and secret-shape are green. Scoped mutation left three
+survivors inside each changed function, all spelling variants or pre-existing (B-148). A step-3
+leftover was repaired in passing: the rs09 audit test now builds a canonical Registry on disk. The
+twelve remaining step-3 leftovers in the legacy vendor/quality-planning modules are step 5's, as
+D-318 records. Step 5 is next; broad verification remains deferred to CP-26.21.
+
+**2026-09-18, CP-26.03 complete.** An initialized Registry now takes the canonical maintenance
+route even before its first version. Canonical `lock`, `build`, `validate`, `audit`, `format` and
+aggregate `publish` remain; the separate CLI Push remains, while all seven surfaces reject retired
+entries/lock/index/unversioned-package state. `publish` builds the canonical catalogs, gates and
+commits locally without pushing. The focused 32-test set, changed-file Ruff and production Mypy are
+green. The targeted empty-Registry mutation was killed; scoped mutation killed every new shape
+detector mutant and left ten pre-existing extraction survivors as B-146. Step 4 is next; broad
+verification remains deferred to CP-26.21.
+
+**2026-09-18, CP-26.02 complete.** `registry scaffold` is removed end to end while canonical
+`registry publish` remains parseable and retains its approved-Registry aggregate. Active public and
+generated guidance now names Source `scan`/`promote`; historical refactor evidence is unchanged.
+A deliberate parser restoration made the withdrawal test red and restoration made it green. The
+focused damage-radius set is 118 tests; Ruff passed 23 changed Python files, Mypy passed 12 changed
+production files, and docs/secret-shape checks are green. Scoped template mutation killed 16/46;
+two survivors are equivalent UTF-8 spellings and 28 pre-existing workflow-helper survivors are
+B-145. No broad suite ran under D-317. CP-26.03 followed and is recorded above.
+
+**2026-09-18, CP-26 test cadence (D-317).** Tasks 2–20 use focused red/green tests, checks over
+changed files and measured damage radius, affected integration/E2E modules, Hypothesis for
+universal claims and scoped mutation over changed production modules. Broad repository runs are
+deferred to the new CP-26.21 closeout: full quality, full integration/E2E where separate, packaging,
+docs, secret-shape and cross-phase acceptance. CP-26 cannot be verified before task 21 is green.
+This records execution policy only; step 3 is now current after step 2 completed.
+
+**2026-09-18, consumer-first README contract (D-316 / Product Specification §168).** CP-26 steps
+13–16 now serve one primary reader: a normal user installing an artifact. README starts with the
+shortest complete install path, then briefly explains AART, then provides categorized links to the
+detailed consumer, authoring, Registry, Enterprise, protocol/security, contributor/testing and
+release documentation. Detailed current prose moves into those documents rather than disappearing.
+The existing MIT License wording and copyright/footer remain the final content. The documentation
+gate executes the install forms and checks section order, explanation size, links and License
+placement. This changes the planned documentation contract only; CP-26 step 3 is now current.
+
+**2026-09-18, CP-26 sequence and retained-command audit.** The implementation tasks form five
+product phases followed by one closeout phase:
+dependency phases: canonical Registry cleanup (1–5), author loop (6–12), final documentation and
+its executable install gate (13–17), Registry Maintainer Push (18), and target-safe local Registry
+consumption (19–20), then full-slice verification (21). CP-26 step 3 removes only older-representation branches. Canonical `lock`,
+`build`, `validate`, `audit`, `format` and `publish` remain; `publish` is the
+build/validate/audit/local-commit aggregate and never pushes. Push remains a separate explicit
+operation on Registry Maintainer's local-workspace row. CP-23 task 05/D-255 is historical evidence
+and is superseded by Product Specification §164.7/D-312. The install execution gate moved after the
+README rewrite, the remaining author kinds correctly point to step 12, and Registry-origin
+authoring is explicitly outside this slice. This is plan clarification, not implementation; step 2
+remains next.
+
+**2026-09-18, B-143/B-144 promoted into CP-26.** The owner added the two newest backlog findings
+to the active critical-path slice. B-144 is CP-26.19: establish Registry-alias- and
+installation-target-qualified configuration, credential bindings, setup state, receipts and
+lifecycle ownership, including collision-resistant Keychain identity and explicit-only sharing.
+B-143 is CP-26.20: admit canonical Registries from local Git checkouts through the same validated
+snapshot, Marketplace, resolution and installation path used by remote Git. Step 19 precedes step
+20 because the state collision already affects remote Registries and must not be amplified by a
+second transport. Both are planned, not implemented; CP-26 step 2 remains next.
+
+**2026-09-18, general installation input-state boundary (D-313 / INV-243 / B-144).** Registry
+transport is irrelevant to configuration and credential identity. For remote URL and local checkout
+Registries alike, the complete owner key is Registry alias + artifact + concrete project/user root +
+harness/profile + input id; macOS Keychain must use a unique item per key. The same MCP installed
+from two aliases, into two projects, or into project and user targets therefore owns independent
+values and bindings. Explicit selection of one provider reference may still share a credential and
+retains every dependant edge. Current `InputId`-global form composition, one-source-for-all-targets
+projection and default Keychain identity are recorded in B-144; B-143 depends on it. This is
+specified, not implemented; it is now CP-26.19 and does not change active step 2.
+
+**2026-09-18, CP-26 publication correction and TUI push scope (D-311/D-312).** `registry publish`
+is retained as the canonical build → validate → audit → local-commit aggregate; step 2 removes only
+`registry scaffold`, and step 3 removes `publish`'s older-representation branch. CP-26 gains step 18:
+Registry Maintainer's local workspace row distinguishes accepted snapshot, local snapshot/`HEAD`
+and publication readiness, then offers `[p] Push` only for a clean committed tree that passes the
+shared full Registry gate contract. Every blocker is visible. The existing named current branch is
+the only target when it is neither `main` nor the Registry default; otherwise the maintainer may
+create a new review branch. Literal `main` and the default branch are always refused. The worktree
+containing `working_at` must itself be the canonical Registry; Source, connected snapshots and
+unrelated repositories are never push targets. Product Specification §164.7 and the slice carry the
+full acceptance contract. This is planned, not yet implemented.
+
+**2026-09-18, CP-26 scope addition.** The owner added step 17 to remove `M1F1` and
+`M1F1/aart-cli` as generated Registry and operational defaults. The slice names the affected
+production files and confines the change to user-facing output and defaults. The CP-26 removal
+sequence is unchanged; The released `v0.3.0` precedes implementation.
 
 **2026-09-18, PR #21 CI repair.** The D-308 refusal now offers parseable `registry scan --help`
 and `registry promote --help` commands. `source_remediation_test` reproduced the CI failure before
 the fix, passed afterward, and failed on a deliberate removal of `--help` from `promote` before
 restoration. Both affected test modules (28 tests) and `make lint format-check typecheck` pass.
-PR #21 still needs a green CI run and release; CP-26 step 2 has not been edited.
+PR #21 and release PR #22 later passed and produced `v0.3.0`; CP-26 step 2 remains next.
 
 **2026-09-18, PR #21 second CI repair (D-310).** Two tests' literal credential URLs are now
 assembled by `credential_fixtures.credential_url`. The scanner was red with two findings before
@@ -161,7 +1131,7 @@ ignored rather than fatal: that Source reads `ATTENTION` and names the remedy, i
 projected nowhere, and every other Source, Candidate and Registry still loads. Misfiled and
 unreadable history still refuse. **2026-09-16, CP-24.02 done (D-281).** A Source Sync compiles and reconciles before it publishes
 the pin, so a refusal after the fetch leaves the Source as it was rather than pinning a revision
-whose Candidates were never recorded. **2026-09-16, CP-24.03 done (D-282).** `aart doctor` reports a Candidate history that does not bind
+whose Candidates were never recorded. **2026-09-16, CP-24.03 done (D-282).** `aart-cli doctor` reports a Candidate history that does not bind
 its pinned snapshot and names the repair, and the Maintainer Source Sync will now run over that
 state instead of refusing it -- so a store already in it is repaired by a command rather than by
 deleting files. **2026-09-16, CP-24.04 done (D-283).** An installation review offers one Python
@@ -316,8 +1286,10 @@ list in Verbose, following the search, with no render-time IO. Six targeted muta
 Task 06 (D-256): Success's three actions are rows reaching Installed, this operation's exact
 receipt and Marketplace. Esc no longer re-enters the finished wizard, and Undo is explained, not
 offered (B-117). Six targeted mutations were killed.
-Task 05 (D-255): TUI push removed entirely; screen 45 ends at the local commit and lists the
-manual Git steps before Registry Sync. A recording transport proves no push; five mutations killed.
+Task 05 (D-255): TUI push was removed entirely at this CP-23 checkpoint; screen 45 ends at the local
+commit and lists the manual Git steps before Registry Sync. A recording transport proves no push;
+five mutations killed. This historical result is superseded for the current product by Product
+Specification §164.7/D-312/CP-26.18, which restores Push on Registry Maintainer.
 Task 04 (D-254): Validation reaches Policy only through Enter; `p` removed; two mutations killed.
 Task 03 (D-253): Candidate file diffs are screen 37's Verbose projection; `f` and its state are
 removed; five targeted mutations killed.
@@ -429,14 +1401,14 @@ only for the operator to retest QA-044 through QA-052 before their checkboxes an
 | CP-07 Inspection/Remediation/Policy/Plan | VERIFIED | Frozen secret-free `EnvironmentFacts`/`InstallPlan`; pure aggregate/assess/filter/plan pipeline; read-only local inspector adapter; capability∩policy∩risk remediation intersection, non-interactive fail-closed and deterministic review digest; 1,989 unit + 46 E2E tests, 83.17% coverage and all quality gates green | Legacy per-artifact `installation/*`, `setup_engine/*` and `consumer/runtime_requirements.py` planning remains public-flow authority until CP-10/12/13 route the canonical plan |
 | CP-08 Inputs/Credentials | VERIFIED | Secret/config, binding and value-source kept on three separate axes; `SecretInput` has no value field and binds only to a provider reference; dependant-aware inspect/store/verify/replace/delete planning with policy as a required argument; `TransientSecret` confined to `io/` and unpicklable, uncopyable, single-use; `MacOsKeychainProvider` proven against `security` itself, replacement measured to need delete-then-add (D-017), 128-byte truncation measured in child processes; 2,034 unit + 46 E2E tests, 83.19% coverage and all ten quality gates green | Legacy `setup_runtime.py` Keychain authority and `setup_engine/*`/`configuration/*` input seam remain public-flow authority until CP-10 routes a real MCP installation through the provider port |
 | CP-09 Python environments/dependencies | VERIFIED | Dependency specification and installer backend kept separate, with one lock-compatibility rule shared by spec and requirement; `ArtifactEnvironment` derives every path from the artifact root so an interpreter outside it cannot be supplied; installer chosen by compatible∩available∩permitted with preference selecting inside it; effects carry the base interpreter, descriptor kind and installer so they reach the review digest; interpreters refuse unowned paths before any process starts and refuse a locked project rather than installing loose versions; proven against real `venv`, pip and uv with a self-built wheel and no network; 2,066 unit + 46 E2E tests, 83.20% coverage and all ten quality gates green | Legacy `setup_runtime.py` environment authority remains public-flow authority until CP-10 routes a real MCP installation through the environment port |
-| CP-10 MCP stdio vertical slice | VERIFIED | Declarative `LaunchContract` plus a POSIX quoter property-tested through a real `/bin/sh`; pure launcher generation where a secret becomes a provider command substitution resolved at launch and never a written value (D-022), a stdin binding is refused because the transport owns stdin (D-023) and a file binding is refused rather than written (D-024); the writer refuses paths outside the artifact and re-digests after writing; measured Tabnine/Claude MCP targets merged without disturbing neighbours or permissions (D-025, D-026); receipts fingerprint config rather than copying it (D-027) and verification names six drift findings, counting an unmeasurable launcher as drift (D-028); proven end to end against a real venv, a real generated launcher and a real stdio MCP server that reports `agent_artifacts` is not importable, with the macOS run resolving a 256-bit token from a real temporary Keychain; 2,126 unit + 55 E2E tests, 83.26% coverage and all ten quality gates green | Legacy `setup_render.py` launcher/settings rendering and the `setup.py`/`lifecycle` merge remain public-flow authority until CP-12 routes install, repair and uninstall through reconciliation over this projection |
+| CP-10 MCP stdio vertical slice | VERIFIED | Declarative `LaunchContract` plus a POSIX quoter property-tested through a real `/bin/sh`; pure launcher generation where a secret becomes a provider command substitution resolved at launch and never a written value (D-022), a stdin binding is refused because the transport owns stdin (D-023) and a file binding is refused rather than written (D-024); the writer refuses paths outside the artifact and re-digests after writing; measured Tabnine/Claude MCP targets merged without disturbing neighbours or permissions (D-025, D-026); receipts fingerprint config rather than copying it (D-027) and verification names six drift findings, counting an unmeasurable launcher as drift (D-028); proven end to end against a real venv, a real generated launcher and a real stdio MCP server that reports `aart_cli` is not importable, with the macOS run resolving a 256-bit token from a real temporary Keychain; 2,126 unit + 55 E2E tests, 83.26% coverage and all ten quality gates green | Legacy `setup_render.py` launcher/settings rendering and the `setup.py`/`lifecycle` merge remain public-flow authority until CP-12 routes install, repair and uninstall through reconciliation over this projection |
 | CP-11 Reconciliation engine | VERIFIED | Seven independently inspectable components ordered by dependency; `DesiredState` and `CurrentState` kept as separate types and a component nobody observed counted as drift rather than a match (D-029); a desired component says both how it is established and how it is corrected, so a missing credential is stored and a wrong one replaced (D-030); planning takes only the drifted components' effects, in dependency order rather than canonical review order (D-031), and fails rather than dropping a repair the policy forbids (D-032); components whose effects are not independently repairable escalate by name, giving the CP-07 capability metadata its first consumer; the CP-10 receipt/observation bridge is paired so describing less cannot invent drift (D-033); proven against a real installation where an edited launcher plans a launcher-only repair and a deleted harness entry a harness-only repair; 2,161 unit + 56 E2E tests, 83.33% coverage and all ten quality gates green | Legacy `setup_verify.py`, `setup_verify_probes.py` and `setup_undo.py` remain public-flow authority until CP-12 routes repair and uninstall through this engine |
 | CP-12 Installed lifecycle | VERIFIED | All eight intents lower through one reconciliation planner; executor rechecks the reviewed plan under a per-scope lease, always re-inspects, reports partial/interrupted/unverified outcomes, restores failed updates only after reversible effects, respects Collection ownership and retains credentials by default; real MCP damage/repair/start and reverse-uninstall E2E; 2,196 unit + 65 E2E tests, 83.25% coverage and all ten quality gates green | Legacy `lifecycle/application.py`, `setup_verify.py` and `setup_undo.py` remain public-flow authority until CP-13 migrates the consumer TUI/commands to the canonical intents and executor |
-| CP-13 Consumer TUI | VERIFIED (legacy removal deferred to CP-14) | Accepted screens 01–29 have canonical Fast/Verbose projections, a pure reducer/keymap and a persistent injected shell (D-039–D-049). Durable action/installation receipts, ownership and machine reload are verified across processes (D-044–D-051, D-064–D-066). Authored packages lower once through reviewed execution; configured approved Selection resolution, screen-07 input references, object-store placement, capability-bound interpreters and one prepare/complete adapter are verified for real MCP installation (D-052–D-076). B-033 is complete: kind-neutral placed receipts and delivery reconciliation now take a real authored Skill through promotion, configured review, installation, durable reload, drift detection and reverse uninstall without a launcher or environment (D-077–D-078). Public direct approved-registry `install`, `status`, `update` and `uninstall` all use the configured action (D-079-D-081, D-083). B-034 is complete: memory owns a delimited region of a file the user writes in, measured by digesting the region rather than the file (D-084), and a hook is delivered and merged at once, owning one entry of one list inside a settings file the harness and its user share (D-085) -- so every artifact kind the Product Specification defines now installs, measures, repairs and removes canonically. B-025 is complete: the default terminal route is the canonical consumer application. `run()` composes machine, offers, configuration and credential adapters once and calls `run_consumer` before any wizard composition; a repair is bounded by its receipt and fails closed on what the receipt cannot describe (D-086); a refusal is drawn under the screen it was asked from rather than raised (D-087); and the Marketplace is now the configured registries' approved published versions, with trust taken from the promotion record that approved each one (D-088, INV-026), so what is browsed is installable. Evidence is `tests/consumer_application_e2e_test.py`, which drives the real shell over the production handler through install, reinstall-converges, verify/repair after a deleted delivery, uninstall, and two refusals. B-037 was promoted from backlog to the critical path and fixed: `plan_bulk_promotion` rebound only the version records in its own transaction while the catalogs took the new content digest, so the second promotion into any registry made it unreadable to every consumer -- a live defect on `aart registry promote`, not a fixture problem. Every retained approved record is now rebound to the snapshot its own transaction produces, as metadata only, with the published package proven byte-identical (D-089). That unblocked D-088's last piece of evidence: a Marketplace row stands for the highest approved SemVer of an identity, and an older approved version is superseded rather than declined. Screen 28 is the last accepted screen to go live: four controls with a cursor, `v` and Detail level unified as one preference, and a durable `<data_root>/state/consumer-settings.json` read strictly rather than repaired -- an opt-in that had to be re-chosen every session was not an opt-in, and Maintainer Mode is the boundary CP-14's whole surface sits behind (D-090). CP-13's remaining legacy retirement is re-triaged as a CP-14 dependency rather than two open product questions: the Product Specification already settles both, and both answers land in CP-14 -- 145.1 makes a Collection versioned and CP-14 owns collection candidates (B-031); 1737 and INV-019-INV-026 put consumer installation over approved registry content and CP-14 owns Sources screens 31-34 (B-038, D-091). Full suite now 2,958 tests green in 179s, with lint, format-check, typecheck, docs-check and secret-shape-check green; coverage and the remaining gates deferred to the end of the CP-13 block. | Direct approved-registry `install`, `status`, `update`, `uninstall` and the default TTY are canonical for all five kinds; Collections and direct/local lifecycle commands still route to legacy authority, and no legacy implementation has been removed. `_run_curses` and the wizard composition are now unreachable from `run()` on a terminal but retain direct test callers (B-039). Collections still have no live versioned source (B-031); a deprecated registry version is declined rather than offered because the row cannot render the warning (B-036); native sources are listed but offer nothing, pending a product answer (B-038). |
-| CP-14 Maintainer TUI | VERIFIED | Step 1 names screens 30–53 inside the shared mode-gated state machine (D-092, INV-193). Screens 30–32 bind configured authoring Sources, durable health and exact pinned Source Scans through strict Candidate history (D-093–D-095, INV-229/239). Screens 33–34 are now the production typed `SOURCE_SYNC` action: read-only digest-bound review; approved-registry and Source/history precondition checks; acquire/validate/publish, exact manifest compile/reconcile, atomic history write/readback under one Source lease; no registry mutation (D-096–D-097, INV-007/200/201). A real temporary installation syncs a local Source through the shared shell and proves the registry observation unchanged. Step 3 puts screens 35–37 in that same shell: the Candidate list is keyed by stable Candidate ID so two Sources publishing one artifact name cannot collide, narrowing is the typed `MaintainerCandidateFilter` rather than renderer string matching, screen 36 carries the full authoring detail with secret inputs valueless, and screen 37 is semantic diff first with the bounded redacted file diff behind an explicit `f` toggle that no navigation carries forward (D-098, INV-202). Drawing the three screens opens no file and rescans nothing; the shell draws the scans `read_maintainer_views` already read once, and corrupt history still refuses the whole observation. Codex's step-3 checkpoint left format-check, lint and typecheck red and all three were repaired rather than relaxed. Step 4's engine is landed ahead of its screens: `application/candidate_validation.py` makes validation an ordered pipeline of named checks with warnings, errors and a non-passing `not-run` kept distinct, refuses a warning or error carrying no actionable detail, and routes policy through the previously unread `EffectivePolicy.required_checks` so a required check that did not pass yields `APPROVAL_REQUIRED` rather than `WARNING` (D-099); which checks can actually fail was established by probing the compiler first, so the re-verification checks are tested against doctored canonical trees and the two that bite on clean artifacts -- a secret bound to argv, an executable payload file -- are tested directly. Step 4 is complete: screens 38-40 project one run per active Candidate, addressed by `"<candidate-id>:<check>"` row pairs that parse back to a typed value rather than being split inside a renderer, with the policy judgement composed into the run so screens 38 and 40 cannot disagree about the same Candidate (D-100). `read_maintainer_views` now takes the `EffectivePolicy` and validates every active Candidate once at composition time; drawing all three screens opens no file. `make quality` and `make integration` are both green after step 4: 3,052 unit tests, 209 E2E tests, 83.35% branch coverage. Step 5 now has screens 41–45 live. Screens 41–43 review, choose and plan without writing (D-101–D-102). Screen 44 projects pre-write validation of the promoted registry and its Candidate-policy evidence. Explicit confirmation on screen 45 rechecks the digest, exact Candidate, approved baseline and checkout; revalidates and replans; refuses movement; atomically applies the existing promotion plan; validates persisted versions and audit provenance; then creates one local Git commit containing only reviewed paths, with no push capability (D-103). Drawing screens 44–45 opens no file. A real temporary production installation walks screens 30 and 35–45, commits a promoted registry into a clean checkout with no remote, and validates the persisted readback. `make quality` is green with 3,098 tests and 83.28% branch coverage; format, lint, type, validation, packaging, docs and secret-shape gates pass. `make integration` is separately green with 210 E2E tests. Screen 46 now reads the registry back: validity is the named check that every approved version carries a promotion approval record, and recent promotions are ordered by walking the audit snapshot chain backwards from the approved snapshot rather than by any clock, because no promotion record carries one and stamping one at read time would make the order a property of when a Maintainer looked (D-104). Working-tree state is a separate observation of the D-103 project-root checkout, digested over the whole synchronized tree -- the same `source_snapshot_digest` D-103 requires a checkout to match before it may be promoted from -- while the audit chain head is read separately in the published-content `registry_state_digest` space the audits themselves name; the composition E2E caught the first attempt comparing the two spaces, which made a correct checkout read as diverged. After a local commit the checkout is legitimately ahead of the synchronized approved snapshot and the line says so rather than calling it an error, and a promotion now recomposes the Maintainer views the way a Source Sync already did, because the commit it just made moved the checkout. Enter on screen 45 confirms only while an action is pending and otherwise continues to screen 46. Drawing screen 46 opens no file. The E2E walk now runs from the consumer dashboard through diff, validation, promotion, the local commit and out to the registry view. `make quality` and `make integration` are both green: 3,167 tests. Screen 47's selection surface is live: what one registry's transaction may carry, with promotability read off the run screens 38–40 showed, Candidates of another registry not offered at all, and a refused Candidate named with its reason rather than silently absent; selection reuses the reducer's existing typed `selection` with `Space` (D-105). Screen 47's transaction is now live and is genuinely one transaction: `PreparedCandidatePromotionTransaction` carries a tuple of promotions rather than a single one, `plan_promotion_transaction` plans the whole set through the existing `plan_bulk_promotion`, and the single-Candidate path is the one-element case of it rather than a second path -- so there is one review flow and one chance for it to be right. Confirmation reads the approved baseline once and then rechecks every Candidate against it, because reading it per Candidate would let one transaction assemble members against two different registries. Screens 44 and 45 now carry a tuple of Candidates each with its own validation-report and effective-policy digests, and screen 45's commit subject names the artifact for one and the count for several. Screen 47's one forward route is screen 44, not screen 43, because a bulk selection has no single-Candidate diff to open, and the configured handler re-checks at action time that the confirmed selection is still a subset of what screen 47 composed (D-106). A real temporary production installation ticks two Candidates on screen 47 and proves they reach the checkout as exactly one commit, one registry snapshot and a clean working tree -- which a loop over single promotions could not produce. B-041 is complete and so is step 5: promotion audits now discriminate a 40-hex Git revision from a typed local snapshot SHA-256, canonical legacy Git records remain readable, and a local pin in that legacy field is refused (D-107). Direct tests prove local screen-43 planning and the audit shape; the production E2E takes a real filesystem Source through sync, validation, promotion, persisted registry validation and one clean local commit whose audit digest matches the durable Candidate-history pin. Mixed Git/local bulk planning remains one transaction and one registry snapshot, and D-089/B-037 rebinding is unchanged. Focused gates are green; full checkpoint results are in the active slice. Screen 53 completes the filter half of step 6: the Product Specification names four Candidate filter facets and the one typed filter now carries all four, with closed sets typed (`states`, `kinds`) and open sets as aliases (`sources`, `registries`) because that is what each facet is. Its rows are `"<facet>:<value>"` addresses parsed back by `parse_candidate_filter_row` and toggled through one entry point, not four; the offered values come from every composed Candidate rather than the narrowed list, since a row that vanished when ticked could never be unticked; and each option states what choosing it would leave, so a narrowing that selects nothing is legible before it empties screen 35 rather than after. `f` opens it from screen 35 and ticking a row puts nothing in `selection`, which is what every action reads. `f` now means the raw file diff on screen 37 and the filters on screen 35, each meaning what its own screen is about; the characterization test that pinned `f` as inert on screen 35 was corrected to the new behaviour rather than relaxed (D-111). Drawing screen 53 opens no file. `make quality` and `make integration` are both green. Screens 51-52 complete step 6. They already had projections, a renderer, validation against approved registry state and durable composition; what they lacked was a route, so every test entered by constructing a session already sitting on screen 51 -- the same gap screens 35-37 had in step 3. `c` on the Candidate list is the way in, because "Collections are candidates too" puts them on the Candidate surface and the accepted screen 30 panel describes no Collections entry to add one to (D-112). Writing the walk forced a real distinction into the open: the fixture first compiled through `compile_author_snapshot` and got no Collections at all, because that boundary returns artifacts only, while production Source Sync uses `compile_author_source`, which carries both kinds. A Collection authored beside an artifact in one tree is now compiled once, persisted once, reached with `c` and resolved on screen 52 to the exact version the registry approved, over one real installation. | Step 6 is complete. Step 7 is under way: its first removal deleted the legacy curses wizard shell `_run_curses`, the two setup shims it alone called and the seven tests that existed only to drive it, on evidence that already existed -- `run()` never reached it and ERR05 is pinned on the canonical `run()` (D-113). `run()`, `_run_text` and the whole text route stay, because no-TTY is a supported environment rather than a broken one, as do the wizard's curses primitives the surviving stages still compose. Step 7 is now done apart from a mechanical sweep: the whole wizard front-end is removed (D-115, D-116, D-117) and `tui.py` is 2,747 lines, down from 5,705. Its stated remainder -- `consumer/application.py`, `lifecycle/*`, `installation/*`, `setup_engine/*` -- was a wrong reading and is not removed: `commands/marketplace.py`, the public `aart marketplace install|update|uninstall|setup`, composes `ConsumerApplicationService` and runs the setup queue through it, and the canonical shell's own `tui_marketplace.py` takes `LifecycleItem` and `InstallMode` from that stack. B-039 is closed; B-038's remainder is restated as an `aart marketplace install` question. What step 7 actually leaves behind is **B-044 (critical)**: the canonical shell reaches none of that stack, so it performs no post-install setup and offers no usage report (D-118). |
-| CP-15 Edge-case hardening | VERIFIED | Step 1 closes the registry-state half of INV-218 at the surface that uses it. `tests/source_sync_command_e2e_test.py` is the first thing anywhere to drive `aart source sync` over a real source whose upstream published an invalid revision -- a new payload plus an `aart-registry.json` that does not parse, so the refusal is observable rather than indistinguishable from the good snapshot. Eight tests hold the whole scenario through public verbs: the refusal is per-source and carries its remediation into the human rendering; the store still points at the last good snapshot and `marketplace list` offers every artifact of it digest for digest; the source degrades to `could-not-check` with a named `source-invalid` diagnostic rather than being withdrawn; an installation made from the good snapshot is byte-identical, its recorded state unchanged, and still `current`; installing after the refused sync places the accepted revision's bytes and updating is a no-op; and a repaired upstream publishes, so the refusal was about the content rather than `sync` being inert. Writing them found D-132: `could-not-check` -- exactly what the explicit last-known-good fallback `SyncDisposition.RETAINED` produces -- was read as "this source is gone" in three places, so one invalid upstream revision made `marketplace status` report every installation as `source-unavailable`, and made `install` and `update` fail on a plan-construction invariant with no remediation on it. Product Specification 165.11 settles it and both sets now admit it, with `missing` and `not-synchronized` still excluded because those mean there is no snapshot. Both seams carry their own red-first claims (`canonical_lifecycle_test`, `canonical_install_planning_test`), and reverting the `RS-08` refusal in `sources/validation.py` turns all eight end-to-end tests red. INV-218 moves to EVIDENCED; INV-210 stays PARTIAL with real evidence in place of "scattered safeguards". Step 2 asks what a *moving* upstream may rewrite. `tests/source_upstream_movement_e2e_test.py` republishes into the real source and proves a sync leaves the installation record identical in every field, the new revision is offered rather than applied (`update-available`, reviewed bytes still on disk), an explicit `update` is what rebinds it, and an upstream rolled back to its first revision is new work rather than an erased event. That last one is the case content addressing makes counter-intuitive: republishing the first revision's bytes republishes its digest, so the store looks untouched, and only the record remembers that the second revision happened. On the registry side `promotion_planning_test::test_a_second_promotion_rewrites_one_field_and_no_provenance` pins D-089's rebinding -- the one place an already-approved record is written over -- to `registry_snapshot` alone, with the promotion audit byte-identical. Mutations: deciding `check_installations` on version alone turns two of four end-to-end tests red; re-deriving one further field of a retained record turns the promotion test red, and it is the only one of that file's sixteen that catches it. INV-219 moves to EVIDENCED; INV-216's consumer half is closed and its Git revert half waits on CP-17. Step 3 takes Product Specification 165.11's decomposition of offline installability -- metadata cached / canonical payload cached / runtime dependencies cached -- and asks whether AART's single `--offline` boolean collapses them. It does not, and `tests/offline_capability_test.py` now pins that: an unsynchronized source refuses by naming the cache (`aart source sync`) rather than the artifact; a cached-metadata, uncached-object install refuses under a different code with the words "while offline" separating it from the connected case; and the dependency installer is denied an index (`pip --no-index`, `uv --offline`) exactly when offline is asked for, in both backends, with that flag the *only* difference between the connected and offline argument vectors. The three codes are asserted pairwise distinct, which is the invariant's actual prohibition -- conflating them is what sends an operator to re-sync a source to fix a missing wheel. Layers 1 and 2 collapse for a local source (the object store is empty before the first install and the object is published from the cached snapshot during it), so layer 2 is measured at the planning seam; that is the fixture's property, not the code's. Three mutations, one per layer: emptying `flags` in both branches of `io/python_runtime.py::_install_argv` turns three of four red; `if False:` in place of `if offline:` in `marketplace/catalog.py::_resolution_failure` turns one red; dropping the `" while offline"` suffix in `installation/application.py` turns a different one red. The dependency layer had no test at all before this -- `python_environment_integration_test` runs real offline installs and would have stayed green with the flag removed, silently reaching the network on every `--offline` install. INV-223 stays PARTIAL, now against a named gap rather than "scattered safeguards": nothing *reports* the three capabilities before an install is attempted, which is the reading 165.11 shows, recorded as B-051 for CP-16's `aart doctor`. Step 4 split into two halves with different subjects, and 4a is done: verification failure and the compensatable restore. `tests/verification_failure_e2e_test.py` runs a declared setup whose recipe writes one managed block and then runs a command that exits non-zero. Product Specification 165.12 makes two claims about that moment and they came apart. The report half already held: `aart marketplace setup` exits non-zero, the item is `verification-failed` -- its own word, not `apply-failed-rolled-back` and not `cancelled` -- the counts read `configured=0, incomplete=1`, the human rendering names the artifact and the retry rather than only a count, 165.13's compensatable-restore branch removed the block, and the separately placed payload is still `current`. The evidence half did not: the receipt recorded the verification result and the final health and recorded no applied effects at all, because `_apply_effects` dropped the step receipts whenever the rollback succeeded -- so `receipt show` said a check had failed while saying nothing about what had already been done to the machine before it did. D-133 keeps them, marked `setup_disposition: "compensated"` (the word the persistence-failure path already writes, and which all three readers already honour), and moves `rollback_command` to depend on the steps still standing, so a fully compensated record offers no undo to run. The two evidence tests were red against the shipped code while the four report tests were green, which measures the split rather than asserting it; reverting `standing` to `receipts` in `_record` turns the undo claim red on its own. INV-224 keeps EVIDENCED with public-flow evidence in place of seam-only evidence; B-052 records the consent-declined sibling branch, which the CLI's all-or-nothing `--approve-setup-effects` cannot reach. Step 4b closes INV-226 over the public verbs. `tests/interrupted_execution_e2e_test.py` uses a real custom entrypoint whose apply fails and whose rollback then also fails -- the one path that raises without removing its run directory -- so the working copy it asserts on is one the engine really created and really failed to clean up, rather than one a patched-away cleanup produced. It had to be that route: a run directory is opened only by `custom.install@1` and `docker.build@1`, so step 4a's managed-block recipe can leave no orphan and the claim answers `true` about a directory that was never made. Six claims: an incomplete compensation is `rollback-incomplete` and not `apply-failed-rolled-back`, and carries a recovery line (165.13); the working copy survives; `receipt verify` finds it, exits non-zero and names the directory the engine actually created, cross-checked against the record's plan hash; verify leaves it exactly where it is (`LAF-61`); the receipt reads back as JSON; and a retry re-plans rather than resuming -- a different review digest, the protocol restarted from its first phase, and both working copies then reported. The JSON claim exists because writing the file found the defect: a parsed record's steps are frozen recursively and the projection copied each shallowly, so `receipt show --json` ended in a `TypeError` for exactly the run whose evidence is hardest to reconstruct by hand; `setup.py`'s `_plain` is now public as `plain_value` and the projection uses it. Mutations: pointing the probe's run root at the project root -- the `LAF-66` defect class at the one seam `setup_verify_test` cannot reach -- turns two red; the shallow projection turns two red; calling an incomplete rollback a completed one turns two red. A fourth attempt killed nothing and is recorded in the slice: the outer `_rollback_all` re-creates the directory when it writes the receipt its own compensation needs. INV-226 moves to EVIDENCED. D-134 adds mutation adequacy as tooling: `mutmut` joins the dev group behind `make mutants ONLY=... TESTS=...` (`scripts/mutants.py`), advisory and always scoped, and `AGENTS.md` now names it and Hypothesis as the two tools that check the tests themselves. | All eight steps are done and every invariant the slice declared is EVIDENCED. Exact collection drift stayed out of scope, waiting on the Collection capability B-038 is sequenced behind (D-131). |
-| CP-16 Doctor/supportability | VERIFIED | Step 1 adds the top-level, read-only `aart doctor` over real canonical project and user installations (D-139). One durable observation feeds both the accepted screen-29 health projection and `prepare_configured_repair`; six E2E tests hold healthy/no-plan, one-drift/one-plan, both scopes, source independence and unreadable-receipt refusal. Step 2 adds D-140's pre-install offline-readiness report: Source/artifact metadata, exact approved canonical payload and runtime-dependency evidence stay separate in JSON and human text. Eight public E2E scenarios cover cold, referenced, dependency-free, dependency-declaring, disabled/plain/multiple sources, multiple artifacts and a deprecated version without installing or publishing. Manual mutations independently break all three capabilities; fresh scoped mutmut runs killed 30/30 application and 73/76 I/O mutants, with three reviewed equivalent/unproducible survivors. Full gates are green: 3,251 tests, 1 skipped, 85.37% branch coverage and 287 separate integration tests. Step 3 adds the reviewed repair entry point (D-141): `aart doctor --repair` returns a complete plan and its review digest and applies nothing; `--yes` requires that digest; a machine moved between review and confirmation returns the recomputed plan instead of applying the stale one; and a machine moved after the command's own re-plan is refused by the lifecycle adapter as `execution-review-stale`, because the staleness check is deliberately made twice against two different things -- the command owns the operator-facing check and the adapter owns the effect-facing one. Confirmed repair records a `repair` receipt whose steps equal the observed drift, after which a plain `aart doctor` independently reports the machine ready. Eight E2E scenarios and five targeted mutations, each red only where claimed. The finding is the exactness test: named source *and* version, it only ever omitted the source, so dropping the version requirement killed nothing; both under-specified forms now run as subtests and each mutation half kills its own. B-059 records the one remaining survivor, an exactly-one-match guard whose duplicate case is not known to be representable. INV-194 is EVIDENCED. Step 4a makes the orphaned-run diagnostic reachable without a receipt to name it (D-142): `orphan_run_directories` filters the run root by one receipt's `plan_hash[:16]`, so finding an interrupted run's working copy required already knowing which run was interrupted -- and being interrupted is usually why the operator stopped watching. `aart doctor` is told nothing and reports the working copy at the path the engine actually created, with the plan-hash prefix that ties it back, cross-checked against the receipt. `LAF-61` is preserved: the report names it and leaves it, contents unchanged, and says it does not delete them. `LAF-66` is preserved: the run root is supplied by the caller, never derived a second time. "No working copy" and "the run root could not be read" stay distinct. Seven E2E scenarios over CP-15 step 4b's real failing custom entrypoint, seven targeted mutations, and a fresh scoped run of 43 mutants at 40 killed, whose survivors found four gaps the manual mutations had not -- a falsey-but-not-`false` `readable` that is `null` in JSON, and `continue`/`break` and `or`/`and` at the loop guards, which one working copy alone can never distinguish. Step 4b puts the audit trail behind a verb (D-143). `project_activity`, `activity_from_receipts`, `activity_view_to_data` and `render_activity` all existed and were referenced only by the TUI's assembly, so the record INV-191 makes the audit evidence was reachable from the interactive shell and nowhere else -- the third capability in this slice found sitting at a seam with no verb reporting it. The report now carries the day-grouped timeline and each recorded action's own undo answer, asserted to share the same recorded moments so they are one observation rendered twice. INV-192 is held as a pair one flow produces: an install reports an undo naming `delivery:claude` and `payload`, and the uninstall that follows reports none because nothing retained can reverse a removal. D-143 records what the first draft got wrong -- it cross-checked Doctor's undo against `marketplace receipt show`, which returns the *setup* receipt, a different record with no `recorded_at` or `undo` at all. Six mutations, each red only where claimed; the finding was that removing the "nothing has been recorded yet" line killed nothing, leaving the human report free to print a bare header that reads as a failed rendering rather than an idle machine. Step 4c completes step 4 by reporting the two configurations a machine honours in silence (D-144). A source with `enabled: false` is skipped by every other part of the report deliberately, so an operator asking why nothing offers an artifact saw a report that source did not appear in at all; and an organization policy that sets a reporting field replaces the value in the user's own configuration file, where `_locked_override_diagnostics` answers only the *runtime* override and `EffectiveConfiguration.locked_fields` had no reader anywhere in the package. Credentials were the fifth capability in this slice found built at a seam with no verb reporting it. Both empty cases are answered in words, and the no-leak guarantee is asserted structurally against `CredentialObservation`'s field names, so a future field called `value` fails there rather than reaching the report. Two claims are held at the seam for reasons named in the test file -- a populated credential list would write to the developer's real Keychain, and installing an organization policy would mean writing to a root-owned system path -- which is CP-15 step 8's recorded precedent. Nine targeted mutations, each red only where claimed. The finding came from the scoped run before a single mutant executed: its baseline failed on step 2's `assertNotIn("installed", output.lower())`, which scanned the whole report while claiming something about the offline capabilities alone, and the new credential section legitimately says "no installed artifact references one". The assertion is now scoped to the offline block and a mutation putting the word into that renderer still turns it red; D-144 records the general form. A second finding repeated step 4b's exactly: six credential payload keys and the disabled source's `kind` were published with no test reading any of them, and the human line for a credential nothing depends on was unheld -- all closed, taking the scoped run from 421/595 killed to 450/595 with no survivor left in any of this step's four functions; the remaining 145 are B-060's 84 in `_run_repair` and the new B-061's 47 in the report composition. Step 5 closes the slice on three things (D-145). The front door: `aart doctor --help` still described the step-1 report, naming one of the six sections the command now carries, so four steps of newly reachable capability stayed undiscoverable short of running the verb and reading its output; the help now names every section, says the report alone changes nothing, and is held by `doctor_help_e2e_test`. The universal halves: three times in this slice a scoped run found a gap whose immediate fix was to add a second item to a fixture -- `continue`/`break` in 4a, the undo separator in 4b, the dependant and locked-field separators in 4c -- which fixes the instance and not the kind, so `doctor_properties_test` states the claims as Hypothesis properties and eleven targeted mutations prove they hold, three of them (`disabled[:1]`, `dependants[:1]`, `runs[:1]`) being exactly what no single-item fixture can express. That run then found two real gaps in step 4a's own claims: the unreadable-run-root branch had no human-output assertion anywhere, leaving the report free to answer "I could not look" the way it answers "there is nothing here" -- the confusion D-142 exists to refuse, standing on the surface an operator actually reads -- and `LAF-61`'s promise was held by the fragment "does not delete" rather than its sentence. Both closed; `orphaned_runs.py` now kills 25 of 25, up from 40 of 43. The invariant walk moves INV-189, INV-191 and INV-192 to EVIDENCED and deliberately leaves INV-190 PARTIAL, because its sentence has two halves and a read-only report that lists affected consumers does not show that `replace` and `verify` account for them. | CP-16 is VERIFIED across all five steps. `aart doctor` is a complete read-only support surface -- installed health with minimal repair plans, offline readiness, interrupted-run working copies, the activity trail with each action's undo answer, credential health and the configuration the machine is ignoring -- and mutates nothing unless `--repair --yes --expect` are all present. Open questions are backlog only: B-060 and B-061 (unclassified mutation survivors in the repair entry point and the report composition) and B-062 (no credential provider reads as no credentials). |
-| CP-17 Git-backed live acceptance | VERIFIED | Steps 1 and 2 are VERIFIED. Step 1 (D-146): the exact candidate from a real system-Git acquisition survives validation, atomic publication and a fresh store read, including Git's real SHA. Step 2 (D-147/D-148): a real user configuration retains a valid HTTPS source identity while only the acquisition port substitutes the temporary Git transport; public `source sync`, `marketplace list` and `marketplace install` then carry the real SHA into the returned and durably re-read lifecycle receipt and place the promoted Skill bytes. Its first RED exposed B-057's consumer half -- a promoted versioned registry was interpreted as an older compiled maintainer workspace -- so validation now dispatches each representation to its own existing authority and the read-only Marketplace reuses the canonical approved-registry projection. The legacy `registry publish` disagreement remains backlog. A placeholder-revision mutation fails exactly at the receipt; fresh scoped mutmut killed omission of the revision and omission of promoted-registry validation after adding the empty/stale-catalog negative. Full `make quality` is green with 3,295 tests, one skipped and 85.39% branch coverage; separate `make integration` is green with 324 E2E tests.  Step 2 was then independently reviewed (D-149), adding tests only. D-148's two guarantees -- a revision is a pinned Source revision, and every added field is optional so existing receipt bytes keep their canonical form -- are claims about inputs the chain cannot produce, so they were re-measured rather than accepted, and they came apart: deleting the `is_pinned_source_revision` clause from `ResolvedArtifact.__post_init__` left all 3,349 tests passing, while the decode tolerance was held incidentally by a round-trip whose name speaks of rebuilding an activity entry over a fixture that happens to carry no revision. `tests/git_revision_provenance_test.py` states both -- the shape as a Hypothesis property over every string that is not a pinned revision (D-145), the durability as the D-138 pair, plus the distinction between a key omitted and a key written as `null` -- with three mutations each red only where claimed and a scoped run leaving no survivor in the code those tests claim (B-063 records its twelve, all in `_safe_line` and the sort keys).  Step 3 is split the way CP-16 step 4 was, because the installed artifact *starting* and the installation *following* its upstream need different fixtures. Step 3a is done: the same Git-backed fixture re-promotes the registry with both versions, replaces the repository's working tree and commits, and one continuous run then holds five claims through public verbs -- a second sync reports the new commit; the delivered bytes are still the ones reviewed at install, so the sync offered and applied nothing; `marketplace update` without `--yes` reviews, names 1.3.0 and writes nothing; the confirmed update with the review's `--expect` digest converges the delivery and records a receipt naming the new commit; and the durable audit trail holds both revisions at once. Three mutations, of which the third justifies the increment: writing the source store's current pointer once and never advancing it turns this test red on a stale `1.2.0` offer while step 2's chain test still passes, because a fixture that syncs once from an empty store cannot see a pointer that never advances. Going to look for a second instance of D-149's gap also found one -- `ApprovedRegistrySnapshot` validates its `resolved_revision` exactly as `ResolvedArtifact` does, and deleting that guard likewise left all 3,357 tests passing -- and both are now stated as properties. No production code changed in either increment.  Step 3b completes step 3. `mcp_stdio_e2e_test` starts a real MCP server but assembles the installation itself -- payload written by hand, environment created by hand, `generate_launcher` called directly -- so nothing joined that runtime to the chain in front of it. `git_backed_runtime_e2e_test` carries an MCP artifact through the same real Git repository with public verbs only; the receipt's four effects (`copy-tree`, `create-python-environment`, `write-file`, `configure-harness`) show a virtual environment was really built, and the launcher the install wrote then answers `initialize`, `tools/list` and `tools/call` over stdio, running on the interpreter the install created, with the `--strict` argument the manifest declared, unable to import `agent_artifacts`. A second test starts what `.mcp.json` names. The artifact declares no inputs as a claim rather than a choice: the CLI has no flag that answers one, so an artifact declaring one is refused with `consumer-invalid` naming each field, and nothing is built -- no runtime directory, no harness entry, no receipt. The finding is where that refusal lives: disabling the adapter's own guard in `io/configured_installation.py` killed nothing because the CLI never reaches it, and the refusal an operator meets is `commands/marketplace.py`'s, the adapter's being a second line of defence with no public flow through it. Three mutations, each red only where claimed. B-064 records the CLI-cannot-answer-inputs capability question; B-065 records that `marketplace list` publishes a provenance `resolved_commit` of all zeros beside the real `source.resolved_revision`, which is the maintainer half of the chain still being synthetic.  Step 4 asks what `aart doctor` says about the installation the chain built, and is the first step in this slice to change production code. Measured against the live Git-backed MCP installation under four kinds of real damage, a rewritten launcher was reported `broken`, divergent and repairable -- while all three kinds of payload damage were reported `health: ready, drift: []`, with the server itself exiting 1. D-150 has the cause: both observers measure the payload, and both current-state builders then discarded it through `item.id in wanted`, because a doctor supplies no `payload_source` and so nothing desires the payload. Omitting it from the *desired* state is right -- guessing where a tree came from would overwrite it from somewhere nobody chose -- but that is a statement about repair, and it was being used as a reason not to report. INV-228 (external drift is surfaced) and INV-175 (AART says when it cannot repair rather than fabricating a guarantee) are both about reporting, and neither asks for an invented repair. `_reported` now keeps a damaged undesired payload and `compare_states` names it by what is wrong (`missing`/`divergent`) rather than `UNEXPECTED`, whose remedy is uninstall; `repairable` stays false, and the repair planner already escalates it. The first attempt kept every damaged undesired component and broke 15 tests, two of them rightly: `installation_health` turns any unrepairable drift into BROKEN including UNVERIFIABLE, and on a removal state absence is the goal -- so the keep-rule is payload-only and ABSENT/DIVERGENT-only, and mutation 4 is those tests catching the widening. The change also exposed a fixture that was lying: `placed_machine_e2e_test` recorded `"a" * 64` as its payload digest while measuring the real tree only for the delivery, so every `ready` it asserted was about a payload nobody had (D-091's shape again, surfacing as `'ready' != 'broken'`). And it forced D-029's distinction into the type: `InstallationObservation.payload_present` was `bool = False`, so any partial observation implicitly claimed the payload was deleted, and is now `bool | None`. Four targeted mutations, each red only where claimed. INV-228 and INV-175 move to EVIDENCED for the placement path, where a tree digest exists on both sides. B-066 records what is left: the installation path has no tree digest on the observation or the receipt, so an MCP payload rewritten in place is still invisible and only whole-tree deletion is caught -- stated in the observed component's detail rather than claimed as health. Step 4's other two halves complete it. Uninstall was proven reverse reconciliation only against installations a fixture assembled; `GitBackedUninstallE2ETest` starts the server first, then removes it through the public verb -- four effects in reverse dependency order, every step applied, the runtime gone, no `notes` left in `.mcp.json`, and doctor reporting a clean machine rather than a record for something that no longer exists (which after D-150 would now read `broken` forever rather than merely stale). Dropping the harness components from `removal_state_from_receipt` leaves `.mcp.json` pointing at a deleted launcher; removing the tree non-recursively turns all three red and does it honestly, with `Directory not empty` and a `partial` session rather than success over a tree still standing. Rollback's honest answer here is that there is none, which is INV-192's actual subject: building a virtual environment is not reversible by anything retained, so the receipt reports `undo.available: false` naming `runtime-environment` rather than refusing generically, and asking anyway is refused as `receipt-no-setup` with remediation while the tree stays untouched and the server still answers `initialize`. Forcing `irreversible` empty makes the receipt claim it can be undone and turns that one red alone. **Step 4 is VERIFIED.** All nine quality gates are green; `make integration` is green. Step 5 splits. Its bulk half is VERIFIED: an MCP server and a Skill published into one repository and installed in one confirmed run, each getting the installation its kind needs -- the server built into a runtime that starts beside the Skill, the Skill placed with neither an environment nor a launcher -- both carrying the same real commit into one receipt, with doctor reporting both ready. Forcing `_is_delivered` false turns all four red with an honest `installation-not-described`; letting only an `mcp` member carry its revision turns exactly the one test claiming it red. Its Collection half is blocked and that is the finding: `io/configured_selection.py` skips every approved version whose kind is `collection` and leaves `ApprovedRegistrySnapshot.collections` at its default, so no public verb can ever see a Collection -- `marketplace list` returns `"collections": []` while offering both members, and installing one answers `collection-not-found` with empty remediation. B-067 records it; `CollectionsAreNotReachableTest` pins the gap as an honest refusal so it cannot become a partial install. D-151 decides it: B-067 is not reclassified, and step 5 is complete for what CP-17 can prove. The gap is not a projection bug -- `CollectionCandidate` reaches six modules and `promotion.py` is not among them, `collection_active` reaches candidate history and stops, so no collection candidate is promoted, no registry version of kind `collection` is published anywhere, and no test publishes one; resolution is the one built part, which is what makes it look smaller than it is. Closing it needs promotion, registry representation, the configured projection and member install planning together, which is a vertical capability slice rather than a step inside an acceptance slice. **CP-17 is VERIFIED.** | CP-18 migration and release gate, unless the Collection capability is scheduled first: B-067 now carries the four-layer scope, and INV-186 and INV-213 cannot be evidenced through any public verb until it exists. |
+| CP-13 Consumer TUI | VERIFIED (legacy removal deferred to CP-14) | Accepted screens 01–29 have canonical Fast/Verbose projections, a pure reducer/keymap and a persistent injected shell (D-039–D-049). Durable action/installation receipts, ownership and machine reload are verified across processes (D-044–D-051, D-064–D-066). Authored packages lower once through reviewed execution; configured approved Selection resolution, screen-07 input references, object-store placement, capability-bound interpreters and one prepare/complete adapter are verified for real MCP installation (D-052–D-076). B-033 is complete: kind-neutral placed receipts and delivery reconciliation now take a real authored Skill through promotion, configured review, installation, durable reload, drift detection and reverse uninstall without a launcher or environment (D-077–D-078). Public direct approved-registry `install`, `status`, `update` and `uninstall` all use the configured action (D-079-D-081, D-083). B-034 is complete: memory owns a delimited region of a file the user writes in, measured by digesting the region rather than the file (D-084), and a hook is delivered and merged at once, owning one entry of one list inside a settings file the harness and its user share (D-085) -- so every artifact kind the Product Specification defines now installs, measures, repairs and removes canonically. B-025 is complete: the default terminal route is the canonical consumer application. `run()` composes machine, offers, configuration and credential adapters once and calls `run_consumer` before any wizard composition; a repair is bounded by its receipt and fails closed on what the receipt cannot describe (D-086); a refusal is drawn under the screen it was asked from rather than raised (D-087); and the Marketplace is now the configured registries' approved published versions, with trust taken from the promotion record that approved each one (D-088, INV-026), so what is browsed is installable. Evidence is `tests/consumer_application_e2e_test.py`, which drives the real shell over the production handler through install, reinstall-converges, verify/repair after a deleted delivery, uninstall, and two refusals. B-037 was promoted from backlog to the critical path and fixed: `plan_bulk_promotion` rebound only the version records in its own transaction while the catalogs took the new content digest, so the second promotion into any registry made it unreadable to every consumer -- a live defect on `aart-cli registry promote`, not a fixture problem. Every retained approved record is now rebound to the snapshot its own transaction produces, as metadata only, with the published package proven byte-identical (D-089). That unblocked D-088's last piece of evidence: a Marketplace row stands for the highest approved SemVer of an identity, and an older approved version is superseded rather than declined. Screen 28 is the last accepted screen to go live: four controls with a cursor, `v` and Detail level unified as one preference, and a durable `<data_root>/state/consumer-settings.json` read strictly rather than repaired -- an opt-in that had to be re-chosen every session was not an opt-in, and Maintainer Mode is the boundary CP-14's whole surface sits behind (D-090). CP-13's remaining legacy retirement is re-triaged as a CP-14 dependency rather than two open product questions: the Product Specification already settles both, and both answers land in CP-14 -- 145.1 makes a Collection versioned and CP-14 owns collection candidates (B-031); 1737 and INV-019-INV-026 put consumer installation over approved registry content and CP-14 owns Sources screens 31-34 (B-038, D-091). Full suite now 2,958 tests green in 179s, with lint, format-check, typecheck, docs-check and secret-shape-check green; coverage and the remaining gates deferred to the end of the CP-13 block. | Direct approved-registry `install`, `status`, `update`, `uninstall` and the default TTY are canonical for all five kinds; Collections and direct/local lifecycle commands still route to legacy authority, and no legacy implementation has been removed. `_run_curses` and the wizard composition are now unreachable from `run()` on a terminal but retain direct test callers (B-039). Collections still have no live versioned source (B-031); a deprecated registry version is declined rather than offered because the row cannot render the warning (B-036); native sources are listed but offer nothing, pending a product answer (B-038). |
+| CP-14 Maintainer TUI | VERIFIED | Step 1 names screens 30–53 inside the shared mode-gated state machine (D-092, INV-193). Screens 30–32 bind configured authoring Sources, durable health and exact pinned Source Scans through strict Candidate history (D-093–D-095, INV-229/239). Screens 33–34 are now the production typed `SOURCE_SYNC` action: read-only digest-bound review; approved-registry and Source/history precondition checks; acquire/validate/publish, exact manifest compile/reconcile, atomic history write/readback under one Source lease; no registry mutation (D-096–D-097, INV-007/200/201). A real temporary installation syncs a local Source through the shared shell and proves the registry observation unchanged. Step 3 puts screens 35–37 in that same shell: the Candidate list is keyed by stable Candidate ID so two Sources publishing one artifact name cannot collide, narrowing is the typed `MaintainerCandidateFilter` rather than renderer string matching, screen 36 carries the full authoring detail with secret inputs valueless, and screen 37 is semantic diff first with the bounded redacted file diff behind an explicit `f` toggle that no navigation carries forward (D-098, INV-202). Drawing the three screens opens no file and rescans nothing; the shell draws the scans `read_maintainer_views` already read once, and corrupt history still refuses the whole observation. Codex's step-3 checkpoint left format-check, lint and typecheck red and all three were repaired rather than relaxed. Step 4's engine is landed ahead of its screens: `application/candidate_validation.py` makes validation an ordered pipeline of named checks with warnings, errors and a non-passing `not-run` kept distinct, refuses a warning or error carrying no actionable detail, and routes policy through the previously unread `EffectivePolicy.required_checks` so a required check that did not pass yields `APPROVAL_REQUIRED` rather than `WARNING` (D-099); which checks can actually fail was established by probing the compiler first, so the re-verification checks are tested against doctored canonical trees and the two that bite on clean artifacts -- a secret bound to argv, an executable payload file -- are tested directly. Step 4 is complete: screens 38-40 project one run per active Candidate, addressed by `"<candidate-id>:<check>"` row pairs that parse back to a typed value rather than being split inside a renderer, with the policy judgement composed into the run so screens 38 and 40 cannot disagree about the same Candidate (D-100). `read_maintainer_views` now takes the `EffectivePolicy` and validates every active Candidate once at composition time; drawing all three screens opens no file. `make quality` and `make integration` are both green after step 4: 3,052 unit tests, 209 E2E tests, 83.35% branch coverage. Step 5 now has screens 41–45 live. Screens 41–43 review, choose and plan without writing (D-101–D-102). Screen 44 projects pre-write validation of the promoted registry and its Candidate-policy evidence. Explicit confirmation on screen 45 rechecks the digest, exact Candidate, approved baseline and checkout; revalidates and replans; refuses movement; atomically applies the existing promotion plan; validates persisted versions and audit provenance; then creates one local Git commit containing only reviewed paths, with no push capability (D-103). Drawing screens 44–45 opens no file. A real temporary production installation walks screens 30 and 35–45, commits a promoted registry into a clean checkout with no remote, and validates the persisted readback. `make quality` is green with 3,098 tests and 83.28% branch coverage; format, lint, type, validation, packaging, docs and secret-shape gates pass. `make integration` is separately green with 210 E2E tests. Screen 46 now reads the registry back: validity is the named check that every approved version carries a promotion approval record, and recent promotions are ordered by walking the audit snapshot chain backwards from the approved snapshot rather than by any clock, because no promotion record carries one and stamping one at read time would make the order a property of when a Maintainer looked (D-104). Working-tree state is a separate observation of the D-103 project-root checkout, digested over the whole synchronized tree -- the same `source_snapshot_digest` D-103 requires a checkout to match before it may be promoted from -- while the audit chain head is read separately in the published-content `registry_state_digest` space the audits themselves name; the composition E2E caught the first attempt comparing the two spaces, which made a correct checkout read as diverged. After a local commit the checkout is legitimately ahead of the synchronized approved snapshot and the line says so rather than calling it an error, and a promotion now recomposes the Maintainer views the way a Source Sync already did, because the commit it just made moved the checkout. Enter on screen 45 confirms only while an action is pending and otherwise continues to screen 46. Drawing screen 46 opens no file. The E2E walk now runs from the consumer dashboard through diff, validation, promotion, the local commit and out to the registry view. `make quality` and `make integration` are both green: 3,167 tests. Screen 47's selection surface is live: what one registry's transaction may carry, with promotability read off the run screens 38–40 showed, Candidates of another registry not offered at all, and a refused Candidate named with its reason rather than silently absent; selection reuses the reducer's existing typed `selection` with `Space` (D-105). Screen 47's transaction is now live and is genuinely one transaction: `PreparedCandidatePromotionTransaction` carries a tuple of promotions rather than a single one, `plan_promotion_transaction` plans the whole set through the existing `plan_bulk_promotion`, and the single-Candidate path is the one-element case of it rather than a second path -- so there is one review flow and one chance for it to be right. Confirmation reads the approved baseline once and then rechecks every Candidate against it, because reading it per Candidate would let one transaction assemble members against two different registries. Screens 44 and 45 now carry a tuple of Candidates each with its own validation-report and effective-policy digests, and screen 45's commit subject names the artifact for one and the count for several. Screen 47's one forward route is screen 44, not screen 43, because a bulk selection has no single-Candidate diff to open, and the configured handler re-checks at action time that the confirmed selection is still a subset of what screen 47 composed (D-106). A real temporary production installation ticks two Candidates on screen 47 and proves they reach the checkout as exactly one commit, one registry snapshot and a clean working tree -- which a loop over single promotions could not produce. B-041 is complete and so is step 5: promotion audits now discriminate a 40-hex Git revision from a typed local snapshot SHA-256, canonical legacy Git records remain readable, and a local pin in that legacy field is refused (D-107). Direct tests prove local screen-43 planning and the audit shape; the production E2E takes a real filesystem Source through sync, validation, promotion, persisted registry validation and one clean local commit whose audit digest matches the durable Candidate-history pin. Mixed Git/local bulk planning remains one transaction and one registry snapshot, and D-089/B-037 rebinding is unchanged. Focused gates are green; full checkpoint results are in the active slice. Screen 53 completes the filter half of step 6: the Product Specification names four Candidate filter facets and the one typed filter now carries all four, with closed sets typed (`states`, `kinds`) and open sets as aliases (`sources`, `registries`) because that is what each facet is. Its rows are `"<facet>:<value>"` addresses parsed back by `parse_candidate_filter_row` and toggled through one entry point, not four; the offered values come from every composed Candidate rather than the narrowed list, since a row that vanished when ticked could never be unticked; and each option states what choosing it would leave, so a narrowing that selects nothing is legible before it empties screen 35 rather than after. `f` opens it from screen 35 and ticking a row puts nothing in `selection`, which is what every action reads. `f` now means the raw file diff on screen 37 and the filters on screen 35, each meaning what its own screen is about; the characterization test that pinned `f` as inert on screen 35 was corrected to the new behaviour rather than relaxed (D-111). Drawing screen 53 opens no file. `make quality` and `make integration` are both green. Screens 51-52 complete step 6. They already had projections, a renderer, validation against approved registry state and durable composition; what they lacked was a route, so every test entered by constructing a session already sitting on screen 51 -- the same gap screens 35-37 had in step 3. `c` on the Candidate list is the way in, because "Collections are candidates too" puts them on the Candidate surface and the accepted screen 30 panel describes no Collections entry to add one to (D-112). Writing the walk forced a real distinction into the open: the fixture first compiled through `compile_author_snapshot` and got no Collections at all, because that boundary returns artifacts only, while production Source Sync uses `compile_author_source`, which carries both kinds. A Collection authored beside an artifact in one tree is now compiled once, persisted once, reached with `c` and resolved on screen 52 to the exact version the registry approved, over one real installation. | Step 6 is complete. Step 7 is under way: its first removal deleted the legacy curses wizard shell `_run_curses`, the two setup shims it alone called and the seven tests that existed only to drive it, on evidence that already existed -- `run()` never reached it and ERR05 is pinned on the canonical `run()` (D-113). `run()`, `_run_text` and the whole text route stay, because no-TTY is a supported environment rather than a broken one, as do the wizard's curses primitives the surviving stages still compose. Step 7 is now done apart from a mechanical sweep: the whole wizard front-end is removed (D-115, D-116, D-117) and `tui.py` is 2,747 lines, down from 5,705. Its stated remainder -- `consumer/application.py`, `lifecycle/*`, `installation/*`, `setup_engine/*` -- was a wrong reading and is not removed: `commands/marketplace.py`, the public `aart-cli marketplace install|update|uninstall|setup`, composes `ConsumerApplicationService` and runs the setup queue through it, and the canonical shell's own `tui_marketplace.py` takes `LifecycleItem` and `InstallMode` from that stack. B-039 is closed; B-038's remainder is restated as an `aart-cli marketplace install` question. What step 7 actually leaves behind is **B-044 (critical)**: the canonical shell reaches none of that stack, so it performs no post-install setup and offers no usage report (D-118). |
+| CP-15 Edge-case hardening | VERIFIED | Step 1 closes the registry-state half of INV-218 at the surface that uses it. `tests/source_sync_command_e2e_test.py` is the first thing anywhere to drive `aart-cli source sync` over a real source whose upstream published an invalid revision -- a new payload plus an `aart-registry.json` that does not parse, so the refusal is observable rather than indistinguishable from the good snapshot. Eight tests hold the whole scenario through public verbs: the refusal is per-source and carries its remediation into the human rendering; the store still points at the last good snapshot and `marketplace list` offers every artifact of it digest for digest; the source degrades to `could-not-check` with a named `source-invalid` diagnostic rather than being withdrawn; an installation made from the good snapshot is byte-identical, its recorded state unchanged, and still `current`; installing after the refused sync places the accepted revision's bytes and updating is a no-op; and a repaired upstream publishes, so the refusal was about the content rather than `sync` being inert. Writing them found D-132: `could-not-check` -- exactly what the explicit last-known-good fallback `SyncDisposition.RETAINED` produces -- was read as "this source is gone" in three places, so one invalid upstream revision made `marketplace status` report every installation as `source-unavailable`, and made `install` and `update` fail on a plan-construction invariant with no remediation on it. Product Specification 165.11 settles it and both sets now admit it, with `missing` and `not-synchronized` still excluded because those mean there is no snapshot. Both seams carry their own red-first claims (`canonical_lifecycle_test`, `canonical_install_planning_test`), and reverting the `RS-08` refusal in `sources/validation.py` turns all eight end-to-end tests red. INV-218 moves to EVIDENCED; INV-210 stays PARTIAL with real evidence in place of "scattered safeguards". Step 2 asks what a *moving* upstream may rewrite. `tests/source_upstream_movement_e2e_test.py` republishes into the real source and proves a sync leaves the installation record identical in every field, the new revision is offered rather than applied (`update-available`, reviewed bytes still on disk), an explicit `update` is what rebinds it, and an upstream rolled back to its first revision is new work rather than an erased event. That last one is the case content addressing makes counter-intuitive: republishing the first revision's bytes republishes its digest, so the store looks untouched, and only the record remembers that the second revision happened. On the registry side `promotion_planning_test::test_a_second_promotion_rewrites_one_field_and_no_provenance` pins D-089's rebinding -- the one place an already-approved record is written over -- to `registry_snapshot` alone, with the promotion audit byte-identical. Mutations: deciding `check_installations` on version alone turns two of four end-to-end tests red; re-deriving one further field of a retained record turns the promotion test red, and it is the only one of that file's sixteen that catches it. INV-219 moves to EVIDENCED; INV-216's consumer half is closed and its Git revert half waits on CP-17. Step 3 takes Product Specification 165.11's decomposition of offline installability -- metadata cached / canonical payload cached / runtime dependencies cached -- and asks whether AART's single `--offline` boolean collapses them. It does not, and `tests/offline_capability_test.py` now pins that: an unsynchronized source refuses by naming the cache (`aart-cli source sync`) rather than the artifact; a cached-metadata, uncached-object install refuses under a different code with the words "while offline" separating it from the connected case; and the dependency installer is denied an index (`pip --no-index`, `uv --offline`) exactly when offline is asked for, in both backends, with that flag the *only* difference between the connected and offline argument vectors. The three codes are asserted pairwise distinct, which is the invariant's actual prohibition -- conflating them is what sends an operator to re-sync a source to fix a missing wheel. Layers 1 and 2 collapse for a local source (the object store is empty before the first install and the object is published from the cached snapshot during it), so layer 2 is measured at the planning seam; that is the fixture's property, not the code's. Three mutations, one per layer: emptying `flags` in both branches of `io/python_runtime.py::_install_argv` turns three of four red; `if False:` in place of `if offline:` in `marketplace/catalog.py::_resolution_failure` turns one red; dropping the `" while offline"` suffix in `installation/application.py` turns a different one red. The dependency layer had no test at all before this -- `python_environment_integration_test` runs real offline installs and would have stayed green with the flag removed, silently reaching the network on every `--offline` install. INV-223 stays PARTIAL, now against a named gap rather than "scattered safeguards": nothing *reports* the three capabilities before an install is attempted, which is the reading 165.11 shows, recorded as B-051 for CP-16's `aart-cli doctor`. Step 4 split into two halves with different subjects, and 4a is done: verification failure and the compensatable restore. `tests/verification_failure_e2e_test.py` runs a declared setup whose recipe writes one managed block and then runs a command that exits non-zero. Product Specification 165.12 makes two claims about that moment and they came apart. The report half already held: `aart-cli marketplace setup` exits non-zero, the item is `verification-failed` -- its own word, not `apply-failed-rolled-back` and not `cancelled` -- the counts read `configured=0, incomplete=1`, the human rendering names the artifact and the retry rather than only a count, 165.13's compensatable-restore branch removed the block, and the separately placed payload is still `current`. The evidence half did not: the receipt recorded the verification result and the final health and recorded no applied effects at all, because `_apply_effects` dropped the step receipts whenever the rollback succeeded -- so `receipt show` said a check had failed while saying nothing about what had already been done to the machine before it did. D-133 keeps them, marked `setup_disposition: "compensated"` (the word the persistence-failure path already writes, and which all three readers already honour), and moves `rollback_command` to depend on the steps still standing, so a fully compensated record offers no undo to run. The two evidence tests were red against the shipped code while the four report tests were green, which measures the split rather than asserting it; reverting `standing` to `receipts` in `_record` turns the undo claim red on its own. INV-224 keeps EVIDENCED with public-flow evidence in place of seam-only evidence; B-052 records the consent-declined sibling branch, which the CLI's all-or-nothing `--approve-setup-effects` cannot reach. Step 4b closes INV-226 over the public verbs. `tests/interrupted_execution_e2e_test.py` uses a real custom entrypoint whose apply fails and whose rollback then also fails -- the one path that raises without removing its run directory -- so the working copy it asserts on is one the engine really created and really failed to clean up, rather than one a patched-away cleanup produced. It had to be that route: a run directory is opened only by `custom.install@1` and `docker.build@1`, so step 4a's managed-block recipe can leave no orphan and the claim answers `true` about a directory that was never made. Six claims: an incomplete compensation is `rollback-incomplete` and not `apply-failed-rolled-back`, and carries a recovery line (165.13); the working copy survives; `receipt verify` finds it, exits non-zero and names the directory the engine actually created, cross-checked against the record's plan hash; verify leaves it exactly where it is (`LAF-61`); the receipt reads back as JSON; and a retry re-plans rather than resuming -- a different review digest, the protocol restarted from its first phase, and both working copies then reported. The JSON claim exists because writing the file found the defect: a parsed record's steps are frozen recursively and the projection copied each shallowly, so `receipt show --json` ended in a `TypeError` for exactly the run whose evidence is hardest to reconstruct by hand; `setup.py`'s `_plain` is now public as `plain_value` and the projection uses it. Mutations: pointing the probe's run root at the project root -- the `LAF-66` defect class at the one seam `setup_verify_test` cannot reach -- turns two red; the shallow projection turns two red; calling an incomplete rollback a completed one turns two red. A fourth attempt killed nothing and is recorded in the slice: the outer `_rollback_all` re-creates the directory when it writes the receipt its own compensation needs. INV-226 moves to EVIDENCED. D-134 adds mutation adequacy as tooling: `mutmut` joins the dev group behind `make mutants ONLY=... TESTS=...` (`scripts/mutants.py`), advisory and always scoped, and `AGENTS.md` now names it and Hypothesis as the two tools that check the tests themselves. | All eight steps are done and every invariant the slice declared is EVIDENCED. Exact collection drift stayed out of scope, waiting on the Collection capability B-038 is sequenced behind (D-131). |
+| CP-16 Doctor/supportability | VERIFIED | Step 1 adds the top-level, read-only `aart-cli doctor` over real canonical project and user installations (D-139). One durable observation feeds both the accepted screen-29 health projection and `prepare_configured_repair`; six E2E tests hold healthy/no-plan, one-drift/one-plan, both scopes, source independence and unreadable-receipt refusal. Step 2 adds D-140's pre-install offline-readiness report: Source/artifact metadata, exact approved canonical payload and runtime-dependency evidence stay separate in JSON and human text. Eight public E2E scenarios cover cold, referenced, dependency-free, dependency-declaring, disabled/plain/multiple sources, multiple artifacts and a deprecated version without installing or publishing. Manual mutations independently break all three capabilities; fresh scoped mutmut runs killed 30/30 application and 73/76 I/O mutants, with three reviewed equivalent/unproducible survivors. Full gates are green: 3,251 tests, 1 skipped, 85.37% branch coverage and 287 separate integration tests. Step 3 adds the reviewed repair entry point (D-141): `aart-cli doctor --repair` returns a complete plan and its review digest and applies nothing; `--yes` requires that digest; a machine moved between review and confirmation returns the recomputed plan instead of applying the stale one; and a machine moved after the command's own re-plan is refused by the lifecycle adapter as `execution-review-stale`, because the staleness check is deliberately made twice against two different things -- the command owns the operator-facing check and the adapter owns the effect-facing one. Confirmed repair records a `repair` receipt whose steps equal the observed drift, after which a plain `aart-cli doctor` independently reports the machine ready. Eight E2E scenarios and five targeted mutations, each red only where claimed. The finding is the exactness test: named source *and* version, it only ever omitted the source, so dropping the version requirement killed nothing; both under-specified forms now run as subtests and each mutation half kills its own. B-059 records the one remaining survivor, an exactly-one-match guard whose duplicate case is not known to be representable. INV-194 is EVIDENCED. Step 4a makes the orphaned-run diagnostic reachable without a receipt to name it (D-142): `orphan_run_directories` filters the run root by one receipt's `plan_hash[:16]`, so finding an interrupted run's working copy required already knowing which run was interrupted -- and being interrupted is usually why the operator stopped watching. `aart-cli doctor` is told nothing and reports the working copy at the path the engine actually created, with the plan-hash prefix that ties it back, cross-checked against the receipt. `LAF-61` is preserved: the report names it and leaves it, contents unchanged, and says it does not delete them. `LAF-66` is preserved: the run root is supplied by the caller, never derived a second time. "No working copy" and "the run root could not be read" stay distinct. Seven E2E scenarios over CP-15 step 4b's real failing custom entrypoint, seven targeted mutations, and a fresh scoped run of 43 mutants at 40 killed, whose survivors found four gaps the manual mutations had not -- a falsey-but-not-`false` `readable` that is `null` in JSON, and `continue`/`break` and `or`/`and` at the loop guards, which one working copy alone can never distinguish. Step 4b puts the audit trail behind a verb (D-143). `project_activity`, `activity_from_receipts`, `activity_view_to_data` and `render_activity` all existed and were referenced only by the TUI's assembly, so the record INV-191 makes the audit evidence was reachable from the interactive shell and nowhere else -- the third capability in this slice found sitting at a seam with no verb reporting it. The report now carries the day-grouped timeline and each recorded action's own undo answer, asserted to share the same recorded moments so they are one observation rendered twice. INV-192 is held as a pair one flow produces: an install reports an undo naming `delivery:claude` and `payload`, and the uninstall that follows reports none because nothing retained can reverse a removal. D-143 records what the first draft got wrong -- it cross-checked Doctor's undo against `marketplace receipt show`, which returns the *setup* receipt, a different record with no `recorded_at` or `undo` at all. Six mutations, each red only where claimed; the finding was that removing the "nothing has been recorded yet" line killed nothing, leaving the human report free to print a bare header that reads as a failed rendering rather than an idle machine. Step 4c completes step 4 by reporting the two configurations a machine honours in silence (D-144). A source with `enabled: false` is skipped by every other part of the report deliberately, so an operator asking why nothing offers an artifact saw a report that source did not appear in at all; and an organization policy that sets a reporting field replaces the value in the user's own configuration file, where `_locked_override_diagnostics` answers only the *runtime* override and `EffectiveConfiguration.locked_fields` had no reader anywhere in the package. Credentials were the fifth capability in this slice found built at a seam with no verb reporting it. Both empty cases are answered in words, and the no-leak guarantee is asserted structurally against `CredentialObservation`'s field names, so a future field called `value` fails there rather than reaching the report. Two claims are held at the seam for reasons named in the test file -- a populated credential list would write to the developer's real Keychain, and installing an organization policy would mean writing to a root-owned system path -- which is CP-15 step 8's recorded precedent. Nine targeted mutations, each red only where claimed. The finding came from the scoped run before a single mutant executed: its baseline failed on step 2's `assertNotIn("installed", output.lower())`, which scanned the whole report while claiming something about the offline capabilities alone, and the new credential section legitimately says "no installed artifact references one". The assertion is now scoped to the offline block and a mutation putting the word into that renderer still turns it red; D-144 records the general form. A second finding repeated step 4b's exactly: six credential payload keys and the disabled source's `kind` were published with no test reading any of them, and the human line for a credential nothing depends on was unheld -- all closed, taking the scoped run from 421/595 killed to 450/595 with no survivor left in any of this step's four functions; the remaining 145 are B-060's 84 in `_run_repair` and the new B-061's 47 in the report composition. Step 5 closes the slice on three things (D-145). The front door: `aart-cli doctor --help` still described the step-1 report, naming one of the six sections the command now carries, so four steps of newly reachable capability stayed undiscoverable short of running the verb and reading its output; the help now names every section, says the report alone changes nothing, and is held by `doctor_help_e2e_test`. The universal halves: three times in this slice a scoped run found a gap whose immediate fix was to add a second item to a fixture -- `continue`/`break` in 4a, the undo separator in 4b, the dependant and locked-field separators in 4c -- which fixes the instance and not the kind, so `doctor_properties_test` states the claims as Hypothesis properties and eleven targeted mutations prove they hold, three of them (`disabled[:1]`, `dependants[:1]`, `runs[:1]`) being exactly what no single-item fixture can express. That run then found two real gaps in step 4a's own claims: the unreadable-run-root branch had no human-output assertion anywhere, leaving the report free to answer "I could not look" the way it answers "there is nothing here" -- the confusion D-142 exists to refuse, standing on the surface an operator actually reads -- and `LAF-61`'s promise was held by the fragment "does not delete" rather than its sentence. Both closed; `orphaned_runs.py` now kills 25 of 25, up from 40 of 43. The invariant walk moves INV-189, INV-191 and INV-192 to EVIDENCED and deliberately leaves INV-190 PARTIAL, because its sentence has two halves and a read-only report that lists affected consumers does not show that `replace` and `verify` account for them. | CP-16 is VERIFIED across all five steps. `aart-cli doctor` is a complete read-only support surface -- installed health with minimal repair plans, offline readiness, interrupted-run working copies, the activity trail with each action's undo answer, credential health and the configuration the machine is ignoring -- and mutates nothing unless `--repair --yes --expect` are all present. Open questions are backlog only: B-060 and B-061 (unclassified mutation survivors in the repair entry point and the report composition) and B-062 (no credential provider reads as no credentials). |
+| CP-17 Git-backed live acceptance | VERIFIED | Steps 1 and 2 are VERIFIED. Step 1 (D-146): the exact candidate from a real system-Git acquisition survives validation, atomic publication and a fresh store read, including Git's real SHA. Step 2 (D-147/D-148): a real user configuration retains a valid HTTPS source identity while only the acquisition port substitutes the temporary Git transport; public `source sync`, `marketplace list` and `marketplace install` then carry the real SHA into the returned and durably re-read lifecycle receipt and place the promoted Skill bytes. Its first RED exposed B-057's consumer half -- a promoted versioned registry was interpreted as an older compiled maintainer workspace -- so validation now dispatches each representation to its own existing authority and the read-only Marketplace reuses the canonical approved-registry projection. The legacy `registry publish` disagreement remains backlog. A placeholder-revision mutation fails exactly at the receipt; fresh scoped mutmut killed omission of the revision and omission of promoted-registry validation after adding the empty/stale-catalog negative. Full `make quality` is green with 3,295 tests, one skipped and 85.39% branch coverage; separate `make integration` is green with 324 E2E tests.  Step 2 was then independently reviewed (D-149), adding tests only. D-148's two guarantees -- a revision is a pinned Source revision, and every added field is optional so existing receipt bytes keep their canonical form -- are claims about inputs the chain cannot produce, so they were re-measured rather than accepted, and they came apart: deleting the `is_pinned_source_revision` clause from `ResolvedArtifact.__post_init__` left all 3,349 tests passing, while the decode tolerance was held incidentally by a round-trip whose name speaks of rebuilding an activity entry over a fixture that happens to carry no revision. `tests/git_revision_provenance_test.py` states both -- the shape as a Hypothesis property over every string that is not a pinned revision (D-145), the durability as the D-138 pair, plus the distinction between a key omitted and a key written as `null` -- with three mutations each red only where claimed and a scoped run leaving no survivor in the code those tests claim (B-063 records its twelve, all in `_safe_line` and the sort keys).  Step 3 is split the way CP-16 step 4 was, because the installed artifact *starting* and the installation *following* its upstream need different fixtures. Step 3a is done: the same Git-backed fixture re-promotes the registry with both versions, replaces the repository's working tree and commits, and one continuous run then holds five claims through public verbs -- a second sync reports the new commit; the delivered bytes are still the ones reviewed at install, so the sync offered and applied nothing; `marketplace update` without `--yes` reviews, names 1.3.0 and writes nothing; the confirmed update with the review's `--expect` digest converges the delivery and records a receipt naming the new commit; and the durable audit trail holds both revisions at once. Three mutations, of which the third justifies the increment: writing the source store's current pointer once and never advancing it turns this test red on a stale `1.2.0` offer while step 2's chain test still passes, because a fixture that syncs once from an empty store cannot see a pointer that never advances. Going to look for a second instance of D-149's gap also found one -- `ApprovedRegistrySnapshot` validates its `resolved_revision` exactly as `ResolvedArtifact` does, and deleting that guard likewise left all 3,357 tests passing -- and both are now stated as properties. No production code changed in either increment.  Step 3b completes step 3. `mcp_stdio_e2e_test` starts a real MCP server but assembles the installation itself -- payload written by hand, environment created by hand, `generate_launcher` called directly -- so nothing joined that runtime to the chain in front of it. `git_backed_runtime_e2e_test` carries an MCP artifact through the same real Git repository with public verbs only; the receipt's four effects (`copy-tree`, `create-python-environment`, `write-file`, `configure-harness`) show a virtual environment was really built, and the launcher the install wrote then answers `initialize`, `tools/list` and `tools/call` over stdio, running on the interpreter the install created, with the `--strict` argument the manifest declared, unable to import `aart_cli`. A second test starts what `.mcp.json` names. The artifact declares no inputs as a claim rather than a choice: the CLI has no flag that answers one, so an artifact declaring one is refused with `consumer-invalid` naming each field, and nothing is built -- no runtime directory, no harness entry, no receipt. The finding is where that refusal lives: disabling the adapter's own guard in `io/configured_installation.py` killed nothing because the CLI never reaches it, and the refusal an operator meets is `commands/marketplace.py`'s, the adapter's being a second line of defence with no public flow through it. Three mutations, each red only where claimed. B-064 records the CLI-cannot-answer-inputs capability question; B-065 records that `marketplace list` publishes a provenance `resolved_commit` of all zeros beside the real `source.resolved_revision`, which is the maintainer half of the chain still being synthetic.  Step 4 asks what `aart-cli doctor` says about the installation the chain built, and is the first step in this slice to change production code. Measured against the live Git-backed MCP installation under four kinds of real damage, a rewritten launcher was reported `broken`, divergent and repairable -- while all three kinds of payload damage were reported `health: ready, drift: []`, with the server itself exiting 1. D-150 has the cause: both observers measure the payload, and both current-state builders then discarded it through `item.id in wanted`, because a doctor supplies no `payload_source` and so nothing desires the payload. Omitting it from the *desired* state is right -- guessing where a tree came from would overwrite it from somewhere nobody chose -- but that is a statement about repair, and it was being used as a reason not to report. INV-228 (external drift is surfaced) and INV-175 (AART says when it cannot repair rather than fabricating a guarantee) are both about reporting, and neither asks for an invented repair. `_reported` now keeps a damaged undesired payload and `compare_states` names it by what is wrong (`missing`/`divergent`) rather than `UNEXPECTED`, whose remedy is uninstall; `repairable` stays false, and the repair planner already escalates it. The first attempt kept every damaged undesired component and broke 15 tests, two of them rightly: `installation_health` turns any unrepairable drift into BROKEN including UNVERIFIABLE, and on a removal state absence is the goal -- so the keep-rule is payload-only and ABSENT/DIVERGENT-only, and mutation 4 is those tests catching the widening. The change also exposed a fixture that was lying: `placed_machine_e2e_test` recorded `"a" * 64` as its payload digest while measuring the real tree only for the delivery, so every `ready` it asserted was about a payload nobody had (D-091's shape again, surfacing as `'ready' != 'broken'`). And it forced D-029's distinction into the type: `InstallationObservation.payload_present` was `bool = False`, so any partial observation implicitly claimed the payload was deleted, and is now `bool | None`. Four targeted mutations, each red only where claimed. INV-228 and INV-175 move to EVIDENCED for the placement path, where a tree digest exists on both sides. B-066 records what is left: the installation path has no tree digest on the observation or the receipt, so an MCP payload rewritten in place is still invisible and only whole-tree deletion is caught -- stated in the observed component's detail rather than claimed as health. Step 4's other two halves complete it. Uninstall was proven reverse reconciliation only against installations a fixture assembled; `GitBackedUninstallE2ETest` starts the server first, then removes it through the public verb -- four effects in reverse dependency order, every step applied, the runtime gone, no `notes` left in `.mcp.json`, and doctor reporting a clean machine rather than a record for something that no longer exists (which after D-150 would now read `broken` forever rather than merely stale). Dropping the harness components from `removal_state_from_receipt` leaves `.mcp.json` pointing at a deleted launcher; removing the tree non-recursively turns all three red and does it honestly, with `Directory not empty` and a `partial` session rather than success over a tree still standing. Rollback's honest answer here is that there is none, which is INV-192's actual subject: building a virtual environment is not reversible by anything retained, so the receipt reports `undo.available: false` naming `runtime-environment` rather than refusing generically, and asking anyway is refused as `receipt-no-setup` with remediation while the tree stays untouched and the server still answers `initialize`. Forcing `irreversible` empty makes the receipt claim it can be undone and turns that one red alone. **Step 4 is VERIFIED.** All nine quality gates are green; `make integration` is green. Step 5 splits. Its bulk half is VERIFIED: an MCP server and a Skill published into one repository and installed in one confirmed run, each getting the installation its kind needs -- the server built into a runtime that starts beside the Skill, the Skill placed with neither an environment nor a launcher -- both carrying the same real commit into one receipt, with doctor reporting both ready. Forcing `_is_delivered` false turns all four red with an honest `installation-not-described`; letting only an `mcp` member carry its revision turns exactly the one test claiming it red. Its Collection half is blocked and that is the finding: `io/configured_selection.py` skips every approved version whose kind is `collection` and leaves `ApprovedRegistrySnapshot.collections` at its default, so no public verb can ever see a Collection -- `marketplace list` returns `"collections": []` while offering both members, and installing one answers `collection-not-found` with empty remediation. B-067 records it; `CollectionsAreNotReachableTest` pins the gap as an honest refusal so it cannot become a partial install. D-151 decides it: B-067 is not reclassified, and step 5 is complete for what CP-17 can prove. The gap is not a projection bug -- `CollectionCandidate` reaches six modules and `promotion.py` is not among them, `collection_active` reaches candidate history and stops, so no collection candidate is promoted, no registry version of kind `collection` is published anywhere, and no test publishes one; resolution is the one built part, which is what makes it look smaller than it is. Closing it needs promotion, registry representation, the configured projection and member install planning together, which is a vertical capability slice rather than a step inside an acceptance slice. **CP-17 is VERIFIED.** | CP-18 migration and release gate, unless the Collection capability is scheduled first: B-067 now carries the four-layer scope, and INV-186 and INV-213 cannot be evidenced through any public verb until it exists. |
 | CP-18 Migration/release gate | VERIFIED | Steps 1–4 are complete: runtime purity is checked against the import graph; the CI/release profile contract is evidenced; only genuinely replaced legacy authority was removed; and public documentation is reconciled against the real parser. Step 5 is complete: the traceability matrix moved from 121 PARTIAL rows to 234 EVIDENCED / 8 honest PARTIAL / 0 CONFLICT. INV-081–105 are now held by one Release Please authority, Conventional Commit PR-title validation, a human-merged generated release PR, and artifact-first release CI. The manual version/changelog/cut-release stack is removed; issued schema freezes remain immutable (D-160–D-165). `scripts/release_artifact.py` verifies the wheel against its tag, including zero runtime dependencies and a clean-environment smoke run. Three deliberate mutations independently broke SemVer mapping, runtime-dependency refusal and workflow wiring. A fresh scoped mutmut run generated 373 mutants: 174 killed, four inspected equivalent/cosmetic survivors, and 195 real-install/entry-point mutants exercised by the closing artifact gate rather than per mutant. The run exposed and fixed the runner's hard-coded source root (D-166). B-068 became critical when the new manually dispatched deep-quality workflow invoked mutmut unattended; the regenerated lock now provisions mutmut/Textual under a dev-only Python `<4` marker. D-167 then corrected the first public-run failures without relaxing a gate: Poetry/tomli are locked, RFC 3339 UTC parses on 3.10, and platform/configuration fixtures are isolated. | All six steps are VERIFIED. Closing evidence: nine quality gates green over 3,322 tests on clean Linux Python 3.10, 3.11 and 3.14 (at least 85.09% branch coverage), 343 separate E2E tests green locally, a consistent Poetry lock, and a real built `aart_cli-0.0.1-py3-none-any.whl` passing metadata, dependency and clean-install smoke verification against tag `v0.0.1`. The mandatory execution plan is complete; eight traceability rows remain honestly PARTIAL against named absent capabilities/process claims. |
 
 ### Post-refactor manual acceptance (2026-09-04)
@@ -455,7 +1427,7 @@ sources produces a `SETUP REQUIRED` first-run callout above Dashboard navigation
 guidance in Registries. Screen 21 now connects an
 approved remote Git registry through the canonical source-add transaction after an exact review;
 local paths remain Maintainer authoring Sources. The two August user-level
-registry subscriptions were reviewed and removed via `aart source remove`, including their managed
+registry subscriptions were reviewed and removed via `aart-cli source remove`, including their managed
 snapshots, and a fresh public list returns no sources. The focused consumer/source suites pass 113
 tests and typecheck. Per operator request, this feedback increment deliberately did
 not rerun the full quality or integration gates; it awaits manual acceptance before commit.
@@ -539,7 +1511,7 @@ B-084/QA-010 and B-087/QA-013 are now **fixed and awaiting manual retest** (D-17
 routes `s` to a distinct `REGISTRY_SYNC` action whose review (21c) names the ref that will be
 fetched, states PS 161.7's rule that a registry refresh is not an artifact update, and says a failed
 fetch keeps the snapshot already held; execution goes through `sync_configured_sources`, the single
-transaction `aart source sync` also uses, and `_prepare_registry_refresh` refuses a row that is not
+transaction `aart-cli source sync` also uses, and `_prepare_registry_refresh` refuses a row that is not
 a connected registry, so INV-199 stays testable rather than asserted. `registry init` now writes the
 usage-reporting Issue Form and its two workflows only when `--usage-reporting-repository` names a
 destination, and the generated README describes the registry that was actually created. Evidence:
@@ -594,7 +1566,7 @@ B-090/QA-016 is now **fixed and awaiting manual retest** (D-186). Maintainer scr
 Initialize Registry: a form (46a) collecting the registry ID, display name, an optional
 usage-reporting destination and the one opt-in local commit, and a review (46b) that names all five
 stages and states that nothing will be pushed or merged. One confirmation runs init → lock → build →
-validate → audit fail-fast through `agent_artifacts/io/registry_bootstrap.py`, which is the ordering
+validate → audit fail-fast through `aart_cli/io/registry_bootstrap.py`, which is the ordering
 and nothing else: the three writing stages go through the same `LocalCurationService` prepare/
 finalize pair the CLI drives and the two gates are the same planning functions. The commit is part
 of the review digest, so the two commit choices are two plans, and a test records every `git` call
@@ -616,7 +1588,7 @@ payload with pinned provenance. Four existing registry commands hold fragments o
 nothing joins them or exposes it in TUI. Upstream movement would be an explicit per-artifact check,
 not continuous Source monitoring.
 
-Its **application half is now built and green** (D-187): `agent_artifacts/io/registry_adoption.py`
+Its **application half is now built and green** (D-187): `aart_cli/io/registry_adoption.py`
 joins those fragments. `scan_repository` reads one pinned commit of a credential-free Git URL,
 compiles only committed `aart.yaml`/`aart.json` manifests, reconciles and validates in memory, and
 writes nothing — no configuration, no Source (INV-199/INV-200), held by a `git status --porcelain`
@@ -656,8 +1628,8 @@ cannot apply without its digest. The production composition test adopts 2.1.0, c
 real Git `main`, checks it and adds 2.2.0 without removing or rewriting 2.1.0. Three TUI mutations
 were killed.
 
-B-095/QA-021 is now **complete and awaiting manual retest** (D-192). `aart registry adopt` and
-`aart registry check-upstream` are the machine-complete CLI projection, and they are a skin over
+B-095/QA-021 is now **complete and awaiting manual retest** (D-192). `aart-cli registry adopt` and
+`aart-cli registry check-upstream` are the machine-complete CLI projection, and they are a skin over
 `io/registry_adoption.py` rather than a second implementation: no planning, discovery or provenance
 logic lives in `commands/registry.py`, so the CLI and the TUI cannot drift into two answers about
 what adopting means. `adopt` with no `--artifact` is a complete answer on its own — it lists every
@@ -688,7 +1660,7 @@ definitions the fixpoint sweep found once they were gone are deleted -- 1,515 li
 **The plan the last three increments carried was wrong, and the correction matters more than the
 removal.** `MIGRATION_STATUS.md`, `NEXT.md` and the slice file all said the wizard stages were the
 last thing holding `consumer/application.py`, `lifecycle/*` and `setup_engine/*`, and that those
-followed. They do not. `commands/marketplace.py` -- the public `aart marketplace
+followed. They do not. `commands/marketplace.py` -- the public `aart-cli marketplace
 install|update|uninstall|setup` -- composes `ConsumerApplicationService` directly and runs the setup
 queue through it (`service.setup_queue`, `service.finalize_setup_queue`), and `tui_marketplace.py`,
 which the canonical shell imports, takes `LifecycleItem` and `InstallMode` out of
@@ -723,7 +1695,7 @@ it is promoted to the critical path rather than filed as backlog. `_canonical_se
 `_complete_canonical_consumer_action` are deliberately **retained** as the material to wire it back
 (D-118): deleting them as orphans would have been the mechanical reading of D-091 and the wrong one,
 since they are not legacy authority but the only implementation of a capability the replacement
-lacks. `aart marketplace install` carries both and is unaffected.
+lacks. `aart-cli marketplace install` carries both and is unaffected.
 
 One live output the removal falsified is fixed here: `InternalFailureContext.stage` was typed
 `WizardStage` and set only by the wizard, so every canonical crash would have reported `stage:
@@ -741,9 +1713,9 @@ reachable from nothing. It is gone, with `_runtime_source_stage_context`, `_disp
 `tui.py`, about 2,200 with the tests that existed only to drive it. The sweep was mechanical and
 repeated to a fixpoint rather than hand-picked, because removing one orphan orphans its callees and a
 list written by eye would have left a tail. Every removed test's capability was checked against a
-public flow before it went rather than assumed: scaffolding against `aart registry scaffold`
+public flow before it went rather than assumed: scaffolding against `aart-cli registry scaffold`
 (`registry_init_scaffold_test.py`, `registry_cli_integration_test.py`); source add/remove/sync/
-resubscribe against the `aart source` command surface (`source_cli_command_test.py`, 23 tests pinning
+resubscribe against the `aart-cli source` command surface (`source_cli_command_test.py`, 23 tests pinning
 the same review-then-finalize semantics); vendoring against the flags half of the parity it was
 testing, with the assessment rendering pinned by `registry_vendor_assessment_test.py`; ERR04's
 `install-state-legacy` against four other modules; ERR06 refusals and the setup queue against the
@@ -822,7 +1794,7 @@ still cover. `_dispatch_result` lost its last production caller here but stays u
 dispatch path retires, because a live test still patches it to prove the canonical text route does
 not dispatch legacy commands. The removal exposed one alias worth naming: a text test reached the
 legacy `model.Err` through `tui.Err`, which existed only because `tui` happened to import it; it now
-imports from `agent_artifacts.model` directly, assertion unchanged (D-113). `make quality` and
+imports from `aart_cli.model` directly, assertion unchanged (D-113). `make quality` and
 `make integration` are both green. B-039 is partly closed -- the shell is gone, the semantic paths
 behind it (`consumer/application.py`, `lifecycle/application.py`, `installation/*`,
 `setup_engine/*`) are not.
@@ -851,13 +1823,13 @@ and `_environment(authored=..., setup=...)`, leaving every existing caller uncha
 `tests/configured_setup_gap_test.py` characterizes what the two front ends then do with it. Its
 first test guards the other three by asserting the approved registry really does carry the
 declaration and its recipe, so a fixture that silently stopped declaring setup could not leave the
-defect tests passing. What they record corrects D-118: **`aart marketplace install` skips setup
+defect tests passing. What they record corrects D-118: **`aart-cli marketplace install` skips setup
 too.** For an approved registry coordinate it reaches `_configured_lifecycle`, which calls
 `complete_configured_installation` -- the same seam `io/consumer_actions.py::_execute_installation`
 uses -- and reports `session_status: succeeded` with no `setup` key, no diagnostic, and the
 configuration file the recipe declares unwritten. Setup runs only on the legacy path, which
 `_configured_registry_selection` selects by returning `None` for a direct or local source. There is
-no operator recovery either: `aart marketplace setup` afterwards refuses with `registry company has
+no operator recovery either: `aart-cli marketplace setup` afterwards refuses with `registry company has
 invalid root manifests`, because it resolves through the legacy catalogue and a promoted registry
 snapshot carries no root manifests. So B-044 is one fix at one shared seam rather than a TUI wiring
 gap (D-120), and what still blocks the green is the installed-record question: the setup engine
@@ -874,7 +1846,7 @@ the delimited managed block. It is `skipUnless(darwin)` because `setup.py:562` a
 now fails two of those four, where before it passed all 3,216 tests.
 
 **The canonical receipt now names its object (D-122).** This was B-044's blocking question and it
-was decided by measurement, not preference: after a canonical `aart marketplace install`, the
+was decided by measurement, not preference: after a canonical `aart-cli marketplace install`, the
 receipt store held the coordinate, `payload_digest`, `root` and the deliveries and no object digest,
 while the legacy install-state record's `ArtifactEvidence` carries one — and
 `setup_engine/application.py::_prepare_setup_object` needs that digest to read the package at all,
@@ -898,7 +1870,7 @@ finished install and said nothing about the setup it skipped, which is the worse
 failures the legacy route has: that route at least names it (D-121's first gate), so an operator
 knows there is a step left, while silence tells somebody a Skill is configured when it is not.
 `complete_configured_installation` now reads the objects it just recorded, carries what they
-declare as `pending_setup`, and both `aart marketplace install` (an additive `pending_setup` key,
+declare as `pending_setup`, and both `aart-cli marketplace install` (an additive `pending_setup` key,
 rendered) and the persistent shell (under screen 11's success) say it. This is the first use of the
 receipt's object identity and it is not scaffolding: setup is declared on the package manifest
 rather than on anything the plan carries, so the reading is the first half of the engine's own
@@ -953,7 +1925,7 @@ check is the approved object identity above. Step 7j of the CP-14 slice carries 
 
 ## CP-14 step 7 — the wizard implementation is swept (D-129)
 
-`agent_artifacts/tui.py` is **2,767 -> 1,087 lines**. The removal was driven by reachability
+`aart_cli/tui.py` is **2,767 -> 1,087 lines**. The removal was driven by reachability
 computed to a fixpoint from the module's live entry points, not by a single-pass reference scan:
 the retired wizard's definitions call each other, and the one-pass estimate this file and `NEXT.md`
 previously carried (~571 lines) kept whole clusters alive by their own internal references. The
@@ -961,7 +1933,7 @@ true figure was 1,680, and the sweep terminates with the detector reporting `0 d
 
 No test file was deleted before D-091 was applied to every assertion it held. That produced one new
 file and five retargeted ones. The new file matters on its own account:
-`tests/setup_receipt_cli_test.py` drives `aart marketplace receipt show|verify|undo` on real
+`tests/setup_receipt_cli_test.py` drives `aart-cli marketplace receipt show|verify|undo` on real
 on-disk records, which nothing did — the renderers and the rollback were characterized, but the
 only front-end reachability test for them drove the retired wizard skins. Three assertions were
 carried into `tests/consumer_shell_test.py` and each proven red against a real production mutation.
@@ -972,7 +1944,7 @@ Step 7 of CP-14 is therefore complete. The next executable work is B-046.
 
 ## Canonical setup runs are readable through the public receipt verbs (D-130)
 
-`aart marketplace receipt show|verify|undo` follows the setup pointer off a canonical installation
+`aart-cli marketplace receipt show|verify|undo` follows the setup pointer off a canonical installation
 receipt as well as out of the retiring install-state manifest. Before this, a configured install
 performed a real setup run (D-128) and then answered every question about it with "this scope has
 no installation state": the effect was on disk, the record was under the data root, and neither was
@@ -996,9 +1968,9 @@ fixture standing in for any part of the chain.
 Product Specification 165.10 requires two things and CP-15 step 5 measured them apart.
 
 The purge boundary held on shipped code, in the strongest available form: there is no `purge` verb
-anywhere in `agent_artifacts`, and the registry lifecycle only deprecates and revokes. So
+anywhere in `aart_cli`, and the registry lifecycle only deprecates and revokes. So
 `tests/withdrawal_and_purge_e2e_test.py` measures the ordinary case instead -- a real upstream that
-deletes an artifact and re-points its Collection, then `aart source sync`. The artifact stops being
+deletes an artifact and re-points its Collection, then `aart-cli source sync`. The artifact stops being
 offered and installing it is refused with a remediation; what is already installed is byte-identical
 and reports `removed-upstream`; the payload stays in the content-addressed store; and `uninstall`
 still works, so not-deleting never becomes not-removable.
@@ -1021,9 +1993,9 @@ isolates it. B-055 records the `ArtifactLifecycle.REMOVED` merge path no product
 
 ## What is installed now says whether the policy still allows it (CP-15 step 6, D-136)
 
-`aart marketplace status` reported one word per installation and it was about the payload. An
+`aart-cli marketplace status` reported one word per installation and it was about the payload. An
 artifact installed under a permissive policy, on a machine whose administrator later required
-`registry-reviewed` trust for user scope, reported `current` -- while `aart marketplace install`
+`registry-reviewed` trust for user scope, reported `current` -- while `aart-cli marketplace install`
 would have refused the very same artifact. Product Specification 165.21 makes compliance part of
 health, and 165.23 asks that a development install stay distinguishable from a reviewed one after
 the install is over. Both turn on the same fact: the trust an artifact's content came from.
@@ -1091,7 +2063,7 @@ artifacts. Nothing held it, and the reason was structural rather than an oversig
 test in this repository has exactly one installation in scope, and what happens to B when A changes
 cannot be measured with only an A.
 
-Nothing needed changing. `aart marketplace uninstall` already says `credentials: retained` in both
+Nothing needed changing. `aart-cli marketplace uninstall` already says `credentials: retained` in both
 renderings, `delete_credentials` defaults false through `prepare_configured_uninstall` and no
 command-line verb sets it, and `_dependants` keys on the credential reference rather than the
 provider account -- so two artifacts sharing an account but binding different inputs are not
@@ -1553,7 +2525,7 @@ turned into a silent skip, and named the test that was missing. New tests:
 open.
 
 **CP-21 step 9 is started (2026-09-10) — three layers, not four.** `D-228` turned publication into
-AART's own action, and the layers that do not draw are built. `agent_artifacts/domain/publication.py`
+AART's own action, and the layers that do not draw are built. `aart_cli/domain/publication.py`
 answers which branch a registry publishes to from two strings — what was requested, and what a
 subscriber reads — so `refs/heads/main`, `HEAD` and `Main` are refused as the default branch under
 other spellings rather than treated as three targets. `application/registry_publication.py` binds
@@ -1773,7 +2745,7 @@ its harness line. **The whole unit suite passes: 3915 passed, 1 skipped, 2091 su
 The full suites were deferred to the end of the batch at the operator's request, so this step pays
 that debt and reads the advisory mutation run over the module step 8 changed.
 
-`make mutants` over `agent_artifacts/io/artifact_placement.py` named three unheld claims inside
+`make mutants` over `aart_cli/io/artifact_placement.py` named three unheld claims inside
 step 8's own function and two more in the asymmetry it reused. The identity passed to
 `compile_native_package` was invisible to every test, so narrowing would have applied whatever
 manifest the stored object happened to hold. The refusal's promise to name the supported set was

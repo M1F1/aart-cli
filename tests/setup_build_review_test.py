@@ -12,14 +12,14 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.model import SetupInstaller, SetupQueueItem
-from agent_artifacts.setup import (
+from aart_cli.model import SetupInstaller, SetupQueueItem
+from aart_cli.setup import (
     parse_installer,
     plan_setup,
     project_setup_review,
     render_setup_review,
 )
-from agent_artifacts.setup_engine.application import _planned_capabilities
+from aart_cli.setup_engine.application import _planned_capabilities
 from tests.setup_fixtures import recipe
 
 _STEPS = [

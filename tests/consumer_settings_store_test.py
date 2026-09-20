@@ -17,7 +17,7 @@ import stat
 import tempfile
 import unittest
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     CONSUMER_SETTINGS_INVALID,
     SETTING_ROWS,
     ConsumerSettings,
@@ -25,8 +25,8 @@ from agent_artifacts.application.consumer_views import (
     settings_from_data,
     settings_to_data,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.consumer_settings import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.consumer_settings import (
     consumer_settings_path,
     read_consumer_settings,
     write_consumer_settings,

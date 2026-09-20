@@ -33,16 +33,14 @@ class ModuleGraphTest(unittest.TestCase):
 
         closure = affected.closure("tests.consumer_flow_test", graph)
 
-        self.assertIn("agent_artifacts.application.consumer_session", closure)
+        self.assertIn("aart_cli.application.consumer_session", closure)
         # Reached only through consumer_session, so the graph is transitive rather than direct.
-        self.assertIn("agent_artifacts.domain.result", closure)
+        self.assertIn("aart_cli.domain.result", closure)
 
     def test_a_relative_import_resolves_inside_its_own_package(self) -> None:
         graph = affected.module_graph(ROOT)
 
-        self.assertIn(
-            "agent_artifacts.tui_consumer", affected.closure("agent_artifacts.tui", graph)
-        )
+        self.assertIn("aart_cli.tui_consumer", affected.closure("aart_cli.tui", graph))
 
 
 class SelectionTest(unittest.TestCase):
@@ -53,7 +51,7 @@ class SelectionTest(unittest.TestCase):
         return affected.select(tuple(paths), root=ROOT, graph=self.graph)
 
     def test_changing_one_module_selects_the_tests_that_reach_it(self) -> None:
-        selection = self._select("agent_artifacts/application/consumer_views.py")
+        selection = self._select("aart_cli/application/consumer_views.py")
 
         self.assertTrue(selection.complete)
         self.assertIn("tests.consumer_flow_test", selection.tests)
@@ -69,7 +67,7 @@ class SelectionTest(unittest.TestCase):
     def test_a_test_that_shells_out_runs_whenever_any_source_changes(self) -> None:
         """A subprocess boundary is not in the import graph, so the graph cannot clear it."""
 
-        selection = self._select("agent_artifacts/domain/result.py")
+        selection = self._select("aart_cli/domain/result.py")
 
         self.assertIn("tests.mcp_stdio_e2e_test", selection.tests)
 
@@ -83,7 +81,7 @@ class SelectionTest(unittest.TestCase):
                 self.assertIn(path, selection.reason)
 
     def test_one_unmapped_path_among_many_still_refuses(self) -> None:
-        selection = self._select("agent_artifacts/domain/result.py", "poetry.lock")
+        selection = self._select("aart_cli/domain/result.py", "poetry.lock")
 
         self.assertFalse(selection.complete)
 
@@ -94,7 +92,7 @@ class SelectionTest(unittest.TestCase):
         self.assertEqual(selection.tests, ())
 
     def test_a_deleted_module_refuses_rather_than_reasoning_about_a_missing_file(self) -> None:
-        selection = self._select("agent_artifacts/domain/does_not_exist.py")
+        selection = self._select("aart_cli/domain/does_not_exist.py")
 
         self.assertFalse(selection.complete)
 

@@ -18,7 +18,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
@@ -27,13 +27,13 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
 )
-from agent_artifacts.application.maintainer_views import MaintainerScreen
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
+from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.tui_consumer import CanonicalScreenSource, frame
 from tests.consumer_shell_test import screens
 
 #: One confirmed action per review screen that owns one, with the screen its run belongs to.
@@ -222,10 +222,10 @@ class FailedActionShellTest(unittest.TestCase):
         import os
         from unittest import mock
 
-        from agent_artifacts import tui
-        from agent_artifacts.domain.result import Ok
-        from agent_artifacts.io.registry_bootstrap import bootstrap_registry_workspace
-        from agent_artifacts.tui_consumer import run_consumer_shell
+        from aart_cli import tui
+        from aart_cli.domain.result import Ok
+        from aart_cli.io.registry_bootstrap import bootstrap_registry_workspace
+        from aart_cli.tui_consumer import run_consumer_shell
         from tests.configured_install_command_e2e_test import _environment
         from tests.consumer_shell_test import ENTER, FakeTerminal
         from tests.maintainer_registry_rebuild_test import _repository
@@ -238,7 +238,7 @@ class FailedActionShellTest(unittest.TestCase):
             assert isinstance(created, Ok) and created.value.passed, created
             # The marker still exists, so the review is prepared exactly as it would be; the run
             # itself is what cannot complete.
-            marker = os.path.join(str(env.project), "aart-registry.json")
+            marker = os.path.join(str(env.project), "aart-cli-registry.json")
             with open(marker, "w", encoding="utf-8") as handle:
                 handle.write("{ this is not a registry manifest")
             composed = tui._canonical_consumer_actions(
@@ -262,7 +262,11 @@ class FailedActionShellTest(unittest.TestCase):
             stopped = next("\n".join(item) for item in terminal.frames if "did not run" in item[0])
 
             self.assertIn("This run stopped", stopped)
-            self.assertIn("lock: refused", stopped)
+            # `lock` over the approved representation resolves nothing and reports that, so the
+            # broken marker is first read by `validate` (`CP-26.5`). What the screen has to show
+            # is which stage refused and that the rest did not run, not which stage that is.
+            self.assertIn("validate: refused", stopped)
+            self.assertIn("the run stopped there; the stages after it did not run", stopped)
             self.assertIn("[Enter] Back to list", stopped)
             self.assertNotIn("Enter Confirm", stopped)
             self.assertNotIn("press Enter to start it", stopped)

@@ -23,6 +23,22 @@ It is the canonical and sole AART Product Specification.
 If anything else conflicts with it, the Product Specification wins. Older repositories, their
 documents and legacy code are evidence/reference only.
 
+## Active CP-26 contract
+
+Product Specification §169 and D-332–D-335 supersede older naming, runtime-placement and
+credential-sharing decisions. The accepted target is `aart-cli` / `aart_cli`, one portable
+`~/.aart-cli` (or `AART_CLI_HOME`) for canonical content and metadata, and private installed files,
+runtime and ordinary configuration under each harness's supported paths. Installation identity
+includes Registry alias, artifact, scope, concrete root and harness/profile; local and remote aliases
+remain separate even for identical packages. Every new target collects separate configuration and
+secrets; no sharing, copy-answers or cross-target prefill. No secret values or global artifact
+configuration pool live in the application home.
+
+All CP-26 changes may break old commands, paths, schemas, formats and internal rules. No compatibility
+aliases, fallback readers, transition periods or migrators are required. External harness contracts
+and the accepted security/ownership invariants still apply. `docs/refactor/NEXT.md` and `docs/refactor/plan.json` determine
+current execution status; accepted specification changes alone do not mean implementation is done.
+
 ## Autonomous execution rule
 
 The intended operating mode is long unattended agent runs. Do not wait for user input when the
@@ -63,8 +79,10 @@ Use TDD for product changes: characterize/red → green → refactor →
 negative/property/integration/E2E tests.
 
 Do not weaken quality gates to make a change pass. Keep secret values out of plans, receipts, logs,
-output, fixtures and committed files. Run the strongest relevant repository gates after each slice
-and the full quality suite before declaring a slice verified.
+output, fixtures and committed files. Run the strongest relevant repository gates for the changed
+claims. For CP-26, D-317/D-334 assign focused, proportionate checks to implementation tasks and
+reserve the full quality/integration/release-facing gates for CP-26.21; do not run full `make quality`
+after individual tasks. No compatibility matrix or test/mutation per mechanical rename is needed.
 
 ### The two tools that check the tests themselves
 
@@ -126,5 +144,5 @@ make quality
 | Schema/content validation | `make validate` |
 | Wheel build | `make wheel` |
 
-Run focused tests while developing; run the strongest relevant gates before calling a slice
-verified, and the full suite before declaring completion.
+Run focused tests while developing. For CP-26, implementation tasks use proportionate relevant
+checks (D-334); CP-26.21 alone owns the full suite before epic verification (D-317).

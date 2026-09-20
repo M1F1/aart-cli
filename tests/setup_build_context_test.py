@@ -18,9 +18,9 @@ import shutil
 import stat
 import unittest
 
-from agent_artifacts.model import SetupInstaller, SetupPlan, SetupQueueItem
-from agent_artifacts.setup import _Invalid, _package_relative_source, resolve_package_source
-from agent_artifacts.setup_runtime import (
+from aart_cli.model import SetupInstaller, SetupPlan, SetupQueueItem
+from aart_cli.setup import _Invalid, _package_relative_source, resolve_package_source
+from aart_cli.setup_runtime import (
     CONTEXT_DIRECTORY,
     context_digest,
     materialize_build_context,
@@ -169,7 +169,7 @@ class MaterializeBuildContextTest(unittest.TestCase):
     def test_the_copy_lives_under_the_run_root_and_nowhere_else(self) -> None:
         run_dir = new_run_directory(_plan(_item(self.workspace), self.run_root))
         context = materialize_build_context(self.payload, run_dir)
-        expected = os.path.join(self.run_root, ".agent-artifacts", "setup-runs")
+        expected = os.path.join(self.run_root, ".aart-cli", "setup-runs")
         self.assertEqual(os.path.commonpath((expected, context)), expected)
 
     def test_a_symlink_in_the_subtree_is_refused_and_leaves_nothing_behind(self) -> None:

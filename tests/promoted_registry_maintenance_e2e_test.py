@@ -20,18 +20,28 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts import cli
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.registry_bootstrap import refresh_registry_workspace
+from aart_cli import cli
+from aart_cli.domain.result import Ok
+from aart_cli.io.registry_bootstrap import refresh_registry_workspace
+from aart_cli.protocol.native_tree import (
+    SnapshotEntry,
+    SnapshotEntryKind,
+    SnapshotOrigin,
+    SourceSnapshot,
+)
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.registry_maintenance.promoted import (
+    is_promoted_registry,
+    legacy_registry_paths,
+)
 from tests.maintainer_scan_cli_test import _author_checkout, _git
 
 _EVIDENCE = ("--validation-report", "sha256:" + "7" * 64, "--policy-result", "sha256:" + "8" * 64)
 
-#: What `.github/workflows/aart-registry.yml` runs on every pull request, in its order.
+#: What `.github/workflows/aart-cli-registry.yml` runs on every pull request, in its order.
 GENERATED_GATE: tuple[tuple[str, ...], ...] = (
     ("format", "--check"),
-    ("validate", "--strict", "--frozen"),
-    ("lock", "--check"),
+    ("validate",),
     ("build", "--check"),
     ("audit",),
     ("test", "--compatibility", "latest"),
@@ -48,7 +58,76 @@ def _cli(*argv: str) -> tuple[int, str]:
     return code, output.getvalue()
 
 
+def _shape(*paths: str) -> SourceSnapshot:
+    entries = []
+    for path in paths:
+        parsed = parse_relative_path(path)
+        assert isinstance(parsed, Ok)
+        entries.append(SnapshotEntry(parsed.value, SnapshotEntryKind.FILE, b"{}"))
+    return SourceSnapshot(SnapshotOrigin.LOCAL, tuple(entries))
+
+
+class RegistryShapeTest(unittest.TestCase):
+    def test_every_retired_path_kind_is_identified_without_matching_versioned_packages(
+        self,
+    ) -> None:
+        retired = (
+            "aart.lock.json",
+            "aart.index.json",
+            "entries/skill/example.json",
+            "artifacts/skill/example/artifact.json",
+            "artifacts/skill/example/provenance.json",
+        )
+        for path in retired:
+            with self.subTest(path=path):
+                self.assertEqual(legacy_registry_paths(_shape(path)), (path,))
+
+        canonical = _shape(
+            "artifacts/skill/example/1.0.0/artifact.json",
+            "artifacts/skill/example/1.0.0/provenance.json",
+        )
+        self.assertEqual(legacy_registry_paths(canonical), ())
+
+    def test_empty_canonical_old_and_mixed_registry_shapes_are_distinct(self) -> None:
+        roots = ("aart-cli-registry.json", "aart-cli-source.json")
+        self.assertTrue(is_promoted_registry(_shape(*roots)))
+        self.assertFalse(is_promoted_registry(_shape(*roots, "aart.lock.json")))
+        self.assertTrue(
+            is_promoted_registry(
+                _shape(
+                    *roots,
+                    "aart.lock.json",
+                    "registry/versions/skill/example/1.0.0.json",
+                )
+            )
+        )
+
+
 class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
+    @contextlib.contextmanager
+    def _empty_registry(self):
+        """An initialized canonical Registry before its first approved version."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            checkout = Path(raw).resolve() / "registry"
+            checkout.mkdir()
+            _git(checkout, "init", "-q")
+            _git(checkout, "config", "user.name", "AART Test")
+            _git(checkout, "config", "user.email", "aart@example.invalid")
+            code, text = _cli(
+                "registry",
+                "init",
+                "--source",
+                str(checkout),
+                "--source-id",
+                "company-registry",
+                "--display-name",
+                "Company Registry",
+                "--yes",
+            )
+            self.assertEqual(code, 0, text)
+            yield checkout
+
     @contextlib.contextmanager
     def _promoted_registry(self):
         """An initialized registry checkout holding exactly one real local promotion."""
@@ -114,6 +193,26 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
 
             self.assertEqual(failed, [])
 
+    def test_empty_registry_maintenance_never_creates_the_older_representation(self) -> None:
+        """CP-26.03: init already chose the canonical shape, before the first promotion."""
+
+        with self._empty_registry() as checkout:
+            for verb in ("lock", "build", "format"):
+                code, text = _cli("registry", verb, "--source", str(checkout), "--yes")
+                self.assertEqual(code, 0, text)
+
+            for verb in ("validate", "audit"):
+                code, text = _cli("registry", verb, "--source", str(checkout))
+                self.assertEqual(code, 0, text)
+
+            code, text = _cli("registry", "publish", "--source", str(checkout), "--yes")
+            self.assertEqual(code, 0, text)
+
+            self.assertFalse((checkout / "aart.lock.json").exists())
+            self.assertFalse((checkout / "aart.index.json").exists())
+            self.assertTrue((checkout / "registry/index.json").is_file())
+            self.assertTrue((checkout / "registry/snapshot.json").is_file())
+
     def test_maintenance_does_not_write_the_older_workspace_representation(self) -> None:
         """`B-057` stays closed by one representation, not by producing both of them."""
 
@@ -132,7 +231,7 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
         with self._promoted_registry() as checkout:
             catalog = checkout / "registry/index.json"
             approved = catalog.read_bytes()
-            catalog.write_bytes(b'{"schema": "aart.dev/registry-index/v1"}')
+            catalog.write_bytes(b'{"schema": "aart-cli.dev/registry-index/v1"}')
 
             code, text = _cli("registry", "build", "--source", str(checkout), "--check")
 
@@ -144,7 +243,7 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
             self.assertEqual(catalog.read_bytes(), approved)
 
     def test_publish_gates_the_approved_representation_without_locking_it(self) -> None:
-        """Publish chains lock, build, validate and audit; the first of those has nothing to do."""
+        """Publish chains build, validate and audit; canonical packages need no legacy lock."""
 
         with self._promoted_registry() as checkout:
             code, text = _cli("registry", "publish", "--source", str(checkout), "--yes")
@@ -165,34 +264,8 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
                 [("lock", True), ("build", True), ("validate", True), ("audit", True)],
             )
 
-    def test_scaffold_refuses_a_registry_that_publishes_approved_versions(self) -> None:
-        """B-142: the authoring verb used to succeed here and quietly break the registry.
-
-        `scaffold` wrote `artifacts/<kind>/<name>/artifact.json` -- the unversioned path of the
-        older representation -- printed `next: lock, build, audit`, and left a checkout whose
-        `build` ignores the new package while `validate` refuses the snapshot it no longer binds.
-        One command, no warning, three red gates, and nothing for a consumer to see either way.
-        """
-
-        with self._promoted_registry() as checkout:
-            code, text = _cli(
-                "registry", "scaffold", "--source", str(checkout),
-                "skill", "my-skill", "--summary", "A locally authored skill",
-                "--profile", "claude-code", "--platform", "linux", "--yes",
-            )  # fmt: skip
-
-            self.assertNotEqual(code, 0, text)
-            self.assertIn("registry promote", text)
-            self.assertFalse((checkout / "artifacts" / "skill").exists(), text)
-
     def test_publish_refuses_a_checkout_carrying_both_representations(self) -> None:
-        """B-142: publish skips locking here, so the gate it then runs cannot be satisfied.
-
-        A real registry reached exactly this: one early `publish` on the still-empty checkout left
-        the legacy pair behind, a later `promote` added the approved representation, and from then
-        on publish failed with four errors it structurally could not fix -- while printing a
-        remediation (`lock --yes`, `build --yes`) that does nothing to this shape.
-        """
+        """B-142: publish refuses mixed representation before any gate can mislead."""
 
         with self._promoted_registry() as checkout:
             (checkout / "aart.lock.json").write_text("{}\n", encoding="utf-8")

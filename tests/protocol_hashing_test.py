@@ -8,7 +8,7 @@ from typing import cast
 
 
 def _unwrap(result):
-    from agent_artifacts.domain.result import Ok
+    from aart_cli.domain.result import Ok
 
     if not isinstance(result, Ok):
         raise AssertionError(f"expected Ok, got {result!r}")
@@ -16,7 +16,7 @@ def _unwrap(result):
 
 
 def _code(result) -> str:
-    from agent_artifacts.domain.result import Err
+    from aart_cli.domain.result import Err
 
     if not isinstance(result, Err):
         raise AssertionError(f"expected Err, got {result!r}")
@@ -25,8 +25,8 @@ def _code(result) -> str:
 
 class CanonicalDigestTest(unittest.TestCase):
     def test_json_digest_is_order_and_whitespace_independent(self):
-        from agent_artifacts.protocol.hashing import json_digest
-        from agent_artifacts.protocol.json import parse_json
+        from aart_cli.protocol.hashing import json_digest
+        from aart_cli.protocol.json import parse_json
 
         first = _unwrap(parse_json('{"b": 2, "a": [1, true]}'))
         second = _unwrap(parse_json('{\n  "a": [1,true],\n  "b": 2\n}'))
@@ -35,7 +35,7 @@ class CanonicalDigestTest(unittest.TestCase):
         self.assertRegex(str(json_digest(first)), r"^sha256:[0-9a-f]{64}$")
 
     def test_sha256_values_are_lowercase_canonical_and_strictly_parsed(self):
-        from agent_artifacts.protocol.hashing import parse_sha256, sha256_bytes
+        from aart_cli.protocol.hashing import parse_sha256, sha256_bytes
 
         digest = sha256_bytes(b"aart")
         self.assertEqual(_unwrap(parse_sha256(str(digest))), digest)
@@ -51,8 +51,8 @@ class CanonicalDigestTest(unittest.TestCase):
 
 class TreeDigestTest(unittest.TestCase):
     def test_tree_digest_is_input_order_independent_and_content_sensitive(self):
-        from agent_artifacts.protocol.hashing import directory_entry, file_entry, tree_digest
-        from agent_artifacts.protocol.paths import parse_relative_path
+        from aart_cli.protocol.hashing import directory_entry, file_entry, tree_digest
+        from aart_cli.protocol.paths import parse_relative_path
 
         root = _unwrap(parse_relative_path("payload"))
         first_path = _unwrap(parse_relative_path("payload/a.txt"))
@@ -74,7 +74,7 @@ class TreeDigestTest(unittest.TestCase):
         self.assertTrue(re.fullmatch(r"sha256:[0-9a-f]{64}", str(baseline)))
 
     def test_executable_bit_directory_presence_and_duplicate_paths_change_or_reject(self):
-        from agent_artifacts.protocol.hashing import (
+        from aart_cli.protocol.hashing import (
             EntryKind,
             TreeEntry,
             directory_entry,
@@ -82,7 +82,7 @@ class TreeDigestTest(unittest.TestCase):
             sha256_bytes,
             tree_digest,
         )
-        from agent_artifacts.protocol.paths import parse_relative_path
+        from aart_cli.protocol.paths import parse_relative_path
 
         directory = directory_entry(_unwrap(parse_relative_path("payload")))
         path = _unwrap(parse_relative_path("payload/run.sh"))

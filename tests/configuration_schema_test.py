@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.configuration.model import (
+from aart_cli.configuration.model import (
     SourceKind,
     SyncMode,
 )
-from agent_artifacts.configuration.schema import (
+from aart_cli.configuration.schema import (
     organization_policy_bytes,
     parse_organization_policy,
     parse_user_configuration,
     user_configuration_bytes,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.capabilities import Capability
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.capabilities import Capability
 from tests.credential_fixtures import credential_url
 
 

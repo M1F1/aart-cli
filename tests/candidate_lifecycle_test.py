@@ -5,14 +5,14 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.domain.artifacts import (
+from aart_cli.domain.artifacts import (
     ArtifactFormat,
     ArtifactKind,
     ArtifactPackage,
     Compatibility,
     Provenance,
 )
-from agent_artifacts.domain.candidates import (
+from aart_cli.domain.candidates import (
     CandidateFinding,
     CandidateState,
     FindingSeverity,
@@ -24,13 +24,13 @@ from agent_artifacts.domain.candidates import (
     semantic_candidate_diff,
     supersede_candidate,
 )
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.registry import (
+from aart_cli.domain.registry import (
     PromotionMode,
     PublicationStage,
     RegistryLifecycle,
@@ -58,14 +58,14 @@ def _package(
             version,
         ),
         ArtifactKind.MCP,
-        ArtifactFormat("aart-mcp-v1"),
+        ArtifactFormat("aart-cli-mcp-v1"),
         _digest(payload_character),
         Provenance(
             "https://git.example/servers.git",
             "c" * 40,
-            "github/aart.yaml",
+            "github/aart-cli.yaml",
             _digest(input_character),
-            "aart-native-author/1.0.0",
+            "aart-cli-native-author/1.0.0",
         ),
         Compatibility(("linux",), ("codex",), ">=3.11"),
         protocol="stdio",

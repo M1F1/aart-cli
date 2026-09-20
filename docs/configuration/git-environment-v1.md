@@ -1,7 +1,9 @@
 # The environment AART gives Git
 
 Every remote AART reaches — a configured source, a promoted native reference, a vendored subtree —
-is reached by running system Git. AART holds no credentials of its own, and this page states the
+is reached by running system Git. Git authentication is delegated to Git and its configured helpers;
+this is distinct from artifact runtime secrets, which have independent per-installation provider
+items under Product Specification §169. This page states the
 mechanism underneath that rule: **the Git subprocess is given an allowlisted environment, not the
 operator's.**
 
@@ -72,6 +74,6 @@ proxies, is this. Confirm it in one step: unset the proxy variables in a shell a
 ## Keeping this page true
 
 `tests/git_environment_docs_test.py` reads the three tables here and compares them against
-`agent_artifacts/io/git.py` — the allowlist against `_ALLOWED_ENVIRONMENT`, and every variable this
+`aart_cli/io/git.py` — the allowlist against `_ALLOWED_ENVIRONMENT`, and every variable this
 page calls dropped against what `_safe_environment` actually returns. A variable added to the code
 and not to this page fails the suite, which is the only reason to trust a list published in prose.

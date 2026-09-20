@@ -5,19 +5,19 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import (
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import (
     compile_author_manifests,
     compile_author_snapshot,
 )
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
+from aart_cli.protocol.paths import parse_relative_path
 
 _SOURCE = "https://git.example/authors.git"
 _REVISION = "a" * 40
@@ -32,7 +32,7 @@ def _entry(path: str, content: str) -> SnapshotEntry:
 def _manifest(name: str, version: str) -> str:
     return json.dumps(
         {
-            "schema": "aart.dev/mcp/v1",
+            "schema": "aart-cli.dev/mcp/v1",
             "artifact": {"name": name, "kind": "mcp", "version": version},
             "payload": {"include": ["server.py"]},
             "transport": {"type": "stdio"},
@@ -46,7 +46,7 @@ def _manifest(name: str, version: str) -> str:
 def _snapshot(*directories: tuple[str, str]) -> SourceSnapshot:
     entries = []
     for name, version in directories:
-        entries.append(_entry(f"{name}/aart.json", _manifest(f"{name}-mcp", version)))
+        entries.append(_entry(f"{name}/aart-cli.json", _manifest(f"{name}-mcp", version)))
         entries.append(_entry(f"{name}/server.py", f"print({name!r})\n"))
     return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries))
 
@@ -88,7 +88,7 @@ class SourcePartialCompilationTest(unittest.TestCase):
 
         self.assertIsInstance(compiled, Ok, getattr(compiled, "diagnostics", ()))
         self.assertEqual(
-            ["bad/aart.json"],
+            ["bad/aart-cli.json"],
             [str(item.manifest_path) for item in _Compiled(compiled.value).refusals],
         )
         refusal = _Compiled(compiled.value).refusals[0]
@@ -105,7 +105,7 @@ class SourcePartialCompilationTest(unittest.TestCase):
         self.assertIsInstance(compiled, Ok, getattr(compiled, "diagnostics", ()))
         self.assertEqual((), _Compiled(compiled.value).artifacts)
         self.assertEqual(
-            ["first/aart.json", "second/aart.json"],
+            ["first/aart-cli.json", "second/aart-cli.json"],
             sorted(str(item.manifest_path) for item in _Compiled(compiled.value).refusals),
         )
 
@@ -120,9 +120,9 @@ class SourcePartialCompilationTest(unittest.TestCase):
         unreadable = SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _entry("good/aart.json", _manifest("good-mcp", "1.0.0")),
+                _entry("good/aart-cli.json", _manifest("good-mcp", "1.0.0")),
                 _entry("good/server.py", "print('good')\n"),
-                _entry("odd/aart.json", json.dumps({"artifact": {"name": "odd"}}, indent=2)),
+                _entry("odd/aart-cli.json", json.dumps({"artifact": {"name": "odd"}}, indent=2)),
             ),
         )
 
@@ -133,7 +133,9 @@ class SourcePartialCompilationTest(unittest.TestCase):
         self.assertEqual(
             ["good-mcp"], [item.package.coordinate.artifact.name for item in answer.artifacts]
         )
-        self.assertEqual(["odd/aart.json"], [str(item.manifest_path) for item in answer.refusals])
+        self.assertEqual(
+            ["odd/aart-cli.json"], [str(item.manifest_path) for item in answer.refusals]
+        )
 
     def test_a_healthy_source_refuses_nothing(self) -> None:
         compiled = _compiled(_snapshot(("good", "1.0.0"), ("other", "2.1.0")))
@@ -152,8 +154,8 @@ class SourcePartialCompilationTest(unittest.TestCase):
         duplicated = SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _entry("good/aart.json", _manifest("good-mcp", "1.0.0")),
-                _entry("good/aart.json", _manifest("good-mcp", "1.0.0")),
+                _entry("good/aart-cli.json", _manifest("good-mcp", "1.0.0")),
+                _entry("good/aart-cli.json", _manifest("good-mcp", "1.0.0")),
             ),
         )
 

@@ -15,27 +15,27 @@ from __future__ import annotations
 import pathlib
 import unittest
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     PresentationProfile,
     project_installed_artifact,
 )
-from agent_artifacts.domain.effects import CopyTree
-from agent_artifacts.domain.harness import Scope, mcp_target
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.effects import CopyTree
+from aart_cli.domain.harness import Scope, mcp_target
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.receipts import (
+from aart_cli.domain.receipts import (
     ArtifactDelivery,
     DeliveryKind,
     InstallationReceipt,
     McpRegistration,
     PlacedArtifactReceipt,
 )
-from agent_artifacts.domain.reconciliation import (
+from aart_cli.domain.reconciliation import (
     Component,
     ComponentId,
     ComponentState,
@@ -44,11 +44,11 @@ from agent_artifacts.domain.reconciliation import (
     DesiredState,
     ObservedComponent,
 )
-from agent_artifacts.tui_consumer import render_installed_artifact
+from aart_cli.tui_consumer import render_installed_artifact
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import (
     _INSTALL,
-    OFFERED,
+    INSTALLED,
     _actions,
     _at,
     _drive,
@@ -278,7 +278,7 @@ class ThePathsSurviveTheSessionThatWroteThemTest(unittest.TestCase):
 
             _, terminal, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=OFFERED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
                 actions=_actions(env),
             )
             drawn = terminal.screen_containing("Installation")
@@ -290,7 +290,7 @@ class ThePathsSurviveTheSessionThatWroteThemTest(unittest.TestCase):
             ]
 
             self.assertTrue(named, "the Installation section listed no paths")
-            self.assertIn(str(env.project / ".claude/skills/code-review"), named)
+            self.assertIn(str(env.project / ".claude/skills/code-review-company-project"), named)
             for path in named:
                 self.assertTrue(
                     pathlib.Path(path).exists(), f"the view named {path}, which is not there"
@@ -304,12 +304,16 @@ class ThePathsSurviveTheSessionThatWroteThemTest(unittest.TestCase):
 
             _, terminal, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=OFFERED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
                 actions=_actions(env),
             )
             drawn = terminal.screen_containing("Installation") or ""
 
-            self.assertNotIn(f"- payload: {env.project / '.claude'}", drawn)
+            # The harness's directory itself, not a path under it: §169.3 puts this
+            # installation's own tree inside `.claude/aart-cli/`, which is exactly what it owns.
+            # What would be wrong is naming `.claude` -- everything the harness has -- as payload,
+            # so the space is the assertion and dropping it would make this pass on nothing.
+            self.assertNotIn(f"- payload: {env.project / '.claude'} ", drawn)
             self.assertNotIn(str(env.home / ".claude/settings.json"), drawn)
 
 

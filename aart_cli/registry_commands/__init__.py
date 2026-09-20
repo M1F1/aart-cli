@@ -1,0 +1,45 @@
+"""Maintainer registry command functional core."""
+
+from .model import (
+    CollectionAuthorOptions,
+    RegistryApplyCommand,
+    RegistryApplyReceipt,
+    RegistryInitOptions,
+    RegistryOperation,
+    RegistryQualityCheck,
+    RegistryQualityReport,
+    RegistryWorkspaceChange,
+    RegistryWorkspacePlan,
+    WorkspaceChangeKind,
+)
+from .planning import (
+    audit_registry_workspace,
+    plan_registry_collection,
+    plan_registry_format,
+    plan_registry_init,
+    plan_registry_workspace_files,
+    project_registry_workspace_plan,
+    test_registry_compatibility,
+    validate_registry_workspace,
+)
+
+__all__ = [
+    "CollectionAuthorOptions",
+    "RegistryApplyCommand",
+    "RegistryApplyReceipt",
+    "RegistryInitOptions",
+    "RegistryOperation",
+    "RegistryQualityCheck",
+    "RegistryQualityReport",
+    "RegistryWorkspaceChange",
+    "RegistryWorkspacePlan",
+    "WorkspaceChangeKind",
+    "audit_registry_workspace",
+    "plan_registry_collection",
+    "plan_registry_format",
+    "plan_registry_init",
+    "plan_registry_workspace_files",
+    "project_registry_workspace_plan",
+    "test_registry_compatibility",
+    "validate_registry_workspace",
+]

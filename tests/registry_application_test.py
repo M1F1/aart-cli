@@ -2,27 +2,27 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.registry_commands import (
+from aart_cli.application.registry_commands import (
     finalize_registry_workspace,
     prepare_registry_format,
     prepare_registry_init,
 )
-from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.registry_commands.model import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.semver import SemVer
+from aart_cli.registry_commands.model import (
     RegistryApplyCommand,
     RegistryApplyReceipt,
     RegistryInitOptions,
 )
-from agent_artifacts.registry_commands.planning import project_registry_workspace_plan
+from aart_cli.registry_commands.planning import project_registry_workspace_plan
 
 
 class MemoryWorkspace:

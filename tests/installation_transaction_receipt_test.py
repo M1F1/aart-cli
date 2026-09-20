@@ -5,22 +5,22 @@ from __future__ import annotations
 import datetime as dt
 import unittest
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ActivityOutcome,
     activity_from_receipts,
     project_installation_receipt,
     receipt_detail_from_data,
     receipt_detail_to_data,
 )
-from agent_artifacts.application.execution import (
+from aart_cli.application.execution import (
     InstallationExecutionStatus,
     execute_installation,
 )
-from agent_artifacts.application.installation_proposal import intended_receipt
-from agent_artifacts.application.receipt_recording import record_installation_transaction
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.application.installation_proposal import intended_receipt
+from aart_cli.application.receipt_recording import record_installation_transaction
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Err, Ok
 from tests.installation_proposal_test import _nothing_installed
 from tests.installation_transaction_test import (
     _Interpreter,

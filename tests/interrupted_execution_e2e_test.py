@@ -120,7 +120,7 @@ def _environment_whose_rollback_fails():
 def _working_copies(env) -> list[Path]:
     """Whatever is under the run root the engine writes into, which is not the project root."""
 
-    runs = Path(env.paths.data_root, ".agent-artifacts", "setup-runs")
+    runs = Path(env.paths.data_root, ".aart-cli", "setup-runs")
     return sorted(runs.iterdir()) if runs.exists() else []
 
 
@@ -215,7 +215,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
         A parsed record's steps are frozen recursively into `MappingProxyType`, and the receipt
         projection copied each step shallowly -- so every nested object stayed a proxy and
         `json.dumps` refused it. The custom setup protocol is the one that writes such a step, which
-        made `aart marketplace receipt show --json` end in a `TypeError` traceback for exactly the
+        made `aart-cli marketplace receipt show --json` end in a `TypeError` traceback for exactly the
         run whose evidence is hardest to reconstruct by hand. Writing this file found it.
         """
 

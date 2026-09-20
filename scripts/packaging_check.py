@@ -23,8 +23,8 @@ _DIST_INFO_FILES = frozenset({"METADATA", "WHEEL", "entry_points.txt", "RECORD",
 
 def _copy_project(source: Path, target: Path) -> None:
     shutil.copytree(
-        source / "agent_artifacts",
-        target / "agent_artifacts",
+        source / "aart_cli",
+        target / "aart_cli",
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
     )
     for name in ("pyproject.toml", "README.md"):
@@ -81,7 +81,7 @@ def _safe_archive_name(name: str) -> bool:
 
 def _allowed_package_member(name: str) -> bool:
     parts = PurePosixPath(name).parts
-    if len(parts) < 2 or parts[0] != "agent_artifacts":
+    if len(parts) < 2 or parts[0] != "aart_cli":
         return False
     if name.endswith(".py"):
         return True
@@ -166,8 +166,8 @@ def _validate_wheel(wheel: Path, install_root: Path) -> None:
         if runtime_requirements:
             raise ValueError(f"runtime dependency found in wheel metadata: {runtime_requirements}")
         for required in (
-            "agent_artifacts/__init__.py",
-            "agent_artifacts/cli.py",
+            "aart_cli/__init__.py",
+            "aart_cli/cli.py",
             f"{info}/entry_points.txt",
         ):
             if required not in names:
@@ -177,9 +177,9 @@ def _validate_wheel(wheel: Path, install_root: Path) -> None:
 
 _TYPED_BEHAVIOR_PROBE = """
 import json
-from agent_artifacts.install_state.schema import parse_install_state
-from agent_artifacts.tui import InternalFailureContext, internal_failure_lines
-from agent_artifacts.tui_failures import WizardStageFailure, render_wizard_stage_failure
+from aart_cli.install_state.schema import parse_install_state
+from aart_cli.tui import InternalFailureContext, internal_failure_lines
+from aart_cli.tui_failures import WizardStageFailure, render_wizard_stage_failure
 
 LEGACY = json.dumps({"repo": "org/aart", "installed": []}).encode()
 INVALID = b'{"schema_version": 2, "installations": '
@@ -200,8 +200,8 @@ def record(raw, path):
 
 
 for raw, path in (
-    (LEGACY, "/probe/project/.agent-artifacts/manifest.json"),
-    (INVALID, "/probe/project/.agent-artifacts/state.json"),
+    (LEGACY, "/probe/project/.aart-cli/manifest.json"),
+    (INVALID, "/probe/project/.aart-cli/state.json"),
 ):
     for line in render_wizard_stage_failure(record(raw, path), width=80):
         print(line)
@@ -267,7 +267,7 @@ def check_packaging(root: Path = ROOT) -> Path:
             [
                 sys.executable,
                 "-c",
-                "import agent_artifacts; from agent_artifacts.cli import main; assert callable(main)",
+                "import aart_cli; from aart_cli.cli import main; assert callable(main)",
             ],
             cwd=temp_root,
             env=environment,

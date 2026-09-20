@@ -31,22 +31,22 @@ import shutil
 import unittest
 from typing import Any, Iterator
 
-from agent_artifacts.model import SetupState, SetupStateRecord
-from agent_artifacts.setup import (
+from aart_cli.model import SetupState, SetupStateRecord
+from aart_cli.setup import (
     dump_setup_state,
     parse_installer,
     plan_setup,
     render_setup_review,
 )
-from agent_artifacts.setup_receipt import ReceiptLocation
-from agent_artifacts.setup_render import (
+from aart_cli.setup_receipt import ReceiptLocation
+from aart_cli.setup_render import (
     receipt_payload,
     render_receipt_payload,
     render_setup_payload,
     render_verification_payload,
 )
-from agent_artifacts.setup_runtime import ProcessResult, SetupRuntime, apply_setup_plan
-from agent_artifacts.setup_verify import (
+from aart_cli.setup_runtime import ProcessResult, SetupRuntime, apply_setup_plan
+from aart_cli.setup_verify import (
     VerificationProbes,
     plan_verification,
     verification_payload,
@@ -177,7 +177,7 @@ class TokenContainmentTest(unittest.TestCase):
     # Channel 3 — what the run left on disk. See `RunDirectoryChannelTest` for what it holds
     # while the run is still in flight, which is the half a post-run walk cannot see.
     def test_the_run_directory_does_not_outlive_the_run_that_made_it(self) -> None:
-        runs = os.path.join(self.home, ".agent-artifacts", "setup-runs")
+        runs = os.path.join(self.home, ".aart-cli", "setup-runs")
 
         self.assertTrue(os.path.isdir(runs), "the run made a working copy, so the root exists")
         self.assertEqual(os.listdir(runs), [], "a failed run removes its working copy")
@@ -319,7 +319,7 @@ class RunDirectoryChannelTest(unittest.TestCase):
         return ProcessResult(0, "", "")
 
     def _apply(self) -> None:
-        from agent_artifacts.model import SetupQueueItem
+        from aart_cli.model import SetupQueueItem
 
         with open(self.script, "rb") as stream:
             custom_bytes = stream.read()

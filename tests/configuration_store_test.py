@@ -6,19 +6,19 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.application.configuration import (
+from aart_cli.application.configuration import (
     ConfigDocument,
     ConfigReadRequest,
     ConfigRecoveryPlan,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.config_store import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.config_store import (
     read_configuration,
     recover_configuration,
     write_configuration,
 )
-from agent_artifacts.protocol.hashing import sha256_bytes
+from aart_cli.protocol.hashing import sha256_bytes
 from tests.credential_fixtures import assignment, secret_object
 
 
@@ -41,7 +41,7 @@ class ConfigurationStoreTest(unittest.TestCase):
             path.write_bytes(b"old")
 
             with patch(
-                "agent_artifacts.io.config_store.os.replace",
+                "aart_cli.io.config_store.os.replace",
                 side_effect=OSError("replace failed " + assignment("token", "secret")),
             ):
                 result = write_configuration(ConfigDocument(str(path), b"new"))
@@ -152,7 +152,7 @@ class ConfigurationStoreTest(unittest.TestCase):
                 sha256_bytes(b"corrupt"),
                 b"replacement",
             )
-            with patch("agent_artifacts.io.config_store.write_configuration", return_value=failure):
+            with patch("aart_cli.io.config_store.write_configuration", return_value=failure):
                 self.assertEqual(recover_configuration(missing_backup), failure)
 
             matching_backup = Path(root) / "matching-backup"
@@ -163,7 +163,7 @@ class ConfigurationStoreTest(unittest.TestCase):
                 sha256_bytes(b"corrupt"),
                 b"replacement",
             )
-            with patch("agent_artifacts.io.config_store.write_configuration", return_value=failure):
+            with patch("aart_cli.io.config_store.write_configuration", return_value=failure):
                 self.assertEqual(recover_configuration(replacement_failure), failure)
 
 

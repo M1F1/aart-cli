@@ -16,31 +16,31 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.application.installation_verification import (
+from aart_cli.application.installation_verification import (
     DeliveryObservation,
     PlacementObservation,
 )
-from agent_artifacts.application.installed_state import (
+from aart_cli.application.installed_state import (
     current_state_from_placement,
     desired_state_from_placement,
 )
-from agent_artifacts.application.intents import InstalledHealth, installation_health
-from agent_artifacts.domain.effects import DeliveryKind
-from agent_artifacts.domain.identifiers import (
+from aart_cli.application.intents import InstalledHealth, installation_health
+from aart_cli.domain.effects import DeliveryKind
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.receipts import ArtifactDelivery, PlacedArtifactReceipt
-from agent_artifacts.domain.reconciliation import (
+from aart_cli.domain.receipts import ArtifactDelivery, PlacedArtifactReceipt
+from aart_cli.domain.reconciliation import (
     Component,
     ComponentId,
     ComponentState,
     DriftKind,
     compare_states,
 )
-from agent_artifacts.io.runtime_projection import observe_placement, tree_digest_at
+from aart_cli.io.runtime_projection import observe_placement, tree_digest_at
 
 COORDINATE = ArtifactCoordinate(
     SourceAlias("public"), ArtifactIdentity("skill", "code-review"), "2.0.0"
@@ -66,7 +66,7 @@ class _Placed:
         self.destination.write_text("be kind\n", encoding="utf-8")
 
     def _receipt(self, digest: ObjectDigest | None = None) -> PlacedArtifactReceipt:
-        from agent_artifacts.protocol.hashing import sha256_bytes
+        from aart_cli.protocol.hashing import sha256_bytes
 
         # Measured when the tree is there, and an arbitrary digest when a test has removed it --
         # a receipt outlives the payload it describes, which is the case being exercised.

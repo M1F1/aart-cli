@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.configuration.model import CompanyReviewedSource
-from agent_artifacts.configuration.schema import (
+from aart_cli.configuration.model import CompanyReviewedSource
+from aart_cli.configuration.schema import (
     organization_policy_bytes,
     parse_organization_policy,
 )
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.result import Err, Ok
 
 
 class MarketplacePolicySchemaTest(unittest.TestCase):

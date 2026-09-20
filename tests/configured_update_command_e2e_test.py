@@ -23,6 +23,7 @@ from tests.configured_install_command_e2e_test import COORDINATE, _environment
 from tests.placed_installation_e2e_test import (
     SKILL_BODY,
     STYLE_BODY,
+    as_delivered,
 )
 
 #: The same Skill as the installed fixture, one minor version further on. Only the version and the
@@ -31,15 +32,17 @@ from tests.placed_installation_e2e_test import (
 UPDATED_SKILL_BODY = "# Code review\n\nRead reference/style.md, then comment on intent.\n"
 
 
-def _authored(version: str, body: str) -> tuple[tuple[str, str], ...]:
+def _authored(
+    version: str, body: str, harnesses: tuple[str, ...] = ("claude",)
+) -> tuple[tuple[str, str], ...]:
     manifest = {
-        "schema": "aart.dev/skill/v1",
+        "schema": "aart-cli.dev/skill/v1",
         "artifact": {"name": "code-review", "kind": "skill", "version": version},
         "payload": {"include": ["SKILL.md", "reference/style.md"]},
-        "compatibility": {"harnesses": ["claude"]},
+        "compatibility": {"harnesses": list(harnesses)},
     }
     return (
-        ("code-review/aart.json", json.dumps(manifest)),
+        ("code-review/aart-cli.json", json.dumps(manifest)),
         ("code-review/SKILL.md", body),
         ("code-review/reference/style.md", STYLE_BODY),
     )
@@ -48,9 +51,15 @@ def _authored(version: str, body: str) -> tuple[tuple[str, str], ...]:
 AUTHORED_SKILL_1_3_0 = _authored("1.3.0", UPDATED_SKILL_BODY)
 AUTHORED_SKILL_1_1_0 = _authored("1.1.0", "# Code review\n\nAn older body.\n")
 
+#: The same two versions, declared for two harnesses, because that is what an update of more than
+#: one installation needs a package to allow (§169.3).
+TWO_HARNESSES = ("claude", "opencode")
+AUTHORED_FOR_TWO_1_2_0 = _authored("1.2.0", SKILL_BODY, TWO_HARNESSES)
+AUTHORED_FOR_TWO_1_3_0 = _authored("1.3.0", UPDATED_SKILL_BODY, TWO_HARNESSES)
+
 
 def _delivered(env) -> pathlib.Path:
-    return env.project / ".claude/skills/code-review/SKILL.md"
+    return env.project / ".claude/skills/code-review-company-project/SKILL.md"
 
 
 class ConfiguredUpdateCommandTest(unittest.TestCase):
@@ -59,7 +68,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
         )
         self.assertEqual(code, 0, payload)
-        self.assertEqual(_delivered(env).read_text(encoding="utf-8"), SKILL_BODY)
+        self.assertEqual(_delivered(env).read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
 
     def test_update_before_any_canonical_install_leaves_the_selection_to_the_legacy_path(
         self,
@@ -87,7 +96,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self.assertEqual(len(payload["items"]), 1)
             self.assertEqual(payload["items"][0]["key"], "company/skill/code-review@1.2.0")
             self.assertEqual(payload["items"][0]["status"], "current")
-            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), SKILL_BODY)
+            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
             self.assertEqual(_delivered(env).stat().st_mtime_ns, before)
 
     def test_review_names_the_newer_approved_version_and_writes_nothing(self) -> None:
@@ -103,7 +112,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self.assertEqual(
                 payload["review"]["items"][0]["key"], "company/skill/code-review@1.3.0"
             )
-            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), SKILL_BODY)
+            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
 
     def test_confirmed_update_converges_the_delivery_in_place_and_records_the_new_version(
         self,
@@ -127,7 +136,9 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["finalized"])
             self.assertEqual(payload["items"][0]["key"], "company/skill/code-review@1.3.0")
-            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), UPDATED_SKILL_BODY)
+            self.assertEqual(
+                _delivered(env).read_text(encoding="utf-8"), as_delivered(UPDATED_SKILL_BODY)
+            )
 
             status_code, status = env.run("marketplace", "status", "--profile", "claude")
             self.assertEqual(status_code, 0, status)
@@ -154,7 +165,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self.assertNotEqual(code, 0)
             self.assertFalse(payload["ok"])
             self.assertFalse(payload["finalized"])
-            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), SKILL_BODY)
+            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
 
     def test_an_approved_version_older_than_the_installed_one_is_refused_as_a_downgrade(
         self,
@@ -170,7 +181,60 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self.assertNotEqual(code, 0)
             self.assertFalse(payload["ok"])
             self.assertIn("downgrade", payload["diagnostics"][0]["message"])
-            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), SKILL_BODY)
+            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
+
+    def test_both_installations_of_one_artifact_are_updated_and_neither_is_forgotten(self) -> None:
+        """§169.3: two harnesses are two installations, so an update converges two of them.
+
+        The whole operation used to be refused -- "an artifact was superseded twice" -- because the
+        state being left was keyed by the artifact, and two installations of one artifact name it
+        twice. The key is the installation; what proves it is that both trees move, since an update
+        that forgot one would leave that harness on the old body while reporting success.
+        """
+
+        with _environment(authored=AUTHORED_FOR_TWO_1_2_0) as env:
+            code, installed = env.run(
+                "marketplace",
+                "install",
+                COORDINATE,
+                "--profile",
+                "claude",
+                "--profile",
+                "opencode",
+                "--yes",
+            )
+            self.assertEqual(code, 0, installed)
+            delivered = {
+                harness: env.project / f".{harness}/skills/code-review-company-project/SKILL.md"
+                for harness in TWO_HARNESSES
+            }
+            for harness, path in delivered.items():
+                self.assertEqual(
+                    path.read_text(encoding="utf-8"), as_delivered(SKILL_BODY), harness
+                )
+            env.publish(AUTHORED_FOR_TWO_1_3_0)
+
+            code, payload = env.run(
+                "marketplace",
+                "update",
+                COORDINATE,
+                "--profile",
+                "claude",
+                "--profile",
+                "opencode",
+                "--yes",
+            )
+
+            self.assertEqual(code, 0, payload)
+            self.assertTrue(payload["finalized"], payload)
+            self.assertEqual(
+                [item["key"] for item in payload["items"]],
+                ["company/skill/code-review@1.3.0"] * 2,
+            )
+            for harness, path in delivered.items():
+                self.assertEqual(
+                    path.read_text(encoding="utf-8"), as_delivered(UPDATED_SKILL_BODY), harness
+                )
 
     def test_update_without_a_coordinate_converges_everything_canonically_installed(self) -> None:
         with _environment() as env:
@@ -182,7 +246,9 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["finalized"])
             self.assertEqual(payload["items"][0]["key"], "company/skill/code-review@1.3.0")
-            self.assertEqual(_delivered(env).read_text(encoding="utf-8"), UPDATED_SKILL_BODY)
+            self.assertEqual(
+                _delivered(env).read_text(encoding="utf-8"), as_delivered(UPDATED_SKILL_BODY)
+            )
 
 
 if __name__ == "__main__":

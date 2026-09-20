@@ -15,40 +15,40 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.artifact_placement import (
+from aart_cli.application.artifact_placement import (
     PLACEMENT_NOT_PLANNABLE,
     plan_artifact_placement,
 )
-from agent_artifacts.application.installation_proposal import (
+from aart_cli.application.installation_proposal import (
     PlannedPlacement,
     intended_placement_receipt,
     placement_desired_state,
 )
-from agent_artifacts.domain.candidates import CandidateId
-from agent_artifacts.domain.effects import DeliverArtifact, DeliveryKind
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.candidates import CandidateId
+from aart_cli.domain.effects import DeliverArtifact, DeliveryKind
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     InputId,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.inputs import EnvironmentBinding, SecretInput
-from agent_artifacts.domain.install_description import InstallDescription
-from agent_artifacts.domain.launch import LaunchContract, Transport
-from agent_artifacts.domain.python_runtime import RequirementsFile
-from agent_artifacts.domain.receipts import ArtifactDelivery
-from agent_artifacts.domain.reconciliation import Component
-from agent_artifacts.domain.registry import (
+from aart_cli.domain.inputs import EnvironmentBinding, SecretInput
+from aart_cli.domain.install_description import InstallDescription
+from aart_cli.domain.launch import LaunchContract, Transport
+from aart_cli.domain.python_runtime import RequirementsFile
+from aart_cli.domain.receipts import ArtifactDelivery
+from aart_cli.domain.reconciliation import Component
+from aart_cli.domain.registry import (
     PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
 )
-from agent_artifacts.domain.requirements import HarnessRequirement
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason, ResolvedArtifact
+from aart_cli.domain.requirements import HarnessRequirement
+from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.selection import OwnershipKind, OwnershipReason, ResolvedArtifact
 
-ROOT = "/home/agent/.agent-artifacts/runtimes/public/skill/code-review"
+ROOT = "/home/agent/.aart-cli/runtimes/public/skill/code-review"
 PAYLOAD_SOURCE = "/var/lib/aart/store/skill/code-review/2.0.0"
 KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/reviewers@1.0.0")
 

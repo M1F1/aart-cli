@@ -9,17 +9,17 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts import cli
-from agent_artifacts.curation.runtime import LocalCurationService
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.native_tree import (
+from aart_cli import cli
+from aart_cli.curation.runtime import LocalCurationService
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.registry_maintenance.model import NativeReferenceAcquisition
 
 _URL = "https://example.com/foreign.git"
 _COMMIT = "b" * 40
@@ -154,7 +154,7 @@ class RegistryVendorBatchTest(unittest.TestCase):
 
             service = LocalCurationService(str(root), native_acquirer=acquire)
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 code, output = _run(
@@ -173,8 +173,12 @@ class RegistryVendorBatchTest(unittest.TestCase):
             result = json.loads(output)
             self.assertEqual(result["review"]["operation"], "registry.vendor-batch")
             self.assertIn("plans 2 owned copies", " ".join(result["review"]["warnings"]))
-            self.assertEqual((root / "artifacts/memory/one/payload/one.md").read_text(), "# One\n")
-            self.assertEqual((root / "artifacts/memory/two/payload/two.md").read_text(), "# Two\n")
+            self.assertEqual(
+                (root / "artifacts/memory/one/1.0.0/payload/one.md").read_text(), "# One\n"
+            )
+            self.assertEqual(
+                (root / "artifacts/memory/two/1.0.0/payload/two.md").read_text(), "# Two\n"
+            )
             self.assertFalse((root / "artifacts/memory/ignored").exists())
 
     def test_a_manifest_with_no_accepted_candidates_refuses_without_acquiring(self) -> None:
@@ -209,7 +213,7 @@ class RegistryVendorBatchTest(unittest.TestCase):
 
             service = LocalCurationService(str(root), native_acquirer=acquire)
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 code, output = _run(

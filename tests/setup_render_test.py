@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from agent_artifacts.commands.marketplace import _setup_reminders
-from agent_artifacts.setup import render_setup_outcome
-from agent_artifacts.setup_render import render_setup_payload
+from aart_cli.commands.marketplace import _setup_reminders
+from aart_cli.setup import render_setup_outcome
+from aart_cli.setup_render import render_setup_payload
 from tests.credential_fixtures import assignment
 from tests.function_cases import function_test_case
 
@@ -20,7 +20,7 @@ MANUAL = {
     "source": "https://github.com/example/registry/blob/c472730/SETUP.md",
 }
 
-# The payload `aart marketplace setup registry-a/mcp/github-docker@1.0.0` emitted on
+# The payload `aart-cli marketplace setup registry-a/mcp/github-docker@1.0.0` emitted on
 # 2026-08-15, which the text path rendered as no lines at all.
 PLANNING_FAILURE = {
     "planned": [],
@@ -218,7 +218,7 @@ def test_a_failed_item_carries_the_command_that_repeats_it_whole() -> None:
     """The retry is the operator's next move, so it is never folded to fit the measure."""
 
     retry = (
-        "aart marketplace setup registry-a/mcp/github-docker@1.0.0 --profile claude "
+        "aart-cli marketplace setup registry-a/mcp/github-docker@1.0.0 --profile claude "
         "--scope project --yes --approve-setup-effects"
     )
     lines = render_setup_payload(
@@ -261,7 +261,7 @@ def test_both_surfaces_print_the_same_block_for_the_same_item() -> None:
         "run created it.\ndocker image rm aart/mcp/github-docker:1.0.0"
     )
     retry = (
-        "aart marketplace setup registry-a/mcp/github-docker@1.0.0 --profile claude "
+        "aart-cli marketplace setup registry-a/mcp/github-docker@1.0.0 --profile claude "
         "--scope project --yes --approve-setup-effects"
     )
     from_wizard = list(

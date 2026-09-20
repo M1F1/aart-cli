@@ -14,7 +14,7 @@ import json
 import pathlib
 import unittest
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ActivityOutcome,
     ActivityRecord,
     PresentationProfile,
@@ -28,27 +28,27 @@ from agent_artifacts.application.consumer_views import (
     project_receipt_detail,
     receipt_detail_to_data,
 )
-from agent_artifacts.application.execution import (
+from aart_cli.application.execution import (
     ExecutionStatus,
     LifecycleExecutionOutcome,
     execute_repair,
 )
-from agent_artifacts.application.installed_state import removal_state_from_receipt
-from agent_artifacts.application.intents import (
+from aart_cli.application.installed_state import removal_state_from_receipt
+from aart_cli.application.intents import (
     LifecyclePlan,
     repair_intent,
     uninstall_intent,
 )
-from agent_artifacts.application.reconciliation import plan_repair
-from agent_artifacts.domain.credentials import (
+from aart_cli.application.reconciliation import plan_repair
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
-from agent_artifacts.tui_consumer import (
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Ok
+from aart_cli.domain.selection import OwnershipKind, OwnershipReason
+from aart_cli.tui_consumer import (
     render_activity,
     render_dashboard,
     render_installed_artifact,

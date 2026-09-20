@@ -11,18 +11,18 @@ from pathlib import Path
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.credential_lifecycle import (
+from aart_cli.application.credential_lifecycle import (
     CREDENTIAL_DEPENDANTS,
     CREDENTIAL_POLICY_VIOLATION,
     plan_credential_mutation,
 )
-from agent_artifacts.application.input_binding import (
+from aart_cli.application.input_binding import (
     INPUT_BINDING_INVALID,
     INPUT_POLICY_VIOLATION,
     INPUT_REQUIRED,
     bind_runtime_inputs,
 )
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.credentials import (
     CredentialIntent,
     CredentialObservation,
     CredentialProviderRef,
@@ -31,19 +31,19 @@ from agent_artifacts.domain.credentials import (
     ProviderState,
     credential_reference_to_data,
 )
-from agent_artifacts.domain.effects import (
+from aart_cli.domain.effects import (
     DeleteCredential,
     ReplaceCredential,
     RiskClass,
     StoreCredential,
     VerifyCredential,
 )
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     SourceAlias,
 )
-from agent_artifacts.domain.inputs import (
+from aart_cli.domain.inputs import (
     CliArgumentBinding,
     ConfigInput,
     EnvironmentBinding,
@@ -62,8 +62,8 @@ from agent_artifacts.domain.inputs import (
     input_to_data,
     validate_config_value,
 )
-from agent_artifacts.domain.policies import EffectivePolicy, PolicyOverlay, compose_policy
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.policies import EffectivePolicy, PolicyOverlay, compose_policy
+from aart_cli.domain.result import Err, Ok
 from tests.credential_fixtures import credential_url
 
 PROVIDER = CredentialProviderRef("macos-keychain", "company.forge", "agent")
@@ -219,7 +219,7 @@ class RuntimeInputAlgebraTest(unittest.TestCase):
 
     def test_url_validation_holds_no_import_that_could_reach_a_network(self) -> None:
         source = (
-            Path(__file__).resolve().parent.parent / "agent_artifacts" / "domain" / "inputs.py"
+            Path(__file__).resolve().parent.parent / "aart_cli" / "domain" / "inputs.py"
         ).read_text(encoding="utf-8")
         roots = set()
         for node in ast.walk(ast.parse(source)):

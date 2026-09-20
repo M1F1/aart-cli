@@ -9,7 +9,7 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.domain.artifacts import (
+from aart_cli.domain.artifacts import (
     ArtifactFormat,
     ArtifactKind,
     ArtifactPackage,
@@ -18,7 +18,7 @@ from agent_artifacts.domain.artifacts import (
     Provenance,
     artifact_to_data,
 )
-from agent_artifacts.domain.effects import (
+from aart_cli.domain.effects import (
     ConfigureHarness,
     CopyTree,
     CreatePythonEnvironment,
@@ -27,19 +27,19 @@ from agent_artifacts.domain.effects import (
     RiskClass,
     effect_to_data,
 )
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.policies import EffectivePolicy, PolicyOverlay, compose_policy
-from agent_artifacts.domain.remediations import (
+from aart_cli.domain.policies import EffectivePolicy, PolicyOverlay, compose_policy
+from aart_cli.domain.remediations import (
     ConfigureCredential,
     InstallRuntime,
     remediation_to_data,
 )
-from agent_artifacts.domain.requirements import (
+from aart_cli.domain.requirements import (
     CredentialRequirement,
     RequirementAssessment,
     RequirementId,
@@ -47,7 +47,7 @@ from agent_artifacts.domain.requirements import (
     RuntimeRequirement,
     requirement_to_data,
 )
-from agent_artifacts.domain.serialization import canonical_json_bytes
+from aart_cli.domain.serialization import canonical_json_bytes
 
 
 def _digest(character: str) -> ObjectDigest:
@@ -66,7 +66,7 @@ def _artifact(*capabilities: str) -> ArtifactPackage:
         provenance=Provenance(
             source="git.company/ai/mcp",
             revision="b" * 40,
-            manifest_path="github/aart.yaml",
+            manifest_path="github/aart-cli.yaml",
             input_digest=_digest("c"),
             compiler="aart-cli/0.0.1",
         ),

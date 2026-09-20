@@ -6,8 +6,8 @@ import os
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.model import SetupQueueItem
-from agent_artifacts.setup import (
+from aart_cli.model import SetupQueueItem
+from aart_cli.setup import (
     SETUP_EFFECT_PROMPT,
     SETUP_QUEUE_PROMPT,
     manual_reference,
@@ -21,11 +21,11 @@ from agent_artifacts.setup import (
     setup_queue_choice,
     setup_queue_question,
 )
-from agent_artifacts.tui_layout import CONTENT_MEASURE
+from aart_cli.tui_layout import CONTENT_MEASURE
 from tests.credential_fixtures import assignment
 from tests.setup_fixtures import recipe
 
-RETRY = "aart marketplace setup mcp/atlassian --profile tabnine --scope project"
+RETRY = "aart-cli marketplace setup mcp/atlassian --profile tabnine --scope project"
 
 
 def installer(**changes: object):
@@ -182,7 +182,7 @@ class SetupReviewProjectionTests(unittest.TestCase):
 
             # Every line is bounded except the command, which is printed whole on purpose: a
             # folded command is pasted broken, so it is never folded.
-            prose = [line for line in rendered if not line.strip().startswith("aart ")]
+            prose = [line for line in rendered if not line.strip().startswith("aart-cli ")]
             self.assertTrue(all(len(line) <= min(width, CONTENT_MEASURE) for line in prose))
             self.assertIn("    " + RETRY, rendered)
             text = "\n".join(rendered)
@@ -401,9 +401,7 @@ class SetupBoundaryTests(unittest.TestCase):
         self.assertEqual(render_run_summary(()), ())
 
 
-_RETRY = (
-    "aart marketplace setup mcp/alation --profile claude --scope user --yes --approve-setup-effects"
-)
+_RETRY = "aart-cli marketplace setup mcp/alation --profile claude --scope user --yes --approve-setup-effects"
 
 _ROWS = (
     {

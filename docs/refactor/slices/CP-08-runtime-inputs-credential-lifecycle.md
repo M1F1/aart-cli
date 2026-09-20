@@ -1,4 +1,9 @@
 # CP-08 — Runtime inputs and credential lifecycle
+
+> **Historical evidence / CP-26 revision:** Product Specification §169 and D-332–D-335 supersede
+> earlier naming, runtime-placement and cross-installation input-sharing assumptions in this record.
+> VERIFIED below refers to the contract tested then. Current implementation/proof belongs to
+> CP-26.18a/19/20; see `../CONTRACT_ALIGNMENT.md` and `../INVARIANT_TRACEABILITY.md`.
 Status: VERIFIED
 
 ## Goal

@@ -16,25 +16,25 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent_artifacts.application.maintainer import reconcile_source_scan
-from agent_artifacts.application.promotion import (
+from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.application.promotion import (
     PromotionEvidence,
     load_registry_versions,
     plan_bulk_promotion,
     project_promotion,
 )
-from agent_artifacts.domain.candidates import assess_candidate
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.registry import PromotionMode
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.candidates import assess_candidate
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
+from aart_cli.protocol.paths import parse_relative_path
 
 MARKER = ".aart-manual-lab.json"
 SCHEMA = 1
@@ -318,9 +318,7 @@ def _home(home: Path, remotes: Path) -> dict[str, str]:
     env.update(
         {
             "HOME": str(home),
-            "XDG_CONFIG_HOME": str(home / ".config"),
-            "XDG_DATA_HOME": str(home / ".local/share"),
-            "XDG_CACHE_HOME": str(home / ".cache"),
+            "AART_CLI_HOME": str(home / ".aart-cli"),
             "PYTHONPATH": str(CHECKOUT),
         }
     )
@@ -444,7 +442,7 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
     _home(consumer_home, remotes)
 
     skill_manifest = {
-        "schema": "aart.dev/skill/v1",
+        "schema": "aart-cli.dev/skill/v1",
         "artifact": {"name": "manual-check", "kind": "skill", "version": "1.0.0"},
         "payload": {"include": ["SKILL.md"]},
         "compatibility": {
@@ -453,7 +451,7 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
         },
     }
     _initialize_repository(skill_repo, branch)
-    _write(skill_repo / "manual-check/aart.json", _manifest_text(skill_manifest))
+    _write(skill_repo / "manual-check/aart-cli.json", _manifest_text(skill_manifest))
     _write(
         skill_repo / "manual-check/SKILL.md", "# Manual check\n\nA disposable AART test skill.\n"
     )
@@ -461,7 +459,7 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
     _publish_bare(skill_repo, remotes / "skill.git", branch)
 
     mcp_manifest = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": "dummy-mcp", "kind": "mcp", "version": "1.0.0"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
@@ -501,7 +499,7 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
         },
     }
     _initialize_repository(mcp_repo, branch)
-    _write(mcp_repo / "dummy-mcp/aart.json", _manifest_text(mcp_manifest))
+    _write(mcp_repo / "dummy-mcp/aart-cli.json", _manifest_text(mcp_manifest))
     _write(mcp_repo / "dummy-mcp/server.py", MCP_SERVER)
     mcp_revision = _commit(mcp_repo, "feat: add disposable credential MCP")
     _publish_bare(mcp_repo, remotes / "mcp.git", branch)
@@ -523,7 +521,7 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
         (
             sys.executable,
             "-m",
-            "agent_artifacts.cli",
+            "aart_cli.cli",
             "registry",
             "init",
             "--source",
@@ -548,7 +546,7 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
         url="https://manual.aart.test/skill.git",
         revision=skill_revision,
         authored=(
-            _entry("manual-check/aart.json", _manifest_text(skill_manifest)),
+            _entry("manual-check/aart-cli.json", _manifest_text(skill_manifest)),
             _entry("manual-check/SKILL.md", "# Manual check\n\nA disposable AART test skill.\n"),
         ),
     )
@@ -558,7 +556,7 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
         url="https://manual.aart.test/mcp.git",
         revision=mcp_revision,
         authored=(
-            _entry("dummy-mcp/aart.json", _manifest_text(mcp_manifest)),
+            _entry("dummy-mcp/aart-cli.json", _manifest_text(mcp_manifest)),
             _entry("dummy-mcp/server.py", MCP_SERVER, executable=True),
         ),
     )
@@ -643,9 +641,9 @@ def _shell(root: Path, role: str) -> int:
     """Open an interactive shell inside the lab, so plain commands are already isolated."""
 
     env, cwd = shell_environment(root, role)
-    env["AART_MANUAL_ROLE"] = role
+    env["AART_CLI_MANUAL_ROLE"] = role
     print(f"AART manual lab shell ({role}). HOME={env['HOME']}")
-    print(f"Run AART as: python3 -m agent_artifacts.cli ...   (cwd: {cwd})")
+    print(f"Run AART as: python3 -m aart_cli.cli ...   (cwd: {cwd})")
     print("Leave with: exit")
     return subprocess.call((os.environ.get("SHELL", "/bin/sh"),), cwd=cwd, env=env)
 
@@ -657,7 +655,7 @@ def _open(root: Path, role: str) -> int:
     project = root / ("repositories/registry" if role == "maintainer" else "consumer-project")
     env = _home(home, remotes)
     return subprocess.call(
-        (sys.executable, "-m", "agent_artifacts.cli"),
+        (sys.executable, "-m", "aart_cli.cli"),
         cwd=project,
         env=env,
     )

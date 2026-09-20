@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.registry_publication import (
+from aart_cli.application.registry_publication import (
     PublicationOutcome,
     RegistryPublicationCommand,
     RegistryPublicationReceipt,
     prepare_registry_publication,
     publication_summary,
 )
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.publication import PublicationBranch
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.publication import PublicationBranch
+from aart_cli.domain.result import Err, Ok
 
 _REVISION = "b" * 40
 _DIGEST = ObjectDigest("sha256", "c" * 64)

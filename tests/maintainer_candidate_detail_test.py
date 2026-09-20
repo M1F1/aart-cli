@@ -14,17 +14,17 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts import tui
-from agent_artifacts.application.consumer_ui import (
+from aart_cli import tui
+from aart_cli.application.consumer_ui import (
     ConsumerUiCommandKind,
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import PresentationProfile
-from agent_artifacts.application.maintainer_views import MaintainerScreen
-from agent_artifacts.tui_consumer import _reload, frame
-from agent_artifacts.tui_layout import CONTENT_MEASURE, SECTION_RULE, footer_start
-from agent_artifacts.tui_maintainer import (
+from aart_cli.application.consumer_views import PresentationProfile
+from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.tui_consumer import _reload, frame
+from aart_cli.tui_layout import CONTENT_MEASURE, SECTION_RULE, footer_start
+from aart_cli.tui_maintainer import (
     maintainer_candidate_detail,
     render_maintainer_candidates,
 )

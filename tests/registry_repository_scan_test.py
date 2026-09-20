@@ -6,7 +6,7 @@ choose some of it, and let the registry own immutable copies of only those files
 never saved as a Source, so nothing about this claims continuous monitoring (INV-199, INV-200).
 
 Three boundaries are the slice rather than incidental to it. Discovery is explicit: only committed
-`aart.yaml`/`aart.json` manifests are read, never an inferred conventional shape (INV-201). What is
+`aart-cli.yaml`/`aart-cli.json` manifests are read, never an inferred conventional shape (INV-201). What is
 copied is only what each selected manifest declares in `payload.include` — a repository's other
 files are not adopted by being nearby. And the copies carry their origin: the upstream URL, the
 resolved commit, the manifest path and its input digest travel into the registry as provenance, so
@@ -24,15 +24,15 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts.application.maintainer import CandidateBundle
-from agent_artifacts.domain.candidates import (
+from aart_cli.application.maintainer import CandidateBundle
+from aart_cli.domain.candidates import (
     CandidateFinding,
     FindingSeverity,
     assess_candidate,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.registry_adoption import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.registry_adoption import (
     AdoptionUpstreamDisposition,
     apply_adoption,
     check_adopted_upstream,
@@ -40,11 +40,11 @@ from agent_artifacts.io.registry_adoption import (
     prepare_adoption,
     scan_repository,
 )
-from agent_artifacts.io.registry_bootstrap import bootstrap_registry_workspace
-from agent_artifacts.sources.git import acquire_git_snapshot
-from agent_artifacts.sources.model import GitSnapshotRequest
+from aart_cli.io.registry_bootstrap import bootstrap_registry_workspace
+from aart_cli.sources.git import acquire_git_snapshot
+from aart_cli.sources.model import GitSnapshotRequest
 
-SKILL_MANIFEST = """schema: aart.dev/skill/v1
+SKILL_MANIFEST = """schema: aart-cli.dev/skill/v1
 artifact:
   name: verification-before-completion
   kind: skill
@@ -57,7 +57,7 @@ compatibility:
     - claude
 """
 
-OTHER_MANIFEST = """schema: aart.dev/skill/v1
+OTHER_MANIFEST = """schema: aart-cli.dev/skill/v1
 artifact:
   name: brainstorming
   kind: skill
@@ -97,7 +97,7 @@ class _Author:
         second = self.path / "skills" / "brainstorming"
         for directory, manifest in ((first, SKILL_MANIFEST), (second, OTHER_MANIFEST)):
             directory.mkdir(parents=True)
-            (directory / "aart.yaml").write_text(manifest, encoding="utf-8")
+            (directory / "aart-cli.yaml").write_text(manifest, encoding="utf-8")
             (directory / "SKILL.md").write_text(f"# {directory.name}\n", encoding="utf-8")
             # Present, committed, and declared by nobody: adoption must not copy it.
             (directory / "NOTES.md").write_text("internal working notes\n", encoding="utf-8")
@@ -137,7 +137,7 @@ class _Lab(unittest.TestCase):
         under test ever weakens the transport request it makes.
         """
 
-        from agent_artifacts.curation.runtime import default_native_acquirer
+        from aart_cli.curation.runtime import default_native_acquirer
 
         def local(request: GitSnapshotRequest):
             self.assertFalse(
@@ -153,7 +153,7 @@ class _Lab(unittest.TestCase):
                 replace(request, location=local_url, allow_local_transport=True)
             )
 
-        with mock.patch("agent_artifacts.curation.runtime.acquire_git_snapshot", side_effect=local):
+        with mock.patch("aart_cli.curation.runtime.acquire_git_snapshot", side_effect=local):
             return default_native_acquirer(url, ref)
 
     def _scan(self):
@@ -183,7 +183,7 @@ class RepositoryScanTest(_Lab):
         assert isinstance(scanned, Ok)
         chosen = next(item for item in scanned.value.artifacts if item.name == "brainstorming")
         self.assertEqual(chosen.payload_paths, ("payload/SKILL.md",))
-        self.assertEqual(chosen.manifest_path, "skills/brainstorming/aart.yaml")
+        self.assertEqual(chosen.manifest_path, "skills/brainstorming/aart-cli.yaml")
         self.assertTrue(chosen.input_digest.startswith("sha256:"))
 
     def test_a_scan_saves_no_source_and_writes_nothing(self) -> None:
@@ -218,7 +218,7 @@ class RepositoryScanTest(_Lab):
 
         self.assertIsInstance(refused, Err)
         assert isinstance(refused, Err)
-        self.assertIn("aart.yaml", "\n".join(item.message for item in refused.diagnostics))
+        self.assertIn("aart-cli.yaml", "\n".join(item.message for item in refused.diagnostics))
 
 
 class SelectiveAdoptionTest(_Lab):
@@ -265,7 +265,7 @@ class SelectiveAdoptionTest(_Lab):
         self.assertIn("payload/SKILL.md", copied)
         # NOTES.md sits beside the manifest and is committed upstream; nothing declared it.
         self.assertNotIn("payload/NOTES.md", copied)
-        self.assertNotIn("payload/aart.yaml", copied)
+        self.assertNotIn("payload/aart-cli.yaml", copied)
 
     def test_the_adopted_copy_records_where_it_came_from(self) -> None:
         scanned = self._scan()
@@ -286,7 +286,7 @@ class SelectiveAdoptionTest(_Lab):
         # adopted copy is provenance-shaped exactly like every other package in the registry.
         self.assertEqual(origin["url"], self.url)
         self.assertEqual(origin["resolved_commit"], self.author.head)
-        self.assertEqual(origin["path"], "skills/brainstorming/aart.yaml")
+        self.assertEqual(origin["path"], "skills/brainstorming/aart-cli.yaml")
         self.assertTrue(origin["input_digest"].startswith("sha256:"))
         self.assertEqual(
             provenance["aart.repository-adoption"],
@@ -440,7 +440,7 @@ class AdoptedUpstreamCheckTest(_Lab):
         self.assertIsNone(checked.value.proposal)
 
     def test_a_changed_manifest_with_a_new_version_proposes_one_new_immutable_copy(self) -> None:
-        manifest = self.author.path / "skills" / "brainstorming" / "aart.yaml"
+        manifest = self.author.path / "skills" / "brainstorming" / "aart-cli.yaml"
         manifest.write_text(OTHER_MANIFEST.replace("2.1.0", "2.2.0"), encoding="utf-8")
         skill = self.author.path / "skills" / "brainstorming" / "SKILL.md"
         skill.write_text("# brainstorming 2.2\n", encoding="utf-8")
@@ -461,7 +461,7 @@ class AdoptedUpstreamCheckTest(_Lab):
         )
 
     def test_a_removed_manifest_is_missing_not_unreachable(self) -> None:
-        manifest = self.author.path / "skills" / "brainstorming" / "aart.yaml"
+        manifest = self.author.path / "skills" / "brainstorming" / "aart-cli.yaml"
         manifest.unlink()
         self._commit("remove brainstorming manifest")
 
@@ -494,8 +494,8 @@ class AdoptedUpstreamCheckTest(_Lab):
         self.assertIn("did not answer", "\n".join(checked.value.details))
 
     def test_an_invalid_current_manifest_is_neither_missing_nor_unreachable(self) -> None:
-        manifest = self.author.path / "skills" / "brainstorming" / "aart.yaml"
-        manifest.write_text("schema: aart.dev/skill/v1\npayload: []\n", encoding="utf-8")
+        manifest = self.author.path / "skills" / "brainstorming" / "aart-cli.yaml"
+        manifest.write_text("schema: aart-cli.dev/skill/v1\npayload: []\n", encoding="utf-8")
         self._commit("break brainstorming declaration")
 
         checked = self._check()

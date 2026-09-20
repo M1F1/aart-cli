@@ -20,7 +20,7 @@ match rather than an exception carved around the existing wording.
 ## Goal and scope
 
 A release pull request rewrites four files: the version literals in `pyproject.toml`,
-`agent_artifacts/__init__.py` and `.release-please-manifest.json`, and `CHANGELOG.md`. It changes no
+`aart_cli/__init__.py` and `.release-please-manifest.json`, and `CHANGELOG.md`. It changes no
 code. The tree underneath it is the tree the last ordinary pull request merged, and that tree passed
 all ten gates on three interpreters to get there.
 
@@ -160,8 +160,8 @@ dashboard**, and its publication to GitHub Pages.
 
 | Surface | Files |
 |---|---|
-| domain/application | `agent_artifacts/reporting/` — nine modules, 1,696 lines |
-| command | `agent_artifacts/commands/reporting.py` (114 lines), the `aart reporting` verb and its `validate-issue`/`aggregate` actions in `cli.py`, `--usage-reporting-repository` |
+| domain/application | `aart_cli/reporting/` — nine modules, 1,696 lines |
+| command | `aart_cli/commands/reporting.py` (114 lines), the `aart reporting` verb and its `validate-issue`/`aggregate` actions in `cli.py`, `--usage-reporting-repository` |
 | consumer surfaces | the offer and its screens in `application/consumer_ui.py`, `consumer_views.py`, `consumer_session.py`, `tui_consumer.py`, `tui_maintainer.py` |
 | registry scaffolding | `registry_commands/templates.py` — both generated workflows, the `usage-dashboard/` directory, the `usage-report` label, the `AART_PAGES` variable; `io/registry_workspace.py` |
 | protocol | the `github-issues` special case in `protocol/registry_schema.py` and `registry_commands/planning.py`, and its paragraph in `docs/protocol/registry-v1.md` |
@@ -189,19 +189,19 @@ package before the scaffolding that calls it, the documents last.
 
 ### 04 — A consumer is no longer offered a usage report
 
-The offer is not in the TUI. It lives in `agent_artifacts/commands/marketplace.py`, as
+The offer is not in the TUI. It lives in `aart_cli/commands/marketplace.py`, as
 `_CliReporting`, `_prepare_cli_reporting`, `_reporting_plan_data`, `_json_reporting_data`,
-`_read_reporting_consent` and `_render_cli_reporting` — the `aart marketplace install` path (D-117;
+`_read_reporting_consent` and `_render_cli_reporting` — the `aart-cli marketplace install` path (D-117;
 the legacy wizard's offer is already unreachable). That block goes.
 
-`--usage-reporting-repository` is *not* part of this task: it hangs on `aart registry init`, where a
+`--usage-reporting-repository` is *not* part of this task: it hangs on `aart-cli registry init`, where a
 maintainer scaffolds a registry, so it goes with task 06.
 
 **Two greps lie, and a future agent will fall for both.** `ProgressReportingHandler` in
 `tui_consumer.py` is CP-24.06's installation progress and has nothing to do with this; the
 `reporting` field on `MaintainerScreen.REGISTRY_INIT` is the maintainer typing a repository while
 scaffolding a registry, which belongs to task 06. Neither is a consumer offer. Match on
-`agent_artifacts.reporting`, `UsageReport` and `ReportingMode` rather than on the word.
+`aart_cli.reporting`, `UsageReport` and `ReportingMode` rather than on the word.
 
 **The part that is not a deletion.** `ReportingSettings`, `ReportingMode` and `ReportingPolicy` live
 in `configuration/model.py`, and `configuration/schema.py` lists `reporting` in the *optional* field
@@ -221,17 +221,17 @@ that names the reason. An old configuration keeps loading, a new one stops growi
 the block disappears from disk the next time anything writes. Removing it from the accepted set is a
 separate change that needs a deprecation window, and it is not in this slice.
 
-Red first: `aart marketplace install` offers nothing and mentions no report in either rendering; a
+Red first: `aart-cli marketplace install` offers nothing and mentions no report in either rendering; a
 configuration carrying a `reporting` block still loads; a configuration written afresh carries none.
 
 ### 05 — The `aart reporting` verb and its package are removed
 
-Delete `agent_artifacts/reporting/` and `agent_artifacts/commands/reporting.py`, the `reporting`
+Delete `aart_cli/reporting/` and `aart_cli/commands/reporting.py`, the `reporting`
 entry in the CLI dispatch table and its parser. Delete the eleven `reporting_*_test.py` modules.
 
 **One type has to come out of the package first.** `SetupReportState` lives in
 `reporting/projection.py` but is not about usage reporting: it is the setup queue's per-item status,
-and `agent_artifacts/tui.py` builds it in eight places (`tui.py:149` types a whole field on it).
+and `aart_cli/tui.py` builds it in eight places (`tui.py:149` types a whole field on it).
 Deleting the package with it inside breaks the TUI. Move it to where the setup queue's own types
 live and re-point `tui.py` and `marketplace.py`, as a separate commit before the deletion, so the
 move is reviewable on its own and the deletion stays a deletion.
@@ -239,14 +239,14 @@ move is reviewable on its own and the deletion stays a deletion.
 `configured_setup_report_test.py` and `configured_setup_gap_test.py` follow that type rather than
 the package, and stay.
 
-Red first: `aart reporting` is an unknown command, `agent_artifacts.reporting` does not import, and
+Red first: `aart reporting` is an unknown command, `aart_cli.reporting` does not import, and
 the setup queue still reports its statuses in the TUI.
 
 ### 06 — A scaffolded registry no longer carries the issue and dashboard workflows
 
 Remove both generated workflows, the `usage-dashboard/` directory, the `usage-report` label and the
 `AART_PAGES` variable from `registry_commands/templates.py` and `io/registry_workspace.py`; the
-`--usage-reporting-repository` option on `aart registry init` (`cli.py`); and the
+`--usage-reporting-repository` option on `aart-cli registry init` (`cli.py`); and the
 `ServiceAdvertisement("usage_reporting", "github-issues", ...)` a scaffolded registry emits
 (`registry_commands/planning.py`). Red first: a freshly scaffolded registry workspace contains
 neither workflow, no Pages permission, and advertises no usage service.
@@ -475,5 +475,5 @@ pretend that `curl` authenticates to a private Enterprise release or that ZIP in
 cryptographic checksum. B-136 holds that optional later contract; CP-25 is not reopened.
 The owner reported that the first command did not work. The examples were made self-contained,
 and `pipx` now selects the active `python3` explicitly after an isolated reproduction found its
-cached Python 3.14 broken on this workstation. Both wheel installs and `aart --help` then passed
+cached Python 3.14 broken on this workstation. Both wheel installs and `aart-cli --help` then passed
 in isolated tool directories with public `v0.1.2`. The exact Enterprise error is still unknown.

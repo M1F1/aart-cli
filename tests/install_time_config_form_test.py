@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     CONFIG_CONTINUE_ROW,
     ConsumerActionKind,
     ConsumerUiCommand,
@@ -18,20 +19,20 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConfigInputView,
     ConsumerScreen,
     ConsumerSession,
     CredentialInputView,
 )
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.inputs import InputValidation, PromptedConfigValue
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_consumer import CanonicalScreenSource, compose_frame, frame
+from aart_cli.domain.inputs import InputValidation, PromptedConfigValue
+from aart_cli.domain.result import Ok
+from aart_cli.tui_consumer import CanonicalScreenSource, compose_frame, frame
 from tests.artifact_installation_e2e_test import ORG
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
@@ -201,6 +202,48 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
         self.assertIn("- Credentials", blocks.status)
         self.assertIn("- GitHub token: Enter securely during installation", blocks.status)
 
+    def test_each_installation_has_its_own_visible_config_and_credential_row(self) -> None:
+        owners = (
+            "claude/project:company/mcp/github",
+            "tabnine/project:company/mcp/github",
+        )
+        base = screens()
+        source = CanonicalScreenSource(
+            replace(
+                base,
+                installation_inputs=tuple(
+                    item
+                    for owner in owners
+                    for item in (
+                        replace(_config_view(), owner=owner),
+                        replace(_credential_view(), owner=owner),
+                    )
+                ),
+            )
+        )
+        draft = InstallationConfigDraft(
+            tuple(
+                InstallationConfigField(
+                    "organization",
+                    "acme",
+                    InputValidation("identifier"),
+                    owner=owner,
+                )
+                for owner in owners
+            )
+        )
+        state = replace(_state(draft), rows=source.rows(_state(draft)))
+
+        drawn = "\n".join(frame(source, state))
+
+        self.assertEqual(
+            source.rows(state),
+            tuple(f"{owner}\torganization" for owner in owners) + (CONFIG_CONTINUE_ROW,),
+        )
+        for owner in owners:
+            self.assertIn(f"GitHub organization — {owner}", drawn)
+            self.assertIn(f"GitHub token — {owner}: Enter securely during installation", drawn)
+
     def test_verbose_describes_what_the_field_under_the_cursor_binds_to(self) -> None:
         source = self._source()
         state = _state()
@@ -279,12 +322,32 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
 
 
 class _MemoryCredentialProvider:
-    """A provider reference/observation fake; it never receives or stores credential material."""
+    """A provider reference/observation fake; it never receives or stores credential material.
+
+    One item per address, not one state for the provider. A real provider holds an item per
+    service/account pair, and each installation addresses its own (§169.4-6), so a fake with a
+    single flag answers `present` for an installation whose item nobody stored -- which made the
+    second harness of a two-harness install read as state that changed after Review, and its
+    member was abandoned while the transaction still reported success.
+    """
 
     provider = "test-keychain"
 
     def __init__(self) -> None:
-        self.state = CredentialState.ABSENT
+        self.stored: set[str] = set()
+
+    @staticmethod
+    def _address(reference) -> str:
+        return f"{reference.provider.service}/{reference.provider.account}"
+
+    @property
+    def state(self) -> CredentialState:
+        """Whether anything at all is held, for the assertions that ask about the provider."""
+
+        return CredentialState.PRESENT if self.stored else CredentialState.ABSENT
+
+    def holds(self, reference) -> bool:
+        return self._address(reference) in self.stored
 
     def available(self) -> ProviderState:
         return ProviderState.AVAILABLE
@@ -294,21 +357,21 @@ class _MemoryCredentialProvider:
             CredentialObservation(
                 reference,
                 ProviderState.AVAILABLE,
-                self.state,
+                CredentialState.PRESENT if self.holds(reference) else CredentialState.ABSENT,
             )
         )
 
     def resolution_argv(self, reference) -> tuple[str, ...]:
-        return ("/usr/bin/false",)
+        return ("/usr/bin/false", "--service", reference.provider.service)
 
     def store(self, reference, secret=None, *, replace: bool = False) -> Ok:
         if secret is not None:
             raise AssertionError("the application handed credential material to the provider fake")
-        self.state = CredentialState.PRESENT
+        self.stored.add(self._address(reference))
         return self.inspect(reference)
 
     def delete(self, reference) -> Ok:
-        self.state = CredentialState.ABSENT
+        self.stored.discard(self._address(reference))
         return self.inspect(reference)
 
 
@@ -331,32 +394,58 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
             self.assertFalse(first.event.review_digest)
             self.assertIsNotNone(first.event.config_draft)
             assert first.event.config_draft is not None
-            self.assertEqual(first.event.config_draft.value(ORG.value), "acme")
+            config_views = tuple(
+                item
+                for item in first.source.screens.installation_inputs
+                if isinstance(item, ConfigInputView)
+            )
+            config_rows = tuple(item.row for item in config_views)
+            self.assertGreater(len(config_rows), 1)
+            self.assertEqual(len(config_rows), len(set(config_rows)))
+            for row in config_rows:
+                self.assertEqual(first.event.config_draft.value(row), "acme")
             self.assertFalse(first.event.config_draft.ready)
             self.assertTrue(first.source.screens.installation_inputs)
-            credential = next(
+            credentials = tuple(
                 item
                 for item in first.source.screens.installation_inputs
                 if isinstance(item, CredentialInputView)
             )
-            self.assertIsNotNone(credential.provider_reference)
+            self.assertEqual(len(credentials), len(config_views))
+            self.assertEqual(len({item.owner for item in credentials}), len(credentials))
+            self.assertTrue(all(item.provider_reference is not None for item in credentials))
+
+            incomplete = handler.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.INSTALL,
+                    selection=("company/mcp/github@1.5.0",),
+                    config_answers=((config_rows[0], "platform-team"),),
+                )
+            )
+            self.assertFalse(incomplete.event.review_digest)
 
             second = handler.handle(
                 ConsumerUiCommand(
                     ConsumerUiCommandKind.PREPARE_ACTION,
                     action=ConsumerActionKind.INSTALL,
                     selection=("company/mcp/github@1.5.0",),
-                    config_answers=((ORG.value, "platform-team"),),
+                    config_answers=tuple((row, "platform-team") for row in config_rows),
                 )
             )
 
         self.assertTrue(second.event.review_digest)
         pending = handler._pending  # noqa: SLF001 - held reviewed action is the assertion subject
         self.assertIsNotNone(pending)
-        self.assertIn(
-            PromptedConfigValue(ORG, "platform-team"),
-            pending.prepared.draft.inputs.sources,  # type: ignore[union-attr]
-        )
+        # Each answer typed on screen 07 reaches only the installation named by its row (D-353).
+        composed = pending.prepared.draft.inputs  # type: ignore[union-attr]
+        owners = tuple(pending.prepared.draft.owners)  # type: ignore[union-attr]
+        self.assertEqual(len(owners), len(config_rows))
+        for owner in owners:
+            self.assertIn(
+                PromptedConfigValue(ORG, "platform-team"),
+                composed.sources_for(owner),
+            )
 
     def test_form_to_success_writes_only_the_two_chosen_harness_files(self) -> None:
         value = "platform-team-form-e2e"
@@ -374,6 +463,10 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 ord("i"),
                 value,
                 ENTER,
+                value,
+                ENTER,
+                value,
+                ENTER,
                 ENTER,
                 DOWN,
                 SPACE,
@@ -387,12 +480,28 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
             )
 
             self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
-            config = env.project / ".agent-artifacts/runtimes/company/mcp/github/config"
-            self.assertFalse((config / "claude.conf").exists())
-            for harness in ("opencode", "tabnine"):
-                path = config / f"{harness}.conf"
+            # Each chosen harness is its own installation, so each has its own tree with its own
+            # configuration in it (§169.3), and the harness nobody chose has no tree at all.
+            self.assertFalse((env.project / ".claude/aart-cli").exists())
+            for harness, directory in (("opencode", ".opencode"), ("tabnine", ".tabnine")):
+                path = (
+                    env.project
+                    / directory
+                    / "aart-cli/mcp/company/github/config"
+                    / f"{harness}.conf"
+                )
                 self.assertTrue(path.is_file(), f"{harness} configuration was not written")
                 self.assertIn(f"{ORG}={value}\n", path.read_text(encoding="utf-8"))
+
+            registrations = (
+                json.loads((env.project / "opencode.json").read_text(encoding="utf-8"))["mcp"],
+                json.loads(
+                    (env.project / ".tabnine/agent/settings.json").read_text(encoding="utf-8")
+                )["mcpServers"],
+            )
+            for registered in registrations:
+                self.assertIn("github-company-project", registered)
+                self.assertNotIn("github", registered)
 
             aart_state = env.paths.data_root
             leaked = [
@@ -401,7 +510,16 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 if path.is_file() and value in path.read_text(encoding="utf-8", errors="replace")
             ]
             self.assertEqual(leaked, [])
-            self.assertIs(provider.state, CredentialState.PRESENT)
+            # One item per installation, not one per artifact (§169.4-6). Two were stored, each
+            # naming its own harness, and the harness nobody chose has none. The addresses are
+            # asserted by what distinguishes them rather than recomposed here, because composing
+            # the expectation from `credential_address` would assert that function against itself.
+            held = sorted(provider.stored)
+            self.assertEqual(len(held), 2, held)
+            self.assertEqual(
+                [1, 1], [sum(h in item for item in held) for h in ("opencode", "tabnine")]
+            )
+            self.assertEqual([], [item for item in held if "claude" in item])
 
 
 if __name__ == "__main__":

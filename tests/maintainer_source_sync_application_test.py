@@ -6,28 +6,28 @@ import json
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.maintainer_sync import (
+from aart_cli.application.maintainer_sync import (
     ApprovedRegistryState,
     MaintainerSourceSyncPorts,
     execute_source_sync,
     prepare_source_sync,
 )
-from agent_artifacts.application.sources import SourceSyncPorts, SourceSyncRequest
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import compile_author_source
-from agent_artifacts.protocol.capabilities import parse_capability
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.application.sources import SourceSyncPorts, SourceSyncRequest
+from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import compile_author_source
+from aart_cli.protocol.capabilities import parse_capability
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.semver import parse_semver
-from agent_artifacts.sources.model import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.semver import parse_semver
+from aart_cli.sources.model import (
     CurrentSource,
     SourceLockLease,
     SourcePublishReceipt,
@@ -53,7 +53,7 @@ def _entry(path: str, content: str) -> SnapshotEntry:
 
 def _snapshot() -> SourceSnapshot:
     manifest = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": "github", "kind": "mcp", "version": "1.0.0"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
@@ -63,7 +63,7 @@ def _snapshot() -> SourceSnapshot:
     return SourceSnapshot(
         SnapshotOrigin.LOCAL,
         (
-            _entry("github/aart.json", json.dumps(manifest, sort_keys=True)),
+            _entry("github/aart-cli.json", json.dumps(manifest, sort_keys=True)),
             _entry("github/server.py", "print('ready')\n"),
         ),
     )
@@ -71,7 +71,7 @@ def _snapshot() -> SourceSnapshot:
 
 def _collection_snapshot() -> SourceSnapshot:
     manifest = {
-        "schema": "aart.dev/collection/v1",
+        "schema": "aart-cli.dev/collection/v1",
         "name": "data-engineer",
         "version": "2.1.0",
         "summary": "Approved data engineering tools.",
@@ -79,7 +79,7 @@ def _collection_snapshot() -> SourceSnapshot:
     }
     return SourceSnapshot(
         SnapshotOrigin.LOCAL,
-        (_entry("collections/data-engineer/aart.json", json.dumps(manifest, sort_keys=True)),),
+        (_entry("collections/data-engineer/aart-cli.json", json.dumps(manifest, sort_keys=True)),),
     )
 
 

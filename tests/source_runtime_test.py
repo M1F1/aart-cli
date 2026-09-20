@@ -5,11 +5,11 @@ import unittest
 from pathlib import Path
 from shutil import copytree
 
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind, SyncMode
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.sources.model import HealthStatus, SyncDisposition
-from agent_artifacts.sources.runtime import observe_configured_source, sync_configured_source
+from aart_cli.configuration.model import ConfiguredSource, SourceKind, SyncMode
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Ok
+from aart_cli.sources.model import HealthStatus, SyncDisposition
+from aart_cli.sources.runtime import observe_configured_source, sync_configured_source
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "native-source-v1"
 

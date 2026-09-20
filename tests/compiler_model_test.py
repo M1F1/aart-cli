@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from typing import cast
 
-from agent_artifacts.compiler.model import (
+from aart_cli.compiler.model import (
     AcquiredCompilation,
     AcquiredSource,
     CompilationCandidate,
@@ -27,9 +27,9 @@ from agent_artifacts.compiler.model import (
     phase_output,
     publication_request,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
 
 
 def _digest(character: str) -> ObjectDigest:

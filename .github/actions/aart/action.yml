@@ -1,7 +1,7 @@
 name: Provide AART
 description: >
   Put an `aart` command on PATH without pip, a package index, or a build backend.
-  AART has no runtime dependencies and ships `agent_artifacts/__main__.py`, so a plain source
+  AART has no runtime dependencies and ships `aart_cli/__main__.py`, so a plain source
   tree plus PYTHONPATH is a working installation. A local action is used on purpose: `./`
   resolves without reaching a marketplace, which a GitHub Enterprise Server instance may not
   carry.
@@ -31,7 +31,7 @@ outputs:
     description: The tree the shim runs from.
     value: ${{ steps.provide.outputs.path }}
   version:
-    description: The version that answered, as `aart --version` printed it.
+    description: The version that answered, as `aart-cli --version` printed it.
     value: ${{ steps.provide.outputs.version }}
 
 runs:
@@ -40,16 +40,16 @@ runs:
     - id: provide
       shell: bash
       env:
-        AART_PATH: ${{ inputs.path }}
-        AART_URL: ${{ inputs.url }}
-        AART_REF: ${{ inputs.ref }}
-        AART_PYTHON: ${{ inputs.python }}
+        AART_CLI_PATH: ${{ inputs.path }}
+        AART_CLI_URL: ${{ inputs.url }}
+        AART_CLI_REF: ${{ inputs.ref }}
+        AART_CLI_PYTHON: ${{ inputs.python }}
       run: |
         set -euo pipefail
 
-        tool="$AART_PATH"
+        tool="$AART_CLI_PATH"
         if [ -z "$tool" ]; then
-          if [ -z "$AART_URL" ]; then
+          if [ -z "$AART_CLI_URL" ]; then
             echo "aart: set either the 'path' input or the 'url' input" >&2
             exit 2
           fi
@@ -57,19 +57,19 @@ runs:
           rm -rf "$tool"
           # A tag or branch clones shallow; a commit sha does not, so fall back to a full clone
           # rather than failing on the one input form an operator is most likely to pin with.
-          if [ -n "$AART_REF" ]; then
-            git clone --quiet --depth 1 --branch "$AART_REF" "$AART_URL" "$tool" 2>/dev/null \
+          if [ -n "$AART_CLI_REF" ]; then
+            git clone --quiet --depth 1 --branch "$AART_CLI_REF" "$AART_CLI_URL" "$tool" 2>/dev/null \
               || { rm -rf "$tool"
-                   git clone --quiet "$AART_URL" "$tool"
-                   git -C "$tool" -c advice.detachedHead=false checkout --quiet "$AART_REF"; }
+                   git clone --quiet "$AART_CLI_URL" "$tool"
+                   git -C "$tool" -c advice.detachedHead=false checkout --quiet "$AART_CLI_REF"; }
           else
-            git clone --quiet --depth 1 "$AART_URL" "$tool"
+            git clone --quiet --depth 1 "$AART_CLI_URL" "$tool"
           fi
         fi
 
-        if [ ! -f "$tool/agent_artifacts/__main__.py" ]; then
-          echo "aart: no agent_artifacts package under '$tool'" >&2
-          echo "      'path' must name the repository root, the directory holding agent_artifacts/" >&2
+        if [ ! -f "$tool/aart_cli/__main__.py" ]; then
+          echo "aart: no aart_cli package under '$tool'" >&2
+          echo "      'path' must name the repository root, the directory holding aart_cli/" >&2
           exit 2
         fi
 
@@ -77,7 +77,7 @@ runs:
         mkdir -p "$bin"
         cat > "$bin/aart" <<SHIM
         #!/usr/bin/env bash
-        exec env PYTHONPATH="$tool" "$AART_PYTHON" -m agent_artifacts "\$@"
+        exec env PYTHONPATH="$tool" "$AART_CLI_PYTHON" -m aart_cli "\$@"
         SHIM
         chmod +x "$bin/aart"
         echo "$bin" >> "$GITHUB_PATH"
@@ -92,4 +92,4 @@ runs:
         } >> "$GITHUB_OUTPUT"
         echo "AART:    $version"
         echo "from:    $tool"
-        echo "python:  $("$AART_PYTHON" --version 2>&1)"
+        echo "python:  $("$AART_CLI_PYTHON" --version 2>&1)"

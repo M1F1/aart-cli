@@ -5,12 +5,12 @@ import threading
 import unittest
 from pathlib import Path
 
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.install_state.schema import parse_install_state
-from agent_artifacts.installation.application import finalize_install, prepare_install
-from agent_artifacts.installation.io import LocalInstallAdapter
-from agent_artifacts.installation.model import InstallStatus
-from agent_artifacts.profiles.builtin import builtin
+from aart_cli.domain.result import Ok
+from aart_cli.install_state.schema import parse_install_state
+from aart_cli.installation.application import finalize_install, prepare_install
+from aart_cli.installation.io import LocalInstallAdapter
+from aart_cli.installation.model import InstallStatus
+from aart_cli.profiles.builtin import builtin
 from tests.canonical_install_application_test import _fixture
 
 
@@ -75,7 +75,7 @@ class InstallConcurrencyE2ETest(unittest.TestCase):
                 )
             )
             destination = project / ".claude/skills/review/SKILL.md"
-            state_path = project / ".agent-artifacts/manifest.json"
+            state_path = project / ".aart-cli/manifest.json"
             self.assertEqual(destination.read_text(encoding="utf-8"), "# Installed\n")
             state = parse_install_state(state_path.read_bytes(), path=str(state_path))
             assert isinstance(state, Ok)

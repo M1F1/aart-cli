@@ -7,12 +7,12 @@ from pathlib import Path
 
 class LifecycleBoundaryTest(unittest.TestCase):
     def test_model_and_application_are_io_free_and_cannot_fetch_sources(self) -> None:
-        root = Path(__file__).parents[1] / "agent_artifacts/lifecycle"
+        root = Path(__file__).parents[1] / "aart_cli/lifecycle"
         forbidden_roots = {"http", "os", "pathlib", "shutil", "socket", "subprocess", "urllib"}
         forbidden_modules = {
-            "agent_artifacts.io",
-            "agent_artifacts.sources.git",
-            "agent_artifacts.sources.local",
+            "aart_cli.io",
+            "aart_cli.sources.git",
+            "aart_cli.sources.local",
         }
 
         violations: list[str] = []

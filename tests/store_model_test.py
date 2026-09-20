@@ -3,11 +3,11 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.store.model import (
+from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.store.model import (
     GcOutcome,
     GcPlan,
     GcRequest,
@@ -135,7 +135,7 @@ class StoreModelTest(unittest.TestCase):
             with self.subTest(payload=payload[:40]):
                 self.assertIsInstance(parse_object_candidate(payload), Err)
 
-        with patch("agent_artifacts.store.model._MAX_ENTRIES", 1):
+        with patch("aart_cli.store.model._MAX_ENTRIES", 1):
             self.assertIsInstance(make_object_candidate(_entries()), Err)
             self.assertIsInstance(parse_object_candidate(raw), Err)
 

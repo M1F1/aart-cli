@@ -11,7 +11,7 @@ TESTS = ROOT / "tests"
 _ROW = re.compile(r"^\| (INV-\d+) \|")
 _CITED_TEST = re.compile(r"`([a-z0-9_]+_test)\.py")
 # Package modules are cited package-relative (`domain/effects.py`), not from the repository
-# root -- the first draft of this regex demanded an `agent_artifacts/` prefix that appears in
+# root -- the first draft of this regex demanded an `aart_cli/` prefix that appears in
 # the matrix exactly zero times, so it matched nothing and passed for that reason (M38).
 _CITED_MODULE = re.compile(r"`([a-z0-9_]+(?:/[a-z0-9_]+)+\.py)")
 # `file_test.py::Class::method` or `file_test.py::method`. Naming the test is what makes a row
@@ -64,7 +64,7 @@ class TheTraceabilityMatrixCitesThingsThatExistTest(unittest.TestCase):
         missing = sorted(
             path
             for path in cited
-            if not (ROOT / "agent_artifacts" / path).is_file() and not (ROOT / path).is_file()
+            if not (ROOT / "aart_cli" / path).is_file() and not (ROOT / path).is_file()
         )
 
         self.assertGreater(len(cited), 10, "this claim is worthless if it resolves nothing")

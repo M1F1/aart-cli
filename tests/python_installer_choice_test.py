@@ -24,8 +24,8 @@ from unittest import mock
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_session import assemble_consumer_machine
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_session import assemble_consumer_machine
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerSession,
     ConsumerUiCommand,
@@ -35,7 +35,7 @@ from agent_artifacts.application.consumer_ui import (
     ConsumerUiState,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSettings,
     HarnessTargetView,
@@ -47,23 +47,23 @@ from agent_artifacts.application.consumer_views import (
     scope_row,
     target_row,
 )
-from agent_artifacts.application.python_environment import (
+from aart_cli.application.python_environment import (
     select_python_installer,
     usable_python_installers,
 )
-from agent_artifacts.domain.inspection import (
+from aart_cli.domain.inspection import (
     EnvironmentFacts,
     RemediationCapability,
     RemediationCapabilityKind,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.python_runtime import (
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.python_runtime import (
     PyProjectSpec,
     PythonInstaller,
     RequirementsFile,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame, screens_from
+from aart_cli.domain.result import Err, Ok
+from aart_cli.tui_consumer import CanonicalScreenSource, frame, screens_from
 from tests.artifact_installation_test import _facts as _plan_facts
 from tests.artifact_installation_test import _plan
 from tests.configured_install_command_e2e_test import _environment
@@ -432,7 +432,7 @@ class TheReviewScreenOffersTheBackendTest(unittest.TestCase):
 
 
 _DEPENDENT_MANIFEST = {
-    "schema": "aart.dev/mcp/v1",
+    "schema": "aart-cli.dev/mcp/v1",
     "artifact": {"name": "code-review", "kind": "mcp", "version": "1.2.0"},
     "payload": {"include": ["server.py", "requirements.txt"]},
     "transport": {"type": "stdio"},
@@ -444,7 +444,7 @@ _DEPENDENT_MANIFEST = {
 #: An artifact that actually needs Python resolved, which the standard fixture does not. Without
 #: one the backend rows can never appear, and every claim about them is a claim about nothing.
 AUTHORED_DEPENDENT = (
-    ("code-review/aart.json", json.dumps(_DEPENDENT_MANIFEST)),
+    ("code-review/aart-cli.json", json.dumps(_DEPENDENT_MANIFEST)),
     ("code-review/server.py", "print('code review')\n"),
     ("code-review/requirements.txt", "attrs\n"),
 )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.curation.model import (
+from aart_cli.curation.model import (
     CurationAction,
     CurationChange,
     CurationCheck,
@@ -12,7 +12,7 @@ from agent_artifacts.curation.model import (
     render_curation_outcome,
     render_curation_review,
 )
-from agent_artifacts.domain.identifiers import ObjectDigest
+from aart_cli.domain.identifiers import ObjectDigest
 
 
 class CurationModelTest(unittest.TestCase):
@@ -41,30 +41,34 @@ class CurationModelTest(unittest.TestCase):
     def test_review_and_outcome_render_exact_evidence_and_follow_up(self) -> None:
         digest = ObjectDigest("sha256", "a" * 64)
         review = CurationReview(
-            action=CurationAction.SCAFFOLD,
+            action=CurationAction.COLLECTION,
             workspace="/tmp/registry",
             mutating=True,
             review_digest=digest,
             snapshot_digest=ObjectDigest("sha256", "b" * 64),
-            changes=(CurationChange("artifacts/skill/demo/artifact.json", "added"),),
+            changes=(CurationChange("collections/demo.json", "added"),),
             checks=(CurationCheck("registry", True),),
             warnings=("Review generated starter content.",),
-            follow_up_commands=("aart registry validate --source /tmp/registry --strict",),
+            follow_up_commands=("aart-cli registry validate --source /tmp/registry --strict",),
         )
         rendered = "\n".join(render_curation_review(review))
-        self.assertIn("scaffold", rendered)
-        self.assertIn("artifacts/skill/demo/artifact.json", rendered)
+        self.assertIn("collection", rendered)
+        self.assertIn("collections/demo.json", rendered)
         self.assertIn(str(digest), rendered)
+        self.assertIn(
+            "AART will not commit or push; review the working-tree diff afterward.", rendered
+        )
+        self.assertNotIn("Finalizing publish", rendered)
 
         outcome = CurationOutcome(
-            action=CurationAction.SCAFFOLD,
+            action=CurationAction.COLLECTION,
             status="succeeded",
             changed_paths=1,
             follow_up_commands=review.follow_up_commands,
         )
         summary = "\n".join(render_curation_outcome(outcome))
         self.assertIn("Changed 1 managed path", summary)
-        self.assertIn("aart registry validate", summary)
+        self.assertIn("aart-cli registry validate", summary)
 
         failed = CurationOutcome(
             CurationAction.AUDIT,
@@ -76,7 +80,7 @@ class CurationModelTest(unittest.TestCase):
         self.assertIn(
             "no changes were required",
             "\n".join(
-                render_curation_outcome(CurationOutcome(CurationAction.REFRESH_NATIVE, "no-op", 0))
+                render_curation_outcome(CurationOutcome(CurationAction.REVENDOR, "no-op", 0))
             ),
         )
         self.assertIn(

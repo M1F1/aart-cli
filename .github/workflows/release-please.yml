@@ -15,7 +15,7 @@ name: release please
 # automating the version, which is why there is nothing to disable here.
 #
 # Portable to a GitHub Enterprise Server fork the way the other workflows are: by repository
-# variables only. `AART_RUNNER` chooses the runner; the action itself is pinned by tag and is the
+# variables only. `AART_CLI_RUNNER` chooses the runner; the action itself is pinned by tag and is the
 # only thing this workflow needs, because it runs on Node inside the action rather than in the
 # repository's own toolchain -- so no container image, no interpreter and no index are involved.
 on:
@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   release-please:
-    runs-on: ${{ fromJSON(vars.AART_RUNNER || '["ubuntu-latest"]') }}
+    runs-on: ${{ fromJSON(vars.AART_CLI_RUNNER || '["ubuntu-latest"]') }}
     outputs:
       released: ${{ steps.release.outputs.release_created }}
       tag: ${{ steps.release.outputs.tag_name }}

@@ -11,7 +11,7 @@ import unittest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.runtime_projection import (
+from aart_cli.application.runtime_projection import (
     LAUNCHER_BINDING_UNSUPPORTED,
     LAUNCHER_INVALID,
     LAUNCHER_PROVIDER_UNRESOLVABLE,
@@ -19,13 +19,15 @@ from agent_artifacts.application.runtime_projection import (
     MISSING_CONFIGURATION_STATUS,
     generate_launcher,
 )
-from agent_artifacts.domain.configuration_files import (
+from aart_cli.domain.configuration_files import (
     configuration_value_problem,
     render_configuration_file,
 )
-from agent_artifacts.domain.credentials import CredentialProviderRef, CredentialReference
-from agent_artifacts.domain.identifiers import InputId
-from agent_artifacts.domain.inputs import (
+from aart_cli.domain.credentials import CredentialProviderRef, CredentialReference
+from aart_cli.domain.identifiers import (
+    InputId,
+)
+from aart_cli.domain.inputs import (
     BoundInput,
     BoundInputs,
     CliArgumentBinding,
@@ -37,15 +39,15 @@ from agent_artifacts.domain.inputs import (
     SecretProviderReference,
     StdinBinding,
 )
-from agent_artifacts.domain.launch import (
+from aart_cli.domain.launch import (
     LAUNCHER_FILENAME,
     LaunchContract,
     Transport,
     launcher_path,
     shell_quote,
 )
-from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.python_runtime import ArtifactEnvironment
+from aart_cli.domain.result import Err, Ok
 
 ROOT = "/opt/agents/.tabnine/agent/aart/mcp/github"
 ENVIRONMENT = ArtifactEnvironment("mcp/github", ROOT)
@@ -177,7 +179,7 @@ class GeneratedLauncherTest(unittest.TestCase):
                 invoked.add(stripped.split()[1])
             for match in re.finditer(r"\$\((\S+)", stripped):
                 invoked.add(match.group(1))
-        self.assertEqual(invoked, {'"$AART_INTERPRETER"', "'/usr/bin/security'"})
+        self.assertEqual(invoked, {'"$AART_CLI_INTERPRETER"', "'/usr/bin/security'"})
 
     def test_a_secret_is_resolved_at_launch_rather_than_written_into_the_file(self):
         content = generate(bind(BoundInput(token_input(), token_source()))).value.content
@@ -202,14 +204,14 @@ class GeneratedLauncherTest(unittest.TestCase):
 
     def test_a_launcher_without_configuration_reads_no_file_and_takes_no_harness(self):
         content = generate(bind(BoundInput(token_input(), token_source()))).value.content
-        self.assertNotIn("AART_HARNESS", content)
+        self.assertNotIn("AART_CLI_HARNESS", content)
         self.assertNotIn("/config/", content)
 
     def test_a_cli_bound_secret_reaches_the_command_line_through_a_variable(self):
         bound = bind(BoundInput(token_input(CliArgumentBinding("--token")), token_source()))
         content = generate(bound).value.content
         self.assertIn("--token", content)
-        self.assertIn('"$AART_SECRET_GITHUB_TOKEN"', content)
+        self.assertIn('"$AART_CLI_SECRET_GITHUB_TOKEN"', content)
 
     def test_a_stdin_binding_is_refused_because_the_transport_owns_stdin(self):
         bound = bind(BoundInput(token_input(StdinBinding()), token_source()))
@@ -241,7 +243,7 @@ class GeneratedLauncherTest(unittest.TestCase):
         bound = bind(
             BoundInput(token_input(CliArgumentBinding("--token")), token_source()),
             BoundInput(
-                ConfigInput(InputId("shadow"), EnvironmentBinding("AART_SECRET_GITHUB_TOKEN")),
+                ConfigInput(InputId("shadow"), EnvironmentBinding("AART_CLI_SECRET_GITHUB_TOKEN")),
                 PersistedConfigValue(InputId("shadow"), "overwritten"),
             ),
         )
@@ -396,7 +398,7 @@ class LauncherReadsHarnessConfigurationTest(unittest.TestCase):
                 PersistedConfigValue(InputId("org"), "acme"),
             ),
             BoundInput(
-                ConfigInput(InputId("shadow"), EnvironmentBinding("AART_CONFIG_ORG")),
+                ConfigInput(InputId("shadow"), EnvironmentBinding("AART_CLI_CONFIG_ORG")),
                 PersistedConfigValue(InputId("shadow"), "overwritten"),
             ),
         )
@@ -456,6 +458,24 @@ class LauncherSecrecyPropertyTest(unittest.TestCase):
             if secret:
                 self.assertIn("find-generic-password", content)
                 self.assertNotIn(f"={name}", content)
+
+
+class LauncherNamesTheItemItsOwnInstallationHoldsTest(unittest.TestCase):
+    """§169.3: one installation, one launcher, one credential item -- written in, not composed.
+
+    It was briefly otherwise. While a placement spanned every harness it registered with, one
+    launcher served four installations and had to build the item to read from the harness it was
+    started with (D-355), because an address written in would have made four installations share
+    one secret. Each harness now has its own installation, its own tree and its own launcher, so
+    the address is concrete again and nothing about it is assembled at start.
+    """
+
+    def test_the_address_is_written_in_rather_than_assembled_at_start(self):
+        generated = generate(bind(BoundInput(token_input(), token_source())))
+
+        assert isinstance(generated, Ok), generated
+        self.assertIn(KEYCHAIN.service, generated.value.content)
+        self.assertNotIn("AART_CLI_SERVICE=", generated.value.content)
 
 
 if __name__ == "__main__":

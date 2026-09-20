@@ -7,9 +7,9 @@ forgotten in the renderer fails this test without anyone remembering to extend i
 
 from __future__ import annotations
 
-from agent_artifacts.model import SetupStateRecord
-from agent_artifacts.setup_receipt import ReceiptLocation
-from agent_artifacts.setup_render import receipt_payload, render_receipt_payload
+from aart_cli.model import SetupStateRecord
+from aart_cli.setup_receipt import ReceiptLocation
+from aart_cli.setup_render import receipt_payload, render_receipt_payload
 from tests.credential_fixtures import assignment
 from tests.function_cases import function_test_case
 
@@ -35,8 +35,8 @@ RECORD = SetupStateRecord(
     started_at="2026-08-15T09:00:00Z",
     finished_at="2026-08-15T09:00:42Z",
     exit_status=0,
-    retry_command="aart marketplace setup registry-a/mcp/github-docker@1.0.0 --yes",
-    rollback_command="aart marketplace receipt undo registry-a/mcp/github-docker",
+    retry_command="aart-cli marketplace setup registry-a/mcp/github-docker@1.0.0 --yes",
+    rollback_command="aart-cli marketplace receipt undo registry-a/mcp/github-docker",
     receipt=(
         {
             "step_id": "build",

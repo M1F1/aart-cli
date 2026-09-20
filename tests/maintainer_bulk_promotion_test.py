@@ -13,22 +13,22 @@ import builtins
 import json
 import unittest
 
-from agent_artifacts.application.candidate_validation import validate_candidate
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.candidate_validation import validate_candidate
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer import reconcile_source_scan
-from agent_artifacts.application.maintainer_sync import ApprovedRegistryState
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.application.maintainer_sync import ApprovedRegistryState
+from aart_cli.application.maintainer_views import (
     MaintainerBulkPromotionView,
     MaintainerScreen,
     MaintainerViews,
@@ -38,20 +38,20 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_source,
     project_maintainer_validation,
 )
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.candidates import CandidateState
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.candidates import CandidateState
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
 from tests.marketplace_fixtures import configured_source, source_state
 
 #: A secret bound to argv compiles and then fails the secret-metadata check, which is what makes it
@@ -80,7 +80,7 @@ def _digest(character: str) -> ObjectDigest:
 
 def _manifest(name: str, *, inputs: list[dict[str, object]] | None = None) -> dict[str, object]:
     manifest: dict[str, object] = {
-        "schema": "aart.dev/mcp/v1",
+        "schema": "aart-cli.dev/mcp/v1",
         "artifact": {"name": name, "kind": "mcp", "version": "1.0.0"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
@@ -96,7 +96,7 @@ def _scan(names, *, registry: str = "company", flawed: frozenset[str] = frozense
     entries: list[SnapshotEntry] = []
     for name in names:
         manifest = _manifest(name, inputs=[_ARGV_SECRET] if name in flawed else None)
-        entries.append(_entry(f"{name}/aart.json", json.dumps(manifest, sort_keys=True)))
+        entries.append(_entry(f"{name}/aart-cli.json", json.dumps(manifest, sort_keys=True)))
         entries.append(_entry(f"{name}/server.py", "print('x')\n"))
     compiled = compile_author_snapshot(
         SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),

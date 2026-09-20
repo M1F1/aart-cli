@@ -15,21 +15,21 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts import cli
-from agent_artifacts.configuration.model import (
+from aart_cli import cli
+from aart_cli.configuration.model import (
     ConfiguredSource,
     SourceKind,
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.paths import (
+from aart_cli.configuration.paths import (
     Platform,
     config_lock_directory,
     resolve_config_paths,
 )
-from agent_artifacts.configuration.schema import parse_user_configuration, user_configuration_bytes
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Ok
+from aart_cli.configuration.schema import parse_user_configuration, user_configuration_bytes
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Ok
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "native-source-v1"
 
@@ -40,17 +40,13 @@ class _Environment:
         self.home.mkdir()
         self.environ = {
             "HOME": str(self.home),
-            "XDG_CONFIG_HOME": str(self.home / ".config"),
-            "XDG_DATA_HOME": str(self.home / ".local" / "share"),
-            "XDG_CACHE_HOME": str(self.home / ".cache"),
+            "AART_CLI_HOME": str(self.home / ".aart-cli"),
         }
         platform = Platform.DARWIN if os.sys.platform == "darwin" else Platform.LINUX
         self.paths = resolve_config_paths(
             platform,
             home=str(self.home),
-            xdg_config_home=self.environ["XDG_CONFIG_HOME"],
-            xdg_data_home=self.environ["XDG_DATA_HOME"],
-            xdg_cache_home=self.environ["XDG_CACHE_HOME"],
+            application_home=self.environ["AART_CLI_HOME"],
         )
         self.config_path = Path(self.paths.user_config_file)
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,7 +120,7 @@ class SourceAddConfigCasTest(unittest.TestCase):
                 env.write_configuration(competitor)
                 return real_sync(source, data_root=data_root)
 
-            from agent_artifacts.commands import source as source_command
+            from aart_cli.commands import source as source_command
 
             real_sync = source_command.sync_configured_source
             with mock.patch.object(source_command, "sync_configured_source", racing_sync):
@@ -145,7 +141,7 @@ class SourceAddConfigCasTest(unittest.TestCase):
 
             # Shorten the wait: this asserts the outcome of losing the lock, not how long a real
             # CLI is willing to wait for a competing writer.
-            with mock.patch("agent_artifacts.io.config_cas.DEFAULT_LOCK_TIMEOUT_SECONDS", 0.05):
+            with mock.patch("aart_cli.io.config_cas.DEFAULT_LOCK_TIMEOUT_SECONDS", 0.05):
                 code, payload = env.add_source("reference")
 
             self.assertEqual(code, 1, payload)

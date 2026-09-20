@@ -25,44 +25,44 @@ import sys
 import tempfile
 import unittest
 
-from agent_artifacts.application.artifact_installation import (
+from aart_cli.application.artifact_installation import (
     installation_remediations,
     plan_artifact_installation,
 )
-from agent_artifacts.application.consumer_session import begin_installation
-from agent_artifacts.application.execution import (
+from aart_cli.application.consumer_session import begin_installation
+from aart_cli.application.execution import (
     InstallationExecutionStatus,
     execute_installation,
 )
-from agent_artifacts.application.installation_planning import inspect_requirements
-from agent_artifacts.application.installation_proposal import desired_state_for, intended_receipt
-from agent_artifacts.application.installed_state import current_state_from_observation
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
-from agent_artifacts.domain.artifacts import ArtifactKind
-from agent_artifacts.domain.candidates import CandidateId
-from agent_artifacts.domain.credentials import CredentialProviderRef
-from agent_artifacts.domain.harness import (
+from aart_cli.application.installation_planning import inspect_requirements
+from aart_cli.application.installation_proposal import desired_state_for, intended_receipt
+from aart_cli.application.installed_state import current_state_from_observation
+from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.domain.artifacts import ArtifactKind
+from aart_cli.domain.candidates import CandidateId
+from aart_cli.domain.credentials import CredentialProviderRef
+from aart_cli.domain.harness import (
     Scope,
     delivery_destination,
     delivery_target,
     mcp_target,
 )
-from agent_artifacts.domain.identifiers import InputId, SourceAlias
-from agent_artifacts.domain.inputs import PersistedConfigValue, SecretProviderReference
-from agent_artifacts.domain.inspection import (
+from aart_cli.domain.identifiers import InputId, SourceAlias
+from aart_cli.domain.inputs import PersistedConfigValue, SecretProviderReference
+from aart_cli.domain.inspection import (
     EnvironmentFacts,
     RemediationCapability,
     RemediationCapabilityKind,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.reconciliation import ComponentState
-from agent_artifacts.domain.registry import (
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.reconciliation import ComponentState
+from aart_cli.domain.registry import (
     PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.domain.selection import (
+from aart_cli.domain.result import Ok
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     OwnershipKind,
@@ -71,20 +71,20 @@ from agent_artifacts.domain.selection import (
     ResolvedSelection,
     VersionConstraint,
 )
-from agent_artifacts.io.environment_inspection import LocalEnvironmentInspector
-from agent_artifacts.io.execution import LocalMutationLock
-from agent_artifacts.io.harness import LocalHarnessRegistry
-from agent_artifacts.io.installation_execution import interpreters_for
-from agent_artifacts.io.object_store import publish_object, read_object
-from agent_artifacts.io.runtime_projection import observe_installation
-from agent_artifacts.protocol.authoring import (
+from aart_cli.io.environment_inspection import LocalEnvironmentInspector
+from aart_cli.io.execution import LocalMutationLock
+from aart_cli.io.harness import LocalHarnessRegistry
+from aart_cli.io.installation_execution import interpreters_for
+from aart_cli.io.object_store import publish_object, read_object
+from aart_cli.io.runtime_projection import observe_installation
+from aart_cli.protocol.authoring import (
     compile_author_snapshot,
     package_payload_root,
     read_package_description,
 )
-from agent_artifacts.sources.local import read_local_snapshot
-from agent_artifacts.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
-from agent_artifacts.store.model import (
+from aart_cli.sources.local import read_local_snapshot
+from aart_cli.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
+from aart_cli.store.model import (
     ObjectPublishCommand,
     ObjectReadRequest,
     make_object_candidate,
@@ -100,7 +100,7 @@ KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/data-scientis
 #: The same authored server the Tabnine E2E uses, declaring OpenCode instead. Everything the
 #: install needs -- runtime, dependencies, launch arguments, both inputs -- is declared here once.
 MANIFEST = {
-    "schema": "aart.dev/mcp/v1",
+    "schema": "aart-cli.dev/mcp/v1",
     "artifact": {"name": "github", "kind": "mcp", "version": "1.5.0"},
     "payload": {"include": ["server.py", "requirements.txt"]},
     "transport": {"type": "stdio"},
@@ -156,7 +156,7 @@ class OpenCodeMcpInstallationTest(unittest.TestCase):
     def _compile(self):
         repository = self.scope / "author"
         (repository / "github").mkdir(parents=True)
-        (repository / "github/aart.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
+        (repository / "github/aart-cli.json").write_text(json.dumps(MANIFEST), encoding="utf-8")
         (repository / "github/server.py").write_text(SERVER_SOURCE, encoding="utf-8")
         (repository / "github/requirements.txt").write_text(
             "# no third-party packages\n", encoding="utf-8"

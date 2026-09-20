@@ -7,24 +7,24 @@ import unittest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.python_environment import (
+from aart_cli.application.python_environment import (
     NO_COMPATIBLE_INSTALLER,
     PYTHON_ENVIRONMENT_INVALID,
     plan_python_environment,
     select_python_installer,
 )
-from agent_artifacts.domain.effects import (
+from aart_cli.domain.effects import (
     CreatePythonEnvironment,
     InstallPythonDependencies,
     RiskClass,
 )
-from agent_artifacts.domain.inspection import (
+from aart_cli.domain.inspection import (
     EnvironmentFacts,
     RemediationCapability,
     RemediationCapabilityKind,
 )
-from agent_artifacts.domain.policies import EffectivePolicy, PolicyOverlay, compose_policy
-from agent_artifacts.domain.python_runtime import (
+from aart_cli.domain.policies import EffectivePolicy, PolicyOverlay, compose_policy
+from aart_cli.domain.python_runtime import (
     ArtifactEnvironment,
     PyProjectSpec,
     PythonInstaller,
@@ -33,7 +33,7 @@ from agent_artifacts.domain.python_runtime import (
     dependency_spec_to_data,
     spec_kind,
 )
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.result import Err, Ok
 
 BASE = "/usr/local/bin/python3.11"
 

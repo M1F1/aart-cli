@@ -25,7 +25,7 @@ from unittest import mock
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -36,22 +36,22 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     PresentationProfile,
     project_credential_record,
 )
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.consumer_actions import LocalConsumerActions
-from agent_artifacts.io.consumer_machine import read_consumer_machine
-from agent_artifacts.io.receipt_store import LocalReceiptStore
-from agent_artifacts.tui_consumer import CanonicalScreenSource, _reload, frame
+from aart_cli.domain.result import Ok
+from aart_cli.io.consumer_actions import LocalConsumerActions
+from aart_cli.io.consumer_machine import read_consumer_machine
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.tui_consumer import CanonicalScreenSource, _reload, frame
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions, _at, _drive
 from tests.consumer_install_flow_shell_test import _navigate, at, screens
@@ -352,7 +352,13 @@ class _Journal:
 
 
 class _Provider:
-    """A provider that records every call and never holds or returns a value."""
+    """A provider that records every call and never holds or returns a value.
+
+    It keeps state per reference, not one flag for all of them. Each installation holds its own
+    item (§169.4-6), so storing one must not make another look present -- a double that answered
+    for every address at once would report an install as ready when nobody had entered its value.
+    `present` remains the state of every address nothing has been done to.
+    """
 
     provider = "macos-keychain"
 
@@ -362,13 +368,15 @@ class _Provider:
         self.present = CredentialState.PRESENT
         self.after_store = CredentialState.PRESENT
         self.stored: list[tuple[object, bool]] = []
+        self._held: dict[str, CredentialState] = {}
 
     def available(self) -> ProviderState:
         return self._provider_state
 
     def _observation(self, reference) -> Ok:
         known = self._provider_state is ProviderState.AVAILABLE
-        state = self.present if known else CredentialState.UNKNOWN
+        held = self._held.get(str(reference), self.present)
+        state = held if known else CredentialState.UNKNOWN
         return Ok(CredentialObservation(reference, self._provider_state, state))
 
     def inspect(self, reference):
@@ -378,12 +386,12 @@ class _Provider:
     def store(self, reference, secret=None, *, replace=False):
         self._journal.entries.append("prompted")
         self.stored.append((secret, replace))
-        self.present = self.after_store
+        self._held[str(reference)] = self.after_store
         return self._observation(reference)
 
     def delete(self, reference):
         self._journal.entries.append("deleted")
-        self.present = CredentialState.ABSENT
+        self._held[str(reference)] = CredentialState.ABSENT
         return self._observation(reference)
 
 

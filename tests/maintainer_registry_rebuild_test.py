@@ -21,7 +21,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -31,18 +31,18 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerSession, ConsumerSettings
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.consumer_views import ConsumerSession, ConsumerSettings
+from aart_cli.application.maintainer_views import (
     MaintainerScreen,
     maintainer_navigation_targets,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.registry_bootstrap import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.registry_bootstrap import (
     REGISTRY_MAINTENANCE_STAGES,
     bootstrap_registry_workspace,
     refresh_registry_workspace,
 )
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
+from aart_cli.tui_consumer import CanonicalScreenSource, frame
 from tests.consumer_shell_test import screens
 
 _PICKER_ROWS = ("all", "lock", "build", "validate", "audit")
@@ -108,7 +108,7 @@ class MaintainerRegistryRebuildInteractionTest(unittest.TestCase):
     def test_absent_registry_guidance_names_the_current_project_not_an_internal_screen(
         self,
     ) -> None:
-        from agent_artifacts.io.registry_bootstrap import registry_absent_refusal
+        from aart_cli.io.registry_bootstrap import registry_absent_refusal
 
         with tempfile.TemporaryDirectory() as root:
             refused = registry_absent_refusal(root)
@@ -201,8 +201,8 @@ class RegistryRefreshTest(unittest.TestCase):
 
     def test_one_run_locks_builds_validates_and_audits_without_initializing_again(self) -> None:
         root = self._registry()
-        identity = open(os.path.join(root, "aart-registry.json"), "rb").read()
-        os.remove(os.path.join(root, "aart.index.json"))
+        identity = open(os.path.join(root, "aart-cli-registry.json"), "rb").read()
+        os.remove(os.path.join(root, "registry", "index.json"))
 
         report = refresh_registry_workspace(root=root)
 
@@ -212,20 +212,20 @@ class RegistryRefreshTest(unittest.TestCase):
             tuple(stage.name for stage in report.value.stages), REGISTRY_MAINTENANCE_STAGES
         )
         self.assertTrue(report.value.passed, report.value.stages)
-        self.assertTrue(os.path.isfile(os.path.join(root, "aart.index.json")))
+        self.assertTrue(os.path.isfile(os.path.join(root, "registry", "index.json")))
         # `init` is not part of this run: the registry's identity is left exactly as it was.
-        self.assertEqual(open(os.path.join(root, "aart-registry.json"), "rb").read(), identity)
+        self.assertEqual(open(os.path.join(root, "aart-cli-registry.json"), "rb").read(), identity)
 
     def test_one_named_stage_runs_alone(self) -> None:
         root = self._registry()
-        os.remove(os.path.join(root, "aart.index.json"))
+        os.remove(os.path.join(root, "registry", "index.json"))
 
         report = refresh_registry_workspace(root=root, stages=("validate",))
 
         assert isinstance(report, Ok), report
         self.assertEqual(tuple(stage.name for stage in report.value.stages), ("validate",))
         # `build` was not asked for, so nothing rebuilt the index behind the operator's back.
-        self.assertFalse(os.path.isfile(os.path.join(root, "aart.index.json")))
+        self.assertFalse(os.path.isfile(os.path.join(root, "registry", "index.json")))
 
     def test_the_named_stages_run_in_the_canonical_order_whatever_order_they_arrive_in(
         self,
@@ -248,7 +248,7 @@ class RegistryRefreshTest(unittest.TestCase):
 
         self.assertIsInstance(refused, Err)
         assert isinstance(refused, Err)
-        self.assertFalse(os.path.exists(os.path.join(root, "aart.lock.json")))
+        self.assertFalse(os.path.exists(os.path.join(root, "registry")))
         self.assertNotIn("aart ", "\n".join(refused.diagnostics[0].interactive))
 
     def test_a_stage_nobody_named_is_refused_rather_than_quietly_ignored(self) -> None:
@@ -261,9 +261,9 @@ class RegistryRefreshTest(unittest.TestCase):
                 self.assertIsInstance(refused, Err, stages)
 
     def test_a_failing_gate_stops_the_run_and_says_which_one(self) -> None:
-        from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-        from agent_artifacts.io import registry_bootstrap
-        from agent_artifacts.registry_commands.model import (
+        from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+        from aart_cli.io import registry_bootstrap
+        from aart_cli.registry_commands.model import (
             RegistryQualityCheck,
             RegistryQualityReport,
         )
@@ -302,7 +302,7 @@ class MaintainerRegistryRebuildActionTest(unittest.TestCase):
     """The action boundary: reviewed by name, run once, and drawn as stages afterwards."""
 
     def _composed(self, env):
-        from agent_artifacts import tui
+        from aart_cli import tui
 
         composed = tui._canonical_consumer_actions(
             project=str(env.project), user_home=str(env.home), today=tui.date.today()
@@ -373,7 +373,7 @@ class MaintainerRegistryRebuildActionTest(unittest.TestCase):
                 root=str(env.project), registry_id="acme-registry", display_name="ACME Registry"
             )
             assert isinstance(created, Ok) and created.value.passed, created
-            index = os.path.join(str(env.project), "aart.index.json")
+            index = os.path.join(str(env.project), "registry", "index.json")
             os.remove(index)
             actions = self._composed(env)
             prepared = self._prepare(actions, "all")
@@ -407,8 +407,8 @@ class MaintainerRegistryRebuildShellTest(unittest.TestCase):
         import os as _os
         from unittest import mock as _mock
 
-        from agent_artifacts import tui
-        from agent_artifacts.tui_consumer import run_consumer_shell
+        from aart_cli import tui
+        from aart_cli.tui_consumer import run_consumer_shell
         from tests.configured_install_command_e2e_test import _environment
         from tests.consumer_shell_test import ENTER, FakeTerminal
 
@@ -418,7 +418,7 @@ class MaintainerRegistryRebuildShellTest(unittest.TestCase):
                 root=str(env.project), registry_id="acme-registry", display_name="ACME Registry"
             )
             assert isinstance(created, Ok) and created.value.passed, created
-            index = _os.path.join(str(env.project), "aart.index.json")
+            index = _os.path.join(str(env.project), "registry", "index.json")
             _os.remove(index)
             composed = tui._canonical_consumer_actions(
                 project=str(env.project), user_home=str(env.home), today=tui.date.today()

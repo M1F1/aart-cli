@@ -11,27 +11,27 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from agent_artifacts import __version__, cli
-from agent_artifacts.application.configuration import (
+from aart_cli import __version__, cli
+from aart_cli.application.configuration import (
     ConfigRecoveryPlan,
     ConfigurationPorts,
     ConfigWriteReceipt,
     LoadedConfiguration,
 )
-from agent_artifacts.commands._configured_runtime import ConfiguredRuntime
-from agent_artifacts.configuration.model import (
+from aart_cli.commands._configured_runtime import ConfiguredRuntime
+from aart_cli.configuration.model import (
     ConfiguredSource,
     SourceKind,
     default_organization_policy,
     default_user_configuration,
 )
-from agent_artifacts.configuration.paths import ConfigPaths
-from agent_artifacts.configuration.policy import RuntimeOverrides, apply_configuration
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.hashing import sha256_bytes
-from agent_artifacts.sources.model import (
+from aart_cli.configuration.paths import ConfigPaths
+from aart_cli.configuration.policy import RuntimeOverrides, apply_configuration
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.hashing import sha256_bytes
+from aart_cli.sources.model import (
     HealthStatus,
     SourceHealth,
     SourceIdentityTransition,
@@ -59,10 +59,11 @@ def _runtime(
     effective = apply_configuration(user, RuntimeOverrides(), policy)
     assert isinstance(effective, Ok)
     paths = ConfigPaths(
+        "/tmp/aart-cli",
         "/tmp/aart-cli/config.json",
-        "/tmp/aart-cli/data",
+        "/tmp/aart-cli",
         "/tmp/aart-cli/cache",
-        "/tmp/aart-cli/policy.json",
+        "/etc/aart-cli/policy.json",
     )
 
     def read(_request):
@@ -157,10 +158,12 @@ class SourceCliCommandTests(unittest.TestCase):
     def test_local_source_add_then_agent_browse_uses_durable_state_without_objects(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw).resolve()
+            home = root / "aart-cli-home"
             paths = ConfigPaths(
-                str(root / "config" / "config.json"),
-                str(root / "data"),
-                str(root / "cache"),
+                str(home),
+                str(home / "config.json"),
+                str(home),
+                str(home / "cache"),
                 str(root / "policy.json"),
             )
             fixture = str(
@@ -170,7 +173,7 @@ class SourceCliCommandTests(unittest.TestCase):
             list_stdout = io.StringIO()
             marketplace_stdout = io.StringIO()
             with patch(
-                "agent_artifacts.commands._configured_runtime.resolve_config_paths",
+                "aart_cli.commands._configured_runtime.resolve_config_paths",
                 return_value=paths,
             ):
                 with contextlib.redirect_stdout(add_stdout):
@@ -213,11 +216,11 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 side_effect=(Ok(runtime), Ok(runtime)),
             ),
             patch(
-                "agent_artifacts.commands.source.sync_configured_source",
+                "aart_cli.commands.source.sync_configured_source",
                 side_effect=synchronize,
             ),
             contextlib.redirect_stdout(stdout),
@@ -260,11 +263,11 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 return_value=Ok(runtime),
             ),
             patch(
-                "agent_artifacts.commands.source.sync_configured_source",
+                "aart_cli.commands.source.sync_configured_source",
                 return_value=failed,
             ),
             contextlib.redirect_stdout(stdout),
@@ -309,11 +312,11 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 side_effect=(Ok(runtime), Ok(runtime)),
             ),
             patch(
-                "agent_artifacts.commands.source.sync_configured_source",
+                "aart_cli.commands.source.sync_configured_source",
                 return_value=Ok(_sync_outcome()),
             ),
             contextlib.redirect_stdout(stdout),
@@ -348,10 +351,10 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 return_value=Ok(runtime),
             ),
-            patch("agent_artifacts.commands.source.sync_configured_source") as synchronize,
+            patch("aart_cli.commands.source.sync_configured_source") as synchronize,
             contextlib.redirect_stdout(stdout),
         ):
             result = cli.main(
@@ -387,11 +390,11 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 side_effect=(Ok(before), Ok(after)),
             ),
             patch(
-                "agent_artifacts.commands.source.sync_configured_source",
+                "aart_cli.commands.source.sync_configured_source",
                 side_effect=lambda *_args, **_kwargs: (events.append("sync"), Ok(_sync_outcome()))[
                     1
                 ],
@@ -482,15 +485,15 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 return_value=Ok(runtime),
             ),
             patch(
-                "agent_artifacts.commands.source.resubscribe_configured_source",
+                "aart_cli.commands.source.resubscribe_configured_source",
                 side_effect=resubscribe,
             ),
             patch(
-                "agent_artifacts.commands.source._source_health",
+                "aart_cli.commands.source._source_health",
                 return_value=SourceHealth(HealthStatus.HEALTHY, 12, None),
             ),
             contextlib.redirect_stdout(stdout),
@@ -544,15 +547,15 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 return_value=Ok(runtime),
             ),
             patch(
-                "agent_artifacts.commands.source.resubscribe_configured_source",
+                "aart_cli.commands.source.resubscribe_configured_source",
                 side_effect=resubscribe,
             ),
             patch(
-                "agent_artifacts.commands.source._source_health",
+                "aart_cli.commands.source._source_health",
                 return_value=SourceHealth(HealthStatus.HEALTHY, 12, None),
             ),
             contextlib.redirect_stdout(stdout),
@@ -594,15 +597,15 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 return_value=Ok(runtime),
             ),
             patch(
-                "agent_artifacts.commands.source.resubscribe_configured_source",
+                "aart_cli.commands.source.resubscribe_configured_source",
                 side_effect=resubscribe,
             ),
             patch(
-                "agent_artifacts.commands.source._source_health",
+                "aart_cli.commands.source._source_health",
                 return_value=SourceHealth(HealthStatus.HEALTHY, 12, None),
             ),
             contextlib.redirect_stdout(stdout),
@@ -625,15 +628,15 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 return_value=Ok(runtime),
             ),
             patch(
-                "agent_artifacts.commands.source.resubscribe_configured_source",
+                "aart_cli.commands.source.resubscribe_configured_source",
                 side_effect=AssertionError("an unknown alias must never reach the origin"),
             ),
             patch(
-                "agent_artifacts.commands.source._source_health",
+                "aart_cli.commands.source._source_health",
                 return_value=SourceHealth(HealthStatus.HEALTHY, 12, None),
             ),
             contextlib.redirect_stdout(stdout),
@@ -642,7 +645,7 @@ class SourceCliCommandTests(unittest.TestCase):
 
         self.assertEqual(result, 1)
         payload = json.loads(stdout.getvalue())
-        self.assertIn("aart source list", payload["diagnostics"][0]["remediation"][0])
+        self.assertIn("aart-cli source list", payload["diagnostics"][0]["remediation"][0])
 
     def test_remove_without_yes_reviews_and_touches_neither_store_nor_configuration(self) -> None:
         events: list[str] = []
@@ -651,15 +654,15 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 return_value=Ok(runtime),
             ),
             patch(
-                "agent_artifacts.commands.source.discard_configured_source",
+                "aart_cli.commands.source.discard_configured_source",
                 side_effect=AssertionError("review must not touch the managed store"),
             ),
             patch(
-                "agent_artifacts.commands.source._source_health",
+                "aart_cli.commands.source._source_health",
                 return_value=SourceHealth(HealthStatus.HEALTHY, 12, None),
             ),
             contextlib.redirect_stdout(stdout),
@@ -687,15 +690,15 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 return_value=Ok(runtime),
             ),
             patch(
-                "agent_artifacts.commands.source.discard_configured_source",
+                "aart_cli.commands.source.discard_configured_source",
                 side_effect=discard,
             ),
             patch(
-                "agent_artifacts.commands.source._source_health",
+                "aart_cli.commands.source._source_health",
                 return_value=SourceHealth(HealthStatus.HEALTHY, 12, None),
             ),
             contextlib.redirect_stdout(stdout),
@@ -725,15 +728,15 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 return_value=Ok(runtime),
             ),
             patch(
-                "agent_artifacts.commands.source.discard_configured_source",
+                "aart_cli.commands.source.discard_configured_source",
                 return_value=failed,
             ),
             patch(
-                "agent_artifacts.commands.source._source_health",
+                "aart_cli.commands.source._source_health",
                 return_value=SourceHealth(HealthStatus.HEALTHY, 12, None),
             ),
             contextlib.redirect_stdout(stdout),
@@ -751,11 +754,11 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 return_value=Ok(runtime),
             ),
             patch(
-                "agent_artifacts.commands.source._source_health",
+                "aart_cli.commands.source._source_health",
                 return_value=SourceHealth(HealthStatus.HEALTHY, 12, None),
             ),
             contextlib.redirect_stdout(stdout),
@@ -765,7 +768,7 @@ class SourceCliCommandTests(unittest.TestCase):
         self.assertEqual(result, 1)
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["diagnostics"][0]["code"], "source-selection-invalid")
-        self.assertIn("aart source list", payload["diagnostics"][0]["remediation"][0])
+        self.assertIn("aart-cli source list", payload["diagnostics"][0]["remediation"][0])
 
     def test_list_reports_managed_health_without_mutating_configuration(self) -> None:
         source = ConfiguredSource(
@@ -786,11 +789,11 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 return_value=Ok(runtime),
             ),
             patch(
-                "agent_artifacts.commands.source._source_health",
+                "aart_cli.commands.source._source_health",
                 return_value=SourceHealth(HealthStatus.HEALTHY, 12, None),
             ),
             contextlib.redirect_stdout(stdout),
@@ -813,7 +816,7 @@ class SourceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.source.load_runtime_configuration",
+                "aart_cli.commands.source.load_runtime_configuration",
                 return_value=Ok(_runtime(recovery=recovery)),
             ),
             contextlib.redirect_stdout(stdout),
@@ -852,15 +855,15 @@ class MarketplaceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.marketplace.load_runtime_configuration",
+                "aart_cli.commands.marketplace.load_runtime_configuration",
                 return_value=Ok(runtime),
             ),
             patch(
-                "agent_artifacts.commands.marketplace.load_read_only_marketplace",
+                "aart_cli.commands.marketplace.load_read_only_marketplace",
                 return_value=Ok(object()),
             ),
             patch(
-                "agent_artifacts.commands.marketplace.marketplace_catalog_bytes",
+                "aart_cli.commands.marketplace.marketplace_catalog_bytes",
                 return_value=json.dumps(snapshot).encode("utf-8"),
             ),
             contextlib.redirect_stdout(stdout),
@@ -887,7 +890,7 @@ class MarketplaceCliCommandTests(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch(
-                "agent_artifacts.commands.marketplace.load_runtime_configuration",
+                "aart_cli.commands.marketplace.load_runtime_configuration",
                 return_value=no_source,
             ),
             contextlib.redirect_stdout(stdout),

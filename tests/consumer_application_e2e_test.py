@@ -30,26 +30,30 @@ import stat
 import unittest
 from unittest import mock
 
-from agent_artifacts import tui
-from agent_artifacts.application.consumer_ui import ConsumerUiState, opening_state
-from agent_artifacts.application.consumer_views import (
+from aart_cli import tui
+from aart_cli.application.consumer_ui import ConsumerUiState, opening_state
+from aart_cli.application.consumer_views import (
     SETTING_ROWS,
     ConsumerScreen,
     ConsumerSession,
     PresentationProfile,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.tui_consumer import run_consumer_shell
+from aart_cli.domain.result import Ok
+from aart_cli.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
 from tests.consumer_shell_test import DOWN, ENTER, ESCAPE, SPACE, FakeTerminal
 
 TODAY = dt.date(2026, 9, 1)
 OFFERED = "company/skill/code-review@1.2.0"
+#: The same artifact as one installation. Rows and focus address this rather than `OFFERED`: each
+#: harness is its own installation (§169.3), so the artifact alone no longer names one thing to act
+#: on. These tests install into claude only, so there is exactly one.
+INSTALLED = f"{OFFERED}#claude"
 
 
 def _delivered(env) -> pathlib.Path:
-    return env.project / ".claude/skills/code-review/SKILL.md"
+    return env.project / ".claude/skills/code-review-company-project/SKILL.md"
 
 
 def _delete_delivery(env) -> None:
@@ -193,7 +197,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             finished, terminal, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=OFFERED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
                 ord("r"),
                 ENTER,
                 actions=handler,
@@ -210,7 +214,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             finished, terminal, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=OFFERED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
                 ord("r"),
                 actions=handler,
             )
@@ -230,7 +234,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             finished, terminal, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=OFFERED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
                 ord("u"),
                 ENTER,
                 actions=handler,
@@ -248,7 +252,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             finished, _, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=OFFERED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
                 ord("u"),
                 actions=handler,
             )
@@ -300,7 +304,7 @@ class ConsumerApplicationSettingsTest(unittest.TestCase):
             _drive(env, _at(ConsumerScreen.MARKETPLACE), *_INSTALL, actions=chosen)
 
             self.assertTrue(
-                (env.home / ".claude/skills/code-review/SKILL.md").exists(),
+                (env.home / ".claude/skills/code-review-company-user/SKILL.md").exists(),
                 "the user-scope install never reached the user home",
             )
             self.assertFalse(

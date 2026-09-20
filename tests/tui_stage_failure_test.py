@@ -5,14 +5,14 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity, SourceLocation
-from agent_artifacts.domain.result import Err
-from agent_artifacts.tui_failures import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity, SourceLocation
+from aart_cli.domain.result import Err
+from aart_cli.tui_failures import (
     WizardStageFailure,
     render_wizard_stage_failure,
     wizard_stage_failure,
 )
-from agent_artifacts.wizard import WizardSession
+from aart_cli.wizard import WizardSession
 
 
 class WizardStageFailureTests(unittest.TestCase):
@@ -21,7 +21,7 @@ class WizardStageFailureTests(unittest.TestCase):
             DiagnosticCode("install-state-legacy"),
             Severity.ERROR,
             "AART 0.1 installation state was detected.",
-            SourceLocation(path="/work/project/.agent-artifacts/manifest.json"),
+            SourceLocation(path="/work/project/.aart-cli/manifest.json"),
             remediation=("Preview migration first.",),
             details=(("detected_schema", "install-state-v0.1"),),
         )
@@ -72,7 +72,7 @@ class WizardStageFailureTests(unittest.TestCase):
                     Severity.ERROR,
                     "AART 0.1 installation state was detected while loading a project artifact view.",
                     SourceLocation(
-                        path="/work/project/.agent-artifacts/manifest.json",
+                        path="/work/project/.aart-cli/manifest.json",
                         pointer="/installed",
                     ),
                     remediation=(

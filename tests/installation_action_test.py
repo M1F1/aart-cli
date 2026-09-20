@@ -10,16 +10,16 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.installation_action import (
+from aart_cli.application.installation_action import (
     ACTION_REVIEW_MISMATCH,
     CompletedInstallationAction,
     PreparedInstallationAction,
     complete_installation_action,
     prepare_installation_action,
 )
-from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.result import Err, Ok
 from tests.artifact_installation_test import (
     INTERPRETER,
     _capabilities,

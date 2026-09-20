@@ -10,18 +10,18 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.consumer_views import PresentationProfile
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.consumer_views import PresentationProfile
+from aart_cli.application.maintainer_views import (
     MaintainerSourceStatus,
     MaintainerSourceView,
     project_maintainer_dashboard,
 )
-from agent_artifacts.domain.candidates import (
+from aart_cli.domain.candidates import (
     ACTIVE_CANDIDATE_STATES,
     SETTLED_CANDIDATE_STATES,
     CandidateState,
 )
-from agent_artifacts.tui_maintainer import (
+from aart_cli.tui_maintainer import (
     render_maintainer_dashboard,
     render_maintainer_source,
 )

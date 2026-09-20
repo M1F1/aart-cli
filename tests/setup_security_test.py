@@ -7,9 +7,9 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.model import SetupQueueItem
-from agent_artifacts.setup import parse_installer, plan_setup, recovery_messages
-from agent_artifacts.setup_runtime import (
+from aart_cli.model import SetupQueueItem
+from aart_cli.setup import parse_installer, plan_setup, recovery_messages
+from aart_cli.setup_runtime import (
     ProcessResult,
     SetupRuntime,
     apply_setup_plan,

@@ -13,7 +13,7 @@ therefore cannot mean "nothing has happened here since". What remembers is the i
 and that is exactly what neither a sync nor a rollback is allowed to touch.
 
 Every scenario here runs over one real temporary machine with one real local source that the test
-republishes into, through `aart source sync`, `aart marketplace status` and `aart marketplace
+republishes into, through `aart-cli source sync`, `aart-cli marketplace status` and `aart-cli marketplace
 update`. Nothing below the CLI is mocked.
 """
 
@@ -39,7 +39,7 @@ def _payload_file(location: Path) -> Path:
 
 
 def _record(env) -> dict:
-    state = json.loads((env.project / ".agent-artifacts" / "manifest.json").read_text())
+    state = json.loads((env.project / ".aart-cli" / "manifest.json").read_text())
     installations = state["installations"]
     assert len(installations) == 1, state
     return installations[0]

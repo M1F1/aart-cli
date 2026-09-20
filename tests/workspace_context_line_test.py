@@ -25,16 +25,16 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_ui import ConsumerUiState, opening_state
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_ui import ConsumerUiState, opening_state
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
 )
-from agent_artifacts.application.maintainer_views import MaintainerScreen
-from agent_artifacts.tui import launch_workspace
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame
-from agent_artifacts.tui_layout import CONTENT_MEASURE, abbreviate_path, footer_start
+from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.tui import launch_workspace
+from aart_cli.tui_consumer import CanonicalScreenSource, frame
+from aart_cli.tui_layout import CONTENT_MEASURE, abbreviate_path, footer_start
 from tests.consumer_shell_test import screens
 
 

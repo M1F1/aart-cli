@@ -20,7 +20,7 @@ import subprocess
 import textwrap
 import unittest
 
-from agent_artifacts.registry_commands.templates import (
+from aart_cli.registry_commands.templates import (
     REGISTRY_CI_WORKFLOW,
     render_registry_readme,
 )
@@ -150,7 +150,7 @@ class ThePrCheckVerdictTest(unittest.TestCase):
 
 
 class TheEmittedRegistryHasAnAggregateTooTest(unittest.TestCase):
-    """The same invariant, in the CI `aart registry init` writes for somebody else.
+    """The same invariant, in the CI `aart-cli registry init` writes for somebody else.
 
     A registry owner protecting `main` faces exactly the situation `pr-check.yml` documents for
     this repository: the gate job is emitted in two container shapes, only one of which ever runs,

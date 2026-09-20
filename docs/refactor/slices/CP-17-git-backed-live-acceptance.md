@@ -44,7 +44,7 @@ against a hand-built precondition is worth what the chain makes of it. `"a" * 40
 
 ## The transport constraint, established before writing anything
 
-`aart source sync` cannot clone a local repository, and that is deliberate.
+`aart-cli source sync` cannot clone a local repository, and that is deliberate.
 `application/sources.py:285` builds its `GitSnapshotRequest` without `allow_local_transport`, so the
 default `False` stands, and `sources/git.py::_allowed_location` then requires
 `git_location_parts` to accept the location -- `https://` or `ssh://` or SCP-style, with a real
@@ -139,8 +139,8 @@ nor configuration parsing was widened.
 
 `tests/git_backed_consumer_e2e_test.py` commits a real promoted, vendored registry tree, writes a
 real user configuration whose source is the valid remote identity
-`https://company.example/agents/company.git`, and drives the public `aart source sync`,
-`aart marketplace list` and `aart marketplace install` verbs. The only substitution is the
+`https://company.example/agents/company.git`, and drives the public `aart-cli source sync`,
+`aart-cli marketplace list` and `aart-cli marketplace install` verbs. The only substitution is the
 acquisition port: it first asserts that production supplied the remote URL with
 `allow_local_transport=False`, then hands an otherwise identical request to the real system-Git
 adapter with the temporary repository as transport. The public sync payload and Marketplace row
@@ -252,11 +252,11 @@ The install is real throughout: its receipt's four effects are `copy-tree`,
 actually built rather than files merely placed. The server then answers `initialize`, `tools/list`
 and `tools/call`; `serverInfo` is a literal in the author's `server.py`, so the bytes answering are
 the ones the commit carried. It runs on the interpreter the install created rather than the one
-running the tests, with the `--strict` argument the manifest declared, and `agent_artifacts` is not
+running the tests, with the `--strict` argument the manifest declared, and `aart_cli` is not
 importable inside it. A second test reads `.mcp.json`, the file a harness actually consults, and
 starts what it names.
 
-**Why the artifact declares no inputs, stated rather than assumed.** `aart marketplace install` has
+**Why the artifact declares no inputs, stated rather than assumed.** `aart-cli marketplace install` has
 no flag that answers a declared input -- the required-input form belongs to the persistent shell --
 so an artifact declaring one cannot be installed through the CLI at all. The third test pins that
 boundary: the refusal is `consumer-invalid`, it names each unanswered field and its kind, and
@@ -307,7 +307,7 @@ every downstream stage reachable through public commands.
 
 ## Step 4 evidence -- drift over the live installation, and what it found
 
-The measurement that started it. `aart doctor`, over the step 3b installation, under four kinds of
+The measurement that started it. `aart-cli doctor`, over the step 3b installation, under four kinds of
 damage done to the real tree:
 
 | damage | before | after |

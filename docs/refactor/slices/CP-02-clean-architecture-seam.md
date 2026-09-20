@@ -12,10 +12,10 @@ INV-002 through INV-009, INV-061 through INV-069, INV-106 through INV-111.
 
 ## Legacy/current paths
 
-- Canonical seed kernel: `agent_artifacts/domain/`.
-- Existing application orchestration: `agent_artifacts/application/` plus subsystem application
+- Canonical seed kernel: `aart_cli/domain/`.
+- Existing application orchestration: `aart_cli/application/` plus subsystem application
   modules.
-- Existing concrete effects: `agent_artifacts/io/` and subsystem `io.py` modules.
+- Existing concrete effects: `aart_cli/io/` and subsystem `io.py` modules.
 - Legacy orchestration/interfaces: `cli.py`, `tui.py`, `setup.py`, `setup_runtime.py`.
 
 ## Target paths/owners
@@ -80,7 +80,7 @@ None for this seam. Concrete legacy flows remain intentionally in place for stra
 
 ## Known compromises
 
-Subsystem-local pure models remain outside `agent_artifacts/domain`. They are migration inputs, not
+Subsystem-local pure models remain outside `aart_cli/domain`. They are migration inputs, not
 canonical new-domain dependencies.
 
 ## Backlog discoveries

@@ -5,14 +5,14 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PURE_ROOT = ROOT / "agent_artifacts" / "registry_maintenance"
+PURE_ROOT = ROOT / "aart_cli" / "registry_maintenance"
 FORBIDDEN = {"os", "pathlib", "shutil", "socket", "subprocess", "tempfile", "importlib"}
 # The canonical consumer path: nothing here may reach into maintainer-only planning.
 CONSUMERS = (
-    ROOT / "agent_artifacts" / "commands" / "marketplace.py",
-    ROOT / "agent_artifacts" / "consumer" / "application.py",
-    ROOT / "agent_artifacts" / "lifecycle" / "application.py",
-    ROOT / "agent_artifacts" / "marketplace" / "catalog.py",
+    ROOT / "aart_cli" / "commands" / "marketplace.py",
+    ROOT / "aart_cli" / "consumer" / "application.py",
+    ROOT / "aart_cli" / "lifecycle" / "application.py",
+    ROOT / "aart_cli" / "marketplace" / "catalog.py",
 )
 
 

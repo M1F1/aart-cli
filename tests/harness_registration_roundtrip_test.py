@@ -17,7 +17,7 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.domain.harness import (
+from aart_cli.domain.harness import (
     MCP_TARGETS,
     McpEntryShape,
     McpRegistration,

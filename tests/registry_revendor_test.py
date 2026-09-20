@@ -22,17 +22,17 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts import cli
-from agent_artifacts.curation.runtime import LocalCurationService
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import (
+from aart_cli import cli
+from aart_cli.curation.runtime import LocalCurationService
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
+from aart_cli.registry_maintenance.model import NativeReferenceAcquisition
 from tests.registry_vendoring_projection_test import (
     _COMMIT,
     _MCP_JSON,
@@ -42,7 +42,9 @@ from tests.registry_vendoring_projection_test import (
     _path,
 )
 
-_PACKAGE = "artifacts/mcp/atlassian"
+_STAGING = "artifacts/mcp/atlassian"
+_PACKAGE = f"{_STAGING}/1.0.0"
+_NEXT_PACKAGE = f"{_STAGING}/2.0.0"
 _MOVED_COMMIT = "a" * 40
 
 
@@ -112,7 +114,7 @@ class RevendorTest(unittest.TestCase):
                 ),
             )
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(original),
             ):
                 code, output = _run(
@@ -160,7 +162,7 @@ class RevendorTest(unittest.TestCase):
             )
             service = LocalCurationService(str(root), native_acquirer=acquirer)
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 yield root
@@ -229,15 +231,21 @@ class RevendorTest(unittest.TestCase):
             self.assertEqual(code, 0, output)
             self.assertEqual(json.loads(output)["outcome"]["status"], "succeeded")
             self.assertEqual(
-                (root / _PACKAGE / "payload/index.js").read_bytes(), b"console.log('serve v2');\n"
+                (root / _NEXT_PACKAGE / "payload/index.js").read_bytes(),
+                b"console.log('serve v2');\n",
             )
-            self.assertTrue((root / _PACKAGE / "payload/CHANGELOG.md").is_file())
-            # Upstream deleted it, so the copy no longer ships it.
-            self.assertFalse((root / _PACKAGE / "payload/lib/client.js").exists())
-            manifest = json.loads((root / _PACKAGE / "artifact.json").read_text())
+            self.assertTrue((root / _NEXT_PACKAGE / "payload/CHANGELOG.md").is_file())
+            # The new version omits the upstream deletion; the old approval stays immutable.
+            self.assertFalse((root / _NEXT_PACKAGE / "payload/lib/client.js").exists())
+            self.assertTrue((root / _PACKAGE / "payload/lib/client.js").is_file())
+            manifest = json.loads((root / _NEXT_PACKAGE / "artifact.json").read_text())
             self.assertEqual(manifest["version"], "2.0.0")
-            provenance = json.loads((root / _PACKAGE / "provenance.json").read_text())
+            provenance = json.loads((root / _NEXT_PACKAGE / "provenance.json").read_text())
             self.assertEqual(provenance["origin"]["resolved_commit"], _MOVED_COMMIT)
+            code, validation = _run("registry", "validate", "--source", str(root), "--json")
+            self.assertEqual(code, 0, validation)
+            self.assertTrue((root / "registry/versions/mcp/atlassian/1.0.0.json").is_file())
+            self.assertTrue((root / "registry/versions/mcp/atlassian/2.0.0.json").is_file())
 
     def test_the_maintainers_authored_wrapper_survives_the_re_vendor(self) -> None:
         """It is not upstream's, so an upstream deletion sweep must not take it."""
@@ -258,7 +266,7 @@ class RevendorTest(unittest.TestCase):
                 0,
             )
 
-            self.assertEqual((root / _PACKAGE / "payload/mcp.json").read_bytes(), _MCP_JSON)
+            self.assertEqual((root / _NEXT_PACKAGE / "payload/mcp.json").read_bytes(), _MCP_JSON)
 
     def test_an_unreachable_origin_is_reported_as_unreachable_and_changes_nothing(self) -> None:
         with self._registry(None) as root:
@@ -376,7 +384,7 @@ class RevendorTest(unittest.TestCase):
                 ),
             )
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 code, output = _run(
@@ -418,14 +426,14 @@ class RevendorTest(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn("options digest", output)
 
-    def test_a_package_that_was_never_vendored_is_refused_naming_refresh_native(self) -> None:
+    def test_a_package_without_vendoring_provenance_is_refused(self) -> None:
         with self._registry(_foreign_repository(), commit=_COMMIT) as root:
             (root / _PACKAGE / "provenance.json").unlink()
 
             code, output = _run("registry", "revendor", "--source", str(root), "mcp", "atlassian")
 
             self.assertEqual(code, 1)
-            self.assertIn("refresh-native", output)
+            self.assertIn("ships no vendoring record", output)
 
 
 if __name__ == "__main__":

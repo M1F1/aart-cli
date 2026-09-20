@@ -14,18 +14,18 @@ from __future__ import annotations
 
 from unittest import TestCase
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiEvent,
     ConsumerUiEventKind,
     ConsumerUiState,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
 )
-from agent_artifacts.application.maintainer_views import MaintainerScreen
+from aart_cli.application.maintainer_views import MaintainerScreen
 
 
 def _state(screen, *history, maintainer: bool = True) -> ConsumerUiState:

@@ -7,32 +7,33 @@ import unittest
 from dataclasses import replace
 from unittest import mock
 
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.installation.model import InstallLocation
-from agent_artifacts.io.configured_installation_action import InstallationHost
-from agent_artifacts.io.configured_setup import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.harness import Scope
+from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.installation.model import InstallLocation
+from aart_cli.io.configured_installation_action import InstallationHost
+from aart_cli.io.configured_setup import (
     LocalConfiguredSetupAdapter,
     configured_setup_subject,
 )
-from agent_artifacts.io.receipt_store import LocalReceiptStore
-from agent_artifacts.io.reference_store import read_references
-from agent_artifacts.marketplace.model import TrustClass
-from agent_artifacts.setup_engine import (
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.io.reference_store import read_references
+from aart_cli.marketplace.model import TrustClass
+from aart_cli.setup_engine import (
     ApprovedObjectIdentity,
     SetupExecutionStatus,
     SetupRequest,
     finalize_setup,
     prepare_setup,
 )
-from agent_artifacts.setup_runtime import production_runtime
-from agent_artifacts.store.model import ReferenceKind, ReferenceReadRequest, object_store_paths
+from aart_cli.setup_runtime import production_runtime
+from aart_cli.store.model import ReferenceKind, ReferenceReadRequest, object_store_paths
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AuthoredSetup
 from tests.configured_setup_gap_test import AUTHORED, COORDINATE, RECIPE
 from tests.marketplace_fixtures import effective_configuration
+from tests.receipt_store_test import sole_record
 
 
 class ConfiguredSetupSubjectTest(unittest.TestCase):
@@ -81,7 +82,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
             self.assertEqual(subject.record.scope, "project")
             self.assertEqual(
                 [effect.destination for effect in subject.record.effects],
-                [".claude/skills/code-review"],
+                [".claude/skills/code-review-company-project"],
                 "receipt destinations must be relative to the project root in engine evidence",
             )
             self.assertEqual(
@@ -169,7 +170,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
             exact = ArtifactCoordinate(
                 SourceAlias("company"), ArtifactIdentity("skill", "code-review"), "1.2.0"
             )
-            stored = LocalReceiptStore(host.state_root).record(exact)
+            stored = sole_record(LocalReceiptStore(host.state_root), exact)
             self.assertIsInstance(stored, Ok, getattr(stored, "diagnostics", ()))
             assert isinstance(stored, Ok)
             self.assertEqual(stored.value.receipt.setup_state_ref, planned.value.setup_state_ref)
@@ -222,7 +223,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
             exact = ArtifactCoordinate(
                 SourceAlias("company"), ArtifactIdentity("skill", "code-review"), "1.2.0"
             )
-            before = LocalReceiptStore(host.state_root).record(exact)
+            before = sole_record(LocalReceiptStore(host.state_root), exact)
             assert isinstance(before, Ok)
             setup_path = pathlib.Path(planned.value.setup_state_path)
             setup_before = setup_path.read_bytes() if setup_path.exists() else None
@@ -237,7 +238,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
             )
 
             with mock.patch(
-                "agent_artifacts.io.configured_setup._replace_setup_reference",
+                "aart_cli.io.configured_setup._replace_setup_reference",
                 return_value=unavailable,
             ):
                 completed = finalize_setup(
@@ -253,7 +254,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
             self.assertIsInstance(completed, Ok)
             assert isinstance(completed, Ok)
             self.assertIs(completed.value.setup_status, SetupExecutionStatus.FAILED)
-            standing = LocalReceiptStore(host.state_root).record(exact)
+            standing = sole_record(LocalReceiptStore(host.state_root), exact)
             assert isinstance(standing, Ok)
             self.assertEqual(
                 standing.value.receipt.setup_state_ref,

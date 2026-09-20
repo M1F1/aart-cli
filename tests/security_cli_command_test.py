@@ -8,23 +8,56 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.commands import security
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.marketplace.model import TrustClass
-from agent_artifacts.model import Request
-from agent_artifacts.protocol.hashing import json_digest, sha256_bytes
-from agent_artifacts.protocol.json import JsonObject, canonical_json_bytes
-from agent_artifacts.protocol.registry_models import RegistryIndex
-from agent_artifacts.protocol.registry_schema import registry_index_to_json
-from agent_artifacts.security.attestation_schema import attestation_bytes
-from agent_artifacts.security.attestations import (
+from aart_cli.commands import security
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.result import Ok
+from aart_cli.marketplace.model import TrustClass
+from aart_cli.model import Request
+from aart_cli.protocol.hashing import json_digest, sha256_bytes
+from aart_cli.protocol.json import JsonObject
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from aart_cli.protocol.paths import SafeRelativePath
+from aart_cli.security.attestation_schema import attestation_bytes
+from aart_cli.security.attestations import (
     AssessmentCacheKey,
     AttestationOrigin,
     AttestationOriginKind,
     SecurityAttestation,
 )
-from agent_artifacts.security.baseline import BASELINE_RULES_DIGEST
+from aart_cli.security.baseline import BASELINE_RULES_DIGEST
+from aart_cli.store.model import make_object_candidate
+from tests.registry_maintenance_fixtures import approved_registry_snapshot, write_snapshot
 from tests.security_baseline_test import _fixture
+
+
+def _approved_object(root: Path) -> tuple[Path, str]:
+    """Write an approved Registry and return one of its published objects, exactly as it stands.
+
+    `security scan` binds an object envelope to the catalog entry that publishes it, so the two have
+    to come from the same place. Reading them out of a real promotion is what keeps this test from
+    asserting against a shape only the test knows how to build.
+    """
+
+    snapshot = approved_registry_snapshot()
+    write_snapshot(root, snapshot)
+    prefix = ("artifacts", "mcp", "github-mcp", "1.0.0")
+    entries = tuple(
+        SnapshotEntry(
+            SafeRelativePath(entry.path.parts[len(prefix) :]),
+            entry.kind,
+            entry.content,
+            entry.executable,
+        )
+        for entry in snapshot.entries
+        if entry.path.parts[: len(prefix)] == prefix
+        and len(entry.path.parts) > len(prefix)
+        and entry.kind is SnapshotEntryKind.FILE
+    )
+    candidate = make_object_candidate(entries)
+    assert isinstance(candidate, Ok), candidate
+    object_path = root.parent / "object.json"
+    object_path.write_bytes(candidate.value.canonical_bytes)
+    return object_path, "mcp/github-mcp"
 
 
 class SecurityCliCommandTest(unittest.TestCase):
@@ -44,7 +77,7 @@ class SecurityCliCommandTest(unittest.TestCase):
         self.assertTrue(all(not item["available"] for item in documents["analyzers"]["analyzers"]))
 
     def test_show_and_verify_report_current_then_stale_evidence(self) -> None:
-        candidate, artifact, _lock = _fixture()
+        candidate, artifact = _fixture()
         assessment = security.assess_installation_risk(
             security.BaselineScanRequest(candidate, artifact)
         )
@@ -52,7 +85,7 @@ class SecurityCliCommandTest(unittest.TestCase):
         key = AssessmentCacheKey(
             1,
             candidate.digest,
-            "aart-baseline",
+            "aart-cli-baseline",
             "1",
             BASELINE_RULES_DIGEST,
             empty,
@@ -114,29 +147,18 @@ class SecurityCliCommandTest(unittest.TestCase):
             self.assertEqual(json.loads(stale.getvalue())["freshness"], "stale")
 
     def test_scan_publishes_idempotent_digest_bound_cache_entry(self) -> None:
-        candidate, artifact, _lock = _fixture()
-        registry_inputs_digest = sha256_bytes(b"registry inputs")
-        index = RegistryIndex(
-            1,
-            1,
-            SourceId("company"),
-            registry_inputs_digest,
-            (artifact,),
-            (),
-        )
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            object_path = root / "object.json"
-            index_path = root / "aart.index.json"
+            registry = root / "registry"
+            registry.mkdir()
+            object_path, identity = _approved_object(registry)
             cache_path = root / "cache"
-            object_path.write_bytes(candidate.canonical_bytes)
-            index_path.write_bytes(canonical_json_bytes(registry_index_to_json(index)))
             request = Request(
                 "security",
                 security_action="scan",
                 security_input=str(object_path),
-                registry_index=str(index_path),
-                security_artifact=str(artifact.identity),
+                security_registry=str(registry),
+                security_artifact=identity,
                 security_cache=str(cache_path),
                 json=True,
             )
@@ -153,8 +175,34 @@ class SecurityCliCommandTest(unittest.TestCase):
             self.assertEqual(outputs[0]["cache_path"], outputs[1]["cache_path"])
             self.assertTrue(Path(outputs[0]["cache_path"]).is_file())
 
+    def test_scan_refuses_a_registry_that_is_not_the_approved_representation(self) -> None:
+        """CP-26.5: the catalog comes from a Registry, so a tree that is not one is named."""
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            registry = root / "registry"
+            registry.mkdir()
+            object_path, identity = _approved_object(registry)
+            (registry / "aart.lock.json").write_bytes(b"{}")
+            output = io.StringIO()
+            with contextlib.redirect_stderr(output):
+                code = security.run(
+                    Request(
+                        "security",
+                        security_action="scan",
+                        security_input=str(object_path),
+                        security_registry=str(registry),
+                        security_artifact=identity,
+                        json=True,
+                    )
+                )
+
+            self.assertEqual(code, 1)
+            self.assertIn("retired authoring-workspace representation", output.getvalue())
+            self.assertIn("aart.lock.json", output.getvalue())
+
     def test_registry_ci_trust_is_derived_only_from_exact_local_context(self) -> None:
-        candidate, artifact, _lock = _fixture()
+        candidate, artifact = _fixture()
         assessment = security.assess_installation_risk(
             security.BaselineScanRequest(candidate, artifact)
         )
@@ -162,7 +210,7 @@ class SecurityCliCommandTest(unittest.TestCase):
         key = AssessmentCacheKey(
             1,
             candidate.digest,
-            "aart-baseline",
+            "aart-cli-baseline",
             "1",
             BASELINE_RULES_DIGEST,
             empty,

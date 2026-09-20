@@ -14,17 +14,17 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.diagnostics import Severity
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.diagnostics import Severity
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.capabilities import Capability
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.registry_commands.planning import audit_registry_workspace
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.semver import SemVer
+from aart_cli.registry_commands.planning import audit_registry_workspace
 from tests.registry_maintenance_fixtures import (
     append_snapshot_file,
     empty_registry_snapshot,
@@ -90,7 +90,7 @@ class EmptyRegistryAuditTest(unittest.TestCase):
     def test_a_manifest_outside_the_declared_roots_is_not_a_package_of_this_registry(
         self,
     ) -> None:
-        """`aart-source.json` declares where this registry's packages live, and only there.
+        """`aart-cli-source.json` declares where this registry's packages live, and only there.
 
         A valid `artifact.json` sitting outside those roots belongs to something else — a vendored
         working copy, a fixture, an unrelated tree committed alongside — so it must not make an
@@ -152,13 +152,10 @@ class EmptyRegistryAuditTest(unittest.TestCase):
             any("installation-risk evidence" in message for message in warnings), warnings
         )
 
-    def test_a_registry_holding_a_package_still_records_the_coverage_limit(self) -> None:
-        report = _audit(registry_with_owned_package())
-
-        warnings = tuple(
-            item.message for item in _diagnostics(report) if item.severity is Severity.WARNING
-        )
-        self.assertTrue(any("no external references" in message for message in warnings), warnings)
+    # `CP-26.5`: the audit used to add "this registry also holds external references, which this
+    # gate cannot assess" beside the risk warning. External references were the retired workspace's
+    # `entries/` records; nothing writes them, so the coverage limit no longer exists and the note
+    # that announced it went with it (`D-321`).
 
 
 if __name__ == "__main__":

@@ -21,11 +21,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind, SourceSnapshot
-from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
-from agent_artifacts.security.attestation_schema import parse_attestation
-from agent_artifacts.security.attestations import AttestationOriginKind, attestation_digest
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind, SourceSnapshot
+from aart_cli.registry_maintenance.model import NativeReferenceAcquisition
+from aart_cli.security.attestation_schema import parse_attestation
+from aart_cli.security.attestations import AttestationOriginKind, attestation_digest
 from tests.credential_fixtures import access_token
 from tests.registry_vendor_command_test import (
     _ACQUISITION,
@@ -98,13 +98,13 @@ class VendorAssessmentTest(unittest.TestCase):
                 if snapshot is None
                 else NativeReferenceAcquisition(_URL, "v1.4.0", _COMMIT, snapshot)
             )
-            from agent_artifacts.curation.runtime import LocalCurationService
+            from aart_cli.curation.runtime import LocalCurationService
 
             service = LocalCurationService(
                 str(root), native_acquirer=lambda _url, _ref: Ok(acquisition)
             )
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 yield root
@@ -219,7 +219,7 @@ class VendorAssessmentTest(unittest.TestCase):
             self.assertIn(f"findings: {len(attestation.assessment.findings)}", rendered)
 
     def test_the_committed_evidence_leaves_the_registry_inputs_alone(self) -> None:
-        """`security/` is not a registry input, so evidence cannot make the lock read as stale."""
+        """`security/` cannot change the approved catalog snapshot."""
 
         with self._registry() as root:
             self.assertEqual(_run(*_vendor_command(root, "--yes"))[0], 0)
@@ -227,12 +227,12 @@ class VendorAssessmentTest(unittest.TestCase):
                 code, output = _run("registry", *arguments, "--source", str(root))
                 self.assertEqual(code, 0, output)
 
-            before = (root / "aart.lock.json").read_bytes()
+            before = (root / "registry/snapshot.json").read_bytes()
             (root / "security/attestations/deadbeef.json").write_bytes(b"{}\n")
             code, output = _run("registry", "lock", "--source", str(root), "--yes")
 
             self.assertEqual(code, 0, output)
-            self.assertEqual((root / "aart.lock.json").read_bytes(), before)
+            self.assertEqual((root / "registry/snapshot.json").read_bytes(), before)
 
 
 if __name__ == "__main__":

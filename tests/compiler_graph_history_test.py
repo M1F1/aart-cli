@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.compiler.graph import (
+from aart_cli.compiler.graph import (
     ArtifactLifecycle,
     CompatibilityTarget,
     GraphSource,
@@ -11,17 +11,17 @@ from agent_artifacts.compiler.graph import (
     compile_marketplace_graph,
     select_artifacts,
 )
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
     SourceId,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_models import CompatibilitySpec, InstallSpec
-from agent_artifacts.protocol.registry_models import IndexArtifact
-from agent_artifacts.protocol.semver import SemVer
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_models import CompatibilitySpec, InstallSpec
+from aart_cli.protocol.registry_models import IndexArtifact
+from aart_cli.protocol.semver import SemVer
 
 
 def _digest(character: str) -> ObjectDigest:

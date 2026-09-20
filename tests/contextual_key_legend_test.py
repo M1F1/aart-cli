@@ -11,15 +11,15 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
 )
-from agent_artifacts.application.maintainer_views import MaintainerScreen
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame, run_consumer_shell
-from agent_artifacts.tui_layout import SECTION_RULE
+from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.tui_consumer import CanonicalScreenSource, frame, run_consumer_shell
+from aart_cli.tui_layout import SECTION_RULE
 from tests.consumer_shell_test import FakeTerminal, screens
 
 

@@ -6,22 +6,22 @@ import dataclasses
 import json
 import unittest
 
-from agent_artifacts.application.candidate_history import (
+from aart_cli.application.candidate_history import (
     parse_source_scan,
     serialize_source_scan,
     source_scan_object_digests,
 )
-from agent_artifacts.application.maintainer import reconcile_source_scan
-from agent_artifacts.domain.candidates import CandidateId, CandidateState
-from agent_artifacts.domain.identifiers import (
+from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.domain.candidates import CandidateId, CandidateState
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     SourceAlias,
 )
-from agent_artifacts.domain.registry import PromotionMode, RegistryArtifactVersion
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.authoring import compile_author_source
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.authoring import compile_author_source
+from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
 from tests.authoring_compiler_test import _file
 from tests.maintainer_source_scan_test import _digest
 
@@ -33,20 +33,20 @@ def _snapshot(
     include_second: bool = False,
 ):
     document = {
-        "schema": "aart.dev/collection/v1",
+        "schema": "aart-cli.dev/collection/v1",
         "name": "data-engineer",
         "version": version,
         "summary": "Approved data engineering tools.",
         "artifacts": [member],
     }
-    files = [_file("collections/data-engineer/aart.json", json.dumps(document))]
+    files = [_file("collections/data-engineer/aart-cli.json", json.dumps(document))]
     if include_second:
         second = {
             **document,
             "name": "platform-engineer",
             "summary": "Approved platform engineering tools.",
         }
-        files.append(_file("collections/platform-engineer/aart.json", json.dumps(second)))
+        files.append(_file("collections/platform-engineer/aart-cli.json", json.dumps(second)))
     return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(files))
 
 

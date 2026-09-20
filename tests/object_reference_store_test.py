@@ -7,16 +7,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.application.store import (
+from aart_cli.application.store import (
     ReferenceUpdatePorts,
     ReferenceUpdateRequest,
     replace_references,
 )
-from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.reference_store import read_references, write_references
-from agent_artifacts.io.store_lock import acquire_store_lock, release_store_lock
-from agent_artifacts.store.model import (
+from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.reference_store import read_references, write_references
+from aart_cli.io.store_lock import acquire_store_lock, release_store_lock
+from aart_cli.store.model import (
     ReferenceIndex,
     ReferenceKind,
     ReferenceReadRequest,
@@ -131,7 +131,7 @@ class ObjectReferenceStoreTest(unittest.TestCase):
             )
 
             with patch(
-                "agent_artifacts.io.reference_store.os.replace",
+                "aart_cli.io.reference_store.os.replace",
                 side_effect=OSError("replace failed"),
             ):
                 failed = replace_references(
@@ -148,7 +148,7 @@ class ObjectReferenceStoreTest(unittest.TestCase):
             self.assertEqual(tuple(Path(paths.state).glob(".object-references-*")), ())
 
             with patch(
-                "agent_artifacts.io.reference_store.os.open",
+                "aart_cli.io.reference_store.os.open",
                 side_effect=PermissionError("denied"),
             ):
                 self.assertIsInstance(read_references(ReferenceReadRequest(paths)), Err)
@@ -205,7 +205,7 @@ class ObjectReferenceStoreTest(unittest.TestCase):
                     original.st_ctime,
                 )
             )
-            with patch("agent_artifacts.io.reference_store.os.fstat", return_value=raced):
+            with patch("aart_cli.io.reference_store.os.fstat", return_value=raced):
                 self.assertIsInstance(read_references(ReferenceReadRequest(paths)), Err)
 
             real_stat = os.stat
@@ -219,18 +219,18 @@ class ObjectReferenceStoreTest(unittest.TestCase):
                 return os.stat_result(values)
 
             with patch(
-                "agent_artifacts.io.reference_store.os.stat",
+                "aart_cli.io.reference_store.os.stat",
                 side_effect=report_larger_file,
             ):
                 self.assertIsInstance(read_references(ReferenceReadRequest(paths)), Err)
 
             with (
                 patch(
-                    "agent_artifacts.io.reference_store.os.replace",
+                    "aart_cli.io.reference_store.os.replace",
                     side_effect=OSError("replace failed"),
                 ),
                 patch(
-                    "agent_artifacts.io.reference_store.os.unlink",
+                    "aart_cli.io.reference_store.os.unlink",
                     side_effect=OSError("cleanup failed"),
                 ),
             ):

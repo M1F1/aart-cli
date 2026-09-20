@@ -16,6 +16,8 @@ This file is the sole product source of truth. Then read:
 - `docs/refactor/MIGRATION_STATUS.md`
 - `docs/refactor/NEXT.md`
 - `docs/refactor/DECISIONS.md`
+- `docs/refactor/INVARIANT_TRACEABILITY.md`
+- `docs/refactor/CONTRACT_ALIGNMENT.md`
 - `docs/refactor/BACKLOG.md`
 - `docs/refactor/slices/README.md`
 
@@ -31,7 +33,7 @@ Specification.
 
 ## Execution objective
 
-Execute **all critical-path slices CP-00 through CP-18** in
+Execute **the current critical path through CP-26**, as recorded in `plan.json` and
 `docs/refactor/EXECUTION_PLAN.md`.
 
 Everything accepted in the Product Specification is mandatory. Use a strangler/vertical-slice
@@ -40,6 +42,22 @@ tests while progressively routing the product through the new domain/application
 
 Do not stop after producing plans. Implement, test, integrate, migrate, remove obsolete authority
 when verified, and continue to the next unblocked slice.
+
+## CP-26 implementation boundary
+
+Read Product Specification §169 and D-332–D-334 before changing installation or naming behavior.
+CP-26.18a establishes `aart-cli` names, one portable application home and harness destination policy;
+19 wires private target-qualified installation state and separately entered inputs; 20 exercises
+local Registry acquisition with the same isolation. Equal local/remote packages with distinct
+Registry aliases have distinct paths, receipts, credentials and Installed rows. No sharing option
+or global artifact input state is part of the accepted product.
+
+Breaking changes are accepted throughout CP-26. Retain characterization only for still-required
+behavior; replace/delete withdrawn assumptions. No compatibility aliases/readers/migration layer
+are needed. Proportionate focused checks are sufficient per implementation task, with required
+mutation evidence scoped to material claims. Full gates belong to CP-26.21. Historical VERIFIED
+records establish the contract tested at that time, not proof of compliance with the revised one;
+use the current invariant matrix for outstanding proof. The current numbered task is in NEXT.md.
 
 ## Autonomous decision policy
 
@@ -132,7 +150,7 @@ completion.
 
 ## Completion condition
 
-Continue until CP-00..CP-18 are completed with evidence, all mandatory Product Specification
+Continue until the current critical path through CP-26 is completed with evidence, all mandatory Product Specification
 behavior/invariants are implemented or explicitly proven already satisfied, accepted consumer TUI
 01–29 and Maintainer TUI 30–53 are implemented, accepted edge cases 54–100 are covered, the
 Git-backed end-to-end lifecycle passes, reconciliation and doctor work as specified, zero runtime

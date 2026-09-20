@@ -3,14 +3,14 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.consumer.runtime_requirements import (
+from aart_cli.consumer.runtime_requirements import (
     RuntimeRequirementStatus,
     evaluate_runtime_requirements,
     parse_runtime_environment,
     parse_runtime_requirements,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_schema import parse_artifact_manifest
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_schema import parse_artifact_manifest
 
 
 def _manifest(extension: object | None = None, *, key: str = "aart.runtime-requirements"):
@@ -20,7 +20,7 @@ def _manifest(extension: object | None = None, *, key: str = "aart.runtime-requi
         "name": "example",
         "version": "1.0.0",
         "summary": "Example skill.",
-        "payload": {"root": "payload", "format": "aart-skill-v1"},
+        "payload": {"root": "payload", "format": "aart-cli-skill-v1"},
         "compatibility": {"profiles": ["claude"], "platforms": ["darwin"]},
         "install": {
             "scopes": ["project"],

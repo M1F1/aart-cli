@@ -27,7 +27,7 @@ tooling, and `0.1.0` for the AART release you are rolling out. Substitute your o
 |---|---|
 | An organisation on the instance you can create repositories in, and admin on those repositories | variables, workflow toggles and branch protection are repository or organisation settings |
 | A runner the repositories can use that can run **container jobs**, and an image with `git` and a Python 3.10+ interpreter | every job for the tool's own workflows runs in a container and takes its interpreter from the image; nothing else is assumed (no `make`, `curl` or `gh`) |
-| A container registry the runner can pull from | unset, `AART_CI_IMAGE` falls back to the official `python:<version>` images, which come from Docker Hub |
+| A container registry the runner can pull from | unset, `AART_CLI_CI_IMAGE` falls back to the official `python:<version>` images, which come from Docker Hub |
 | `actions/checkout@v4` available on the instance | both repositories check out with it |
 | `googleapis/release-please-action@v4`, **only** if the copy will cut its own releases | see [Part 1, step 4](#step-4--turn-off-the-release-engine-on-the-copy) — a plain copy does not need it |
 | A package index the runner can reach for the tool's own gates (`ruff`, `mypy`, `coverage`) | the default is `pypi.org`; most instances point at an internal mirror |
@@ -40,7 +40,7 @@ anything else.
 `actions/setup-python` is not on that list, and its absence is deliberate. A step-level `if:` decides
 whether a step **runs**, not whether its action is **fetched**: every action a job references is
 resolved during "Set up job", before any condition is read. So a job that referenced it failed on an
-instance that does not carry it even with `AART_CI_IMAGE` set and the step skipped. The reference is
+instance that does not carry it even with `AART_CLI_CI_IMAGE` set and the step skipped. The reference is
 gone; every job takes its interpreter from its container image instead.
 
 ## Part 1 — Put `aart-cli` on the instance
@@ -60,8 +60,11 @@ Actions back on in Part 2.
 
 ### Step 3 — Copy the code and the tags
 
+`<aart-upstream>` is wherever you are copying AART from -- the public repository you found it in,
+or another instance's copy:
+
 ```bash
-git clone --bare https://github.com/M1F1/aart-cli.git
+git clone --bare <aart-upstream>.git
 git -C aart-cli.git push https://ghe.corp/platform/aart-cli.git main
 git -C aart-cli.git push https://ghe.corp/platform/aart-cli.git --tags
 ```
@@ -101,15 +104,15 @@ The short list for a private runner with an internal index:
 
 | Variable | Set it to |
 |---|---|
-| `AART_RUNNER` | your runner labels, as JSON: `["self-hosted","linux","x64"]` |
-| `AART_PIP_INDEX_URL` | the internal mirror's simple index, as a bare URL with no credentials: `https://nexus.corp/repository/pypi-group/simple` |
-| `AART_PIP_INDEX_CREDENTIALS_SECRET` | if the index needs a login: the **name** of a secret holding `user:token` |
-| `AART_GIT_CREDENTIALS_SECRET` | if the AART copy is private: the **name** of a secret holding a token, or `user:token`. Without it the clone is anonymous and a private copy answers `could not read Username` |
-| `AART_CI_IMAGE` | if jobs run in a container: the image, e.g. `registry.corp/python:3.11` |
-| `AART_PYTHON_VERSIONS` | with `AART_CI_IMAGE`: one entry, the image's interpreter, e.g. `["3.11"]` |
-| `AART_PYTHON` | with `AART_CI_IMAGE`: the interpreter's name inside it, if not `python` |
-| `AART_IMAGE_USERNAME_SECRET`, `AART_IMAGE_PASSWORD_SECRET` | if the image needs a login: the **names** of the two secrets |
-| `AART_POETRY` | if the image keeps Poetry off `PATH`: its full path, e.g. `/opt/poetry/bin/poetry` |
+| `AART_CLI_RUNNER` | your runner labels, as JSON: `["self-hosted","linux","x64"]` |
+| `AART_CLI_PIP_INDEX_URL` | the internal mirror's simple index, as a bare URL with no credentials: `https://nexus.corp/repository/pypi-group/simple` |
+| `AART_CLI_PIP_INDEX_CREDENTIALS_SECRET` | if the index needs a login: the **name** of a secret holding `user:token` |
+| `AART_CLI_GIT_CREDENTIALS_SECRET` | if the AART copy is private: the **name** of a secret holding a token, or `user:token`. Without it the clone is anonymous and a private copy answers `could not read Username` |
+| `AART_CLI_CI_IMAGE` | if jobs run in a container: the image, e.g. `registry.corp/python:3.11` |
+| `AART_CLI_PYTHON_VERSIONS` | with `AART_CLI_CI_IMAGE`: one entry, the image's interpreter, e.g. `["3.11"]` |
+| `AART_CLI_PYTHON` | with `AART_CLI_CI_IMAGE`: the interpreter's name inside it, if not `python` |
+| `AART_CLI_IMAGE_USERNAME_SECRET`, `AART_CLI_IMAGE_PASSWORD_SECRET` | if the image needs a login: the **names** of the two secrets |
+| `AART_CLI_POETRY` | if the image keeps Poetry off `PATH`: its full path, e.g. `/opt/poetry/bin/poetry` |
 
 Every variable holding a credential holds a secret's **name**, never its value. Create the secret
 itself under **Secrets**, then name it in the variable. A secret's name is not a secret.
@@ -134,7 +137,7 @@ git push -u origin ci-smoke
 ```
 
 Open a pull request from `ci-smoke` into `main` and wait for **`pr-check`**. It runs all ten gates on
-each interpreter in `AART_PYTHON_VERSIONS`, then reports one aggregate result. When it is green,
+each interpreter in `AART_CLI_PYTHON_VERSIONS`, then reports one aggregate result. When it is green,
 close the pull request **without merging** and delete the branch, so the copy stays identical to the
 tags it serves.
 
@@ -150,8 +153,8 @@ index everything else uses, with credentials the instance already manages.
 
    | Variable | Set it to |
    |---|---|
-   | `AART_INDEX_PUBLISH_URL` | the upload endpoint of a **hosted** repository, e.g. `https://nexus.corp/repository/pypi-internal/`. A proxy or group repository refuses uploads |
-   | `AART_INDEX_PUBLISH_CREDENTIALS_SECRET` | the **name** of a secret holding `user:token` for a *deploy* account |
+   | `AART_CLI_INDEX_PUBLISH_URL` | the upload endpoint of a **hosted** repository, e.g. `https://nexus.corp/repository/pypi-internal/`. A proxy or group repository refuses uploads |
+   | `AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET` | the **name** of a secret holding `user:token` for a *deploy* account |
 
 2. **Releases → Draft a new release**, choose the existing tag `v0.1.0`, and **Publish release**.
 
@@ -159,7 +162,7 @@ Publishing starts the `release` workflow. It checks the tag is on `main`, runs t
 checklist, builds the wheel, verifies it against the tag, attaches it to the release, and uploads it
 to the index. An index that already holds `0.1.0` refuses a second upload, so publish each tag once.
 
-The checklist also reconciles against a reference registry when `AART_REFERENCE_REGISTRY_URL` is
+The checklist also reconciles against a reference registry when `AART_CLI_REFERENCE_REGISTRY_URL` is
 set. Leave it unset on a copy: those checks report `skipped`, never `passed`, with a warning.
 
 Skip this step if the instance has no index you can publish to. Part 4 has other routes.
@@ -177,10 +180,10 @@ pipx install "git+https://ghe.corp/platform/aart-cli.git@v0.1.0"
 ```
 
 ```bash
-aart --version
+aart-cli --version
 ```
 
-The command is `aart`; the package is `aart-cli`. `agent-artifacts` on a public index is somebody
+The command and the package are both `aart-cli`. `agent-artifacts` on a public index is somebody
 else's project.
 
 ## Part 3 — Create the company registry
@@ -198,14 +201,14 @@ git clone https://ghe.corp/platform/agent-registry.git && cd agent-registry
 Review first. Every mutating `aart` command prints what it would write and stops:
 
 ```bash
-aart registry init --source . --source-id corp-registry --display-name "Corp Registry"
+aart-cli registry init --source . --source-id corp-registry --display-name "Corp Registry"
 ```
 
-The review lists `.aart-version`, `.github/workflows/aart-registry.yml`, `.gitignore`, `README.md`,
-`aart-registry.json` and `aart-source.json`. When it reads right, finalize:
+The review lists `.aart-cli-version`, `.github/workflows/aart-cli-registry.yml`, `.gitignore`, `README.md`,
+`aart-cli-registry.json` and `aart-cli-source.json`. When it reads right, finalize:
 
 ```bash
-aart registry init --source . --source-id corp-registry --display-name "Corp Registry" --yes
+aart-cli registry init --source . --source-id corp-registry --display-name "Corp Registry" --yes
 ```
 
 | Option | What it decides |
@@ -214,7 +217,7 @@ aart registry init --source . --source-id corp-registry --display-name "Corp Reg
 | `--display-name` | the human-readable name |
 | `--minimum-version`, `--maximum-version` | the AART version window the registry declares; defaults are the running AART's version and the next major version (exclusive) |
 
-`.aart-version` holds the version of the `aart` you just ran. That is the version the registry's CI
+`.aart-cli-version` holds the version of the `aart` you just ran. That is the version the registry's CI
 will run, and bumping it later is a pull request.
 
 ### Step 3 — Commit, publish, and push the first `main`
@@ -223,32 +226,39 @@ will run, and bumping it later is a pull request.
 git add -A
 git commit -m "chore: initialise the registry"
 
-aart registry publish --source .
-aart registry publish --source . --yes -m "chore: publish the empty registry"
+aart-cli registry publish --source .
+aart-cli registry publish --source . --yes -m "chore: publish the empty registry"
 
 git push -u origin main
 git remote set-head origin --auto
 ```
 
-`publish` locks, builds, validates and audits one snapshot, then commits `aart.lock.json` and
-`aart.index.json`. It never pushes. A registry does not pass its own gates without those two files,
-so the first `main` has to carry them.
+`publish` prepares the shared publication gates, rebuilds `registry/index.json` and
+`registry/snapshot.json` from approved version records, validates and audits the projected snapshot,
+then commits the reviewed changes. It never pushes. The first published Registry snapshot must
+carry valid derived catalogs, including when it has no approved versions yet.
 
 This first push is the only one you make by hand. `git remote set-head origin --auto` records which
-branch the remote calls default; `aart registry push` reads it to know which branch it must refuse.
+branch the remote calls default; `aart-cli registry push` reads it to know which branch it must refuse.
 Cloning an empty repository leaves it unset.
 
 ### Step 4 — From now on, every change is a pull request
 
 ```bash
 git switch -c add-code-review
-aart registry scaffold skill code-review --source . --summary "Review code." \
-  --profile claude --platform linux --yes
-aart registry publish --source . --yes -m "feat: add the code-review skill"
-aart registry push --source . --branch add-code-review
+# Author and commit aart-cli.yaml plus its payload in a separate clean Source checkout.
+# Then inspect the exact scan/promotion inputs for that checkout:
+aart-cli registry scan --help
+aart-cli registry promote --help
+aart-cli registry publish --source . --yes -m "feat: add the code-review skill"
+aart-cli registry push --source . --branch add-code-review
 ```
 
-`aart registry push` refuses the default branch by name, and AART never merges. Open the pull request
+The artifact is authored in its Source repository, not inside the Registry. `scan` compiles its
+explicit manifest into a Candidate and `promote` brings the reviewed Candidate into this checkout.
+Use the Candidate and evidence digests printed by the review flow; neither command invents them.
+
+`aart-cli registry push` refuses the default branch by name, and AART never merges. Open the pull request
 on the instance; its CI is what Part 4 makes pass. The generated `README.md` in the registry lists the
 other everyday commands.
 
@@ -257,20 +267,22 @@ other everyday commands.
 ### Step 1 — Choose how the registry's CI fetches AART
 
 The registry's workflow puts `aart` on the runner in one of four ways. **The first variable that is
-set wins**; they are never combined. The version always comes from `.aart-version` — `{version}` in a
+set wins**; they are never combined. The version always comes from `.aart-cli-version` — `{version}` in a
 variable is replaced with it — so no variable carries a version number.
 
 | Order | Variable | Example | Works when |
 |---|---|---|---|
-| 1 | `AART_PACKAGE` | `aart-cli=={version}` | you did [Part 2, step 4](#step-4--publish-the-release-to-the-internal-index-recommended). Installs from `AART_PIP_INDEX_URL`, with `AART_PIP_INDEX_CREDENTIALS_SECRET` if the index needs a login. **Recommended** |
-| 2 | `AART_WHEEL_URL` | `https://ghe.corp/platform/aart-cli/releases/download/v{version}/aart_cli-{version}-py3-none-any.whl` | the release asset is readable **without a login**. The fetch sends no token, so a private repository returns a sign-in page instead of a wheel |
-| 3 | `AART_TOOL_PATH` | `/opt/aart` | the CI image already carries an `aart-cli` source tree or unpacked wheel |
-| 4 | `AART_TOOL_URL` | `https://ghe.corp/platform/aart-cli.git` | the runner can clone that repository — anonymously, or with a credential already in the image's Git configuration. Clones the tag `v` + the pin |
+| 1 | `AART_CLI_PACKAGE` | `aart-cli=={version}` | you did [Part 2, step 4](#step-4--publish-the-release-to-the-internal-index-recommended). Installs from `AART_CLI_PIP_INDEX_URL`, with `AART_CLI_PIP_INDEX_CREDENTIALS_SECRET` if the index needs a login. **Recommended** |
+| 2 | `AART_CLI_WHEEL_URL` | `https://ghe.corp/platform/aart-cli/releases/download/v{version}/aart_cli-{version}-py3-none-any.whl` | the release asset is readable **without a login**. The fetch sends no token, so a private repository returns a sign-in page instead of a wheel |
+| 3 | `AART_CLI_TOOL_PATH` | `/opt/aart` | the CI image already carries an `aart-cli` source tree or unpacked wheel |
+| 4 | `AART_CLI_TOOL_URL` | `https://ghe.corp/platform/aart-cli.git` | the runner can clone that repository — anonymously, or with a credential already in the image's Git configuration. Clones the tag `v` + the pin |
 
-Row 4 is also what happens when **none** is set: the URL is built from the instance the job runs on
-and `AART_REPOSITORY`, which defaults to `M1F1/aart-cli`. So on most instances you set at least
-`AART_REPOSITORY` = `platform/aart-cli`. A repository that needs a login and a runner without one
-fails that clone on the first run — which is why row 1 is the recommendation.
+Setting **none** of them is not a fourth route: the first run stops and lists these four. Where
+AART comes from is a fact about your deployment, and a shipped default would send every company's
+registry to a repository nobody in it had chosen. Row 4 is the shortest to arrange — set
+`AART_CLI_REPOSITORY` = `platform/aart-cli` and the URL is built from the instance the job runs on. A
+repository that needs a login and a runner without one fails that clone on the first run, which is
+why row 1 is the recommendation.
 
 ### Step 2 — Set the variables
 
@@ -279,10 +291,10 @@ Again on the **organisation** where you can, so every future registry is configu
 | Variable | When |
 |---|---|
 | one route from step 1 | always |
-| `AART_PIP_INDEX_URL`, `AART_PIP_INDEX_CREDENTIALS_SECRET` | with `AART_PACKAGE` |
-| `AART_REPOSITORY` | with the Git route, when the copy is not at `M1F1/aart-cli` on this instance |
-| `AART_RUNNER`, `AART_CI_IMAGE`, `AART_IMAGE_USERNAME_SECRET`, `AART_IMAGE_PASSWORD_SECRET` | same meaning as in Part 2 |
-| `AART_PYTHON` | the interpreter's name on the runner or in the image, if not `python3` |
+| `AART_CLI_PIP_INDEX_URL`, `AART_CLI_PIP_INDEX_CREDENTIALS_SECRET` | with `AART_CLI_PACKAGE` |
+| `AART_CLI_REPOSITORY` | with the Git route, unless you set `AART_CLI_TOOL_URL` in full |
+| `AART_CLI_RUNNER`, `AART_CLI_CI_IMAGE`, `AART_CLI_IMAGE_USERNAME_SECRET`, `AART_CLI_IMAGE_PASSWORD_SECRET` | same meaning as in Part 2 |
+| `AART_CLI_PYTHON` | the interpreter's name on the runner or in the image, if not `python3` |
 
 Unlike the tool's own jobs, the registry jobs do not install Python: the runner or image must
 already have it.
@@ -307,12 +319,12 @@ at both ends of the version window. Its **Provide AART** step ends with one line
 happened:
 
 ```text
-AART: aart-cli 0.1.0  via index https://nexus.corp/repository/pypi-group/simple (aart-cli==0.1.0)  pinned by .aart-version
+AART: aart-cli 0.1.0  via index https://nexus.corp/repository/pypi-group/simple (aart-cli==0.1.0)  pinned by .aart-cli-version
 ```
 
 Which version ran, which route answered, and whether the pin was honoured. When it is green, merge.
 
-From here, moving the registry to a new AART is a pull request that edits `.aart-version`: the gates
+From here, moving the registry to a new AART is a pull request that edits `.aart-cli-version`: the gates
 run on the new version before anyone merges it. Take the release into the copy first
 ([Part 1, step 4](#step-4--turn-off-the-release-engine-on-the-copy)), and publish it to the index if
 you use one.
@@ -323,7 +335,7 @@ Each person installs `aart` as in [Part 2, step 5](#step-5--install-aart-on-your
 adds the registry once:
 
 ```bash
-aart source add --alias company --kind registry-git \
+aart-cli source add --alias company --kind registry-git \
   --location https://ghe.corp/platform/agent-registry.git --ref main --default
 ```
 
@@ -334,24 +346,24 @@ machine's own Git and credential helper; see
 Then run `aart` for the terminal UI, or use the flag form:
 
 ```bash
-aart marketplace list
-aart marketplace install --help
+aart-cli marketplace list
+aart-cli marketplace install --help
 ```
 
 ## Troubleshooting
 
 | You see | It means |
 |---|---|
-| a job queued forever | no runner matches `AART_RUNNER`. It must be JSON — `["self-hosted"]`, not `self-hosted` |
+| a job queued forever | no runner matches `AART_CLI_RUNNER`. It must be JSON — `["self-hosted"]`, not `self-hosted` |
 | `Unable to resolve action` | the instance does not carry that action. An administrator enables GitHub Connect or syncs it |
-| `CERTIFICATE_VERIFY_FAILED` or a timeout from `pypi.org` | `AART_PIP_INDEX_URL` is unset and the runner has no route to the public index |
-| `poetry: command not found` in `release` | set `AART_POETRY` to Poetry's full path in the image |
-| `pr-check` fails with "neither gate job ran" | `AART_IMAGE_USERNAME_SECRET` names a secret that does not exist |
-| `no agent_artifacts package under …` | the registry's fetch route reached something that is not AART: wrong URL, wrong path, or a sign-in page instead of a wheel |
-| `.aart-version pins X but … provided Y` | the route works and disagrees with the pin: a moved tag, an index that resolved another version, or an image with an old AART baked in |
-| `pin X overridden by AART_REF` | not a failure. Someone set `AART_REF` to run a branch or tag on purpose, and the run says so |
-| `aart registry push` refuses a branch that is not `main` | the checkout does not know the remote's default branch. Run `git remote set-head origin --auto` |
-| `aart source add` says the URL is not a safe Git location | the location is not `https`, or it carries a user or token. Remove it and let the credential helper supply it |
+| `CERTIFICATE_VERIFY_FAILED` or a timeout from `pypi.org` | `AART_CLI_PIP_INDEX_URL` is unset and the runner has no route to the public index |
+| `poetry: command not found` in `release` | set `AART_CLI_POETRY` to Poetry's full path in the image |
+| `pr-check` fails with "neither gate job ran" | `AART_CLI_IMAGE_USERNAME_SECRET` names a secret that does not exist |
+| `no aart_cli package under …` | the registry's fetch route reached something that is not AART: wrong URL, wrong path, or a sign-in page instead of a wheel |
+| `.aart-cli-version pins X but … provided Y` | the route works and disagrees with the pin: a moved tag, an index that resolved another version, or an image with an old AART baked in |
+| `pin X overridden by AART_CLI_REF` | not a failure. Someone set `AART_CLI_REF` to run a branch or tag on purpose, and the run says so |
+| `aart-cli registry push` refuses a branch that is not `main` | the checkout does not know the remote's default branch. Run `git remote set-head origin --auto` |
+| `aart-cli source add` says the URL is not a safe Git location | the location is not `https`, or it carries a user or token. Remove it and let the credential helper supply it |
 
 ## Reference
 
@@ -361,42 +373,42 @@ Read by `.github/workflows/pr-check.yml` and `.github/workflows/release.yml`.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `AART_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels |
-| `AART_CI_IMAGE` | `python:<version>` | container image for every job, and the only place an interpreter comes from. Unset, each `pr-check` matrix entry runs the official image for its own version and the release job runs `python:$AART_RELEASE_PYTHON_VERSION` |
-| `AART_PYTHON` | `python` | the interpreter's name inside the image |
-| `AART_PYTHON_VERSIONS` | `["3.10", "3.11", "3.14"]` | JSON array for the `pr-check` matrix. Pin to the image's one interpreter when `AART_CI_IMAGE` is set |
-| `AART_RELEASE_PYTHON_VERSION` | `3.11` | which official image the `release` and `deep-quality` jobs run, and the single interpreter `pr-check` uses on a release pull request, when `AART_CI_IMAGE` is unset |
-| `AART_PIP_INDEX_URL` | `https://pypi.org/simple` | index for the development tools the gates install. Keep it a bare URL |
-| `AART_PIP_INDEX_CREDENTIALS_SECRET` | unset | **name** of a secret holding `user:token` for that index. Each half is masked before use |
-| `AART_GIT_CREDENTIALS_SECRET` | unset | **name** of a secret holding a bare token, or `user:token`, for the `git clone` arm. A bare token is used with the user name `x-access-token`. Each half that came from the secret is masked before use |
-| `AART_IMAGE_USERNAME_SECRET` | unset | **name** of the secret holding the image registry's username. Setting it switches every job to the shape that logs in |
-| `AART_IMAGE_PASSWORD_SECRET` | unset | **name** of the secret holding the image registry's password |
-| `AART_POETRY` | `poetry` | how to invoke Poetry, which builds the wheel |
-| `AART_INDEX_PUBLISH_URL` | unset | upload endpoint of a hosted index. Set, a published release also uploads the wheel there; unset, it only attaches it |
-| `AART_INDEX_PUBLISH_CREDENTIALS_SECRET` | unset | **name** of a secret holding `user:token` for the publishing account |
-| `AART_REFERENCE_REGISTRY_URL` | unset | registry the release checklist reconciles against. Unset, those checks report `skipped` with a warning |
+| `AART_CLI_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels |
+| `AART_CLI_CI_IMAGE` | `python:<version>` | container image for every job, and the only place an interpreter comes from. Unset, each `pr-check` matrix entry runs the official image for its own version and the release job runs `python:$AART_CLI_RELEASE_PYTHON_VERSION` |
+| `AART_CLI_PYTHON` | `python` | the interpreter's name inside the image |
+| `AART_CLI_PYTHON_VERSIONS` | `["3.10", "3.11", "3.14"]` | JSON array for the `pr-check` matrix. Pin to the image's one interpreter when `AART_CLI_CI_IMAGE` is set |
+| `AART_CLI_RELEASE_PYTHON_VERSION` | `3.11` | which official image the `release` and `deep-quality` jobs run, and the single interpreter `pr-check` uses on a release pull request, when `AART_CLI_CI_IMAGE` is unset |
+| `AART_CLI_PIP_INDEX_URL` | `https://pypi.org/simple` | index for the development tools the gates install. Keep it a bare URL |
+| `AART_CLI_PIP_INDEX_CREDENTIALS_SECRET` | unset | **name** of a secret holding `user:token` for that index. Each half is masked before use |
+| `AART_CLI_GIT_CREDENTIALS_SECRET` | unset | **name** of a secret holding a bare token, or `user:token`, for the `git clone` arm. A bare token is used with the user name `x-access-token`. Each half that came from the secret is masked before use |
+| `AART_CLI_IMAGE_USERNAME_SECRET` | unset | **name** of the secret holding the image registry's username. Setting it switches every job to the shape that logs in |
+| `AART_CLI_IMAGE_PASSWORD_SECRET` | unset | **name** of the secret holding the image registry's password |
+| `AART_CLI_POETRY` | `poetry` | how to invoke Poetry, which builds the wheel |
+| `AART_CLI_INDEX_PUBLISH_URL` | unset | upload endpoint of a hosted index. Set, a published release also uploads the wheel there; unset, it only attaches it |
+| `AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET` | unset | **name** of a secret holding `user:token` for the publishing account |
+| `AART_CLI_REFERENCE_REGISTRY_URL` | unset | registry the release checklist reconciles against. Unset, those checks report `skipped` with a warning |
 
 ### Variables a registry reads
 
-Read by the workflows `aart registry init` writes. Those files are managed: `init` refuses to
+Read by the workflows `aart-cli registry init` writes. Those files are managed: `init` refuses to
 overwrite one that was edited by hand, so configure them with variables, not edits.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `AART_PACKAGE` | unset | fetch route 1: a requirement such as `aart-cli=={version}`, installed with `pip --no-deps --target` |
-| `AART_PIP_INDEX_URL` | `https://pypi.org/simple` | the index `AART_PACKAGE` installs from |
-| `AART_PIP_INDEX_CREDENTIALS_SECRET` | unset | **name** of a secret holding `user:token` for that index |
-| `AART_GIT_CREDENTIALS_SECRET` | unset | **name** of a secret holding a bare token, or `user:token`, used only by the `git clone` arm |
-| `AART_WHEEL_URL` | unset | fetch route 2: a wheel URL, downloaded without credentials and unzipped |
-| `AART_TOOL_PATH` | unset | fetch route 3: an AART tree already on the runner |
-| `AART_TOOL_URL` | instance URL + `AART_REPOSITORY` | fetch route 4: a Git URL, cloned at `v` + the pin |
-| `AART_REPOSITORY` | `M1F1/aart-cli` | `owner/name` used to build the default `AART_TOOL_URL` |
-| `AART_REF` | `v` + the pin | a branch or tag to run instead of the pin. Switches the version check off, and the run says so |
-| `AART_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels |
-| `AART_CI_IMAGE` | unset | container image for the jobs |
-| `AART_PYTHON` | `python3` | the interpreter on the runner or in the image |
-| `AART_IMAGE_USERNAME_SECRET` | unset | **name** of the image registry username secret; switches jobs to the shape that logs in |
-| `AART_IMAGE_PASSWORD_SECRET` | unset | **name** of the image registry password secret |
+| `AART_CLI_PACKAGE` | unset | fetch route 1: a requirement such as `aart-cli=={version}`, installed with `pip --no-deps --target` |
+| `AART_CLI_PIP_INDEX_URL` | `https://pypi.org/simple` | the index `AART_CLI_PACKAGE` installs from |
+| `AART_CLI_PIP_INDEX_CREDENTIALS_SECRET` | unset | **name** of a secret holding `user:token` for that index |
+| `AART_CLI_GIT_CREDENTIALS_SECRET` | unset | **name** of a secret holding a bare token, or `user:token`, used only by the `git clone` arm |
+| `AART_CLI_WHEEL_URL` | unset | fetch route 2: a wheel URL, downloaded without credentials and unzipped |
+| `AART_CLI_TOOL_PATH` | unset | fetch route 3: an AART tree already on the runner |
+| `AART_CLI_TOOL_URL` | instance URL + `AART_CLI_REPOSITORY`, if that is set | fetch route 4: a Git URL, cloned at `v` + the pin |
+| `AART_CLI_REPOSITORY` | unset | `owner/name` on this instance, used to build `AART_CLI_TOOL_URL` |
+| `AART_CLI_REF` | `v` + the pin | a branch or tag to run instead of the pin. Switches the version check off, and the run says so |
+| `AART_CLI_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels |
+| `AART_CLI_CI_IMAGE` | unset | container image for the jobs |
+| `AART_CLI_PYTHON` | `python3` | the interpreter on the runner or in the image |
+| `AART_CLI_IMAGE_USERNAME_SECRET` | unset | **name** of the image registry username secret; switches jobs to the shape that logs in |
+| `AART_CLI_IMAGE_PASSWORD_SECRET` | unset | **name** of the image registry password secret |
 
 ### What a variable cannot change
 

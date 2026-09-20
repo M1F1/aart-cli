@@ -3,26 +3,19 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from agent_artifacts import __version__, cli
-from agent_artifacts.commands import registry as registry_command
-from agent_artifacts.curation.model import CurationAction
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.model import Request
-from agent_artifacts.protocol.semver import VersionBounds, parse_semver
+from aart_cli import __version__, cli
+from aart_cli.commands import registry as registry_command
+from aart_cli.curation.model import CurationAction
+from aart_cli.domain.result import Ok
+from aart_cli.model import Request
+from aart_cli.protocol.semver import VersionBounds, parse_semver
 
-_SCAFFOLD = (
-    "registry scaffold --source /tmp/registry skill demo --summary One. "
-    "--profile codex --platform darwin"
-)
 _VENDOR = (
     "registry vendor --source /tmp/registry mcp atlassian --url https://example.com/up.git "
     "--path artifacts/mcp/atlassian --artifact-version 1.2.0 --summary One. "
     "--profile claude --platform darwin"
 )
-_PROMOTE = (
-    "registry promote-native --source /tmp/registry skill demo "
-    "--url https://example.com/up.git --path artifacts/skill/demo"
-)
+_FORMAT = "registry format --source /tmp/registry"
 
 
 class RegistryCliTest(unittest.TestCase):
@@ -30,7 +23,6 @@ class RegistryCliTest(unittest.TestCase):
         parser = cli.build_parser()
         actions = {
             "init",
-            "scaffold",
             "collection",
             "scan",
             "adopt",
@@ -38,10 +30,8 @@ class RegistryCliTest(unittest.TestCase):
             "promote",
             "discover",
             "format",
-            "promote-native",
             "publish",
             "push",
-            "refresh-native",
             "vendor",
             "vendor-batch",
             "revendor",
@@ -96,6 +86,26 @@ class RegistryCliTest(unittest.TestCase):
             )
         self.assertEqual(raised.exception.code, 2)
 
+    def test_registry_scaffold_is_withdrawn_but_publish_remains_the_canonical_aggregate(
+        self,
+    ) -> None:
+        """CP-26 step 2 removes in-registry authoring, not the canonical publication aggregate.
+
+        `scaffold` wrote a compiled package by hand, which no canonical package may be: each one
+        carries a `provenance.json` whose origin names the revision it was compiled from, and an
+        artifact authored in place has none. Authoring belongs in a source checkout, reached by
+        `scan` and `promote`. `publish` remains the reviewed build/validate/audit/commit aggregate
+        for that approved representation; CP-26 step 3 removes its legacy branch.
+        """
+
+        with self.assertRaises(SystemExit) as raised:
+            cli.build_parser().parse_args(["registry", "scaffold", "--source", "/tmp/r"])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertFalse(hasattr(CurationAction, "SCAFFOLD"))
+        self.assertTrue(hasattr(CurationAction, "PUBLISH"))
+        published = cli.build_parser().parse_args(["registry", "publish", "--source", "/tmp/r"])
+        self.assertEqual(published.registry_action, "publish")
+
     def test_the_compatibility_ceiling_defaults_to_the_running_aart(self) -> None:
         # The upper compatibility point is whichever AART is publishing, not a version frozen in
         # the parser.  A default that never moves refuses every registry whose floor rises above
@@ -114,7 +124,7 @@ class RegistryCliTest(unittest.TestCase):
         running = parse_semver(__version__)
         assert isinstance(running, Ok)
 
-        for command in (_SCAFFOLD, _VENDOR, _PROMOTE):
+        for command in (_VENDOR, _FORMAT):
             with self.subTest(command=command.split()[1]):
                 request = cli._to_request(cli.build_parser().parse_args(command.split()))
                 curation = registry_command._curation_request(
@@ -145,63 +155,6 @@ class RegistryCliTest(unittest.TestCase):
         assert isinstance(curation, Ok)
         self.assertEqual(curation.value.minimum_version, "2.0.0")
         self.assertEqual(curation.value.maximum_version, "4.0.0")
-
-    def test_native_promotion_maps_an_explicit_reference_and_finalize_consent(self) -> None:
-        request = cli._to_request(
-            cli.build_parser().parse_args(
-                [
-                    "registry",
-                    "promote-native",
-                    "--source",
-                    "/tmp/registry",
-                    "skill",
-                    "review-python",
-                    "--url",
-                    "https://github.com/example/review-python.git",
-                    "--ref",
-                    "release",
-                    "--path",
-                    "artifacts/skill/review-python",
-                    "--review-policy",
-                    "company-review-v2",
-                    "--yes",
-                ]
-            )
-        )
-        self.assertEqual(request.registry_action, "promote-native")
-        self.assertEqual(request.artifact_kind, "skill")
-        self.assertEqual(request.names, ("review-python",))
-        self.assertEqual(request.native_url, "https://github.com/example/review-python.git")
-        self.assertEqual(request.ref, "release")
-        self.assertEqual(request.native_path, "artifacts/skill/review-python")
-        self.assertEqual(request.review_policy, "company-review-v2")
-        self.assertTrue(request.yes)
-
-    def test_scaffold_install_scope_and_mode_do_not_silently_include_defaults(self) -> None:
-        request = cli._to_request(
-            cli.build_parser().parse_args(
-                [
-                    "registry",
-                    "scaffold",
-                    "--source",
-                    "/tmp/registry",
-                    "skill",
-                    "demo",
-                    "--summary",
-                    "Demonstrate one canonical skill.",
-                    "--profile",
-                    "codex",
-                    "--platform",
-                    "darwin",
-                    "--install-scope",
-                    "user",
-                    "--install-mode",
-                    "symlink",
-                ]
-            )
-        )
-        self.assertEqual(request.registry_scopes, ("user",))
-        self.assertEqual(request.registry_modes, ("symlink",))
 
     def test_laf90_init_pressed_through_names_a_window_the_running_aart_is_inside(self) -> None:
         # Every registry action that reaches the boundary with both versions unset gets the

@@ -8,16 +8,16 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ArtifactCoordinate
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.install_state.model import InstallState
-from agent_artifacts.install_state.schema import install_state_bytes, parse_install_state
-from agent_artifacts.installation.application import finalize_install, prepare_install
-from agent_artifacts.installation.model import InstallStatus
-from agent_artifacts.io.reference_store import read_references
-from agent_artifacts.lifecycle import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ArtifactCoordinate
+from aart_cli.domain.result import Err, Ok
+from aart_cli.install_state.model import InstallState
+from aart_cli.install_state.schema import install_state_bytes, parse_install_state
+from aart_cli.installation.application import finalize_install, prepare_install
+from aart_cli.installation.model import InstallStatus
+from aart_cli.io.reference_store import read_references
+from aart_cli.lifecycle import (
     LifecycleSelection,
     LifecycleStatus,
     LocalLifecycleAdapter,
@@ -29,13 +29,13 @@ from agent_artifacts.lifecycle import (
     reconcile_installations,
     status_installations,
 )
-from agent_artifacts.marketplace.catalog import build_marketplace
-from agent_artifacts.profiles.builtin import builtin
-from agent_artifacts.profiles.model import MergeSpec
-from agent_artifacts.protocol.hashing import json_digest
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.sources.model import HealthStatus
-from agent_artifacts.store.model import ReferenceKind, ReferenceReadRequest
+from aart_cli.marketplace.catalog import build_marketplace
+from aart_cli.profiles.builtin import builtin
+from aart_cli.profiles.model import MergeSpec
+from aart_cli.protocol.hashing import json_digest
+from aart_cli.protocol.semver import SemVer
+from aart_cli.sources.model import HealthStatus
+from aart_cli.store.model import ReferenceKind, ReferenceReadRequest
 from tests.canonical_symlink_test import _fixture
 from tests.marketplace_fixtures import (
     artifact,
@@ -48,7 +48,7 @@ from tests.marketplace_fixtures import (
 
 
 def _state(project: Path) -> InstallState:
-    parsed = parse_install_state((project / ".agent-artifacts/manifest.json").read_bytes())
+    parsed = parse_install_state((project / ".aart-cli/manifest.json").read_bytes())
     assert isinstance(parsed, Ok), parsed
     return parsed.value
 
@@ -167,7 +167,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
             self.assertEqual(remaining, {"mcpServers": {"foreign": {"command": "keep-me"}}})
             # The last record out of the scope takes the manifest with it, so "no
             # installations remain" is now read from the absence of the state itself.
-            self.assertFalse((project / ".agent-artifacts").exists())
+            self.assertFalse((project / ".aart-cli").exists())
 
     def test_profile_target_migration_refuses_orphan_then_uninstalls_and_reinstalls(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -313,7 +313,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
         `check_installations` is documented as fetch-free -- it compares a record against an
         already-built catalog -- but the subscription test it starts from also required the
         source's *live* health to be one of healthy, stale or degraded. `could-not-check` is none
-        of those, and it is exactly what a refused `aart source sync` leaves behind: the published
+        of those, and it is exactly what a refused `aart-cli source sync` leaves behind: the published
         snapshot is intact and serving, and only the re-check against the origin failed.
 
         The effect was that one invalid upstream revision made every installation from that source
@@ -348,7 +348,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
                     Diagnostic(
                         DiagnosticCode("source-invalid"),
                         Severity.ERROR,
-                        "aart-registry.json is present and does not parse",
+                        "aart-cli-registry.json is present and does not parse",
                     ),
                 ),
             )
@@ -559,9 +559,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
             record = state.installations[0]
             planned = prepare_uninstall(record, state, location, paths, adapter)
             assert isinstance(planned, Ok), planned
-            original = __import__(
-                "agent_artifacts.lifecycle.io", fromlist=["_write_atomic"]
-            )._write_atomic
+            original = __import__("aart_cli.lifecycle.io", fromlist=["_write_atomic"])._write_atomic
             calls = 0
 
             def fail_state_once(path, content, *, mode=0o600):
@@ -572,7 +570,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
                 return original(path, content, mode=mode)
 
             with patch(
-                "agent_artifacts.lifecycle.io._write_atomic",
+                "aart_cli.lifecycle.io._write_atomic",
                 side_effect=fail_state_once,
             ):
                 failed = finalize_uninstall(
@@ -603,7 +601,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
             state = _state(project)
             planned = prepare_uninstall(state.installations[0], state, location, paths, adapter)
             assert isinstance(planned, Ok), planned
-            module = __import__("agent_artifacts.lifecycle.io", fromlist=["_write_atomic"])
+            module = __import__("aart_cli.lifecycle.io", fromlist=["_write_atomic"])
             original = module._write_atomic
             calls = 0
 
@@ -614,9 +612,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
                     return original(path, content, mode=mode)
                 return None
 
-            with patch(
-                "agent_artifacts.lifecycle.io._write_atomic", side_effect=ignore_first_write
-            ):
+            with patch("aart_cli.lifecycle.io._write_atomic", side_effect=ignore_first_write):
                 outcome = finalize_uninstall(planned.value, planned.value.review_digest, adapter)
 
             assert isinstance(outcome, Ok), outcome
@@ -948,7 +944,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
                 effects=(replace(original.effects[0], installed_digest=json_digest(None)),),
             )
             state = InstallState(2, (record,))
-            state_path = project / ".agent-artifacts/manifest.json"
+            state_path = project / ".aart-cli/manifest.json"
             state_path.write_bytes(install_state_bytes(state))
             config_path = project / ".mcp.json"
             config = json.loads(config_path.read_text())
@@ -1044,8 +1040,8 @@ class CanonicalLifecycleTest(unittest.TestCase):
             record = state.installations[0]
             destination = project / "CLAUDE.md"
             content = destination.read_text()
-            begin = "<!-- >>> agent-artifacts memory:review >>> -->"
-            end = "<!-- <<< agent-artifacts memory:review <<< -->"
+            begin = "<!-- >>> aart-cli memory:review >>> -->"
+            end = "<!-- <<< aart-cli memory:review <<< -->"
             destination.write_text(
                 content.replace(begin, "TOKEN").replace(end, begin).replace("TOKEN", end)
             )
@@ -1179,7 +1175,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
             state = _state(project)
             planned = prepare_uninstall(state.installations[0], state, location, paths, adapter)
             assert isinstance(planned, Ok), planned
-            module = __import__("agent_artifacts.lifecycle.io", fromlist=["_remove"])
+            module = __import__("aart_cli.lifecycle.io", fromlist=["_remove"])
             original = module._remove
             calls = 0
 
@@ -1190,7 +1186,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
                     return original(path)
                 return None
 
-            with patch("agent_artifacts.lifecycle.io._remove", side_effect=ignore_first_remove):
+            with patch("aart_cli.lifecycle.io._remove", side_effect=ignore_first_remove):
                 outcome = finalize_uninstall(planned.value, planned.value.review_digest, adapter)
 
             assert isinstance(outcome, Ok), outcome
@@ -1211,7 +1207,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
             config_path.write_text(json.dumps(config))
             planned = prepare_uninstall(state.installations[0], state, location, paths, adapter)
             assert isinstance(planned, Ok), planned
-            module = __import__("agent_artifacts.lifecycle.io", fromlist=["_write_atomic"])
+            module = __import__("aart_cli.lifecycle.io", fromlist=["_write_atomic"])
             original = module._write_atomic
             calls = 0
 
@@ -1222,9 +1218,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
                     return original(path, content, mode=mode)
                 return None
 
-            with patch(
-                "agent_artifacts.lifecycle.io._write_atomic", side_effect=ignore_first_write
-            ):
+            with patch("aart_cli.lifecycle.io._write_atomic", side_effect=ignore_first_write):
                 outcome = finalize_uninstall(planned.value, planned.value.review_digest, adapter)
 
             assert isinstance(outcome, Ok), outcome
@@ -1252,7 +1246,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
             )
 
             with patch(
-                "agent_artifacts.lifecycle.io._replace_installed_reference",
+                "aart_cli.lifecycle.io._replace_installed_reference",
                 return_value=failure,
             ):
                 outcome = finalize_uninstall(planned.value, planned.value.review_digest, adapter)
@@ -1281,7 +1275,7 @@ class CanonicalLifecycleTest(unittest.TestCase):
             assert isinstance(planned, Ok), planned
 
             with patch(
-                "agent_artifacts.lifecycle.io._replace_installed_reference",
+                "aart_cli.lifecycle.io._replace_installed_reference",
                 return_value=Ok(planned.value.reference_replacement),
             ):
                 outcome = finalize_uninstall(planned.value, planned.value.review_digest, adapter)
@@ -1420,7 +1414,7 @@ class CreatedMergeFileReclamationTest(unittest.TestCase):
                 effects=(replace(original.effects[0], created_destination=False),),
             )
             state = InstallState(2, (record,))
-            (project / ".agent-artifacts/manifest.json").write_bytes(install_state_bytes(state))
+            (project / ".aart-cli/manifest.json").write_bytes(install_state_bytes(state))
 
             planned = prepare_uninstall(record, state, location, paths, adapter)
             assert isinstance(planned, Ok), planned

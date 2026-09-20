@@ -8,7 +8,7 @@ Three steps, three commands, and a JSON manifest between them:
     scripts/vendor_scan.py vendor candidates.json --source /path/to/registry
 
 `scan` clones the repository read-only and reports what looks like an artifact. `review` asks about
-each candidate one at a time and records your answer. `vendor` runs `aart registry vendor` for the
+each candidate one at a time and records your answer. `vendor` runs `aart-cli registry vendor` for the
 ones you kept — the real command, with its real review and its three checks, once per artifact.
 
 It is deliberately an orchestration layer over `registry vendor`, never a replacement for it, so
@@ -40,7 +40,7 @@ exactly those:
     scripts/vendor_scan.py adopt candidates.json --source /path/to/registry --yes
 
 `adopt` asks what to call each loose document, scaffolds a `memory` package under that name with
-`aart registry scaffold`, and puts the upstream document in as the payload. From there it is an
+`aart-cli registry scaffold`, and puts the upstream document in as the payload. From there it is an
 ordinary artifact: under the tabnine profile it installs as project-root `TABNINE.md`, under another
 profile wherever that profile says. What it cannot carry is a `provenance.json`, so the origin is
 printed for the commit message instead — `artifact.json` rejects an unknown field, and inventing a
@@ -248,7 +248,7 @@ def guidance_hints(directory: Path, root: Path) -> list[Hint]:
             ),
             what_to_do=(
                 "ask upstream to give each document its own directory, or author the guideline in "
-                "your registry with `aart registry scaffold guideline` and lose the provenance link"
+                "your registry with `aart-cli registry scaffold guideline` and lose the provenance link"
             ),
         )
         for document in documents
@@ -521,7 +521,7 @@ def command_adopt(args: argparse.Namespace) -> int:
 
     This is the answer to the hint `scan` reports for `CLAUDE.md`, `AGENTS.md` and `TABNINE.md`.
     `registry vendor` cannot take a file, so nothing here pretends to vendor: it scaffolds
-    a package with `aart registry scaffold`, then puts the upstream document in as the payload. From
+    a package with `aart-cli registry scaffold`, then puts the upstream document in as the payload. From
     that point AART treats it like any other artifact — under the tabnine profile a `memory` lands
     as project-root `TABNINE.md`, and each harness gets its own destination from its own profile.
 
@@ -532,8 +532,8 @@ def command_adopt(args: argparse.Namespace) -> int:
 
     manifest = load(args.manifest)
     registry = Path(args.source).expanduser().resolve()
-    if not (registry / "aart-registry.json").is_file():
-        die(f"{registry} is not a registry checkout: no aart-registry.json")
+    if not (registry / "aart-cli-registry.json").is_file():
+        die(f"{registry} is not a registry checkout: no aart-cli-registry.json")
     adoptable = [
         hint for hint in manifest.get("hints", []) if hint["looks_like"] in {"memory", "guideline"}
     ]
@@ -620,15 +620,15 @@ def command_adopt(args: argparse.Namespace) -> int:
     print(f"    Adopted from {manifest['url']} at {manifest['ref']}")
     for name, _, source_path in adopted:
         print(f"      {args.kind}/{name} ← {Path(source_path).name}")
-    print("\nnext: aart registry lock --source . --yes, commit, then build --source . --yes")
+    print("\nnext: aart-cli registry lock --source . --yes, commit, then build --source . --yes")
     return 0
 
 
 def command_vendor(args: argparse.Namespace) -> int:
     manifest = load(args.manifest)
     registry = Path(args.source).expanduser().resolve()
-    if not (registry / "aart-registry.json").is_file():
-        die(f"{registry} is not a registry checkout: no aart-registry.json")
+    if not (registry / "aart-cli-registry.json").is_file():
+        die(f"{registry} is not a registry checkout: no aart-cli-registry.json")
     selected = [item for item in manifest["candidates"] if item.get("selected")]
     if not selected:
         die(f"nothing is selected in {args.manifest}; run `review` first")
@@ -638,7 +638,9 @@ def command_vendor(args: argparse.Namespace) -> int:
         label = f"({position}/{len(selected)}) {item['type']}/{item['name']}"
         target = registry / "artifacts" / item["type"] / item["name"]
         if target.exists() and not args.revendor:
-            print(f"{label}: already in the registry, skipping — `aart registry revendor` moves it")
+            print(
+                f"{label}: already in the registry, skipping — `aart-cli registry revendor` moves it"
+            )
             continue
         command = [
             args.aart,
@@ -684,8 +686,8 @@ def command_vendor(args: argparse.Namespace) -> int:
         print("\nReviewed only. Re-run with --yes to finalize every one of them.")
         return 0
     print(
-        "\nnext: aart registry lock --source . --yes, commit the lock, "
-        "then aart registry build --source . --yes"
+        "\nnext: aart-cli registry lock --source . --yes, commit the lock, "
+        "then aart-cli registry build --source . --yes"
     )
     return 0
 
@@ -710,7 +712,7 @@ def main(argv: list[str] | None = None) -> int:
     review.add_argument("--again", action="store_true", help="revisit candidates already answered")
     review.set_defaults(handler=command_review)
 
-    vendor = actions.add_parser("vendor", help="run `aart registry vendor` for each keeper")
+    vendor = actions.add_parser("vendor", help="run `aart-cli registry vendor` for each keeper")
     vendor.add_argument("manifest")
     vendor.add_argument("--source", required=True, help="registry checkout to vendor into")
     vendor.add_argument("--profile", action="append", default=None, metavar="P")

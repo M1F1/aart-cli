@@ -19,16 +19,16 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.domain.effects import (
+from aart_cli.domain.effects import (
     DeliverArtifact,
     DeliveryKind,
     MergeSettingsEntry,
     UnmergeSettingsEntry,
 )
-from agent_artifacts.domain.hooks import HookEntry, HookEntryShape
-from agent_artifacts.domain.receipts import ArtifactSettingsEntry
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.execution import SettingsEntryInterpreter
+from aart_cli.domain.hooks import HookEntry, HookEntryShape
+from aart_cli.domain.receipts import ArtifactSettingsEntry
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.execution import SettingsEntryInterpreter
 
 ARTIFACT = "company/hook/guard-bash"
 PATH = "hooks.PreToolUse"

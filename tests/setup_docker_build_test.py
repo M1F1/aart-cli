@@ -15,9 +15,9 @@ import os
 import shutil
 import unittest
 
-from agent_artifacts.model import SetupQueueItem
-from agent_artifacts.setup import parse_installer, plan_setup, project_setup_review
-from agent_artifacts.setup_runtime import ProcessResult, SetupRuntime, apply_setup_plan
+from aart_cli.model import SetupQueueItem
+from aart_cli.setup import parse_installer, plan_setup, project_setup_review
+from aart_cli.setup_runtime import ProcessResult, SetupRuntime, apply_setup_plan
 from tests.setup_fixtures import recipe
 
 _BUILD_STEP = {
@@ -228,7 +228,7 @@ class AppliedBuildTest(unittest.TestCase):
         )
 
     def _runs_root(self) -> str:
-        return os.path.join(self.home, ".agent-artifacts", "setup-runs")
+        return os.path.join(self.home, ".aart-cli", "setup-runs")
 
     def test_a_build_runs_in_a_copy_of_the_package_and_records_what_it_built_from(self) -> None:
         docker = _Docker()
@@ -270,7 +270,7 @@ class AppliedBuildTest(unittest.TestCase):
         docker = _Docker()
         plan = self._plan()
         record = apply_setup_plan(plan, self._runtime(docker), consent=lambda _e: True)
-        from agent_artifacts.setup_runtime import rollback_record
+        from aart_cli.setup_runtime import rollback_record
 
         rolled = rollback_record(record, self._runtime(docker))
         self.assertEqual(rolled.status, "skipped")
@@ -287,7 +287,7 @@ class AppliedBuildTest(unittest.TestCase):
     def test_rollback_leaves_a_tag_that_existed_before_the_run(self) -> None:
         docker = _Docker(preexisting=True)
         record = apply_setup_plan(self._plan(), self._runtime(docker), consent=lambda _e: True)
-        from agent_artifacts.setup_runtime import rollback_record
+        from aart_cli.setup_runtime import rollback_record
 
         rolled = rollback_record(record, self._runtime(docker))
         self.assertEqual(rolled.status, "skipped")
@@ -316,7 +316,7 @@ class AppliedBuildTest(unittest.TestCase):
         self.assertFalse(os.path.isdir(self._runs_root()))
 
     def test_a_receipt_is_bound_to_the_reviewed_tag(self) -> None:
-        from agent_artifacts.setup import receipt_matches_plan
+        from aart_cli.setup import receipt_matches_plan
 
         plan = self._plan()
         record = apply_setup_plan(plan, self._runtime(_Docker()), consent=lambda _e: True)

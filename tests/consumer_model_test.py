@@ -5,7 +5,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from agent_artifacts.consumer import (
+from aart_cli.consumer import (
     ConsumerActionRequest,
     ConsumerContext,
     ConsumerOutcome,
@@ -14,10 +14,10 @@ from agent_artifacts.consumer import (
     ConsumerTerminalItem,
     prepare_consumer_action,
 )
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.lifecycle import LocalLifecycleAdapter
-from agent_artifacts.profiles.builtin import builtin
-from agent_artifacts.protocol.hashing import sha256_bytes
+from aart_cli.domain.result import Ok
+from aart_cli.lifecycle import LocalLifecycleAdapter
+from aart_cli.profiles.builtin import builtin
+from aart_cli.protocol.hashing import sha256_bytes
 from tests.canonical_symlink_test import _fixture
 
 

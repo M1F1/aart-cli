@@ -1,10 +1,16 @@
 """A copy that contradicts its own record fails validate and audit.
 
-Replace a vendored package's payload, re-run `registry lock --yes` and `registry build --yes`, and
-the lock and index gates stay green by construction — the lock
-and the index are derived from the bytes that are there, so they agree with any substitution — which
-is why the reproduction here re-locks and re-builds before asserting, rather than tampering and
-checking validate alone.
+The check that matters is the one no compiled catalog could make: a vendored package records the
+origin digest it was copied from, so substituting a payload byte contradicts the package's own
+provenance. A catalog derived from the bytes that are there agrees with any substitution, which is
+why this is asserted over the package rather than over anything generated beside it.
+
+`CP-26.5` took the compiled lock and index away, so these gates now run over the checkout directly.
+They were red for the length of `B-149`, because `project_vendored_package` still wrote the retired
+unversioned `artifacts/<kind>/<name>/` layout that `registry_native_content` refuses by name. The
+refusal was correct and the writer is what moved: `vendor` now projects into the approved
+representation's versioned package and promotes it (`D-326`). The claims below were kept whole
+through that, rather than deleted to reach green (`D-323`).
 """
 
 from __future__ import annotations
@@ -12,32 +18,30 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.domain.identifiers import ArtifactIdentity
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.protocol.json import canonical_json_bytes
-from agent_artifacts.protocol.native_schema import parse_provenance, provenance_to_json
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.identifiers import ArtifactIdentity
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.capabilities import Capability
+from aart_cli.protocol.json import canonical_json_bytes
+from aart_cli.protocol.native_schema import parse_provenance, provenance_to_json
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.registry_commands.planning import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.registry_models import ReviewRecord
+from aart_cli.protocol.semver import SemVer
+from aart_cli.registry_commands.planning import (
     audit_registry_workspace,
-    plan_registry_build,
-    plan_registry_lock,
+    plan_artifact_vendor,
     project_registry_workspace_plan,
     validate_registry_workspace,
 )
-from agent_artifacts.registry_maintenance.vendoring import (
+from aart_cli.registry_maintenance.model import NativeReferenceAcquisition
+from aart_cli.registry_maintenance.vendoring import (
     VendorOptions,
-    VendorOrigin,
-    project_vendored_package,
 )
-from agent_artifacts.sources.subtree import take_subtree
 from tests.registry_maintenance_fixtures import (
     empty_registry_snapshot,
     replace_snapshot_file,
@@ -52,7 +56,7 @@ _MCP_JSON = (
     json.dumps({"name": "atlassian", "server": {"command": "npx", "args": ["-y", "srv"]}}).encode()
     + b"\n"
 )
-_BASE = "artifacts/mcp/atlassian"
+_BASE = "artifacts/mcp/atlassian/1.0.0"
 
 
 def _path(raw: str):
@@ -85,11 +89,12 @@ def _upstream() -> SourceSnapshot:
 def _vendored_registry() -> SourceSnapshot:
     """An otherwise empty registry that owns one vendored package."""
 
-    taken = take_subtree(_upstream(), _path("servers/atlassian"))
-    assert isinstance(taken, Ok), taken
-    projected = project_vendored_package(
-        taken.value,
-        VendorOrigin(_URL, "v1.4.0", _COMMIT),
+    snapshot = empty_registry_snapshot()
+    staging = _file(f"{_BASE}/payload/mcp.json", _MCP_JSON)
+    snapshot = SourceSnapshot(snapshot.origin, (*snapshot.entries, staging))
+    planned = plan_artifact_vendor(
+        snapshot,
+        NativeReferenceAcquisition(_URL, "v1.4.0", _COMMIT, _upstream()),
         VendorOptions(
             ArtifactIdentity("mcp", "atlassian"),
             SemVer(1, 0, 0),
@@ -98,50 +103,23 @@ def _vendored_registry() -> SourceSnapshot:
             ("darwin",),
             ("project",),
             ("copy",),
-            authored=(("payload/mcp.json", _MCP_JSON, False),),
             license="MIT",
         ),
-        artifact_root=_path("artifacts"),
+        path=_path("servers/atlassian"),
+        review=ReviewRecord("approved", "manual-review-v1"),
         importer_version=_VERSION,
     )
+    assert isinstance(planned, Ok), planned
+    projected = project_registry_workspace_plan(snapshot, planned.value.plan)
     assert isinstance(projected, Ok), projected
-    snapshot = empty_registry_snapshot()
-    return SourceSnapshot(
-        snapshot.origin,
-        (
-            *snapshot.entries,
-            *(
-                _file(relative, content, executable=executable)
-                for relative, content, executable in projected.value.files
-            ),
-        ),
-    )
+    return projected.value
 
 
-def _compiled(snapshot: SourceSnapshot) -> SourceSnapshot:
-    """Lock and build the registry, exactly as the reproduction did after tampering."""
-
-    locked = plan_registry_lock(
-        snapshot, (), executable_version=_VERSION, available_capabilities=_CAPABILITIES
-    )
-    assert isinstance(locked, Ok), locked
-    with_lock = project_registry_workspace_plan(snapshot, locked.value)
-    assert isinstance(with_lock, Ok), with_lock
-    built = plan_registry_build(
-        with_lock.value, (), executable_version=_VERSION, available_capabilities=_CAPABILITIES
-    )
-    assert isinstance(built, Ok), built
-    complete = project_registry_workspace_plan(with_lock.value, built.value)
-    assert isinstance(complete, Ok), complete
-    return complete.value
-
-
-def _validate(snapshot: SourceSnapshot, *, require_compiled: bool = False):
+def _validate(snapshot: SourceSnapshot):
     report = validate_registry_workspace(
         snapshot,
         executable_version=_VERSION,
         available_capabilities=_CAPABILITIES,
-        require_compiled=require_compiled,
     )
     assert isinstance(report, Ok), report
     return report.value
@@ -169,17 +147,15 @@ def _tampered(snapshot: SourceSnapshot) -> SourceSnapshot:
 
 class VendoredCopyGateTest(unittest.TestCase):
     def test_an_untouched_vendored_registry_passes_both_gates(self) -> None:
-        registry = _compiled(_vendored_registry())
-        self.assertTrue(
-            _validate(registry, require_compiled=True).passed, _messages(_validate(registry))
-        )
+        registry = _vendored_registry()
+        self.assertTrue(_validate(registry).passed, _messages(_validate(registry)))
         self.assertTrue(_audit(registry).passed, _messages(_audit(registry)))
 
     def test_a_substituted_payload_fails_validate_and_audit_after_relocking(self) -> None:
         """A substituted payload, end to end and offline."""
 
-        registry = _compiled(_tampered(_vendored_registry()))
-        validated = _validate(registry, require_compiled=True)
+        registry = _tampered(_vendored_registry())
+        validated = _validate(registry)
         audited = _audit(registry)
         self.assertFalse(validated.passed)
         self.assertFalse(audited.passed)
@@ -213,8 +189,8 @@ class VendoredCopyGateTest(unittest.TestCase):
         self.assertFalse(_audit(edited).passed)
         self.assertFalse(_validate(edited).passed)
 
-    def test_an_owned_package_without_provenance_is_unaffected(self) -> None:
-        """Only a package carrying `registry-vendor-v1` provenance ships bytes to check."""
+    def test_an_approved_package_without_provenance_is_refused(self) -> None:
+        """The approved package digest binds provenance as well as payload."""
 
         registry = _vendored_registry()
         without = SourceSnapshot(
@@ -223,7 +199,7 @@ class VendoredCopyGateTest(unittest.TestCase):
                 entry for entry in registry.entries if str(entry.path) != f"{_BASE}/provenance.json"
             ),
         )
-        self.assertTrue(_validate(without).passed, _messages(_validate(without)))
+        self.assertFalse(_validate(without).passed)
         self.assertNotIn("no longer matches", _messages(_audit(without)))
 
     def test_a_provenance_written_by_another_importer_is_not_verified(self) -> None:

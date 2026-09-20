@@ -7,14 +7,14 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.model import SetupQueueItem
-from agent_artifacts.setup import (
+from aart_cli.model import SetupQueueItem
+from aart_cli.setup import (
     parse_installer,
     plan_setup,
     retry_command,
     rollback_command,
 )
-from agent_artifacts.setup_runtime import ProcessResult, SetupRuntime, apply_setup_plan
+from aart_cli.setup_runtime import ProcessResult, SetupRuntime, apply_setup_plan
 from tests.setup_fixtures import recipe
 from tests.source_remediation_test import _parse_failure
 
@@ -94,7 +94,7 @@ class CustomProtocolTests(unittest.TestCase):
             custom_calls = [call for call in fake.calls if call[0].endswith("install.sh")]
             self.assertEqual([call[1] for call in custom_calls], ["plan", "apply", "verify"])
             self.assertIn("--plan-hash", custom_calls[1])
-            run_dirs = list(pathlib.Path(target, ".agent-artifacts", "setup-runs").iterdir())
+            run_dirs = list(pathlib.Path(target, ".aart-cli", "setup-runs").iterdir())
             self.assertEqual(len(run_dirs), 1)
             self.assertEqual(run_dirs[0].stat().st_mode & 0o777, 0o700)
             executed = pathlib.Path(custom_calls[0][0])
@@ -140,7 +140,7 @@ class CustomProtocolTests(unittest.TestCase):
             # until `2.6.0` shipped `receipt undo` and then was a claim the same executable
             # contradicted in every record it wrote.
             self.assertIn("mcp/atlassian", result.rollback_command)
-            self.assertIn("aart marketplace receipt undo", result.rollback_command)
+            self.assertIn("aart-cli marketplace receipt undo", result.rollback_command)
 
 
 class WrittenCommandFieldTests(unittest.TestCase):

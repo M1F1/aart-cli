@@ -6,7 +6,7 @@
   "summary": "House conventions injected into the harness instruction file.",
   "payload": {
     "root": "payload",
-    "format": "aart-memory-v1"
+    "format": "aart-cli-memory-v1"
   },
   "compatibility": {
     "profiles": ["claude", "tabnine"],

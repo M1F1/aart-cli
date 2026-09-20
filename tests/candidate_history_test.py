@@ -5,14 +5,14 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.application.candidate_history import (
+from aart_cli.application.candidate_history import (
     parse_source_scan,
     serialize_source_scan,
 )
-from agent_artifacts.application.maintainer import CandidateBundle, reconcile_source_scan
-from agent_artifacts.domain.candidates import CandidateState, assess_candidate, reject_candidate
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.application.maintainer import CandidateBundle, reconcile_source_scan
+from aart_cli.domain.candidates import CandidateState, assess_candidate, reject_candidate
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
 from tests.maintainer_source_scan_test import _compiled
 
 

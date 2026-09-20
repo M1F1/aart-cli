@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerUiCommandKind,
     ConsumerUiEvent,
     ConsumerUiEventKind,
@@ -24,8 +24,8 @@ from agent_artifacts.application.consumer_ui import (
     reduce_consumer_ui,
     typing_text,
 )
-from agent_artifacts.application.consumer_views import PresentationProfile
-from agent_artifacts.tui_consumer import ConsumerScreenSource, compose_frame
+from aart_cli.application.consumer_views import PresentationProfile
+from aart_cli.tui_consumer import ConsumerScreenSource, compose_frame
 
 #: A row as the actions block draws it: the cursor gutter, then the row itself.
 _ROW = re.compile(r"^(> |  )\S")

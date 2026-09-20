@@ -21,11 +21,11 @@ from tests.configured_install_command_e2e_test import COORDINATE, _environment
 
 
 def _delivered(env) -> pathlib.Path:
-    return env.project / ".claude/skills/code-review/SKILL.md"
+    return env.project / ".claude/skills/code-review-company-project/SKILL.md"
 
 
 def _artifact_tree(env) -> pathlib.Path:
-    return env.project / ".agent-artifacts/runtimes/company/skill/code-review"
+    return env.project / ".claude/aart-cli/skill/company/code-review"
 
 
 class ConfiguredUninstallCommandTest(unittest.TestCase):

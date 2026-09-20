@@ -5,8 +5,8 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
-from agent_artifacts.domain.selection import (
+from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     Collection,

@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.store_lock import acquire_store_lock, release_store_lock
-from agent_artifacts.store.model import StoreLockLease, StoreLockRequest
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.store_lock import acquire_store_lock, release_store_lock
+from aart_cli.store.model import StoreLockLease, StoreLockRequest
 
 
 class StoreLockAdapterTest(unittest.TestCase):

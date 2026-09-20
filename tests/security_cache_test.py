@@ -5,19 +5,19 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.security_cache import read_cached_attestation, write_cached_attestation
-from agent_artifacts.protocol.hashing import sha256_bytes
-from agent_artifacts.security.attestations import (
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.security_cache import read_cached_attestation, write_cached_attestation
+from aart_cli.protocol.hashing import sha256_bytes
+from aart_cli.security.attestations import (
     AssessmentCacheKey,
     AttestationOrigin,
     AttestationOriginKind,
     SecurityAttestation,
     cache_key_digest,
 )
-from agent_artifacts.security.cache import security_cache_paths
-from agent_artifacts.security.model import (
+from aart_cli.security.cache import security_cache_paths
+from aart_cli.security.model import (
     AssessmentCoverage,
     AssessmentStatus,
     FindingSeverity,

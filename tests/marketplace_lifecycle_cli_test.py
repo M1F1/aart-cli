@@ -1,6 +1,6 @@
 """Canonical non-interactive lifecycle commands (LIFE02).
 
-These tests pin the agent-facing contract of ``aart marketplace install/update/uninstall/status/
+These tests pin the agent-facing contract of ``aart-cli marketplace install/update/uninstall/status/
 setup``: JSON first, source-qualified coordinates, and an explicit Review/Finalize boundary that
 replaces the TUI's interactive confirmation instead of removing it.
 """
@@ -15,10 +15,10 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from unittest import mock
 
-from agent_artifacts import cli
-from agent_artifacts.commands import marketplace
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.consumer.model import (
+from aart_cli import cli
+from aart_cli.commands import marketplace
+from aart_cli.configuration.model import SourceKind
+from aart_cli.consumer.model import (
     ConsumerActionRequest,
     ConsumerOutcome,
     ConsumerReview,
@@ -28,17 +28,17 @@ from agent_artifacts.consumer.model import (
     ConsumerSetupQueue,
     ConsumerTerminalItem,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.marketplace.catalog import build_marketplace
-from agent_artifacts.protocol.hashing import sha256_bytes
-from agent_artifacts.protocol.native_models import ArtifactSelector, CollectionManifest
+from aart_cli.domain.result import Err, Ok
+from aart_cli.marketplace.catalog import build_marketplace
+from aart_cli.protocol.hashing import sha256_bytes
+from aart_cli.protocol.native_models import ArtifactSelector, CollectionManifest
 from tests.marketplace_fixtures import (
     artifact,
     configured_source,
@@ -189,17 +189,17 @@ def _run(argv, service):
     stdout = io.StringIO()
     with (
         mock.patch(
-            "agent_artifacts.commands.marketplace.load_local_consumer_service",
+            "aart_cli.commands.marketplace.load_local_consumer_service",
             return_value=Ok(service),
         ),
         # These request-mapping tests inject the characterized legacy service. Canonical registry
         # routing has its own disk-backed command E2E; do not let a developer's real configured
         # default registry choose a different seam while this isolated unit test is running.
-        mock.patch("agent_artifacts.commands.marketplace._configured_install", return_value=None),
-        mock.patch("agent_artifacts.commands.marketplace._configured_update", return_value=None),
-        mock.patch("agent_artifacts.commands.marketplace._configured_uninstall", return_value=None),
-        mock.patch("agent_artifacts.commands.marketplace._configured_status", return_value=None),
-        mock.patch("agent_artifacts.commands.marketplace._configured_setup", return_value=None),
+        mock.patch("aart_cli.commands.marketplace._configured_install", return_value=None),
+        mock.patch("aart_cli.commands.marketplace._configured_update", return_value=None),
+        mock.patch("aart_cli.commands.marketplace._configured_uninstall", return_value=None),
+        mock.patch("aart_cli.commands.marketplace._configured_status", return_value=None),
+        mock.patch("aart_cli.commands.marketplace._configured_setup", return_value=None),
         contextlib.redirect_stdout(stdout),
     ):
         code = cli.main(argv)
@@ -674,14 +674,14 @@ class ConfigurationGateTests(unittest.TestCase):
                     DiagnosticCode("no-source-configured"),
                     Severity.ERROR,
                     "this content operation requires at least one enabled source",
-                    remediation=("run `aart source add --help` to configure one",),
+                    remediation=("run `aart-cli source add --help` to configure one",),
                 ),
             )
         )
         stdout = io.StringIO()
         with (
             mock.patch(
-                "agent_artifacts.commands.marketplace.load_local_consumer_service",
+                "aart_cli.commands.marketplace.load_local_consumer_service",
                 return_value=denial,
             ),
             contextlib.redirect_stdout(stdout),

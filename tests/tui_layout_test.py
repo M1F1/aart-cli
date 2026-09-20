@@ -9,7 +9,7 @@ from __future__ import annotations
 import pathlib
 import unittest
 
-from agent_artifacts import tui_layout as layout
+from aart_cli import tui_layout as layout
 
 
 class MeasureTests(unittest.TestCase):
@@ -229,7 +229,7 @@ class KernelContractTests(unittest.TestCase):
     def test_the_kernel_depends_on_no_other_tui_module(self):
         source = pathlib.Path(layout.__file__).read_text(encoding="utf-8")
 
-        for forbidden in ("agent_artifacts.tui ", "from .tui", "tui_marketplace", "wizard"):
+        for forbidden in ("aart_cli.tui ", "from .tui", "tui_marketplace", "wizard"):
             self.assertNotIn(forbidden, source)
 
     def test_every_function_is_total_across_plausible_terminals(self):

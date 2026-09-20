@@ -14,14 +14,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.lifecycle import (
+from aart_cli.domain.result import Ok
+from aart_cli.lifecycle import (
     LifecycleStatus,
     finalize_uninstall,
     prepare_uninstall,
 )
-from agent_artifacts.lifecycle.io import _tear_down
-from agent_artifacts.lifecycle.model import ScopeTeardown
+from aart_cli.lifecycle.io import _tear_down
+from aart_cli.lifecycle.model import ScopeTeardown
 from tests.canonical_lifecycle_test import _install, _state
 from tests.canonical_symlink_test import _fixture
 from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _environment
@@ -51,13 +51,13 @@ def _git(project: Path, *arguments: str) -> str:
 class ScopeTeardownValueTest(unittest.TestCase):
     def test_directories_are_bound_deepest_first_and_beneath_one_state_root(self) -> None:
         teardown = ScopeTeardown(
-            "/p/.agent-artifacts/manifest.json",
-            "/p/.agent-artifacts/state.lock",
-            "/p/.agent-artifacts",
+            "/p/.aart-cli/manifest.json",
+            "/p/.aart-cli/state.lock",
+            "/p/.aart-cli",
             ("/p/.tabnine/agent/skills", "/p/.tabnine/agent"),
         )
 
-        self.assertEqual(teardown.state_root, "/p/.agent-artifacts")
+        self.assertEqual(teardown.state_root, "/p/.aart-cli")
         # Shallow-first would try to remove a parent while its child still stands, so the order is
         # part of the value rather than of whoever applies it.
         for directories in (
@@ -67,18 +67,18 @@ class ScopeTeardownValueTest(unittest.TestCase):
         ):
             with self.subTest(directories=directories), self.assertRaises(ValueError):
                 ScopeTeardown(
-                    "/p/.agent-artifacts/manifest.json",
-                    "/p/.agent-artifacts/state.lock",
-                    "/p/.agent-artifacts",
+                    "/p/.aart-cli/manifest.json",
+                    "/p/.aart-cli/state.lock",
+                    "/p/.aart-cli",
                     directories,
                 )
 
     def test_the_state_root_must_hold_both_the_manifest_and_its_lock(self) -> None:
         with self.assertRaises(ValueError):
             ScopeTeardown(
-                "/p/.agent-artifacts/manifest.json",
+                "/p/.aart-cli/manifest.json",
                 "/p/elsewhere/state.lock",
-                "/p/.agent-artifacts",
+                "/p/.aart-cli",
             )
 
 
@@ -93,7 +93,7 @@ class ScopeTeardownPlanTest(unittest.TestCase):
             plan = _uninstall(project, paths, location, adapter)
 
             assert plan.teardown is not None
-            self.assertEqual(plan.teardown.state_root, str(project / ".agent-artifacts"))
+            self.assertEqual(plan.teardown.state_root, str(project / ".aart-cli"))
             self.assertEqual(plan.teardown.directories, (str(project / ".claude" / "skills"),))
             self.assertTrue(plan.teardown.reclaims_state)
 
@@ -141,7 +141,7 @@ class ScopeTeardownApplyTest(unittest.TestCase):
             assert isinstance(removed, Ok), removed
             self.assertEqual(removed.value.status, LifecycleStatus.REMOVED)
             self.assertEqual(removed.value.detail, "")
-            self.assertFalse((project / ".agent-artifacts").exists())
+            self.assertFalse((project / ".aart-cli").exists())
             self.assertFalse((project / ".claude" / "skills").exists())
             self.assertTrue((project / ".claude").is_dir())
 
@@ -163,7 +163,7 @@ class ScopeTeardownApplyTest(unittest.TestCase):
             self.assertEqual(foreign.read_text(encoding="utf-8"), "# not ours\n")
             self.assertFalse((project / ".claude" / "skills" / "review").exists())
             # The scope's own directory is empty and goes; the one with a stranger in it stays.
-            self.assertFalse((project / ".agent-artifacts").exists())
+            self.assertFalse((project / ".aart-cli").exists())
 
     def test_a_state_directory_holding_something_else_is_left_alone(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -171,7 +171,7 @@ class ScopeTeardownApplyTest(unittest.TestCase):
             project, paths, location, _request, _catalog, _effective, adapter = _install(
                 _fixture(root, "skill")
             )
-            note = project / ".agent-artifacts" / "operator-note.txt"
+            note = project / ".aart-cli" / "operator-note.txt"
             note.write_text("keep\n", encoding="utf-8")
             plan = _uninstall(project, paths, location, adapter)
 
@@ -179,7 +179,7 @@ class ScopeTeardownApplyTest(unittest.TestCase):
 
             assert isinstance(removed, Ok), removed
             self.assertEqual(removed.value.status, LifecycleStatus.REMOVED)
-            self.assertFalse((project / ".agent-artifacts" / "manifest.json").exists())
+            self.assertFalse((project / ".aart-cli" / "manifest.json").exists())
             self.assertEqual(note.read_text(encoding="utf-8"), "keep\n")
 
 
@@ -189,7 +189,7 @@ class ScopeTeardownFailureTest(unittest.TestCase):
         # The uninstall is already proven when teardown runs.  Litter it cannot clear is the
         # operator's to know about, never a reason to fail a removal that succeeded.
         with tempfile.TemporaryDirectory() as raw:
-            state_root = Path(raw) / ".agent-artifacts"
+            state_root = Path(raw) / ".aart-cli"
             state_root.mkdir()
             manifest = state_root / "manifest.json"
             manifest.write_text('{"installations": [], "schema_version": 2}\n', encoding="utf-8")
@@ -254,7 +254,7 @@ class ScopeTeardownEndToEndTest(unittest.TestCase):
             )
 
             self.assertEqual(code, 0, payload)
-            self.assertTrue((env.project / ".agent-artifacts" / "manifest.json").is_file())
+            self.assertTrue((env.project / ".aart-cli" / "manifest.json").is_file())
             self.assertFalse((env.project / ".claude" / "skills").exists())
 
             last_code, last = env.run(
@@ -262,7 +262,7 @@ class ScopeTeardownEndToEndTest(unittest.TestCase):
             )
 
             self.assertEqual(last_code, 0, last)
-            self.assertFalse((env.project / ".agent-artifacts").exists())
+            self.assertFalse((env.project / ".aart-cli").exists())
 
     def test_user_scope_reclaims_its_manifest_and_the_directory_it_emptied(self) -> None:
         # The user state root is shared with the object-reference index, so it stays: what the

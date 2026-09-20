@@ -13,17 +13,17 @@ import shutil
 from pathlib import Path
 from unittest import TestCase, mock
 
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.registry import PromotionMode
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.candidate_store import candidate_history_paths, read_candidate_history
-from agent_artifacts.io.maintainer_promotion import prepare_configured_candidate_promotion
-from agent_artifacts.io.maintainer_sync import (
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.candidate_store import candidate_history_paths, read_candidate_history
+from aart_cli.io.maintainer_promotion import prepare_configured_candidate_promotion
+from aart_cli.io.maintainer_sync import (
     complete_configured_source_sync,
     prepare_configured_source_sync,
 )
-from agent_artifacts.sources.model import source_instance_id, source_store_paths
+from aart_cli.sources.model import source_instance_id, source_store_paths
 from tests.authoring_source_admission_e2e_test import (
     _effective,
     _Environment,
@@ -37,7 +37,7 @@ def _candidate(env: _Environment):
     code, payload = env.add_author_source()
     assert code == 0, payload
     with mock.patch(
-        "agent_artifacts.sources.runtime.acquire_git_snapshot",
+        "aart_cli.sources.runtime.acquire_git_snapshot",
         side_effect=env._local_transport,
     ):
         prepared = prepare_configured_source_sync(
@@ -83,7 +83,7 @@ def _words(result: Err) -> str:
 
 
 def _change_registry(root: Path, display_name: str) -> None:
-    marker = root / "aart-registry.json"
+    marker = root / "aart-cli-registry.json"
     document = json.loads(marker.read_text(encoding="utf-8"))
     document["display_name"] = display_name
     marker.write_text(json.dumps(document, sort_keys=True) + "\n", encoding="utf-8")
@@ -94,7 +94,7 @@ class RegistryBaselineDiagnosisTest(TestCase):
         with _environment() as env:
             candidate_id = _candidate(env)
             _change_registry(env.registry, "Awaiting Review")
-            _git(env.registry, "add", "aart-registry.json")
+            _git(env.registry, "add", "aart-cli-registry.json")
             _git(env.registry, "commit", "-m", "prior registry promotion")
 
             words = _words(_prepare(env, candidate_id))
@@ -110,7 +110,7 @@ class RegistryBaselineDiagnosisTest(TestCase):
         with _environment() as env:
             old = _git(env.registry, "rev-parse", "HEAD")
             _change_registry(env.registry, "Published Registry")
-            _git(env.registry, "add", "aart-registry.json")
+            _git(env.registry, "add", "aart-cli-registry.json")
             _git(env.registry, "commit", "-m", "published registry change")
             candidate_id = _candidate(env)
             _git(env.registry, "checkout", "--detach", old)

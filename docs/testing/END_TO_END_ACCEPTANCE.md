@@ -3,8 +3,8 @@
 ## Purpose
 
 This is the manual test for AART's **command line**. You play two roles in order: a maintainer who
-builds and publishes a Registry with `aart registry ...`, then a consumer who subscribes to it and
-installs from it with `aart source ...` and `aart marketplace ...`.
+builds and publishes a Registry with `aart-cli registry ...`, then a consumer who subscribes to it and
+installs from it with `aart-cli source ...` and `aart-cli marketplace ...`.
 
 There are two routes through the same product, and this is one of them:
 
@@ -38,7 +38,7 @@ make manual-test-shell-maintainer   # cwd: the empty Registry checkout
 make manual-test-shell-consumer     # cwd: a clean consumer project
 ```
 
-Inside it, invoke AART as `python3 -m agent_artifacts.cli`. Every command below assumes that shell,
+Inside it, invoke AART as `python3 -m aart_cli.cli`. Every command below assumes that shell,
 so nothing is exported into your own session and no command can reach your real AART state. Leave
 with `exit`; throw the run away with `make manual-test-reset`.
 
@@ -87,7 +87,7 @@ Open `make manual-test-shell-maintainer`. The current directory is the empty Reg
 - [ ] Run `registry init` **without** `--yes` first.
 
 ```sh
-python3 -m agent_artifacts.cli registry init \
+python3 -m aart_cli.cli registry init \
   --source . --source-id manual-registry --display-name "Manual Registry"
 ```
 
@@ -102,7 +102,7 @@ it expects (`validate`, `lock`, `build`, `audit`).
 `registry scan` reads a clean author checkout at its exact HEAD and never mutates anything:
 
 ```sh
-python3 -m agent_artifacts.cli registry scan --source . \
+python3 -m aart_cli.cli registry scan --source . \
   --checkout ../skill --source-alias manual-skill \
   --source-url https://manual.aart.test/skill.git --target-registry manual-registry
 ```
@@ -126,7 +126,7 @@ The CLI's own route into the Registry is vendoring, which needs no external evid
 Registry takes ownership of the bytes:
 
 ```sh
-python3 -m agent_artifacts.cli registry vendor --source . \
+python3 -m aart_cli.cli registry vendor --source . \
   --url https://manual.aart.test/skill.git --ref "$REF" --path manual-check \
   --artifact-version 1.0.0 --summary "Disposable manual skill" --license MIT \
   --profile claude --platform darwin skill manual-check
@@ -144,7 +144,7 @@ the command says AART will not commit or push.
 ## 4 — Publish
 
 ```sh
-python3 -m agent_artifacts.cli registry publish --source .
+python3 -m aart_cli.cli registry publish --source .
 ```
 
 Expected: it prepares lock and index in memory, runs validate and audit over that exact snapshot,
@@ -190,7 +190,7 @@ Open `make manual-test-shell-consumer`. Fresh home, empty project, nothing confi
 ## 6 — Subscribe
 
 ```sh
-python3 -m agent_artifacts.cli source add --alias manual-registry --kind registry-git \
+python3 -m aart_cli.cli source add --alias manual-registry --kind registry-git \
   --location https://manual.aart.test/registry.git --ref "$REF" --default
 ```
 
@@ -212,7 +212,7 @@ author commit — and never a placeholder.
 ## 8 — Install
 
 ```sh
-python3 -m agent_artifacts.cli marketplace install manual-registry/skill/manual-check@1.0.0 \
+python3 -m aart_cli.cli marketplace install manual-registry/skill/manual-check@1.0.0 \
   --profile claude
 ```
 

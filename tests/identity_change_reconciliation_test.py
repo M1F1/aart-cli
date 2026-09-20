@@ -29,7 +29,7 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
     def _adopt_new_identity(self, env) -> None:
         """Rename the source's declared identity upstream, then adopt it with `resubscribe`."""
 
-        document = env.source_location / "aart-source.json"
+        document = env.source_location / "aart-cli-source.json"
         identity = json.loads(document.read_text(encoding="utf-8"))
         self.assertEqual(identity["source_id"], _OLD_IDENTITY)
         identity["source_id"] = _NEW_IDENTITY
@@ -118,7 +118,7 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
                 _, review = env.run("marketplace", "update", "--profile", "claude")
                 reviewed = review["review_digest"]
 
-                document = env.source_location / "aart-source.json"
+                document = env.source_location / "aart-cli-source.json"
                 identity = json.loads(document.read_text(encoding="utf-8"))
                 identity["source_id"] = "third-reference-source"
                 document.write_text(json.dumps(identity, indent=2), encoding="utf-8")
@@ -173,9 +173,9 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
                 # A second subscription, so this case stays what it is about: one subscription
                 # gone while another survives. The empty case is covered separately.
                 mirror = self._writable_source(env.root)
-                identity = json.loads((mirror / "aart-source.json").read_text(encoding="utf-8"))
+                identity = json.loads((mirror / "aart-cli-source.json").read_text(encoding="utf-8"))
                 identity["source_id"] = "mirror-reference-source"
-                (mirror / "aart-source.json").write_text(json.dumps(identity), encoding="utf-8")
+                (mirror / "aart-cli-source.json").write_text(json.dumps(identity), encoding="utf-8")
                 _source(
                     env,
                     "source",

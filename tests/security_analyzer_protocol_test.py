@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.hashing import json_digest, sha256_bytes
-from agent_artifacts.protocol.json import JsonObject
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.security.analyzers import (
+from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.hashing import json_digest, sha256_bytes
+from aart_cli.protocol.json import JsonObject
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.security.analyzers import (
     AnalyzerCommand,
     AnalyzerDescriptor,
     AnalyzerInput,
@@ -22,9 +22,9 @@ from agent_artifacts.security.analyzers import (
     scan_request_bytes,
     to_security_assessment,
 )
-from agent_artifacts.security.application import analyzer_input_from_stored_object
-from agent_artifacts.security.model import AssessmentStatus, FindingSeverity
-from agent_artifacts.store.model import StoredObject, make_object_candidate
+from aart_cli.security.application import analyzer_input_from_stored_object
+from aart_cli.security.model import AssessmentStatus, FindingSeverity
+from aart_cli.store.model import StoredObject, make_object_candidate
 from tests.credential_fixtures import assignment_bytes
 
 RULES = sha256_bytes(b"rules-v1")
@@ -83,7 +83,7 @@ def _handshake_json(**changes: str) -> bytes:
 def _scan_json(*, duplicate: bool = False, provider_id: str = "example-analyzer") -> bytes:
     path = parse_relative_path("payload/main.py")
     assert isinstance(path, Ok)
-    from agent_artifacts.security.model import make_finding
+    from aart_cli.security.model import make_finding
 
     finding = make_finding(
         "rule-101",

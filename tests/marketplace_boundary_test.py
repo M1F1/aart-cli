@@ -7,7 +7,7 @@ from pathlib import Path
 
 class MarketplaceBoundaryTest(unittest.TestCase):
     def test_marketplace_context_has_no_durable_io_or_cli_imports(self) -> None:
-        root = Path(__file__).parents[1] / "agent_artifacts" / "marketplace"
+        root = Path(__file__).parents[1] / "aart_cli" / "marketplace"
         forbidden = {
             "os",
             "pathlib",
@@ -15,9 +15,9 @@ class MarketplaceBoundaryTest(unittest.TestCase):
             "socket",
             "subprocess",
             "tempfile",
-            "agent_artifacts.io",
-            "agent_artifacts.cli",
-            "agent_artifacts.tui",
+            "aart_cli.io",
+            "aart_cli.cli",
+            "aart_cli.tui",
         }
         for path in root.glob("*.py"):
             with self.subTest(path=path):

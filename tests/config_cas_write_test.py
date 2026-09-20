@@ -16,14 +16,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.config_cas import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.config_cas import (
     CONFIG_LOCK_BUSY,
     CONFIG_WRITE_CONFLICT,
     ConfigCasDocument,
     write_configuration_checked,
 )
-from agent_artifacts.protocol.hashing import sha256_bytes
+from aart_cli.protocol.hashing import sha256_bytes
 from tests.credential_fixtures import secret_field
 
 
@@ -169,7 +169,7 @@ class ConfigCasWriteTest(unittest.TestCase):
             (Path(lock) / "owner.json").write_text(owner, encoding="utf-8")
 
             with mock.patch(
-                "agent_artifacts.io.config_cas._owner_alive",
+                "aart_cli.io.config_cas._owner_alive",
                 return_value=False,
             ):
                 written = write_configuration_checked(

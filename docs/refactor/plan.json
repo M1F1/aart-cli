@@ -572,7 +572,7 @@
         },
         {
           "id": "5",
-          "title": "Remove TUI push capability and explain manual Registry publication",
+          "title": "Historical D-255 TUI Push removal, superseded by CP-26.18 restoring explicit Push on Registry Maintainer",
           "status": "done"
         },
         {
@@ -778,8 +778,8 @@
     },
     {
       "id": "CP-26",
-      "title": "Author-side manifests, and the end of the older registry representation",
-      "status": "in_progress",
+      "title": "Canonical Registry maintenance, authoring tools, local consumption and MCP smoke verification",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -788,78 +788,113 @@
         },
         {
           "id": "2",
-          "title": "`registry scaffold` and `registry publish` are deleted",
-          "status": "todo"
+          "title": "`registry scaffold` is deleted while canonical `registry publish` remains",
+          "status": "done"
         },
         {
           "id": "3",
-          "title": "The dual-mode registry verbs lose their legacy branch",
-          "status": "todo"
+          "title": "Keep canonical lock/build/validate/audit/format and aggregate publish; remove only legacy branches while Push remains separate",
+          "status": "done"
         },
         {
           "id": "4",
           "title": "The consumer and source validators lose their legacy branch",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "5",
           "title": "The lock/index schema, tree constants, planning halves and fixtures are deleted",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "6",
           "title": "The authoring-manifest field surface is collected from the parser, not transcribed",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "7",
           "title": "A deterministic YAML emitter for the generated subset",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "8",
-          "title": "`aart author init` emits a full-surface `aart.yaml` for `mcp`",
-          "status": "todo"
+          "title": "`aart-cli author init` emits a full-surface `aart.yaml` for `mcp`",
+          "status": "done"
         },
         {
           "id": "9",
-          "title": "`aart author init` emits the same for `skill`",
-          "status": "todo"
+          "title": "`aart-cli author init` emits the same for `skill`",
+          "status": "done"
         },
         {
           "id": "10",
-          "title": "`aart author check` proves every discovered manifest parses",
-          "status": "todo"
+          "title": "`aart-cli author check` proves every discovered manifest parses",
+          "status": "done"
         },
         {
           "id": "11",
-          "title": "`aart author check` proves each manifest would be accepted by `scan`",
-          "status": "todo"
+          "title": "`aart-cli author check` proves each manifest would be accepted by `scan`",
+          "status": "done"
         },
         {
           "id": "12",
-          "title": "`aart author init` covers `guideline`, `hook` and `memory`",
-          "status": "todo"
+          "title": "`aart-cli author init` covers `guideline`, `hook` and `memory`",
+          "status": "done"
         },
         {
           "id": "13",
-          "title": "Every install line in the README is executed by a gate, not described",
-          "status": "todo"
+          "title": "README opens with the fastest normal-user path from installing AART to installing and verifying an artifact",
+          "status": "done"
         },
         {
           "id": "14",
-          "title": "The README opens with the consumer's path and nothing else",
-          "status": "todo"
+          "title": "A short What AART is section and categorized documentation index follow the quick start",
+          "status": "done"
         },
         {
           "id": "15",
-          "title": "Its second half is authoring in a source checkout, then the registry that compiles it",
-          "status": "todo"
+          "title": "Detailed material moves to linked documents while the existing License and copyright footer remain last",
+          "status": "done"
         },
         {
           "id": "16",
-          "title": "Everything that serves neither reader moves out of the README",
-          "status": "todo"
+          "title": "A gate executes final install lines and verifies README order, bounded explanation, links, and final License",
+          "status": "done"
+        },
+        {
+          "id": "17",
+          "title": "Generated registry and release defaults contain no M1F1 repository or organization",
+          "status": "done"
+        },
+        {
+          "id": "18",
+          "title": "Registry Maintainer exposes publication readiness and may push its validated local snapshot, never to main or the Registry default",
+          "status": "done"
+        },
+        {
+          "id": "18a",
+          "title": "Use aart-cli everywhere in active interfaces and one portable ~/.aart-cli home; define harness-owned installation paths",
+          "status": "done"
+        },
+        {
+          "id": "19",
+          "title": "Each installation owns versionless harness names, runtime, receipt and separately entered configuration and credentials; complete owner/input identity for Keychain",
+          "status": "done"
+        },
+        {
+          "id": "20",
+          "title": "Add Registry synchronizes a local repo and selected branch through normal Marketplace/install, ready for installed-MCP smoke tests",
+          "status": "done"
+        },
+        {
+          "id": "20a",
+          "title": "CLI-only smoke verification of installed MCPs: direct credential checks, an operator-run harness prompt and report graded by the direct evaluator, English assessment and opt-in response display",
+          "status": "done"
+        },
+        {
+          "id": "21",
+          "title": "Run full CP-26 quality, integration/E2E and release-facing verification only after all implementation tasks are complete",
+          "status": "done"
         }
       ]
     }

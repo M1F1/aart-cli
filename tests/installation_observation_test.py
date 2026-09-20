@@ -11,16 +11,16 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.domain.credentials import (
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.reconciliation import Component, ComponentState
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.harness import LocalHarnessRegistry
-from agent_artifacts.io.installation_observation import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.reconciliation import Component, ComponentState
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.harness import LocalHarnessRegistry
+from aart_cli.io.installation_observation import (
     credential_component_states,
     observe_planned_installation,
 )
@@ -84,7 +84,7 @@ class CredentialComponentStateTest(unittest.TestCase):
     def _references(self):
         planned = _plan()
         assert isinstance(planned, Ok), planned
-        from agent_artifacts.application.installation_proposal import intended_receipt
+        from aart_cli.application.installation_proposal import intended_receipt
 
         return intended_receipt(planned.value).credentials
 

@@ -1,6 +1,12 @@
 # Native source protocol v1
 
-A native AART source is an acquired repository tree whose root contains `aart-source.json`.
+> **CP-26 transition notice (2026-09-19):** This guide contains retired native-reference and
+> lock/index representation descriptions. Those portions are historical, not an implementation
+> contract. Use the canonical [Product Specification](../product-specification/PRODUCT_SPECIFICATION.md)
+> and its §169 for accepted names and installation ownership. B-151 tracks the required guide
+> rewrite/removal before CP-26.21; CP-26.18a updates active names alongside the executable.
+
+A native AART source is an acquired repository tree whose root contains `aart-cli-source.json`.
 Artifact discovery is deliberately limited to the manifest's explicit `artifact_roots`; AART does
 not crawl arbitrary repository layouts during consumer installation. A foreign layout must be
 re-authored as a native source before it becomes a consumer input; AART does not convert other
@@ -12,7 +18,7 @@ contains one canonical skill, optional import provenance, and one collection.
 
 ## Source document
 
-`aart-source.json` declares schema/protocol version 1, a stable lowercase `source_id`, a display
+`aart-cli-source.json` declares schema/protocol version 1, a stable lowercase `source_id`, a display
 name, half-open AART compatibility bounds, required compiler capabilities, one or more artifact
 roots, and optional collection roots. A source never declares its own trust class. Unknown fields
 fail unless they use an explicitly supported lowercase namespaced extension such as
@@ -26,11 +32,11 @@ payloads are:
 
 | Type | Format | Required payload |
 |---|---|---|
-| `skill` | `aart-skill-v1` | `payload/SKILL.md` plus optional supporting files |
-| `guideline` | `aart-guideline-v1` | exactly one Markdown document |
-| `memory` | `aart-memory-v1` | exactly one Markdown document |
-| `mcp` | `aart-mcp-v1` | strict JSON object at `payload/mcp.json` |
-| `hook` | `aart-hook-v1` | strict JSON object at `payload/hook.json`, plus optional resources |
+| `skill` | `aart-cli-skill-v1` | `payload/SKILL.md` plus optional supporting files |
+| `guideline` | `aart-cli-guideline-v1` | exactly one Markdown document |
+| `memory` | `aart-cli-memory-v1` | exactly one Markdown document |
+| `mcp` | `aart-cli-mcp-v1` | strict JSON object at `payload/mcp.json` |
+| `hook` | `aart-cli-hook-v1` | strict JSON object at `payload/hook.json`, plus optional resources |
 
 The manifest also requires a one-line summary, SemVer, explicit profile/platform compatibility,
 install scopes/modes/effects, and an optional package-relative setup recipe. It may declare
@@ -52,11 +58,11 @@ the whole payload arrives, and for one it does not:
 | `hook` | `copy-tree`, `merge-json` | the whole payload tree, plus the merged entry | yes — `${SCRIPT_DIR}` resolves to where it was copied |
 | `mcp` | `merge-json` | the `server` object from `payload/mcp.json`, and nothing else | no |
 
-`aart-mcp-v1` is `{"name": …, "server": {…}}`, and only `server` is merged into the profile's MCP
+`aart-cli-mcp-v1` is `{"name": …, "server": {…}}`, and only `server` is merged into the profile's MCP
 configuration. Two consequences follow. A descriptor whose `command` or `args` names a path inside
 `payload/` names a file no consumer will have. And a document shaped like the harness file it is
 merged into — `{"mcpServers": {…}}` — has no `server` key, so it delivers an empty entry that starts
-nothing. Registry curation reports both (`aart registry vendor`, `aart registry audit`); the loader
+nothing. Registry curation reports both (`aart-cli registry vendor`, `aart-cli registry audit`); the loader
 accepts what it always accepted.
 
 ## Provenance and collections
@@ -65,7 +71,7 @@ Imported or curated content may include `provenance.json`. It binds the canonica
 credential-free Git URL, a lowercase 40-hex commit, input digest, importer ID/SemVer, options
 digest, and reviewable warnings. Secrets, moving refs, and absolute paths are invalid.
 
-A package produced by `aart registry vendor` is an ordinary package of its declared type that
+A package produced by `aart-cli registry vendor` is an ordinary package of its declared type that
 carries such a document, with importer ID `registry-vendor-v1`; the copied subtree is its
 `payload/`, and any wrapper the maintainer authored beside it — the `mcp.json` the type requires, a
 `SETUP.md`, a setup recipe — is part of the same package and is reviewed and assessed with it. No

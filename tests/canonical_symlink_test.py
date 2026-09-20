@@ -7,13 +7,13 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.install_state.schema import parse_install_state
-from agent_artifacts.installation.application import finalize_install, prepare_install
-from agent_artifacts.installation.io import LocalInstallAdapter
-from agent_artifacts.installation.model import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.install_state.schema import parse_install_state
+from aart_cli.installation.application import finalize_install, prepare_install
+from aart_cli.installation.io import LocalInstallAdapter
+from aart_cli.installation.model import (
     InstallLocation,
     InstallRequest,
     InstallStatus,
@@ -23,24 +23,24 @@ from agent_artifacts.installation.model import (
     PathSnapshot,
     classify_link,
 )
-from agent_artifacts.io.object_store import publish_object
-from agent_artifacts.io.reference_store import read_references
-from agent_artifacts.marketplace.catalog import build_marketplace
-from agent_artifacts.profiles.builtin import builtin
-from agent_artifacts.protocol.hashing import file_entry, json_digest, tree_digest
-from agent_artifacts.protocol.json import canonical_json_bytes
-from agent_artifacts.protocol.native_models import (
+from aart_cli.io.object_store import publish_object
+from aart_cli.io.reference_store import read_references
+from aart_cli.marketplace.catalog import build_marketplace
+from aart_cli.profiles.builtin import builtin
+from aart_cli.protocol.hashing import file_entry, json_digest, tree_digest
+from aart_cli.protocol.json import canonical_json_bytes
+from aart_cli.protocol.native_models import (
     PAYLOAD_FORMAT_BY_TYPE,
     ArtifactManifest,
     CompatibilitySpec,
     InstallSpec,
     PayloadSpec,
 )
-from agent_artifacts.protocol.native_schema import artifact_manifest_to_json
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.store.model import (
+from aart_cli.protocol.native_schema import artifact_manifest_to_json
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.semver import SemVer
+from aart_cli.store.model import (
     ObjectPublishCommand,
     ReferenceKind,
     ReferenceReadRequest,
@@ -225,7 +225,7 @@ class CanonicalSymlinkTest(unittest.TestCase):
             shutil.rmtree(environment)
 
             self.assertEqual((destination / "SKILL.md").read_text(), "# Installed v1\n")
-            state = parse_install_state((project / ".agent-artifacts/manifest.json").read_bytes())
+            state = parse_install_state((project / ".aart-cli/manifest.json").read_bytes())
             assert isinstance(state, Ok), state
             effect = state.value.installations[0].effects[0]
             self.assertEqual(effect.actual_mode, "symlink")
@@ -527,7 +527,7 @@ class CanonicalSymlinkTest(unittest.TestCase):
             )
             assert isinstance(retarget, Ok), retarget
             original = __import__(
-                "agent_artifacts.installation.io", fromlist=["_write_atomic"]
+                "aart_cli.installation.io", fromlist=["_write_atomic"]
             )._write_atomic
             calls = 0
 
@@ -539,7 +539,7 @@ class CanonicalSymlinkTest(unittest.TestCase):
                 return original(path, content, mode=mode)
 
             with patch(
-                "agent_artifacts.installation.io._write_atomic",
+                "aart_cli.installation.io._write_atomic",
                 side_effect=fail_state_once,
             ):
                 failed = finalize_install(
@@ -632,7 +632,7 @@ class CanonicalSymlinkTest(unittest.TestCase):
             )
             assert isinstance(planned, Ok), planned
             original = __import__(
-                "agent_artifacts.installation.io", fromlist=["_write_symlink"]
+                "aart_cli.installation.io", fromlist=["_write_symlink"]
             )._write_symlink
             wrong = root / "wrong-target"
             wrong.mkdir()
@@ -644,7 +644,7 @@ class CanonicalSymlinkTest(unittest.TestCase):
                 return original(path, str(wrong) if calls == 1 else target)
 
             with patch(
-                "agent_artifacts.installation.io._write_symlink",
+                "aart_cli.installation.io._write_symlink",
                 side_effect=write_wrong_once,
             ):
                 outcome = finalize_install(
@@ -658,7 +658,7 @@ class CanonicalSymlinkTest(unittest.TestCase):
             assert isinstance(outcome, Ok), outcome
             self.assertEqual(outcome.value.status, InstallStatus.FAILED)
             self.assertFalse((project / ".claude/skills/review").exists())
-            self.assertFalse((project / ".agent-artifacts/manifest.json").exists())
+            self.assertFalse((project / ".aart-cli/manifest.json").exists())
 
 
 if __name__ == "__main__":

@@ -36,7 +36,7 @@ Only what has the release as its subject:
 * `packaging-check` — the one quality gate whose subject is the wheel rather than the source
 * build, then `scripts/release_artifact.py --tag` — the wheel's filename, metadata, declared
   dependencies and installed command, against the tag it is published under
-* attach to the release, and publish to an index when `AART_INDEX_PUBLISH_URL` is set
+* attach to the release, and publish to an index when `AART_CLI_INDEX_PUBLISH_URL` is set
 
 Everything else is left to `pr-check`: a release is cut from a commit that reached `main`, and
 nothing reaches `main` except through a pull request that passed all ten gates.
@@ -48,7 +48,7 @@ release Release Please creates start nothing on their own. `release-please.yml` 
 ## What `pr-check` runs on a release pull request
 
 A release pull request rewrites four files — the version literals in `pyproject.toml`,
-`agent_artifacts/__init__.py` and `.release-please-manifest.json`, and the changelog — on a tree the
+`aart_cli/__init__.py` and `.release-please-manifest.json`, and the changelog — on a tree the
 full gate already passed when the last ordinary pull request merged. Running 4,338 tests on three
 interpreters against it proves that tree a second time, which is the thing INV-097 and INV-102 rule
 out. So `pr-check` narrows to what the release pull request can actually break (INV-096):
@@ -88,7 +88,7 @@ None of these can be committed. Each is set per repository, on every instance se
    The gate jobs themselves come in two shapes, `gates` and `gates-private-image`, of which only one
    ever runs; requiring either by name would hang every pull request on an instance using the other.
    The aggregate fails when the shape that ran failed, and when neither ran — which is what a
-   mistyped `AART_IMAGE_USERNAME_SECRET` looks like.
+   mistyped `AART_CLI_IMAGE_USERNAME_SECRET` looks like.
 3. **Require branches to be up to date before merging.** Two pull requests can each be green and
    still break `main` together. `pr-check` does not run on `main`, so this setting is what catches
    the pair.
@@ -104,7 +104,7 @@ a workflow or job and re-point the required check in the same sitting.
 pull request early if you want a branch checked while you work on it.
 
 **Only Poetry builds the wheel.** The packaging gate runs in the release job and builds a wheel, so
-an image without Poetry fails there. Name it in `AART_POETRY` if it is off `PATH`; see
+an image without Poetry fails there. Name it in `AART_CLI_POETRY` if it is off `PATH`; see
 [`wheel-reproducibility-v1.md`](../release/wheel-reproducibility-v1.md).
 
 **The release pull request gets no `pr-check` until somebody approves it.** It is opened with the

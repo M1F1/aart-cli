@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_artifacts import cli
+from aart_cli import cli
 
 
 def _run(*arguments: str) -> tuple[int, str]:
@@ -49,7 +49,7 @@ class RegistryPublishCommandTest(unittest.TestCase):
             self.assertEqual(code, 0, output)
             yield root
 
-    def test_preview_projects_lock_and_build_lists_every_commit_path_and_writes_nothing(
+    def test_preview_projects_canonical_build_lists_every_commit_path_and_writes_nothing(
         self,
     ) -> None:
         with self._registry() as root:
@@ -59,9 +59,9 @@ class RegistryPublishCommandTest(unittest.TestCase):
             result = json.loads(output)
             self.assertEqual(result["phase"], "review")
             paths = {item["path"] for item in result["commit"]["paths"]}
-            self.assertIn("aart.lock.json", paths)
-            self.assertIn("aart.index.json", paths)
-            self.assertIn("aart-registry.json", paths)
+            self.assertIn("registry/index.json", paths)
+            self.assertIn("registry/snapshot.json", paths)
+            self.assertIn("aart-cli-registry.json", paths)
             self.assertFalse((root / "aart.lock.json").exists())
             self.assertFalse((root / "aart.index.json").exists())
             self.assertNotEqual(_git(root, "rev-parse", "HEAD").returncode, 0)
@@ -85,8 +85,10 @@ class RegistryPublishCommandTest(unittest.TestCase):
             self.assertFalse(result["commit"]["push"])
             self.assertTrue(all(check["passed"] for check in result["review"]["checks"]))
             committed_paths = {item["path"] for item in result["commit"]["paths"]}
-            self.assertIn("aart.lock.json", committed_paths)
-            self.assertIn("aart.index.json", committed_paths)
+            self.assertIn("registry/index.json", committed_paths)
+            self.assertIn("registry/snapshot.json", committed_paths)
+            self.assertFalse((root / "aart.lock.json").exists())
+            self.assertFalse((root / "aart.index.json").exists())
             head = _git(root, "rev-parse", "HEAD").stdout.strip()
             self.assertTrue(head)
             self.assertEqual(_git(root, "status", "--porcelain").stdout, "")
@@ -103,8 +105,8 @@ class RegistryPublishCommandTest(unittest.TestCase):
             code, output = _run("registry", "publish", "--source", str(root), "--yes", "--json")
             self.assertEqual(code, 0, output)
             head = _git(root, "rev-parse", "HEAD").stdout.strip()
-            lock_before = (root / "aart.lock.json").read_bytes()
-            index_before = (root / "aart.index.json").read_bytes()
+            index_before = (root / "registry/index.json").read_bytes()
+            snapshot_before = (root / "registry/snapshot.json").read_bytes()
             collection = root / "collections" / "broken.json"
             collection.parent.mkdir()
             collection.write_text(
@@ -123,8 +125,8 @@ class RegistryPublishCommandTest(unittest.TestCase):
             self.assertEqual(failed, 1)
             self.assertIn("selector identity is invalid", failure_output)
             self.assertEqual(_git(root, "rev-parse", "HEAD").stdout.strip(), head)
-            self.assertEqual((root / "aart.lock.json").read_bytes(), lock_before)
-            self.assertEqual((root / "aart.index.json").read_bytes(), index_before)
+            self.assertEqual((root / "registry/index.json").read_bytes(), index_before)
+            self.assertEqual((root / "registry/snapshot.json").read_bytes(), snapshot_before)
 
 
 if __name__ == "__main__":

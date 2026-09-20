@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 IN_SCOPE = frozenset(
     {
         "pyproject.toml",
-        "agent_artifacts/__init__.py",
+        "aart_cli/__init__.py",
         ".release-please-manifest.json",
         "CHANGELOG.md",
     }

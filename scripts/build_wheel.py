@@ -14,7 +14,7 @@ are eight callers who would each have to hold them instead:
     commit. The version is pinned in `[build-system]` and checked here, so that upgrade fails a
     build instead of silently invalidating a published digest.
   * **Poetry ships whatever is in the package directory.** The allowlist below is a gate: a stray
-    file dropped under `agent_artifacts/` fails the build rather than shipping inside it.
+    file dropped under `aart_cli/` fails the build rather than shipping inside it.
 
 The archive is byte-reproducible: see docs/release/wheel-reproducibility-v1.md
 for what that now means and how to verify a published wheel.
@@ -80,7 +80,7 @@ def pinned_backend() -> str:
 
 def _allowed_package_member(arcname: str) -> bool:
     parts = tuple(Path(arcname).parts)
-    if len(parts) < 2 or parts[0] != "agent_artifacts":
+    if len(parts) < 2 or parts[0] != "aart_cli":
         return False
     if arcname.endswith(".py"):
         return True
@@ -96,7 +96,7 @@ def collect_package_files() -> dict[str, bytes]:
     """
 
     files: dict[str, bytes] = {}
-    for path in sorted((ROOT / "agent_artifacts").rglob("*")):
+    for path in sorted((ROOT / "aart_cli").rglob("*")):
         arc = str(path.relative_to(ROOT)).replace(os.sep, "/")
         if path.is_symlink():
             raise ValueError(f"wheel resource allowlist rejects: {arc}")
@@ -113,8 +113,8 @@ def missing_poetry(name: str) -> str:
         f"Poetry is not installed, or is not on PATH as {name!r}.\n"
         "It builds the wheel, so a build without it cannot happen.\n"
         "Install it (https://python-poetry.org/docs/#installation), or name it:\n"
-        "  AART_POETRY=/opt/poetry/bin/poetry python scripts/build_wheel.py\n"
-        "In CI, set the AART_POETRY repository variable -- see docs/ci/github-enterprise-rollout.md."
+        "  AART_CLI_POETRY=/opt/poetry/bin/poetry python scripts/build_wheel.py\n"
+        "In CI, set the AART_CLI_POETRY repository variable -- see docs/ci/github-enterprise-rollout.md."
     )
 
 
@@ -138,11 +138,11 @@ def _poetry_module_runs() -> bool:
 def poetry_command() -> list[str]:
     """How to invoke Poetry here.
 
-    `AART_POETRY` names it outright, for an image that installs Poetry somewhere off `PATH` --
+    `AART_CLI_POETRY` names it outright, for an image that installs Poetry somewhere off `PATH` --
     a company CI image commonly does, as `/opt/poetry/bin/poetry`.
     """
 
-    override = os.environ.get("AART_POETRY", "").strip()
+    override = os.environ.get("AART_CLI_POETRY", "").strip()
     if override:
         return [override]
     found = shutil.which("poetry")

@@ -4,10 +4,10 @@ import json
 import unittest
 from dataclasses import replace
 
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.identifiers import ArtifactIdentity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.marketplace.catalog import (
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.identifiers import ArtifactIdentity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.marketplace.catalog import (
     build_marketplace,
     list_marketplace,
     marketplace_catalog_bytes,
@@ -15,15 +15,15 @@ from agent_artifacts.marketplace.catalog import (
     resolve_artifact,
     search_marketplace,
 )
-from agent_artifacts.marketplace.model import (
+from aart_cli.marketplace.model import (
     ArtifactQuery,
     MarketplaceCatalog,
     MarketplaceQuery,
 )
-from agent_artifacts.protocol.native_models import ArtifactSelector, CollectionManifest
-from agent_artifacts.protocol.paths import SafeRelativePath
-from agent_artifacts.protocol.registry_models import IndexProvenance, ReviewRecord
-from agent_artifacts.protocol.semver import SemVer, VersionBounds
+from aart_cli.protocol.native_models import ArtifactSelector, CollectionManifest
+from aart_cli.protocol.paths import SafeRelativePath
+from aart_cli.protocol.registry_models import IndexProvenance, ReviewRecord
+from aart_cli.protocol.semver import SemVer, VersionBounds
 from tests.credential_fixtures import credential_url
 from tests.marketplace_fixtures import (
     artifact,

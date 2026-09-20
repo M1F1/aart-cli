@@ -1,7 +1,7 @@
 """What a stored package still says about installing itself.
 
 A manifest declares a runtime, a dependency descriptor and the inputs an artifact is started with.
-Compilation carries those declarations into `artifact.json` as the `aart.authoring` extension, and
+Compilation carries those declarations into `artifact.json` as the `aart-cli.authoring` extension, and
 an install has to read them back -- from the package on disk, not from the author's repository,
 which the machine doing the installing has never seen.
 
@@ -16,29 +16,29 @@ import json
 import unittest
 from typing import cast
 
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.inputs import ConfigInput, SecretInput
-from agent_artifacts.domain.install_description import (
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.inputs import ConfigInput, SecretInput
+from aart_cli.domain.install_description import (
     InstallDescription,
     install_description_to_data,
 )
-from agent_artifacts.domain.launch import LaunchContract, Transport
-from agent_artifacts.domain.python_runtime import PyProjectSpec, RequirementsFile
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.authoring import (
+from aart_cli.domain.launch import LaunchContract, Transport
+from aart_cli.domain.python_runtime import PyProjectSpec, RequirementsFile
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.authoring import (
     compile_author_snapshot,
     describe_installation,
     package_payload_root,
     read_install_description,
     read_package_description,
 )
-from agent_artifacts.protocol.native_schema import parse_artifact_manifest
+from aart_cli.protocol.native_schema import parse_artifact_manifest
 from tests.authoring_compiler_test import _file, _snapshot
 from tests.authoring_inputs_test import _document, _parsed
 
 
 def _compiled(**overrides: object):
-    entry = _file("github/aart.json", json.dumps(_document(**overrides), sort_keys=True))
+    entry = _file("github/aart-cli.json", json.dumps(_document(**overrides), sort_keys=True))
     payload = (
         _file("github/server.py", "print('hi')\n"),
         _file("github/requirements.txt", "httpx==0.27.0\n"),
@@ -65,15 +65,15 @@ def _stored_description(**overrides: object):
     )
     parsed = parse_artifact_manifest(manifest_entry.content)
     assert isinstance(parsed, Ok), getattr(parsed, "diagnostics", ())
-    extension = dict(parsed.value.extensions)["aart.authoring"]
+    extension = dict(parsed.value.extensions)["aart-cli.authoring"]
     return read_install_description(extension, path="artifact.json")
 
 
 def _without_authoring(entries):
     """The same tree, as some other importer that never wrote an authoring intent would leave it."""
 
-    from agent_artifacts.protocol.json import JsonObject, canonical_json_bytes, parse_json
-    from agent_artifacts.protocol.native_tree import SnapshotEntry
+    from aart_cli.protocol.json import JsonObject, canonical_json_bytes, parse_json
+    from aart_cli.protocol.native_tree import SnapshotEntry
 
     rewritten = []
     for entry in entries:
@@ -83,7 +83,7 @@ def _without_authoring(entries):
         parsed = parse_json(entry.content)
         assert isinstance(parsed, Ok), getattr(parsed, "diagnostics", ())
         kept = JsonObject(
-            tuple(item for item in parsed.value.entries if item[0] != "aart.authoring")
+            tuple(item for item in parsed.value.entries if item[0] != "aart-cli.authoring")
         )
         rewritten.append(
             SnapshotEntry(entry.path, entry.kind, canonical_json_bytes(kept), entry.executable)
@@ -125,7 +125,7 @@ class DescribedInstallationTest(unittest.TestCase):
 
     def test_a_skill_with_nothing_to_start_describes_nothing_to_start(self) -> None:
         description = _authored_description(
-            schema="aart.dev/skill/v1",
+            schema="aart-cli.dev/skill/v1",
             artifact={"name": "review", "kind": "skill", "version": "1.0.0"},
             payload={"include": ["SKILL.md"]},
             transport=None,
@@ -166,7 +166,7 @@ class StoredDescriptionTest(unittest.TestCase):
 
     def test_a_package_that_declares_nothing_installable_is_read_as_such(self) -> None:
         stored = _stored_description(
-            schema="aart.dev/skill/v1",
+            schema="aart-cli.dev/skill/v1",
             artifact={"name": "review", "kind": "skill", "version": "1.0.0"},
             payload={"include": ["SKILL.md"]},
             transport=None,
@@ -180,7 +180,7 @@ class StoredDescriptionTest(unittest.TestCase):
         self.assertEqual(stored.value, InstallDescription())
 
     def test_an_extension_that_is_not_an_object_is_refused_rather_than_ignored(self) -> None:
-        result = read_install_description("aart.authoring", path="artifact.json")
+        result = read_install_description("aart-cli.authoring", path="artifact.json")
 
         self.assertIsInstance(result, Err)
 

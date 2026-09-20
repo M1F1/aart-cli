@@ -7,7 +7,7 @@ import unittest
 
 
 def _unwrap(result):
-    from agent_artifacts.domain.result import Ok
+    from aart_cli.domain.result import Ok
 
     if not isinstance(result, Ok):
         raise AssertionError(f"expected Ok, got {result!r}")
@@ -15,7 +15,7 @@ def _unwrap(result):
 
 
 def _codes(result) -> tuple[str, ...]:
-    from agent_artifacts.domain.result import Err
+    from aart_cli.domain.result import Err
 
     if not isinstance(result, Err):
         raise AssertionError(f"expected Err, got {result!r}")
@@ -65,8 +65,8 @@ def _artifact_document(artifact_type: str, payload_format: str, **overrides):
 
 class SourceManifestTest(unittest.TestCase):
     def test_parses_normalizes_and_serializes_the_v1_source_contract(self):
-        from agent_artifacts.protocol.hashing import json_digest
-        from agent_artifacts.protocol.native_schema import (
+        from aart_cli.protocol.hashing import json_digest
+        from aart_cli.protocol.native_schema import (
             parse_source_manifest,
             source_manifest_to_json,
         )
@@ -88,7 +88,7 @@ class SourceManifestTest(unittest.TestCase):
         )
 
     def test_rejects_unknown_or_self_declared_trust_and_invalid_versions(self):
-        from agent_artifacts.protocol.native_schema import parse_source_manifest
+        from aart_cli.protocol.native_schema import parse_source_manifest
 
         unknown = _source_document(trust="company-reviewed", surprise=True)
         self.assertEqual(
@@ -116,7 +116,7 @@ class SourceManifestTest(unittest.TestCase):
         )
 
     def test_source_fields_fail_closed_with_stable_diagnostics(self):
-        from agent_artifacts.protocol.native_schema import parse_source_manifest
+        from aart_cli.protocol.native_schema import parse_source_manifest
 
         cases = (
             ([], "source-invalid"),
@@ -160,8 +160,8 @@ class SourceManifestTest(unittest.TestCase):
 
 class ArtifactManifestTest(unittest.TestCase):
     def test_all_canonical_artifact_types_parse_with_normalized_install_metadata(self):
-        from agent_artifacts.protocol.native_models import PAYLOAD_FORMATS
-        from agent_artifacts.protocol.native_schema import parse_artifact_manifest
+        from aart_cli.protocol.native_models import PAYLOAD_FORMATS
+        from aart_cli.protocol.native_schema import parse_artifact_manifest
 
         for artifact_type, payload_format in PAYLOAD_FORMATS:
             with self.subTest(artifact_type=artifact_type):
@@ -180,42 +180,42 @@ class ArtifactManifestTest(unittest.TestCase):
                 self.assertEqual(manifest.install.modes, ("copy", "symlink"))
 
     def test_manifest_rejects_wrong_format_multiline_summary_and_trust(self):
-        from agent_artifacts.protocol.native_schema import parse_artifact_manifest
+        from aart_cli.protocol.native_schema import parse_artifact_manifest
 
-        wrong_format = _artifact_document("skill", "aart-mcp-v1")
+        wrong_format = _artifact_document("skill", "aart-cli-mcp-v1")
         self.assertEqual(
             _codes(parse_artifact_manifest(json.dumps(wrong_format))),
             ("artifact-invalid",),
         )
-        multiline = _artifact_document("skill", "aart-skill-v1", summary="first\nsecond")
+        multiline = _artifact_document("skill", "aart-cli-skill-v1", summary="first\nsecond")
         self.assertEqual(
             _codes(parse_artifact_manifest(json.dumps(multiline))),
             ("artifact-invalid",),
         )
-        with_trust = _artifact_document("skill", "aart-skill-v1", trust="local")
+        with_trust = _artifact_document("skill", "aart-cli-skill-v1", trust="local")
         self.assertEqual(
             _codes(parse_artifact_manifest(json.dumps(with_trust))),
             ("protocol-schema-unknown-field",),
         )
 
     def test_setup_and_install_values_are_bounded_and_explicit(self):
-        from agent_artifacts.protocol.native_schema import parse_artifact_manifest
+        from aart_cli.protocol.native_schema import parse_artifact_manifest
 
-        bad_scope = _artifact_document("mcp", "aart-mcp-v1")
+        bad_scope = _artifact_document("mcp", "aart-cli-mcp-v1")
         bad_scope["install"]["scopes"] = ["machine"]
         self.assertEqual(
             _codes(parse_artifact_manifest(json.dumps(bad_scope))),
             ("artifact-invalid",),
         )
 
-        bad_setup = _artifact_document("mcp", "aart-mcp-v1")
+        bad_setup = _artifact_document("mcp", "aart-cli-mcp-v1")
         bad_setup["setup"] = {"recipe": "../install.sh", "platforms": ["darwin"]}
         self.assertEqual(
             _codes(parse_artifact_manifest(json.dumps(bad_setup))),
             ("protocol-path-invalid",),
         )
 
-        wrong_effect = _artifact_document("skill", "aart-skill-v1")
+        wrong_effect = _artifact_document("skill", "aart-cli-skill-v1")
         wrong_effect["install"]["effects"] = ["merge-json"]
         self.assertEqual(
             _codes(parse_artifact_manifest(json.dumps(wrong_effect))),
@@ -223,30 +223,33 @@ class ArtifactManifestTest(unittest.TestCase):
         )
 
     def test_nested_artifact_fields_are_strict_and_optional_metadata_round_trips(self):
-        from agent_artifacts.protocol.json import canonical_json_bytes
-        from agent_artifacts.protocol.native_schema import (
+        from aart_cli.protocol.json import canonical_json_bytes
+        from aart_cli.protocol.native_schema import (
             artifact_manifest_to_json,
             parse_artifact_manifest,
         )
 
-        unsupported_type = _artifact_document("skill", "aart-skill-v1")
+        unsupported_type = _artifact_document("skill", "aart-cli-skill-v1")
         unsupported_type["type"] = "widget"
 
         cases = (
             ([], "artifact-invalid"),
             ("{not-json", "protocol-json-invalid"),
-            (_artifact_document("skill", "aart-skill-v1", schema_version=2), "artifact-invalid"),
-            (unsupported_type, "artifact-invalid"),
-            (_artifact_document("skill", "aart-skill-v1", name="Bad_Name"), "artifact-invalid"),
             (
-                _artifact_document("skill", "aart-skill-v1", version="next"),
+                _artifact_document("skill", "aart-cli-skill-v1", schema_version=2),
+                "artifact-invalid",
+            ),
+            (unsupported_type, "artifact-invalid"),
+            (_artifact_document("skill", "aart-cli-skill-v1", name="Bad_Name"), "artifact-invalid"),
+            (
+                _artifact_document("skill", "aart-cli-skill-v1", version="next"),
                 "protocol-semver-invalid",
             ),
-            (_artifact_document("skill", "aart-skill-v1", payload=[]), "artifact-invalid"),
+            (_artifact_document("skill", "aart-cli-skill-v1", payload=[]), "artifact-invalid"),
             (
                 _artifact_document(
                     "skill",
-                    "aart-skill-v1",
+                    "aart-cli-skill-v1",
                     payload={"root": "payload"},
                 ),
                 "protocol-schema-missing-field",
@@ -254,29 +257,32 @@ class ArtifactManifestTest(unittest.TestCase):
             (
                 _artifact_document(
                     "skill",
-                    "aart-skill-v1",
-                    payload={"root": "nested/payload", "format": "aart-skill-v1"},
+                    "aart-cli-skill-v1",
+                    payload={"root": "nested/payload", "format": "aart-cli-skill-v1"},
                 ),
                 "artifact-invalid",
             ),
             (
                 _artifact_document(
                     "skill",
-                    "aart-skill-v1",
+                    "aart-cli-skill-v1",
                     compatibility={"profiles": ["UPPER"], "platforms": ["darwin"]},
                 ),
                 "artifact-invalid",
             ),
-            (_artifact_document("skill", "aart-skill-v1", authors="Ada"), "artifact-invalid"),
-            (_artifact_document("skill", "aart-skill-v1", license="MIT\nGPL"), "artifact-invalid"),
+            (_artifact_document("skill", "aart-cli-skill-v1", authors="Ada"), "artifact-invalid"),
             (
-                _artifact_document("skill", "aart-skill-v1", homepage="http://example.test"),
+                _artifact_document("skill", "aart-cli-skill-v1", license="MIT\nGPL"),
+                "artifact-invalid",
+            ),
+            (
+                _artifact_document("skill", "aart-cli-skill-v1", homepage="http://example.test"),
                 "artifact-invalid",
             ),
             (
                 _artifact_document(
                     "mcp",
-                    "aart-mcp-v1",
+                    "aart-cli-mcp-v1",
                     setup={"recipe": "setup/installer.json", "platforms": ["windows"]},
                 ),
                 "artifact-invalid",
@@ -292,7 +298,7 @@ class ArtifactManifestTest(unittest.TestCase):
                 json.dumps(
                     _artifact_document(
                         "skill",
-                        "aart-skill-v1",
+                        "aart-cli-skill-v1",
                         compatibility={"profiles": [], "platforms": []},
                     )
                 )
@@ -303,7 +309,7 @@ class ArtifactManifestTest(unittest.TestCase):
 
         complete = _artifact_document(
             "mcp",
-            "aart-mcp-v1",
+            "aart-cli-mcp-v1",
             requires_aart={"min_inclusive": "1.1.0", "max_exclusive": "2.0.0"},
             setup={"recipe": "setup/installer.json", "platforms": ["darwin"]},
             authors=["Ada", "Bob"],
@@ -320,17 +326,17 @@ class ArtifactManifestTest(unittest.TestCase):
         )
 
     def test_artifact_requires_aart_is_optional_and_strict(self):
-        from agent_artifacts.protocol.native_schema import parse_artifact_manifest
+        from aart_cli.protocol.native_schema import parse_artifact_manifest
 
         without_bounds = _unwrap(
-            parse_artifact_manifest(json.dumps(_artifact_document("skill", "aart-skill-v1")))
+            parse_artifact_manifest(json.dumps(_artifact_document("skill", "aart-cli-skill-v1")))
         )
         self.assertIsNone(without_bounds.requires_aart.min_inclusive)
         self.assertIsNone(without_bounds.requires_aart.max_exclusive)
 
         invalid = _artifact_document(
             "skill",
-            "aart-skill-v1",
+            "aart-cli-skill-v1",
             requires_aart={"min_inclusive": "2.0.0", "max_exclusive": "1.1.0"},
         )
         self.assertEqual(
@@ -339,15 +345,15 @@ class ArtifactManifestTest(unittest.TestCase):
         )
 
     def test_requires_are_canonical_unique_and_never_self_referential(self):
-        from agent_artifacts.protocol.json import canonical_json_bytes
-        from agent_artifacts.protocol.native_schema import (
+        from aart_cli.protocol.json import canonical_json_bytes
+        from aart_cli.protocol.native_schema import (
             artifact_manifest_to_json,
             parse_artifact_manifest,
         )
 
         document = _artifact_document(
             "skill",
-            "aart-skill-v1",
+            "aart-cli-skill-v1",
             name="residual-stage",
             requires=[
                 {
@@ -383,7 +389,7 @@ class ArtifactManifestTest(unittest.TestCase):
         for requires, code in cases:
             with self.subTest(requires=requires):
                 invalid = _artifact_document(
-                    "skill", "aart-skill-v1", name="residual-stage", requires=requires
+                    "skill", "aart-cli-skill-v1", name="residual-stage", requires=requires
                 )
                 self.assertEqual(_codes(parse_artifact_manifest(json.dumps(invalid))), (code,))
 

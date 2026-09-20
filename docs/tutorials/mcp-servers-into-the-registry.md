@@ -1,6 +1,6 @@
 # Porting an MCP server into the company registry
 
-This is the procedure for turning one MCP server from `agent-mcp-servers` into an AART artifact that
+This is the procedure for turning one MCP server from `example-mcp-servers` into an AART artifact that
 a colleague installs and sets up in two commands. It was written by porting `company-atlassian`
 first, and every command and error message below was run rather than
 recalled.
@@ -21,7 +21,7 @@ artifacts/mcp/<name>/
   provenance.json        written by vendoring, never by hand
   payload/
     mcp.json             the descriptor; the only file a consumer receives anything from
-    server.py            vendored from agent-mcp-servers
+    server.py            vendored from example-mcp-servers
     requirements.txt     vendored
     Dockerfile           authored here
   setup/
@@ -58,7 +58,7 @@ Two consequences worth stating plainly:
 ## 3. The tag is derived, not chosen
 
 AART tags a locally built image `aart/<type>/<name>:<version>`, from
-[`setup.py:256`](../../agent_artifacts/setup.py). There is no `tag` field. A recipe that tries is
+[`setup.py:256`](../../aart_cli/setup.py). There is no `tag` field. A recipe that tries is
 refused:
 
 ```
@@ -163,7 +163,7 @@ one path, and nothing else. Three consequences:
   `registry audit` recomputes it from the package on disk.
 
 What you *can* do is add your own files, and this is the mechanism your registry is built on.
-`_adopted_authored` at [`registry_commands/planning.py`](../../agent_artifacts/registry_commands/planning.py) line 705
+`_adopted_authored` at [`registry_commands/planning.py`](../../aart_cli/registry_commands/planning.py) line 705
 takes every file already present at `artifacts/mcp/<name>/`, records it in `provenance.json` as
 authored, and `verify_vendored_copy` then subtracts exactly those before recomputing the origin
 digest. An authored path that collides with a taken one is refused, so the copy can never be
@@ -191,7 +191,7 @@ So the rule is precise:
 So the sequence is: write `payload/mcp.json`, write `payload/Dockerfile`, then
 
 ```bash
-aart registry vendor mcp <name> --source . --url https://github.example.com/your-org/agent-mcp-servers.git --ref main --path servers/<name> --artifact-version 1.0.0 --summary "…" --profile claude,tabnine --platform darwin --install-scope user --install-scope project --setup-recipe setup/installer.json --yes
+aart-cli registry vendor mcp <name> --source . --url https://github.example.com/your-org/example-mcp-servers.git --ref main --path servers/<name> --artifact-version 1.0.0 --summary "…" --profile claude,tabnine --platform darwin --install-scope user --install-scope project --setup-recipe setup/installer.json --yes
 ```
 
 Pass `--setup-recipe` only once `setup/installer.json` and `SETUP.md` are both there — it checks for
@@ -216,7 +216,7 @@ afterwards, and what to add. Write it by hand only for a package with no upstrea
   "version": "1.0.0",
   "summary": "Jira and Confluence access for the company Atlassian instance, over a locally built MCP server.",
   "authors": ["Platform Team"],
-  "homepage": "https://github.example.com/your-org/agent-mcp-servers",
+  "homepage": "https://github.example.com/your-org/example-mcp-servers",
   "license": "LicenseRef-company-internal",
   "compatibility": {
     "platforms": ["darwin"],
@@ -228,7 +228,7 @@ afterwards, and what to add. Write it by hand only for a package with no upstrea
     "scopes": ["user", "project"]
   },
   "payload": {
-    "format": "aart-mcp-v1",
+    "format": "aart-cli-mcp-v1",
     "root": "payload"
   },
   "setup": {
@@ -254,7 +254,7 @@ Five things that are not free choices:
 - `setup.platforms` must be a subset of `compatibility.platforms`. A Keychain recipe means both are
   `["darwin"]`, and the artifact then does not offer itself on Linux, which is correct.
 - `aart.runtime-requirements` is a real extension and is advisory: it feeds
-  `aart marketplace health` and never blocks an install. Extension keys must be dotted and
+  `aart-cli marketplace health` and never blocks an install. Extension keys must be dotted and
   lowercase; `x-anything` is refused as an unknown field.
 - `scopes` decides which file the descriptor is merged into. Under the `tabnine` profile, `user`
   means `~/.tabnine/agent/settings.json` and `project` means
@@ -465,7 +465,7 @@ copies them.
 **5. Vendor.**
 
 ```bash
-aart registry vendor mcp company-atlassian --source . --url https://github.example.com/your-org/agent-mcp-servers.git --ref main --path servers/atlassian --artifact-version 1.0.0 --summary "Jira and Confluence access for the company Atlassian instance." --profile claude,tabnine --platform darwin --install-scope user --install-scope project --setup-recipe setup/installer.json --yes
+aart-cli registry vendor mcp company-atlassian --source . --url https://github.example.com/your-org/example-mcp-servers.git --ref main --path servers/atlassian --artifact-version 1.0.0 --summary "Jira and Confluence access for the company Atlassian instance." --profile claude,tabnine --platform darwin --install-scope user --install-scope project --setup-recipe setup/installer.json --yes
 ```
 
 What happens: `vendor` adopts everything already sitting at `artifacts/mcp/company-atlassian/`,
@@ -517,7 +517,7 @@ like.
 
 ### If the extra files genuinely bother you
 
-The only way to not take them today is a layout change in `agent-mcp-servers`: a subdirectory holding
+The only way to not take them today is a layout change in `example-mcp-servers`: a subdirectory holding
 what should be copied.
 
 ```
@@ -540,8 +540,8 @@ Two checks worth running on every port:
 
 ```bash
 python3 -c "
-from agent_artifacts.setup import parse_installer, plan_setup, render_setup_review
-from agent_artifacts.model import SetupQueueItem
+from aart_cli.setup import parse_installer, plan_setup, render_setup_review
+from aart_cli.model import SetupQueueItem
 pkg='artifacts/mcp/company-atlassian'
 raw=open(pkg+'/setup/installer.json','rb').read()
 inst=parse_installer(raw, artifact_key='mcp/company-atlassian', descriptor_path='setup/installer.json').value
@@ -562,7 +562,7 @@ install and a dead server.
 
 ## 8. Per-server checklist
 
-For each new server in `agent-mcp-servers`:
+For each new server in `example-mcp-servers`:
 
 | | In order | What changes |
 |---|---|---|
@@ -570,7 +570,7 @@ For each new server in `agent-mcp-servers`:
 | 2 | author `payload/Dockerfile` | usually nothing, if the servers build the same way |
 | 3 | author `setup/installer.json` | `artifact`, `purpose`, Keychain services `aart/mcp/<name>/<what>`, and the variable names the server reads |
 | 4 | author `SETUP.md` | rewritten for those names |
-| 5 | `aart registry vendor` | `--path servers/<name>`, `--summary`, `--artifact-version 1.0.0` |
+| 5 | `aart-cli registry vendor` | `--path servers/<name>`, `--summary`, `--artifact-version 1.0.0` |
 | 6 | check `artifact.json` | add the runtime-requirements block if the server needs one |
 
 Steps 1 and 2 are before step 5 and not after it: a `payload/` file that arrives after the vendoring

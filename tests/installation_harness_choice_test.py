@@ -11,15 +11,15 @@ from types import SimpleNamespace
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_session import assemble_consumer_machine
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_session import assemble_consumer_machine
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
     ConsumerUiEventKind,
     ConsumerUiState,
 )
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     HarnessTargetView,
@@ -27,13 +27,13 @@ from agent_artifacts.application.consumer_views import (
     project_install_plan,
     target_row,
 )
-from agent_artifacts.domain.effects import RiskClass
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.receipts import receipt_profiles
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.consumer_actions import LocalConsumerActions, _installation_targets
-from agent_artifacts.io.receipt_store import LocalReceiptStore
-from agent_artifacts.tui_consumer import CanonicalScreenSource, frame, render_ready, screens_from
+from aart_cli.domain.effects import RiskClass
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.receipts import receipt_profiles
+from aart_cli.domain.result import Ok
+from aart_cli.io.consumer_actions import LocalConsumerActions, _installation_targets
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.tui_consumer import CanonicalScreenSource, frame, render_ready, screens_from
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions, _at, _drive
 from tests.consumer_shell_test import DOWN, ENTER, SPACE
@@ -42,17 +42,17 @@ from tests.frame_contract import key_violations
 
 _COMPATIBLE = ["claude", "opencode", "tabnine"]
 _SKILL_MANIFEST = {
-    "schema": "aart.dev/skill/v1",
+    "schema": "aart-cli.dev/skill/v1",
     "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
     "payload": {"include": ["SKILL.md"]},
     "compatibility": {"harnesses": _COMPATIBLE},
 }
 _AUTHORED_SKILL = (
-    ("code-review/aart.json", json.dumps(_SKILL_MANIFEST)),
+    ("code-review/aart-cli.json", json.dumps(_SKILL_MANIFEST)),
     ("code-review/SKILL.md", "# Code review\n\nChosen harness delivery.\n"),
 )
 _MCP_MANIFEST = {
-    "schema": "aart.dev/mcp/v1",
+    "schema": "aart-cli.dev/mcp/v1",
     "artifact": {"name": "dummy", "kind": "mcp", "version": "1.0.0"},
     "payload": {"include": ["server.py"]},
     "transport": {"type": "stdio"},
@@ -61,7 +61,7 @@ _MCP_MANIFEST = {
     "compatibility": {"harnesses": _COMPATIBLE},
 }
 _AUTHORED_MCP = (
-    ("dummy/aart.json", json.dumps(_MCP_MANIFEST)),
+    ("dummy/aart-cli.json", json.dumps(_MCP_MANIFEST)),
     ("dummy/server.py", "print('dummy')\n"),
 )
 
@@ -122,7 +122,7 @@ class HarnessTargetScreenTest(unittest.TestCase):
             ),
         )
 
-        from agent_artifacts.application.consumer_ui import ConsumerUiEvent, reduce_consumer_ui
+        from aart_cli.application.consumer_ui import ConsumerUiEvent, reduce_consumer_ui
 
         for event in events:
             state, _commands = reduce_consumer_ui(
@@ -276,9 +276,9 @@ class ChosenHarnessDeliveryE2ETest(unittest.TestCase):
 
     def test_skill_is_delivered_only_to_the_chosen_opencode_or_tabnine_target(self) -> None:
         destinations = {
-            "claude": ".claude/skills/code-review/SKILL.md",
-            "opencode": ".opencode/skills/code-review/SKILL.md",
-            "tabnine": ".tabnine/agent/skills/code-review/SKILL.md",
+            "claude": ".claude/skills/code-review-company-project/SKILL.md",
+            "opencode": ".opencode/skills/code-review-company-project/SKILL.md",
+            "tabnine": ".tabnine/agent/skills/code-review-company-project/SKILL.md",
         }
         for chosen in ("opencode", "tabnine"):
             with self.subTest(chosen=chosen), _environment(authored=_AUTHORED_SKILL) as env:
@@ -307,14 +307,28 @@ class ChosenHarnessDeliveryE2ETest(unittest.TestCase):
             )
 
             self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
-            self.assertFalse((env.project / ".claude/skills/code-review/SKILL.md").exists())
-            self.assertTrue((env.project / ".opencode/skills/code-review/SKILL.md").is_file())
-            self.assertTrue((env.project / ".tabnine/agent/skills/code-review/SKILL.md").is_file())
+            self.assertFalse(
+                (env.project / ".claude/skills/code-review-company-project/SKILL.md").exists()
+            )
+            self.assertTrue(
+                (env.project / ".opencode/skills/code-review-company-project/SKILL.md").is_file()
+            )
+            self.assertTrue(
+                (
+                    env.project / ".tabnine/agent/skills/code-review-company-project/SKILL.md"
+                ).is_file()
+            )
             stored = LocalReceiptStore(str(env.paths.data_root) + "/state").installations()
             assert isinstance(stored, Ok)
+            # Two harnesses are two installations, so they are two records rather than one record
+            # naming two profiles (§169.3). Each names exactly one, which is what makes either
+            # uninstall able to take its own files and leave the other's.
             self.assertEqual(
-                receipt_profiles(stored.value[0].receipt),
-                frozenset({"opencode", "tabnine"}),
+                [receipt_profiles(item.receipt) for item in stored.value],
+                [frozenset({"opencode"}), frozenset({"tabnine"})],
+            )
+            self.assertEqual(
+                [item.receipt.owner.harness for item in stored.value], ["opencode", "tabnine"]
             )
 
     def test_mcp_is_registered_only_with_the_chosen_opencode_or_tabnine_target(self) -> None:
@@ -336,7 +350,7 @@ class ChosenHarnessDeliveryE2ETest(unittest.TestCase):
                     )
                     if harness == chosen:
                         document = json.loads(path.read_text(encoding="utf-8"))
-                        self.assertIn("dummy", document[server_map])
+                        self.assertIn("dummy-company-project", document[server_map])
 
     def test_execution_boundary_refuses_an_empty_choice_without_mutation(self) -> None:
         with _environment(authored=_AUTHORED_SKILL) as env:

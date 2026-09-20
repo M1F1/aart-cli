@@ -20,19 +20,20 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts import cli
-from agent_artifacts.curation.runtime import LocalCurationService
-from agent_artifacts.domain.identifiers import ArtifactIdentity
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.registry_maintenance.model import NativeReferenceAcquisition
-from agent_artifacts.registry_maintenance.vendoring import (
+from aart_cli import cli
+from aart_cli.curation.runtime import LocalCurationService
+from aart_cli.domain.identifiers import ArtifactIdentity
+from aart_cli.domain.result import Ok
+from aart_cli.registry_maintenance.model import NativeReferenceAcquisition
+from aart_cli.registry_maintenance.vendoring import (
     delivery_reference_message,
     describe_delivery,
     mcp_descriptor_message,
 )
 from tests.registry_vendoring_projection_test import _COMMIT, _URL, _foreign_repository
 
-_PACKAGE = "artifacts/mcp/atlassian"
+_STAGING = "artifacts/mcp/atlassian"
+_PACKAGE = f"{_STAGING}/1.0.0"
 
 
 def _descriptor(command: str, *arguments: str) -> bytes:
@@ -173,7 +174,7 @@ class VendorDeliveryReviewTest(unittest.TestCase):
                 ),
             )
             with patch(
-                "agent_artifacts.commands.registry.load_local_curation_service",
+                "aart_cli.commands.registry.load_local_curation_service",
                 return_value=Ok(service),
             ):
                 yield root
@@ -258,7 +259,7 @@ class VendorDeliveryReviewTest(unittest.TestCase):
 
 
 class OwnedMcpDeliveryTest(unittest.TestCase):
-    """The same descriptor, authored in place instead of vendored.
+    """The same descriptor in registry-owned content rather than a vendored copy.
 
     The check is not tied to the vendoring delivery finding, so an `mcp` package a maintainer wrote
     themselves is checked too. Nothing about the consequence depends on where the bytes
@@ -290,26 +291,46 @@ class OwnedMcpDeliveryTest(unittest.TestCase):
                 )[0],
                 0,
             )
-            # Scaffolded, not hand-written: the package under test is the one the tool itself tells
-            # a maintainer to author, so the finding cannot be an artefact of a bad fixture.
-            self.assertEqual(
-                _run(
+            descriptor = root / _PACKAGE / "payload/mcp.json"
+            descriptor.parent.mkdir(parents=True)
+            descriptor.write_bytes(_descriptor("npx", "-y", "@example/srv"))
+            service = LocalCurationService(
+                str(root),
+                native_acquirer=lambda _url, _ref: Ok(
+                    NativeReferenceAcquisition(_URL, "v1.4.0", _COMMIT, _foreign_repository())
+                ),
+            )
+            with patch(
+                "aart_cli.commands.registry.load_local_curation_service",
+                return_value=Ok(service),
+            ):
+                code, output = _run(
                     "registry",
-                    "scaffold",
+                    "vendor",
                     "--source",
                     str(root),
                     "mcp",
                     "atlassian",
+                    "--url",
+                    _URL,
+                    "--ref",
+                    "v1.4.0",
+                    "--path",
+                    "servers/atlassian",
+                    "--artifact-version",
+                    "1.0.0",
                     "--summary",
                     "Atlassian MCP server.",
                     "--profile",
                     "claude",
                     "--platform",
                     "darwin",
+                    "--license",
+                    "MIT",
                     "--yes",
-                )[0],
-                0,
-            )
+                )
+            self.assertEqual(code, 0, output)
+            (root / _PACKAGE / "provenance.json").unlink()
             if document is not None:
                 (root / _PACKAGE / "payload/mcp.json").write_bytes(document)
             for name, content in payload.items():
@@ -343,13 +364,16 @@ class OwnedMcpDeliveryTest(unittest.TestCase):
 
             self.assertNotIn("vendored mcp descriptor", output)
 
-    def test_rs01_the_scaffolded_descriptor_still_passes(self) -> None:
-        """The refusal must not fail the package the tool itself generates."""
+    def test_an_approved_package_cannot_lose_its_provenance_even_with_a_working_descriptor(
+        self,
+    ) -> None:
+        """An approval binds every package byte, including provenance."""
 
         with self._owned() as root:
             code, output = _run("registry", "audit", "--source", str(root))
 
-            self.assertEqual(code, 0, output)
+            self.assertEqual(code, 1, output)
+            self.assertIn("approved content snapshot", output)
 
 
 if __name__ == "__main__":

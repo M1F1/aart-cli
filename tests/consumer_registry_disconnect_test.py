@@ -6,7 +6,7 @@ import os
 import unittest
 from unittest import mock
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -15,9 +15,9 @@ from agent_artifacts.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.consumer_actions import RegistryConnectionSnapshot
+from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
+from aart_cli.domain.result import Ok
+from aart_cli.io.consumer_actions import RegistryConnectionSnapshot
 
 
 class RegistryDisconnectInteractionTest(unittest.TestCase):
@@ -47,8 +47,8 @@ class RegistryDisconnectInteractionTest(unittest.TestCase):
         self.assertIsNone(key_event("d", state))
 
     def test_review_returns_to_registries_after_completion(self) -> None:
-        from agent_artifacts.application.consumer_ui import _ACTION_RESULT
-        from agent_artifacts.application.consumer_views import navigation_targets
+        from aart_cli.application.consumer_ui import _ACTION_RESULT
+        from aart_cli.application.consumer_views import navigation_targets
 
         self.assertIn(
             ConsumerScreen.REGISTRY_REMOVE,
@@ -62,7 +62,7 @@ class RegistryDisconnectInteractionTest(unittest.TestCase):
 
 class RegistryDisconnectActionTest(unittest.TestCase):
     def _actions(self):
-        from agent_artifacts import tui
+        from aart_cli import tui
         from tests.configured_install_command_e2e_test import _environment
 
         environment = _environment()
@@ -124,7 +124,7 @@ class RegistryDisconnectActionTest(unittest.TestCase):
         self.assertIsNotNone(remover)
 
         with mock.patch(
-            "agent_artifacts.commands.source.remove_configured_source", return_value=Ok(object())
+            "aart_cli.commands.source.remove_configured_source", return_value=Ok(object())
         ) as remove:
             result = remover(registry)  # type: ignore[misc]
 

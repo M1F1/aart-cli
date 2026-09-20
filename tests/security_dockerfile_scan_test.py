@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.security import BaselineScanRequest, assess_installation_risk
+from aart_cli.security import BaselineScanRequest, assess_installation_risk
 from tests.credential_fixtures import access_token
 from tests.security_baseline_test import _fixture
 
@@ -20,8 +20,8 @@ _PAYLOAD = ("payload/SKILL.md", b"# Review\n", False)
 
 
 def _rule_ids(*files: tuple[str, bytes, bool]) -> set[str]:
-    candidate, artifact, lock = _fixture((_PAYLOAD, *files))
-    assessment = assess_installation_risk(BaselineScanRequest(candidate, artifact, lock))
+    candidate, artifact = _fixture((_PAYLOAD, *files))
+    assessment = assess_installation_risk(BaselineScanRequest(candidate, artifact))
     return {finding.rule_id for finding in assessment.findings}
 
 

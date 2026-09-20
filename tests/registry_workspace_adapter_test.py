@@ -8,13 +8,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.registry_workspace import FilesystemRegistryWorkspace
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.registry_commands.model import RegistryApplyCommand, RegistryInitOptions
-from agent_artifacts.registry_commands.planning import plan_registry_init
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.registry_workspace import FilesystemRegistryWorkspace
+from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from aart_cli.protocol.semver import SemVer
+from aart_cli.registry_commands.model import RegistryApplyCommand, RegistryInitOptions
+from aart_cli.registry_commands.planning import plan_registry_init
 
 
 class RegistryWorkspaceAdapterTest(unittest.TestCase):
@@ -105,7 +105,7 @@ class RegistryWorkspaceAdapterTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "managed-snapshot"
             root.mkdir()
-            (root / "aart-registry.json").write_text("{}", encoding="utf-8")
+            (root / "aart-cli-registry.json").write_text("{}", encoding="utf-8")
             os.chmod(root, 0o500)
             try:
                 result = FilesystemRegistryWorkspace(str(root)).snapshot()
@@ -119,7 +119,7 @@ class RegistryWorkspaceAdapterTest(unittest.TestCase):
             root.mkdir()
             target = Path(temp) / "marker.json"
             target.write_text("{}", encoding="utf-8")
-            (root / "aart-registry.json").symlink_to(target)
+            (root / "aart-cli-registry.json").symlink_to(target)
             self.assertIsInstance(FilesystemRegistryWorkspace(str(root)).snapshot(), Err)
 
     def test_partial_write_failure_rolls_back_files_and_created_directories(self) -> None:
@@ -239,7 +239,7 @@ class RegistryWorkspaceAdapterTest(unittest.TestCase):
                 os.close(descriptor)
 
             self.assertIsInstance(applied, Err)
-            self.assertFalse((root / "aart-registry.json").exists())
+            self.assertFalse((root / "aart-cli-registry.json").exists())
 
 
 if __name__ == "__main__":

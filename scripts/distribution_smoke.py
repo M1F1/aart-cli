@@ -13,6 +13,7 @@ import importlib.metadata
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -24,7 +25,7 @@ from typing import Any
 
 
 def _unwrap(result: Any) -> Any:
-    from agent_artifacts.domain.result import Ok
+    from aart_cli.domain.result import Ok
 
     if not isinstance(result, Ok):
         raise RuntimeError(f"AART operation failed: {result!r}")
@@ -36,15 +37,13 @@ def _platform() -> str:
 
 
 def _config_paths(home: Path):
-    from agent_artifacts.configuration.paths import Platform, resolve_config_paths
+    from aart_cli.configuration.paths import Platform, resolve_config_paths
 
     platform = Platform.DARWIN if sys.platform == "darwin" else Platform.LINUX
     return resolve_config_paths(
         platform,
         home=str(home),
-        xdg_config_home=os.environ.get("XDG_CONFIG_HOME"),
-        xdg_data_home=os.environ.get("XDG_DATA_HOME"),
-        xdg_cache_home=os.environ.get("XDG_CACHE_HOME"),
+        application_home=os.environ.get("AART_CLI_HOME") or None,
     )
 
 
@@ -54,9 +53,9 @@ def _assert_installed_origin(
     source_root: Path,
     environment_root: Path,
 ) -> int:
-    import agent_artifacts
+    import aart_cli
 
-    package_file = Path(agent_artifacts.__file__).resolve()
+    package_file = Path(aart_cli.__file__).resolve()
     if expected == "editable":
         if not package_file.is_relative_to(source_root):
             raise RuntimeError(f"editable phase imported unexpected package: {package_file}")
@@ -72,29 +71,29 @@ def _assert_installed_origin(
 
 
 def _configure_and_sync(source_root: Path, home: Path) -> str:
-    from agent_artifacts.application.configuration import ConfigDocument
-    from agent_artifacts.application.sources import SourceSyncPorts, SourceSyncRequest, sync_source
-    from agent_artifacts.configuration.model import (
+    from aart_cli.application.configuration import ConfigDocument
+    from aart_cli.application.sources import SourceSyncPorts, SourceSyncRequest, sync_source
+    from aart_cli.configuration.model import (
         ConfiguredSource,
         SourceKind,
         SyncSettings,
         UserConfiguration,
     )
-    from agent_artifacts.configuration.schema import user_configuration_bytes
-    from agent_artifacts.domain.identifiers import SourceAlias
-    from agent_artifacts.io.config_store import write_configuration
-    from agent_artifacts.io.source_store import (
+    from aart_cli.configuration.schema import user_configuration_bytes
+    from aart_cli.domain.identifiers import SourceAlias
+    from aart_cli.io.config_store import write_configuration
+    from aart_cli.io.source_store import (
         acquire_source_lock,
         publish_source_snapshot,
         read_current_source,
         release_source_lock,
     )
-    from agent_artifacts.protocol.capabilities import Capability
-    from agent_artifacts.protocol.semver import SemVer
-    from agent_artifacts.sources.git import acquire_git_snapshot
-    from agent_artifacts.sources.local import read_local_snapshot
-    from agent_artifacts.sources.model import SyncFallback
-    from agent_artifacts.sources.validation import validate_source_candidate
+    from aart_cli.protocol.capabilities import Capability
+    from aart_cli.protocol.semver import SemVer
+    from aart_cli.sources.git import acquire_git_snapshot
+    from aart_cli.sources.local import read_local_snapshot
+    from aart_cli.sources.model import SyncFallback
+    from aart_cli.sources.validation import validate_source_candidate
 
     source = ConfiguredSource(
         SourceAlias("reference"),
@@ -143,7 +142,7 @@ def _configure_and_sync(source_root: Path, home: Path) -> str:
 
 
 def _load_service(project: Path, home: Path):
-    from agent_artifacts.consumer.runtime import load_local_consumer_service
+    from aart_cli.consumer.runtime import load_local_consumer_service
 
     return _unwrap(load_local_consumer_service(project=str(project), user_home=str(home)))
 
@@ -154,8 +153,8 @@ def _apply(service: Any, request: Any) -> Any:
 
 
 def _state(service: Any) -> Any:
-    from agent_artifacts.install_state.paths import install_state_paths
-    from agent_artifacts.install_state.schema import parse_install_state
+    from aart_cli.install_state.paths import install_state_paths
+    from aart_cli.install_state.schema import parse_install_state
 
     location = service.context.location
     state_path = install_state_paths(
@@ -210,7 +209,7 @@ def _symlinkable_coordinate(service: Any) -> Any:
 
 
 def _phase_seed(args: argparse.Namespace) -> dict[str, Any]:
-    from agent_artifacts.consumer.model import ConsumerActionRequest
+    from aart_cli.consumer.model import ConsumerActionRequest
 
     source_root = Path(args.source_root).resolve()
     project = Path(args.project).resolve()
@@ -247,8 +246,8 @@ def _phase_seed(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _phase_resume(args: argparse.Namespace) -> dict[str, Any]:
-    from agent_artifacts.consumer.model import ConsumerActionRequest
-    from agent_artifacts.domain.identifiers import ArtifactCoordinate
+    from aart_cli.consumer.model import ConsumerActionRequest
+    from aart_cli.domain.identifiers import ArtifactCoordinate
 
     project = Path(args.project).resolve()
     home = Path(args.home).resolve()
@@ -351,7 +350,7 @@ def _lend_build_backend(workspace: Path) -> Path:
 
     The dev group names ``poetry-core`` at the version ``[build-system]`` pins, for exactly this,
     so this process has one to lend. Only the backend is lent: a directory of links, not the whole
-    environment, so nothing else -- least of all an editable ``agent_artifacts`` from the
+    environment, so nothing else -- least of all an editable ``aart_cli`` from the
     developer's own environment -- can leak in and make the install look like it worked when it
     did not.
     """
@@ -475,9 +474,7 @@ def run_smoke(source_root: Path) -> dict[str, Any]:
         environment.update(
             {
                 "HOME": str(home),
-                "XDG_CONFIG_HOME": str(workspace / "xdg-config"),
-                "XDG_DATA_HOME": str(workspace / "xdg-data"),
-                "XDG_CACHE_HOME": str(workspace / "xdg-cache"),
+                "AART_CLI_HOME": str(workspace / "aart-cli-home"),
                 "PIP_DISABLE_PIP_VERSION_CHECK": "1",
                 "PIP_NO_INDEX": "1",
                 "PYTHONDONTWRITEBYTECODE": "1",
@@ -504,7 +501,7 @@ def run_smoke(source_root: Path) -> dict[str, Any]:
             environment=build_environment,
         )
         _run(
-            [str(_environment_script(editable_environment, "aart")), "--version"],
+            [str(_environment_script(editable_environment, "aart-cli")), "--version"],
             cwd=outside,
             environment=environment,
         )
@@ -545,7 +542,7 @@ def run_smoke(source_root: Path) -> dict[str, Any]:
             cwd=outside,
             environment=environment,
         )
-        aart = _environment_script(wheel_environment, "aart")
+        aart = _environment_script(wheel_environment, "aart-cli")
         _run([str(aart), "--version"], cwd=outside, environment=environment)
         upgrade = _run(
             [str(aart), "upgrade", "--wheel", str(wheel), "--dry-run"],
@@ -635,3 +632,225 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# --- The documented install routes, executed ----------------------------------------------------
+
+_INSTALL_DOCUMENT = "docs/install/installing-aart-v1.md"
+_SHELL_BLOCK = re.compile(r"```sh\n(.*?)```", re.S)
+#: Routes whose line can be run here. The rest name an address or a project that does not exist.
+_RUNNABLE = ("clipboard", "disk", "authenticated-download")
+
+
+def documented_commands(source_root: Path) -> tuple[str, ...]:
+    """Every fenced shell block in the install document, verbatim and in order."""
+
+    text = (Path(source_root) / _INSTALL_DOCUMENT).read_text(encoding="utf-8")
+    return tuple(match.group(1).strip() for match in _SHELL_BLOCK.finditer(text))
+
+
+def classify_command(command: str) -> str:
+    """Which route a documented line belongs to, or `unclassified`.
+
+    `unclassified` is not a failure mode of this function -- it is the answer for a line nobody has
+    said anything about, and the gate fails on it. A line added to the page then has to be declared
+    runnable or declared unrunnable, which is the question its author is in the best position to
+    answer and the last moment anyone will be asked.
+    """
+
+    if "<repository>" in command:
+        return "network"
+    if command.startswith("cd /path/to/"):
+        return "consumer-example"
+    if "scripts/install_commands.py" in command:
+        return "generator"
+    if "gh release download" in command:
+        return "authenticated-download"
+    if "$(pbpaste)" in command:
+        return "clipboard"
+    if "./aart_cli-X.Y.Z-py3-none-any.whl" in command:
+        return "disk"
+    return "unclassified"
+
+
+def installer_of(command: str) -> str:
+    for installer in ("python -m pip", "pipx", "uv", "gh"):
+        if command.startswith(installer):
+            return installer
+    return command.split(maxsplit=1)[0]
+
+
+def _stand_ins(directory: Path, wheel: Path) -> Path:
+    """`pbpaste` and `gh`, close enough to fail on a line the real ones would reject.
+
+    The clipboard reader prints the path the reader would have copied. `gh` parses its arguments
+    the way `gh release download` does and refuses anything else, so the documented flags are what
+    is under test rather than this stub's tolerance; what it cannot prove is that GitHub answers,
+    which is why the route is named for the download and not for the release.
+    """
+
+    directory.mkdir(parents=True, exist_ok=True)
+    clipboard = directory / "pbpaste"
+    clipboard.write_text(f'#!/bin/sh\nprintf %s "{wheel}"\n', encoding="utf-8")
+    clipboard.chmod(0o755)
+    stub = directory / "gh"
+    stub.write_text(
+        "\n".join(
+            (
+                "#!/usr/bin/env python3",
+                "import argparse, glob, shutil, sys",
+                "from pathlib import Path",
+                "parser = argparse.ArgumentParser(prog='gh')",
+                "group = parser.add_subparsers(dest='group', required=True)",
+                "action = group.add_parser('release').add_subparsers(dest='action', required=True)",
+                "download = action.add_parser('download')",
+                "download.add_argument('tag')",
+                "download.add_argument('--pattern', required=True)",
+                "download.add_argument('--dir', required=True)",
+                "parsed = parser.parse_args()",
+                f"assets = glob.glob({str(wheel.parent)!r} + '/' + parsed.pattern)",
+                "if not assets:",
+                "    sys.exit('no asset matched ' + parsed.pattern)",
+                "Path(parsed.dir).mkdir(parents=True, exist_ok=True)",
+                "shutil.copy(assets[0], Path(parsed.dir) / Path(assets[0]).name)",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+    return directory
+
+
+def _installed_executable(roots: tuple[Path, ...]) -> Path | None:
+    for root in roots:
+        candidate = root / "aart-cli"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _run_route(command: str, *, workspace: Path, index: int, wheel: Path) -> dict[str, Any]:
+    """One documented line, in its own environment, with the developer's tools out of reach.
+
+    `UV_TOOL_DIR`, `PIPX_HOME` and their bin directories are redirected into the workspace. Without
+    that, running this gate would reinstall the developer's own `aart-cli` from a throwaway wheel --
+    a gate that damages the machine it runs on is worse than the drift it was written to catch.
+    """
+
+    root = workspace / f"route-{index}"
+    environment = root / "venv"
+    venv.EnvBuilder(with_pip=True, clear=True).create(environment)
+    bin_directory = _environment_python(environment).parent
+    uv_bin, pipx_bin = root / "uv-bin", root / "pipx-bin"
+    stand_ins = _stand_ins(root / "stand-ins", wheel)
+    downloads = root / "downloads"
+    downloads.mkdir()
+    shutil.copy(wheel, downloads / wheel.name)
+
+    env = dict(os.environ)
+    env.update(
+        PATH=os.pathsep.join((str(bin_directory), str(stand_ins), env.get("PATH", ""))),
+        UV_TOOL_DIR=str(root / "uv-tools"),
+        UV_TOOL_BIN_DIR=str(uv_bin),
+        PIPX_HOME=str(root / "pipx"),
+        PIPX_BIN_DIR=str(pipx_bin),
+        PIP_DISABLE_PIP_VERSION_CHECK="1",
+    )
+    env.pop("VIRTUAL_ENV", None)
+
+    completed = subprocess.run(
+        command,
+        shell=True,
+        cwd=downloads,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"documented install line failed: {command}\n{completed.stdout}{completed.stderr}"
+        )
+    if classify_command(command) == "authenticated-download":
+        landed = tuple(downloads.glob(wheel.name))
+        if not landed:
+            raise RuntimeError(f"documented download left no wheel behind: {command}")
+        return {"version": None}
+    executable = _installed_executable((bin_directory, uv_bin, pipx_bin))
+    if executable is None:
+        raise RuntimeError(f"documented install line installed no `aart-cli`: {command}")
+    version = subprocess.run(
+        [str(executable), "--version"], capture_output=True, text=True, timeout=120, check=True
+    )
+    return {"version": version.stdout.strip().split()[-1]}
+
+
+def run_install_routes(source_root: Path) -> dict[str, Any]:
+    """Execute the install document's runnable lines and return a stable receipt."""
+
+    source_root = Path(source_root).resolve()
+    commands = documented_commands(source_root)
+    with tempfile.TemporaryDirectory(prefix="aart-install-routes-") as raw:
+        workspace = Path(raw)
+        wheel = _build_local_wheel(source_root, workspace)
+        version = wheel.name.split("-")[1]
+
+        generated = subprocess.run(
+            [sys.executable, "scripts/install_commands.py"],
+            cwd=source_root,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+        executed: list[dict[str, Any]] = []
+        declined: list[dict[str, Any]] = []
+        unavailable: list[dict[str, Any]] = []
+        unclassified: list[str] = []
+        for index, command in enumerate(commands):
+            route = classify_command(command)
+            if route == "unclassified":
+                unclassified.append(command)
+                continue
+            if route == "generator":
+                # Run separately, before the routes, because its output is what the release body
+                # carries rather than something a reader installs from.
+                declined.append({"command": command, "route": route})
+                continue
+            if route not in _RUNNABLE:
+                declined.append({"command": command, "route": route})
+                continue
+            installer = installer_of(command)
+            # pip belongs to the isolated venv and gh is supplied by _stand_ins. Only optional
+            # real installers depend on what the host has on PATH.
+            if installer not in ("python -m pip", "gh") and shutil.which(installer) is None:
+                unavailable.append({"command": command, "route": route, "installer": installer})
+                continue
+            outcome = _run_route(
+                command.replace("X.Y.Z", version),
+                workspace=workspace,
+                index=index,
+                wheel=wheel,
+            )
+            executed.append(
+                {
+                    "command": command,
+                    "route": route,
+                    "installer": installer,
+                    "version": outcome["version"] or version,
+                }
+            )
+
+    return {
+        "schema_version": 1,
+        "version": version,
+        "wheel": wheel.name,
+        "documented": len(commands),
+        "executed": tuple(executed),
+        "declined": tuple(declined),
+        "unavailable": tuple(unavailable),
+        "unclassified": tuple(unclassified),
+        "generator_ran": generated.returncode == 0,
+        "generated_lines": generated.stdout,
+    }

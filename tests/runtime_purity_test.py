@@ -24,7 +24,7 @@ import pathlib
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-PACKAGE = ROOT / "agent_artifacts"
+PACKAGE = ROOT / "aart_cli"
 
 #: Distribution names whose import names differ from them. Only what the dev group actually holds.
 IMPORT_NAMES = {"poetry-core": "poetry"}

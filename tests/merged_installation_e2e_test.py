@@ -18,11 +18,11 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.domain.managed_blocks import managed_block_body
+from aart_cli.domain.managed_blocks import managed_block_body
 from tests.configured_install_command_e2e_test import _Environment
 
 MEMORY_MANIFEST = {
-    "schema": "aart.dev/memory/v1",
+    "schema": "aart-cli.dev/memory/v1",
     "artifact": {"name": "house-style", "kind": "memory", "version": "1.2.0"},
     "payload": {"include": ["MEMORY.md"]},
     "compatibility": {"harnesses": ["claude"]},
@@ -31,7 +31,7 @@ MEMORY_MANIFEST = {
 MEMORY_BODY = "## House style\n\nName the failure, not the code.\n"
 
 AUTHORED_MEMORY: tuple[tuple[str, str], ...] = (
-    ("house-style/aart.json", json.dumps(MEMORY_MANIFEST)),
+    ("house-style/aart-cli.json", json.dumps(MEMORY_MANIFEST)),
     ("house-style/MEMORY.md", MEMORY_BODY),
 )
 

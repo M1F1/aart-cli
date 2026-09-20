@@ -4,26 +4,26 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.execution import (
+from aart_cli.application.execution import (
     EXECUTION_REVIEW_STALE,
     InstallationExecutionStatus,
     LifecycleExecutionStatus,
     execute_installation,
     installation_execution_to_data,
 )
-from agent_artifacts.application.installation_proposal import (
+from aart_cli.application.installation_proposal import (
     PlannedInstallation,
     desired_state_for,
     propose_installation,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.effects import Effect
-from agent_artifacts.domain.inspection import EnvironmentFacts
-from agent_artifacts.domain.plans import install_plan_to_data
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.python_runtime import ArtifactEnvironment
-from agent_artifacts.domain.reconciliation import ComponentState, CurrentState, ObservedComponent
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.effects import Effect
+from aart_cli.domain.inspection import EnvironmentFacts
+from aart_cli.domain.plans import install_plan_to_data
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.python_runtime import ArtifactEnvironment
+from aart_cli.domain.reconciliation import ComponentState, CurrentState, ObservedComponent
+from aart_cli.domain.result import Err, Ok
 from tests.installation_proposal_test import (
     COORDINATE,
     _launcher,

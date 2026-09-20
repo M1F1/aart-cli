@@ -17,8 +17,8 @@ from pathlib import Path
 from tests.marketplace_lifecycle_e2e_test import _environment
 
 _MEMORY = "reference/memory/house@1.0.0"
-_SENTINEL_OPEN = "<!-- >>> agent-artifacts memory:house >>> -->"
-_BACKUP_SUFFIX = ".agent-artifacts-bak"
+_SENTINEL_OPEN = "<!-- >>> aart-cli memory:house >>> -->"
+_BACKUP_SUFFIX = ".aart-cli-bak"
 
 
 def _instruction_file(environment) -> Path:

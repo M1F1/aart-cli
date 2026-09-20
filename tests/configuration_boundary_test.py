@@ -7,7 +7,7 @@ from pathlib import Path
 
 class ConfigurationBoundaryTest(unittest.TestCase):
     def test_configuration_core_and_application_do_not_import_durable_io(self) -> None:
-        root = Path(__file__).parents[1] / "agent_artifacts"
+        root = Path(__file__).parents[1] / "aart_cli"
         files = (
             root / "configuration" / "model.py",
             root / "configuration" / "paths.py",
@@ -21,7 +21,7 @@ class ConfigurationBoundaryTest(unittest.TestCase):
             "shutil",
             "socket",
             "subprocess",
-            "agent_artifacts.io",
+            "aart_cli.io",
         }
         for path in files:
             with self.subTest(path=path):

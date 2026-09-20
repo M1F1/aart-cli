@@ -1,4 +1,4 @@
-# agent-artifacts — build & validation tasks (WP-21).
+# aart-cli — build & validation tasks (WP-21).
 #
 # Zero runtime deps. Poetry builds the wheel and installs the developer tooling; nothing it
 # installs reaches the runtime, which stays standard-library only. The wheel produced by
@@ -27,7 +27,7 @@ release-freeze:
 	$(PYTHON) scripts/release.py freeze --write
 
 release-check:
-	@test -n "$(REGISTRY)" || (echo "REGISTRY=/path/to/agent-artifacts-registry is required" >&2; exit 2)
+	@test -n "$(REGISTRY)" || (echo "REGISTRY=/path/to/aart-cli-registry is required" >&2; exit 2)
 	$(PYTHON) scripts/release.py check --registry "$(REGISTRY)"
 
 # Stamp the git commit, then build the wheel into dist/ with Poetry.
@@ -46,7 +46,7 @@ lint:
 	$(QUALITY) lint
 
 format:
-	$(PYTHON) -m ruff format agent_artifacts tests scripts
+	$(PYTHON) -m ruff format aart_cli tests scripts
 
 format-check:
 	$(QUALITY) format-check
@@ -72,7 +72,7 @@ quality:
 # Mutation adequacy, advisory and always scoped (D-134). A suite that passes proves the code does
 # what the tests say; a killed mutant proves the test would have noticed if it did not.
 #
-#   make mutants ONLY=agent_artifacts/setup_render.py TESTS="tests/setup_render_test.py"
+#   make mutants ONLY=aart_cli/setup_render.py TESTS="tests/setup_render_test.py"
 #
 # Survivors are findings to read, not a number to drive to zero. Never weaken a test to move it.
 ONLY ?=
@@ -113,6 +113,10 @@ manual-test-maintainer:
 
 manual-test-consumer:
 	$(PYTHON) scripts/manual_test.py open consumer
+
+# Live harness evidence for installed-MCP smoke verification. Opt-in and local only: it spends a
+# real model call and needs a provider that answers, which CI has neither of. Name the harnesses
+# whose providers work on this machine, e.g. `make HARNESS=claude`.
 
 # Remove build leftovers (safe: only the dist/ wheels and build/ tree).
 clean:

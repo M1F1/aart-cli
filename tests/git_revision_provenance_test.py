@@ -23,13 +23,13 @@ from dataclasses import replace
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     project_installation_receipt,
     receipt_detail_from_data,
     receipt_detail_to_data,
 )
-from agent_artifacts.domain.identifiers import is_pinned_source_revision
-from agent_artifacts.domain.result import Ok
+from aart_cli.domain.identifiers import is_pinned_source_revision
+from aart_cli.domain.result import Ok
 from tests.approved_marketplace_resolution_test import _snapshot
 from tests.installation_proposal_test import _resolved
 from tests.installation_transaction_receipt_test import MOMENT, _executed

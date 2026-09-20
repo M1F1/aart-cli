@@ -10,29 +10,29 @@ from __future__ import annotations
 import datetime as dt
 import unittest
 
-from agent_artifacts.application.consumer_session import (
+from aart_cli.application.consumer_session import (
     InstalledInspection,
     assemble_consumer_machine,
 )
-from agent_artifacts.application.consumer_views import ActivityRecord, project_receipt_detail
-from agent_artifacts.domain.credentials import (
+from aart_cli.application.consumer_views import ActivityRecord, project_receipt_detail
+from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialProviderRef,
     CredentialReference,
     CredentialState,
     ProviderState,
 )
-from agent_artifacts.domain.effects import ConfigureHarness, WriteFile
-from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.effects import ConfigureHarness, WriteFile
+from aart_cli.domain.harness import McpRegistration, Scope, mcp_target
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     InputId,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.receipts import InstallationReceipt, InstalledRecord
-from agent_artifacts.domain.reconciliation import (
+from aart_cli.domain.receipts import InstallationReceipt, InstalledRecord
+from aart_cli.domain.reconciliation import (
     Component,
     ComponentId,
     ComponentState,
@@ -41,7 +41,7 @@ from agent_artifacts.domain.reconciliation import (
     DesiredState,
     ObservedComponent,
 )
-from agent_artifacts.domain.selection import OwnershipKind, OwnershipReason
+from aart_cli.domain.selection import OwnershipKind, OwnershipReason
 from tests.consumer_activity_test import lifecycle_outcome
 
 TODAY = dt.date(2026, 8, 31)

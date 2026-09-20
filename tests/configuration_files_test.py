@@ -7,15 +7,15 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.domain.configuration_files import (
+from aart_cli.domain.configuration_files import (
     ConfigurationFileRecord,
     configuration_file_path,
     configuration_value_problem,
     parse_configuration_file,
     render_configuration_file,
 )
-from agent_artifacts.domain.identifiers import InputId, ObjectDigest
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.identifiers import InputId, ObjectDigest
+from aart_cli.domain.result import Err, Ok
 
 ROOT = "/home/someone/.aart/installations/mcp/github"
 DIGEST = ObjectDigest("sha256", "a" * 64)

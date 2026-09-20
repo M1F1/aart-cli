@@ -69,7 +69,7 @@ class ReleaseScopeTest(unittest.TestCase):
             release_pr_scope.out_of_scope(
                 (
                     "pyproject.toml",
-                    "agent_artifacts/__init__.py",
+                    "aart_cli/__init__.py",
                     ".release-please-manifest.json",
                     "CHANGELOG.md",
                 )
@@ -80,9 +80,9 @@ class ReleaseScopeTest(unittest.TestCase):
     def test_anything_else_is_named_and_refused(self) -> None:
         self.assertEqual(
             release_pr_scope.out_of_scope(
-                ("CHANGELOG.md", "agent_artifacts/domain/requirements.py", "tests/fs_test.py")
+                ("CHANGELOG.md", "aart_cli/domain/requirements.py", "tests/fs_test.py")
             ),
-            ("agent_artifacts/domain/requirements.py", "tests/fs_test.py"),
+            ("aart_cli/domain/requirements.py", "tests/fs_test.py"),
         )
 
     def test_a_release_pull_request_that_changes_nothing_is_refused(self) -> None:
@@ -100,15 +100,15 @@ class ReleaseScopeTest(unittest.TestCase):
     def test_the_script_exits_non_zero_and_names_what_it_found(self) -> None:
         completed = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "release_pr_scope.py"), "--files"],
-            input="CHANGELOG.md\nagent_artifacts/domain/requirements.py\n",
+            input="CHANGELOG.md\naart_cli/domain/requirements.py\n",
             capture_output=True,
             text=True,
             check=False,
         )
 
         self.assertEqual(completed.returncode, 1)
-        self.assertIn("agent_artifacts/domain/requirements.py", completed.stderr)
-        self.assertNotIn("CHANGELOG.md\n", completed.stderr.split("agent_artifacts")[0][-30:])
+        self.assertIn("aart_cli/domain/requirements.py", completed.stderr)
+        self.assertNotIn("CHANGELOG.md\n", completed.stderr.split("aart_cli")[0][-30:])
 
     def test_the_script_accepts_a_release_bump(self) -> None:
         completed = subprocess.run(
@@ -160,8 +160,8 @@ class ReleasePullRequestRunsTheNarrowGateTest(unittest.TestCase):
         self.assertEqual(
             workflow.count(
                 f"python-version: >- ${{{{ fromJSON({RELEASE_BRANCH}"
-                " && format('[\"{0}\"]', vars.AART_RELEASE_PYTHON_VERSION || '3.11')"
-                ' || vars.AART_PYTHON_VERSIONS || \'["3.10", "3.11", "3.14"]\') }}'
+                " && format('[\"{0}\"]', vars.AART_CLI_RELEASE_PYTHON_VERSION || '3.11')"
+                ' || vars.AART_CLI_PYTHON_VERSIONS || \'["3.10", "3.11", "3.14"]\') }}'
             ),
             2,
         )

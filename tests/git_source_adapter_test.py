@@ -9,16 +9,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.git import GitProcessReceipt
-from agent_artifacts.sources.git import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.git import GitProcessReceipt
+from aart_cli.sources.git import (
     _snapshot_from_archive,
     _tree_listing,
     acquire_git_snapshot,
 )
-from agent_artifacts.sources.model import (
+from aart_cli.sources.model import (
     GitSnapshotRequest,
     SnapshotLimits,
     SourceInstanceId,
@@ -28,7 +28,7 @@ from tests.credential_fixtures import credential_url
 
 def _archive(path: str, *, unsafe: bool = False) -> None:
     with tarfile.open(path, "w") as archive:
-        name = "../escape" if unsafe else "aart-source.json"
+        name = "../escape" if unsafe else "aart-cli-source.json"
         content = b'{"schema_version":1}'
         info = tarfile.TarInfo(name)
         info.size = len(content)
@@ -47,7 +47,7 @@ class _GitRunner:
         if "init" in argv:
             Path(argv[-1]).mkdir(parents=True, exist_ok=True)
         if "fetch" in argv and self.fail_fetch:
-            from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+            from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 
             return Err(
                 (
@@ -62,7 +62,7 @@ class _GitRunner:
             return Ok(GitProcessReceipt(("a" * 40 + "\n").encode(), b""))
         if "ls-tree" in argv:
             size = len(b'{"schema_version":1}')
-            record = f"100644 blob {'b' * 40} {size}\taart-source.json\0".encode()
+            record = f"100644 blob {'b' * 40} {size}\taart-cli-source.json\0".encode()
             return Ok(GitProcessReceipt(record, b""))
         if "archive" in argv:
             output = next(
@@ -194,7 +194,7 @@ class GitSourceAdapterTest(unittest.TestCase):
 
             _archive(archive_path)
             self.assertIsInstance(
-                _snapshot_from_archive(archive_path, {"aart-source.json": 999}, request), Err
+                _snapshot_from_archive(archive_path, {"aart-cli-source.json": 999}, request), Err
             )
 
             with tarfile.open(archive_path, "w") as archive:
@@ -278,7 +278,7 @@ class GitSourceAdapterTest(unittest.TestCase):
 
             self.assertIsInstance(acquire_git_snapshot(request, runner=bad_commit), Err)
 
-            with patch("agent_artifacts.sources.git.Path.mkdir", side_effect=OSError("storage")):
+            with patch("aart_cli.sources.git.Path.mkdir", side_effect=OSError("storage")):
                 self.assertIsInstance(acquire_git_snapshot(request, runner=base), Err)
 
     def test_embedded_credentials_and_unapproved_file_transport_are_rejected(self) -> None:

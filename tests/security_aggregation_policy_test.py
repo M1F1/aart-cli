@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
-from agent_artifacts.protocol.hashing import sha256_bytes
-from agent_artifacts.security.aggregation import (
+from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
+from aart_cli.protocol.hashing import sha256_bytes
+from aart_cli.security.aggregation import (
     ArtifactSecurityEvidence,
     summarize_bundle_security,
 )
-from agent_artifacts.security.attestations import AttestationTrust
-from agent_artifacts.security.model import (
+from aart_cli.security.attestations import AttestationTrust
+from aart_cli.security.model import (
     AssessmentCoverage,
     AssessmentStatus,
     FindingSeverity,
@@ -18,7 +18,7 @@ from agent_artifacts.security.model import (
     make_finding,
     risk_from_evidence,
 )
-from agent_artifacts.security.policy import (
+from aart_cli.security.policy import (
     SecurityInstallPolicy,
     SecurityPolicyAction,
     evaluate_security_policy,
@@ -38,7 +38,7 @@ def _assessment(
     status: AssessmentStatus,
     severity: FindingSeverity = FindingSeverity.UNKNOWN,
     *,
-    provider_id: str = "aart-baseline",
+    provider_id: str = "aart-cli-baseline",
 ) -> SecurityAssessment:
     complete = status in {AssessmentStatus.COMPLETE, AssessmentStatus.STALE}
     coverage = AssessmentCoverage(
@@ -85,7 +85,7 @@ def _evidence(
     severity: FindingSeverity = FindingSeverity.UNKNOWN,
     *,
     trust: AttestationTrust = AttestationTrust.LOCAL,
-    provider_id: str = "aart-baseline",
+    provider_id: str = "aart-cli-baseline",
 ) -> ArtifactSecurityEvidence:
     return ArtifactSecurityEvidence(
         _coordinate(name),
@@ -194,7 +194,7 @@ class SecurityAggregationPolicyTest(unittest.TestCase):
         strict = SecurityInstallPolicy(
             minimum_attestation_trust=AttestationTrust.COMPANY_REVIEWED,
             insufficient_trust_action=SecurityPolicyAction.BLOCK,
-            required_provider_ids=("aart-baseline", "ruff"),
+            required_provider_ids=("aart-cli-baseline", "ruff"),
             missing_provider_action=SecurityPolicyAction.CONFIRM,
             scopes=("user",),
         )

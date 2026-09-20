@@ -1,113 +1,73 @@
 # Registry protocol v1
 
-An AART registry is a native source with optional curation documents. It may own canonical packages
-under `artifacts/`, or reference native packages in other repositories through `entries/`. The
-reference fixture at `tests/fixtures/protocol/registry-v1/` exercises both forms.
+An AART Registry publishes reviewed, versioned canonical artifacts. Authors maintain manifests and
+payloads in a separate Source checkout; scan compiles Candidates, and promotion writes approved
+Registry content after validation and policy review. Registry maintenance and consumer acquisition
+validate the same representation.
 
-## Owned, referenced, vendored
+## Canonical layout
 
-Three ways content reaches a consumer through one registry. They differ in who the consumer must
-reach, who owns the version, and who can change the bytes that are delivered:
+```text
+aart-cli-registry.json
+aart-cli-source.json
+registry/
+  versions/<kind>/<name>/<version>.json
+  promotions/<candidate-id>.json
+  index.json
+  snapshot.json
+artifacts/<kind>/<name>/<version>/
+  artifact.json
+  payload/
+references/<kind>/<name>/<version>.json
+```
 
-| | Authored here | Referenced (`entries/`) | Vendored (`artifacts/` + `provenance.json`) |
-|---|---|---|---|
-| Where the payload lives | this registry | upstream repository | this registry |
-| Who the consumer reaches | this registry | this registry **and** the upstream origin | this registry |
-| Who owns the version | this registry | upstream | this registry |
-| Who can change delivered bytes | this registry | upstream, at a new commit the maintainer pins | this registry |
-| Upstream must be an AART package | — | yes | no |
-| A `requires` target | yes | no | yes |
+The root markers identify the Registry and its protocol/compatibility requirements. Each approved
+version record binds an artifact coordinate and version to canonical content, provenance and the
+approved content snapshot. Promotion records preserve the reviewed Candidate's audit evidence.
+`registry/index.json` and `registry/snapshot.json` are derived catalogs rebuilt from those records;
+they contain metadata, not artifact payload bytes or credentials.
 
-One worked vendoring, from an upstream with an arbitrary layout through to re-vendoring when it
-moves, is in [the vendoring tutorial](../tutorials/vendoring-v1.md).
+## Vendored and referenced versions
 
-Vendoring is not a third document format. A vendored artifact is an ordinary owned package that
-carries `provenance.json`, so every rule for owned content applies to it unchanged and an AART that
-predates vendoring reads it without being taught anything.
+A vendored version stores its canonical package under `artifacts/<kind>/<name>/<version>/`.
+A reference-mode version instead records its pinned source in
+`references/<kind>/<name>/<version>.json`. The approved version retains the exact source revision
+and content digests; consumer acquisition verifies these rather than following a moving branch.
+A reference may therefore require access to the source origin, while a vendored package carries
+its payload in the Registry. Neither mode creates an unversioned authoring entry.
 
-**What vendoring moves is the trust boundary.** Copying a subtree into `artifacts/` makes this
-registry the distributor of somebody else's work: its consumers install those bytes on this
-registry's word, never having seen the origin, and upstream's later fixes — including security
-fixes — do not reach them until a maintainer vendors the artifact again. AART records where the
-bytes came from, assesses exactly the bytes that would be written, and reports what it found. It
-does not certify them. A vendor or re-vendor that completes with no findings means the copy was
-made and pinned, and nothing more; responsibility for the copied content stays with the maintainer
-who published it. Licensing is part of that responsibility: the copy carries whatever obligations
-the upstream licence imposes, `artifact.json`'s `license` records what this registry publishes it
-under, and `aart registry audit` reports a vendored artifact that records none.
+Promotion refuses a conflicting package at an already approved coordinate/version. Updating
+Registry snapshot metadata does not authorize rewriting that immutable package. Vendoring makes
+the Registry the distributor of copied bytes: provenance records their origin, but does not
+certify their safety or remove the maintainer's licensing and review responsibilities.
 
-**The copy is verified against the record it carries.** `origin.input_digest` is the digest of the
-taken subtree, and it is recomputable from the package alone: the payload files not listed in
-`aart.vendor.authored` are exactly the copied ones. `aart registry validate --strict` and
-`aart registry audit` recompute it, and `aart registry revendor` recomputes it before it reaches the
-network. A vendored payload edited after vendoring therefore fails, offline, without upstream being
-contacted — a package that claims an origin must still match it. This is a consistency check, not an
-authentication: it proves the package agrees with its own record, not that the record is true.
+## Validation and derived catalogs
 
-**Assessed bytes and delivered bytes are not the same set for `mcp`.** The vendor assessment covers
-the whole copied subtree, because this registry is redistributing it; installation applies the
-effects the type declares, and for `mcp` that is the `server` object from `payload/mcp.json` and
-nothing else. `mcp` is the only type where the two differ, and the review says so beside the
-assessment rather than leaving a reader to infer that a finding in a copied script is a finding in
-something no consumer of that artifact runs. The per-type delivery table is in
-[the native source protocol](native-source-v1.md).
+Validation checks canonical records, identities, versions, content/provenance digests, package
+boundaries and agreement between approved records and derived catalogs. A missing or changed
+catalog cannot silently redefine approved content. Managed symlinks and special files are refused.
+Compatibility, dependency and Collection validation remain part of admission; consumer policy
+and configured Registry identity remain separate from author-supplied metadata. Content cannot
+assign itself effective trust.
 
-## Authored inputs
+`aart-cli registry build` rebuilds `registry/index.json` and `registry/snapshot.json` from approved
+version records. `--check` reports drift without applying it. `aart-cli registry lock` remains an
+accepted command, but approved records already contain their pins: it is a read-only check with
+nothing to resolve, not a producer of a separate lock file. The generated Registry workflow omits
+that redundant lock step and checks format, reproducible build, validation, audit and compatibility.
 
-`aart-registry.json` declares protocol compatibility, required compiler capabilities, a default
-channel, and optional service advertisements. Service kinds are opaque lowercase identifiers;
-provider-specific requirements belong to the consumer of a service, not to this base schema.
-Authored registry, entry, artifact, and index documents cannot assign effective trust.
+`aart-cli registry publish` prepares the shared publication gate set, applies the reviewed derived
+changes and commits the listed Git changes when explicitly finalized. It never pushes. Push is a
+separate reviewed action restricted to an eligible review branch.
 
-Each `entries/<type>/<name>.json` native reference records a credential-free Git URL, a reviewable
-requested ref, the canonical package path ending in `<type>/<name>`, and a review record. A
-registry-owned canonical package needs no duplicate entry document.
+## Removed representation
 
-## Dependency scope
+Historically, authoring workspaces used `entries/`, `aart.lock.json`, `aart.index.json` and
+unversioned packages. CP-26 removed that representation. Those paths are rejected, including in a
+mixed checkout; no compatibility reader or automatic migration is provided. They are not inputs
+or outputs of current maintenance commands.
 
-An artifact's `requires` resolves **inside one registry, against the artifacts that registry owns**.
-This is deliberate, not a gap. A dependency on an artifact in another registry breaks whenever a
-maintainer who does not own it changes their own registry, and neither the lock nor the index of the
-depending registry can pin what it does not contain. Consumption federates across every configured
-source; publication does not.
-
-To depend on foreign content, put it in this registry: author the artifact here
-(`aart registry scaffold --help`), or vendor the upstream content into a package this registry owns
-(`aart registry vendor --help`), which copies the subtree and records where it came from. A promoted
-native reference is not a route to this: it is the `entries/` case below.
-
-An `entries/` native reference is not a `requires` target. It offers a foreign package to consumers
-of this registry — they resolve and install it from its own repository at the pinned commit — but the
-declared dependency graph is validated over registry-owned packages, so a `requires` naming a
-referenced identity is refused. The refusal says which of the two cases it is: an identity this
-registry does not publish at all, or one it references from another origin rather than owning.
-
-## Committed lock boundary
-
-`aart.lock.json` resolves every native reference to a lowercase 40-hex commit plus manifest,
-payload, and immutable-object digests. Consumer resolution compares the current deterministic
-registry-input digest and every entry URL/ref/path/review field with the committed lock. It returns
-only the pinned commit and digests; it never dereferences the moving requested ref.
-
-The registry-input digest includes canonical JSON and raw non-JSON files from the root markers and
-`entries/`, `artifacts/`, and `collections/`. It excludes generated `aart.lock.json` and
-`aart.index.json`, explicit directory entries, and unrelated repository files. Local and immutable
-Git snapshots therefore hash identically. Symlinks and special files inside registry inputs fail
-closed.
-
-## Compiled index
-
-`aart.index.json` is a deterministic, payload-free consumer projection. Records contain qualified
-source identity, one-line summaries, version and digests, compatibility, optional per-artifact
-`requires_aart` bounds, install effects, setup and provenance summaries, review evidence, and
-derived collection membership. It never contains payload bytes, credentials, raw importer logs,
-or a locally derived trust classification. The compiled bound must match the canonical manifest;
-it is not a registry-wide minimum and is never inferred from the current executable version.
-
-Both generation and parsing validate the complete collection graph. Duplicate or ambiguous
-artifact identities, version exclusions, dangling artifact/collection references, cycles, and
-membership claims that do not match the graph are rejected. Canonical JSON makes index bytes
-independent of input ordering.
-
-Maintainer-side entry, promotion, locked-update, review-digest, and apply-port rules are documented
-in [`registry maintenance planning v1`](../registry/maintenance-planning-v1.md).
+See [maintenance planning](../registry/maintenance-planning-v1.md),
+[maintainer commands](../registry/maintainer-commands-v1.md) and the canonical
+[Product Specification](../product-specification/PRODUCT_SPECIFICATION.md) for review, publication
+and installation ownership.

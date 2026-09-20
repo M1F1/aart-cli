@@ -18,32 +18,32 @@ import os
 import pathlib
 import unittest
 
-from agent_artifacts.application.consumer_session import ConsumerMachine
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.identifiers import (
+from aart_cli.application.consumer_session import ConsumerMachine
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
     SourceId,
 )
-from agent_artifacts.domain.receipts import (
+from aart_cli.domain.receipts import (
     InstallationReceipt,
     installation_receipt_from_data,
     installation_receipt_to_data,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.install_state.model import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.install_state.model import (
     ArtifactEvidence,
     EffectProof,
     InstallationRecord,
     InstallState,
     SourceEvidence,
 )
-from agent_artifacts.install_state.schema import install_state_bytes
-from agent_artifacts.io.consumer_machine import read_consumer_machine
-from agent_artifacts.io.receipt_store import LocalReceiptStore
-from agent_artifacts.protocol.semver import SemVer
+from aart_cli.install_state.schema import install_state_bytes
+from aart_cli.io.consumer_machine import read_consumer_machine
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.protocol.semver import SemVer
 from tests.repair_e2e_test import COORDINATE, InstalledFixture
 
 TODAY = dt.date(2026, 8, 31)
@@ -205,7 +205,7 @@ class MachineFromDiskTest(InstalledFixture):
         unknown row an invitation to install what is already here.
         """
 
-        manifest = pathlib.Path(self.scope) / ".agent-artifacts" / "manifest.json"
+        manifest = pathlib.Path(self.scope) / ".aart-cli" / "manifest.json"
         manifest.parent.mkdir(parents=True, exist_ok=True)
         manifest.write_bytes(install_state_bytes(InstallState(2, (_shadow_of_the_receipt(),))))
 

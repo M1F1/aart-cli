@@ -9,26 +9,26 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     project_dashboard,
 )
-from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
-from agent_artifacts.domain.selection import (
+from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
+from aart_cli.domain.selection import (
     ArtifactRequest,
     Collection,
     CollectionCoordinate,
     CollectionMember,
     VersionConstraint,
 )
-from agent_artifacts.tui_consumer import (
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     ConsumerScreens,
     MarketplaceCollectionEntry,
     MarketplaceEntry,
     run_consumer_shell,
 )
-from agent_artifacts.tui_marketplace import MarketplaceTarget, project_marketplace_rows
+from aart_cli.tui_marketplace import MarketplaceTarget, project_marketplace_rows
 from tests.consumer_shell_test import ENTER, SPACE, UP, FakeTerminal, _at
 from tests.tui_marketplace_test import _catalog
 

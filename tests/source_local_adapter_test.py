@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.sources.local import read_local_snapshot
-from agent_artifacts.sources.model import LocalSnapshotRequest, SnapshotLimits, SourceInstanceId
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.sources.local import read_local_snapshot
+from aart_cli.sources.model import LocalSnapshotRequest, SnapshotLimits, SourceInstanceId
 
 _REFERENCE = Path(__file__).parent / "fixtures" / "protocol" / "native-source-v1"
 
@@ -31,7 +31,7 @@ class SourceLocalAdapterTest(unittest.TestCase):
         assert isinstance(first, Ok)
         self.assertEqual(first.value.snapshot.origin.value, "local")
         self.assertIn(
-            "aart-source.json", tuple(str(item.path) for item in first.value.snapshot.entries)
+            "aart-cli-source.json", tuple(str(item.path) for item in first.value.snapshot.entries)
         )
         self.assertTrue(all(str(item.path) != ".git" for item in first.value.snapshot.entries))
 
@@ -123,15 +123,15 @@ class SourceLocalAdapterTest(unittest.TestCase):
             path = Path(root) / "file"
             path.write_bytes(b"content")
             request = LocalSnapshotRequest(instance, SourceAlias("racy"), root, SnapshotLimits())
-            with patch("agent_artifacts.sources.local.os.scandir", side_effect=OSError("race")):
+            with patch("aart_cli.sources.local.os.scandir", side_effect=OSError("race")):
                 self.assertIsInstance(read_local_snapshot(request), Err)
             real_open = os.open
-            with patch("agent_artifacts.sources.local.os.open", wraps=real_open) as opened:
+            with patch("aart_cli.sources.local.os.open", wraps=real_open) as opened:
                 self.assertIsInstance(read_local_snapshot(request), Ok)
             self.assertTrue(opened.called)
             self.assertTrue(opened.call_args.args[1] & getattr(os, "O_NOFOLLOW", 0))
 
-            with patch("agent_artifacts.sources.local.os.open", side_effect=OSError("race")):
+            with patch("aart_cli.sources.local.os.open", side_effect=OSError("race")):
                 self.assertIsInstance(read_local_snapshot(request), Err)
             original = os.stat(path, follow_symlinks=False)
             raced = os.stat_result(
@@ -148,7 +148,7 @@ class SourceLocalAdapterTest(unittest.TestCase):
                     original.st_ctime,
                 )
             )
-            with patch("agent_artifacts.sources.local.os.fstat", return_value=raced):
+            with patch("aart_cli.sources.local.os.fstat", return_value=raced):
                 self.assertIsInstance(read_local_snapshot(request), Err)
 
     def test_root_git_metadata_is_never_part_of_a_local_candidate(self) -> None:

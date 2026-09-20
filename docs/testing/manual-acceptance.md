@@ -45,7 +45,7 @@ Each entry records:
       now appears above navigation and points to Registry onboarding. B-080/D-170.
 
 - [ ] **QA-005 — Old user subscriptions look like built-in registries.** The two persisted August
-      subscriptions and their managed snapshots were removed through `aart source remove`; a fresh
+      subscriptions and their managed snapshots were removed through `aart-cli source remove`; a fresh
       public list is empty. B-081.
 
 - [ ] **QA-006 — Registry cannot be added from the TUI.** Screen 21 now provides Add Registry with
@@ -66,7 +66,7 @@ Each entry records:
       to its own Refresh Registry action with a review (21c) that names the ref to be fetched,
       states that a refresh is not an artifact update, and warns that a failed fetch keeps the
       snapshot already held. Execution goes through `sync_configured_sources`, the same transaction
-      as `aart source sync`. B-084/D-179.
+      as `aart-cli source sync`. B-084/D-179.
 
 - [ ] **QA-011 — Canonical installation cannot target OpenCode.**
       Stage: installing the Skill and MCP into the locally installed OpenCode 1.18.29
@@ -168,8 +168,8 @@ Each entry records:
 - [ ] **QA-020 — A YAML authoring repository cannot enter the monitored Source → Candidate flow.**
       Authoring-Source admission is now manifest discovery rather than native-package validation:
       `source add --kind source-git` admits a repository that declares at least one explicit
-      `aart.yaml`/`aart.json`, keeps the native-package rule for a tree that declares
-      `aart-source.json`, and still refuses a tree that declares neither. Transport, identity,
+      `aart-cli.yaml`/`aart-cli.json`, keeps the native-package rule for a tree that declares
+      `aart-cli-source.json`, and still refuses a tree that declares neither. Transport, identity,
       symlink, special-file and last-known-good boundaries are unchanged. An authoring Source
       contributes no Marketplace offers and cannot empty the consumer's Marketplace. B-094/D-176.
 
@@ -179,7 +179,7 @@ Each entry records:
       Severity: high
       Blocks current monitored-Source stage: no; this is a second required onboarding model
       Reproduction: provide the Superpowers URL/ref without adding it as a configured Source, then
-      try to discover its `aart.yaml` files and select one Skill for Registry ownership
+      try to discover its `aart-cli.yaml` files and select one Skill for Registry ownership
       Expected: `Scan Repository` finds only explicit YAML/JSON manifests, presents selectable
       artifacts, and vendors only each selected manifest's `payload.include` files with pinned
       provenance; the repository is not saved as a Source
@@ -194,7 +194,7 @@ Each entry records:
       immutable namespaced provenance (D-189). The read-only check distinguishes unchanged,
       changed, missing, unreachable and invalid manifests, and prepares a new immutable version
       only after an upstream version bump (D-190, 8 tests), reached as `u` Check upstream on
-      screens 46f/46g (D-191). `aart registry adopt` and `aart registry check-upstream` are the
+      screens 46f/46g (D-191). `aart-cli registry adopt` and `aart-cli registry check-upstream` are the
       machine-complete CLI projection: scan/review/apply phases, `--expect` verified whenever
       given, sorted listings (D-192, 8 tests).
 
@@ -345,9 +345,13 @@ Each entry records:
       Retest: add one Source, press `a` on screen 31 again, and confirm the form is empty; then
       let a preparation refuse and confirm the typed values are still there.
 
-- [ ] **QA-032 — A Registry produced by TUI promotion fails its generated GitHub Actions.**
+- [x] **QA-032 — Historical: a Registry produced by TUI promotion failed its generated GitHub Actions.**
+      Current contract (CP-26): only the approved `registry/versions/` representation is supported;
+      build derives `registry/index.json` and `registry/snapshot.json`, and lock produces no file.
+      The reproduction and D-208 fix below record the earlier defect and intermediate dual-reader
+      implementation. CP-26 removed that legacy reader; these are not current maintenance steps.
       Stage: publishing the first promoted artifact through Registry PR #1
-      Surface: generated `.github/workflows/aart-registry.yml`
+      Surface: generated `.github/workflows/aart-cli-registry.yml`
       Severity: blocking
       Blocks current stage: yes, unless the known false-negative checks are consciously bypassed
       Reproduction: promote `skill/verification-before-completion@1.0.0` through the TUI, push the
@@ -548,7 +552,7 @@ Each entry records:
       configuration/data/cache targets, requires two deliberate confirmations, refuses unsafe
       targets, restores the app to no connections/settings, and leaves projects, harness files,
       other applications' credentials and unrelated files untouched. CP-20 step 6.
-      Fix: CLI-only `aart reset` lists the exact plan/digest, requires `RESET AART` and
+      Fix: CLI-only `aart-cli reset` lists the exact plan/digest, requires `RESET AART` and
       `DELETE AART STATE`, and refuses unsafe/symlinked targets before deleting anything.
       Evidence: `tests/factory_reset_test.py` including Hypothesis target properties.
 
@@ -569,7 +573,7 @@ Each entry records:
       Observed: stages 1-3 are entirely CLI and GitHub setup, stage 4 adds author Sources through
       the CLI although adding a Source is itself a Maintainer screen, and the CP-20 head advertising
       `make manual-test-setup` was never reconciled with a body that still exports
-      `$AART_MAINTAINER_HOME`. The default lab also publishes both fixtures, so the whole Maintainer
+      `$AART_CLI_MAINTAINER_HOME`. The default lab also publishes both fixtures, so the whole Maintainer
       run — Initialize Registry, Add Source, Sync, Candidates, validation, promotion, commit — is
       already done by the setup script and an operator walking those screens re-reads a result
       instead of producing one. Expected: a TUI-first walkthrough over a Registry that starts empty.
@@ -581,7 +585,7 @@ Each entry records:
       `[n] Initialize` on the empty Registry.
 
 - [ ] **QA-056 — A promotion cannot be completed from the CLI without fabricating its evidence.**
-      Surface: `aart registry promote`. Severity: medium. **Unconfirmed — verify during the CLI
+      Surface: `aart-cli registry promote`. Severity: medium. **Unconfirmed — verify during the CLI
       run.** Observed in code: `registry promote` requires `--validation-report DIGEST` and
       `--policy-result DIGEST`, and no CLI command emits either; `validation_report_digest` is
       derived in the application layer and displayed only by the Maintainer screens. An operator

@@ -21,7 +21,7 @@ import subprocess
 import tempfile
 import unittest
 
-from agent_artifacts.domain.harness import (
+from aart_cli.domain.harness import (
     MCP_TARGETS,
     McpEditor,
     McpRegistration,
@@ -29,8 +29,8 @@ from agent_artifacts.domain.harness import (
     Scope,
     mcp_target,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.harness import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.harness import (
     HARNESS_EDITOR_MISSING,
     CodexServerEditor,
     LocalHarnessRegistry,

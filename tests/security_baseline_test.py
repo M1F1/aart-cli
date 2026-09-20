@@ -6,12 +6,12 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from agent_artifacts.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.protocol.hashing import file_entry, json_digest, tree_digest
-from agent_artifacts.protocol.json import canonical_json_bytes
-from agent_artifacts.protocol.native_models import (
+from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.capabilities import Capability
+from aart_cli.protocol.hashing import file_entry, json_digest, tree_digest
+from aart_cli.protocol.json import canonical_json_bytes
+from aart_cli.protocol.native_models import (
     ArtifactManifest,
     CompatibilitySpec,
     ImporterProvenance,
@@ -21,21 +21,20 @@ from agent_artifacts.protocol.native_models import (
     Provenance,
     SetupReference,
 )
-from agent_artifacts.protocol.native_schema import (
+from aart_cli.protocol.native_schema import (
     artifact_manifest_to_json,
     provenance_to_json,
 )
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.registry_models import (
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.registry_models import (
     IndexArtifact,
     IndexProvenance,
     IndexSetup,
-    LockedArtifact,
     ReviewRecord,
 )
-from agent_artifacts.protocol.semver import SemVer, VersionBounds
-from agent_artifacts.security import (
+from aart_cli.protocol.semver import SemVer, VersionBounds
+from aart_cli.security import (
     BASELINE_RULES_DIGEST,
     AssessmentCoverage,
     AssessmentStatus,
@@ -51,7 +50,7 @@ from agent_artifacts.security import (
     not_scanned_assessment,
     parse_assessment,
 )
-from agent_artifacts.store.model import ObjectCandidate, make_object_candidate
+from aart_cli.store.model import ObjectCandidate, make_object_candidate
 from tests.credential_fixtures import access_token, assignment
 
 
@@ -81,14 +80,14 @@ def _fixture(
     provenance: bool = False,
     include_provenance_file: bool = True,
     importer_warnings: tuple[str, ...] = (),
-) -> tuple[ObjectCandidate, IndexArtifact, LockedArtifact | None]:
+) -> tuple[ObjectCandidate, IndexArtifact]:
     setup = SetupReference(_path("setup/installer.json"), ("darwin",)) if capabilities else None
     manifest = ArtifactManifest(
         1,
         ArtifactIdentity(kind, "review"),  # type: ignore[arg-type]
         SemVer(1, 0, 0),
         "Review agent changes before merging.",
-        PayloadSpec(_path("payload"), f"aart-{kind}-v1"),
+        PayloadSpec(_path("payload"), f"aart-cli-{kind}-v1"),
         CompatibilitySpec(("claude",), ("darwin",)),
         InstallSpec(("project",), ("copy",), effects),  # type: ignore[arg-type]
         setup,
@@ -201,29 +200,11 @@ def _fixture(
         review,
         index_provenance,
     )
-    locked = None
-    if provenance and review is not None:
-        locked = LockedArtifact(
-            origin.url,
-            "main",
-            origin.resolved_commit,
-            origin.path,
-            indexed.manifest_digest,
-            indexed.payload_digest,
-            indexed.object_digest,
-            indexed.version,
-            review,
-            json_digest(provenance_to_json(imported)),
-        )
-    return candidate, indexed, locked
+    return candidate, indexed
 
 
-def _scan(
-    candidate: ObjectCandidate,
-    artifact: IndexArtifact,
-    lock: LockedArtifact | None = None,
-):
-    return assess_installation_risk(BaselineScanRequest(candidate, artifact, lock))
+def _scan(candidate: ObjectCandidate, artifact: IndexArtifact):
+    return assess_installation_risk(BaselineScanRequest(candidate, artifact))
 
 
 def _replace_entry(
@@ -252,7 +233,7 @@ def _json_bytes(value: object) -> bytes:
 
 class SecurityBaselineModelTest(unittest.TestCase):
     def test_not_scanned_and_stale_states_are_explicit_and_digest_bound(self) -> None:
-        candidate, _, _ = _fixture()
+        candidate, _ = _fixture()
         assessment = not_scanned_assessment(candidate.digest, "assessment was not requested")
         self.assertEqual(assessment.status, AssessmentStatus.NOT_SCANNED)
         self.assertEqual(assessment.installation_risk, InstallationRisk.UNKNOWN)
@@ -268,7 +249,7 @@ class SecurityBaselineModelTest(unittest.TestCase):
         self.assertEqual(stale.providers[0].status, AssessmentStatus.STALE)
 
     def test_assessment_serialization_is_canonical_and_round_trips(self) -> None:
-        candidate, indexed, _ = _fixture()
+        candidate, indexed = _fixture()
         first = _scan(candidate, indexed)
         second = _scan(candidate, indexed)
         self.assertEqual(first, second)
@@ -289,7 +270,7 @@ class SecurityBaselineModelTest(unittest.TestCase):
         self.assertIs(current, first)
 
     def test_model_rejects_inconsistent_coverage_findings_and_providers(self) -> None:
-        candidate, indexed, _ = _fixture()
+        candidate, indexed = _fixture()
         assessment = _scan(candidate, indexed)
         finding = assessment.findings[0]
         provider = assessment.providers[0]
@@ -319,7 +300,7 @@ class SecurityBaselineModelTest(unittest.TestCase):
                     constructor()
 
     def test_schema_rejects_noncanonical_or_inconsistent_evidence(self) -> None:
-        candidate, indexed, _ = _fixture()
+        candidate, indexed = _fixture()
         encoded = assessment_bytes(_scan(candidate, indexed))
         document = json.loads(encoded)
         mutations = []
@@ -397,7 +378,7 @@ class SecurityBaselineModelTest(unittest.TestCase):
         self.assertIsInstance(parse_assessment(b" " + encoded), Err)
 
     def test_schema_bounds_input_finding_and_provider_counts(self) -> None:
-        candidate, indexed, _ = _fixture()
+        candidate, indexed = _fixture()
         document = json.loads(assessment_bytes(_scan(candidate, indexed)))
 
         too_many_findings = json.loads(json.dumps(document))
@@ -412,7 +393,7 @@ class SecurityBaselineModelTest(unittest.TestCase):
         self.assertIsInstance(parse_assessment(oversized), Err)
 
     def test_finding_and_assessment_public_values_require_canonical_types(self) -> None:
-        candidate, indexed, _ = _fixture()
+        candidate, indexed = _fixture()
         assessment = _scan(candidate, indexed)
         finding = assessment.findings[0]
         provider = assessment.providers[0]
@@ -458,7 +439,7 @@ class SecurityBaselineModelTest(unittest.TestCase):
 
 class SecurityBaselineEvidenceTest(unittest.TestCase):
     def test_clean_unreviewed_native_object_is_fully_scanned_but_not_certified(self) -> None:
-        candidate, indexed, _ = _fixture()
+        candidate, indexed = _fixture()
         assessment = _scan(candidate, indexed)
         self.assertEqual(assessment.status, AssessmentStatus.COMPLETE)
         self.assertEqual(assessment.object_digest, candidate.digest)
@@ -466,23 +447,8 @@ class SecurityBaselineEvidenceTest(unittest.TestCase):
         self.assertEqual(assessment.installation_risk, InstallationRisk.MEDIUM)
         self.assertIn("review-missing", {item.rule_id for item in assessment.findings})
 
-    def test_reviewed_external_object_requires_matching_provenance_and_lock(self) -> None:
-        candidate, indexed, lock = _fixture(reviewed=True, provenance=True)
-        complete = _scan(candidate, indexed, lock)
-        self.assertEqual(complete.status, AssessmentStatus.COMPLETE)
-        self.assertNotIn("lock-missing", {item.rule_id for item in complete.findings})
-
-        missing = _scan(candidate, indexed)
-        self.assertEqual(missing.status, AssessmentStatus.PARTIAL)
-        self.assertIn("lock-missing", {item.rule_id for item in missing.findings})
-
-        assert lock is not None
-        mismatched = _scan(candidate, indexed, replace(lock, resolved_commit="b" * 40))
-        self.assertEqual(mismatched.status, AssessmentStatus.FAILED)
-        self.assertIn("lock-evidence-mismatch", {item.rule_id for item in mismatched.findings})
-
     def test_missing_provenance_and_rejected_review_are_explained(self) -> None:
-        candidate, indexed, _ = _fixture(
+        candidate, indexed = _fixture(
             rejected=True,
             provenance=True,
             include_provenance_file=False,
@@ -498,7 +464,7 @@ class SecurityBaselineEvidenceTest(unittest.TestCase):
         )
 
     def test_object_and_manifest_digest_mismatches_fail_closed(self) -> None:
-        candidate, indexed, _ = _fixture()
+        candidate, indexed = _fixture()
         mismatched_object = replace(indexed, object_digest=ObjectDigest("sha256", "f" * 64))
         assessment = _scan(candidate, mismatched_object)
         self.assertEqual(assessment.status, AssessmentStatus.FAILED)
@@ -515,13 +481,13 @@ class SecurityBaselineEvidenceTest(unittest.TestCase):
 
     def test_importer_warnings_are_counted_without_echoing_untrusted_text(self) -> None:
         warning = "credential " + assignment("token", "do-not-echo")
-        candidate, indexed, _ = _fixture(provenance=True, importer_warnings=(warning,))
+        candidate, indexed = _fixture(provenance=True, importer_warnings=(warning,))
         assessment = _scan(candidate, indexed)
         self.assertIn("importer-warning", {item.rule_id for item in assessment.findings})
         self.assertNotIn(warning, assessment_bytes(assessment).decode("utf-8"))
 
     def test_manifest_payload_and_index_shape_failures_have_distinct_rules(self) -> None:
-        candidate, indexed, _ = _fixture()
+        candidate, indexed = _fixture()
         missing = _replace_entry(candidate, "artifact.json", None)
         missing_result = _scan(missing, replace(indexed, object_digest=missing.digest))
         self.assertIn("manifest-missing", {item.rule_id for item in missing_result.findings})
@@ -549,7 +515,7 @@ class SecurityBaselineEvidenceTest(unittest.TestCase):
         self.assertIn("payload-digest-mismatch", {item.rule_id for item in payload.findings})
 
     def test_unexpected_or_invalid_provenance_is_reported(self) -> None:
-        candidate, indexed, _ = _fixture(provenance=True)
+        candidate, indexed = _fixture(provenance=True)
         unexpected = _scan(candidate, replace(indexed, provenance=None))
         self.assertIn("provenance-unexpected", {item.rule_id for item in unexpected.findings})
 
@@ -557,21 +523,20 @@ class SecurityBaselineEvidenceTest(unittest.TestCase):
         invalid_result = _scan(invalid, replace(indexed, object_digest=invalid.digest))
         self.assertIn("provenance-invalid", {item.rule_id for item in invalid_result.findings})
 
-    def test_pending_review_and_immutable_authored_ref_are_distinct(self) -> None:
-        candidate, indexed, lock = _fixture(reviewed=True, provenance=True)
-        pending_review = ReviewRecord("pending", "company-v1")
-        pending_index = replace(indexed, review=pending_review)
-        assert lock is not None
-        pending_lock = replace(lock, review=pending_review, requested_ref="b" * 40)
-        assessment = _scan(candidate, pending_index, pending_lock)
+    def test_a_pending_review_on_an_externally_provenanced_object_is_named(self) -> None:
+        """The review a registry recorded is what the baseline reports, approved or not."""
+
+        candidate, indexed = _fixture(reviewed=True, provenance=True)
+        pending_index = replace(indexed, review=ReviewRecord("pending", "company-v1"))
+        assessment = _scan(candidate, pending_index)
         rules = {item.rule_id for item in assessment.findings}
         self.assertIn("review-pending", rules)
-        self.assertNotIn("source-moving-ref", rules)
+        self.assertNotIn("review-missing", rules)
 
 
 class SecurityBaselineDeclaredRiskTest(unittest.TestCase):
     def test_install_effects_and_sensitive_setup_capabilities_raise_explainable_risk(self) -> None:
-        candidate, indexed, _ = _fixture(
+        candidate, indexed = _fixture(
             kind="mcp",
             files=(("payload/mcp.json", b'{"command":"review-mcp"}\n', False),),
             effects=("merge-json",),
@@ -586,7 +551,7 @@ class SecurityBaselineDeclaredRiskTest(unittest.TestCase):
         self.assertEqual(assessment.installation_risk, InstallationRisk.CRITICAL)
 
     def test_unknown_setup_capability_is_reported_as_high_risk(self) -> None:
-        candidate, indexed, _ = _fixture(capabilities=("future-capability",))
+        candidate, indexed = _fixture(capabilities=("future-capability",))
         assessment = _scan(candidate, indexed)
         finding = next(
             item for item in assessment.findings if item.rule_id == "setup-capability-unknown"
@@ -595,7 +560,7 @@ class SecurityBaselineDeclaredRiskTest(unittest.TestCase):
         self.assertIn("Review and explicitly allow", finding.remediation)
 
     def test_missing_invalid_and_mismatched_setup_recipe_reduce_coverage(self) -> None:
-        candidate, indexed, _ = _fixture(capabilities=("process",))
+        candidate, indexed = _fixture(capabilities=("process",))
         missing = _replace_entry(candidate, "setup/installer.json", None)
         missing_result = _scan(missing, replace(indexed, object_digest=missing.digest))
         self.assertIn("setup-recipe-missing", {item.rule_id for item in missing_result.findings})
@@ -626,7 +591,7 @@ class SecurityBaselineDeclaredRiskTest(unittest.TestCase):
         for kind, payload_path, effect in fixtures:
             with self.subTest(effect=effect):
                 content = b"{}" if kind == "mcp" else b"# Review\n"
-                candidate, indexed, _ = _fixture(
+                candidate, indexed = _fixture(
                     kind=kind,
                     files=((payload_path, content, False),),
                     effects=(effect,),
@@ -638,7 +603,7 @@ class SecurityBaselineDeclaredRiskTest(unittest.TestCase):
 class SecurityBaselineContentTest(unittest.TestCase):
     def test_python_ast_rules_find_dynamic_execution_and_shell_true(self) -> None:
         source = b"import subprocess\neval(user_input)\nsubprocess.run(cmd, shell=True)\n"
-        candidate, indexed, _ = _fixture(
+        candidate, indexed = _fixture(
             files=(
                 ("payload/SKILL.md", b"# Review\n", False),
                 ("payload/tool.py", source, False),
@@ -653,7 +618,7 @@ class SecurityBaselineContentTest(unittest.TestCase):
         self.assertTrue({2, 3} <= lines)
 
     def test_unparseable_and_oversized_python_expose_partial_coverage(self) -> None:
-        invalid, indexed, _ = _fixture(
+        invalid, indexed = _fixture(
             files=(
                 ("payload/SKILL.md", b"# Review\n", False),
                 ("payload/broken.py", b"def nope(:\n", False),
@@ -663,7 +628,7 @@ class SecurityBaselineContentTest(unittest.TestCase):
         self.assertEqual(invalid_result.status, AssessmentStatus.PARTIAL)
         self.assertIn("python-parse-failed", {item.rule_id for item in invalid_result.findings})
 
-        oversized, oversized_index, _ = _fixture(
+        oversized, oversized_index = _fixture(
             files=(
                 ("payload/SKILL.md", b"# Review\n", False),
                 ("payload/large.py", b"#" * (1024 * 1024 + 1), False),
@@ -675,7 +640,7 @@ class SecurityBaselineContentTest(unittest.TestCase):
 
     def test_python_ast_reports_command_and_deserialization_calls(self) -> None:
         source = b"import os, pickle\nos.system(command)\npickle.loads(blob)\n"
-        candidate, indexed, _ = _fixture(
+        candidate, indexed = _fixture(
             files=(
                 ("payload/SKILL.md", b"# Review\n", False),
                 ("payload/tool.py", source, False),
@@ -696,7 +661,7 @@ class SecurityBaselineContentTest(unittest.TestCase):
                 }
             }
         ).encode("utf-8")
-        candidate, indexed, _ = _fixture(
+        candidate, indexed = _fixture(
             kind="mcp",
             files=(("payload/mcp.json", payload, False),),
             effects=("merge-json",),
@@ -711,7 +676,7 @@ class SecurityBaselineContentTest(unittest.TestCase):
 
     def test_shell_heuristics_are_bounded_and_report_observed_facts(self) -> None:
         script = b'#!/bin/sh\nsudo rm -rf /\neval "$PAYLOAD"\npip install requests\n'
-        candidate, indexed, _ = _fixture(
+        candidate, indexed = _fixture(
             files=(
                 ("payload/SKILL.md", b"# Review\n", False),
                 ("payload/install.sh", script, True),
@@ -738,7 +703,7 @@ class SecurityBaselineContentTest(unittest.TestCase):
         # Prose, not JSON: `_json_findings` raises the same rule for a credential member, so a
         # `.json` fixture would pass with the assignment branch removed entirely.
         note = "# Review\n\nSet " + assignment("password", "n0t-a-vendor-shaped-value") + "\n"
-        candidate, indexed, _ = _fixture(
+        candidate, indexed = _fixture(
             files=(("payload/SKILL.md", note.encode("utf-8"), False),),
         )
 
@@ -748,7 +713,7 @@ class SecurityBaselineContentTest(unittest.TestCase):
 
     def test_placeholder_credentials_are_not_reported_as_embedded_secrets(self) -> None:
         payload = b'{"server":{"env":{"API_TOKEN":"${ATLASSIAN_API_TOKEN}"}}}\n'
-        candidate, indexed, _ = _fixture(
+        candidate, indexed = _fixture(
             kind="mcp",
             files=(("payload/mcp.json", payload, False),),
             effects=("merge-json",),
@@ -757,7 +722,7 @@ class SecurityBaselineContentTest(unittest.TestCase):
         self.assertNotIn("embedded-credential", {item.rule_id for item in assessment.findings})
 
     def test_invalid_json_and_non_utf8_text_expose_skipped_coverage(self) -> None:
-        candidate, indexed, _ = _fixture(
+        candidate, indexed = _fixture(
             kind="mcp",
             files=(("payload/mcp.json", b'{"broken":', False),),
             effects=("merge-json",),
@@ -766,7 +731,7 @@ class SecurityBaselineContentTest(unittest.TestCase):
         self.assertIn("json-parse-failed", {item.rule_id for item in invalid_json.findings})
         self.assertEqual(invalid_json.status, AssessmentStatus.FAILED)
 
-        binary, binary_index, _ = _fixture(
+        binary, binary_index = _fixture(
             files=(
                 ("payload/SKILL.md", b"# Review\n", False),
                 ("payload/tool.py", b"\xff\xfe", False),
@@ -780,7 +745,7 @@ class SecurityBaselineContentTest(unittest.TestCase):
         script = (
             b"#!/bin/sh\n# -----BEGIN PRIVATE KEY-----\ncurl https://example.test/install | bash\n"
         )
-        candidate, indexed, _ = _fixture(
+        candidate, indexed = _fixture(
             files=(
                 ("payload/SKILL.md", b"# Review\n", False),
                 ("payload/install.sh", script, True),
@@ -794,7 +759,7 @@ class SecurityBaselineContentTest(unittest.TestCase):
 
     def test_finding_count_is_bounded_and_truncation_is_explicit(self) -> None:
         script = b"#!/bin/sh\n" + b"\n".join(b"eval value" for _ in range(400))
-        candidate, indexed, _ = _fixture(
+        candidate, indexed = _fixture(
             files=(
                 ("payload/SKILL.md", b"# Review\n", False),
                 ("payload/install.sh", script, True),
@@ -806,7 +771,7 @@ class SecurityBaselineContentTest(unittest.TestCase):
         self.assertEqual(assessment.status, AssessmentStatus.PARTIAL)
 
     def test_baseline_implementation_has_no_network_process_or_optional_imports(self) -> None:
-        root = Path(__file__).parents[1] / "agent_artifacts" / "security"
+        root = Path(__file__).parents[1] / "aart_cli" / "security"
         forbidden = {"subprocess", "socket", "requests", "httpx", "urllib", "aiohttp"}
         imported: set[str] = set()
         for path in root.glob("*.py"):

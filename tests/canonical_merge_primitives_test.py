@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.installation.application import _descend, _render_template
+from aart_cli.domain.result import Err, Ok
+from aart_cli.installation.application import _descend, _render_template
 
 
 class RenderTemplateTest(unittest.TestCase):

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.curation.model import (
+from aart_cli.curation.model import (
     CurationAction,
     CurationChange,
     CurationCheck,
@@ -22,8 +22,8 @@ from agent_artifacts.curation.model import (
     CurationReview,
     render_curation_outcome,
 )
-from agent_artifacts.curation.runtime import _follow_up
-from agent_artifacts.domain.identifiers import ObjectDigest
+from aart_cli.curation.runtime import _follow_up
+from aart_cli.domain.identifiers import ObjectDigest
 
 DIGEST = ObjectDigest("sha256", "a" * 64)
 
@@ -35,7 +35,7 @@ def _review(*warnings: str) -> CurationReview:
         mutating=True,
         review_digest=DIGEST,
         snapshot_digest=ObjectDigest("sha256", "b" * 64),
-        changes=(CurationChange("aart-registry.json", "added"),),
+        changes=(CurationChange("aart-cli-registry.json", "added"),),
         warnings=warnings,
     )
 
@@ -52,7 +52,7 @@ def _outcome(*warnings: str, changed: int = 1, observed: int = 0) -> CurationOut
 
 class ConfirmedOutcomeBrevityTest(unittest.TestCase):
     def test_a_warning_the_review_already_stated_is_not_stated_again(self) -> None:
-        warning = "registry CI runs AART 1.0.0, pinned in .aart-version"
+        warning = "registry CI runs AART 1.0.0, pinned in .aart-cli-version"
 
         rendered = render_curation_outcome(_outcome(warning), reviewed=_review(warning))
 
@@ -121,8 +121,8 @@ class FollowUpCommandTest(unittest.TestCase):
         commands = _follow_up(
             "/tmp/registry",
             (
-                CurationChange("aart-registry.json", "added"),
-                CurationChange("aart-source.json", "added"),
+                CurationChange("aart-cli-registry.json", "added"),
+                CurationChange("aart-cli-source.json", "added"),
             ),
             CurationAction.INIT,
         )
@@ -130,25 +130,31 @@ class FollowUpCommandTest(unittest.TestCase):
         self.assertEqual(
             commands,
             (
-                "aart registry validate --source /tmp/registry",
-                "aart registry lock --source /tmp/registry",
-                "aart registry build --source /tmp/registry",
-                "aart registry audit --source /tmp/registry",
+                "aart-cli registry validate --source /tmp/registry",
+                "aart-cli registry build --source /tmp/registry",
+                "aart-cli registry audit --source /tmp/registry",
             ),
         )
 
-    def test_an_action_with_generated_evidence_still_asks_for_strict_validation(self) -> None:
+    def test_an_action_that_adds_no_owned_content_does_not_ask_for_a_rebuild(self) -> None:
+        """`CP-26.5`: `build` is named only when the approvals the catalog derives from moved.
+
+        `format` rewrites committed JSON into its canonical spelling and adds no approval, so the
+        catalog it would recompute is the catalog already there. `--strict` is gone with the
+        representation that needed a second compiled copy to be strict about (`D-318`).
+        """
+
         commands = _follow_up(
             "/tmp/registry",
-            (CurationChange("aart-registry.json", "changed"),),
+            (CurationChange("aart-cli-registry.json", "changed"),),
             CurationAction.FORMAT,
         )
 
         self.assertEqual(
             commands,
             (
-                "aart registry validate --source /tmp/registry --strict",
-                "aart registry audit --source /tmp/registry",
+                "aart-cli registry validate --source /tmp/registry",
+                "aart-cli registry audit --source /tmp/registry",
             ),
         )
 

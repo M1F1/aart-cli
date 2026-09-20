@@ -18,12 +18,12 @@ import sys
 import unittest
 from unittest import mock
 
-from agent_artifacts import tui
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import ConsumerScreen, ConsumerSession
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.install_state.paths import install_state_paths
-from agent_artifacts.tui_consumer import run_consumer_shell
+from aart_cli import tui
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
+from aart_cli.domain.result import Ok
+from aart_cli.install_state.paths import install_state_paths
+from aart_cli.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AuthoredSetup, _published_registry
 from tests.consumer_shell_test import ENTER, SPACE, FakeTerminal
@@ -40,14 +40,14 @@ CONFIGURED = ".code-review.toml"
 #: A setup declaration must name a subset of the artifact's platforms, and the setup engine supports
 #: exactly `darwin`, so an artifact that declares no platforms at all cannot declare setup.
 MANIFEST = {
-    "schema": "aart.dev/skill/v1",
+    "schema": "aart-cli.dev/skill/v1",
     "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
     "payload": {"include": ["SKILL.md", "reference/style.md"]},
     "compatibility": {"harnesses": ["claude"], "platforms": ["darwin", "linux"]},
 }
 
 AUTHORED: tuple[tuple[str, str], ...] = (
-    ("code-review/aart.json", json.dumps(MANIFEST)),
+    ("code-review/aart-cli.json", json.dumps(MANIFEST)),
     ("code-review/SKILL.md", SKILL_BODY),
     ("code-review/reference/style.md", STYLE_BODY),
 )
@@ -112,7 +112,7 @@ class DeclaredSetupFixtureTest(unittest.TestCase):
     "refused for the platform before the effect this asserts on is reached",
 )
 class ConfiguredInstallCommandSetupTest(unittest.TestCase):
-    """`aart marketplace install`, for a coordinate the configured registry approved."""
+    """`aart-cli marketplace install`, for a coordinate the configured registry approved."""
 
     def test_an_artifact_that_declares_setup_is_configured_after_explicit_effect_approval(
         self,
@@ -132,7 +132,7 @@ class ConfiguredInstallCommandSetupTest(unittest.TestCase):
             self.assertTrue(payload["ok"])
             self.assertEqual(payload["session_status"], "succeeded")
             self.assertTrue(
-                (env.project / ".claude/skills/code-review/SKILL.md").is_file(),
+                (env.project / ".claude/skills/code-review-company-project/SKILL.md").is_file(),
                 "the Skill never reached the harness, so this proves nothing about setup",
             )
             self.assertTrue((env.project / CONFIGURED).exists())
@@ -170,7 +170,7 @@ class ConfiguredReceiptVerbsTest(unittest.TestCase):
     B-044 made the run happen; this is the other half of it being real. A setup run nobody can
     show, verify or undo is one the operator has to take on faith and cannot roll back, and until
     the receipt-backed locator existed that was exactly the state a configured install left behind:
-    the effect on disk, the record under the data root, and `aart marketplace receipt show`
+    the effect on disk, the record under the data root, and `aart-cli marketplace receipt show`
     answering that this scope has no installation state.
 
     Nothing here is a fixture. The install is the public command, the receipt is the one it wrote,
@@ -316,7 +316,7 @@ class ConsumerShellSetupTest(unittest.TestCase):
 
             self.assertEqual(finished.session.screen, ConsumerScreen.SUCCESS)
             self.assertTrue(
-                (env.project / ".claude/skills/code-review/SKILL.md").is_file(),
+                (env.project / ".claude/skills/code-review-company-project/SKILL.md").is_file(),
                 "the Skill never reached the harness, so this proves nothing about setup",
             )
             self.assertTrue((env.project / CONFIGURED).exists())

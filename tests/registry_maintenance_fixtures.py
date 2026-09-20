@@ -1,18 +1,18 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.json import canonical_json_bytes, parse_json
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.registry_models import RegistryEntry
-from agent_artifacts.protocol.registry_schema import parse_registry_entry
+from aart_cli.protocol.paths import parse_relative_path
 
 NATIVE_FIXTURE = Path("tests/fixtures/protocol/native-source-v1")
 
@@ -43,6 +43,12 @@ def tree_snapshot(root: Path, origin: SnapshotOrigin) -> SourceSnapshot:
     return SourceSnapshot(origin, tuple(entries))
 
 
+def _canonical(document: dict) -> bytes:
+    parsed = parse_json(json.dumps(document).encode())
+    assert isinstance(parsed, Ok), parsed
+    return canonical_json_bytes(parsed.value)
+
+
 def empty_registry_snapshot() -> SourceSnapshot:
     registry = {
         "schema_version": 1,
@@ -64,45 +70,20 @@ def empty_registry_snapshot() -> SourceSnapshot:
         "artifact_roots": ["artifacts"],
         "collection_roots": [],
     }
+    # Canonical bytes, because every fixture built on top of this one is a Registry that `format`
+    # must find nothing to do in; a fixture spelled differently from what AART writes would make
+    # `changed_paths == 0` unreachable for an approved Registry (CP-26.5).
     return SourceSnapshot(
         SnapshotOrigin.LOCAL,
         (
-            _file("aart-registry.json", json.dumps(registry).encode()),
-            _file("aart-source.json", json.dumps(source).encode()),
+            _file("aart-cli-registry.json", _canonical(registry)),
+            _file("aart-cli-source.json", _canonical(source)),
         ),
     )
 
 
 def native_snapshot() -> SourceSnapshot:
     return tree_snapshot(NATIVE_FIXTURE, SnapshotOrigin.IMMUTABLE_GIT)
-
-
-def registry_entry(
-    *,
-    name: str = "code-review",
-    review_status: str = "approved",
-) -> RegistryEntry:
-    result = parse_registry_entry(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "type": "skill",
-                "name": name,
-                "source": {
-                    "kind": "git",
-                    "url": "https://github.com/example/reference-skills.git",
-                    "ref": "main",
-                    "path": f"artifacts/skill/{name}",
-                },
-                "review": {
-                    "status": review_status,
-                    "policy": "company-review-v1",
-                },
-            }
-        )
-    )
-    assert isinstance(result, Ok), result
-    return result.value
 
 
 def renamed_native_snapshot(name: str) -> SourceSnapshot:
@@ -181,3 +162,94 @@ def without_snapshot_paths(snapshot: SourceSnapshot, *paths: str) -> SourceSnaps
         snapshot.origin,
         tuple(entry for entry in snapshot.entries if str(entry.path) not in removed),
     )
+
+
+def approved_registry_snapshot(
+    *,
+    names: tuple[str, ...] = ("github-mcp",),
+    version: str = "1.0.0",
+    registry_alias: str = "company",
+) -> SourceSnapshot:
+    """An initialized Registry holding one approved, vendored version per name.
+
+    Built through the same promotion the maintainer runs, so the fixture cannot claim a shape the
+    product does not write: `registry/versions/`, `registry/promotions/`, both derived catalogs and
+    one package per version under `artifacts/<kind>/<name>/<version>/`.
+    """
+
+    from aart_cli.application.maintainer import reconcile_source_scan
+    from aart_cli.application.promotion import (
+        PromotionEvidence,
+        plan_bulk_promotion,
+        project_promotion,
+    )
+    from aart_cli.domain.candidates import assess_candidate
+    from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+    from aart_cli.protocol.authoring import compile_author_snapshot
+
+    entries = []
+    for name in names:
+        manifest = {
+            "schema": "aart-cli.dev/mcp/v1",
+            "artifact": {"name": name, "kind": "mcp", "version": version},
+            "payload": {"include": ["server.py"]},
+            "transport": {"type": "stdio"},
+            "runtime": {"type": "python", "version": ">=3.11"},
+            "launch": {"type": "python", "entrypoint": "server.py"},
+        }
+        entries.append(_file(f"{name}/aart-cli.json", json.dumps(manifest).encode()))
+        entries.append(_file(f"{name}/server.py", f"print('{name}')\n".encode()))
+    revision = "a" * 40
+    compiled = compile_author_snapshot(
+        SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),
+        source_alias=SourceAlias("authors"),
+        source="https://git.example/servers.git",
+        revision=revision,
+    )
+    assert isinstance(compiled, Ok), compiled
+    scanned = reconcile_source_scan(
+        SourceAlias("authors"),
+        revision,
+        compiled.value,
+        previous=(),
+        approved=(),
+        target_registry=SourceAlias(registry_alias),
+    )
+    assert isinstance(scanned, Ok), scanned
+    bundles = tuple(
+        dataclasses.replace(bundle, candidate=assess_candidate(bundle.candidate))
+        for bundle in scanned.value.active
+    )
+    assert len(bundles) == len(names), bundles
+    base = empty_registry_snapshot()
+    evidence = tuple(
+        (
+            bundle.candidate.id,
+            PromotionEvidence(
+                ObjectDigest("sha256", "7" * 64),
+                ObjectDigest("sha256", "8" * 64),
+                (),
+            ),
+        )
+        for bundle in bundles
+    )
+    planned = plan_bulk_promotion(base, bundles, evidence=evidence, approved=())
+    assert isinstance(planned, Ok), planned
+    projected = project_promotion(base, planned.value)
+    assert isinstance(projected, Ok), projected
+    return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, projected.value.entries)
+
+
+def write_snapshot(root: Path, snapshot: SourceSnapshot) -> Path:
+    """Materialize a snapshot as a real checkout, so a CLI gate can read what a fixture built."""
+
+    for entry in snapshot.entries:
+        path = root / str(entry.path)
+        if entry.kind is SnapshotEntryKind.DIRECTORY:
+            path.mkdir(parents=True, exist_ok=True)
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(entry.content)
+        if entry.executable:
+            path.chmod(path.stat().st_mode | 0o111)
+    return root

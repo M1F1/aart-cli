@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.marketplace.search import (
+from aart_cli.marketplace.search import (
     Document,
     Hit,
     match,

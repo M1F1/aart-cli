@@ -2,17 +2,17 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts.application.store import (
+from aart_cli.application.store import (
     ReferenceUpdatePorts,
     ReferenceUpdateRequest,
     StoreGcPorts,
     collect_garbage,
     replace_references,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.store.model import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.domain.result import Err, Ok
+from aart_cli.store.model import (
     GcRequest,
     ObjectInventory,
     ObjectReference,

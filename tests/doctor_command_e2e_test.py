@@ -1,4 +1,4 @@
-"""CP-16: ``aart doctor`` measures installed state and proposes only minimal repairs.
+"""CP-16: ``aart-cli doctor`` measures installed state and proposes only minimal repairs.
 
 The fixture installs through the public configured-registry command and then changes the file a
 harness actually reads.  Doctor therefore has to derive both the healthy answer and the drifted
@@ -22,7 +22,7 @@ SECOND_MANIFEST = {
     "artifact": {**SKILL_MANIFEST["artifact"], "name": "documentation"},
 }
 SECOND_AUTHORED_SKILL: tuple[tuple[str, str], ...] = (
-    ("documentation/aart.json", json.dumps(SECOND_MANIFEST)),
+    ("documentation/aart-cli.json", json.dumps(SECOND_MANIFEST)),
     ("documentation/SKILL.md", "# Documentation\n\nExplain the public contract.\n"),
     ("documentation/reference/style.md", "Prefer one observable example.\n"),
 )
@@ -69,7 +69,7 @@ class DoctorCommandE2ETest(unittest.TestCase):
 
         with _environment() as env:
             self._two_installations(env)
-            changed = env.project / ".claude/skills/documentation/SKILL.md"
+            changed = env.project / ".claude/skills/documentation-company-project/SKILL.md"
             changed.chmod(0o600)
             changed.write_text("# changed outside AART\n", encoding="utf-8")
 
@@ -100,7 +100,7 @@ class DoctorCommandE2ETest(unittest.TestCase):
     def test_the_human_report_names_every_artifact_and_explains_the_drift(self) -> None:
         with _environment() as env:
             self._two_installations(env)
-            changed = env.project / ".claude/skills/documentation/SKILL.md"
+            changed = env.project / ".claude/skills/documentation-company-project/SKILL.md"
             changed.chmod(0o600)
             changed.write_text("# changed outside AART\n", encoding="utf-8")
 

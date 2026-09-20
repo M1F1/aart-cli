@@ -7,8 +7,9 @@ refusal has to say so.  "requires missing" reads as "not published yet", so a ma
 waits for a publication that will never make the build pass.
 
 These tests hold the wording to the rule: every refusal is produced by the real planning path, never
-by a literal written here, and the two shapes a maintainer can actually be in are distinguished —
-an identity this registry does not publish at all, and one it references from another origin.
+by a literal written here.  `CP-26.5` removed the second site of the rule along with the retired
+workspace's compiled index, so the graph validator is bound into the approved representation's own
+maintenance path and checked there (`D-325`).
 """
 
 from __future__ import annotations
@@ -16,61 +17,56 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SourceSnapshot
-from agent_artifacts.protocol.registry_index import (
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.native_tree import SnapshotEntry, SourceSnapshot
+from aart_cli.protocol.registry_index import (
     index_artifact_from_package,
     validate_registry_graph,
 )
-from agent_artifacts.protocol.registry_schema import parse_registry_manifest
-from agent_artifacts.protocol.semver import parse_semver
-from agent_artifacts.registry_maintenance.planning import registry_native_content
+from aart_cli.protocol.registry_schema import parse_registry_manifest
+from aart_cli.protocol.semver import parse_semver
+from aart_cli.registry_maintenance.planning import registry_native_content
 from tests.registry_index_test import _digest, _package
 from tests.registry_maintenance_fixtures import (
     append_snapshot_file,
-    registry_with_owned_package,
+    approved_registry_snapshot,
     replace_snapshot_file,
     snapshot_file,
 )
 from tests.source_remediation_test import _COMMAND, _parse_failure
 
-_OWNED_MANIFEST = "artifacts/skill/code-review/artifact.json"
-_ELSEWHERE = "https://github.com/example/other-registry.git"
+_OWNED = "mcp/github-mcp"
 
 
-def _requiring(name: str) -> SourceSnapshot:
-    """A registry that owns one package, which requires ``skill/<name>``."""
+def _collection(name: str, *members: str) -> bytes:
+    return json.dumps(
+        {
+            "schema_version": 1,
+            "name": name,
+            "summary": "One collection.",
+            "artifacts": [
+                {"type": member.split("/")[0], "name": member.split("/")[1]} for member in members
+            ],
+        }
+    ).encode()
 
-    snapshot = registry_with_owned_package()
-    document = json.loads(snapshot_file(snapshot, _OWNED_MANIFEST))
-    document["requires"] = [{"type": "skill", "name": name}]
-    return replace_snapshot_file(snapshot, _OWNED_MANIFEST, json.dumps(document).encode())
 
+def _with_collection(name: str, *members: str) -> SourceSnapshot:
+    """An approved Registry that declares a collection root and holds one collection in it."""
 
-def _referencing(snapshot: SourceSnapshot, name: str) -> SourceSnapshot:
-    """The same registry, now referencing ``skill/<name>`` from another repository."""
-
-    entry = {
-        "schema_version": 1,
-        "type": "skill",
-        "name": name,
-        "source": {
-            "kind": "git",
-            "url": _ELSEWHERE,
-            "ref": "main",
-            "path": f"artifacts/skill/{name}",
-        },
-        "review": {"status": "approved", "policy": "company-review-v1"},
-    }
-    return append_snapshot_file(snapshot, f"entries/skill/{name}.json", json.dumps(entry).encode())
+    registry = approved_registry_snapshot()
+    source = json.loads(snapshot_file(registry, "aart-cli-source.json"))
+    source["collection_roots"] = ["collections"]
+    declared = replace_snapshot_file(registry, "aart-cli-source.json", json.dumps(source).encode())
+    return append_snapshot_file(declared, f"collections/{name}.json", _collection(name, *members))
 
 
 def _compiled(snapshot: SourceSnapshot):
-    """Compile the workspace's owned content exactly as every maintainer command does."""
+    """Compile the registry's own content exactly as every maintainer command does."""
 
     files: dict[str, SnapshotEntry] = {str(entry.path): entry for entry in snapshot.entries}
-    registry = parse_registry_manifest(files["aart-registry.json"].content)
+    registry = parse_registry_manifest(files["aart-cli-registry.json"].content)
     assert isinstance(registry, Ok), registry
     version = parse_semver("2.1.0")
     assert isinstance(version, Ok), version
@@ -91,62 +87,64 @@ def _refusal(result) -> tuple[str, tuple[str, ...]]:
 
 
 class DependencyScopeRefusalTest(unittest.TestCase):
-    def test_a_dependency_the_registry_does_not_publish_states_the_rule(self) -> None:
-        message, remediation = _refusal(_compiled(_requiring("helper")))
-
-        self.assertIn("skill/code-review requires skill/helper", message)
-        self.assertIn("this registry does not publish", message)
-        self.assertIn("requires resolves inside one registry", message)
-        self.assertNotIn("missing", message)
-        self.assertTrue(remediation)
-
-    def test_a_referenced_dependency_is_not_reported_as_an_absent_one(self) -> None:
-        """The two cases have different fixes, so they are not allowed to read alike.
-
-        A promoted reference is published by this registry — a consumer can install it — and is
-        still not something this registry's own dependency graph can resolve.  Told "does not
-        publish", a maintainer looking at their own `entries/` directory would have every reason to
-        think AART was simply wrong.
-        """
-
-        message, _remediation = _refusal(_compiled(_referencing(_requiring("helper"), "helper")))
-
-        self.assertIn(_ELSEWHERE, message)
-        self.assertIn("rather than owning", message)
-        self.assertNotIn("does not publish", message)
-
-    def test_a_referenced_dependency_is_still_refused(self) -> None:
-        """The refusal documents the restriction; it does not lift it."""
-
-        self.assertIsInstance(_compiled(_referencing(_requiring("helper"), "helper")), Err)
-
-    def test_the_registry_builds_when_the_dependency_is_owned(self) -> None:
-        """The rule refuses one thing only: the workspace it is meant to accept still compiles."""
-
-        self.assertIsInstance(_compiled(registry_with_owned_package()), Ok)
-
-    def test_the_index_graph_refuses_with_the_same_words(self) -> None:
-        """The second site of the same rule, reached when an index is generated or parsed."""
-
+    def test_the_index_graph_refuses_a_dependency_the_registry_does_not_publish(self) -> None:
         artifact = index_artifact_from_package(
             _package("review", requires=[{"type": "skill", "name": "helper"}]),
             source_id=SourceId("company-registry"),
             object_digest=_digest("3"),
         )
 
-        indexed = validate_registry_graph((artifact,), ())
+        message, remediation = _refusal(validate_registry_graph((artifact,), ()))
 
-        message, remediation = _refusal(indexed)
         self.assertIn("skill/review requires skill/helper", message)
         self.assertIn("this registry does not publish", message)
+        self.assertIn("requires resolves inside one registry", message)
+        self.assertNotIn("missing", message)
         self.assertTrue(remediation)
+
+
+class ApprovedRegistryGraphTest(unittest.TestCase):
+    """`CP-26.5`: the rule's second site moved with the representation, it did not disappear.
+
+    `build_registry_index` compiled the retired workspace's catalog and was where the maintenance
+    path met `validate_registry_graph`. Deleting it would have left the approved representation with
+    no graph check at all, so `registry_native_content` calls the validator directly (`D-325`).
+    """
+
+    def test_an_approved_registry_with_nothing_unresolved_compiles(self) -> None:
+        self.assertIsInstance(_compiled(approved_registry_snapshot()), Ok)
+
+    def test_a_collection_naming_an_artifact_the_registry_does_not_publish_is_refused(self) -> None:
+        message, _remediation = _refusal(_compiled(_with_collection("essentials", "mcp/absent")))
+
+        self.assertIn("absent", message)
+
+    def test_membership_reaches_the_maintenance_path_derived_rather_than_declared(self) -> None:
+        compiled = _compiled(_with_collection("essentials", _OWNED))
+
+        assert isinstance(compiled, Ok), compiled
+        artifacts, collections = compiled.value
+        self.assertEqual(tuple(item.name for item in collections), ("essentials",))
+        self.assertEqual(
+            {str(item.identity): item.collections for item in artifacts},
+            {_OWNED: ("essentials",)},
+        )
 
 
 class DependencyScopeRemediationTest(unittest.TestCase):
     """Every command the remediation names must exist."""
 
+    def _remediation(self) -> tuple[str, ...]:
+        artifact = index_artifact_from_package(
+            _package("review", requires=[{"type": "skill", "name": "helper"}]),
+            source_id=SourceId("company-registry"),
+            object_digest=_digest("3"),
+        )
+        _message, remediation = _refusal(validate_registry_graph((artifact,), ()))
+        return remediation
+
     def test_every_command_the_remediation_names_is_one_the_parser_accepts(self) -> None:
-        _message, remediation = _refusal(_compiled(_requiring("helper")))
+        remediation = self._remediation()
 
         commands = tuple(match for line in remediation for match in _COMMAND.findall(line))
         self.assertTrue(commands, f"remediation names no command: {remediation}")
@@ -155,19 +153,13 @@ class DependencyScopeRemediationTest(unittest.TestCase):
             self.assertIsNone(failure, f"`{command}` is not accepted: {failure}")
 
     def test_the_remediation_names_the_route_that_works_in_this_release(self) -> None:
-        """Publishing it here is the route; promoting it is named for what it actually does.
+        """The dependency is authored outside the Registry, then scanned and promoted."""
 
-        `registry promote-native` puts a foreign package in this registry for consumers to install,
-        and a promoted identity is *not* a `requires` target — proved by
-        `test_a_referenced_dependency_is_still_refused`.  Offering it as the fix for this refusal
-        would send the maintainer to a command that cannot resolve their build.
-        """
+        joined = " ".join(self._remediation())
 
-        _message, remediation = _refusal(_compiled(_requiring("helper")))
-        joined = " ".join(remediation)
-
-        self.assertIn("aart registry scaffold", joined)
-        self.assertIn("does not", joined)
+        self.assertIn("aart-cli registry scan", joined)
+        self.assertIn("aart-cli registry promote", joined)
+        self.assertIn("copy the upstream content into an artifact this registry owns", joined)
 
 
 if __name__ == "__main__":

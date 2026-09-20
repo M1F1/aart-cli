@@ -19,7 +19,10 @@ from tests.credential_fixtures import assignment
 from tests.script_fixtures import ROOT
 from tests.script_fixtures import load_script as _load_script
 
-REFERENCE_ORIGIN = "https://github.com/M1F1/agent-artifacts-registry.git"
+# A neutral example. It used to be the maintainer's own registry, which was also the script's
+# shipped default, so the fixture agreed with the constant rather than testing anything about the
+# variable that now carries it (D-309).
+REFERENCE_ORIGIN = "https://example.invalid/company/aart-registry.git"
 REFERENCE_COMMIT = "a" * 40
 
 
@@ -36,7 +39,7 @@ def _fixture_root(raw: str, release, *, version: str = FIXTURE_VERSION) -> Path:
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
-    package = root / "agent_artifacts"
+    package = root / "aart_cli"
     package.mkdir(exist_ok=True)
     (package / "__init__.py").write_text(f'__version__ = "{version}"\n', encoding="utf-8")
     (root / "pyproject.toml").write_text(
@@ -142,10 +145,24 @@ class TheDeclaredSchemaInputsExistTest(unittest.TestCase):
         release = _load_script("release")
 
         self.assertTrue(release.SCHEMA_INPUTS)
-        self.assertFalse((ROOT / "agent_artifacts" / "no_such_schema.py").is_file())
+        self.assertFalse((ROOT / "aart_cli" / "no_such_schema.py").is_file())
 
 
 class ReleaseChecklistTest(unittest.TestCase):
+    def setUp(self) -> None:
+        """Name the registry this release publishes to, because nothing names it for you.
+
+        The checklist used to fall back to the maintainer's own registry when the variable was
+        unset, so these fixtures passed by agreeing with a constant nobody had set (D-309). A real
+        release run sets it -- the workflow clones exactly what it names -- and so does this.
+        """
+
+        patch = unittest.mock.patch.dict(
+            os.environ, {"REFERENCE_REGISTRY_URL": REFERENCE_ORIGIN}, clear=False
+        )
+        patch.start()
+        self.addCleanup(patch.stop)
+
     def test_complete_stable_tree_and_registry_return_deterministic_pass_receipt(self) -> None:
         release = _load_script("release")
         with tempfile.TemporaryDirectory() as raw:
@@ -181,7 +198,7 @@ class ReleaseChecklistTest(unittest.TestCase):
             root = _fixture_root(raw, release)
             registry = root / "reference-registry"
             registry.mkdir()
-            (root / "agent_artifacts/__init__.py").write_text("# no version\n", encoding="utf-8")
+            (root / "aart_cli/__init__.py").write_text("# no version\n", encoding="utf-8")
             (root / release.REQUIRED_RELEASE_DOCS[0]).unlink()
             schema = root / release.SCHEMA_INPUTS[0]
             schema.write_bytes(schema.read_bytes() + b"\n# changed after freeze\n")
@@ -442,7 +459,10 @@ class ReleaseChecklistTest(unittest.TestCase):
         self.assertNotIn(
             "registry-origin-invalid", codes(REFERENCE_REGISTRY_URL=fork_origin + ".git")
         )
-        self.assertEqual(release.approved_registry_origin(), release.REFERENCE_REGISTRY_ORIGIN)
+        # Unset is no longer a fifth registry: there is nothing approved to reconcile against, and
+        # the diagnostic says so rather than naming somebody else's repository (CP-26.17, D-309).
+        with unittest.mock.patch.dict(os.environ, {"REFERENCE_REGISTRY_URL": ""}, clear=False):
+            self.assertEqual(release.approved_registry_origin(), "")
 
     def test_scrubbed_environment_reads_no_config_yet_trusts_the_directory_it_runs_in(
         self,
@@ -667,7 +687,7 @@ class WheelDigestArtifactTest(unittest.TestCase):
         inject = _load_script("inject_commit")
 
         with zipfile.ZipFile(self._written_wheel()) as archive:
-            stamp = archive.read("agent_artifacts/_commit.py").decode("utf-8")
+            stamp = archive.read("aart_cli/_commit.py").decode("utf-8")
 
         # The tracked source says `unknown`; `build_wheel.py` run in the checkout packages that.
         self.assertIn(f'COMMIT = "{inject.current_commit()}"', stamp)

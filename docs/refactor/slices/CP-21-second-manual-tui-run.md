@@ -194,13 +194,13 @@ Tests: `tests/source_partial_compilation_test.py` and `tests/source_sync_refusal
 `D-228` made publication AART's work, and this builds it from the bottom. Three layers landed, and
 the fourth is deliberately not started because Codex holds the screens it would touch.
 
-`agent_artifacts/domain/publication.py` decides the rule from two strings and nothing else — what
+`aart_cli/domain/publication.py` decides the rule from two strings and nothing else — what
 was asked for, and what a subscriber reads — so the refusal needs no repository and no network.
 `refs/heads/main`, `HEAD` and `Main` are the default branch under other spellings rather than three
-separate targets, and each is refused as such. `agent_artifacts/application/registry_publication.py`
+separate targets, and each is refused as such. `aart_cli/application/registry_publication.py`
 binds one reviewed revision to one branch on one remote; `force`, `merge`, `fast_forward` and
 `delete` are absent from the command rather than refused by it, and a test asserts that absence.
-`agent_artifacts/io/registry_publication.py` pushes `<revision>:refs/heads/<branch>`, so the reviewed
+`aart_cli/io/registry_publication.py` pushes `<revision>:refs/heads/<branch>`, so the reviewed
 commit moves rather than whatever `HEAD` has become, and it makes the default-branch refusal a
 second time from the remote's own advertised `HEAD` — because a configured ref can disagree with the
 remote it names, and the branch that must never move is the one the remote calls default.
@@ -468,7 +468,7 @@ The operator asked for the full suites to be deferred to the end of the batch ra
 every step, so this step is where that debt is paid, and where the advisory mutation run over the
 module step 8 changed is finally read rather than skimmed.
 
-**What `make mutants` found.** The scoped run over `agent_artifacts/io/artifact_placement.py`
+**What `make mutants` found.** The scoped run over `aart_cli/io/artifact_placement.py`
 generated 390 mutants and left 99 alive. Fifteen of them were inside
 `_declared_narrowing`, the function step 8 added, and reading them named three claims the step had
 made in prose and held nowhere:

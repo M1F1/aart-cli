@@ -20,20 +20,20 @@ class MutationScopeTest(unittest.TestCase):
         )
 
         self.assertIn("source_paths = scripts\n", section)
-        self.assertNotIn("source_paths = agent_artifacts\n", section)
+        self.assertNotIn("source_paths = aart_cli\n", section)
 
     def test_multiple_source_roots_are_each_copied_once(self) -> None:
         section = mutants._section(
             [
                 "scripts/release_artifact.py",
-                "agent_artifacts/runtime_contract.py",
+                "aart_cli/runtime_contract.py",
                 "scripts/conventional_title.py",
             ],
             [],
         )
 
         self.assertIn(
-            "source_paths =\n    agent_artifacts\n    scripts\n",
+            "source_paths =\n    aart_cli\n    scripts\n",
             section,
         )
 

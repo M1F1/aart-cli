@@ -7,27 +7,27 @@ from pathlib import Path
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
-from agent_artifacts.domain.identifiers import SourceAlias, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.protocol.capabilities import parse_capability
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.domain.identifiers import SourceAlias, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.protocol.capabilities import parse_capability
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.protocol.semver import parse_semver
-from agent_artifacts.sources.local import read_local_snapshot
-from agent_artifacts.sources.model import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.protocol.semver import parse_semver
+from aart_cli.sources.local import read_local_snapshot
+from aart_cli.sources.model import (
     LocalSnapshotRequest,
     SnapshotLimits,
     SourceInstanceId,
     SourceValidationRequest,
     make_source_candidate,
 )
-from agent_artifacts.sources.validation import (
+from aart_cli.sources.validation import (
     validate_authoring_source_candidate,
     validate_source_candidate,
 )
@@ -89,7 +89,7 @@ class SourceValidationTest(unittest.TestCase):
 
     def test_corrupt_source_marker_is_rejected_without_mutating_acquired_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as root:
-            marker = Path(root) / "aart-source.json"
+            marker = Path(root) / "aart-cli-source.json"
             marker.write_bytes(
                 b'{"schema_version":1,' + secret_field("token", "secret").encode("utf-8")
             )
@@ -115,7 +115,7 @@ class AuthoringSourceAdmissionRuleTest(unittest.TestCase):
 
     `authoring_source_admission_e2e_test` proves the public command admits one real repository.
     This proves the rule that made it do so is a rule: for *any* tree carrying no
-    `aart-source.json`, admission is exactly whether an explicit manifest basename is present
+    `aart-cli-source.json`, admission is exactly whether an explicit manifest basename is present
     anywhere in it (INV-201), and the alias is the identity a tree that declares none receives.
     """
 
@@ -151,7 +151,9 @@ class AuthoringSourceAdmissionRuleTest(unittest.TestCase):
                     min_size=0,
                     max_size=3,
                 ).map(tuple),
-                st.sampled_from(("aart.yaml", "aart.json", "README.md", "server.py", "SKILL.md")),
+                st.sampled_from(
+                    ("aart-cli.yaml", "aart-cli.json", "README.md", "server.py", "SKILL.md")
+                ),
             ),
             min_size=1,
             max_size=6,
@@ -170,12 +172,12 @@ class AuthoringSourceAdmissionRuleTest(unittest.TestCase):
             entries.append(_entry("/".join((*parts, name))))
         # Two manifest spellings in one directory is a tree-shape refusal of its own, and it is
         # discovery's to make, not this rule's; excluding it keeps the property about admission.
-        both = any({"aart.yaml", "aart.json"} <= names for names in by_directory.values())
+        both = any({"aart-cli.yaml", "aart-cli.json"} <= names for names in by_directory.values())
         snapshot = SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries))
 
         result = validate_authoring_source_candidate(self._configured(), self._request(snapshot))
 
-        declared = any(name in {"aart.yaml", "aart.json"} for _, name in raw)
+        declared = any(name in {"aart-cli.yaml", "aart-cli.json"} for _, name in raw)
         if both:
             self.assertIsInstance(result, Err)
         elif declared:
@@ -191,8 +193,8 @@ class AuthoringSourceAdmissionRuleTest(unittest.TestCase):
         snapshot = SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _entry("aart-source.json", b"{ not json\n"),
-                _entry("skills/review/aart.yaml", b"schema: aart.dev/skill/v1\n"),
+                _entry("aart-cli-source.json", b"{ not json\n"),
+                _entry("skills/review/aart-cli.yaml", b"schema: aart-cli.dev/skill/v1\n"),
             ),
         )
 

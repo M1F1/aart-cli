@@ -16,12 +16,12 @@ import unittest
 from contextlib import contextmanager
 from typing import Iterator
 
-from agent_artifacts.application.maintainer_views import MaintainerPublicationState
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.configuration.policy import EffectiveConfiguration
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.maintainer_views import read_maintainer_views
-from agent_artifacts.io.registry_workspace import read_registry_workspace
+from aart_cli.application.maintainer_views import MaintainerPublicationState
+from aart_cli.configuration.model import SourceKind
+from aart_cli.configuration.policy import EffectiveConfiguration
+from aart_cli.domain.result import Ok
+from aart_cli.io.maintainer_views import read_maintainer_views
+from aart_cli.io.registry_workspace import read_registry_workspace
 from tests.marketplace_fixtures import configured_source, effective_configuration
 
 
@@ -58,8 +58,8 @@ def _workspace(*, marker: str | None = None) -> Iterator[pathlib.Path]:
         _git(root, "config", "user.name", "AART Test")
         _git(root, "config", "user.email", "aart@example.invalid")
         if marker is not None:
-            (root / "aart-registry.json").write_text(marker, encoding="utf-8")
-            _git(root, "add", "aart-registry.json")
+            (root / "aart-cli-registry.json").write_text(marker, encoding="utf-8")
+            _git(root, "add", "aart-cli-registry.json")
             _git(root, "commit", "-m", "Initialize registry")
         yield root
 
@@ -148,7 +148,7 @@ class RegistryWorkspaceReaderTest(unittest.TestCase):
     def test_a_registry_no_git_ever_touched_is_left_unobserved(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary).resolve()
-            (root / "aart-registry.json").write_text(_manifest(), encoding="utf-8")
+            (root / "aart-cli-registry.json").write_text(_manifest(), encoding="utf-8")
 
             view = read_registry_workspace(str(root))
 

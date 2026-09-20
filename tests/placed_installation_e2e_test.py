@@ -23,35 +23,35 @@ import tempfile
 import unittest
 from datetime import date
 
-from agent_artifacts.application.execution import (
+from aart_cli.application.execution import (
     ExecutionStatus,
     InstallationExecutionStatus,
     execute_repair,
 )
-from agent_artifacts.application.installed_state import removal_state_from_placement
-from agent_artifacts.application.reconciliation import plan_repair
-from agent_artifacts.configuration.model import SourceKind
-from agent_artifacts.domain.harness import Scope
-from agent_artifacts.domain.identifiers import ArtifactIdentity, SourceId
-from agent_artifacts.domain.placement import artifact_root
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.reconciliation import Component, ComponentId
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.domain.selection import (
+from aart_cli.application.installed_state import removal_state_from_placement
+from aart_cli.application.reconciliation import plan_repair
+from aart_cli.configuration.model import SourceKind
+from aart_cli.domain.harness import Scope, managed_tree_target
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceId
+from aart_cli.domain.installation_tree import installation_tree_root
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.reconciliation import Component, ComponentId
+from aart_cli.domain.result import Ok
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     VersionConstraint,
 )
-from agent_artifacts.io.configured_installation_action import (
+from aart_cli.io.configured_installation_action import (
     InstallationHost,
     complete_configured_installation,
     prepare_configured_installation,
 )
-from agent_artifacts.io.harness import LocalHarnessRegistry
-from agent_artifacts.io.installation_execution import interpreters_for
-from agent_artifacts.io.installation_observation import observe_planned_installation
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.sources.model import (
+from aart_cli.io.harness import LocalHarnessRegistry
+from aart_cli.io.installation_execution import interpreters_for
+from aart_cli.io.installation_observation import observe_planned_installation
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
     make_source_candidate,
@@ -65,7 +65,7 @@ from tests.marketplace_fixtures import configured_source, effective_configuratio
 TODAY = date(2026, 8, 31)
 
 SKILL_MANIFEST = {
-    "schema": "aart.dev/skill/v1",
+    "schema": "aart-cli.dev/skill/v1",
     "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
     "payload": {"include": ["SKILL.md", "reference/style.md"]},
     "compatibility": {"harnesses": ["claude"]},
@@ -74,8 +74,21 @@ SKILL_MANIFEST = {
 SKILL_BODY = "# Code review\n\nRead reference/style.md before commenting.\n"
 STYLE_BODY = "Prefer naming the failure over describing the code.\n"
 
+
+def as_delivered(body: str, name: str = "code-review-company-project") -> str:
+    """The same Skill as the harness reads it: the authored body under this install's name.
+
+    Every test that asserts which version reached a harness has to spell this, because the
+    delivered copy is not byte-for-byte the authored one -- a Skill's document names the
+    directory it was delivered into (`§169.7`), and the directory is named for the
+    installation rather than for the artifact.
+    """
+
+    return f'---\nname: {name}\ndescription: "Code review"\n---\n\n{body}'
+
+
 AUTHORED_SKILL: tuple[tuple[str, str], ...] = (
-    ("code-review/aart.json", json.dumps(SKILL_MANIFEST)),
+    ("code-review/aart-cli.json", json.dumps(SKILL_MANIFEST)),
     ("code-review/SKILL.md", SKILL_BODY),
     ("code-review/reference/style.md", STYLE_BODY),
 )
@@ -160,14 +173,16 @@ class PlacedInstallationTest(unittest.TestCase):
 
     @property
     def delivered(self) -> pathlib.Path:
-        return pathlib.Path(self.project_root) / ".claude/skills/code-review"
+        return pathlib.Path(self.project_root) / ".claude/skills/code-review-company-project"
 
-    def _installed_root(self, prepared) -> str:
-        return artifact_root(
+    def _installed_root(self, prepared, harness: str = "claude") -> str:
+        """The tree one installation owns, under the harness that selected it (§169.3)."""
+
+        return installation_tree_root(
             prepared.action.installations[0].coordinate,
-            Scope.PROJECT,
-            project_root=self.project_root,
-            data_root=self.data_root,
+            harness_root=os.path.join(
+                self.project_root, managed_tree_target(harness, Scope.PROJECT).directory
+            ),
         )
 
     # -- what the install has to be true of ---------------------------------------------------
@@ -187,10 +202,12 @@ class PlacedInstallationTest(unittest.TestCase):
         self.assertFalse(self.delivered.exists(), "planning delivered before anybody confirmed")
         self.assertFalse(pathlib.Path(self._installed_root(prepared)).exists())
 
-    def test_installing_puts_the_authored_files_where_the_harness_reads_them(self) -> None:
+    def test_installing_projects_the_name_only_in_the_private_copy_the_harness_reads(self) -> None:
         self._install()
 
-        self.assertEqual(SKILL_BODY, (self.delivered / "SKILL.md").read_text(encoding="utf-8"))
+        installed = (self.delivered / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("name: code-review-company-project\n", installed)
+        self.assertTrue(installed.endswith(SKILL_BODY))
         self.assertEqual(
             STYLE_BODY,
             (self.delivered / "reference/style.md").read_text(encoding="utf-8"),
@@ -205,9 +222,10 @@ class PlacedInstallationTest(unittest.TestCase):
         payload = pathlib.Path(self._installed_root(prepared)) / "payload"
 
         self.assertFalse(self.delivered.is_symlink())
-        self.assertEqual(
-            (payload / "SKILL.md").read_text(encoding="utf-8"),
-            (self.delivered / "SKILL.md").read_text(encoding="utf-8"),
+        self.assertEqual(SKILL_BODY, (payload / "SKILL.md").read_text(encoding="utf-8"))
+        self.assertNotEqual(
+            (payload / "SKILL.md").read_bytes(),
+            (self.delivered / "SKILL.md").read_bytes(),
         )
 
     def test_nothing_is_launched_registered_or_given_an_interpreter(self) -> None:
@@ -303,7 +321,7 @@ class PlacedInstallationTest(unittest.TestCase):
 
 
 def _receipt(planned):
-    from agent_artifacts.application.installation_proposal import intended_placement_receipt
+    from aart_cli.application.installation_proposal import intended_placement_receipt
 
     return intended_placement_receipt(planned)
 

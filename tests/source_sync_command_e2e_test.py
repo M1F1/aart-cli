@@ -1,16 +1,16 @@
-"""CP-15: `aart source sync` over a real source whose upstream turned invalid.
+"""CP-15: `aart-cli source sync` over a real source whose upstream turned invalid.
 
 INV-218 — *invalid fetched registry state cannot replace last-known-good state* — is already held
 at two seams below the CLI: `source_store_adapter_test` proves a corrupt convergent snapshot never
 becomes `current`, and `source_sync_application_test` proves a validation failure publishes nothing.
-Both drive the seam directly. Nothing drove `aart source sync`, the verb an operator actually runs,
+Both drive the seam directly. Nothing drove `aart-cli source sync`, the verb an operator actually runs,
 over a real source that changed under it — so the invariant was held by the machinery and unproven
 at the surface that uses it.
 
 That surface is where the invariant is worth something. A refusal that leaves the store correct and
 the *Marketplace* empty would satisfy every seam test above and still take the operator's registry
 away; so would one that left an installation half-rebound to a snapshot that was never accepted.
-These tests corrupt the upstream the way a publisher actually can — a root `aart-registry.json`
+These tests corrupt the upstream the way a publisher actually can — a root `aart-cli-registry.json`
 that no longer parses — run the public verb, and then ask the other public verbs what
 the machine still knows.
 """
@@ -27,9 +27,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts import cli
-from agent_artifacts.io.source_store import read_current_source
-from agent_artifacts.sources.model import (
+from aart_cli import cli
+from aart_cli.io.source_store import read_current_source
+from aart_cli.sources.model import (
     CurrentSourceRequest,
     source_instance_id,
     source_store_paths,
@@ -83,7 +83,7 @@ def _break_upstream(location: Path) -> None:
     there would be nothing to tell the two snapshots apart.
     """
 
-    (location / "aart-registry.json").write_text("{ not json", encoding="utf-8")
+    (location / "aart-cli-registry.json").write_text("{ not json", encoding="utf-8")
     (location / "artifacts" / "skill" / "code-review" / "payload" / "SKILL.md").write_text(
         "# Code Review\n\nRevision published with an unreadable registry marker.\n",
         encoding="utf-8",
@@ -191,14 +191,14 @@ class RefusedSyncKeepsLastKnownGoodTest(unittest.TestCase):
             env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
             installed = env.project / ".claude" / "skills" / "code-review" / "SKILL.md"
             before = installed.read_bytes()
-            recorded = json.loads((env.project / ".agent-artifacts" / "manifest.json").read_text())
+            recorded = json.loads((env.project / ".aart-cli" / "manifest.json").read_text())
             _break_upstream(location)
 
             _source_json(env, "source", "sync")
 
             self.assertEqual(installed.read_bytes(), before)
             self.assertEqual(
-                json.loads((env.project / ".agent-artifacts" / "manifest.json").read_text()),
+                json.loads((env.project / ".aart-cli" / "manifest.json").read_text()),
                 recorded,
             )
             code, status = env.run("marketplace", "status", "--profile", "claude")
@@ -257,7 +257,7 @@ class RefusedSyncKeepsLastKnownGoodTest(unittest.TestCase):
             good = _current_digest(env)
             _break_upstream(location)
             self.assertEqual(_source_json(env, "source", "sync")[0], 1)
-            (location / "aart-registry.json").unlink()
+            (location / "aart-cli-registry.json").unlink()
             (location / "artifacts" / "skill" / "code-review" / "payload" / "SKILL.md").write_text(
                 "# Code Review\n\nSecond revision.\n", encoding="utf-8"
             )

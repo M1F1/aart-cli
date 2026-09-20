@@ -5,15 +5,15 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.application.candidate_validation import validate_candidate
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.candidate_validation import validate_candidate
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     project_dashboard,
 )
-from agent_artifacts.application.maintainer import CandidateBundle
-from agent_artifacts.application.maintainer_views import (
+from aart_cli.application.maintainer import CandidateBundle
+from aart_cli.application.maintainer_views import (
     MaintainerScreen,
     MaintainerViews,
     project_maintainer_candidate_lifecycle,
@@ -21,9 +21,9 @@ from agent_artifacts.application.maintainer_views import (
     project_maintainer_dashboard,
     project_maintainer_provenance,
 )
-from agent_artifacts.application.promotion import PromotionSourceKind
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from aart_cli.application.promotion import PromotionSourceKind
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
 from tests.maintainer_candidate_shell_test import _projected_source
 from tests.maintainer_promotion_test import _LOCAL_REVISION, _scan
 
@@ -38,8 +38,8 @@ class MaintainerProvenanceProjectionTest(unittest.TestCase):
         self.assertEqual(view.source_url, "https://git.example/authors.git")
         self.assertEqual(view.git_revision, "a" * 40)
         self.assertIsNone(view.local_snapshot_digest)
-        self.assertEqual(view.manifest_path, "github/aart.json")
-        self.assertEqual(view.importer_id, "aart-native-author")
+        self.assertEqual(view.manifest_path, "github/aart-cli.json")
+        self.assertEqual(view.importer_id, "aart-cli-native-author")
         self.assertEqual(view.importer_version, "1.0.0")
         self.assertEqual(
             view.payload_paths,
@@ -144,7 +144,7 @@ class MaintainerProvenanceShellTest(unittest.TestCase):
 
         self.assertEqual(opened, [])
         self.assertIn("Pinned Git revision", drawn)
-        self.assertIn("aart-native-author 1.0.0", drawn)
+        self.assertIn("aart-cli-native-author 1.0.0", drawn)
         self.assertIn("payload/server.py", drawn)
 
 

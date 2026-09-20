@@ -2,7 +2,7 @@
 
 INV-191 makes Activity and Receipt the audit and recovery evidence. `project_activity`,
 `activity_from_receipts`, `activity_view_to_data` and `render_activity` all exist, and they are
-referenced by `application/consumer_session.py` and by nothing under `agent_artifacts/commands/` --
+referenced by `application/consumer_session.py` and by nothing under `aart_cli/commands/` --
 so the record of what AART did to a machine is reachable from the interactive shell and from
 nowhere else. Anyone reading a support report, or working on a box with no terminal to drive,
 cannot see it at all.

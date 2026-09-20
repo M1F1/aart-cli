@@ -17,19 +17,19 @@ import tempfile
 import unittest
 from unittest import mock
 
-from agent_artifacts import cli
-from agent_artifacts.configuration.model import (
+from aart_cli import cli
+from aart_cli.configuration.model import (
     SourceKind,
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.paths import Platform, resolve_config_paths
-from agent_artifacts.configuration.schema import user_configuration_bytes
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.registry import PromotionMode
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.sources.model import (
+from aart_cli.configuration.paths import Platform, resolve_config_paths
+from aart_cli.configuration.schema import user_configuration_bytes
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.result import Ok
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
     make_source_candidate,
@@ -38,7 +38,7 @@ from agent_artifacts.sources.model import (
 )
 from tests.configured_installation_draft_e2e_test import AuthoredSetup, _published_registry
 from tests.marketplace_fixtures import configured_source
-from tests.placed_installation_e2e_test import AUTHORED_SKILL, SKILL_BODY
+from tests.placed_installation_e2e_test import AUTHORED_SKILL, SKILL_BODY, as_delivered
 
 COORDINATE = "company/skill/code-review"
 
@@ -61,17 +61,13 @@ class _Environment:
         self.project.mkdir()
         self.xdg = {
             "HOME": str(self.home),
-            "XDG_CONFIG_HOME": str(self.home / ".config"),
-            "XDG_DATA_HOME": str(self.home / ".local/share"),
-            "XDG_CACHE_HOME": str(self.home / ".cache"),
+            "AART_CLI_HOME": str(self.home / ".aart-cli"),
         }
         platform = Platform.DARWIN if os.sys.platform == "darwin" else Platform.LINUX
         self.paths = resolve_config_paths(
             platform,
             home=str(self.home),
-            xdg_config_home=self.xdg["XDG_CONFIG_HOME"],
-            xdg_data_home=self.xdg["XDG_DATA_HOME"],
-            xdg_cache_home=self.xdg["XDG_CACHE_HOME"],
+            application_home=self.xdg["AART_CLI_HOME"],
         )
         self.source = configured_source("company", SourceKind.REGISTRY_GIT)
         configuration = UserConfiguration(1, (self.source,), self.source.alias, SyncSettings())
@@ -230,11 +226,13 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
             self.assertEqual(payload["review_digest"], review["review_digest"])
             self.assertEqual(payload["receipt"]["review_digest"], review["review_digest"])
             self.assertEqual(
-                (env.project / ".claude/skills/code-review/SKILL.md").read_text(encoding="utf-8"),
-                SKILL_BODY,
+                (env.project / ".claude/skills/code-review-company-project/SKILL.md").read_text(
+                    encoding="utf-8"
+                ),
+                as_delivered(SKILL_BODY),
             )
             self.assertFalse(
-                (env.project / ".agent-artifacts/manifest.json").exists(),
+                (env.project / ".aart-cli/manifest.json").exists(),
                 "the registry route fell back to the legacy install-state writer",
             )
             state = pathlib.Path(env.paths.data_root) / "state"
@@ -278,7 +276,7 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
                 "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(installed, 0)
-            delivered = env.project / ".claude/skills/code-review/SKILL.md"
+            delivered = env.project / ".claude/skills/code-review-company-project/SKILL.md"
             delivered.chmod(0o600)
             delivered.write_text("# changed after installation\n", encoding="utf-8")
 

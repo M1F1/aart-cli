@@ -10,10 +10,10 @@ import os
 import tempfile
 from types import SimpleNamespace
 
-from agent_artifacts.model import SetupQueueItem, SetupStateRecord
-from agent_artifacts.setup import rollback_command
-from agent_artifacts.setup_runtime import new_run_directory
-from agent_artifacts.setup_verify import (
+from aart_cli.model import SetupQueueItem, SetupStateRecord
+from aart_cli.setup import rollback_command
+from aart_cli.setup_runtime import new_run_directory
+from aart_cli.setup_verify import (
     BLOCK_PRESENT,
     FALSE,
     KEYCHAIN_HOLDS_VALUE,
@@ -28,7 +28,7 @@ from agent_artifacts.setup_verify import (
     verification_payload,
     verify_claims,
 )
-from agent_artifacts.setup_verify_probes import command_accepted, orphan_run_directories
+from aart_cli.setup_verify_probes import command_accepted, orphan_run_directories
 from tests.credential_fixtures import access_token
 from tests.function_cases import function_test_case
 
@@ -208,7 +208,7 @@ def test_laf61_an_orphaned_run_directory_is_named_and_not_removed() -> None:
 
     def orphans(plan_hash: str):
         seen.append(plan_hash)
-        return ("/p/.agent-artifacts/setup-runs/aaaaaaaaaaaaaaaa-xyz",)
+        return ("/p/.aart-cli/setup-runs/aaaaaaaaaaaaaaaa-xyz",)
 
     status, detail = _statuses(_record(), _probes(orphan_run_directories=orphans))[NO_ORPHAN_RUN]
 
@@ -326,7 +326,9 @@ def test_laf73_a_rollback_line_this_executable_rejects_is_reported_not_rewritten
     status, detail = statuses[ROLLBACK_COMMAND_RUNS]
 
     assert status == FALSE
-    assert "aart marketplace receipt undo mcp/x --profile claude --scope project --yes" in detail
+    assert (
+        "aart-cli marketplace receipt undo mcp/x --profile claude --scope project --yes" in detail
+    )
     assert record.rollback_command == before
 
 
@@ -362,7 +364,7 @@ def test_laf73_the_probe_rejects_the_sentence_and_accepts_the_command() -> None:
     assert command_accepted("no command reverses a completed setup; undo mcp/x") is False
     assert (
         command_accepted(
-            "aart marketplace receipt undo mcp/x --profile claude --scope project --yes"
+            "aart-cli marketplace receipt undo mcp/x --profile claude --scope project --yes"
         )
         is True
     )

@@ -12,23 +12,23 @@ from __future__ import annotations
 import shutil
 import unittest
 
-from agent_artifacts.application.promotion import (
+from aart_cli.application.promotion import (
     load_registry_versions,
     plan_registry_lifecycle,
     project_lifecycle_update,
 )
-from agent_artifacts.configuration.model import (
+from aart_cli.configuration.model import (
     SourceKind,
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.schema import user_configuration_bytes
-from agent_artifacts.domain.identifiers import SourceId
-from agent_artifacts.domain.registry import PromotionMode, deprecate_registry_version
-from agent_artifacts.domain.result import Ok
-from agent_artifacts.io.source_store import publish_source_snapshot
-from agent_artifacts.protocol.native_tree import SnapshotOrigin, SourceSnapshot
-from agent_artifacts.sources.model import (
+from aart_cli.configuration.schema import user_configuration_bytes
+from aart_cli.domain.identifiers import SourceId
+from aart_cli.domain.registry import PromotionMode, deprecate_registry_version
+from aart_cli.domain.result import Ok
+from aart_cli.io.source_store import publish_source_snapshot
+from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
+from aart_cli.sources.model import (
     SourcePublishCommand,
     ValidatedSourceCandidate,
     make_source_candidate,

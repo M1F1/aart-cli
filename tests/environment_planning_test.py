@@ -9,7 +9,7 @@ import unittest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.application.installation_planning import (
+from aart_cli.application.installation_planning import (
     NO_ALLOWED_REMEDIATION,
     POLICY_VIOLATION,
     REQUIREMENT_CONFLICT,
@@ -19,21 +19,21 @@ from agent_artifacts.application.installation_planning import (
     assess_requirements,
     prepare_install_plan,
 )
-from agent_artifacts.application.python_environment import select_python_installer
-from agent_artifacts.domain.candidates import CandidateId
-from agent_artifacts.domain.effects import (
+from aart_cli.application.python_environment import select_python_installer
+from aart_cli.domain.candidates import CandidateId
+from aart_cli.domain.effects import (
     ConfigureHarness,
     CopyTree,
     CreatePythonEnvironment,
     RiskClass,
 )
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
 )
-from agent_artifacts.domain.inspection import (
+from aart_cli.domain.inspection import (
     EnvironmentFact,
     EnvironmentFacts,
     FactState,
@@ -41,20 +41,20 @@ from agent_artifacts.domain.inspection import (
     RemediationCapabilityKind,
     environment_facts_to_data,
 )
-from agent_artifacts.domain.plans import PlannedRemediation, install_plan_to_data
-from agent_artifacts.domain.policies import EffectivePolicy, PolicyOverlay, compose_policy
-from agent_artifacts.domain.python_runtime import PyProjectSpec
-from agent_artifacts.domain.registry import (
+from aart_cli.domain.plans import PlannedRemediation, install_plan_to_data
+from aart_cli.domain.policies import EffectivePolicy, PolicyOverlay, compose_policy
+from aart_cli.domain.python_runtime import PyProjectSpec
+from aart_cli.domain.registry import (
     PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
 )
-from agent_artifacts.domain.remediations import (
+from aart_cli.domain.remediations import (
     ConfigureCredential,
     InstallPythonPackages,
     InstallRuntime,
 )
-from agent_artifacts.domain.requirements import (
+from aart_cli.domain.requirements import (
     CredentialRequirement,
     ExecutableRequirement,
     PythonPackageRequirement,
@@ -62,8 +62,8 @@ from agent_artifacts.domain.requirements import (
     RequirementState,
     RuntimeRequirement,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.domain.selection import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
     OwnershipKind,

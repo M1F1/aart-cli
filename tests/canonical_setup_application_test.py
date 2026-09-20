@@ -9,49 +9,49 @@ from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_artifacts.configuration.model import (
+from aart_cli.configuration.model import (
     OrganizationPolicy,
     SourceKind,
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.policy import RuntimeOverrides, apply_configuration
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.install_state.model import (
+from aart_cli.configuration.policy import RuntimeOverrides, apply_configuration
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.install_state.model import (
     ArtifactEvidence,
     EffectProof,
     InstallationRecord,
     InstallState,
     SourceEvidence,
 )
-from agent_artifacts.install_state.paths import install_state_paths
-from agent_artifacts.install_state.schema import install_state_bytes, parse_install_state
-from agent_artifacts.installation.io import _write_atomic
-from agent_artifacts.installation.model import InstallLocation
-from agent_artifacts.io.object_store import publish_object
-from agent_artifacts.io.reference_store import read_references
-from agent_artifacts.marketplace.catalog import build_marketplace
-from agent_artifacts.model import SetupState
-from agent_artifacts.protocol.capabilities import Capability
-from agent_artifacts.protocol.hashing import file_entry, json_digest, sha256_bytes, tree_digest
-from agent_artifacts.protocol.json import canonical_json_bytes
-from agent_artifacts.protocol.native_models import (
+from aart_cli.install_state.paths import install_state_paths
+from aart_cli.install_state.schema import install_state_bytes, parse_install_state
+from aart_cli.installation.io import _write_atomic
+from aart_cli.installation.model import InstallLocation
+from aart_cli.io.object_store import publish_object
+from aart_cli.io.reference_store import read_references
+from aart_cli.marketplace.catalog import build_marketplace
+from aart_cli.model import SetupState
+from aart_cli.protocol.capabilities import Capability
+from aart_cli.protocol.hashing import file_entry, json_digest, sha256_bytes, tree_digest
+from aart_cli.protocol.json import canonical_json_bytes
+from aart_cli.protocol.native_models import (
     ArtifactManifest,
     CompatibilitySpec,
     InstallSpec,
     PayloadSpec,
     SetupReference,
 )
-from agent_artifacts.protocol.native_schema import artifact_manifest_to_json
-from agent_artifacts.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-from agent_artifacts.protocol.paths import SafeRelativePath
-from agent_artifacts.protocol.registry_models import IndexArtifact, IndexSetup, ReviewRecord
-from agent_artifacts.protocol.semver import SemVer
-from agent_artifacts.receipt_service import load_receipt
-from agent_artifacts.setup import dump_setup_state, project_setup_review
-from agent_artifacts.setup_engine import (
+from aart_cli.protocol.native_schema import artifact_manifest_to_json
+from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
+from aart_cli.protocol.paths import SafeRelativePath
+from aart_cli.protocol.registry_models import IndexArtifact, IndexSetup, ReviewRecord
+from aart_cli.protocol.semver import SemVer
+from aart_cli.receipt_service import load_receipt
+from aart_cli.setup import dump_setup_state, project_setup_review
+from aart_cli.setup_engine import (
     ApprovedObjectIdentity,
     IndexedSetupDeclaration,
     LocalSetupAdapter,
@@ -68,8 +68,8 @@ from agent_artifacts.setup_engine import (
     rollback_setup,
     setup_outcome_event,
 )
-from agent_artifacts.setup_runtime import ProcessResult, SetupRuntime
-from agent_artifacts.store.model import (
+from aart_cli.setup_runtime import ProcessResult, SetupRuntime
+from aart_cli.store.model import (
     ObjectPublishCommand,
     ReferenceKind,
     ReferenceReadRequest,
@@ -163,7 +163,7 @@ class Fixture:
             ArtifactIdentity("skill", "review"),
             SemVer(1, 0, 0),
             "Use review to improve agent work.",
-            PayloadSpec(_path("payload"), "aart-skill-v1"),
+            PayloadSpec(_path("payload"), "aart-cli-skill-v1"),
             CompatibilitySpec(profiles, ("darwin",)),
             InstallSpec(("project",), ("copy",), ("copy-tree",)),
             SetupReference(_path("setup/installer.json"), setup_platforms),
@@ -275,7 +275,7 @@ class Fixture:
 
     @property
     def source_id(self):
-        from agent_artifacts.domain.identifiers import SourceId
+        from aart_cli.domain.identifiers import SourceId
 
         return SourceId("review-registry")
 
@@ -847,7 +847,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
                 )
             )
             with patch(
-                "agent_artifacts.setup_engine.io._replace_setup_reference",
+                "aart_cli.setup_engine.io._replace_setup_reference",
                 return_value=failure,
             ):
                 outcome = finalize_setup(
@@ -938,7 +938,7 @@ class CanonicalSetupApplicationTest(unittest.TestCase):
             self.assertEqual([call[1] for call in custom_calls], ["plan", "apply", "verify"])
             copied = Path(custom_calls[0][0])
             self.assertTrue(all(Path(call[0]) == copied for call in custom_calls))
-            self.assertTrue(copied.is_relative_to(fixture.data / ".agent-artifacts/setup-runs"))
+            self.assertTrue(copied.is_relative_to(fixture.data / ".aart-cli/setup-runs"))
             self.assertFalse(copied.is_relative_to(Path(planned.value.object_root)))
             self.assertEqual(
                 sha256_bytes(copied.read_bytes()), planned.value.custom_entrypoint_digest

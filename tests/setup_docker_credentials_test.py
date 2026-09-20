@@ -17,9 +17,9 @@ import os
 import tempfile
 import unittest
 
-from agent_artifacts.model import SetupQueueItem, SetupStateRecord
-from agent_artifacts.setup import parse_installer, plan_setup
-from agent_artifacts.setup_runtime import (
+from aart_cli.model import SetupQueueItem, SetupStateRecord
+from aart_cli.setup import parse_installer, plan_setup
+from aart_cli.setup_runtime import (
     ProcessResult,
     SetupRuntime,
     apply_setup_plan,
@@ -159,7 +159,7 @@ class DockerRollbackEnvironmentTests(unittest.TestCase):
     def test_rs12_removing_a_built_tag_asks_the_daemon_that_built_it(self):
         """`DOCKER_CONFIG` carries the context, so an unequal environment is an unequal daemon."""
 
-        from agent_artifacts.setup_runtime import _docker_env, _minimal_env
+        from aart_cli.setup_runtime import _docker_env, _minimal_env
 
         with tempfile.TemporaryDirectory() as home:
             runtime = SetupRuntime(

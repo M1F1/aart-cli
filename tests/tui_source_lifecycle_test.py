@@ -11,27 +11,27 @@ from __future__ import annotations
 
 import unittest
 
-from agent_artifacts import tui
-from agent_artifacts.application.sources import SourceAdoptionOutcome
-from agent_artifacts.configuration.model import (
+from aart_cli import tui
+from aart_cli.application.sources import SourceAdoptionOutcome
+from aart_cli.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
     SourceKind,
     UserConfiguration,
     default_user_configuration,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.identifiers import ObjectDigest, SourceAlias, SourceId
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.consumer_actions import _refusal
-from agent_artifacts.protocol.native_tree import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ObjectDigest, SourceAlias, SourceId
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.consumer_actions import _refusal
+from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SnapshotOrigin,
     SourceSnapshot,
 )
-from agent_artifacts.protocol.paths import parse_relative_path
-from agent_artifacts.sources.model import (
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.sources.model import (
     CurrentSource,
     HealthStatus,
     SourceHealth,
@@ -41,10 +41,12 @@ from agent_artifacts.sources.model import (
     make_source_candidate,
     source_instance_id,
 )
-from agent_artifacts.tui_sources import (
+from aart_cli.tui_sources import (
     build_source_stage,
+    plan_source_management,
     plan_source_removal,
     render_source_removal_review,
+    render_source_row,
     render_source_stage,
     render_source_sync_outcome,
     render_source_sync_review,
@@ -189,7 +191,7 @@ class SourceLifecyclePlanningTests(unittest.TestCase):
 
         self.assertIsInstance(refused, Err)
         assert isinstance(refused, Err)
-        self.assertIn("aart source list", refused.diagnostics[0].remediation[0])
+        self.assertIn("aart-cli source list", refused.diagnostics[0].remediation[0])
 
     def test_the_removal_review_promises_installed_artifacts_are_kept(self) -> None:
         view = _view(_configuration(_registry(), default="registry"))
@@ -325,7 +327,7 @@ class SourceRefusalWayOutTests(unittest.TestCase):
             Severity.ERROR,
             "resolved source changed its declared source identity",
             remediation=(
-                "review the origin, then run `aart source remove --alias registry` and add "
+                "review the origin, then run `aart-cli source remove --alias registry` and add "
                 "it again to subscribe to the new identity",
             ),
             # `QA-017`/`D-185`: the way out is still stated, in the words of somebody who is
@@ -365,6 +367,50 @@ class SourceRefusalWayOutTests(unittest.TestCase):
         self.assertEqual(
             _refusal((wrapped,)), ("first line", "", "second line", "", "do the thing")
         )
+
+
+class LocalRegistryCheckoutRowTest(unittest.TestCase):
+    """A Registry read out of a checkout is a registry on the source screen too (D-350).
+
+    The screen used to ask `kind is REGISTRY_GIT` wherever it meant "is this a registry", which
+    was the same question while there was only one transport. With two, that spelling answers a
+    different question, and a local checkout came out of it as a direct source with a broken Git
+    origin that could never be the default.
+    """
+
+    def _local(self, alias: str = "candidate") -> ConfiguredSource:
+        return ConfiguredSource(
+            SourceAlias(alias),
+            SourceKind.REGISTRY_LOCAL,
+            "/srv/registry",
+            "test/candidate",
+            True,
+        )
+
+    def _row(self, source: ConfiguredSource):
+        view = _view(_configuration(source))
+        return next(item for item in view.rows if item.source.alias == source.alias)
+
+    def test_its_row_is_selectable_and_names_no_broken_git_origin(self) -> None:
+        row = self._row(self._local())
+
+        self.assertEqual(row.reason, "")
+        self.assertTrue(row.selectable)
+
+    def test_its_row_says_which_kind_of_registry_it_is(self) -> None:
+        rendered = render_source_row(self._row(self._local()))
+
+        self.assertIn("local registry checkout", rendered)
+        self.assertIn("/srv/registry", rendered)
+
+    def test_it_can_be_the_default_registry(self) -> None:
+        source = self._local()
+        view = _view(_configuration(source))
+
+        planned = plan_source_management(view, (source.alias,), default_registry=source.alias)
+
+        self.assertIsInstance(planned, Ok, planned)
+        self.assertEqual(planned.value.request.after.default_registry, source.alias)
 
 
 if __name__ == "__main__":

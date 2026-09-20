@@ -15,19 +15,19 @@ import sys
 import unittest
 from unittest import mock
 
-from agent_artifacts import tui
-from agent_artifacts.application.consumer_session import assemble_consumer_machine
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import ConsumerSettings
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.harness import (
+from aart_cli import tui
+from aart_cli.application.consumer_session import assemble_consumer_machine
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import ConsumerSettings
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.harness import (
     DELIVERY_TARGETS,
     HOOK_TARGETS,
     MCP_TARGETS,
     MEMORY_TARGETS,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.tui_consumer import (
+from aart_cli.domain.result import Err, Ok
+from aart_cli.tui_consumer import (
     ConsumerOffers,
     MarketplaceEntry,
     run_consumer_shell,
@@ -39,7 +39,7 @@ TODAY = dt.date(2026, 8, 31)
 
 
 def _row():
-    from agent_artifacts.tui_marketplace import MarketplaceTarget, project_marketplace_rows
+    from aart_cli.tui_marketplace import MarketplaceTarget, project_marketplace_rows
 
     rows = project_marketplace_rows(
         _catalog(), MarketplaceTarget(("claude",), "darwin", "project", "copy")
@@ -185,7 +185,7 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
         self.assertIsInstance(composed, Ok, composed)
         arguments = read.call_args.kwargs
         self.assertEqual(arguments["harness_root"], "/work/project")
-        self.assertTrue(arguments["state_root"].endswith("agent-artifacts/state"))
+        self.assertEqual(arguments["state_root"], "/users/alice/.aart-cli/state")
         self.assertEqual(arguments["today"], TODAY)
         # The adapters the machine is measured through are the ones the actions can act on.
         self.assertEqual(

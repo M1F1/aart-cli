@@ -1,7 +1,7 @@
 """The difference between the harnesses somebody named and the harnesses this machine happens to
 have.
 
-`aart marketplace install` never guesses: it refuses without `--profile`, so every profile it
+`aart-cli marketplace install` never guesses: it refuses without `--profile`, so every profile it
 places into was typed by the operator, and a profile that cannot be placed is a refusal -- they
 asked for something that will not work.
 
@@ -24,16 +24,16 @@ import pathlib
 import tempfile
 import unittest
 
-from agent_artifacts.configuration.model import ConfiguredSource, SourceKind
-from agent_artifacts.domain.harness import Scope, measured_harnesses
-from agent_artifacts.domain.identifiers import SourceAlias
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.artifact_placement import PLACEMENT_UNAVAILABLE, placement_for
-from agent_artifacts.io.object_store import publish_object
-from agent_artifacts.protocol.authoring import compile_author_snapshot
-from agent_artifacts.sources.local import read_local_snapshot
-from agent_artifacts.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
-from agent_artifacts.store.model import (
+from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.domain.harness import Scope, measured_harnesses
+from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.artifact_placement import PLACEMENT_UNAVAILABLE, placements_for
+from aart_cli.io.object_store import publish_object
+from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.sources.local import read_local_snapshot
+from aart_cli.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
+from aart_cli.store.model import (
     ObjectPublishCommand,
     make_object_candidate,
     object_store_paths,
@@ -46,13 +46,31 @@ from tests.artifact_placement_resolution_test import SKILL_MANIFEST, _stored_art
 #: `declared_harness_narrowing_test.py` (`QA-078`, `D-231`). Constraining it here would make every
 #: assertion below depend on two rules at once and say which of them failed for neither.
 MEMORY_MANIFEST = {
-    "schema": "aart.dev/memory/v1",
+    "schema": "aart-cli.dev/memory/v1",
     "artifact": {"name": "house-rules", "kind": "memory", "version": "1.0.0"},
     "payload": {"include": ["house.md"]},
 }
 
 #: What the persistent shell targets: every harness this build measured, not a list beside them.
 MACHINE = ("claude", "codex", "opencode", "tabnine")
+
+
+def _reached(placed, attribute: str = "") -> list[str]:
+    """Every harness a whole placement result reaches, however it reaches them.
+
+    One placement is one harness's (§169.3), so "which harnesses did this artifact end up in" is a
+    question about the tuple rather than about any member of it.
+    """
+
+    harnesses: list[str] = []
+    for placement in placed.value:
+        items = (
+            getattr(placement, attribute)
+            if attribute
+            else (*placement.targets, *placement.deliveries, *placement.merges)
+        )
+        harnesses.extend(item.harness for item in items)
+    return sorted(harnesses)
 
 
 class _PlacementFixture(unittest.TestCase):
@@ -75,7 +93,9 @@ class _PlacementFixture(unittest.TestCase):
         name = str(self.manifest["artifact"]["name"])  # type: ignore[index]
         repository = self.scope / "author"
         (repository / name).mkdir(parents=True)
-        (repository / name / "aart.json").write_text(json.dumps(self.manifest), encoding="utf-8")
+        (repository / name / "aart-cli.json").write_text(
+            json.dumps(self.manifest), encoding="utf-8"
+        )
         for filename, content in self.files:
             (repository / name / filename).write_text(content, encoding="utf-8")
 
@@ -111,7 +131,7 @@ class _PlacementFixture(unittest.TestCase):
             "store": self.store,
         }
         fields.update(overrides)
-        return placement_for(self.artifact, **fields)  # type: ignore[arg-type]
+        return placements_for(self.artifact, **fields)  # type: ignore[arg-type]
 
 
 class MeasuredHarnessSetTest(unittest.TestCase):
@@ -126,8 +146,8 @@ class ShellHostTest(unittest.TestCase):
     """What the persistent shell says about the profiles it installs into."""
 
     def _host(self):
-        from agent_artifacts.configuration.paths import Platform, resolve_config_paths
-        from agent_artifacts.tui import (
+        from aart_cli.configuration.paths import Platform, resolve_config_paths
+        from aart_cli.tui import (
             _canonical_installation_host,
             _canonical_marketplace_target,
         )
@@ -141,7 +161,7 @@ class ShellHostTest(unittest.TestCase):
         self.assertEqual(tuple(sorted(measured_harnesses())), self._host().profiles)
 
     def test_and_says_that_nobody_asked_for_them(self) -> None:
-        """`aart marketplace install` refuses without `--profile`; the shell names none, so a
+        """`aart-cli marketplace install` refuses without `--profile`; the shell names none, so a
         measured harness that cannot host one artifact must not refuse the whole install."""
 
         self.assertFalse(self._host().profiles_requested)
@@ -159,7 +179,7 @@ class MachineProfileMcpPlacementTest(_PlacementFixture):
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         self.assertEqual(
             ["claude", "opencode", "tabnine"],
-            sorted(target.harness for target in placed.value.targets),
+            _reached(placed, "targets"),
         )
 
     def test_the_same_harness_named_by_the_operator_is_still_refused(self) -> None:
@@ -196,7 +216,7 @@ class MachineProfileDeliveryPlacementTest(_PlacementFixture):
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         self.assertEqual(
             ["claude", "codex", "opencode"],
-            sorted(item.harness for item in placed.value.deliveries),
+            _reached(placed, "deliveries"),
         )
 
     def test_the_same_harness_named_by_the_operator_is_still_refused(self) -> None:
@@ -222,7 +242,7 @@ class MachineProfileDeliveryPlacementTest(_PlacementFixture):
         )
 
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        self.assertEqual(["claude"], sorted(item.harness for item in placed.value.deliveries))
+        self.assertEqual(["claude"], _reached(placed, "deliveries"))
 
     def test_and_the_same_pair_typed_is_refused_by_name_rather_than_narrowed(self) -> None:
         """The whole distinction in one pair: same profiles, different origin, different answer.
@@ -264,7 +284,7 @@ class MachineProfileMergePlacementTest(_PlacementFixture):
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         self.assertEqual(
             ["claude", "codex", "opencode"],
-            sorted(item.harness for item in placed.value.merges),
+            _reached(placed, "merges"),
         )
 
     def test_the_same_harness_named_by_the_operator_is_still_refused(self) -> None:
@@ -285,7 +305,7 @@ class MachineProfileMergePlacementTest(_PlacementFixture):
         )
 
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
-        self.assertEqual(["claude"], sorted(item.harness for item in placed.value.merges))
+        self.assertEqual(["claude"], _reached(placed, "merges"))
 
     def test_and_the_same_pair_typed_is_refused_by_name_rather_than_narrowed(self) -> None:
         placed = self._place(

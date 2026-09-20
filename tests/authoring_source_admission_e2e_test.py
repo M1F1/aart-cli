@@ -4,17 +4,17 @@ The accepted flow is Product Specification 72.1 and 164.2 read end to end:
 
 ```text
 Git author repository
-        -> explicit aart.yaml/aart.json discovery
+        -> explicit aart-cli.yaml/aart-cli.json discovery
         -> Candidate
         -> selected promotion
         -> Registry
         -> later Source Sync reports upstream movement
 ```
 
-Its public entrance is `aart source add --kind source-git`. Until B-094 that entrance validated
+Its public entrance is `aart-cli source add --kind source-git`. Until B-094 that entrance validated
 every acquired tree through `load_native_source`, the loader for a *consumer* native package
-tree: a root `aart-source.json` plus `<root>/<kind>/<name>/artifact.json` and `payload/`. An
-authoring repository declares none of that -- it declares one `aart.yaml` next to the files that
+tree: a root `aart-cli-source.json` plus `<root>/<kind>/<name>/artifact.json` and `payload/`. An
+authoring repository declares none of that -- it declares one `aart-cli.yaml` next to the files that
 manifest names -- so it was refused before manifest discovery could run, and INV-201's "no
 manifest = no candidate" rule never got the chance to say yes to a manifest that was there.
 
@@ -38,8 +38,8 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from agent_artifacts import cli
-from agent_artifacts.configuration.model import (
+from aart_cli import cli
+from aart_cli.configuration.model import (
     ConfiguredSource,
     OrganizationPolicy,
     SourceAlias,
@@ -47,30 +47,30 @@ from agent_artifacts.configuration.model import (
     SyncSettings,
     UserConfiguration,
 )
-from agent_artifacts.configuration.paths import Platform, resolve_config_paths
-from agent_artifacts.configuration.policy import RuntimeOverrides, apply_configuration
-from agent_artifacts.configuration.schema import (
+from aart_cli.configuration.paths import Platform, resolve_config_paths
+from aart_cli.configuration.policy import RuntimeOverrides, apply_configuration
+from aart_cli.configuration.schema import (
     parse_user_configuration,
     user_configuration_bytes,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.registry import PromotionMode
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.candidate_store import candidate_history_paths, read_candidate_history
-from agent_artifacts.io.maintainer_promotion import (
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.candidate_store import candidate_history_paths, read_candidate_history
+from aart_cli.io.maintainer_promotion import (
     complete_configured_candidate_promotion,
     prepare_configured_candidate_promotion,
 )
-from agent_artifacts.io.maintainer_sync import (
+from aart_cli.io.maintainer_sync import (
     complete_configured_source_sync,
     prepare_configured_source_sync,
 )
-from agent_artifacts.io.maintainer_views import read_maintainer_views
-from agent_artifacts.io.registry_promotion import FilesystemPromotionOutput
-from agent_artifacts.io.source_store import read_current_source
-from agent_artifacts.sources.git import acquire_git_snapshot
-from agent_artifacts.sources.model import (
+from aart_cli.io.maintainer_views import read_maintainer_views
+from aart_cli.io.registry_promotion import FilesystemPromotionOutput
+from aart_cli.io.source_store import read_current_source
+from aart_cli.sources.git import acquire_git_snapshot
+from aart_cli.sources.model import (
     CurrentSourceRequest,
     GitSnapshotRequest,
     source_instance_id,
@@ -79,7 +79,7 @@ from agent_artifacts.sources.model import (
 from tests.git_backed_consumer_e2e_test import _materialize, _registry_snapshot
 
 AUTHOR_LOCATION = "https://git.example/superpowers.git"
-SKILL_MANIFEST = """schema: aart.dev/skill/v1
+SKILL_MANIFEST = """schema: aart-cli.dev/skill/v1
 artifact:
   name: verification-before-completion
   kind: skill
@@ -110,8 +110,8 @@ def _git(repository: Path, *arguments: str) -> str:
 class _AuthoringRepository:
     """A real Git repository shaped like the authoring repositories the acceptance run uses.
 
-    Nothing here is an AART package: there is no `aart-source.json`, no `artifact.json` and no
-    `payload/` directory. There is one explicit `aart.yaml` inside the directory it describes,
+    Nothing here is an AART package: there is no `aart-cli-source.json`, no `artifact.json` and no
+    `payload/` directory. There is one explicit `aart-cli.yaml` inside the directory it describes,
     which is exactly what 72.1 says an author opts in with, plus one unrelated file so that
     "discovery finds only the manifest" is a claim with something to be wrong about.
     """
@@ -120,7 +120,7 @@ class _AuthoringRepository:
         self.path = root / "superpowers"
         self.skill = self.path / "skills" / "verification-before-completion"
         self.skill.mkdir(parents=True)
-        (self.skill / "aart.yaml").write_text(SKILL_MANIFEST, encoding="utf-8")
+        (self.skill / "aart-cli.yaml").write_text(SKILL_MANIFEST, encoding="utf-8")
         (self.skill / "SKILL.md").write_text(SKILL_BODY, encoding="utf-8")
         (self.path / "README.md").write_text("# Superpowers\n", encoding="utf-8")
         _git(self.path, "init", "-b", "main")
@@ -161,17 +161,13 @@ class _Environment:
 
         self.xdg = {
             "HOME": str(self.home),
-            "XDG_CONFIG_HOME": str(self.home / ".config"),
-            "XDG_DATA_HOME": str(self.home / ".local/share"),
-            "XDG_CACHE_HOME": str(self.home / ".cache"),
+            "AART_CLI_HOME": str(self.home / ".aart-cli"),
         }
         platform = Platform.DARWIN if sys.platform == "darwin" else Platform.LINUX
         self.paths = resolve_config_paths(
             platform,
             home=str(self.home),
-            xdg_config_home=self.xdg["XDG_CONFIG_HOME"],
-            xdg_data_home=self.xdg["XDG_DATA_HOME"],
-            xdg_cache_home=self.xdg["XDG_CACHE_HOME"],
+            application_home=self.xdg["AART_CLI_HOME"],
         )
         self.registry_source = ConfiguredSource(
             SourceAlias("company"),
@@ -212,7 +208,7 @@ class _Environment:
             contextlib.redirect_stdout(output),
             mock.patch("os.getcwd", return_value=str(self.project)),
             mock.patch(
-                "agent_artifacts.sources.runtime.acquire_git_snapshot",
+                "aart_cli.sources.runtime.acquire_git_snapshot",
                 side_effect=self._local_transport,
             ),
         ):
@@ -329,7 +325,7 @@ class AuthoringSourceAdmissionTest(unittest.TestCase):
         """
 
         with _environment() as env:
-            (env.author.skill / "aart.yaml").unlink()
+            (env.author.skill / "aart-cli.yaml").unlink()
             _git(env.author.path, "add", "-A")
             _git(env.author.path, "commit", "-m", "remove the manifest")
 
@@ -405,7 +401,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
 
     Admission on its own is not the claim B-094 makes; it is the door the claim walks through.
     These drive the same configured composition the Maintainer Source Sync screens call, over
-    the durable store `aart source add` just wrote, so what is proven is the real monitored flow
+    the durable store `aart-cli source add` just wrote, so what is proven is the real monitored flow
     rather than a compiled snapshot handed to a fixture.
     """
 
@@ -422,7 +418,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
         """One reviewed Source Sync, exactly as the screen performs it: prepare then confirm."""
 
         with mock.patch(
-            "agent_artifacts.sources.runtime.acquire_git_snapshot",
+            "aart_cli.sources.runtime.acquire_git_snapshot",
             side_effect=env._local_transport,
         ):
             prepared = self._prepare(env, alias)
@@ -528,7 +524,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
 
             env.author.publish(UPDATED_SKILL_BODY)
             with mock.patch(
-                "agent_artifacts.io.maintainer_sync.compile_author_source",
+                "aart_cli.io.maintainer_sync.compile_author_source",
                 return_value=Err(
                     (
                         Diagnostic(
@@ -557,7 +553,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
         """CP-24.03: the way back, end to end, with no file moved by hand.
 
         The owner's store held Candidate history from an earlier revision. Nothing said so
-        outside the screens that would not load, `aart source sync` reported `unchanged` and wrote
+        outside the screens that would not load, `aart-cli source sync` reported `unchanged` and wrote
         nothing, and the only recovery found was `mv .../candidates .../candidates.bak`.
         """
 
@@ -617,7 +613,7 @@ class PromotionFromAnAdmittedGitSourceTest(unittest.TestCase):
             env.synchronize_registry()
             self.assertEqual(env.add_author_source()[0], 0)
             with mock.patch(
-                "agent_artifacts.sources.runtime.acquire_git_snapshot",
+                "aart_cli.sources.runtime.acquire_git_snapshot",
                 side_effect=env._local_transport,
             ):
                 prepared_sync = prepare_configured_source_sync(

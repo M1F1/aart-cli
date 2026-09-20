@@ -14,8 +14,8 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from agent_artifacts.application.consumer_ui import ConsumerUiState
-from agent_artifacts.application.consumer_views import (
+from aart_cli.application.consumer_ui import ConsumerUiState
+from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     InstalledHealth,
@@ -24,7 +24,7 @@ from agent_artifacts.application.consumer_views import (
     project_credential_record,
     project_installed_collection,
 )
-from agent_artifacts.tui_consumer import (
+from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     _fitted,
     _reload,
@@ -34,7 +34,7 @@ from agent_artifacts.tui_consumer import (
     render_installed_collection,
     render_ready,
 )
-from agent_artifacts.tui_layout import CONTENT_MEASURE
+from aart_cli.tui_layout import CONTENT_MEASURE
 from tests.consumer_install_flow_shell_test import plan_view, screens
 from tests.consumer_shell_test import installed
 from tests.consumer_views_test import _credential_input

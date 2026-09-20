@@ -7,11 +7,15 @@ import unittest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from agent_artifacts.domain.publication import (
+from aart_cli.domain.publication import (
+    DEFAULT_PUBLICATION_BRANCH,
+    PUBLICATION_BRANCH_NAMESPACE,
     PublicationBranch,
+    RegistryCommitOrigin,
     resolve_publication_branch,
+    suggested_publication_branch,
 )
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.result import Err, Ok
 
 
 class PublicationBranchNameTest(unittest.TestCase):
@@ -115,6 +119,52 @@ class PublicationBranchPropertyTest(unittest.TestCase):
     @given(name=_NAMES)
     def test_a_branch_is_never_accepted_as_a_publication_target_for_itself(self, name: str) -> None:
         self.assertIsInstance(resolve_publication_branch(requested=name, default_branch=name), Err)
+
+
+class PublicationBranchSuggestionTest(unittest.TestCase):
+    def test_each_registry_commit_origin_has_a_readable_branch(self) -> None:
+        self.assertEqual(
+            "aart-cli/init-registry",
+            suggested_publication_branch(RegistryCommitOrigin.INIT_REGISTRY).value,
+        )
+        self.assertEqual(
+            "aart-cli/rebuild-registry",
+            suggested_publication_branch(RegistryCommitOrigin.REBUILD_REGISTRY).value,
+        )
+        self.assertEqual(
+            "aart-cli/promote-github-mcp-1.0.0",
+            suggested_publication_branch(
+                RegistryCommitOrigin.PROMOTE, subject="github-mcp-1.0.0"
+            ).value,
+        )
+        self.assertEqual(
+            "aart-cli/bulk-promote",
+            suggested_publication_branch(RegistryCommitOrigin.BULK_PROMOTE).value,
+        )
+
+    def test_absent_origin_or_missing_or_unusable_subject_uses_the_default(self) -> None:
+        self.assertEqual(DEFAULT_PUBLICATION_BRANCH, suggested_publication_branch(None).value)
+        self.assertEqual(
+            DEFAULT_PUBLICATION_BRANCH,
+            suggested_publication_branch(RegistryCommitOrigin.PROMOTE).value,
+        )
+        self.assertEqual(
+            DEFAULT_PUBLICATION_BRANCH,
+            suggested_publication_branch(RegistryCommitOrigin.PROMOTE, subject="bad subject").value,
+        )
+
+    @settings(max_examples=200, deadline=None)
+    @given(subject=st.text(max_size=80))
+    def test_every_suggestion_is_usable_and_stays_in_the_product_namespace(
+        self, subject: str
+    ) -> None:
+        for origin in RegistryCommitOrigin:
+            suggested = suggested_publication_branch(origin, subject=subject)
+            self.assertTrue(suggested.value.startswith(PUBLICATION_BRANCH_NAMESPACE + "/"))
+            self.assertIsInstance(
+                resolve_publication_branch(requested=suggested.value, default_branch="main"),
+                Ok,
+            )
 
 
 if __name__ == "__main__":

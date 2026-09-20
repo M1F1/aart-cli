@@ -108,7 +108,7 @@ runs:
     # already need, the same way GNU Make came off the list earlier.
     #
     # The script also removes a hazard `gh` brought with it: `gh` talks to github.com unless
-    # `GH_HOST` says otherwise, so an unset `AART_GH_HOST` pointed a fork's upload at the wrong
+    # `GH_HOST` says otherwise, so an unset `AART_CLI_GH_HOST` pointed a fork's upload at the wrong
     # instance entirely.  See scripts/attach_release_asset.py for what is read rather than guessed.
     # Asked for by the caller rather than read off `github.event_name`.  The release button
     # publishes the release with the repository `GITHUB_TOKEN`, and GitHub deliberately raises no
@@ -141,7 +141,7 @@ runs:
         # `:-` and not bare expansion: with `set -u` a missing secret would abort here on a shell
         # error naming a variable, instead of reaching the script, which says which secret is
         # missing and what it holds.  A step that fails should say what to do about it.
-        held="${AART_INDEX_PUBLISH_CREDENTIALS:-}"
+        held="${AART_CLI_INDEX_PUBLISH_CREDENTIALS:-}"
         if [ -n "$held" ]; then
           echo "::add-mask::${held%%:*}"
           echo "::add-mask::${held#*:}"

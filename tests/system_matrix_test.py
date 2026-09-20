@@ -11,12 +11,11 @@ from tests.packaging_test import REPO_ROOT, _load_script
 EXPECTED_SCENARIOS = (
     "direct-only",
     "public-company-team",
-    "native-reference",
     "collision",
     "trust-downgrade",
     "offline",
     "concurrent-sync-install",
-    "corrupt-lock-object",
+    "corrupt-object",
     "setup-partial",
     "security-provider-failure",
 )

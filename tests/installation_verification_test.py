@@ -9,23 +9,23 @@ import sys
 import tempfile
 import unittest
 
-from agent_artifacts.application.installation_verification import (
+from aart_cli.application.installation_verification import (
     InstallationObservation,
     VerificationFinding,
     installation_verified,
     verify_installation,
 )
-from agent_artifacts.domain.harness import McpRegistration, Scope, mcp_target
-from agent_artifacts.domain.identifiers import InputId, ObjectDigest
-from agent_artifacts.domain.launch import Transport
-from agent_artifacts.domain.receipts import (
+from aart_cli.domain.harness import McpRegistration, Scope, mcp_target
+from aart_cli.domain.identifiers import InputId, ObjectDigest
+from aart_cli.domain.launch import Transport
+from aart_cli.domain.receipts import (
     InstallationReceipt,
     config_fingerprint,
     installation_receipt_to_data,
 )
-from agent_artifacts.io.harness import LocalHarnessRegistry
-from agent_artifacts.io.runtime_projection import observe_installation
-from agent_artifacts.protocol.hashing import sha256_bytes
+from aart_cli.io.harness import LocalHarnessRegistry
+from aart_cli.io.runtime_projection import observe_installation
+from aart_cli.protocol.hashing import sha256_bytes
 
 ROOT = "/opt/agents/mcp/github"
 LAUNCHER = f"{ROOT}/launch.sh"

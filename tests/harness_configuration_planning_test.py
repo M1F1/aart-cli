@@ -14,28 +14,28 @@ from dataclasses import replace
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.installation_proposal import (
+from aart_cli.application.installation_proposal import (
     PlannedInstallation,
     desired_state_for,
     intended_receipt,
 )
-from agent_artifacts.application.installation_verification import InstallationObservation
-from agent_artifacts.application.installed_state import current_state_from_observation
-from agent_artifacts.application.runtime_projection import configuration_projection
-from agent_artifacts.domain.configuration_files import (
+from aart_cli.application.installation_verification import InstallationObservation
+from aart_cli.application.installed_state import current_state_from_observation
+from aart_cli.application.runtime_projection import configuration_projection
+from aart_cli.domain.configuration_files import (
     CONFIGURATION_FILE_INVALID,
     parse_configuration_file,
 )
-from agent_artifacts.domain.effects import WriteFile
-from agent_artifacts.domain.harness import Scope, mcp_target
-from agent_artifacts.domain.identifiers import ObjectDigest
-from agent_artifacts.domain.inputs import PersistedConfigValue, SecretProviderReference
-from agent_artifacts.domain.receipts import (
+from aart_cli.domain.effects import WriteFile
+from aart_cli.domain.harness import Scope, mcp_target
+from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.domain.inputs import PersistedConfigValue, SecretProviderReference
+from aart_cli.domain.receipts import (
     installation_receipt_from_data,
     installation_receipt_to_data,
 )
-from agent_artifacts.domain.reconciliation import Component, ComponentId, ComponentState
-from agent_artifacts.domain.result import Err, Ok
+from aart_cli.domain.reconciliation import Component, ComponentId, ComponentState
+from aart_cli.domain.result import Err, Ok
 from tests.artifact_installation_test import ORG, ROOT, TOKEN, _description, _plan, _sources
 
 HARNESSES = ("claude", "codex", "opencode", "tabnine")
@@ -82,7 +82,7 @@ class EachHarnessGetsItsOwnFileTest(unittest.TestCase):
         assert isinstance(planned, Ok)
         self.assertEqual(planned.value.configuration, ())
         self.assertEqual(planned.value.registrations[0].arguments, ())
-        self.assertNotIn("AART_HARNESS", planned.value.launcher.content)
+        self.assertNotIn("AART_CLI_HARNESS", planned.value.launcher.content)
 
     def test_a_credential_pasted_into_a_configuration_answer_is_never_planned_to_disk(self):
         refused = _plan(

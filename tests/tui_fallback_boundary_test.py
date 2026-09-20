@@ -13,14 +13,14 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
-from agent_artifacts import tui
-from agent_artifacts.configuration.model import (
+from aart_cli import tui
+from aart_cli.configuration.model import (
     OrganizationPolicy,
     default_user_configuration,
 )
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.tui_sources import build_source_stage
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.result import Err, Ok
+from aart_cli.tui_sources import build_source_stage
 
 
 class _TtyCapture(io.StringIO):
@@ -200,7 +200,7 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
                 tui, "run_consumer", side_effect=ValueError("/Users/secret/path leaked")
             ),
             mock.patch.object(tui, "run_consumer_text", return_value=None) as fallback,
-            mock.patch.dict(tui.os.environ, {"AART_DEBUG": "1"}, clear=False),
+            mock.patch.dict(tui.os.environ, {"AART_CLI_DEBUG": "1"}, clear=False),
             redirect_stdout(output),
             redirect_stderr(debug),
         ):

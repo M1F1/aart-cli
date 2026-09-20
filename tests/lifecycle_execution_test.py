@@ -5,27 +5,27 @@ from __future__ import annotations
 import tempfile
 import unittest
 
-from agent_artifacts.application.execution import (
+from aart_cli.application.execution import (
     EXECUTION_REVIEW_STALE,
     LifecycleExecutionStatus,
     execute_lifecycle,
     lifecycle_execution_to_data,
 )
-from agent_artifacts.application.intents import plan_lifecycle_intent, repair_intent, update_intent
-from agent_artifacts.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from agent_artifacts.domain.effects import (
+from aart_cli.application.intents import plan_lifecycle_intent, repair_intent, update_intent
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.effects import (
     ConfigureHarness,
     CreatePythonEnvironment,
     Effect,
     WriteFile,
 )
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     SourceAlias,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.reconciliation import (
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.reconciliation import (
     Component,
     ComponentId,
     ComponentState,
@@ -34,8 +34,8 @@ from agent_artifacts.domain.reconciliation import (
     DesiredState,
     ObservedComponent,
 )
-from agent_artifacts.domain.result import Err, Ok
-from agent_artifacts.io.execution import LocalMutationLock
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.execution import LocalMutationLock
 
 V1 = ArtifactCoordinate(SourceAlias("public"), ArtifactIdentity("mcp", "github"), "1.0.0")
 V2 = ArtifactCoordinate(SourceAlias("public"), ArtifactIdentity("mcp", "github"), "2.0.0")

@@ -8,16 +8,16 @@ from dataclasses import replace
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.consumer_ui import (
+from aart_cli.application.consumer_ui import (
     CONFIG_CONTINUE_ROW,
     key_event,
     reduce_consumer_ui,
 )
-from agent_artifacts.application.consumer_views import ConsumerScreen, PresentationProfile
-from agent_artifacts.application.maintainer_views import MaintainerScreen
-from agent_artifacts.tui import _CursesTerminal, _TextTerminal
-from agent_artifacts.tui_consumer import _reload, frame
-from agent_artifacts.tui_layout import SECTION_RULE, anchor, footer_start
+from aart_cli.application.consumer_views import ConsumerScreen, PresentationProfile
+from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.tui import _CursesTerminal, _TextTerminal
+from aart_cli.tui_consumer import _reload, frame
+from aart_cli.tui_layout import SECTION_RULE, anchor, footer_start
 from tests.frame_contract import (
     frame_violations,
     key_violations,

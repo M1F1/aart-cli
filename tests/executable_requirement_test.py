@@ -17,31 +17,31 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from agent_artifacts.application.installation_planning import (
+from aart_cli.application.installation_planning import (
     aggregate_requirements,
     allowed_remediations,
     assess_requirements,
 )
-from agent_artifacts.domain.identifiers import (
+from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
     SourceAlias,
 )
-from agent_artifacts.domain.inspection import (
+from aart_cli.domain.inspection import (
     EnvironmentFact,
     EnvironmentFacts,
     FactState,
     RemediationCapability,
     RemediationCapabilityKind,
 )
-from agent_artifacts.domain.policies import EffectivePolicy
-from agent_artifacts.domain.remediations import InstallExecutable
-from agent_artifacts.domain.requirements import (
+from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.remediations import InstallExecutable
+from aart_cli.domain.requirements import (
     ExecutableRequirement,
     RequirementId,
     requirement_to_data,
 )
-from agent_artifacts.domain.result import Ok
+from aart_cli.domain.result import Ok
 
 
 class ExecutableNameTest(unittest.TestCase):
