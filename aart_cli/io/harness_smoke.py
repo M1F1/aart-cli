@@ -150,9 +150,7 @@ def _prompt(server: str, declaration: SmokeDeclaration) -> str:
     )
 
 
-def _assessment_text(
-    harness: str, rows: tuple[dict[str, object], ...]
-) -> str | None:
+def _assessment_text(harness: str, rows: tuple[dict[str, object], ...]) -> str | None:
     texts: list[str] = []
     if harness == "opencode":
         for row in rows:
@@ -350,9 +348,7 @@ def run_harness_smoke(
         return HarnessSmokeRun(harness, version, None, "BLOCKED", reason, _not_assessed(reason))
     if completed.returncode != 0:
         reason = "harness or model-provider execution failed"
-        return HarnessSmokeRun(
-            harness, version, None, "FAIL", reason, _not_assessed(reason)
-        )
+        return HarnessSmokeRun(harness, version, None, "FAIL", reason, _not_assessed(reason))
     rows = _events(completed.stdout)
     result = None if rows is None else parser(rows, expected, arguments)
     # `rows is None` already implies `result is None`; naming both is what lets the assessment

@@ -476,7 +476,7 @@ def _parse_smoke_test(
     fields = _fields(
         parsed.value,
         required=frozenset({"tool", "read_only"}),
-        optional=frozenset({"arguments", "timeout_seconds", "expect"}),
+        optional=frozenset({"arguments", "timeout_seconds", "expect", "reaches_service"}),
         path=path,
         label="smoke_test",
     )
@@ -519,6 +519,17 @@ def _parse_smoke_test(
         ("timeout_seconds", timeout),
         ("tool", tool.value),
     ]
+    if "reaches_service" in fields.value:
+        # Only `true` states the claim.  A field that also accepted `false` would let a manifest
+        # carry the word without carrying the statement, and there is nothing to record for an
+        # author who is not making it -- absence is already the answer the evaluator reads.
+        if fields.value["reaches_service"] is not True:
+            return _error(
+                AUTHOR_MANIFEST_INVALID,
+                "smoke_test.reaches_service must be true",
+                path=path,
+            )
+        entries.append(("reaches_service", True))
     if "expect" in fields.value:
         expectation = _object(fields.value["expect"], "smoke_test.expect", path=path)
         if isinstance(expectation, Err):

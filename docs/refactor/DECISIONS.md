@@ -9239,3 +9239,49 @@ Implementation is pending for this revision. Required evidence includes direct-o
 capability-based aggregation, deadline/process cleanup, malformed assessment and uncertain/error
 cases, argument enforcement, bounded opt-in display and default non-disclosure. Existing tests do not
 establish these new claims. CP-26.20a remains in flight; do not mark it done.
+
+## D-366 — The external-service stage is graded from a declared claim and a declared expectation
+
+**Date:** 2026-09-20. **Context:** CP-26.20a, B-164, §170.2/§170.3/§170.5, INV-250.
+
+`McpCallResult.service_observed` was the only thing that could turn `mcp-to-external-service` into a
+`PASS`, and nothing in the product ever set it. Measured, not reasoned: a real stdio server, a real
+`execute_stdio_smoke`, a fully successful call, and the stage still read `NOT VERIFIED`. Because the
+stage was unconditionally in the required set, `aggregate_success` was always false and
+`aart-cli mcp test` returned non-zero for every installation that worked perfectly.
+
+B-164 offered two readings and **the Product Specification rules out both**:
+
+* *(a) any declared expectation upgrades the stage* contradicts §170.3 — "Optional expectations
+  strengthen only the claims they actually test: output shape alone does not prove a fresh network
+  request, authentication or all permissions."
+* *(b) `NOT VERIFIED` does not block a zero exit* contradicts §170.5 — "Empty selections, failed
+  prerequisites, or unverified required stages cannot pass."
+
+The specification supplies the third reading itself. §170.3 says the judgement is made from "the
+selected tool's reviewed behavior **and** the observed result", and that an "absent declaration is
+`NOT CONFIGURED` for operation-dependent stages"; §170.5 keeps an absent optional declaration outside
+the required set. So the stage has two declared inputs and neither stands alone:
+
+| declared | observed | stage |
+|---|---|---|
+| no `reaches_service` | anything | `NOT CONFIGURED`, outside the required set |
+| `reaches_service`, no `expect` | anything | `NOT VERIFIED` |
+| `reaches_service` + `expect` | expectation failed | `NOT VERIFIED` |
+| `reaches_service` + `expect` | expectation held | `PASS` |
+
+`smoke_test.reaches_service` is a new optional manifest field: the author's reviewed statement that
+this tool performs a real read against the configured service with this installation's credentials.
+Only `true` is accepted — a field that also took `false` would let a manifest carry the word without
+carrying the statement. The minimal declaration stays `tool` + `read_only` (INV-249).
+
+`service_observed` is deleted rather than deprecated (§169.1, no compatibility windows). Its
+replacement is not a flag any runtime code sets, which is the point: nothing the product observes at
+the protocol level may promote itself into a service claim, so the promotion is carried by what the
+author declared and what the evaluator then checked.
+
+**Evidence.** `tests/mcp_smoke_stdio_test.py` reaches `PASS` against a real launcher with the
+declaration present and does not reach it with the expectation removed. Targeted mutation:
+relaxing `expectation.outcome is not PASS` to `is FAIL` in `_service` — which would let the author's
+word alone carry the stage — turns exactly two tests red, the evaluation test that names the claim
+and the CLI test that keeps the exclusion narrow, and nothing else.

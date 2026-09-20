@@ -177,6 +177,7 @@ def _mcp_blueprint(name: str) -> _Blueprint:
             _object(
                 ("arguments", _object(("limit", 1))),
                 ("expect", _object(("text_contains", "expected text"))),
+                ("reaches_service", True),
                 ("read_only", True),
                 ("timeout_seconds", 15),
                 ("tool", "get_current_user"),
@@ -288,6 +289,7 @@ _EXPLANATIONS: dict[str, str] = {
     "exclude": "Payload files to leave out of the package, applied after `include`.",
     "inputs": "Values AART collects from the installer and keeps for this artifact.",
     "python": "How the payload's Python dependencies are resolved at install time.",
+    "reaches_service": "Declares that this tool really reads the external service. With `expect`, it lets the service stage pass.",
     "smoke_test": "A reviewed read-only MCP tool call used by `aart-cli mcp test --harness <harness>`.",
     "summary": "One line shown wherever the artifact is listed. Derived from the name if absent.",
 }
@@ -345,6 +347,7 @@ _SMOKE_NOT_GENERATED: tuple[str, ...] = (
     "#?     equals: null",
     "#?     structured_path: field",
     "#?     text_contains: text",
+    "#?   reaches_service: true",
     "#?   read_only: true",
     "#?   timeout_seconds: 15",
     "#?   tool: tool-name",

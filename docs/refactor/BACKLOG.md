@@ -4176,3 +4176,42 @@ not block a zero exit, with service proof remaining an explicit opt-in. (b) matc
 specification's own language that `NOT VERIFIED` means the available evidence does not establish
 the claim, rather than that something failed. Not chosen here, because either reading changes what
 a passing `mcp test` asserts.
+
+**Closed 2026-09-20 by D-366, and by neither of those two readings.** Re-reading §170 against them
+ruled both out: §170.3 refuses (a) -- "output shape alone does not prove a fresh network request" --
+and §170.5 refuses (b) -- "unverified required stages cannot pass". The specification supplies the
+third reading itself: the stage is graded from "the selected tool's reviewed behavior and the
+observed result", so it takes a declared `smoke_test.reaches_service` *and* a declared `expect` that
+holds. An absent claim is `NOT CONFIGURED` and outside the required set, which is what lets a working
+installation exit zero. `service_observed` is deleted. See D-366 for the table and the evidence.
+
+## B-165 — a harness that verifies itself through an installed skill, instead of a per-harness adapter
+
+**Found:** 2026-09-20, raised by the owner while reading CP-26.20a's design. **Open, noncritical.**
+
+Today each eligible harness needs its own adapter: `_claude_result` (35 lines) parses Claude Code's
+`stream-json`, `_opencode_result` (24) parses OpenCode's `--format json`, and `_thaw`/`_freeze`/
+`_as_call_result` (38) bridge the harness dict world and `JsonObject`. That is ~97 lines that grow
+with every harness added, and adding a harness is a code change rather than a configuration one.
+
+**The proposal.** Ship a read-only verification *skill* -- an ordinary AART artifact; `ArtifactKind.SKILL`
+already exists and `domain/harness.py` already carries measured skill paths for claude, codex,
+opencode and tabnine. The harness runs the skill, calls the declared tool per installed MCP under its
+declared timeout, and writes one report in a fixed schema that `aart-cli mcp test` parses. One parser
+for every harness; a new harness needs a prompt and a path, not an adapter.
+
+**What blocks adopting it as-is.** A report written by the model is a *claim*, not an observation,
+and INV-251 says the English assessment "cannot replace the observed call or independent service
+proof". A model can state it called the tool without having called it. The mechanism that closes
+this is the one D-366 just built: require the report to carry a value only the real service could
+return, so the report validates itself rather than being believed. Note also that the saving is in
+parsing, not launching -- something still has to start the harness, and if that is `aart-cli` then
+`run_harness_smoke` (103 lines) stays. A variant where the operator runs the skill and the command
+only reads the report removes that too, but changes what a `mcp test` exit code asserts.
+
+**Not a runtime dependency.** Pydantic or pydantic-ai were suggested for the report schema and are
+refused by §26 (`dependencies = []`); the repository's own `protocol/json` and schema validation
+cover it. A dev-group package would not help code that has to parse the report at runtime.
+
+This is a §170.4 specification change, not an implementation gap, so it is not critical-path work
+for CP-26. Reclassify only if evidence shows a mandatory invariant cannot be met without it.

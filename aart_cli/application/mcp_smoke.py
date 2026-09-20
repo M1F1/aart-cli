@@ -50,6 +50,10 @@ class SmokeDeclaration:
     arguments: JsonObject
     timeout_seconds: int
     expect: JsonObject | None = None
+    #: The author's reviewed statement that this tool performs a real read against the configured
+    #: external service using this installation's credentials (§170.2, §170.3).  It is one half
+    #: of the service-stage evidence; the declared expectation is the other.
+    reaches_service: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,7 +71,6 @@ class McpCallResult:
     structured_content: JsonValue | None = None
     is_error: bool | None = None
     jsonrpc_error: str | None = None
-    service_observed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +149,7 @@ def declaration_from_intent(value: JsonValue | None) -> SmokeDeclaration | None:
     arguments = fields.get("arguments")
     timeout = fields.get("timeout_seconds")
     expectation = fields.get("expect")
+    reaches_service = fields.get("reaches_service", False)
     if (
         not isinstance(tool, str)
         or not isinstance(arguments, JsonObject)
@@ -153,10 +157,11 @@ def declaration_from_intent(value: JsonValue | None) -> SmokeDeclaration | None:
         or not isinstance(timeout, int)
         or not 1 <= timeout <= 60
         or not (expectation is None or isinstance(expectation, JsonObject))
+        or reaches_service not in (True, False)
         or fields.get("read_only") is not True
     ):
         return None
-    return SmokeDeclaration(tool, arguments, timeout, expectation)
+    return SmokeDeclaration(tool, arguments, timeout, expectation, reaches_service is True)
 
 
 def _python(value: JsonValue) -> object:
@@ -381,16 +386,40 @@ def evaluate_tool_call(
             SmokeOutcome.PASS if failed is None else SmokeOutcome.FAIL,
             "declared expectation matched" if failed is None else failed,
         )
-    service = SmokeStageResult(
+    return SmokeEvaluation(protocol, expectation, _service(declaration, expectation))
+
+
+def _service(declaration: SmokeDeclaration, expectation: SmokeStageResult) -> SmokeStageResult:
+    """Grade the external-service claim from its two declared inputs (§170.2, §170.3).
+
+    The specification asks for "the selected tool's reviewed behavior and the observed result",
+    and refuses to let either stand alone: protocol success cannot prove the read reached the
+    service, and "output shape alone does not prove a fresh network request".  So the reviewed
+    behaviour comes from `reaches_service` and the observed result from the declared expectation,
+    and an absent claim is `NOT CONFIGURED` rather than a failure nothing could have avoided.
+    """
+
+    if not declaration.reaches_service:
+        return SmokeStageResult(
+            SmokeStage.SERVICE,
+            SmokeOutcome.NOT_CONFIGURED,
+            "the declaration does not claim this tool reads the external service",
+        )
+    if expectation.outcome is not SmokeOutcome.PASS:
+        return SmokeStageResult(
+            SmokeStage.SERVICE,
+            SmokeOutcome.NOT_VERIFIED,
+            (
+                "a declared service read needs an expectation the response satisfies"
+                if declaration.expect is None
+                else "the declared expectation did not hold, so the service read is unproven"
+            ),
+        )
+    return SmokeStageResult(
         SmokeStage.SERVICE,
-        SmokeOutcome.PASS if result.service_observed else SmokeOutcome.NOT_VERIFIED,
-        (
-            "the declared read reached the protected fixture service"
-            if result.service_observed
-            else "the response does not independently prove external-service access"
-        ),
+        SmokeOutcome.PASS,
+        "the declared read reached the external service and its expectation held",
     )
-    return SmokeEvaluation(protocol, expectation, service)
 
 
 def aggregate_success(results: Iterable[SmokeStageResult]) -> bool:

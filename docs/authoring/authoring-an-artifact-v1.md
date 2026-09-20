@@ -82,17 +82,25 @@ expect:
   equals: expected-login
 ```
 
+Optional `reaches_service: true` is your reviewed statement that this tool performs a real read
+against the configured external service using the installation's own credentials. It is what
+makes the `mcp-to-external-service` stage a claim worth grading: without it the stage reports
+`NOT CONFIGURED` and stays outside the required set, so an installation that works exits zero.
+With it, the stage passes only when `expect` also holds -- the declaration is the reviewed
+behaviour and the expectation is the observed result, and neither alone establishes the read.
+A declared service read with no `expect` is reported `NOT VERIFIED`. Only `true` is accepted.
+
 The generic evaluator checks protocol completion/errors and declared schemas,
 accepting supported text, structured, image and empty results. It does not guess business meaning
 from keywords or ask a model to decide success. Successful invocation is reported separately from
 external-service evidence; cached output or an error disguised as normal text cannot alone prove
 service access. The read-only flag is a reviewed declaration, not a sandbox guarantee.
 
-## Accepted smoke revision — implementation pending
+## Smoke revision under D-365
 
 D-365 revises the behavior above: harnesses without enforceable allowed tools receive direct MCP
 checks only; the excluded harness stage does not fail direct coverage. Eligible harnesses return
 a bounded English JSON assessment (`status`, `summary`, `possible_error`) within 120 seconds.
 The assessment is separate from protocol and service evidence. Default-off `--show-response` will
 permit bounded inspection of the server response in current output, without application persistence.
-These revised behaviors are specified in Product Specification §170 and still need implementation.
+These behaviors are specified in Product Specification §170 and are implemented.

@@ -5,6 +5,28 @@ contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
 
+**2026-09-20, CP-26.20a — the service stage can now be reached, and the specification chose how.**
+B-164 was blocking: `McpCallResult.service_observed` was the only thing that could turn
+`mcp-to-external-service` into a `PASS`, nothing in the product ever set it, and the stage sat
+unconditionally in the required set -- so `aart-cli mcp test` returned non-zero for every
+installation that worked perfectly. Measured against a real stdio server, not reasoned.
+
+The backlog offered two readings and **§170 rules out both**: (a) "any declared expectation upgrades
+the stage" contradicts §170.3's "output shape alone does not prove a fresh network request", and
+(b) "`NOT VERIFIED` does not block a zero exit" contradicts §170.5's "unverified required stages
+cannot pass". The specification supplies the third reading itself -- the stage is graded from "the
+selected tool's reviewed behavior **and** the observed result" -- so D-366 takes both: a new optional
+`smoke_test.reaches_service` (the reviewed behaviour, `true` only) **and** a declared `expect` that
+holds (the observed result). An absent claim is `NOT CONFIGURED` and outside the required set, which
+is what lets a working installation exit zero. `service_observed` is deleted, not deprecated.
+
+Evidence: `tests/mcp_smoke_stdio_test.py` now reaches `PASS` against a real launcher with the
+declaration present, and the same run without the expectation does not. Targeted mutation --
+relaxing `expectation.outcome is not PASS` to `is FAIL` in `_service`, which would let the author's
+word alone carry the stage -- turns exactly two tests red, the evaluation test that names the claim
+and the CLI test that keeps the capability exclusion narrow, and nothing else. The skeleton's
+anti-drift oracle forced the new field into all five kinds' documents, live and disabled.
+
 **2026-09-20, CP-26.20a — D-365's evidence is in, and what remains is not writable here.** The
 entry below said the revision's implementation was pending and that existing tests did not
 establish its claims. The first half is stale: the capability route, the 120-second whole-run

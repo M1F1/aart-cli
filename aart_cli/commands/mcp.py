@@ -61,9 +61,7 @@ def _plain(value: JsonValue) -> object:
     return value
 
 
-def _response_preview(
-    result: McpCallResult, *, sensitive: tuple[str, ...]
-) -> dict[str, object]:
+def _response_preview(result: McpCallResult, *, sensitive: tuple[str, ...]) -> dict[str, object]:
     document: dict[str, object] = {}
     if result.content is not None:
         document["content"] = _plain(result.content)
@@ -352,6 +350,7 @@ def _target(
     harness_context: tuple[SmokeDeclaration, tuple[McpTool, ...]] | None = None
     direct_result = None
     expectation_configured = False
+    service_configured = False
     config, config_failure = _configuration_values(receipt)
     if config_failure is not None:
         stages.append(
@@ -431,9 +430,14 @@ def _target(
             else:
                 assert isinstance(arguments, JsonObject)
                 resolved = SmokeDeclaration(
-                    declaration.tool, arguments, declaration.timeout_seconds, declaration.expect
+                    declaration.tool,
+                    arguments,
+                    declaration.timeout_seconds,
+                    declaration.expect,
+                    declaration.reaches_service,
                 )
                 expectation_configured = resolved.expect is not None
+                service_configured = resolved.reaches_service
                 run = execute_stdio_smoke(receipt.launcher, resolved, cwd=receipt.root)
                 if isinstance(run, Err):
                     stages.extend(
@@ -469,6 +473,9 @@ def _target(
         for stage in stages
         if not (
             (stage.stage is SmokeStage.EXPECTATION and not expectation_configured)
+            # An undeclared service read is outside the required set for the same reason an
+            # absent expectation is (§170.5): nothing was requested, so nothing is owed.
+            or (stage.stage is SmokeStage.SERVICE and not service_configured)
             or (
                 coverage == "direct"
                 and stage.stage
@@ -488,9 +495,7 @@ def _target(
         "stages": [_stage_data(stage) for stage in stages],
     }
     if show_response and direct_result is not None:
-        target["response"] = _response_preview(
-            direct_result, sensitive=tuple(config.values())
-        )
+        target["response"] = _response_preview(direct_result, sensitive=tuple(config.values()))
     return target
 
 

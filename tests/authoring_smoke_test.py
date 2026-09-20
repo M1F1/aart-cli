@@ -140,6 +140,36 @@ class AuthoringSmokeDeclarationTest(unittest.TestCase):
         self.assertIsInstance(parsed, Err)
         self.assertIn("unknown field 'script'", parsed.diagnostics[0].message)
 
+    def test_the_service_read_claim_is_an_explicit_opt_in_that_must_be_true(self) -> None:
+        """`reaches_service` is the author's reviewed statement, so only `true` states it.
+
+        §170.3 keeps the minimal declaration at tool and read-only, so this stays optional; and
+        a field that accepted `false` or a string would let a manifest look like it made the claim
+        without making it.
+        """
+
+        absent = _parse(_manifest("smoke_test:\n  tool: read_identity\n  read_only: true\n"))
+        assert isinstance(absent, Ok), getattr(absent, "diagnostics", ())
+        assert absent.value.smoke_test is not None
+        self.assertNotIn("reaches_service", dict(absent.value.smoke_test.entries))
+
+        declared = _parse(
+            _manifest(
+                "smoke_test:\n  tool: read_identity\n  read_only: true\n  reaches_service: true\n"
+            )
+        )
+        assert isinstance(declared, Ok), getattr(declared, "diagnostics", ())
+        assert declared.value.smoke_test is not None
+        self.assertIs(dict(declared.value.smoke_test.entries)["reaches_service"], True)
+
+        refused = _parse(
+            _manifest(
+                "smoke_test:\n  tool: read_identity\n  read_only: true\n  reaches_service: false\n"
+            )
+        )
+        self.assertIsInstance(refused, Err)
+        self.assertIn("smoke_test.reaches_service must be true", refused.diagnostics[0].message)
+
 
 if __name__ == "__main__":
     unittest.main()

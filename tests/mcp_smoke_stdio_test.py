@@ -39,7 +39,38 @@ class McpSmokeStdioTest(unittest.TestCase):
             assert isinstance(run, Ok), getattr(run, "diagnostics", ())
             evaluated = evaluate_tool_call(declaration, run.value.tools, run.value.result)
             self.assertEqual(evaluated.protocol.outcome, SmokeOutcome.PASS)
-            self.assertEqual(evaluated.service.outcome, SmokeOutcome.NOT_VERIFIED)
+            # This declaration makes no service claim, so a protocol pass leaves nothing asked
+            # and nothing owed -- the distinction INV-250 exists to keep.
+            self.assertEqual(evaluated.service.outcome, SmokeOutcome.NOT_CONFIGURED)
+
+    def test_a_declared_service_read_reaches_PASS_against_a_real_server(self) -> None:
+        """B-164 end to end: a real launcher, a real call, and a service stage that can pass.
+
+        This is the claim that had no path through the product before. The same run with the
+        expectation removed is the test above, and it does not reach PASS -- so what carries the
+        stage is the declared evidence rather than the call having completed.
+        """
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            launcher = root / "launch"
+            launcher.write_text(textwrap.dedent(SERVER), encoding="utf-8")
+            launcher.chmod(0o700)
+            declaration = SmokeDeclaration(
+                "read_identity",
+                JsonObject(()),
+                15,
+                JsonObject((("text_contains", "Ada"),)),
+                True,
+            )
+
+            run = execute_stdio_smoke(str(launcher), declaration, cwd=str(root))
+
+            assert isinstance(run, Ok), getattr(run, "diagnostics", ())
+            evaluated = evaluate_tool_call(declaration, run.value.tools, run.value.result)
+            self.assertEqual(evaluated.protocol.outcome, SmokeOutcome.PASS)
+            self.assertEqual(evaluated.expectation.outcome, SmokeOutcome.PASS)
+            self.assertEqual(evaluated.service.outcome, SmokeOutcome.PASS)
 
     def test_timeout_is_a_visible_failure_and_the_process_is_terminated(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

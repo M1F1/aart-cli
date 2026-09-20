@@ -151,13 +151,18 @@ class McpSmokeCliTest(unittest.TestCase):
         counting the stages as passes would claim evidence nobody gathered.
         """
 
-        declaration = SmokeDeclaration("read_identity", JsonObject(()), 15)
+        # A declared service read plus the expectation that proves it: without both, the service
+        # stage is not a PASS and no run passes, capability or not.
+        declaration = SmokeDeclaration(
+            "read_identity",
+            JsonObject(()),
+            15,
+            JsonObject((("text_contains", "Ada"),)),
+            True,
+        )
         tool = McpTool("read_identity", JsonObject((("type", "object"),)))
-        # `service_observed` is what a direct run needs to pass: without independent proof the
-        # service stage is NOT VERIFIED and no run passes, capability or not.
         result = McpCallResult(
             content=JsonArray((JsonObject((("type", "text"), ("text", "Ada"))),)),
-            service_observed=True,
         )
         with (
             patch.object(mcp, "_configuration_values", return_value=({}, None)),
@@ -189,10 +194,11 @@ class McpSmokeCliTest(unittest.TestCase):
         """The exclusion is narrow: it drops the harness stages and nothing else.
 
         Without this, the previous test could pass because `ok` ignored every non-PASS stage
-        rather than because it ignored exactly the three that capability excluded.
+        rather than because it ignored exactly the three that capability excluded. The declared
+        service read has no expectation, so it is claimed and unproven -- required, and not a pass.
         """
 
-        declaration = SmokeDeclaration("read_identity", JsonObject(()), 15)
+        declaration = SmokeDeclaration("read_identity", JsonObject(()), 15, None, True)
         tool = McpTool("read_identity", JsonObject((("type", "object"),)))
         result = McpCallResult(
             content=JsonArray((JsonObject((("type", "text"), ("text", "Ada"))),))
@@ -212,6 +218,35 @@ class McpSmokeCliTest(unittest.TestCase):
         self.assertIs(report["ok"], False)
         stages = {stage["stage"]: stage["outcome"] for stage in report["stages"]}
         self.assertEqual(stages["mcp-to-external-service"], "NOT VERIFIED")
+
+    def test_an_undeclared_service_read_does_not_block_a_zero_exit(self) -> None:
+        """B-164: the stage nobody declared is outside the required set (§170.3, §170.5).
+
+        Before this, the service stage was in the required set unconditionally and nothing could
+        satisfy it, so every working installation exited non-zero.
+        """
+
+        declaration = SmokeDeclaration("read_identity", JsonObject(()), 15)
+        tool = McpTool("read_identity", JsonObject((("type", "object"),)))
+        result = McpCallResult(
+            content=JsonArray((JsonObject((("type", "text"), ("text", "Ada"))),))
+        )
+        with (
+            patch.object(mcp, "_configuration_values", return_value=({}, None)),
+            patch.object(mcp, "_declaration", return_value=(declaration, None)),
+            patch.object(
+                mcp,
+                "execute_stdio_smoke",
+                return_value=Ok(DirectSmokeRun("2025-11-25", (tool,), result)),
+            ),
+            patch.object(mcp, "run_harness_smoke"),
+        ):
+            report = mcp._target(installed("local", "tabnine"), "/managed")
+
+        self.assertIs(report["ok"], True)
+        stages = {stage["stage"]: stage["outcome"] for stage in report["stages"]}
+        # Present and honest rather than absent or quietly green.
+        self.assertEqual(stages["mcp-to-external-service"], "NOT CONFIGURED")
 
     def test_the_response_preview_is_absent_unless_it_was_asked_for(self) -> None:
         """Default non-disclosure: `--show-response` is the only way a response reaches output."""
