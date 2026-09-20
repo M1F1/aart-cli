@@ -2097,3 +2097,51 @@ Implementation is pending for this revision. Required evidence includes direct-o
 capability-based aggregation, deadline/process cleanup, malformed assessment and uncertain/error
 cases, argument enforcement, bounded opt-in display and default non-disclosure. Existing tests do not
 establish these new claims. CP-26.20a remains in flight; do not mark it done.
+
+## Step 20a — CLI-only smoke verification of installed MCPs
+
+Two decisions landed here, and the second replaced most of what the first was built on.
+
+**D-366 made the external-service stage reachable.** `McpCallResult.service_observed` was the only
+thing that could turn `mcp-to-external-service` into a `PASS` and nothing ever set it, so the stage
+was always `NOT VERIFIED` and, being unconditionally required, made `aart-cli mcp test` exit nonzero
+for every installation that worked perfectly. The backlog offered two readings and §170 rules out
+both: §170.3 refuses "any expectation upgrades the stage" ("output shape alone does not prove a
+fresh network request") and §170.5 refuses "NOT VERIFIED may still pass" ("unverified required
+stages cannot pass"). The specification supplies the third itself -- the judgement comes from "the
+selected tool's reviewed behavior **and** the observed result" -- so the stage now needs an author's
+`smoke_test.reaches_service` claim *and* a declared `expect` that holds. An absent claim is
+`NOT CONFIGURED`, outside the required set, which is what lets a working installation exit zero.
+
+**D-368 removed the harness driver.** Owner-directed: AART no longer launches a harness, submits a
+prompt to one, or reads its session. `mcp test --prompt` composes a prompt naming every selected
+installation, its server name as that harness sees it, the declared tool with resolved arguments
+and the report shape; a person runs it; `mcp test --report <path>` grades what comes back;
+`mcp report <path>` checks a report's shape alone, which is what a session can run on its own
+output. 220 lines of process control, event parsing, deadlines and the capability gate went with
+the driver, and no harness is special any more because none is driven.
+
+What is given up is stated rather than glossed: report evidence is operator-attested, carries its
+own coverage value `direct-and-attested`, and never counts as direct evidence. INV-251 was replaced.
+The enforcement paragraph of §170.3 no longer claims the harness route blocks unexpected operations;
+it says the direct client blocks and the operator observes. What keeps an attested report honest is
+D-366: `expect` must carry a value only the real service returns, so an invented or unfaithfully
+copied result fails rather than passes, and the runner grades every carried result with the same
+evaluator the direct route uses.
+
+### Evidence
+
+Nine targeted mutations across the two decisions, each restored afterwards. **Four first survived,
+and every one of them exposed a test that did not hold its own name** rather than a gap in the code:
+
+* the "last JSON object wins" fixture contained only one JSON object, so first and last agreed;
+* no fixture carried the self-contradictory `called: false` *with* a result, so dropping the
+  `called` check changed nothing;
+* the duplicate-installation check appeared to survive being made conditional on correlation,
+  because nothing tested duplicates in the no-selection mode.
+
+Each test was corrected -- never the code, and never by weakening an assertion -- and each mutation
+then died in exactly the test whose name claims it.
+
+Gates: unit 4754 and integration 424 at D-368, both green, with lint, format-check, typecheck,
+validate, docs-check, packaging-check, secret-shape-check and the release gate clean.

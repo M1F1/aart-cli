@@ -9346,8 +9346,11 @@ and it is where "does this MCP work, with these credentials" is actually answere
 
 * `aart-cli mcp test --prompt` prints the generated prompt (installations, tool and arguments per
   installation, the required report structure and its destination path).
-* `aart-cli mcp report validate <path>` validates a report against the schema, so a harness session
-  can check its own output before handing it over.
+* `aart-cli mcp report <path>` validates a report's shape, so a harness session can check its own
+  output before handing it over. A separate action rather than a flag on `test`, because the
+  session knows only the file: `test --report` also needs a scope, a project root and a harness
+  name. It checks shape alone and says so -- correlation against the selection belongs to
+  `test --report`, which has one.
 * `aart-cli mcp test --report <path>` grades the report and renders the result.
 
 ### Not a runtime dependency

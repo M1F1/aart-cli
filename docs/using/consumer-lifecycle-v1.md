@@ -92,6 +92,8 @@ it:
 aart-cli mcp test --all --harness claude --scope user --prompt
 
 # 2. Paste it into your own harness session. It writes aart-cli-smoke-report.json.
+#    The session can check its own output first:
+aart-cli mcp report aart-cli-smoke-report.json
 
 # 3. Grade what came back, alongside the direct checks
 aart-cli mcp test --all --harness claude --scope user --report aart-cli-smoke-report.json

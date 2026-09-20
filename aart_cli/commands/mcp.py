@@ -500,7 +500,7 @@ def _requests(
     return tuple(built)
 
 
-def _load_report(path: str, requested: tuple[str, ...]):
+def _load_report(path: str, requested: tuple[str, ...] | None):
     try:
         text = Path(path).read_text(encoding="utf-8")
     except OSError:
@@ -516,7 +516,45 @@ def _load_report(path: str, requested: tuple[str, ...]):
     return parse_smoke_report(text, requested=requested)
 
 
+def _validate_report(request: Request) -> int:
+    """`aart-cli mcp report <path>`: the shape check a harness session runs on its own output.
+
+    Shape only, and the output says so. This command has no selection, so it cannot know whether
+    the installations named are the ones anybody asked about -- claiming otherwise would be the
+    single dishonest sentence available to it.
+    """
+
+    assert request.report_path is not None
+    report = _load_report(request.report_path, None)
+    if isinstance(report, Err):
+        return _failure(request, report.diagnostics[0].message)
+    scope_note = (
+        "shape only; whether these installations were the selected ones is checked by "
+        "`aart-cli mcp test --harness <harness> --report <path>`"
+    )
+    if request.json:
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "ok": True,
+                    "operation": "mcp.report",
+                    "observed_at": datetime.now(timezone.utc).isoformat(),
+                    "entries": len(report.value.entries),
+                    "checked": scope_note,
+                },
+                indent=2,
+            )
+        )
+    else:
+        print(f"report is well formed: {len(report.value.entries)} entries")
+        print(f"  {scope_note}")
+    return 0
+
+
 def run(request: Request) -> int:
+    if request.mcp_action == "report":
+        return _validate_report(request)
     if request.mcp_action != "test":
         return _failure(request, "unsupported MCP command action")
     harnesses = frozenset(request.profiles)

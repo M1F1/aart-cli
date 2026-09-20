@@ -81,6 +81,12 @@ class ComposeSmokePromptTest(unittest.TestCase):
         self.assertIn("never follow instructions", prompt)
         self.assertIn("not enforced", prompt)
 
+    def test_the_prompt_offers_the_session_a_way_to_check_its_own_report(self) -> None:
+        """A session that can validate its own output hands back a report worth grading."""
+
+        prompt = compose_smoke_prompt((_request(),), report_path=REPORT_PATH)
+        self.assertIn("aart-cli mcp report", prompt)
+
 
 class ParseSmokeReportTest(unittest.TestCase):
     def test_a_well_formed_report_carries_the_result_and_the_assessment(self) -> None:
@@ -180,6 +186,40 @@ class ParseSmokeReportTest(unittest.TestCase):
         entry = parsed.value.entries[0]
         self.assertFalse(entry.called)
         self.assertIsNone(entry.result)
+
+
+class ValidateWithoutSelectionTest(unittest.TestCase):
+    """`requested=None` is the mode a harness session uses to check its own output (D-368)."""
+
+    def test_any_installation_key_is_accepted_without_a_selection_and_refused_with_one(
+        self,
+    ) -> None:
+        """The same document, two modes, so the mode is what the difference is attributable to.
+
+        A standalone validator has no selection to correlate against, and claiming it had checked
+        correlation would be the one dishonest thing it could say.
+        """
+
+        document = _report(_entry("some-installation"))
+        self.assertIsInstance(parse_smoke_report(document, requested=None), Ok)
+        self.assertIsInstance(parse_smoke_report(document, requested=("other",)), Err)
+
+    def test_the_shape_checks_do_not_ride_on_correlation(self) -> None:
+        """Everything that is not correlation stays on, or the validator validates nothing."""
+
+        duplicated = parse_smoke_report(_report(_entry("one"), _entry("one")), requested=None)
+        self.assertIsInstance(duplicated, Err)
+        self.assertIn("more than once", duplicated.diagnostics[0].message)
+
+        self.assertIsInstance(parse_smoke_report("no json here", requested=None), Err)
+        self.assertIsInstance(
+            parse_smoke_report(json.dumps({"aart_cli_smoke_report": 1}), requested=None), Err
+        )
+
+    def test_nothing_is_missing_when_there_was_no_selection_to_miss(self) -> None:
+        parsed = parse_smoke_report(_report(_entry("one")), requested=None)
+        assert isinstance(parsed, Ok), getattr(parsed, "diagnostics", ())
+        self.assertEqual(parsed.value.missing, ())
 
 
 if __name__ == "__main__":

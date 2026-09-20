@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import unittest
 from unittest.mock import patch
 
@@ -360,6 +362,53 @@ class McpSmokeReportRouteTest(unittest.TestCase):
                 report = self._run(declaration, entry)
                 stages = {stage["stage"]: stage["outcome"] for stage in report["stages"]}
                 self.assertEqual(stages["harness-to-mcp-to-external-service"], "FAIL")
+
+
+class McpReportValidateCommandTest(unittest.TestCase):
+    """`aart-cli mcp report <path>`: what a harness session can run on its own output."""
+
+    def _write(self, body: str) -> str:
+        import tempfile
+
+        handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+        handle.write(body)
+        handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        return handle.name
+
+    def _request(self, path: str):
+        return cli._to_request(cli.build_parser().parse_args(["mcp", "report", path]))
+
+    def test_the_action_needs_only_a_path(self) -> None:
+        """No scope, no project, no harness: a harness session knows none of them."""
+
+        request = self._request("out.json")
+        self.assertEqual(request.mcp_action, "report")
+        self.assertEqual(request.report_path, "out.json")
+
+    def test_a_well_formed_report_exits_zero(self) -> None:
+        body = json.dumps(
+            {
+                "aart_cli_smoke_report": 1,
+                "results": [
+                    {
+                        "installation": "anything",
+                        "called": True,
+                        "result": {"content": [{"type": "text", "text": "Ada"}]},
+                        "status": "ok",
+                        "summary": "It read the user.",
+                        "possible_error": None,
+                    }
+                ],
+            }
+        )
+        self.assertEqual(mcp.run(self._request(self._write(body))), 0)
+
+    def test_a_malformed_report_exits_nonzero(self) -> None:
+        self.assertNotEqual(mcp.run(self._request(self._write("not a report"))), 0)
+
+    def test_an_unreadable_path_exits_nonzero_rather_than_raising(self) -> None:
+        self.assertNotEqual(mcp.run(self._request("/nonexistent/report.json")), 0)
 
 
 if __name__ == "__main__":

@@ -166,6 +166,10 @@ def compose_smoke_prompt(
             "",
             _shape(requests),
             "",
+            f"You can check the shape of what you wrote by running "
+            f"`aart-cli mcp report {report_path}`, and fix it before finishing. That checks the "
+            "report's shape only.",
+            "",
             "One results entry per installation listed above, using its installation string "
             "unchanged. `called` is whether you made the call. `result` is the tool result "
             "copied verbatim, or null if you did not call it. `status` is ok, error or "
@@ -242,13 +246,18 @@ def _assessment(fields: dict[str, object]) -> HarnessAssessment:
     )
 
 
-def _entry(raw: object, requested: tuple[str, ...], seen: set[str]) -> Result[SmokeReportEntry]:
+def _entry(
+    raw: object, requested: tuple[str, ...] | None, seen: set[str]
+) -> Result[SmokeReportEntry]:
     if not isinstance(raw, dict):
         return _error("a report result entry is not an object")
     installation = raw.get("installation")
     if not isinstance(installation, str):
         return _error("a report result entry has no installation string")
-    if installation not in requested:
+    # `requested is None` is the standalone validator's mode: there is no selection to correlate
+    # against, so correlation is the one check it skips -- and every other check stays on, or it
+    # would be validating nothing.
+    if requested is not None and installation not in requested:
         return _error(f"report entry names installation {installation!r}, which was not requested")
     if installation in seen:
         return _error(f"report names installation {installation!r} more than once")
@@ -263,8 +272,13 @@ def _entry(raw: object, requested: tuple[str, ...], seen: set[str]) -> Result[Sm
     return Ok(SmokeReportEntry(installation, called, result, _assessment(raw)))
 
 
-def parse_smoke_report(text: str, *, requested: tuple[str, ...]) -> Result[SmokeReport]:
-    """Read the operator's report, refusing anything it cannot grade honestly."""
+def parse_smoke_report(text: str, *, requested: tuple[str, ...] | None) -> Result[SmokeReport]:
+    """Read the operator's report, refusing anything it cannot grade honestly.
+
+    `requested` is the selection an entry's installation key must belong to. Pass `None` to check
+    the report's shape alone, which is what a harness session can do to its own output before
+    handing it over: it has no selection, so it cannot be told whether the keys are the right ones.
+    """
 
     document: dict[str, object] | None = None
     for span in reversed(_json_objects(text)):
@@ -291,7 +305,7 @@ def parse_smoke_report(text: str, *, requested: tuple[str, ...]) -> Result[Smoke
             return parsed
         seen.add(parsed.value.installation)
         entries.append(parsed.value)
-    missing = tuple(name for name in requested if name not in seen)
+    missing = () if requested is None else tuple(n for n in requested if n not in seen)
     return Ok(SmokeReport(tuple(entries), missing))
 
 

@@ -635,6 +635,22 @@ def build_parser() -> argparse.ArgumentParser:
     _add_project(p_mcp_test)
     _add_json(p_mcp_test)
 
+    # A second action rather than a flag on `test`, because a harness session has to be able to
+    # check its own output knowing only the file: `test --report` also needs a scope, a project
+    # root and a harness name, and the session knows none of them.
+    p_mcp_report = mcp_sub.add_parser(
+        "report",
+        formatter_class=_HELP_FORMATTER,
+        help="validate the shape of a harness smoke report",
+        description=(
+            "Check that a harness smoke report is well formed. This validates the report's shape "
+            "alone; whether its installations were the ones selected is checked by "
+            "`aart-cli mcp test --harness <harness> --report <path>`, which knows the selection."
+        ),
+    )
+    p_mcp_report.add_argument("report_path", metavar="PATH")
+    _add_json(p_mcp_report)
+
     # `receipt` lives under `marketplace` rather than under a top-level `setup` group, because
     # `marketplace setup` already owns that word: a second `aart setup` would name two different
     # operations.  A receipt is a read over one installation, which is this family's subject.
