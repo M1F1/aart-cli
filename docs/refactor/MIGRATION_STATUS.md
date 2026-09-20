@@ -4,6 +4,18 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-20, README — authenticated install first, TUI first (D-372).** The owner asked for the
+adoption page to lead with the Enterprise route rather than the public one, and for connecting a
+Registry to be shown in the TUI before the CLI. The second half is a divergence from §168, which
+already names the TUI the primary human route while the page ended with `Or do all five in the
+TUI`. The page now opens with `gh release download` and the Releases page by hand, then `pip`,
+`pipx`, `uv tool` and `uvx` from the downloaded file; public-repository installs live only in
+`docs/install/installing-aart-v1.md`. The Add Registry frame is generated from `compose_frame` and
+held by `tests/readme_tui_screen_test.py`, which a label-level mutation fails. Section order,
+bounded orientation and licence-last are unchanged: `adoption_first_contact_test` 31 tests,
+`install_routes_e2e_test` and `source_remediation_test` 23 tests, ruff, mypy and `docs-check` pass.
+
+
 **2026-09-20, install guide — the documented download named no repository (D-371).** The owner
 read the page and asked how a reader is supposed to know which project the wheel comes from. They
 could not: `gh release download` with no `--repo` resolves the repository from the current

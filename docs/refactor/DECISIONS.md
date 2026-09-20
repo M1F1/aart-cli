@@ -9433,3 +9433,34 @@ comment saying so. A targeted mutation restoring the old order reclassifies the 
 
 What the stand-in still cannot prove is unchanged: that a real instance answers, or that the
 address is the right one. What it now proves is that the documented line names an address at all.
+
+## D-372 — The README leads with the authenticated install, and with the TUI
+
+**2026-09-20, owner's direction.** Two orderings on the adoption page change.
+
+**The install route.** The page led with `uv tool install "git+<repository>.git@vX.Y.Z"`, which is
+the public-repository shape: it works when an unauthenticated fetch of the repository works. The
+product is meant to be run from an organization's own instance, where it does not. The two
+authenticated routes come first now -- `gh release download` for someone with the GitHub CLI, and
+the Releases page by hand for someone with nothing installed -- followed by installing from the
+downloaded file with `pip`, `pipx`, `uv tool` or `uvx`. Installing straight from a public
+repository moves to `docs/install/installing-aart-v1.md`, which already carried the rest of it.
+§168 does not fix which install shape leads, so this is a free choice; what it does fix is that no
+value that cannot be universal becomes a default, and `<repository>` stays a placeholder.
+
+`uvx` is listed as what it is: it runs the wheel and keeps nothing, so it answers "look at it
+first" rather than "install it". Verified against a real 0.4.0 wheel --
+`uvx --from ./aart_cli-0.4.0-py3-none-any.whl aart-cli --version` prints `aart-cli 0.4.0`.
+
+**The TUI.** §168 already says it: "The TUI is the primary human route; a compact deterministic CLI
+equivalent may follow." The page had it inverted -- five CLI steps, then `### Or do all five in the
+TUI` at the end. This is a correction of a divergence, not a new contract. Connecting a Registry is
+now shown in the interface first, and the commands follow under one heading for somebody scripting
+it.
+
+**The screen is generated, not drawn.** The illustration is a real frame, composed through the same
+`compose_frame`/`render` the shell draws with, and `tests/readme_tui_screen_test.py` recomposes it
+and compares. A picture of the product is the claim on an adoption page most likely to rot, because
+renaming a field is not a change anyone expects to break a README. A targeted mutation -- one field
+label altered in the pasted block -- fails the comparison. No screenshot or recording is committed:
+none can be produced here, and an image would be the one thing on the page no gate could check.
