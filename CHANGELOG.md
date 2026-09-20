@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.4.0](https://github.com/M1F1/aart-cli/compare/v0.3.0...v0.4.0) (2026-09-20)
+
+
+### Added
+
+* **authoring:** `aart-cli author check` answers with the parser and the compile rather than a lint ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **authoring:** `aart-cli author init` writes a full-surface workspace for guideline, hook, mcp, memory and skill ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **identity:** each installation owns its harness-visible name, credential address, configuration and runtime, and a collision is refused before anything is written ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **inputs:** every target collects its own configuration and credentials; nothing is shared or prefilled across installations ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **installed:** one row, one focus and one lookup address exactly one installation ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **mcp:** verify installed MCPs from the CLI over configuration, protocol, expectation and external-service stages, with an operator-run harness prompt and an attested report ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **paths:** one portable application home under `~/.aart-cli` or `AART_CLI_HOME` ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **protocol:** a deterministic AART YAML emitter, written as the parser's inverse ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **registry:** Registry Maintainer shows publication readiness and can push its validated local snapshot, never the default branch ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **registry:** review branches are named after the action that produced the commit ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **sources:** a Registry repository on this disk is a Registry, read one committed branch at a time ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+
+
+### Fixed
+
+* **authoring:** the smoke hint names a command the parser accepts ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **registry:** refuse to mix the two registry representations ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **registry:** stop shipping the maintainer's repository as a default ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+
+
+### Changed
+
+* **mcp:** the harness leg is operator-run -- AART composes a prompt and grades a report instead of driving a CLI ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **naming:** one command and one import package, with no second name anywhere the filesystem can see ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+* **registry:** remove `registry scaffold` and the retired representation's schema, fixtures and branches ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+
+
+### Documentation
+
+* **readme:** open with the route a new user runs, say what AART is, and link the detail rather than inlining it ([12c83e8](https://github.com/M1F1/aart-cli/commit/12c83e8ffe86f8dee4796b7fa10b6c99f8d38201))
+
 ## [0.3.0](https://github.com/M1F1/aart-cli/compare/v0.2.0...v0.3.0) (2026-09-18)
 
 
