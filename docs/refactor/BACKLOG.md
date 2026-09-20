@@ -4061,6 +4061,10 @@ pair a member with another harness's previous state and forget the wrong record.
 `forget_installation`, so the store does the right thing once the proposal names the right
 installation.
 
-**Reclassify to critical if it does not resolve with the Installed view.** The view slice makes
-per-owner records reachable, and this lookup is expected to fall out of that. If it does not, it is
-a wrong-transition bug on an accepted invariant and belongs inside CP-26.19 rather than here.
+**Reclassified critical and closed, 2026-09-20 (D-361).** It did not fall out of the view slice.
+Measured rather than predicted: `marketplace update` on a Skill installed into claude and opencode
+was refused outright with `installation-proposal-invalid: an artifact was superseded twice`,
+because `dict(previous)` collapsed the two entries that name one coordinate. Nothing was paired
+with the wrong state and nothing was forgotten -- the whole update stopped. That is §169.3's update
+acceptance failing, so it moved into CP-26.19. The key is now the installation owner the previous
+state already carries, and `tests/configured_update_command_e2e_test.py` converges both trees.

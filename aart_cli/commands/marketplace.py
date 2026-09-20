@@ -1135,6 +1135,9 @@ def _configured_update(request: Request, selectors: tuple[ArtifactSelector, ...]
         )
     except ValueError:
         return None
+    # One entry per installation, which is what `propose_installation` matches them by: two
+    # harnesses are two installations of one artifact (§169.3), and each names its own previous
+    # state through the owner its desired state carries.
     previous = tuple(
         (replace(item.record.coordinate, version=None), item.desired) for item in installed
     )

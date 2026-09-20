@@ -1968,8 +1968,11 @@ class LocalConsumerActions:
         )
         if isinstance(inspected, Err):
             return inspected
-        by_coordinate = {item.coordinate: item for item in inspected.value.inspections}
-        missing = [item for item in coordinates if item not in by_coordinate]
+        # Keyed by installation. Addressed by coordinate alone, an action on an artifact that is
+        # installed into two harnesses would reach whichever inspection this dictionary kept
+        # (§169.3), so the key is what the row carries.
+        by_installation = {item.installation: item for item in inspected.value.inspections}
+        missing = [item for item in coordinates if item not in by_installation]
         if missing:
             return Err(
                 (
@@ -1981,7 +1984,7 @@ class LocalConsumerActions:
                     ),
                 )
             )
-        return Ok(tuple(by_coordinate[item] for item in coordinates))
+        return Ok(tuple(by_installation[item] for item in coordinates))
 
     # -- execution ------------------------------------------------------------ #
 

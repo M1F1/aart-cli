@@ -33,6 +33,7 @@ from aart_cli.domain.installation_owner import (
     MAX_INSTALLED_NAME_LENGTH,
     InstallationOwner,
     credential_address,
+    installation_key,
     installation_owner,
     installed_name,
     installed_name_for,
@@ -255,6 +256,81 @@ class CredentialAddressPropertyTest(unittest.TestCase):
 
         self.assertLessEqual(len(address.service), MAX_CREDENTIAL_SERVICE_LENGTH)
         self.assertNotIn(owner.root, address.service)
+
+
+class InstallationKeyTest(unittest.TestCase):
+    """§169.3: what addresses one installation, where the coordinate addresses an artifact.
+
+    The keys a row, a focus and a lookup are built from. They have to be distinct per installation
+    -- two rows spelled the same make one of them unreachable and aim an action at whichever a
+    dictionary kept -- and they have to stay distinguishable from a plain coordinate, because both
+    travel through the same string-typed fields.
+    """
+
+    def test_the_harness_is_what_separates_two_installations_of_one_artifact(self) -> None:
+        coordinate = "company/mcp/github@1.5.0"
+
+        keys = [
+            installation_key(coordinate, _owner(harness=harness))
+            for harness in ("claude", "opencode")
+        ]
+
+        self.assertEqual(keys, [f"{coordinate}#claude", f"{coordinate}#opencode"])
+
+    def test_two_profiles_of_one_harness_are_two_keys(self) -> None:
+        """A profile is part of the installation, so a key that dropped it would address both."""
+
+        coordinate = "company/mcp/github@1.5.0"
+
+        self.assertEqual(
+            installation_key(coordinate, _owner(profile="work")), f"{coordinate}#claude+work"
+        )
+        self.assertNotEqual(
+            installation_key(coordinate, _owner(profile="work")),
+            installation_key(coordinate, _owner()),
+        )
+
+    def test_a_record_naming_no_owner_is_addressed_by_what_it_is(self) -> None:
+        """The callers below the boundary that knows an owner. Nothing is invented for them."""
+
+        self.assertEqual(
+            installation_key("company/mcp/github@1.5.0", None), "company/mcp/github@1.5.0"
+        )
+
+    def test_a_key_is_never_spelled_like_a_coordinate(self) -> None:
+        """`#` cannot occur in an alias, kind, name or version, so the two never collide."""
+
+        key = installation_key("company/mcp/github@1.5.0", _owner())
+
+        self.assertNotIn("#", "company/mcp/github@1.5.0")
+        self.assertEqual(key.count("#"), 1)
+
+    def test_only_an_owner_or_nothing_will_do(self) -> None:
+        with self.assertRaises(ValueError):
+            installation_key("company/mcp/github@1.5.0", "claude")  # type: ignore[arg-type]
+
+
+class InstallationKeyPropertyTest(unittest.TestCase):
+    _owners = CredentialAddressPropertyTest._owners
+
+    @given(first=_owners, second=_owners)
+    @settings(max_examples=200, suppress_health_check=(HealthCheck.differing_executors,))
+    def test_two_installations_of_one_artifact_share_a_key_only_when_the_harness_is_the_same(
+        self, first: InstallationOwner, second: InstallationOwner
+    ) -> None:
+        """The claim a row list depends on, stated over owners rather than over two examples.
+
+        Only the harness and profile can separate two keys, because the rest of the owner is what
+        the coordinate already says. So the key is the same exactly when the label is -- and an
+        owner differing only in scope or root is deliberately *not* a second row, which is a fact
+        worth pinning rather than discovering from a duplicate row later.
+        """
+
+        coordinate = "company/mcp/github@1.5.0"
+
+        same = installation_key(coordinate, first) == installation_key(coordinate, second)
+
+        self.assertEqual(same, first.label == second.label)
 
 
 class InstalledNameTest(unittest.TestCase):

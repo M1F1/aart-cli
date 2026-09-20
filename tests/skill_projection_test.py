@@ -125,6 +125,20 @@ class SkillProjectionTest(unittest.TestCase):
         assert isinstance(projected, Ok), projected
         self.assertIn(b"name: code-review-company-project\r\n", projected.value)
 
+    def test_a_stray_carriage_return_in_the_prose_is_not_the_document_s_line_ending(self) -> None:
+        """A lone `\\r` is data, not a row terminator, and reading it as one wrote the whole
+        header as a single line no frontmatter parser can read."""
+
+        projected = project_skill_document(
+            b"Body with a stray \r in it.\n",
+            installed_name="code-review-company-project",
+            summary="A summary.",
+        )
+
+        assert isinstance(projected, Ok), projected
+        self.assertTrue(projected.value.startswith(b"---\nname: code-review-company-project\n"))
+        self.assertTrue(projected.value.endswith(b"Body with a stray \r in it.\n"))
+
     # -- what it refuses rather than guesses at ------------------------------------------------
 
     def _refusal(self, canonical: bytes) -> Err:

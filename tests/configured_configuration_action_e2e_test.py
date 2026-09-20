@@ -52,7 +52,7 @@ from aart_cli.tui_consumer import run_consumer_shell
 from tests.artifact_installation_e2e_test import MANIFEST, MOMENT, ORG, TOKEN
 from tests.configured_installation_action_e2e_test import _FileCredentials
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP, _published_registry
-from tests.consumer_shell_test import BACKSPACE, DOWN, ENTER, SPACE, FakeTerminal
+from tests.consumer_shell_test import BACKSPACE, ENTER, FakeTerminal
 from tests.marketplace_fixtures import configured_source, effective_configuration
 from tests.mcp_stdio_e2e_test import speak
 
@@ -160,7 +160,14 @@ class ConfiguredConfigurationActionE2ETest(unittest.TestCase):
         )
         assert isinstance(installed, Ok), installed
 
-    def _inspection(self):
+    def _inspection(self, harness: str = "claude"):
+        """The one installation this harness has (§169.3).
+
+        Three harnesses are three installations, so asking for "the" inspection is asking which
+        one. The count is asserted rather than assumed: a missing one would otherwise be read as
+        somebody else's row.
+        """
+
         inspected = read_installed_inspections(
             state_root=self.host.state_root,
             harness_root=self.host.harness_root,
@@ -170,8 +177,10 @@ class ConfiguredConfigurationActionE2ETest(unittest.TestCase):
         )
         self.assertIsInstance(inspected, Ok, getattr(inspected, "diagnostics", ()))
         assert isinstance(inspected, Ok)
-        self.assertEqual(len(inspected.value.inspections), 1)
-        return inspected.value.inspections[0]
+        self.assertEqual(len(inspected.value.inspections), len(HARNESSES))
+        found = [item for item in inspected.value.inspections if item.harness == harness]
+        self.assertEqual(len(found), 1, f"{harness} has {len(found)} installations")
+        return found[0]
 
     def _project_files(self) -> dict[str, bytes]:
         return {
@@ -180,20 +189,82 @@ class ConfiguredConfigurationActionE2ETest(unittest.TestCase):
             if path.is_file()
         }
 
+    def _config_record(self, harness: str):
+        """The one configuration file the named harness's installation has (§169.3)."""
+
+        records = self._inspection(harness).record.receipt.configuration_files
+        self.assertEqual([item.harness for item in records], [harness])
+        return records[0]
+
+    def _registration(self, harness: str):
+        """The one registration the named harness's installation has."""
+
+        registrations = self._inspection(harness).record.receipt.registrations
+        self.assertEqual([item.target.harness for item in registrations], [harness])
+        return registrations[0]
+
     def _edit(self, harnesses: tuple[str, ...], value: str):
-        before = self._inspection()
+        """Edit the named harnesses' configuration, one reviewed edit per installation.
+
+        An installation is one harness's and owns one configuration file (§169.3), so editing
+        three harnesses is three reviewed edits rather than one spanning them. That is the whole
+        difference from what this drove before, and it is what makes each edit's Review name only
+        the file that edit will write. What is asserted afterwards is unchanged, and is the point:
+        the harnesses nobody edited keep their file, their digest and their answer byte for byte.
+        """
+
         files_before = self._project_files()
+        before = {harness: self._config_record(harness) for harness in HARNESSES}
+
+        edits = [self._edit_one(harness, value) for harness in harnesses]
+
+        after = {harness: self._config_record(harness) for harness in HARNESSES}
+        for harness in HARNESSES:
+            if harness in harnesses:
+                self.assertNotEqual(before[harness].digest, after[harness].digest)
+            else:
+                self.assertEqual(before[harness], after[harness])
+
+        files_after = self._project_files()
+        changed = {
+            path
+            for path in files_before.keys() | files_after.keys()
+            if files_before.get(path) != files_after.get(path)
+        }
+        self.assertEqual(changed, {after[harness].path for harness in harnesses})
+
+        for harness in HARNESSES:
+            registration = self._registration(harness)
+            replies = speak(
+                [registration.command, *registration.arguments],
+                [{"jsonrpc": "2.0", "id": 1, "method": "tools/call"}],
+            )
+            facts = json.loads(replies[0]["result"]["content"][0]["text"])
+            self.assertEqual(facts["org"], value if harness in harnesses else "original-team")
+
+        durable = "".join(
+            repr(completed.machine.activity) + repr(completed.machine.receipts)
+            for _, completed in edits
+        )
+        state_root = pathlib.Path(self.host.state_root)
+        for path in state_root.rglob("*"):
+            if path.is_file():
+                durable += path.read_text(encoding="utf-8", errors="replace")
+        self.assertNotIn(value, durable)
+        return edits[-1]
+
+    def _edit_one(self, harness: str, value: str):
         prepared = prepare_configured_configuration(
-            before,
+            self._inspection(harness),
             input_id=ORG,
-            harnesses=harnesses,
+            harnesses=(harness,),
             value=value,
             policy=EffectivePolicy(),
         )
         self.assertIsInstance(prepared, Ok, getattr(prepared, "diagnostics", ()))
         assert isinstance(prepared, Ok)
         self.assertEqual(
-            {step.component.name for step in prepared.value.plan.repair.steps}, set(harnesses)
+            {step.component.name for step in prepared.value.plan.repair.steps}, {harness}
         )
         completed = complete_configured_configuration(
             prepared.value,
@@ -208,41 +279,6 @@ class ConfiguredConfigurationActionE2ETest(unittest.TestCase):
         self.assertIsInstance(completed, Ok, getattr(completed, "diagnostics", ()))
         assert isinstance(completed, Ok)
         self.assertIs(completed.value.outcome.status, LifecycleExecutionStatus.COMPLETED)
-
-        after = self._inspection()
-        old_records = {item.harness: item for item in before.record.receipt.configuration_files}
-        new_records = {item.harness: item for item in after.record.receipt.configuration_files}
-        for harness in HARNESSES:
-            if harness in harnesses:
-                self.assertNotEqual(old_records[harness].digest, new_records[harness].digest)
-            else:
-                self.assertEqual(old_records[harness], new_records[harness])
-
-        files_after = self._project_files()
-        changed = {
-            path
-            for path in files_before.keys() | files_after.keys()
-            if files_before.get(path) != files_after.get(path)
-        }
-        self.assertEqual(changed, {new_records[item].path for item in harnesses})
-
-        receipt = after.record.receipt
-        registrations = {item.target.harness: item for item in receipt.registrations}
-        for harness in HARNESSES:
-            registration = registrations[harness]
-            replies = speak(
-                [registration.command, *registration.arguments],
-                [{"jsonrpc": "2.0", "id": 1, "method": "tools/call"}],
-            )
-            facts = json.loads(replies[0]["result"]["content"][0]["text"])
-            self.assertEqual(facts["org"], value if harness in harnesses else "original-team")
-
-        durable = repr(completed.value.machine.activity) + repr(completed.value.machine.receipts)
-        state_root = pathlib.Path(self.host.state_root)
-        for path in state_root.rglob("*"):
-            if path.is_file():
-                durable += path.read_text(encoding="utf-8", errors="replace")
-        self.assertNotIn(value, durable)
         return prepared.value, completed.value
 
     def test_edit_one_harness(self) -> None:
@@ -350,7 +386,9 @@ class ConfiguredConfigurationActionE2ETest(unittest.TestCase):
             ConsumerUiCommand(
                 ConsumerUiCommandKind.PREPARE_ACTION,
                 action=ConsumerActionKind.CONFIGURE,
-                focus=str(self._inspection().coordinate),
+                # The installation, not the artifact: three harnesses are three installations and
+                # an action addressed to the coordinate alone names none of them (§169.3).
+                focus=self._inspection().installation,
                 targets=("claude",),
                 config_answers=((ORG.value, candidate),),
             )
@@ -449,19 +487,19 @@ class ConfiguredConfigurationActionE2ETest(unittest.TestCase):
             ),
             now=lambda: __import__("datetime").datetime.fromisoformat(EDITED_AT),
         )
-        coordinate = self._inspection().coordinate
+        # The claude installation, which is what a row and a focus address (§169.3). The shell is
+        # opened on it rather than on the coordinate, which now names three of them.
+        installation = self._inspection().installation
         state = ConsumerUiState(
             ConsumerSession(ConsumerScreen.USER_INPUT_DETAILS),
-            focus=coordinate,
-            user_inputs_artifact=coordinate,
+            focus=installation,
+            user_inputs_artifact=installation,
         )
         value = "shell-team"
         terminal = FakeTerminal(
             ENTER,
-            DOWN,
-            SPACE,
-            DOWN,
-            SPACE,
+            # 22b opens with the one harness this installation is already chosen (§169.3), so
+            # Enter accepts it. It used to take two DOWN/SPACE pairs to pick two out of three.
             ENTER,
             # 22c opens holding the value the chosen harness has now; it is cleared, then replaced.
             *(BACKSPACE for _ in "original-team"),
@@ -482,9 +520,12 @@ class ConfiguredConfigurationActionE2ETest(unittest.TestCase):
             "\n---\n".join("\n".join(item) for item in terminal.frames),
         )
         self.assertTrue(terminal.screen_containing(f"> {ORG} [original-team]"))
-        after = self._inspection().record.receipt.configuration_files
+        # Read per installation, because each one owns its own file now (§169.3). The two the
+        # shell never opened still hold what they were installed with, which is what makes this an
+        # edit of one installation rather than of the artifact.
         values = {
-            item.harness: pathlib.Path(item.path).read_text(encoding="utf-8") for item in after
+            harness: pathlib.Path(self._config_record(harness).path).read_text(encoding="utf-8")
+            for harness in HARNESSES
         }
         self.assertIn(f"{ORG}={value}\n", values["claude"])
         self.assertIn(f"{ORG}=original-team\n", values["opencode"])

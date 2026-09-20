@@ -32,12 +32,14 @@ from tests.placed_installation_e2e_test import (
 UPDATED_SKILL_BODY = "# Code review\n\nRead reference/style.md, then comment on intent.\n"
 
 
-def _authored(version: str, body: str) -> tuple[tuple[str, str], ...]:
+def _authored(
+    version: str, body: str, harnesses: tuple[str, ...] = ("claude",)
+) -> tuple[tuple[str, str], ...]:
     manifest = {
         "schema": "aart-cli.dev/skill/v1",
         "artifact": {"name": "code-review", "kind": "skill", "version": version},
         "payload": {"include": ["SKILL.md", "reference/style.md"]},
-        "compatibility": {"harnesses": ["claude"]},
+        "compatibility": {"harnesses": list(harnesses)},
     }
     return (
         ("code-review/aart-cli.json", json.dumps(manifest)),
@@ -48,6 +50,12 @@ def _authored(version: str, body: str) -> tuple[tuple[str, str], ...]:
 
 AUTHORED_SKILL_1_3_0 = _authored("1.3.0", UPDATED_SKILL_BODY)
 AUTHORED_SKILL_1_1_0 = _authored("1.1.0", "# Code review\n\nAn older body.\n")
+
+#: The same two versions, declared for two harnesses, because that is what an update of more than
+#: one installation needs a package to allow (§169.3).
+TWO_HARNESSES = ("claude", "opencode")
+AUTHORED_FOR_TWO_1_2_0 = _authored("1.2.0", SKILL_BODY, TWO_HARNESSES)
+AUTHORED_FOR_TWO_1_3_0 = _authored("1.3.0", UPDATED_SKILL_BODY, TWO_HARNESSES)
 
 
 def _delivered(env) -> pathlib.Path:
@@ -174,6 +182,59 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self.assertFalse(payload["ok"])
             self.assertIn("downgrade", payload["diagnostics"][0]["message"])
             self.assertEqual(_delivered(env).read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
+
+    def test_both_installations_of_one_artifact_are_updated_and_neither_is_forgotten(self) -> None:
+        """§169.3: two harnesses are two installations, so an update converges two of them.
+
+        The whole operation used to be refused -- "an artifact was superseded twice" -- because the
+        state being left was keyed by the artifact, and two installations of one artifact name it
+        twice. The key is the installation; what proves it is that both trees move, since an update
+        that forgot one would leave that harness on the old body while reporting success.
+        """
+
+        with _environment(authored=AUTHORED_FOR_TWO_1_2_0) as env:
+            code, installed = env.run(
+                "marketplace",
+                "install",
+                COORDINATE,
+                "--profile",
+                "claude",
+                "--profile",
+                "opencode",
+                "--yes",
+            )
+            self.assertEqual(code, 0, installed)
+            delivered = {
+                harness: env.project / f".{harness}/skills/code-review-company-project/SKILL.md"
+                for harness in TWO_HARNESSES
+            }
+            for harness, path in delivered.items():
+                self.assertEqual(
+                    path.read_text(encoding="utf-8"), as_delivered(SKILL_BODY), harness
+                )
+            env.publish(AUTHORED_FOR_TWO_1_3_0)
+
+            code, payload = env.run(
+                "marketplace",
+                "update",
+                COORDINATE,
+                "--profile",
+                "claude",
+                "--profile",
+                "opencode",
+                "--yes",
+            )
+
+            self.assertEqual(code, 0, payload)
+            self.assertTrue(payload["finalized"], payload)
+            self.assertEqual(
+                [item["key"] for item in payload["items"]],
+                ["company/skill/code-review@1.3.0"] * 2,
+            )
+            for harness, path in delivered.items():
+                self.assertEqual(
+                    path.read_text(encoding="utf-8"), as_delivered(UPDATED_SKILL_BODY), harness
+                )
 
     def test_update_without_a_coordinate_converges_everything_canonically_installed(self) -> None:
         with _environment() as env:

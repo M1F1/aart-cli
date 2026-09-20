@@ -1,21 +1,22 @@
 # AART Refactor — Next Work
 
-## Where CP-26 is (2026-09-19)
+## Where CP-26 is (2026-09-20)
 
-**2026-09-20 handoff check:** the handoff naming `4fe1fe4`, 17/22 and step 18 as next is stale.
-At inspected HEAD `64db5c0`, steps 18 and 18a are already done; step 19 is in progress. A focused
-rerun of 76 Push/publication/workspace tests passed. This does not clear step 19's recorded red
-suite or its remaining owner-qualified Installed/lifecycle work below. Use the current plan and
-the "What is left, in order" section, not the old step-18 handoff, to resume implementation.
+**Steps 1–19 are done** on `refactor/cp-26-legacy-removal`, with the suite green: `unit` 4671 OK,
+`integration` 410 OK, lint/format-check/typecheck clean. **Next is CP-26.20.** Read "What is left,
+in order" below; the older handoff naming `4fe1fe4`, 17/22 and step 18 as next is stale and so is
+anything that describes step 19 as in progress or the suite as red.
 
-Steps 1–18a are **done** on `refactor/cp-26-legacy-removal`; **step 19 is in progress**. Installation
-owners, per-owner input composition, concrete credential addresses, launcher-side harness address
-composition, reconciliation names and Screen 07's per-installation rows are now implemented
-(D-352–D-357). The executable, import and filesystem namespace is `aart-cli` / `aart_cli`, the product has one portable
+Installation owners, per-owner input composition, concrete credential addresses, one placement and one record
+per installation, the installation key the Installed view and the TUI address a row by,
+reconciliation names and Screen 07's per-installation rows are implemented
+(D-352–D-353, D-356–D-361; D-354 and D-355 are deleted). The executable, import and filesystem
+namespace is `aart-cli` / `aart_cli`, the product has one portable
 `~/.aart-cli` / `AART_CLI_HOME`, the harness-owned installation-tree policy is defined, and Push
 suggests a review branch from the action that produced the current commit (D-347). B-057 and B-149
-are both closed. The plan has **23 tasks (19 done)**: additions **CP-26.18a** and **CP-26.20a**
-preserve existing ids. Execution remains **19 → 20 → 20a → 21**; task 21 is the final broad gate.
+are both closed, and so is B-160. The plan has **23 tasks (20 done)**: additions **CP-26.18a** and
+**CP-26.20a** preserve existing ids. Execution is now **20 → 20a → 21**; task 21 is the final broad
+gate.
 
 ### Accepted local MCP smoke verification (2026-09-19)
 
@@ -180,54 +181,57 @@ made every member of a two-harness install fail preflight as "state changed afte
 `InstallationProposal` is keyed on `(artifact, owner)` and observations are paired member for
 member by position rather than looked up by artifact.
 
-**The suite is NOT green. Do not treat this branch as finished.** Last full `make unit` before the
-last round of fixes: 4669 tests, 25 failures, 6 errors. Since then these are green again and were
-verified by module: `receipt_recording_test`, `installed_object_identity_test`,
-`configured_setup_report_test`, `configured_setup_subject_test`, `git_backed_runtime_e2e_test`,
-`git_backed_bulk_install_e2e_test`, `configured_uninstall_command_e2e_test`,
-`configured_installation_action_e2e_test`, `configured_installation_draft_e2e_test`,
-`consumer_flow_test`, `installed_artifact_paths_test`, `traceability_matrix_test`.
+**The suite is green (2026-09-20).** `python scripts/quality.py unit` — 4671 tests, OK, one
+skipped. `python scripts/quality.py integration` — 410 tests, OK. Lint, format-check and typecheck
+clean. Never run `make quality` locally; CP-26.21 owns it (D-317).
+
+**Step 19's remaining work landed (D-361).** The Installed view and the TUI focus key address one
+installation, through `installation_key(coordinate, owner)` in `domain/installation_owner.py`:
+`<coordinate>#<harness>`, `+<profile>` where the harness has profiles, the bare coordinate where a
+record names no owner. One function composes it and `InstalledInspection.installation`,
+`InstalledArtifactView.row`, `ConfigurationFileView.row`, the TUI row list, `screens.artifact()`,
+`_inspections`, `credential_dependants` and the health map all read it.
+
+`tests/configured_configuration_action_e2e_test.py` was rewritten as planned: one reviewed
+prepare/complete per installation, `_inspection(harness)` selecting by owner, and the harnesses
+nobody edited asserted unchanged file, digest and served answer.
+
+**B-160 was reclassified critical and is closed.** It did not fall out of the view slice. A
+`marketplace update` of an artifact installed into two harnesses was refused outright --
+`installation-proposal-invalid: an artifact was superseded twice` -- because `dict(previous)`
+collapsed two previous states naming one coordinate. Supersession is keyed by the owner the
+previous state already carries (`_supersession_key`), and
+`configured_update_command_e2e_test.py::ConfiguredUpdateCommandTest::test_both_installations_of_one_artifact_are_updated_and_neither_is_forgotten`
+converges both trees.
+
+**Found and fixed on the way.** A Hypothesis property in `skill_projection_test` showed
+`application/skill_projection._ending` reading a lone `\r` in a body as the document's line
+ending, which wrote the installed `SKILL.md` frontmatter with `\r` as its row terminator -- one
+header no parser reads. Detection is `\r\n` or `\n` and nothing else now, pinned by an example.
+
+*Targeted mutations: five recorded*, each reverted after watching the named test turn red. The
+table is in the slice document's second Step 19 entry: `path_for` including the owner,
+`placements_for` returning one placement per harness, the `(coordinate, owner)` key in
+`configured_installation_action.inspect`, `InstalledArtifactView.row`, and `_supersession_key`.
+Scoped `mutmut` over `domain/installation_owner.py` with `installation_owner_test.py` leaves
+`installation_key`'s structural mutants killed and three message-text survivors on a
+programming-error guard. Clear `mutants/` and `mutmut-stats.json` before mutating a module that
+has gained a function, or its mutants report "no tests" from the stale cache.
 
 **What is left, in order.**
 
-*(a) The Installed view is still keyed by artifact, and that is now a defect rather than a
-simplification.* `InstalledInspection.coordinate` is `str(record.coordinate)` and is used as the
-TUI **focus key** (`io/consumer_actions.py:1971`, `by_coordinate = {item.coordinate: item ...}`).
-With three harnesses there are three inspections with the same key, so two of them are unreachable
-and configure/repair/uninstall silently act on whichever the dict kept. The view needs one
-actionable row per installation, and the focus key needs the owner in it. Every failing test below
-is waiting on this:
+*(a)* **B-159 is still open and still noncritical:** the launcher's harness argument and the
+`config/<harness>.conf` filename say what the tree already knows. Correct, redundant, and a rename
+worth doing when nothing else is in flight.
 
-- `tests/configured_configuration_action_e2e_test.py` — 9 failures, all `3 != 1` from
-  `_inspection()` asserting one inspection for three harnesses. This module needs a real rewrite,
-  not a number change: `_inspection(harness)` should select by `record.receipt.owner.harness`, and
-  `_edit` should drive one prepare/complete **per installation** (each with `harnesses=(harness,)`)
-  rather than one call spanning harnesses. `prepare_configured_configuration` itself is already
-  correct per installation -- an installation has one configuration file now, so choosing another
-  harness's is correctly "stale", which is worth asserting as the §169.3 evidence.
-  `test_screen_22a_...`, `test_real_handler_...` and `test_credential_set_...` drive the shell with
-  `focus=str(inspection.coordinate)` and are blocked on the focus key.
-- `tests/install_time_config_form_test.py` — "opencode configuration was not written".
-- `tests/installation_harness_choice_test.py` — the recorded delivery set for several chosen
-  harnesses.
-- `tests/artifact_details_controls_test.py::test_a_declared_platform_including_this_machine_still_places`
-  — error, not yet diagnosed.
+*(b)* **CP-26.20** — Add a Registry from a local repository path and a selected branch (D-350),
+then prove local and remote aliases stay distinct installation owners. INV-243's remaining
+"PARTIAL" is this.
 
-*(b)* `propose_installation`'s `previous` / `superseded` is still coordinate-keyed. It resolves
-naturally once (a) makes records per owner reachable; until then a multi-harness **update** can
-forget the wrong record. `record_installation_transaction` already passes `superseded.owner`.
+*(c)* **CP-26.20a** — CLI-only smoke verification of installed MCPs (GitHub issue #27, D-348/D-351,
+§170).
 
-*(c)* Owed at the end of the slice: a new decision superseding **D-354** and **D-355** (both are
-now dead code, deleted), the slice document, `MIGRATION_STATUS.md` and `BACKLOG.md`.
-
-*(d) Backlog candidate, not critical path:* the launcher's harness argument and the per-harness
-configuration **filename** are both redundant now -- one installation has one configuration file --
-but they still function correctly, so leave them until the slice closes.
-
-*Targeted mutations owed.* None of this split has had its mutation evidence recorded yet. The
-claims that need one each: `path_for` including the owner (delete the owner from the digest and
-watch two installations collapse to one record), `placements_for` returning one placement per
-harness, and the `(coordinate, owner)` key in `configured_installation_action.inspect`.
+*(d)* **CP-26.21** — the only task that runs the full quality suite.
 
 Naming is included in this task (D-349, §169.7, INV-253; issues #26/#28). Harness-visible names
 carry artifact/Registry alias/scope without version, respect discovery paths and adapter grammar,

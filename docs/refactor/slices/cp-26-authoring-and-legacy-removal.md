@@ -1926,3 +1926,59 @@ non-declared profile passed alone, so running it per harness turned "this harnes
 unreachable and an action takes whichever the dict kept -- a defect the split created and has not
 yet repaid. The suite is red on it, and `NEXT.md` names each failing module and what it waits on.
 No targeted mutation is recorded for this step yet; three are owed and named there.
+
+### Step 19 — the key that addresses one installation, and what it repaid (2026-09-20, D-361)
+
+The previous entry stopped at a defect it had created: the Installed view and the TUI focus key
+were still `str(record.coordinate)`, so three harnesses were three inspections under one key and
+two of them were unreachable. That is now `installation_key(coordinate, owner)` --
+`<coordinate>#<harness>`, `+<profile>` where the harness has them, and the bare coordinate where a
+record names no owner. One function composes it and `InstalledInspection.installation`,
+`InstalledArtifactView.row`, `ConfigurationFileView.row`, the TUI row list, `screens.artifact()`,
+`_inspections`, `credential_dependants` and the health map all read it, because a key spelled two
+ways addresses nothing and the two spellings would not disagree until a profile appeared.
+
+**What the rewrite of `configured_configuration_action_e2e_test.py` says, which the number did
+not.** Nine tests failed on `3 != 1`, and the honest repair was not a count. An installation owns
+one configuration file, so `_inspection(harness)` selects the installation and `_edit` drives one
+reviewed prepare/complete **per installation** instead of one call spanning three. The assertions
+afterwards are unchanged and that is the point: the harnesses nobody edited keep their file, their
+digest and the answer their server reports, and Screen 22b now opens with the one harness this
+installation is, already chosen.
+
+**Two things found by running it rather than by reading it.**
+
+- Only one of two chosen harnesses was installed in `install_time_config_form_test`. Progressive
+  instrumentation showed `credential:github-token` absent at Review and present at execution for
+  the second harness. Probing the prepared placements proved the addresses were already
+  per-harness, so the product was right and the *test double* was wrong: `_MemoryCredentialProvider`
+  held one flag for every address, so it answered `present` for an item nobody had stored. It holds
+  one item per service/account now, and the test asserts the two distinct addresses.
+- `marketplace update` on an artifact installed into two harnesses was refused outright --
+  `installation-proposal-invalid: an artifact was superseded twice` -- because `dict(previous)` in
+  `propose_installation` collapsed two previous states naming one coordinate. That is §169.3's
+  update acceptance failing, so B-160 was reclassified critical and closed here: supersession is
+  keyed by the owner the previous state already carries.
+
+**Found on the way.** A Hypothesis property in `skill_projection_test` generated a body holding a
+lone `\r` and showed `_ending` reading it as the document's line ending, writing the whole
+frontmatter with `\r` as its row terminator. Detection is `\r\n` or `\n` and nothing else now, with
+an example test pinning it.
+
+**Evidence.** `unit` 4671 tests OK, `integration` 410 tests OK, lint/format/typecheck clean. Five
+targeted mutations, each reverted after watching the named test turn red:
+
+| Claim | Mutation | What went red |
+|---|---|---|
+| `path_for` keys by installation | drop the owner from the digested identity | `installation_harness_choice_test` — "a transaction records each installation once" |
+| `placements_for` is per harness | keep only the first placement | `installation_harness_choice_test` (5) |
+| `inspect` pairs plan with tree per installation | re-key `planned`/`recorded` by coordinate | `install_time_config_form_test` |
+| a row addresses an installation | `InstalledArtifactView.row` returns the coordinate | `installed_artifact_paths_test` |
+| supersession is per installation | `_supersession_key` ignores the owner | `configured_update_command_e2e_test` |
+
+Scoped `mutmut` over `domain/installation_owner.py` with `installation_owner_test.py`: the
+structural mutants of `installation_key` are killed; its three survivors are `ValueError` message
+text on a programming-error guard, which is the same class as the survivors already present in
+`credential_address` and `installed_name_for` and is not a claim worth asserting. The first run
+reported `installation_key` as "no tests" because `mutants/` held a cache from before the function
+existed — clear `mutants/` and `mutmut-stats.json` when mutating a module that has gained one.

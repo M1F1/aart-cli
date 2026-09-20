@@ -28,6 +28,7 @@ from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactCoordinate, InputId
 from aart_cli.domain.inputs import BoundInput, BoundInputs, RuntimeInput
 from aart_cli.domain.inspection import EnvironmentFacts
+from aart_cli.domain.installation_owner import installation_key
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.receipts import InstalledRecord
 from aart_cli.domain.reconciliation import CurrentState, DesiredState
@@ -105,6 +106,19 @@ class InstalledInspection:
     def coordinate(self) -> str:
         return str(self.record.coordinate)
 
+    @property
+    def installation(self) -> str:
+        """The key that addresses this installation rather than its artifact (§169.3)."""
+
+        return installation_key(self.coordinate, self.record.receipt.owner)
+
+    @property
+    def harness(self) -> str:
+        """Which harness this installation is, or empty where the record names none."""
+
+        owner = self.record.receipt.owner
+        return "" if owner is None else owner.label
+
 
 @dataclass(frozen=True, slots=True)
 class UnadoptedInstallation:
@@ -155,8 +169,11 @@ def credential_dependants(
     """
 
     reference = observation.reference
+    # The installation rather than the artifact: a credential belongs to one installation
+    # (§169.4-6), so two harnesses holding two items for one artifact are two dependants, and
+    # naming the artifact twice would read as one dependant listed by mistake.
     return tuple(
-        item.coordinate for item in inspections if reference in item.record.credential_references
+        item.installation for item in inspections if reference in item.record.credential_references
     )
 
 
@@ -170,12 +187,12 @@ def _collections(
     since published a new member has not thereby installed it.
     """
 
-    health = {view.coordinate: view.health for view in views}
+    health = {view.row: view.health for view in views}
     members: dict[str, list[MemberHealth]] = {}
     for item in inspections:
         for collection in item.record.collections:
             members.setdefault(collection, []).append(
-                MemberHealth(item.coordinate, InstalledHealth(health[item.coordinate]))
+                MemberHealth(item.installation, InstalledHealth(health[item.installation]))
             )
     return tuple(
         project_installed_collection(name, tuple(group)) for name, group in sorted(members.items())
@@ -235,6 +252,7 @@ def assemble_consumer_machine(
                 if str(reference) in by_reference
             ),
             receipt=item.record.receipt,
+            harness=item.harness,
         )
         for item in inspections
     )

@@ -54,6 +54,7 @@ from aart_cli.domain.harness import (
     memory_target,
 )
 from aart_cli.domain.identifiers import ArtifactCoordinate
+from aart_cli.domain.installation_owner import installation_key
 from aart_cli.domain.receipts import (
     InstallationReceipt,
     InstalledRecord,
@@ -230,6 +231,10 @@ def read_configuration_files(
         if not isinstance(receipt, InstallationReceipt):
             continue
         input_ids = tuple(item.input.value for item in receipt.config)
+        # The file belongs to one installation, not to the artifact (§169.3): three harnesses are
+        # three records here, all carrying the same coordinate, so the coordinate cannot be what a
+        # reader looks one of them up by.
+        key = installation_key(installed.coordinate, receipt.owner)
         for record in receipt.configuration_files:
             try:
                 content = Path(record.path).read_bytes()
@@ -243,6 +248,7 @@ def read_configuration_files(
                         (),
                         "the configuration file is missing",
                         input_ids,
+                        key,
                     )
                 )
                 continue
@@ -256,6 +262,7 @@ def read_configuration_files(
                         (),
                         "the configuration file could not be read",
                         input_ids,
+                        key,
                     )
                 )
                 continue
@@ -276,6 +283,7 @@ def read_configuration_files(
                         (),
                         "the configuration file does not use the supported format",
                         input_ids,
+                        key,
                     )
                 )
                 continue
@@ -293,6 +301,7 @@ def read_configuration_files(
                         else "the file changed outside AART after its receipt was recorded"
                     ),
                     input_ids or tuple(item[0].value for item in parsed),
+                    key,
                 )
             )
     return Ok(tuple(views))

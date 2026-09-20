@@ -22,12 +22,18 @@ def _error(message: str) -> Err:
 
 
 def _ending(lines: list[str]) -> str:
-    """How this document ends a line, taken from the first line that ends at all."""
+    """How this document ends a line: `\r\n` where it is a Windows document, `\n` otherwise.
+
+    Only those two, because only those two are what a harness's frontmatter reader will accept as
+    the end of a row. `str.splitlines` also breaks on a lone `\r` and on the Unicode separators,
+    and reading one of those off a document that merely contains one -- a stray carriage return in
+    the prose -- would write the whole header as a single row no parser can read.
+    """
 
     for line in lines:
-        stripped = line.rstrip("\r\n")
-        if len(stripped) != len(line):
-            return line[len(stripped) :]
+        for ending in ("\r\n", "\n"):
+            if line.endswith(ending):
+                return ending
     return "\n"
 
 

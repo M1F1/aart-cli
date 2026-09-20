@@ -48,6 +48,7 @@ from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import OFFERED, _delivered, _drive
 from tests.consumer_marketplace_shell_test import drive, screens
 from tests.consumer_shell_test import ENTER, ESCAPE, SPACE, FakeTerminal, _at
+from tests.declared_harness_narrowing_test import _reached
 from tests.marketplace_fixtures import (
     artifact,
     configured_source,
@@ -371,7 +372,7 @@ class ThisPlatformIsDeclaredTest(_PlacementFixture):
 
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
         assert isinstance(placed, Ok)
-        self.assertEqual([item.harness for item in placed.value.deliveries], ["claude"])
+        self.assertEqual(_reached(placed, "deliveries"), ["claude"])
 
 
 class DetailsAgreesWithReviewSelectionE2ETest(unittest.TestCase):

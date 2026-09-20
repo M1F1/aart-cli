@@ -2596,8 +2596,16 @@ class ConsumerScreens:
     def offered_collection(self, key: str) -> MarketplaceCollectionEntry | None:
         return next((item for item in self.collections if item.key == key), None)
 
-    def artifact(self, coordinate: str) -> InstalledArtifactView | None:
-        return next((item for item in self.installed if item.coordinate == coordinate), None)
+    def artifact(self, installation: str) -> InstalledArtifactView | None:
+        """The row this key addresses -- one installation, not one artifact (§169.3).
+
+        The key is what `InstalledArtifactView.row` composes and what the Installed rows carry.
+        Matching on the coordinate would answer with whichever harness's installation came first,
+        so a details screen, a repair and an uninstall would all act on a different one than the
+        person was looking at.
+        """
+
+        return next((item for item in self.installed if item.row == installation), None)
 
     def receipt(self, recorded_at: str) -> ReceiptDetailView | None:
         return next((item for item in self.receipts if item.recorded_at == recorded_at), None)
@@ -2615,8 +2623,10 @@ class ConsumerScreens:
         dependants = {owner for item in self.credentials for owner in item.dependants}
         return tuple(sorted(configured | dependants))
 
-    def configurations_for(self, coordinate: str) -> tuple[ConfigurationFileView, ...]:
-        return tuple(item for item in self.configurations if item.coordinate == coordinate)
+    def configurations_for(self, installation: str) -> tuple[ConfigurationFileView, ...]:
+        """The configuration this installation has -- one file, not one per harness (§169.3)."""
+
+        return tuple(item for item in self.configurations if item.row == installation)
 
     def held_configuration(
         self, coordinate: str, input_id: str
@@ -3163,7 +3173,10 @@ class CanonicalScreenSource:
                 for item in self._screens.installed_collections
                 if _matches(query, item.collection, item.health)
             ) + tuple(
-                item.coordinate
+                # The installation, not the artifact: two harnesses are two rows, and rows have to
+                # be distinct or the second one is unreachable (§169.3). The filter still matches
+                # on the coordinate a person would type.
+                item.row
                 for item in self._screens.installed
                 if _matches(query, item.coordinate, item.health)
             )
@@ -4190,7 +4203,7 @@ class CanonicalScreenSource:
             return collection_member_rows(preview.view(state.selection), state.current_row)
         if screen in (ConsumerScreen.INSTALLED, ConsumerScreen.UPDATES):
             health = {item.collection: item.health for item in screens.installed_collections}
-            health.update({item.coordinate: item.health for item in screens.installed})
+            health.update({item.row: item.health for item in screens.installed})
             return self._list(
                 state, tuple(f"{row}  {_human(health.get(row, 'unknown'))}" for row in state.rows)
             )

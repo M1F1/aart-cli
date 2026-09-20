@@ -19,8 +19,36 @@ These tests use controlled local fixtures; no external Registry was pushed. No r
 task status, new product decision or backlog item changed. No full quality gate or new mutation
 claim applies to this audit. Step 19's red-suite obligations below remain unresolved.
 
+**2026-09-20, CP-26.19 — the Installed view addresses installations, and step 19 is verified
+(D-361).** `unit` 4671 tests OK, `integration` 410 OK, lint/format-check/typecheck clean.
+
+One function composes the key that addresses one installation:
+`installation_key(coordinate, owner)` in `domain/installation_owner.py`, spelled
+`<coordinate>#<harness>` with `+<profile>` where the harness has profiles and the bare coordinate
+where a record names no owner. `InstalledInspection.installation`, `InstalledArtifactView.row`,
+`ConfigurationFileView.row`, the TUI row list, `screens.artifact()`, `_inspections`,
+`credential_dependants` and the health map read it, so three harnesses are three reachable rows
+and an action is aimed at the one it names instead of at whichever a dictionary kept. This is the
+"where this stops" of the entry below, repaid.
+
+`configured_configuration_action_e2e_test` was rewritten rather than renumbered: an installation
+owns one configuration file, so editing three harnesses is three reviewed edits, and the
+harnesses nobody edited keep their file, their digest and the answer their server reports.
+
+Two defects were found by running it. `marketplace update` on an artifact installed into two
+harnesses was refused outright -- "an artifact was superseded twice" -- because
+`propose_installation` matched previous states by unversioned coordinate; B-160 was reclassified
+critical and closed, and supersession is keyed by the owner the previous state already carries.
+And a Hypothesis property showed `skill_projection` reading a lone `\r` in a body as the
+document's line ending, writing frontmatter no parser reads; detection is `\r\n` or `\n` now.
+
+Five targeted mutations are recorded in the slice document with the test each one turned red,
+covering `path_for`, `placements_for`, `configured_installation_action.inspect`,
+`InstalledArtifactView.row` and `_supersession_key`. Scoped `mutmut` over
+`domain/installation_owner.py` leaves `installation_key` with message-text survivors only.
+
 **2026-09-20, CP-26.19 in progress — one installation per harness, and the record is keyed by it.
-NOT VERIFIED: the suite is red.**
+Superseded by the entry above; its "NOT VERIFIED" no longer holds.**
 
 `io/artifact_placement.placements_for` replaces `placement_for` and answers with one placement per
 harness, each carrying its own `InstallationOwner`, its own tree composed through
@@ -42,13 +70,10 @@ rather than disabled, along with `domain/placement.py`: once a placement belongs
 address is concrete and there is nothing left to compose at run time. The five tests that described
 that workaround were replaced by tests of what replaced it.
 
-**This entry claims no verification.** Lint, format-check and typecheck pass; `mypy` is clean over
-256 modules. The last full `make unit` was 4669 tests with 25 failures and 6 errors; twelve of
-those modules have since been fixed and verified individually, and the rest are listed by name in
-`NEXT.md` with what each is waiting on. They are all waiting on the same thing: the Installed view
-and the TUI focus key are still keyed by artifact, which with several harnesses makes two of three
-installations unreachable. No targeted mutation has been recorded for any claim in this entry yet;
-`NEXT.md` names the three that are owed.
+**This entry claimed no verification when it was written**, and the entry above pays that debt:
+the red modules it listed were all waiting on the Installed view and the TUI focus key, which is
+what `installation_key` fixed. The three targeted mutations it owed are among the five recorded in
+the slice document.
 
 **2026-09-19, CP-26.19 in progress — the managed tree has a measured base (D-359).**
 `MANAGED_TREE_TARGETS` in `domain/harness.py` records which directory of each harness's own AART

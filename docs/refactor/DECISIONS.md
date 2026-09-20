@@ -9074,3 +9074,41 @@ installation asks with the owner.
 **Not yet done.** The Installed view and the TUI focus key are still keyed by artifact, which with
 several harnesses makes two of three installations unreachable from the shell. That is tracked as
 the next action in `NEXT.md`, and the suite is red until it lands.
+
+## D-361 — One key addresses one installation, and it is composed in one place
+
+**Date:** 2026-09-20. **Status:** accepted and implemented on `refactor/cp-26-legacy-removal`.
+**Completes:** D-360's "not yet done".
+
+D-360 made a coordinate stop identifying one thing on this machine and left the Installed view and
+the TUI focus key still keyed by it. Rows built from the coordinate collapsed three installations
+into one row, which made two of them unreachable and aimed configure, repair and uninstall at
+whichever a dictionary had kept. The key is now `installation_key(coordinate, owner)` in
+`domain/installation_owner.py`: `<coordinate>#<harness>` with `+<profile>` where the harness has
+profiles, and the bare coordinate where a record names no owner.
+
+**Composed once, on purpose.** `InstalledInspection.installation`, `InstalledArtifactView.row`,
+`ConfigurationFileView.row` and the TUI's row list, `screens.artifact()`, `_inspections`,
+`credential_dependants` and health map all read that one function. A key spelled one way where it
+is written and another way where it is looked up addresses nothing, and the two spellings would
+not disagree until a harness with a profile appeared.
+
+**`#` rather than a second `/` or a space.** No alias, kind, name or version may contain it, so a
+key cannot be read as a coordinate and a coordinate cannot be read as a key. Both travel through
+the same string-typed `focus` field, so that has to be true by construction rather than by
+convention.
+
+**Supersession is keyed the same way.** `propose_installation` matched each previous state to a
+planned installation by unversioned coordinate. Two installations of one artifact name that
+coordinate twice, so `marketplace update` on an artifact installed into two harnesses was refused
+outright -- "an artifact was superseded twice" -- which is the update half of §169.3's acceptance
+failing, not a backlog nicety. It is keyed by the owner the previous state already carries, with
+the unversioned coordinate as the fallback for callers below that boundary. B-160 was reclassified
+critical for that reason and is closed by this change.
+
+**Found on the way, fixed here.** `application/skill_projection.py` read the installed document's
+line ending off `str.splitlines`, which breaks on a lone `\r` as well as on `\r\n` and `\n`. A
+canonical document with a stray carriage return in its prose therefore had its whole frontmatter
+written with `\r` as the row terminator -- one header no parser reads. Detection is now `\r\n` or
+`\n` and nothing else. A Hypothesis property in `tests/skill_projection_test.py` found it; an
+example test pins it.

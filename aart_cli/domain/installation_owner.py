@@ -44,6 +44,7 @@ __all__ = [
     "MAX_INSTALLED_NAME_LENGTH",
     "InstallationOwner",
     "credential_address",
+    "installation_key",
     "installation_owner",
     "installation_owner_from_data",
     "installation_owner_to_data",
@@ -145,9 +146,18 @@ class InstallationOwner:
         if self.profile:
             _slug(self.profile, "harness profile")
 
+    @property
+    def label(self) -> str:
+        """The harness this installation is, as one token: `harness`, or `harness+profile`.
+
+        Composed here rather than at each reader, because a key spelled one way where it is
+        written and another where it is looked up addresses nothing.
+        """
+
+        return f"{self.harness}+{self.profile}" if self.profile else self.harness
+
     def __str__(self) -> str:
-        profile = f"+{self.profile}" if self.profile else ""
-        return f"{self.harness}{profile}/{self.scope.value}:{self.source}/{self.artifact}"
+        return f"{self.label}/{self.scope.value}:{self.source}/{self.artifact}"
 
 
 def installation_owner(
@@ -168,6 +178,27 @@ def installation_owner(
     if not isinstance(coordinate, ArtifactCoordinate):
         raise ValueError("an installation owner needs an artifact coordinate")
     return InstallationOwner(coordinate.source, coordinate.artifact, scope, root, harness, profile)
+
+
+def installation_key(coordinate: object, owner: InstallationOwner | None) -> str:
+    """The key that addresses one installation rather than one artifact (§169.3).
+
+    The coordinate stopped identifying one thing on this machine when each harness became its own
+    installation: the same artifact in claude and in tabnine is two trees, two configuration files
+    and two records. Everything that selects something to act on -- a row, a focus, a lookup --
+    has to use this, because an action addressed to the coordinate alone would reach whichever of
+    them a dictionary happened to keep.
+
+    `#` separates the two halves, and both are composed of slugs, so the key stays greppable and
+    cannot collide with a coordinate: no alias, kind, name or version may contain one. A record
+    that names no owner falls back to the coordinate, which is what it is.
+    """
+
+    if owner is None:
+        return str(coordinate)
+    if not isinstance(owner, InstallationOwner):
+        raise ValueError("an installation key needs an installation owner")
+    return f"{coordinate}#{owner.label}"
 
 
 def credential_address(

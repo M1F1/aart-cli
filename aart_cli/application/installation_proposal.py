@@ -419,12 +419,27 @@ def placement_lifecycle_intent(planned: PlannedPlacement) -> LifecycleIntent:
 def _unversioned(coordinate: ArtifactCoordinate) -> ArtifactCoordinate:
     """The artifact a coordinate names, without the version it happens to be at.
 
-    Supersession is keyed by this. An update names the artifact, not the version -- the version
-    being left is what the previous state records, and the version being taken is what resolution
-    chose, so a key carrying either of them could only agree with one side.
+    An update names the artifact, not the version -- the version being left is what the previous
+    state records, and the version being taken is what resolution chose, so a key carrying either
+    of them could only agree with one side.
     """
 
     return replace(coordinate, version=None)
+
+
+def _supersession_key(
+    coordinate: ArtifactCoordinate, owner: InstallationOwner | None
+) -> InstallationOwner | ArtifactCoordinate:
+    """What a previous state is matched to the planned installation it is the previous state of.
+
+    The owner where there is one, because §169.3 makes the *installation* the thing superseded and
+    one artifact has one of those per harness: two of them name one coordinate and are two separate
+    transitions, each leaving its own version in its own tree. The unversioned coordinate
+    otherwise, which is what the callers below that boundary have and what this was keyed by
+    before -- an owner is not invented for them, because a guessed one would match the wrong tree.
+    """
+
+    return _unversioned(coordinate) if owner is None else owner
 
 
 def artifact_receipt_for(planned: PlannedArtifact) -> ArtifactReceipt:
@@ -533,6 +548,9 @@ def propose_installation(
     transition is between two things somebody intended -- a drifted installation is still an update
     from the version it records, not from the damage. Which transition it is follows from the two
     versions (`supersession_intent`), including the refusal to call a move backwards an update.
+    Each entry is matched to the *installation* it is the previous state of, not to the artifact:
+    §169.3 gives one artifact an installation per harness, and updating two of them is two
+    transitions that happen to name one coordinate.
     """
 
     if any(not isinstance(item, (PlannedInstallation, PlannedPlacement)) for item in installations):
@@ -547,18 +565,22 @@ def propose_installation(
         item.coordinate for item in installations
     ):
         return _error("what was observed is not what is planned, member for member")
-    superseded = dict(previous)
-    if len(superseded) != len(previous):
-        return _error("an artifact was superseded twice")
-    if any(coordinate.version is not None for coordinate in superseded):
+    if any(coordinate.version is not None for coordinate, _ in previous):
         return _error(
             "a superseded artifact is named without a version; the version being left is the one "
             "its previous state records"
         )
-    planned_coordinates = {_unversioned(item.coordinate) for item in installations}
-    unplanned = tuple(
-        str(coordinate) for coordinate in superseded if coordinate not in planned_coordinates
-    )
+    # Keyed by installation, not by artifact. One artifact is legitimately installed several times
+    # over -- one installation per harness (§169.3) -- so updating two of them names two previous
+    # states that carry the same coordinate. Keyed by the coordinate alone they collapsed into one,
+    # and the whole update was refused as an artifact superseded twice.
+    superseded = {
+        _supersession_key(coordinate, state.owner): state for coordinate, state in previous
+    }
+    if len(superseded) != len(previous):
+        return _error("an installation was superseded twice")
+    planned_keys = {_supersession_key(item.coordinate, item.owner) for item in installations}
+    unplanned = tuple(str(key) for key in superseded if key not in planned_keys)
     if unplanned:
         return _error(
             "a previous version was named for "
@@ -575,7 +597,7 @@ def propose_installation(
             runtime, transport = None, None
         else:
             runtime, transport = planned.runtime, planned.transport
-        replaced = superseded.get(_unversioned(planned.coordinate))
+        replaced = superseded.get(_supersession_key(planned.coordinate, planned.owner))
         try:
             if replaced is not None:
                 intent = supersession_intent(

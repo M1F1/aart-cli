@@ -978,6 +978,11 @@ class ConfigurationFileView:
     values: tuple[tuple[str, str], ...]
     detail: str = ""
     inputs: tuple[str, ...] = ()
+    #: The installation this file belongs to (§169.3). An installation owns exactly one
+    #: configuration file, so this is what a lookup addresses it by; the coordinate no longer is,
+    #: because three harnesses are three files that all carry it. Empty where the record names no
+    #: owner, and `row` is then the coordinate.
+    installation: str = ""
 
     def __post_init__(self) -> None:
         if (
@@ -1012,8 +1017,16 @@ class ConfigurationFileView:
                 for item in self.inputs
             )
             or len(set(self.inputs)) != len(self.inputs)
+            or not isinstance(self.installation, str)
+            or any(character in self.installation for character in "\r\n")
         ):
             raise ValueError("configuration file view is invalid")
+
+    @property
+    def row(self) -> str:
+        """The key this file is looked up by: its installation, or its artifact where none is named."""
+
+        return self.installation or self.coordinate
 
 
 def project_credential_record(
@@ -1095,6 +1108,23 @@ class InstalledArtifactView:
     installation: tuple[InstalledPathView, ...] = ()
     #: `project`, `user`, or empty when the receipt records no scope or records more than one.
     scope: str = ""
+    #: Which harness this installation is (§169.3), `harness+profile` where the harness has
+    #: profiles. Empty where the record names no owner, which is what a row with no harness in it
+    #: means: nobody wrote down which installation this was.
+    harness: str = ""
+
+    @property
+    def row(self) -> str:
+        """The key a row, a focus and a lookup address this installation by.
+
+        `coordinate` names the artifact and is what a person reads; this names the installation
+        and is what an action is aimed at. They were the same string until each harness became its
+        own installation, and keeping them the same now would make two of three rows unreachable
+        -- rows have to be distinct, and an action addressed to the coordinate would reach
+        whichever installation a dictionary happened to keep.
+        """
+
+        return f"{self.coordinate}#{self.harness}" if self.harness else self.coordinate
 
     @property
     def user_facing_paths(self) -> tuple[InstalledPathView, ...]:
@@ -1207,6 +1237,7 @@ def project_installed_artifact(
     update_available: bool = False,
     credentials: tuple[CredentialRecordView, ...] = (),
     receipt: ArtifactReceipt | None = None,
+    harness: str = "",
 ) -> InstalledArtifactView:
     """Project measured installed health; mutation success is never health evidence."""
 
@@ -1229,6 +1260,7 @@ def project_installed_artifact(
         credentials,
         _installed_paths(receipt, current),
         _recorded_scope(receipt),
+        harness,
     )
 
 

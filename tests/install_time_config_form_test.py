@@ -322,12 +322,32 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
 
 
 class _MemoryCredentialProvider:
-    """A provider reference/observation fake; it never receives or stores credential material."""
+    """A provider reference/observation fake; it never receives or stores credential material.
+
+    One item per address, not one state for the provider. A real provider holds an item per
+    service/account pair, and each installation addresses its own (§169.4-6), so a fake with a
+    single flag answers `present` for an installation whose item nobody stored -- which made the
+    second harness of a two-harness install read as state that changed after Review, and its
+    member was abandoned while the transaction still reported success.
+    """
 
     provider = "test-keychain"
 
     def __init__(self) -> None:
-        self.state = CredentialState.ABSENT
+        self.stored: set[str] = set()
+
+    @staticmethod
+    def _address(reference) -> str:
+        return f"{reference.provider.service}/{reference.provider.account}"
+
+    @property
+    def state(self) -> CredentialState:
+        """Whether anything at all is held, for the assertions that ask about the provider."""
+
+        return CredentialState.PRESENT if self.stored else CredentialState.ABSENT
+
+    def holds(self, reference) -> bool:
+        return self._address(reference) in self.stored
 
     def available(self) -> ProviderState:
         return ProviderState.AVAILABLE
@@ -337,7 +357,7 @@ class _MemoryCredentialProvider:
             CredentialObservation(
                 reference,
                 ProviderState.AVAILABLE,
-                self.state,
+                CredentialState.PRESENT if self.holds(reference) else CredentialState.ABSENT,
             )
         )
 
@@ -347,11 +367,11 @@ class _MemoryCredentialProvider:
     def store(self, reference, secret=None, *, replace: bool = False) -> Ok:
         if secret is not None:
             raise AssertionError("the application handed credential material to the provider fake")
-        self.state = CredentialState.PRESENT
+        self.stored.add(self._address(reference))
         return self.inspect(reference)
 
     def delete(self, reference) -> Ok:
-        self.state = CredentialState.ABSENT
+        self.stored.discard(self._address(reference))
         return self.inspect(reference)
 
 
@@ -460,10 +480,16 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
             )
 
             self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
-            config = env.project / ".claude/aart-cli/mcp/company/github/config"
-            self.assertFalse((config / "claude.conf").exists())
-            for harness in ("opencode", "tabnine"):
-                path = config / f"{harness}.conf"
+            # Each chosen harness is its own installation, so each has its own tree with its own
+            # configuration in it (§169.3), and the harness nobody chose has no tree at all.
+            self.assertFalse((env.project / ".claude/aart-cli").exists())
+            for harness, directory in (("opencode", ".opencode"), ("tabnine", ".tabnine")):
+                path = (
+                    env.project
+                    / directory
+                    / "aart-cli/mcp/company/github/config"
+                    / f"{harness}.conf"
+                )
                 self.assertTrue(path.is_file(), f"{harness} configuration was not written")
                 self.assertIn(f"{ORG}={value}\n", path.read_text(encoding="utf-8"))
 
@@ -484,7 +510,16 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 if path.is_file() and value in path.read_text(encoding="utf-8", errors="replace")
             ]
             self.assertEqual(leaked, [])
-            self.assertIs(provider.state, CredentialState.PRESENT)
+            # One item per installation, not one per artifact (§169.4-6). Two were stored, each
+            # naming its own harness, and the harness nobody chose has none. The addresses are
+            # asserted by what distinguishes them rather than recomposed here, because composing
+            # the expectation from `credential_address` would assert that function against itself.
+            held = sorted(provider.stored)
+            self.assertEqual(len(held), 2, held)
+            self.assertEqual(
+                [1, 1], [sum(h in item for item in held) for h in ("opencode", "tabnine")]
+            )
+            self.assertEqual([], [item for item in held if "claude" in item])
 
 
 if __name__ == "__main__":

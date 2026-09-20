@@ -879,7 +879,7 @@
         {
           "id": "19",
           "title": "Each installation owns versionless harness names, runtime, receipt and separately entered configuration and credentials; complete owner/input identity for Keychain",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "20",

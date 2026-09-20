@@ -46,6 +46,10 @@ from tests.consumer_shell_test import DOWN, ENTER, ESCAPE, SPACE, FakeTerminal
 
 TODAY = dt.date(2026, 9, 1)
 OFFERED = "company/skill/code-review@1.2.0"
+#: The same artifact as one installation. Rows and focus address this rather than `OFFERED`: each
+#: harness is its own installation (§169.3), so the artifact alone no longer names one thing to act
+#: on. These tests install into claude only, so there is exactly one.
+INSTALLED = f"{OFFERED}#claude"
 
 
 def _delivered(env) -> pathlib.Path:
@@ -193,7 +197,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             finished, terminal, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=OFFERED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
                 ord("r"),
                 ENTER,
                 actions=handler,
@@ -210,7 +214,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             finished, terminal, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=OFFERED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
                 ord("r"),
                 actions=handler,
             )
@@ -230,7 +234,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             finished, terminal, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=OFFERED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
                 ord("u"),
                 ENTER,
                 actions=handler,
@@ -248,7 +252,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             finished, _, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=OFFERED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
                 ord("u"),
                 actions=handler,
             )

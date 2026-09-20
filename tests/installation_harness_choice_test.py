@@ -320,9 +320,15 @@ class ChosenHarnessDeliveryE2ETest(unittest.TestCase):
             )
             stored = LocalReceiptStore(str(env.paths.data_root) + "/state").installations()
             assert isinstance(stored, Ok)
+            # Two harnesses are two installations, so they are two records rather than one record
+            # naming two profiles (§169.3). Each names exactly one, which is what makes either
+            # uninstall able to take its own files and leave the other's.
             self.assertEqual(
-                receipt_profiles(stored.value[0].receipt),
-                frozenset({"opencode", "tabnine"}),
+                [receipt_profiles(item.receipt) for item in stored.value],
+                [frozenset({"opencode"}), frozenset({"tabnine"})],
+            )
+            self.assertEqual(
+                [item.receipt.owner.harness for item in stored.value], ["opencode", "tabnine"]
             )
 
     def test_mcp_is_registered_only_with_the_chosen_opencode_or_tabnine_target(self) -> None:
