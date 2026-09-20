@@ -13,7 +13,9 @@ broken argument tuples, which is why no gate caught it. The executed name now co
 `collection_new.py`, `registry_publish.py` and `vendor_scan.py`. Verified by building the 0.4.0
 wheel and running the failing check locally: `release artifact passed:
 aart_cli-0.4.0-py3-none-any.whl`. The composite action's `aart` shim is untouched and recorded as
-B-167. The v0.4.0 release still has no assets until this reaches `main` and the job is re-run.
+B-167. The v0.4.0 release keeps no assets by decision: the release job checks out the tag it
+builds, so re-running it would rebuild the same broken tree, and the owner chose to leave the
+published tag alone rather than move it. The wheel arrives with the next release.
 
 
 **2026-09-20, CP-26 complete — PR #29 matrix green, step 21 closed.** GitHub Actions run

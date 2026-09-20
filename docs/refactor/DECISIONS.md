@@ -9399,3 +9399,8 @@ Evidence: the corrected assertion failed against the old source and passed again
 the real check now passes end to end locally — `poetry build -f wheel` followed by
 `scripts/release_artifact.py --tag v0.4.0 --dist dist` reports
 `release artifact passed: aart_cli-0.4.0-py3-none-any.whl`, which is the job that failed in CI.
+
+The v0.4.0 tag is left as it is. The release job checks out the tag it builds, so re-running it
+would rebuild the same broken tree, and moving a published tag to make an old release whole is a
+worse trade than one release without a wheel. The owner decided this on 2026-09-20; the first
+attached wheel is the next release's.
