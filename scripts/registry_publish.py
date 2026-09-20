@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--source", default=".", help="registry checkout (default: .)")
     parser.add_argument("-m", "--message", default=None, help="commit subject; one is derived")
-    parser.add_argument("--aart", default="aart", help="the aart executable to run")
+    parser.add_argument("--aart", default="aart-cli", help="the aart-cli executable to run")
     parser.add_argument("--yes", action="store_true", help="write and commit instead of previewing")
     parser.add_argument(
         "--allow-audit-failure",

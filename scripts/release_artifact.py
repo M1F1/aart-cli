@@ -166,7 +166,7 @@ def smoke(version: str, *, runner: Runner) -> tuple[ArtifactDiagnostic, ...]:
     """
 
     diagnostics: list[ArtifactDiagnostic] = []
-    reported = runner(("aart", "--version"))
+    reported = runner((PROJECT, "--version"))
     if reported[0] != 0:
         diagnostics.append(
             _diagnostic(
@@ -180,7 +180,7 @@ def smoke(version: str, *, runner: Runner) -> tuple[ArtifactDiagnostic, ...]:
                 f"the installed command reports {reported[1].strip()!r}, not {version}",
             )
         )
-    helped = runner(("aart", "--help"))
+    helped = runner((PROJECT, "--help"))
     if helped[0] != 0:
         diagnostics.append(
             _diagnostic("artifact-smoke-failed", f"`aart-cli --help` failed: {helped[1].strip()}")

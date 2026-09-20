@@ -4,6 +4,18 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-20, post-release — the v0.4.0 wheel was never attached (D-370).** The `artifact /
+release` job of run 35516056590 failed after the tag was cut: the release smoke installed the wheel
+into a clean environment and ran `aart`, the pre-§169 executable, so it died with `[Errno 2] No
+such file or directory: .../env/bin/aart`. `tests/release_artifact_test.py` asserted those exact
+broken argument tuples, which is why no gate caught it. The executed name now comes from the
+`PROJECT` constant the version assertion already used, and the same stale default was corrected in
+`collection_new.py`, `registry_publish.py` and `vendor_scan.py`. Verified by building the 0.4.0
+wheel and running the failing check locally: `release artifact passed:
+aart_cli-0.4.0-py3-none-any.whl`. The composite action's `aart` shim is untouched and recorded as
+B-167. The v0.4.0 release still has no assets until this reaches `main` and the job is re-run.
+
+
 **2026-09-20, CP-26 complete — PR #29 matrix green, step 21 closed.** GitHub Actions run
 `35505543309` passed the full canonical quality, integration/E2E and release-facing gates on all
 required interpreters: Python 3.10 in 20m54s, Python 3.11 in 26m02s and Python 3.14 in 20m51s. The

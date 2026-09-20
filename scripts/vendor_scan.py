@@ -719,7 +719,7 @@ def main(argv: list[str] | None = None) -> int:
     vendor.add_argument("--platform", default="darwin")
     vendor.add_argument("--license", default=None, metavar="SPDX")
     vendor.add_argument("--review-policy", default="manual-review-v1")
-    vendor.add_argument("--aart", default="aart", help="the aart executable to run")
+    vendor.add_argument("--aart", default="aart-cli", help="the aart-cli executable to run")
     vendor.add_argument("--yes", action="store_true", help="finalize instead of reviewing")
     vendor.add_argument("--revendor", action="store_true", help="do not skip artifacts already in")
     vendor.set_defaults(handler=command_vendor)
@@ -732,7 +732,7 @@ def main(argv: list[str] | None = None) -> int:
     adopt.add_argument("--kind", default="memory", choices=("memory", "guideline"))
     adopt.add_argument("--profile", action="append", default=None, metavar="P")
     adopt.add_argument("--platform", default="darwin")
-    adopt.add_argument("--aart", default="aart", help="the aart executable to run")
+    adopt.add_argument("--aart", default="aart-cli", help="the aart-cli executable to run")
     adopt.add_argument("--yes", action="store_true", help="write instead of reviewing")
     adopt.set_defaults(handler=command_adopt)
 

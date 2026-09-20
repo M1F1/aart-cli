@@ -9371,3 +9371,31 @@ mandatory. The existing E2E case now simulates absent optional executables on ev
 building/installing the real wheel through pip and executing the documented download flags through
 the stand-in. This proves command execution, not live authentication to a GitHub instance. No
 product behavior, runtime dependency or quality threshold changes.
+
+## D-370 — The release smoke runs the console script by the name the distribution declares
+
+**2026-09-20, after the v0.4.0 release-artifact job failed.** `scripts/release_artifact.py::smoke`
+installed the built wheel into a throwaway environment and then executed `("aart", "--version")`
+and `("aart", "--help")`. `aart` is the pre-§169 executable. The wheel installs `aart-cli`, so the
+runner resolved a path that does not exist and the job died with `[Errno 2] No such file or
+directory: .../env/bin/aart` before it could produce a diagnostic. The v0.4.0 tag was created with
+no wheel attached.
+
+The rename was half-applied: the adjacent failure messages already read `aart-cli`, and the version
+comparison already used the `PROJECT` constant. Only the two executed argument tuples were missed,
+and `tests/release_artifact_test.py` asserted the broken tuples verbatim, so the gate that exists to
+catch exactly this could not.
+
+The name is therefore taken from `PROJECT`, the same constant the version assertion uses, rather
+than written again as a literal. `PROJECT` is `aart-cli`, which is both the distribution name and
+the console script `pyproject.toml` declares, so the executed name and the reported name can no
+longer drift apart. The three helper scripts whose `--aart` default still named the old executable
+(`collection_new.py`, `registry_publish.py`, `vendor_scan.py`) are corrected with it; the tutorial
+documents invoking `registry_publish.py` without that flag, so its default was reachable and wrong.
+`.github/actions/aart/action.yml` is left alone and recorded as B-167: it is self-consistent, and
+whether its shim name is an external contract cannot be decided from this repository.
+
+Evidence: the corrected assertion failed against the old source and passed against the new one, and
+the real check now passes end to end locally — `poetry build -f wheel` followed by
+`scripts/release_artifact.py --tag v0.4.0 --dist dist` reports
+`release artifact passed: aart_cli-0.4.0-py3-none-any.whl`, which is the job that failed in CI.
