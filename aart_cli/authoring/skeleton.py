@@ -288,7 +288,7 @@ _EXPLANATIONS: dict[str, str] = {
     "exclude": "Payload files to leave out of the package, applied after `include`.",
     "inputs": "Values AART collects from the installer and keeps for this artifact.",
     "python": "How the payload's Python dependencies are resolved at install time.",
-    "smoke_test": "A reviewed read-only MCP tool call used by `aart-cli mcp test`.",
+    "smoke_test": "A reviewed read-only MCP tool call used by `aart-cli mcp test --harness <harness>`.",
     "summary": "One line shown wherever the artifact is listed. Derived from the name if absent.",
 }
 
