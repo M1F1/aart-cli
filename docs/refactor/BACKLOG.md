@@ -4242,3 +4242,14 @@ generated mutants but failed during stats collection: the isolated copy lacks
 build and documentation assets outside the copied scripts/tests roots. Add explicit fixture-copy
 support before claiming mutation adequacy for this gate. D-369 has real red/green E2E evidence and
 a targeted semantic mutation; this advisory runner limitation does not replace or block CI gates.
+
+## B-167 — the composite action still publishes the pre-CP-26 executable name
+
+**Found 2026-09-20, after the v0.4.0 release-artifact failure; noncritical, needs an owner decision.**
+`.github/actions/aart/action.yml` writes a shim named `aart` onto `PATH` and invokes it as `aart`.
+It is internally consistent, so it works, but the name it exposes is the one §169 renamed to
+`aart-cli`; a workflow written against the shipped CLI and a workflow written against this action
+now disagree about what the command is called. Nothing in this repository consumes the action, so
+whether the shim is an orphan or an external contract with generated registry workflows cannot be
+settled from here. Settle that first, then either rename the shim to `aart-cli` or delete the
+action. The same half-applied rename did break the release path and was fixed there (D-370).

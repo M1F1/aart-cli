@@ -230,7 +230,9 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="bound each member to its current version up to the next major",
     )
-    parser.add_argument("--aart", default="aart", help="the aart executable used to validate")
+    parser.add_argument(
+        "--aart", default="aart-cli", help="the aart-cli executable used to validate"
+    )
     args = parser.parse_args(argv)
 
     if SLUG_RE.fullmatch(args.name) is None:

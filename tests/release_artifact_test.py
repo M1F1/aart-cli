@@ -211,7 +211,7 @@ class CleanEnvironmentSmokeTest(unittest.TestCase):
             return (0, "usage: aart [-h] ...\n")
 
         self.assertEqual(release_artifact.smoke("1.4.0", runner=runner), ())
-        self.assertEqual(calls, [("aart", "--version"), ("aart", "--help")])
+        self.assertEqual(calls, [("aart-cli", "--version"), ("aart-cli", "--help")])
 
     def test_a_command_that_reports_another_version_is_refused(self) -> None:
         def runner(command: tuple[str, ...]) -> tuple[int, str]:

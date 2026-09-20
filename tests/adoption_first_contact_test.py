@@ -8,6 +8,7 @@ from pathlib import Path
 
 from aart_cli import cli, model, wizard
 from aart_cli.domain.artifacts import ArtifactKind
+from aart_cli.profiles.builtin import builtin
 from tests.source_remediation_test import _parse_failure
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -208,6 +209,27 @@ class QuickStartRouteTest(unittest.TestCase):
                 rejected = _parse_failure(re.sub(r"<[^>]+>", _PLACEHOLDER, command))
 
                 self.assertIsNone(rejected, rejected)
+
+    def test_the_route_names_every_harness_this_build_installs_into(self) -> None:
+        """Read off the built-in profiles rather than written down beside them.
+
+        A harness this build supports and the page omits is a reader concluding their agent is not
+        covered; one the page still lists after the build drops it sends them to install into
+        nothing. The list is a fact about the code, so it is checked against the code -- the same
+        reason the orientation reads `ArtifactKind` instead of transcribing it.
+
+        Both halves are held. Completeness alone would pass a page that also offered a harness
+        that does not exist, and the exact comparison is made against the line that does the
+        offering rather than the whole section, where `claude` is also a word in prose.
+        """
+
+        offer = next(
+            line
+            for line in self._quick_start().splitlines()
+            if "harness to install it into" in line
+        )
+
+        self.assertEqual(set(re.findall(r"`([^`]+)`", offer)), set(builtin()))
 
     def test_the_route_names_no_address_a_fork_would_have_to_correct(self) -> None:
         """The same rule as the install grid: nothing here can know which instance it is read on."""

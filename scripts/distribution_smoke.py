@@ -658,14 +658,16 @@ def classify_command(command: str) -> str:
     answer and the last moment anyone will be asked.
     """
 
+    # Before the placeholder check: this line carries `<repository>` too, and reaching that check
+    # first would quietly declare the one executable download route unrunnable.
+    if "gh release download" in command:
+        return "authenticated-download"
     if "<repository>" in command:
         return "network"
     if command.startswith("cd /path/to/"):
         return "consumer-example"
     if "scripts/install_commands.py" in command:
         return "generator"
-    if "gh release download" in command:
-        return "authenticated-download"
     if "$(pbpaste)" in command:
         return "clipboard"
     if "./aart_cli-X.Y.Z-py3-none-any.whl" in command:
@@ -705,6 +707,10 @@ def _stand_ins(directory: Path, wheel: Path) -> Path:
                 "action = group.add_parser('release').add_subparsers(dest='action', required=True)",
                 "download = action.add_parser('download')",
                 "download.add_argument('tag')",
+                # Required, because the real `gh` has nowhere else to learn the repository from:
+                # without it, it reads the git remotes of the current directory, and this section
+                # is the one for a reader who has no clone.
+                "download.add_argument('--repo', required=True)",
                 "download.add_argument('--pattern', required=True)",
                 "download.add_argument('--dir', required=True)",
                 "parsed = parser.parse_args()",

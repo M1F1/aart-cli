@@ -4,6 +4,44 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-20, README — authenticated install first, TUI first (D-372).** The owner asked for the
+adoption page to lead with the Enterprise route rather than the public one, and for connecting a
+Registry to be shown in the TUI before the CLI. The second half is a divergence from §168, which
+already names the TUI the primary human route while the page ended with `Or do all five in the
+TUI`. The page now opens with `gh release download` and the Releases page by hand, then `pip`,
+`pipx`, `uv tool` and `uvx` from the downloaded file; public-repository installs live only in
+`docs/install/installing-aart-v1.md`. The Add Registry frame is generated from `compose_frame` and
+held by `tests/readme_tui_screen_test.py`, which a label-level mutation fails. Section order,
+bounded orientation and licence-last are unchanged: `adoption_first_contact_test` 31 tests,
+`install_routes_e2e_test` and `source_remediation_test` 23 tests, ruff, mypy and `docs-check` pass.
+
+
+**2026-09-20, install guide — the documented download named no repository (D-371).** The owner
+read the page and asked how a reader is supposed to know which project the wheel comes from. They
+could not: `gh release download` with no `--repo` resolves the repository from the current
+directory's git remotes, and that section is the one for a reader with no clone. Verified by
+running the documented line outside a checkout, which fails with `not a git repository`. The line
+now carries `--repo "<repository>"`, the placeholder the rest of the page already uses. The `gh`
+stand-in requires the flag, so the omission is a red -- it refused the documented line before the
+page was edited -- and `classify_command` tests the download before the placeholder, or the fix
+would have silently made the one executed download route unrunnable. `install_routes_e2e_test`
+red then green; ruff, mypy, `docs-check` and `source_remediation_test` pass.
+
+
+**2026-09-20, post-release — the v0.4.0 wheel was never attached (D-370).** The `artifact /
+release` job of run 35516056590 failed after the tag was cut: the release smoke installed the wheel
+into a clean environment and ran `aart`, the pre-§169 executable, so it died with `[Errno 2] No
+such file or directory: .../env/bin/aart`. `tests/release_artifact_test.py` asserted those exact
+broken argument tuples, which is why no gate caught it. The executed name now comes from the
+`PROJECT` constant the version assertion already used, and the same stale default was corrected in
+`collection_new.py`, `registry_publish.py` and `vendor_scan.py`. Verified by building the 0.4.0
+wheel and running the failing check locally: `release artifact passed:
+aart_cli-0.4.0-py3-none-any.whl`. The composite action's `aart` shim is untouched and recorded as
+B-167. The v0.4.0 release keeps no assets by decision: the release job checks out the tag it
+builds, so re-running it would rebuild the same broken tree, and the owner chose to leave the
+published tag alone rather than move it. The wheel arrives with the next release.
+
+
 **2026-09-20, CP-26 complete — PR #29 matrix green, step 21 closed.** GitHub Actions run
 `35505543309` passed the full canonical quality, integration/E2E and release-facing gates on all
 required interpreters: Python 3.10 in 20m54s, Python 3.11 in 26m02s and Python 3.14 in 20m51s. The

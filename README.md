@@ -5,68 +5,147 @@ validated registry snapshots into a selected harness.
 
 ## Install an artifact
 
-One route, end to end: no AART on the machine, to an installed artifact you can verify. You need
-Python 3.10 or later, the address of a Registry somebody maintains, and the harness you are
-installing into — `claude`, `opencode`, `tabnine` or `vibe`. Everything in angle brackets is yours
-to fill in.
+This page goes from a machine with no aart-cli on it to an artifact installed in your agent, and
+one command that proves it worked.
 
-**1. Install AART.** The exact command for the repository you are reading this in is on its
-[Releases page](../../releases), already filled in with the right address and version; from a
-checkout, `python scripts/install_commands.py` prints the same lines. The shape, where
-`<repository>` is that address and `X.Y.Z` is the release you want:
+**What you need:**
+
+- **Python 3.10 or later** — and nothing else. aart-cli has no dependencies of its own.
+- **aart-cli itself.** Steps 1 and 2 below install it.
+- **The address of a Registry.** A Registry is a Git repository of approved artifacts that somebody
+  in your organization maintains. Ask whoever runs it for the URL — this is not a value you can
+  invent.
+- **An artifact in that Registry** that you want. Finding one is step 4.
+- **A harness to install it into** — one of `claude`, `opencode`, `tabnine` or `vibe`. This is the
+  agent tool whose own configuration aart-cli writes.
+
+**The angle brackets.** Commands on this page contain blanks written like `<registry-url>` and
+`<alias>`. Replace each one with your own value, brackets and all: `--alias <alias>` typed for real
+becomes `--alias company`. They are left blank because none of these values is the same at two
+organizations.
+
+### 1. Download the wheel
+
+AART is meant to be run from your organization's own instance, where the release is private — so
+the route in front is the authenticated one. `<repository>` is the address of the repository you
+are reading this in; nothing on this page names an instance, because nothing on this page can know
+which one you are on.
+
+**With the GitHub CLI**, already signed in to that instance:
 
 ```sh
-uv tool install "git+<repository>.git@vX.Y.Z"
+gh release download vX.Y.Z --repo "<repository>" --pattern 'aart_cli-*-py3-none-any.whl' --dir .
 ```
 
-`pip` and `pipx`, private Enterprise instances and the case where a release cannot be installed
-from its URL at all are in [Installing AART](docs/install/installing-aart-v1.md).
+**Or by hand**, which needs nothing installed at all: open the repository's
+[Releases page](../../releases), choose the release, and download
+`aart_cli-X.Y.Z-py3-none-any.whl` from its **Assets**.
 
-**2. Connect a Registry.** `source add` acquires, compiles and validates the snapshot *before* it
-saves anything, so a Registry that does not answer or does not validate never becomes
-configuration:
+### 2. Install it from the file
+
+The wheel has no dependencies, so none of these fetches anything else. Use whichever you already
+have:
+
+```sh
+python -m pip install --no-deps --force-reinstall ./aart_cli-X.Y.Z-py3-none-any.whl
+```
+
+```sh
+pipx install --python "$(command -v python3)" --force ./aart_cli-X.Y.Z-py3-none-any.whl
+```
+
+```sh
+uv tool install --force ./aart_cli-X.Y.Z-py3-none-any.whl
+```
+
+`pip` installs into **whatever environment is active right now**; `pipx` and `uv tool` build an
+isolated one for the tool. To look at it before installing anything, `uvx` runs the wheel and keeps
+nothing behind:
+
+```sh
+uvx --from ./aart_cli-X.Y.Z-py3-none-any.whl aart-cli --version
+```
+
+Installing straight from a public repository — `git+<repository>`, or the wheel's own address — is
+in [Installing AART](docs/install/installing-aart-v1.md), together with what stops working when the
+release is private, and why.
+
+### 3. Connect a Registry, in the TUI
+
+A Registry is the approved catalog somebody in your organization maintains; `<registry-url>` is the
+repository your platform team points you at. Running `aart-cli` with no subcommand on a terminal
+opens the human-oriented interface, which is the primary route for a person rather than a script:
+
+```sh
+aart-cli
+```
+
+Open **Registries**, then **Add Registry**. The form validates a fresh snapshot *before* it saves
+anything, so a Registry that does not answer or does not validate never becomes configuration:
+
+```text
+AART / Registries / Add Registry
+
+✓ Registries → ▸ Add Registry → · Review Registry
+
+────────────────────────────────────────────────────────────────
+
+> Alias: <type a short name>
+  Transport: Remote Git
+  Registry URL: <type an HTTPS or SSH Git URL>
+  Branch or tag: <repository default>
+  Make default registry: yes
+  Continue: Validate and review
+
+────────────────────────────────────────────────────────────────
+
+- Connect an approved registry. AART validates a fresh snapshot before saving it.
+  A local checkout reads one branch's committed content; your worktree is never read.
+
+- This adds another registry. Nothing already connected is changed.
+
+────────────────────────────────────────────────────────────────
+
+[Type] Edit   [Backspace] Delete   [Enter] Next
+[↑/↓] Move   [Esc] Back
+```
+
+The interface does the whole route, not just this step: it lists and searches the catalog (press
+`/` and keep typing), shows the same reviewed plan before anything is applied, and reports the same
+status. It submits the identical canonical requests as the commands below — it is not a second
+command engine, so nothing is available in one and missing from the other.
+
+### The same route, as commands
+
+For a script, or when you already know what you want. Connect the Registry:
 
 ```sh
 cd /path/to/your-project
 aart-cli source add --alias <alias> --kind registry-git --location <registry-url> --ref main --default
 ```
 
-**3. Find the artifact.** `list` prints the whole catalog; `search` is how you find one thing in
-it. Every word must match, so a second word narrows rather than widens, and the coordinate it
-prints is the one `install` takes:
+Find the artifact. `list` prints the whole catalog; `search` is how you find one thing in it. Every
+word must match, so a second word narrows rather than widens, and the coordinate it prints is the
+one `install` takes:
 
 ```sh
 aart-cli marketplace search <word>
 ```
 
-**4. Install it.** Every mutation is two commands on purpose. The first renders the plan and
-changes nothing; the second finalizes exactly that plan:
+Install it. Every mutation is two commands on purpose: the first renders the plan and changes
+nothing, the second finalizes exactly that plan:
 
 ```sh
 aart-cli marketplace install <alias>/<kind>/<name> --profile <harness>
 aart-cli marketplace install <alias>/<kind>/<name> --profile <harness> --yes
 ```
 
-**5. Verify.** `status` reports what is installed and whether it still matches the Registry —
-`current`, `update_available`, `removed_upstream`, `source_unavailable` or `local_drift`:
+Verify. `status` reports what is installed and whether it still matches the Registry — `current`,
+`update_available`, `removed_upstream`, `source_unavailable` or `local_drift`:
 
 ```sh
 aart-cli marketplace status --profile <harness>
 ```
-
-### Or do all five in the TUI
-
-Running `aart-cli` with no subcommand on a terminal opens the human-oriented interface, which is
-the primary route for a person rather than a script:
-
-```sh
-aart-cli
-```
-
-It adds the Source, lists and searches the catalog (press `/` and keep typing), shows the same
-reviewed plan before anything is applied, and reports the same status. It submits the identical
-canonical requests as the flags above — it is not a second command engine, so nothing is available
-in one and missing from the other.
 
 ### One name, spelled two ways
 
@@ -84,8 +163,10 @@ into a harness, from a catalog somebody in your organization has reviewed.
 An artifact reaches you through four places that are deliberately not one place. A **Source** is a
 repository an author writes in. Scanning one produces **Candidates**: compiled and validated, not
 yet approved. A maintainer promotes a Candidate into the **Registry**, the approved and immutable
-catalog. **Marketplace** is your view of that Registry -- what you search, what you install, and
-what `status` later compares your machine against. No Source installs anything directly, and
+catalog. **Marketplace** is your view across every registry you have connected -- one, or several
+at once -- and it is what you search, what you install from, and what `status` later compares your
+machine against. An artifact keeps the alias of the registry it came from, so the same name in two
+registries stays two different things. No Source installs anything directly, and
 nothing enters the Registry without a maintainer putting it there.
 
 On your side of that line AART is a Registry client, which acquires and validates a whole snapshot

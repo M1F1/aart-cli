@@ -9371,3 +9371,118 @@ mandatory. The existing E2E case now simulates absent optional executables on ev
 building/installing the real wheel through pip and executing the documented download flags through
 the stand-in. This proves command execution, not live authentication to a GitHub instance. No
 product behavior, runtime dependency or quality threshold changes.
+
+## D-370 — The release smoke runs the console script by the name the distribution declares
+
+**2026-09-20, after the v0.4.0 release-artifact job failed.** `scripts/release_artifact.py::smoke`
+installed the built wheel into a throwaway environment and then executed `("aart", "--version")`
+and `("aart", "--help")`. `aart` is the pre-§169 executable. The wheel installs `aart-cli`, so the
+runner resolved a path that does not exist and the job died with `[Errno 2] No such file or
+directory: .../env/bin/aart` before it could produce a diagnostic. The v0.4.0 tag was created with
+no wheel attached.
+
+The rename was half-applied: the adjacent failure messages already read `aart-cli`, and the version
+comparison already used the `PROJECT` constant. Only the two executed argument tuples were missed,
+and `tests/release_artifact_test.py` asserted the broken tuples verbatim, so the gate that exists to
+catch exactly this could not.
+
+The name is therefore taken from `PROJECT`, the same constant the version assertion uses, rather
+than written again as a literal. `PROJECT` is `aart-cli`, which is both the distribution name and
+the console script `pyproject.toml` declares, so the executed name and the reported name can no
+longer drift apart. The three helper scripts whose `--aart` default still named the old executable
+(`collection_new.py`, `registry_publish.py`, `vendor_scan.py`) are corrected with it; the tutorial
+documents invoking `registry_publish.py` without that flag, so its default was reachable and wrong.
+`.github/actions/aart/action.yml` is left alone and recorded as B-167: it is self-consistent, and
+whether its shim name is an external contract cannot be decided from this repository.
+
+Evidence: the corrected assertion failed against the old source and passed against the new one, and
+the real check now passes end to end locally — `poetry build -f wheel` followed by
+`scripts/release_artifact.py --tag v0.4.0 --dist dist` reports
+`release artifact passed: aart_cli-0.4.0-py3-none-any.whl`, which is the job that failed in CI.
+
+The v0.4.0 tag is left as it is. The release job checks out the tag it builds, so re-running it
+would rebuild the same broken tree, and moving a published tag to make an old release whole is a
+worse trade than one release without a wheel. The owner decided this on 2026-09-20; the first
+attached wheel is the next release's.
+
+## D-371 — The documented download names the repository it downloads from
+
+**2026-09-20, owner's reading of the install guide.** The page's one authenticated-download line was
+`gh release download vX.Y.Z --pattern '...' --dir .`, with no repository anywhere in it. `gh` then
+resolves the repository from the git remotes of the current directory: outside a checkout the
+command fails with `not a git repository`, and inside a checkout of another project it asks that
+project for a wheel it does not have. The section is explicitly the one for a reader installing
+*without* a clone, so the one thing it could not rely on was the reader standing in a clone.
+
+Every other line on that page already answers this, and the page says why it must: an address
+written into the file would be wrong in a fork on a company instance. So the fix is the page's own
+convention rather than a new one — `--repo "<repository>"`, the same placeholder the git and URL
+rows use, which `gh` accepts as a full URL. It is quoted because a bare `<` is a redirection; the
+E2E caught that on the first attempt, which is the second defect this change closes.
+
+**Why no gate caught the original.** `_stand_ins` builds a `gh` whose parser knows `tag`,
+`--pattern` and `--dir` and copies from a fixed local directory. It has no concept of a repository,
+so it could not notice one was never named. Requiring `--repo` in that parser makes the omission a
+red, which is how this was fixed: the stub refused the documented line before the page was touched.
+
+**The ordering trap.** `classify_command` tested `<repository>` first and returned `network`, which
+is not runnable. Adding the placeholder to the download line would therefore have deleted the only
+executed download route while leaving the suite green -- a silent loss of coverage as the price of
+a documentation fix. The `gh release download` test now runs before the placeholder test, with a
+comment saying so. A targeted mutation restoring the old order reclassifies the line as `network`.
+
+What the stand-in still cannot prove is unchanged: that a real instance answers, or that the
+address is the right one. What it now proves is that the documented line names an address at all.
+
+## D-372 — The README leads with the authenticated install, and with the TUI
+
+**2026-09-20, owner's direction.** Two orderings on the adoption page change.
+
+**The install route.** The page led with `uv tool install "git+<repository>.git@vX.Y.Z"`, which is
+the public-repository shape: it works when an unauthenticated fetch of the repository works. The
+product is meant to be run from an organization's own instance, where it does not. The two
+authenticated routes come first now -- `gh release download` for someone with the GitHub CLI, and
+the Releases page by hand for someone with nothing installed -- followed by installing from the
+downloaded file with `pip`, `pipx`, `uv tool` or `uvx`. Installing straight from a public
+repository moves to `docs/install/installing-aart-v1.md`, which already carried the rest of it.
+§168 does not fix which install shape leads, so this is a free choice; what it does fix is that no
+value that cannot be universal becomes a default, and `<repository>` stays a placeholder.
+
+`uvx` is listed as what it is: it runs the wheel and keeps nothing, so it answers "look at it
+first" rather than "install it". Verified against a real 0.4.0 wheel --
+`uvx --from ./aart_cli-0.4.0-py3-none-any.whl aart-cli --version` prints `aart-cli 0.4.0`.
+
+**The TUI.** §168 already says it: "The TUI is the primary human route; a compact deterministic CLI
+equivalent may follow." The page had it inverted -- five CLI steps, then `### Or do all five in the
+TUI` at the end. This is a correction of a divergence, not a new contract. Connecting a Registry is
+now shown in the interface first, and the commands follow under one heading for somebody scripting
+it.
+
+**The screen is generated, not drawn.** The illustration is a real frame, composed through the same
+`compose_frame`/`render` the shell draws with, and `tests/readme_tui_screen_test.py` recomposes it
+and compares. A picture of the product is the claim on an adoption page most likely to rot, because
+renaming a field is not a change anyone expects to break a README. A targeted mutation -- one field
+label altered in the pasted block -- fails the comparison. No screenshot or recording is committed:
+none can be produced here, and an image would be the one thing on the page no gate could check.
+
+**Amended after the owner read it.** Three things the page said badly. The opening was one
+sentence carrying four prerequisites and a note about angle brackets, and it is now a list of what
+you need, with aart-cli named as an item and pointed at the steps that install it -- the reader
+asked for it in the list rather than inferred from the absence of it. "Everything in angle brackets
+is yours to fill in" said nothing to the person it was written for: the page now says they are
+blanks, says to replace them brackets and all, shows `--alias <alias>` becoming `--alias company`,
+and says why they are left blank.
+
+The harness list is no longer transcribed. `adoption_first_contact_test` reads `profiles.builtin`
+and compares it to the line that offers the harnesses -- both halves, because completeness alone
+would pass a page that also offered a harness this build does not have. Dropping `vibe` from the
+page fails it. The owner asked whether the README should parameterize such things; this is that,
+without templating the file, which would cost the page its plain readability on a repository front.
+
+The orientation said Marketplace was "your view of that Registry", which reads as though there can
+only be one. Several can be connected, and the catalog spans them: `load_read_only_marketplace`
+iterates every enabled source into one graph, and `compile_marketplace_graph` keys artifacts by
+`(SourceAlias, ArtifactIdentity)`. Verified rather than read -- two sources holding the *same*
+`skill/reviewer` compile to two entries with no diagnostic, and reusing one alias is refused with
+`duplicate source alias`. So the page now says one or several, and says an artifact keeps its
+registry's alias, which is the question "several" immediately raises.
