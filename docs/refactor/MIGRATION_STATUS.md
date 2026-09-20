@@ -4,6 +4,14 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-20, CP-26 complete — PR #29 matrix green, step 21 closed.** GitHub Actions run
+`35505543309` passed the full canonical quality, integration/E2E and release-facing gates on all
+required interpreters: Python 3.10 in 20m54s, Python 3.11 in 26m02s and Python 3.14 in 20m51s. The
+aggregate `pr-check` job passed; the conditional private-image job was skipped by design. This is
+the required broad evidence assigned to CP-26.21 by D-317. No local full-suite run duplicated it.
+Together with the closed traceability rows and B-151 documentation correction below, all 23 CP-26
+tasks are done. PR #29 remains open for owner review and the 0.4.0-versus-1.0.0 release decision.
+
 
 **2026-09-20, CP-26.21 — CI install-route failure fixed (D-369), matrix rerun pending.**
 Runs 35504777445 and 35504840836 failed the documented-install route case on all three interpreters:

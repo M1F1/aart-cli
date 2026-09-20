@@ -894,7 +894,7 @@
         {
           "id": "21",
           "title": "Run full CP-26 quality, integration/E2E and release-facing verification only after all implementation tasks are complete",
-          "status": "todo"
+          "status": "done"
         }
       ]
     }

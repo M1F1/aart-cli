@@ -2076,12 +2076,11 @@ preflight refusal; accepting an extra/old OpenCode session and call; and promoti
 content to service PASS. The report test proves neither a configuration value nor raw tool payload
 appears in its result.
 
-Still required: a protected fixture observer that can honestly set service PASS; live declared
-reads through OpenCode and Tabnine; the remaining focused/unit/docs gates; and scoped mutmut on the
-new modules. Tabnine's missing pre-invocation restriction makes its live obligation currently
-blocked, so CP-26.20a and GitHub issue #27 remain open.
+At this checkpoint, a protected fixture observer, live harness evidence, the remaining focused
+gates and scoped mutmut were still required. D-366–D-368 below changed and completed that contract;
+this paragraph records the checkpoint rather than current work.
 
-### Current owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
+### Historical owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
 
 This supersedes earlier requirements for mandatory Tabnine harness execution, blanket prohibition
 of model assessment and unconditional suppression of response display. Implement revised Product
@@ -2093,10 +2092,9 @@ fields are English. Assessments remain separate from deterministic checks and se
 Add default-off `--show-response` for bounded current-output inspection, without application
 persistence. Keep zero runtime dependencies; use Python's standard library.
 
-Implementation is pending for this revision. Required evidence includes direct-only Tabnine coverage,
-capability-based aggregation, deadline/process cleanup, malformed assessment and uncertain/error
-cases, argument enforcement, bounded opt-in display and default non-disclosure. Existing tests do not
-establish these new claims. CP-26.20a remains in flight; do not mark it done.
+This revision was implemented and its claims were tested, then D-368 replaced the harness-driving
+half with an operator-run prompt and carried report. The final Step 20a record follows; CP-26.20a
+is done.
 
 ## Step 20a — CLI-only smoke verification of installed MCPs
 
@@ -2202,6 +2200,13 @@ interpreters through the pull request rather than locally, where the same answer
 later. The local checks for this step are the ones that verify the change it made:
 `tests.traceability_matrix_test` plus `docs-check`.
 
+**Final CI evidence, 2026-09-20.** PR #29 run `35505543309` passed the full canonical gate set on
+Python 3.10 (20m54s), Python 3.11 (26m02s) and Python 3.14 (20m51s), and its aggregate `pr-check`
+job passed. The conditional private-image job was skipped by design. This is the broad evidence
+D-317 assigns to this step; it was not duplicated locally. With traceability closed and B-151
+closed, CP-26.21 and the 23-task CP-26 plan are complete. PR #29 remains open for owner review and
+the release-version decision.
+
 ### Step 21 CI finding — portable documented install routes (D-369)
 
 The first matrix failed on all interpreters because only clipboard installation executed on hosts
@@ -2210,5 +2215,5 @@ gh stand-in without requiring a host executable. The existing route E2E case exp
 optional tool availability: red before the fix, green after. Restoring the gh prerequisite as a
 targeted mutation made authenticated-download coverage fail; restored, it passed. Scoped lint,
 format, documentation and diff checks passed. Scoped mutmut could not collect the E2E case because
-its copy lacked the install document, recorded as advisory B-166. The full matrix is rerun on CI;
-this finding does not weaken either mandatory route assertion or the required gate set.
+its copy lacked the install document, recorded as advisory B-166. The rerun is green as recorded
+above; this finding does not weaken either mandatory route assertion or the required gate set.

@@ -2,16 +2,18 @@
 
 ## Where CP-26 is (2026-09-20)
 
-**Steps 1–20a are done** on `refactor/cp-26-legacy-removal`. **CP-26.21, the final verification
-step, is in flight.** Read "What is left, in order" below; any older handoff naming step 18, 19, 20
-or 20a as next is stale, and so is anything describing the suite as red or 20a as open.
+**CP-26 is complete: steps 1–21 are done** on `refactor/cp-26-legacy-removal`. PR #29 remains open
+for owner review and the release-version decision. Any older handoff naming step 18, 19, 20, 20a
+or 21 as next is stale, and so is anything describing the suite as red or CP-26 as open.
 
 **CI follow-up, D-369:** the matrix exposed a missing pip disk-install example and an unnecessary
 host-gh requirement in the documented-install test driver. Both are fixed; the existing E2E case
 now simulates absent optional tools and passed after reproducing CI's failure. A targeted mutation
 restoring the host-gh requirement failed on authenticated-download coverage, then passed restored.
 Scoped mutmut could not collect because its copy omitted the install document (B-166); no adequacy
-claim is made. Wait for PR #29 checks on the fix before marking step 21 done.
+claim is made. PR #29 run `35505543309` passed every required matrix job: Python 3.10 in 20m54s,
+3.11 in 26m02s and 3.14 in 20m51s; the aggregate `pr-check` passed and the conditional private-image
+job was skipped by design.
 
 **State of the gates for step 20, exactly.** `unit` 4705 OK, `integration` 424 OK, and
 lint/format-check/typecheck/docs-check/validate/secret-shape-check all clean. `unit` was red twice
@@ -32,11 +34,11 @@ suggests a review branch from the action that produced the current commit (D-347
 repository already on this machine is a fourth `SourceKind` read one committed branch at a time
 (D-350, D-362), and a local and a remote connection to one Registry coexist as two aliases, two
 installations and two trees. B-057, B-149 and B-160 are closed; **B-162 is resolved by the owner’s scope decision D-365**; B-161/B-163 are noncritical.
-The plan has **23 tasks (22 done)**: additions **CP-26.18a** and **CP-26.20a** preserve existing
-ids. Execution is now **21**; task 21 is the final broad gate.
+The plan has **23 tasks (23 done)**: additions **CP-26.18a** and **CP-26.20a** preserve existing
+ids. CP-26 has no remaining execution task.
 
 
-### Current owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
+### Historical owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
 
 This supersedes earlier requirements for mandatory Tabnine harness execution, blanket prohibition
 of model assessment and unconditional suppression of response display. Implement revised Product
@@ -48,15 +50,13 @@ fields are English. Assessments remain separate from deterministic checks and se
 Add default-off `--show-response` for bounded current-output inspection, without application
 persistence. Keep zero runtime dependencies; use Python's standard library.
 
-Implementation is pending for this revision. Required evidence includes direct-only Tabnine coverage,
-capability-based aggregation, deadline/process cleanup, malformed assessment and uncertain/error
-cases, argument enforcement, bounded opt-in display and default non-disclosure. Existing tests do not
-establish these new claims. CP-26.20a remains in flight; do not mark it done.
+This was the accepted revision before D-366–D-368 completed and then replaced its harness-driving
+half with an operator-run prompt and carried report. The final implementation and evidence are
+recorded under paragraph *(c)* below; CP-26.20a is done.
 
-### Accepted local MCP smoke verification (2026-09-19)
+### Historical acceptance record — local MCP smoke verification (2026-09-19)
 
-D-348 and Product Specification §170 add **CP-26.20a**, still **todo in `plan.json` and now in
-flight**, after local Registry
+D-348 and Product Specification §170 originally added **CP-26.20a** after local Registry
 consumption. Deliver one CLI command for all or selected **already installed** MCPs in the local
 environment: ordinary installations from a local Registry repo/branch or a remote Registry,
 using existing installation-owned configuration and credentials. Uninstalled content is refused. Keep
@@ -305,10 +305,10 @@ lint/format-check/typecheck/docs-check/validate/secret-shape-check clean. The sl
 targeted mutations, including four that first survived -- each one a test that did not hold its own
 name, closed by fixing the test rather than the code.
 
-*(d)* **CP-26.21 is the last step and is in flight** -- the sole broad quality, integration/E2E and
-release-facing closeout (D-317, `EXECUTION_PLAN.md`). The full suite runs on CI across three
-interpreters through the pull request rather than here, which is the owner's standing instruction;
-what belongs to this step locally is the traceability closeout and the release-facing PR.
+*(d)* **CP-26.21 is done** -- the sole broad quality, integration/E2E and release-facing closeout
+(D-317, `EXECUTION_PLAN.md`). PR #29 run `35505543309` passed the required Python 3.10, 3.11 and
+3.14 jobs and the aggregate `pr-check`; the conditional private-image job was skipped by design.
+The full suite ran only there, following the owner's standing instruction.
 
 **Traceability is closed.** INV-243 through INV-253 -- the eleven rows that carried pending CP-26
 proof -- now cite implementation and named test cases in `INVARIANT_TRACEABILITY.md` and read
@@ -322,8 +322,8 @@ in the body. Read `gh pr checks 29` rather than re-running the suite here.
 **B-151 is closed (2026-09-20).** Public protocol, maintenance, security and publication prose
 now describes approved version records and derived Registry catalogs. The schema freeze is updated;
 its single-case guard passed and a deliberate stale-freeze mutation failed as expected. README
-already had no obsolete layout section. Historical refactor records remain intact. Step 21 now
-awaits the PR #29 CI matrix on the updated branch; do not mark it done before required checks pass.
+already had no obsolete layout section. Historical refactor records remain intact. The required
+PR #29 matrix is green in run `35505543309`; step 21 and CP-26 are closed.
 
 **The naming scope described below is implemented, not pending** (D-349, §169.7, INV-253; issues
 #26/#28). Harness-visible names carry artifact, Registry alias and scope without version and match
