@@ -5,6 +5,42 @@ contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
 
+**2026-09-20, CP-26.21 — the traceability closeout, and what the matrix was still claiming.**
+Eleven rows had been carrying pending CP-26 proof. INV-243 and INV-246 read `PARTIAL`; INV-244,
+INV-247 and INV-248 through INV-253 read `CONFLICT`, six of them with the words "No
+implementation evidence yet" in their evidence column; INV-245 read `EVIDENCED` but still owed
+CP-26.20 the local-alias half. All eleven were implemented by steps 18a, 19, 20 and 20a. A matrix that
+says a shipped behaviour has no evidence is the same defect as one that cites a deleted test, in the
+other direction: it is wrong about the repository, and a reader cannot tell which rows to trust.
+
+Each row now names the module that owns the clause and the test cases that hold it, and reads
+`EVIDENCED`. Two of them record that the contract itself moved rather than only that it was built.
+INV-250 grades the external-service stage from a declared `reaches_service` plus a declared
+expectation that holds (D-366) -- output shape alone never proved a fresh request, so the product
+stopped implying it did. INV-251 is operator-attested because AART launches no harness at all
+(D-368), which makes "current execution evidence" a thing a person produces, not a thing the tool
+takes.
+
+`traceability_matrix_test.py` holds the citations rather than the prose: cited files, package
+modules and `file::Class::method` cases must all resolve. **Targeted mutation:** renaming one cited
+case (`test_no_harness_is_started_and_coverage_says_so` → `…_said_so`) turned
+`test_every_cited_test_case_exists_under_the_name_it_is_cited_by` red and nothing else; reverted, it
+is green. The guard cannot check that a row's *claim* matches its evidence -- that stays a reading
+job, and is why each row's characterization column says what the cited tests actually establish.
+
+Not run here: the full quality suite. CP-26.21 owns it (D-317), and by the owner's standing
+instruction it runs on CI across three interpreters through the pull request rather than locally.
+
+**2026-09-20, CP-26.20a — the harness can check its own report (`aart-cli mcp report <path>`).**
+Between composing the prompt and grading the file there was a gap: the session writing the report
+had no way to learn its JSON was malformed, so a shape mistake surfaced only after that session was
+gone. The new action runs every shape check the full route runs -- marker, version, entry shapes,
+duplicates -- and skips only the correlation check, which needs a selection it does not have. It
+says so in its own output instead of implying a completeness it lacks. `parse_smoke_report` takes
+`requested=None` for exactly this; `test_the_shape_checks_do_not_ride_on_correlation` pins that
+dropping correlation drops nothing else. `unit` 4762 OK, `integration` 424 OK.
+
+
 **2026-09-20, CP-26.20a — the harness leg stops being something AART drives (D-368).**
 Owner-directed. AART no longer launches a harness, submits a prompt to one, or reads its session.
 `aart-cli mcp test --prompt` composes a prompt naming every selected installation, its MCP server

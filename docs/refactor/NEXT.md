@@ -2,9 +2,9 @@
 
 ## Where CP-26 is (2026-09-20)
 
-**Steps 1–20 are done** on `refactor/cp-26-legacy-removal`. **CP-26.20a is in flight.** Read "What is
-left, in order" below; any older handoff naming step 18, 19 or 20 as next is stale, and so is
-anything describing the suite as red.
+**Steps 1–20a are done** on `refactor/cp-26-legacy-removal`. **CP-26.21, the final verification
+step, is in flight.** Read "What is left, in order" below; any older handoff naming step 18, 19, 20
+or 20a as next is stale, and so is anything describing the suite as red or 20a as open.
 
 **State of the gates for step 20, exactly.** `unit` 4705 OK, `integration` 424 OK, and
 lint/format-check/typecheck/docs-check/validate/secret-shape-check all clean. `unit` was red twice
@@ -271,49 +271,50 @@ lint/format-check/typecheck/docs-check/validate/secret-shape-check clean. INV-24
 "PARTIAL" is closed by it in behaviour; confirm the traceability row at CP-26.21. The scoped
 `make mutants` is the one piece of its evidence not produced, and is now B-163.
 
-*(c)* **CP-26.20a is in flight and is the next executable work** (GitHub issue #27, D-348/D-351,
-D-363/D-364, §170). The implemented half is in the working tree: a parser-owned optional
-`smoke_test` block on the author manifest, `aart-cli mcp test` over concrete installed owners, and
-the OpenCode and Claude adapters; 58 focused tests, four recorded semantic mutations, ruff and mypy
-green.
+*(c)* **CP-26.20a is done** (GitHub issue #27, D-348/D-351, D-363/D-364, D-366, D-368, §170).
+`aart-cli mcp test` verifies concrete installed MCP owners over four direct stages -- installation
+configuration and credential presence, MCP startup and protocol, the declared result expectation,
+and the external-service read -- while the three harness stages are operator-attested rather than
+driven.
 
-**Live harness evidence exists for Claude Code** (2026-09-20): `make live-harness HARNESS=claude`
-drives the real CLI against a real MCP server and passes, with a live mutation proving the test
-holds. OpenCode is blocked by its own provider (free tier refuses headless, HTTP 403), which is an
-account matter rather than a code gap; Tabnine is direct-only by design. **B-164 is closed by D-366** -- the
-service stage is graded from a declared `smoke_test.reaches_service` plus a declared `expect` that
-holds, an absent claim is `NOT CONFIGURED` and outside the required set, and `service_observed` is
-deleted. Neither of the two readings the backlog offered was taken: §170.3 refuses one and §170.5
-refuses the other, and the specification supplies the third itself.
+**D-366** made the service stage reachable. It is graded from a declared
+`smoke_test.reaches_service` plus a declared `expect` that holds; an absent claim is
+`NOT CONFIGURED` and outside the required set, and `service_observed` is deleted. Neither reading
+the backlog offered was taken -- §170.3 refuses one and §170.5 refuses the other, and the
+specification supplies the third itself, so B-164 is closed.
 
-**D-365's implementation and its test evidence are done** (see the newest `MIGRATION_STATUS.md`
-entry): capability route, 120-second whole-run deadline and process-group cleanup, argument
-confinement, the English assessment contract with its three outcomes, capability-based aggregation
-and the default-off `--show-response` all have a test and a recorded mutation. **Superseded by D-368 (2026-09-20):** AART no longer drives a harness at all, so B-162 dissolved
-and the paragraph below describes machinery that has been deleted. Kept for the history of how 20a
-got here. **Step 20a is complete**: D-366 made the service stage reachable, D-368 replaced the
-driver with `mcp test --prompt` / `mcp test --report` / `mcp report`, and the slice document records
-the evidence. **CP-26.21 is the only remaining step, and it alone owns the full quality suite
-(D-317).** The old statement follows: live OpenCode and Tabnine runs plus
-protected-service evidence need the real harness CLIs and a real protected service on the machine,
-and a substitute MCP configuration would prove the adapter fixture rather than the user's
-installation (§170.4). That is owner/manual evidence. Until it exists, 20a stays in flight.
+**D-368** then removed the driver entirely. `mcp test --prompt` composes the prompt, the operator
+runs it in their own session, `mcp report <path>` lets that session check its own JSON against the
+schema, and `mcp test --harness <harness> --report <path>` grades the carried results with the same
+deterministic evaluator and labels coverage `direct-and-attested`. AART launches no harness, submits
+no prompt and reads no session, so B-162 dissolved together with the machinery it was about, and
+`io/harness_smoke.py` and its two test modules are gone. Live Claude Code evidence was taken here on
+2026-09-20 against the real CLI before the driver was deleted; OpenCode was blocked by its own
+provider's free tier (HTTP 403 on headless), which is an account matter rather than a code gap, and
+Tabnine is direct-only by design.
 
-**The original statement of what 20a needs, kept for reference** -- the revised §170 / INV-250–252 under **D-365**, which
-supersedes mandatory Tabnine harness execution, the blanket prohibition on model assessment and the
-unconditional suppression of response display. An unsupported allowed-tools capability means direct
-MCP testing with that installation's credentials plus an explicit excluded harness stage, and does
-not block completion. Eligible harnesses get a 120-second deadline, exact operation/argument
-enforcement, and an English prompt asking for `status` (`ok`, `error`, `uncertain`), `summary` and
-`possible_error`. Assessments stay separate from deterministic checks and service evidence. Add a
-default-off `--show-response` for bounded inspection with no application persistence. Zero runtime
-dependencies; standard library only. Required evidence: direct-only Tabnine coverage,
-capability-based aggregation, deadline and process cleanup, malformed-assessment and
-uncertain/error cases, argument enforcement, bounded opt-in display, and default non-disclosure.
-**Existing tests do not establish these claims, and B-162 -- missing live OpenCode/Tabnine and
-protected-service evidence -- is still open. Do not mark 20a done.**
+Gates for the three increments: `unit` 4749 / 4754 / 4762 OK, `integration` 424 OK, and
+lint/format-check/typecheck/docs-check/validate/secret-shape-check clean. The slice records the
+targeted mutations, including four that first survived -- each one a test that did not hold its own
+name, closed by fixing the test rather than the code.
 
-*(d)* **CP-26.21** — the only task that runs the full quality suite.
+*(d)* **CP-26.21 is the last step and is in flight** -- the sole broad quality, integration/E2E and
+release-facing closeout (D-317, `EXECUTION_PLAN.md`). The full suite runs on CI across three
+interpreters through the pull request rather than here, which is the owner's standing instruction;
+what belongs to this step locally is the traceability closeout and the release-facing PR.
+
+**Traceability is closed.** INV-243 through INV-253 -- the eleven rows that carried pending CP-26
+proof -- now cite implementation and named test cases in `INVARIANT_TRACEABILITY.md` and read
+`EVIDENCED`. The matrix guard (`traceability_matrix_test.py`) holds those citations: a planted stale
+case name turns it red, which is the targeted mutation recorded for this step.
+
+**The naming scope described below is implemented, not pending** (D-349, §169.7, INV-253; issues
+#26/#28). Harness-visible names carry artifact, Registry alias and scope without version and match
+the published skill grammar; two owners that would spell one name are refused together before
+anything is written; credential addresses carry the complete owner plus input id with readable
+labels and an opaque root discriminator, and refuse an over-long address rather than truncating it;
+projection changes the installed name and leaves the authored body byte for byte. The paragraphs
+that follow are kept as the statement of the accepted contract, not as open work.
 
 Naming is included in this task (D-349, §169.7, INV-253; issues #26/#28). Harness-visible names
 carry artifact/Registry alias/scope without version, respect discovery paths and adapter grammar,

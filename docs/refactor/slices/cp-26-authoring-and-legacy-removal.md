@@ -2145,3 +2145,49 @@ then died in exactly the test whose name claims it.
 
 Gates: unit 4754 and integration 424 at D-368, both green, with lint, format-check, typecheck,
 validate, docs-check, packaging-check, secret-shape-check and the release gate clean.
+
+## Step 21 — the closeout: what the repository still claimed, and where the suite runs
+
+The last step of CP-26 is its broad verification, and the first thing broad verification found was
+in the repository's own record rather than in the code.
+
+### The matrix was wrong in the direction nobody checks for
+
+`traceability_matrix_test.py` exists because a slice that deletes a module leaves rows citing it.
+CP-18 step 3 removed `policy.py` and five rows went on offering it as evidence. The guard closes
+that direction: every cited test file, package module and `file::Class::method` case must resolve.
+
+It cannot close the other direction. Eleven rows -- INV-243 through INV-253 -- described behaviour
+that steps 18a, 19, 20 and 20a had built, and six of them still said "No implementation evidence
+yet" in the column a reader goes to first. Nothing was red, because a row that under-claims breaks
+no test. It is still a false statement about the repository, and it is the more corrosive kind: a
+reader who finds one row wrong has no way to know which of the remaining two hundred to trust.
+
+Each of the eleven now names the module that owns the clause and the test cases that hold it. Two
+record that the contract moved rather than only that it was implemented:
+
+* **INV-250** grades the external-service stage from a declared `smoke_test.reaches_service` plus a
+  declared `expect` that holds (D-366). Output shape alone never proved a fresh network request, so
+  the product stopped implying that it did; an absent claim is `NOT CONFIGURED` and leaves the
+  required set rather than failing it.
+* **INV-251** is operator-attested (D-368). AART launches no harness, submits no prompt and reads
+  no session, so "current execution evidence" became something a person produces and the tool
+  grades, and the absence of a report is an honest non-success state rather than a failure.
+
+### Evidence
+
+**Targeted mutation.** Renaming one cited case in the matrix
+(`test_no_harness_is_started_and_coverage_says_so` → `…_said_so`) turned
+`test_every_cited_test_case_exists_under_the_name_it_is_cited_by` red, and nothing else; reverted,
+the module is green. The guard is load-bearing over the rows this step wrote.
+
+**What the guard cannot do, stated rather than glossed.** It resolves citations; it does not read
+them. A row could cite a real test that establishes something other than what the row claims. That
+stays a reading job, which is why every rewritten row's characterization column says what its cited
+tests actually establish, in the words of the tests.
+
+**Where the full suite runs.** Not here. CP-26.21 owns the full quality, integration/E2E and
+release-facing gates (D-317), and by the owner's standing instruction they run on CI across three
+interpreters through the pull request rather than locally, where the same answer arrives hours
+later. The local checks for this step are the ones that verify the change it made:
+`tests.traceability_matrix_test` plus `docs-check`.
