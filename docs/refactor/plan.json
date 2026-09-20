@@ -779,7 +779,7 @@
     {
       "id": "CP-26",
       "title": "Canonical Registry maintenance, authoring tools, local consumption and MCP smoke verification",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
