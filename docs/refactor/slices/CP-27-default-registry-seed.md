@@ -131,6 +131,33 @@ spellings, and the same mutation turns it red on the tab case here.
 The general lesson is the one the matrix exists for: a test that pins *invalid* must pin it for a
 reason the product holds, not for a reason the interpreter happens to supply.
 
+## The release-facing half, checked without a release
+
+Task 5's release-facing third does not need a tag, and doing it without one is what makes it
+repeatable. `scripts/release.py wheel-digest` builds the wheel in a throwaway copy of the tree and
+applies *every* injector there from the real environment, so it is the release build minus the
+publishing:
+
+```sh
+AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL="acme=https://github.com/M1F1/aart-registry-demo.git" \
+  python scripts/release.py wheel-digest --output /tmp/whl
+```
+
+The wheel it produced carries `ALIAS = "acme"` and the URL in `aart_cli/_default_registry.py`, and
+the checkout is still clean afterwards -- the tracked module is untouched and still empty, which is
+the property D-309 asks for and the one a maintainer testing this by hand is most likely to break
+(running `inject_default_registry.py` directly overwrites the tracked file in place).
+
+The receipt agrees: `release.py check --without-registry` reports `default_registry: null` with the
+variable unset, and the trimmed `<alias>=<url>` with it set. Its two failing checks on this branch
+are `repository-dirty` and `source-not-merged-into-main`, which are properties of a feature branch
+rather than of CP-27.
+
+Gates run here, all clean: `packaging-check` (built `aart_cli-0.4.1-py3-none-any.whl`),
+`secret-shape-check`, `validate`, `lint`, `format-check`, `typecheck`, `docs-check`. The full
+`unit`/`integration` suites stay on `pr-check`, for the reason at the top of this document -- and
+this slice is the case for it: the one failure the matrix found was invisible to every local run.
+
 ## What this slice deliberately did not do
 
 - **B-168** — only the terminal route seeds. `load_runtime_configuration` promises to make no
