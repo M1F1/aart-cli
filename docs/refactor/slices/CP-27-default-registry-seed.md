@@ -158,6 +158,36 @@ Gates run here, all clean: `packaging-check` (built `aart_cli-0.4.1-py3-none-any
 `unit`/`integration` suites stay on `pr-check`, for the reason at the top of this document -- and
 this slice is the case for it: the one failure the matrix found was invisible to every local run.
 
+## The first run, proven on an installed wheel
+
+Everything above proves the mechanism on doubles and on the source tree. The one thing neither
+covers is the artefact a person actually receives, so it was run:
+
+```sh
+AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL="acme=https://127.0.0.1:1/team/registry.git" \
+  python scripts/release.py wheel-digest --output /tmp/whl
+python3 -m venv /tmp/venv && /tmp/venv/bin/pip install /tmp/whl/aart_cli-*.whl
+```
+
+The installed package carries `ALIAS = "acme"` and the URL, read back from
+`site-packages/aart_cli/_default_registry.py`. Driving `connect_baked_default_registry` against a
+fresh `AART_CLI_HOME` degrades exactly as rule 3 says: a **warning** naming the Registry the build
+named and the connection that failed, the remediation *open Registries and choose Add Registry*,
+the run not failed, and no `config.json`.
+
+One thing the doubles could not show. The same failure, from a hand-typed
+`aart-cli source add --alias manual --kind registry-git --location https://127.0.0.1:1/... --ref main`,
+leaves the *identical* state behind: no `config.json`, and an empty
+`sources/registry-<origin-hash>/mirror.git`. That the two routes are indistinguishable in what they
+leave on disk is the strongest evidence available that the seed runs `source add`'s transaction
+rather than a copy of it -- the property `ItRunsTheOrdinaryAddTransaction` asserts about the
+*request*, observed here on the filesystem. The empty directory is the acquisition transaction's,
+not seeding's, and went to the backlog as **B-171**.
+
+Bare `aart-cli` reaches the terminal only on a TTY (`cli.py:1600`) and prints help otherwise, so
+this drove the seeding entry point directly rather than through curses. That is the same boundary
+B-168 already records.
+
 ## What this slice deliberately did not do
 
 - **B-168** — only the terminal route seeds. `load_runtime_configuration` promises to make no

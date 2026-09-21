@@ -4281,6 +4281,22 @@ general notice field, so carrying it onto the dashboard is its own contained pie
 rather than a line in this slice. The consequence today is only that a curses user sees the
 connected Registry on the dashboard without reading the sentence explaining where it came from.
 
+## B-171 — a source whose first fetch fails leaves an empty mirror directory behind
+
+**Found 2026-09-21, CP-27.5; noncritical.** An `aart-cli source add` whose fetch cannot reach the
+origin writes no `config.json` -- the compare-and-swap is atomic and the configuration is
+untouched -- but it leaves `sources/registry-<origin-hash>/` holding an empty `mirror.git` and an
+empty `tmp`, which nothing afterwards references. Observed on an installed wheel against
+`https://127.0.0.1:1/...`, for a hand-typed `source add` and for the baked seed alike, which is
+itself the evidence that the seed runs the ordinary transaction rather than a second one.
+
+Not critical, and not CP-27's: the directory is keyed by the origin hash, so a retry reuses it
+rather than accumulating, it holds no configuration, no secret and no artifact, and the invariant
+the slice claims -- no partial *configuration* -- holds exactly. What it costs is tidiness and one
+confusing artefact for anyone who looks in the application home after a failed first run. The fix
+belongs to the acquisition transaction, not to seeding: remove a source directory the transaction
+created when that transaction does not commit, leaving a pre-existing one alone.
+
 ## B-167 — the composite action still publishes the pre-CP-26 executable name
 
 **Found 2026-09-20, after the v0.4.0 release-artifact failure; noncritical, needs an owner decision.**
