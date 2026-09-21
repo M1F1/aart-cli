@@ -9524,6 +9524,15 @@ tool that works offline into one that will not start without a VPN. And the firs
 alias and URL it added, since the person did not choose them and a silent seed cannot later answer
 "where did this come from".
 
+**Implemented 2026-09-21, and one thing the implementation settled.** The variable carries the
+alias as well as the URL and names exactly one Registry; a list was considered and dropped, because
+it needs an answer to "which of these is *the* default" and a separator to parse, and buys nothing
+the second Registry's Add Registry cannot. The seeded source is tracked at `main`, which is the ref
+`configuration/schema.py` already reads when an entry names none, so the seed agrees with a
+hand-written `config.json` instead of introducing a second answer. Seeding is composed in `tui.run`
+rather than in `load_runtime_configuration`, whose contract is that it makes no implicit source or
+configuration mutation -- B-168 records that the flag-form CLI therefore does not seed yet.
+
 **Two consequences recorded rather than deferred.** `config.json` already has a `default_registry`
 field meaning *which connected Registry to use when no alias is given*; the seeded value carries a
 distinct name in the code even though the first run sets both, so the two ideas stay separable. And

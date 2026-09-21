@@ -2,7 +2,15 @@
 
 ## Where CP-27 is (2026-09-21)
 
-**CP-27 is the current critical path, and it is deliberately short: five tasks, none done.**
+**CP-27 tasks 1-4 are done on `docs/cp-27-default-registry-plan` (PR #40); task 5 is the full
+verification, which runs on `pr-check` rather than locally.** The slice document
+`docs/refactor/slices/CP-27-default-registry-seed.md` carries the evidence: sixteen targeted
+mutations with the test each one turned red, a scoped `make mutants` of 37/37 on
+`configuration/seed.py`, and the end-to-end proof that an unreachable seeded Registry leaves no
+`config.json` behind. Three noncritical discoveries went to the backlog rather than into the
+slice: B-168 (only the terminal route seeds), B-169 (no notice channel inside curses) and B-170
+(`1 registries` on the dashboard, now visible on the README front page).
+
 It is recorded in `docs/refactor/plan.json` and specified in issue #39.
 
 One sentence of what it does: a release may bake **one** default Registry into the wheel, and a

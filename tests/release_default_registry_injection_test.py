@@ -13,10 +13,12 @@ first run it would otherwise break is the one moment a person has no configurati
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from aart_cli.configuration.seed import SeededRegistry, baked_default_registry
 from aart_cli.domain.identifiers import SourceAlias
@@ -158,6 +160,50 @@ class EveryInjectorReachesBothBuilds(unittest.TestCase):
                 target = _load(path.stem).TARGET
                 self.assertTrue(target.is_relative_to(ROOT / "aart_cli"))
                 self.assertTrue(target.exists())
+
+
+class TheReceiptRecordsWhatWasBaked(unittest.TestCase):
+    """Two wheels of one version can now differ, so the difference has to be written down.
+
+    A wheel used to be reproducible from its tag alone. It is now reproducible from its tag plus
+    the repository variables in effect, which is already true of the commit stamp and is what #24
+    must settle for the distribution name. A release whose receipt does not say which Registry it
+    baked leaves nobody able to tell two same-version wheels apart afterwards.
+    """
+
+    def _receipt_field(self, value: str | None) -> object:
+        release = _load("release")
+        environment = dict(os.environ)
+        environment.pop(VARIABLE, None)
+        if value is not None:
+            environment[VARIABLE] = value
+        with mock.patch.dict(os.environ, environment, clear=True):
+            return release.baked_default_registry_value()
+
+    def test_an_unset_variable_records_nothing(self) -> None:
+        self.assertIsNone(self._receipt_field(None))
+
+    def test_the_effective_value_is_recorded(self) -> None:
+        self.assertEqual(self._receipt_field(f"company={URL}"), f"company={URL}")
+
+    def test_the_recorded_value_is_the_one_the_build_used(self) -> None:
+        # Trimmed the same way the injector trims it, or the receipt would describe a value the
+        # wheel does not carry.
+        self.assertEqual(self._receipt_field(f"  company={URL}\n"), f"company={URL}")
+
+    def test_the_checklist_receipt_carries_the_field(self) -> None:
+        release = _load("release")
+        with TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "pyproject.toml").write_text('[project]\nversion = "1.2.3"\n', encoding="utf-8")
+            receipt = release.check_release(
+                root,
+                None,
+                process_runner=lambda *_, **__: None,
+                require_clean=False,
+                require_main=False,
+            )
+        self.assertIn("default_registry", receipt)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,23 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-21, CP-27 tasks 1-4 — one baked default Registry, implemented (D-373).** A release may
+now bake one Registry into the wheel from `AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL`, and a first run
+with nothing configured connects it, makes it the default and says so. Unset bakes nothing and the
+public wheel is unchanged, which `render_from` proves by rendering the committed module byte for
+byte. Sixteen targeted mutations, each red then restored, are listed with their tests in
+`docs/refactor/slices/CP-27-default-registry-seed.md`; mutation 3 survived its first run and the
+finding was real -- `_SLUG_RE` is already anchored, so the only behaviour `match` adds is accepting
+the trailing newline a release variable arrives with from `echo`. Scoped `make mutants` over
+`configuration/seed.py`: 37/37 killed; over `scripts/inject_default_registry.py` it could not
+collect, which is B-166 a second time. The strongest evidence is not a mutation:
+`ARegistryThatCannotBeReachedLeavesNothingBehind` drives the real transaction against a real home and
+a loopback port that refuses, and leaves no `config.json`. The release receipt records the effective
+value, closing the last of issue #39's acceptance notes. Task 5 is the full suite, which runs on
+`pr-check`. Six gates and the release, packaging, configuration, TUI, source and consumer suites pass
+locally.
+
+
 **2026-09-21, CP-27 planned — one baked default Registry (D-373).** Planning only; no product
 code changed. The owner asked that a fork be able to carry its own Registry address so a first run
 starts connected, and steered the design away from policy-as-validation to a plain default. Both
