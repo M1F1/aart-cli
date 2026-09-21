@@ -119,6 +119,15 @@ Scoped re-run of the nine modules that reach `git_location_parts` — configurat
 policy, seed and source-input, the Git source adapter, install-state schema, marketplace boundary
 and maintainer source addition — 79 tests OK. `lint`, `format-check` and `typecheck` clean.
 
+Checked at the release boundary too, since that is where a baked value is born. `render_from`
+still trims the variable's own surrounding whitespace -- the shell's, from `echo` -- so
+`"  company=https://host/team/registry.git\n"` bakes exactly as before. Padding *inside* the value
+now fails the build: `"company= https://host/team/registry.git"` exits with `baked default registry
+URL is invalid` on every interpreter, rather than baking a leading space into the wheel wherever
+`urlsplit` forgave it. The guard makes the release gate stricter, not the product narrower.
+`release_default_registry_injection_test::test_padding_inside_the_value_fails_the_build` pins both
+spellings, and the same mutation turns it red on the tab case here.
+
 The general lesson is the one the matrix exists for: a test that pins *invalid* must pin it for a
 reason the product holds, not for a reason the interpreter happens to supply.
 

@@ -9564,3 +9564,12 @@ these locations are identity-bearing (INV-253 stamps an alias into installed pat
 `git_origin_key` keys the source store by origin), and quietly repairing an identity is how two
 things that differ come to look the same. Refusing costs nothing anybody wanted, and every accepted
 location is now one no interpreter argues about.
+
+It also strengthens the release gate rather than narrowing it. `render_from` trims the release
+variable once, where the provenance is known -- a variable set from `echo` arrives with a trailing
+newline, and that is the shell's whitespace, not the value's. Padding *inside* the value is another
+matter: `AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL="company= https://host/team/registry.git"` now
+fails the build with `baked default registry URL is invalid`, on every interpreter, instead of
+baking a URL with a leading space into the wheel wherever `urlsplit` happened to forgive it. A typo
+in a repository variable is caught by the maintainer who set it, not by the first person whose
+first run degrades.

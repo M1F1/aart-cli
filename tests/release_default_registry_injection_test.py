@@ -118,6 +118,19 @@ class MalformedValueFailsTheBuild(unittest.TestCase):
     def test_a_location_git_cannot_clone_is_refused(self) -> None:
         self.assertIn("URL", self._refused("company=not a url"))
 
+    def test_padding_inside_the_value_fails_the_build(self) -> None:
+        """The shell's whitespace is trimmed; the value's own is a typo, and stops the release.
+
+        `render_from` trims the variable once, because a repository variable set from `echo`
+        arrives with a trailing newline that nobody typed. A space after the separator is not
+        that: it is inside what the maintainer wrote. Refusing it here means the typo is caught
+        by the person who set the variable, instead of baking a URL with a leading space into a
+        wheel on whichever interpreters `urlsplit` forgives one (D-374).
+        """
+
+        self.assertIn("URL", self._refused(f"company= {URL}"))
+        self.assertIn("URL", self._refused(f"company=\t{URL}"))
+
     def test_a_refused_value_writes_no_module(self) -> None:
         with TemporaryDirectory() as raw:
             target = Path(raw) / "_default_registry.py"
