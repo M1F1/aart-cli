@@ -9486,3 +9486,48 @@ iterates every enabled source into one graph, and `compile_marketplace_graph` ke
 `skill/reviewer` compile to two entries with no diagnostic, and reusing one alias is refused with
 `duplicate source alias`. So the page now says one or several, and says an artifact keeps its
 registry's alias, which is the question "several" immediately raises.
+
+## D-373 — A release may bake one default Registry; it is a default, never a restriction
+
+CP-27 opens with the question the owner asked of issue #39: a first run has nothing configured, and
+in an Enterprise fork the Registry address it is about to ask for is the same for everybody and was
+already known at release time. So a release may carry it.
+
+**One Registry, alias included, supplied per fork.** The repository variable is
+`AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL` and holds `<alias>=<url>`. Not a list: a list needs an
+answer to "which of these is *the* default" and a parser for the separator, and neither buys
+anything the second Registry's Add Registry cannot. The alias is inside the variable rather than
+derived from the repository name because an alias is stamped into the path of everything installed
+from that Registry (D-359, INV-253) -- two repositories of the same name in different organizations
+would collide exactly where it is hardest to undo. Unset bakes nothing and is not an error; that is
+the public build's state, and it keeps the public wheel byte-identical to today's.
+
+**Neither half of the mechanism is new**, which is why this is a short epic. `aart_cli/_commit.py`
+is already a generated module holding a neutral default in the tree, overwritten by
+`scripts/inject_commit.py` in a *copy* of the tree immediately before Poetry builds
+(`scripts/release.py:169-179`). `AART_CLI_REFERENCE_REGISTRY_URL` is already a per-fork repository
+variable whose comment explains why it deliberately has no default (D-309). CP-27 adds a second
+client of the first and a second instance of the second.
+
+**A default, not a restriction, and the distinction is not stylistic.** The alternative considered
+was baking an allowlist of permitted Registry addresses. It was rejected: a wheel is a file on the
+user's own machine, which they may edit or replace, so an allowlist baked into it restricts nobody
+and only resembles security. Authority over what may be connected stays in the machine policy file
+an administrator owns, outside any directory the user names. A baked *convenience* promises nothing
+it cannot keep.
+
+**Three boundaries that make the convenience safe.** It applies only when `sources` is empty, so an
+upgrade never overrides a choice the person made -- including a local Registry, which is a choice
+too. A seed that cannot be used (unreachable host, unparseable manifest, no network) degrades to
+today's `SETUP REQUIRED` screen and writes no partial entry, because a baked default must not turn a
+tool that works offline into one that will not start without a VPN. And the first run reports the
+alias and URL it added, since the person did not choose them and a silent seed cannot later answer
+"where did this come from".
+
+**Two consequences recorded rather than deferred.** `config.json` already has a `default_registry`
+field meaning *which connected Registry to use when no alias is given*; the seeded value carries a
+distinct name in the code even though the first run sets both, so the two ideas stay separable. And
+the wheel stops being reproducible from its tag alone and becomes reproducible from its tag plus the
+repository variables in effect -- already true of `_commit.py`, and the same question #24 must
+settle for the distribution name. The effective alias and URL go into the release receipt, so the
+difference between two same-version wheels is documented rather than mysterious.

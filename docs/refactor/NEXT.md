@@ -1,5 +1,55 @@
 # AART Refactor — Next Work
 
+## Where CP-27 is (2026-09-21)
+
+**CP-27 is the current critical path, and it is deliberately short: five tasks, none done.**
+It is recorded in `docs/refactor/plan.json` and specified in issue #39.
+
+One sentence of what it does: a release may bake **one** default Registry into the wheel, and a
+first run that has no configured sources connects it and makes it the default, so the first thing a
+person can do is install an artifact instead of answering a question whose answer the organization
+already had.
+
+The value is supplied per fork by a repository variable, `AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL`,
+holding `<alias>=<url>`. Unset bakes nothing and is not an error -- that is the public build's
+state. The alias is in the variable because it is not derivable: it is stamped into the path of
+everything installed from that Registry (D-359, INV-253).
+
+**Neither half of the mechanism is new.** `aart_cli/_commit.py` is already a generated module that
+`scripts/inject_commit.py` overwrites in a copy of the tree before Poetry builds
+(`scripts/release.py:169-179`), and `AART_CLI_REFERENCE_REGISTRY_URL`
+(`.github/workflows/release.yml:75`) is already a per-fork repository variable that deliberately has
+no default, for the reason D-309 gives. CP-27 joins them; it does not invent a third mechanism.
+
+**Four things about the contract that are easy to get wrong.**
+
+1. It is a **default, not a restriction**. A wheel is a file on the user's own machine, so an
+   allowlist baked into it would restrict nobody and only look like security. Authority stays in the
+   machine policy file an administrator owns.
+2. **First run only** -- when `sources` is empty. Once anything of the user's own is connected,
+   including a local Registry, no later upgrade re-adds or overrides it.
+3. **Failure is not fatal.** Unreachable host, unparseable manifest, no network: degrade to today's
+   `SETUP REQUIRED` screen, leave no partial entry in `config.json`, and say what was tried. A baked
+   default must not turn a tool that works offline into one that will not start without a VPN.
+4. **Say where it came from.** The person did not choose this Registry, so the first run reports
+   that it added `<alias>` from `<url>`.
+
+**One naming collision to resolve in step 1.** `config.json` already has a `default_registry` field
+meaning *which of the already connected Registries to use when no alias is given*. The seeded value
+must carry a distinct name in the code, even though the first run sets both.
+
+**Step 4 is a README change and depends on step 3.** The README's first run currently opens on the
+Add Registry screen, pinned by `tests/readme_tui_screen_test.py`. It becomes the dashboard routing
+to Marketplace when a default was seeded without error, keeping Add Registry as the path when
+nothing was baked. Landing it before step 3 would document a build that does not exist.
+
+**Reproducibility.** The wheel stops being reproducible from its tag alone and becomes reproducible
+from its tag plus the repository variables in effect -- already true of `_commit.py`, and the same
+question #24 must settle for the distribution name. The effective alias and URL go into the release
+receipt.
+
+CP-26 is complete; the section below is its record.
+
 ## Where CP-26 is (2026-09-20)
 
 **CP-26 is complete: steps 1–21 are done** on `refactor/cp-26-legacy-removal`. PR #29 remains open

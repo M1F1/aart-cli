@@ -4,6 +4,20 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-21, CP-27 planned — one baked default Registry (D-373).** Planning only; no product
+code changed. The owner asked that a fork be able to carry its own Registry address so a first run
+starts connected, and steered the design away from policy-as-validation to a plain default. Both
+halves of the mechanism already exist and were confirmed by reading them: `aart_cli/_commit.py` is a
+generated module overwritten by `scripts/inject_commit.py` in a copy of the tree before Poetry
+builds (`scripts/release.py:169-179`), and `AART_CLI_REFERENCE_REGISTRY_URL`
+(`.github/workflows/release.yml:75`) is a per-fork repository variable that deliberately has no
+default (D-309). The collision with the existing `config.json` `default_registry` field
+(`configuration/schema.py:483`) was found while reading the serializer and is recorded rather than
+left to be discovered in implementation. CP-27 is five tasks, all `todo`; issue #39 carries the
+specification; step 4 (README) depends on step 3, since the README's first run is pinned by
+`tests/readme_tui_screen_test.py` and landing it first would document a build that does not exist.
+
+
 **2026-09-20, README — authenticated install first, TUI first (D-372).** The owner asked for the
 adoption page to lead with the Enterprise route rather than the public one, and for connecting a
 Registry to be shown in the TUI before the CLI. The second half is a divergence from §168, which

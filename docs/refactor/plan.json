@@ -897,6 +897,38 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-27",
+      "title": "One baked default Registry so a first run starts connected",
+      "status": "todo",
+      "steps": [
+        {
+          "id": "1",
+          "title": "A generated default-registry module carries one alias and one URL and is empty in the source tree",
+          "status": "todo"
+        },
+        {
+          "id": "2",
+          "title": "The release build stamps it from AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL; unset bakes nothing and leaves the wheel unchanged",
+          "status": "todo"
+        },
+        {
+          "id": "3",
+          "title": "A first run with no configured sources seeds that Registry as the default, says so, and leaves no partial configuration when it cannot be used",
+          "status": "todo"
+        },
+        {
+          "id": "4",
+          "title": "The README's first run shows the dashboard and routes to Marketplace, with Add Registry as the path when no default was baked",
+          "status": "todo"
+        },
+        {
+          "id": "5",
+          "title": "Run the full quality, integration and release-facing verification only after CP-27's implementation tasks are complete",
+          "status": "todo"
+        }
+      ]
     }
   ]
 }
