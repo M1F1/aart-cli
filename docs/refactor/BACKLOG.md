@@ -4283,6 +4283,8 @@ connected Registry on the dashboard without reading the sentence explaining wher
 
 ## B-172 — a vendored artifact can be listed but not installed
 
+**Tracked as issue #41.**
+
 **Found 2026-09-21, exercising a real registry end to end; critical to the vendoring story, not to
 CP-27.** `registry vendor` writes an `artifact.json` with no `extensions`, and installation refuses
 any package whose manifest carries no `aart-cli.authoring`:
