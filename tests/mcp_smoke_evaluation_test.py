@@ -200,3 +200,54 @@ class McpSmokeEvaluationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class McpSmokeSchemaAnnotationTest(unittest.TestCase):
+    """A schema's annotations are read past; a constraint this validator lacks is still refused.
+
+    The shape below is copied from a real server's `tools/list`: every property carries a
+    `description`, and every optional one a `default`. Under a closed allowlist that was an
+    unsupported keyword, so a declared call was refused before invocation over a word that cannot
+    make any value invalid -- the validator refused the server rather than the schema (B-173).
+    """
+
+    ANNOTATED = obj(
+        type="object",
+        title="list_dags arguments",
+        description="Arguments for listing DAGs.",
+        properties=obj(
+            tag=obj(type="string", description="Optional tag to filter by", default=""),
+            limit=obj(type="integer", description="How many to return", default=100),
+        ),
+    )
+
+    def _refusal(self, schema, arguments):
+        declaration = SmokeDeclaration("list_dags", arguments, 15)
+        tool = McpTool("list_dags", schema, None)
+        # `None` is the preflight the stdio route makes before it sends anything: NOT_RUN means
+        # the call was allowed to happen, anything else is the refusal it reports instead.
+        return evaluate_tool_call(declaration, (tool,), None).protocol
+
+    def test_annotations_do_not_refuse_a_declared_call(self) -> None:
+        protocol = self._refusal(self.ANNOTATED, obj(limit=5))
+
+        self.assertEqual(protocol.outcome, SmokeOutcome.NOT_RUN)
+
+    def test_a_constraint_this_validator_cannot_apply_is_still_refused(self) -> None:
+        constrained = obj(
+            type="object",
+            properties=obj(limit=obj(type="integer", description="How many", minimum=1)),
+        )
+
+        protocol = self._refusal(constrained, obj(limit=5))
+
+        self.assertNotEqual(protocol.outcome, SmokeOutcome.NOT_RUN)
+        # Named, because the point of refusing is to say which constraint went unapplied.
+        self.assertIn("'minimum'", protocol.reason)
+
+    def test_an_annotation_never_makes_a_value_invalid(self) -> None:
+        # `default` says what an absent value would have been. Supplying a different one is the
+        # ordinary case, and a validator that read `default` as a constraint would refuse it.
+        protocol = self._refusal(self.ANNOTATED, obj(tag="project:x", limit=7))
+
+        self.assertEqual(protocol.outcome, SmokeOutcome.NOT_RUN)

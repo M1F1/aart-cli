@@ -172,14 +172,40 @@ def _python(value: JsonValue) -> object:
     return value
 
 
+#: Refusing a keyword this validator does not implement is deliberate: an unimplemented keyword is
+#: a constraint that would otherwise go unapplied, and validating less than a schema states is the
+#: failure worth stopping for.
 _SUPPORTED_SCHEMA_KEYS = frozenset(
     {"type", "properties", "required", "additionalProperties", "items", "enum", "const"}
+)
+
+#: Annotations constrain nothing. JSON Schema files these under basic meta-data: they describe a
+#: value for whoever reads the schema, and no instance is ever invalid because of one. So the
+#: reason the allowlist above is closed does not reach them, and ignoring them still applies every
+#: constraint the schema states.
+#:
+#: Refusing them refused the servers rather than the schemas. A real MCP server puts `description`
+#: on nearly every property and `default` on every optional one, so a declared call against it was
+#: rejected before invocation over a word that could not have changed the verdict (B-173).
+_ANNOTATION_SCHEMA_KEYS = frozenset(
+    {
+        "$comment",
+        "$id",
+        "$schema",
+        "default",
+        "deprecated",
+        "description",
+        "examples",
+        "readOnly",
+        "title",
+        "writeOnly",
+    }
 )
 
 
 def _validate_schema(value: JsonValue, schema: JsonObject, pointer: str = "$") -> str | None:
     fields = dict(schema.entries)
-    unsupported = sorted(fields.keys() - _SUPPORTED_SCHEMA_KEYS)
+    unsupported = sorted(fields.keys() - _SUPPORTED_SCHEMA_KEYS - _ANNOTATION_SCHEMA_KEYS)
     if unsupported:
         return f"unsupported JSON Schema keyword {unsupported[0]!r} at {pointer}"
     if "const" in fields and value != fields["const"]:
