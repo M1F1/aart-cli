@@ -4308,7 +4308,14 @@ people install from; what they cannot do is get there by vendoring.
 What remains is still worth fixing. `registry promote` is closed to the CLI on purpose (QA-056),
 which leaves `adopt` and `vendor` as the two CLI doors, and one of them produces packages that only
 look complete. The tutorial `docs/tutorials/company-registry-tabnine-v1.md` vendors an artifact in
-§3 and installs it in §8, so that documented path does not work as written.
+§3 and installs it in §8, so that documented path does not work as written -- and neither does the
+repository's own acceptance walk: `docs/testing/END_TO_END_ACCEPTANCE.md` vendors
+`skill/manual-check` in §3 and installs `manual-registry/skill/manual-check@1.0.0` in §8. Anyone
+following that document to completion would hit this.
+
+It is not stale code, either. `registry_maintenance/vendoring.py` and the installation requirement
+in `protocol/authoring.py` arrived in the *same* commit (`12c83e8`), so the gap shipped with the
+feature rather than being left behind by it.
 
 No test covers it: `registry_vendor_*_test.py` cover the review, the delivery assessment and the
 audit, and none installs what vendoring produced. The fix is for vendoring to write an install
