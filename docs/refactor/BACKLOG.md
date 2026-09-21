@@ -4252,6 +4252,25 @@ recorded in the slice instead, each red then restored. Two occurrences now, on t
 subjects, so the fixture-copy support is the fix rather than a per-test workaround: the workspace
 needs the repository files a test names, not only `scripts/` and `tests/`.
 
+## B-168 — the baked default Registry is connected by the terminal route only
+
+**Found 2026-09-21, CP-27.3; noncritical.** `tui.run` seeds the baked Registry before it composes
+the application, because that is where an implicit configuration mutation is allowed to happen --
+`load_runtime_configuration` promises not to make one, and it is the path every command shares. So
+a person whose first `aart-cli` invocation is a flag-form command rather than the terminal gets
+today's `no-source-configured` refusal instead of a connected Registry. Not critical: the terminal
+is the primary human route (§168) and the adoption page describes it. The fix is an explicit
+seeding step at the CLI boundary, once, with the same report.
+
+## B-169 — a startup notice has nowhere to go inside the curses terminal
+
+**Found 2026-09-21, CP-27.3; noncritical.** What the first run connected is printed before the
+terminal starts, which is the channel `run` already uses for startup failures. It survives in the
+line-oriented terminal and is cleared by `curses.wrapper` in the other. `ConsumerUiState` has no
+general notice field, so carrying it onto the dashboard is its own contained piece of UI work
+rather than a line in this slice. The consequence today is only that a curses user sees the
+connected Registry on the dashboard without reading the sentence explaining where it came from.
+
 ## B-167 — the composite action still publishes the pre-CP-26 executable name
 
 **Found 2026-09-20, after the v0.4.0 release-artifact failure; noncritical, needs an owner decision.**

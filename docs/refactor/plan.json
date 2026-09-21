@@ -916,7 +916,7 @@
         {
           "id": "3",
           "title": "A first run with no configured sources seeds that Registry as the default, says so, and leaves no partial configuration when it cannot be used",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "4",

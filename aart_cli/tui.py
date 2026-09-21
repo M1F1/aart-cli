@@ -19,7 +19,10 @@ import traceback
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import date
-from typing import Callable, List, Literal, Mapping, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Callable, List, Literal, Mapping, Optional, Sequence, Tuple
+
+if TYPE_CHECKING:  # pragma: no cover - imported for annotations only
+    from .commands.first_run import FirstRunSeedReport
 
 from .application.consumer_ui import (
     ConsumerUiEventKind,
@@ -1317,6 +1320,42 @@ def _curses_supported() -> bool:
 # --------------------------------------------------------------------------- #
 # Entry point — chooses curses vs text and delegates.                           #
 # --------------------------------------------------------------------------- #
+def _seed_first_run(user_home: Optional[str]) -> "FirstRunSeedReport":
+    """Connect the Registry this build carried, if this run is the first and nothing is set up.
+
+    Composed here rather than inside the shared configuration loader, which promises not to make
+    an implicit source or configuration mutation. This is the explicit one, and it happens before
+    the application is composed so that what is composed already has the Registry in it.
+    """
+
+    from .commands.first_run import FirstRunSeedReport, connect_baked_default_registry
+    from .model import Request
+
+    try:
+        return connect_baked_default_registry(Request(command="tui", user_home=user_home))
+    except Exception:
+        # A convenience may not stop the tool starting. Whatever went wrong, the run continues
+        # into the same first-run screen it would have reached with no baked Registry at all.
+        return FirstRunSeedReport(None, (), ())
+
+
+def _announce(report: "FirstRunSeedReport") -> None:
+    """Say what was connected, or why nothing was, before the terminal takes the screen.
+
+    The person did not choose this Registry, so a run that connected one silently could never
+    answer where it came from. A warning is printed for the same reason: the screen that follows
+    will ask for a Registry without being able to say that this build named one and it did not
+    work.
+    """
+
+    for line in report.lines:
+        print(line)
+    for diagnostic in report.diagnostics:
+        print(f"warning: {diagnostic.message}")
+        for remediation in diagnostic.remediation:
+            print(f"  {remediation}")
+
+
 def run(
     *,
     source_dir: Optional[str] = None,
@@ -1342,6 +1381,12 @@ def run(
         )
         return 2
     canonical_failures = InternalFailureContext()
+    # Before anything reads the configuration: a build may have been given one Registry to connect
+    # when there is nothing configured yet, so that a first run opens on a Marketplace rather than
+    # on a request for an address the organization already decided on (D-373). It never fails the
+    # run -- a refusal leaves the configuration untouched and this lands on the same first-run
+    # screen it would have landed on anyway.
+    _announce(_seed_first_run(user_home))
     try:
         canonical_terminal = _curses_supported()
     except Exception as error:
