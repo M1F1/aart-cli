@@ -4281,6 +4281,36 @@ general notice field, so carrying it onto the dashboard is its own contained pie
 rather than a line in this slice. The consequence today is only that a curses user sees the
 connected Registry on the dashboard without reading the sentence explaining where it came from.
 
+## B-172 — a vendored artifact can be listed but not installed
+
+**Found 2026-09-21, exercising a real registry end to end; critical to the vendoring story, not to
+CP-27.** `registry vendor` writes an `artifact.json` with no `extensions`, and installation refuses
+any package whose manifest carries no `aart-cli.authoring`:
+
+```text
+error: skill/writing-plans does not say how it is installed: it carries no 'aart-cli.authoring',
+so what it needs is unknown rather than nothing
+```
+
+`protocol/authoring.py:2146` emits that extension on the native path only -- the one
+`compile_author_*` drives, reached by `registry scan` + `registry promote`.
+`registry_maintenance/vendoring.py` builds its manifest from the command's own flags and never adds
+it. So a vendored package passes `registry validate`, `audit` and `publish`, appears in
+`marketplace list` as `[registry-reviewed] [healthy]`, and cannot be installed.
+
+Two things make this worse than a missing feature. The tutorial
+`docs/tutorials/company-registry-tabnine-v1.md` vendors an artifact in §3 and installs it in §8, so
+the documented adoption path does not work. And the other route into a Registry is closed to the
+CLI on purpose: `registry promote` requires `--validation-report` and `--policy-result` digests that
+no CLI command emits (QA-056), by design, so vendoring is the *only* CLI way in -- and what it
+produces is uninstallable. A CLI-only maintainer therefore cannot stand up a Registry anyone can
+install from.
+
+No test covers it: `registry_vendor_*_test.py` cover the review, the delivery assessment and the
+audit, and none installs what vendoring produced. The fix is for vendoring to write an install
+description of its own -- for a skill, the copy-tree intent its `install` block already states --
+rather than for installation to relax what it requires.
+
 ## B-171 — a source whose first fetch fails leaves an empty mirror directory behind
 
 **Found 2026-09-21, CP-27.5; noncritical.** An `aart-cli source add` whose fetch cannot reach the
