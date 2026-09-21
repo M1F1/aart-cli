@@ -4252,6 +4252,16 @@ recorded in the slice instead, each red then restored. Two occurrences now, on t
 subjects, so the fixture-copy support is the fix rather than a per-test workaround: the workspace
 needs the repository files a test names, not only `scripts/` and `tests/`.
 
+## B-170 — the dashboard summary does not agree with itself about plurals
+
+**Found 2026-09-21, CP-27.4; noncritical, cosmetic.** The dashboard's summary line reads
+`1 registries — 0 credentials need attention`. It went unnoticed because no page had ever shown
+that frame; CP-27.4 puts it on the repository front page, where it is the first thing a reader
+sees of the product. The neighbouring line (`2 installed — 1 ready, 1 update, 0 attention`) does
+not have the problem, so this is one count, not a missing convention. Fixing it changes the frame
+and therefore `readme_tui_screen_test`, which is exactly the coupling that gate exists to create.
+Deliberately not folded into CP-27: it is a product change, and the slice is the page.
+
 ## B-168 — the baked default Registry is connected by the terminal route only
 
 **Found 2026-09-21, CP-27.3; noncritical.** `tui.run` seeds the baked Registry before it composes

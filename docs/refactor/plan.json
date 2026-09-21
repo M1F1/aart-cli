@@ -921,7 +921,7 @@
         {
           "id": "4",
           "title": "The README's first run shows the dashboard and routes to Marketplace, with Add Registry as the path when no default was baked",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "5",
