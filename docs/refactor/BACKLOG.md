@@ -4298,13 +4298,17 @@ so what it needs is unknown rather than nothing
 it. So a vendored package passes `registry validate`, `audit` and `publish`, appears in
 `marketplace list` as `[registry-reviewed] [healthy]`, and cannot be installed.
 
-Two things make this worse than a missing feature. The tutorial
-`docs/tutorials/company-registry-tabnine-v1.md` vendors an artifact in §3 and installs it in §8, so
-the documented adoption path does not work. And the other route into a Registry is closed to the
-CLI on purpose: `registry promote` requires `--validation-report` and `--policy-result` digests that
-no CLI command emits (QA-056), by design, so vendoring is the *only* CLI way in -- and what it
-produces is uninstallable. A CLI-only maintainer therefore cannot stand up a Registry anyone can
-install from.
+**Scope, corrected.** This is not "the CLI cannot fill a Registry". `registry adopt` is the native
+CLI route: it compiles explicit `aart-cli.yaml`/`aart-cli.json` manifests, needs no review digests,
+and writes `aart-cli.authoring` as a top-level key of `artifact.json`. Verified end to end against a
+real public Registry -- adopt, publish, push, first run on a baked wheel, `marketplace install
+--yes`, files delivered to `.claude/skills/`. So a CLI-only maintainer *can* stand up a Registry
+people install from; what they cannot do is get there by vendoring.
+
+What remains is still worth fixing. `registry promote` is closed to the CLI on purpose (QA-056),
+which leaves `adopt` and `vendor` as the two CLI doors, and one of them produces packages that only
+look complete. The tutorial `docs/tutorials/company-registry-tabnine-v1.md` vendors an artifact in
+§3 and installs it in §8, so that documented path does not work as written.
 
 No test covers it: `registry_vendor_*_test.py` cover the review, the delivery assessment and the
 audit, and none installs what vendoring produced. The fix is for vendoring to write an install
