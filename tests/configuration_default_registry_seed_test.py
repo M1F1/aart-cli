@@ -24,6 +24,7 @@ from aart_cli.configuration.schema import _ALIAS_RE
 from aart_cli.configuration.seed import SeededRegistry, baked_default_registry
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err, Ok
+from tests.credential_fixtures import credential_url
 
 URL = "https://example.invalid/team/registry.git"
 
@@ -109,7 +110,7 @@ class MalformedValuesAreRefused(unittest.TestCase):
         # variable is not a secret store.
         self.assertIn(
             "baked default registry URL is invalid",
-            _messages("company", "https://someone:token@example.invalid/team/registry.git"),
+            _messages("company", credential_url("example.invalid", "/team/registry.git")),
         )
 
 

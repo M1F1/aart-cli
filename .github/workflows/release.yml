@@ -73,6 +73,10 @@ jobs:
       # passing and verify seven checks fewer, which is why the checklist warns on every run that
       # skips and records `registry_reconciliation` in its receipt.
       REFERENCE_REGISTRY_URL: ${{ vars.AART_CLI_REFERENCE_REGISTRY_URL }}
+      # `<alias>=<url>` for the one Registry this fork's wheel connects on a first run that has
+      # nothing configured (D-373).  Unset bakes nothing; the alias is in the value because it is
+      # stamped into the path of everything installed from that Registry (D-359, INV-253).
+      AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL: ${{ vars.AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL }}
       # Unset means this fork publishes to no index.  The URL is a variable because it is not a
       # secret and belongs in plain sight; the credential is named rather than written, so the
       # value lives only in the secret store.
@@ -109,6 +113,10 @@ jobs:
       AART_CLI_INDEX_URL: ${{ vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple' }}
       AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET] }}
       REFERENCE_REGISTRY_URL: ${{ vars.AART_CLI_REFERENCE_REGISTRY_URL }}
+      # `<alias>=<url>` for the one Registry this fork's wheel connects on a first run that has
+      # nothing configured (D-373).  Unset bakes nothing; the alias is in the value because it is
+      # stamped into the path of everything installed from that Registry (D-359, INV-253).
+      AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL: ${{ vars.AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL }}
       # Unset means this fork publishes to no index.  The URL is a variable because it is not a
       # secret and belongs in plain sight; the credential is named rather than written, so the
       # value lives only in the secret store.

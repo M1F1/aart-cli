@@ -63,10 +63,16 @@ def render(commit: str, epoch: int = 0) -> str:
     return f'{DOCSTRING}\n\nCOMMIT = "{commit}"\nCOMMIT_EPOCH = {epoch}\n'
 
 
+def stamp(target: Path) -> None:
+    """Write this checkout's stamp to ``target``; the uniform entry point every injector has."""
+
+    target.write_text(render(current_commit(), current_commit_epoch()), encoding="utf-8")
+
+
 def main() -> int:
     commit = current_commit()
     epoch = current_commit_epoch()
-    TARGET.write_text(render(commit, epoch), encoding="utf-8")
+    stamp(TARGET)
     print(
         f"inject_commit: wrote COMMIT = {commit!r}, COMMIT_EPOCH = {epoch} "
         f"to {TARGET.relative_to(ROOT)}"

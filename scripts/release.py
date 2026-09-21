@@ -151,6 +151,18 @@ def _script(name: str):
     return module
 
 
+def injectors() -> tuple[Path, ...]:
+    """Every build-time stamp, discovered from ``scripts/`` rather than transcribed.
+
+    Two builds have to apply the same set: the release action on a runner, and ``wheel_digest``
+    here, whose output is the file the published digest describes. Listing them in both places is
+    how they come apart; `release_default_registry_injection_test` holds the discovery against the
+    action's steps.
+    """
+
+    return tuple(sorted((ROOT / "scripts").glob("inject_*.py")))
+
+
 def wheel_digest(root: Path = ROOT, *, output_dir: Path | None = None) -> tuple[str, str]:
     """Build this commit's wheel in a throwaway copy and return ``(filename, digest)``.
 
@@ -166,19 +178,19 @@ def wheel_digest(root: Path = ROOT, *, output_dir: Path | None = None) -> tuple[
     one — a *different* file, because a build from the checkout carries no commit stamp.
     """
 
-    inject = _script("inject_commit")
     packaging = _script("packaging_check")
     with tempfile.TemporaryDirectory(prefix="aart-wheel-digest-") as raw:
         temp_root = Path(raw)
         source_copy = temp_root / "source"
         source_copy.mkdir()
         packaging._copy_project(root, source_copy)
-        # The copy has no ``.git``, so the stamp is taken from the real checkout and written in —
-        # otherwise this would hash a wheel no release ever publishes.
-        (source_copy / "aart_cli" / "_commit.py").write_text(
-            inject.render(inject.current_commit(), inject.current_commit_epoch()),
-            encoding="utf-8",
-        )
+        # The copy has no ``.git``, so every build-time stamp is taken from the real checkout and
+        # the real environment and written in — otherwise this would hash a wheel no release ever
+        # publishes.  The injectors are discovered rather than listed, because a stamp the release
+        # action applies and this build does not would make the published digest describe a file
+        # nobody has.
+        for script in injectors():
+            _script(script.stem).stamp(source_copy / "aart_cli" / _script(script.stem).TARGET.name)
         subprocess.run(
             [PYTHON, "scripts/build_wheel.py"],
             cwd=source_copy,

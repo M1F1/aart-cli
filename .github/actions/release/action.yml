@@ -87,6 +87,14 @@ runs:
       shell: bash
       run: ${{ inputs.python }} scripts/inject_commit.py
 
+    # Unset means this fork bakes no default Registry, which is the public build's state and is
+    # not an error -- the same switch `REFERENCE_REGISTRY_URL` is, for the reason D-309 gives.
+    # Set, it is `<alias>=<url>`, and a malformed value fails here rather than on somebody's first
+    # run, which is the one run with no configuration to fall back on.  See D-373.
+    - name: Inject default registry
+      shell: bash
+      run: ${{ inputs.python }} scripts/inject_default_registry.py
+
     - name: Build wheel
       shell: bash
       run: ${{ inputs.python }} scripts/build_wheel.py

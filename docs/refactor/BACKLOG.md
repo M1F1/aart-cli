@@ -4243,6 +4243,15 @@ build and documentation assets outside the copied scripts/tests roots. Add expli
 support before claiming mutation adequacy for this gate. D-369 has real red/green E2E evidence and
 a targeted semantic mutation; this advisory runner limitation does not replace or block CI gates.
 
+**Recurred 2026-09-21, CP-27.2.** The same limitation, a different missing file:
+`make mutants ONLY=scripts/inject_default_registry.py TESTS="tests/release_default_registry_injection_test.py"`
+stops with `FileNotFoundError: .../mutants/.github/actions/release/action.yml`, because the parity
+test reads the release action to prove every injector reaches both builds. No mutations were
+evaluated, so no adequacy claim is made for that script. Four targeted semantic mutations are
+recorded in the slice instead, each red then restored. Two occurrences now, on two unrelated
+subjects, so the fixture-copy support is the fix rather than a per-test workaround: the workspace
+needs the repository files a test names, not only `scripts/` and `tests/`.
+
 ## B-167 — the composite action still publishes the pre-CP-26 executable name
 
 **Found 2026-09-20, after the v0.4.0 release-artifact failure; noncritical, needs an owner decision.**

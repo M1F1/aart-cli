@@ -387,6 +387,7 @@ Read by `.github/workflows/pr-check.yml` and `.github/workflows/release.yml`.
 | `AART_CLI_INDEX_PUBLISH_URL` | unset | upload endpoint of a hosted index. Set, a published release also uploads the wheel there; unset, it only attaches it |
 | `AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET` | unset | **name** of a secret holding `user:token` for the publishing account |
 | `AART_CLI_REFERENCE_REGISTRY_URL` | unset | registry the release checklist reconciles against. Unset, those checks report `skipped` with a warning |
+| `AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL` | unset | `<alias>=<url>` for the one Registry a wheel built here connects on a first run that has nothing configured. Unset bakes nothing, which is what the public build does. The alias is part of the value because it appears in the path of everything installed from that Registry, so it is chosen once and not changed. A malformed value fails the release rather than somebody's first run |
 
 ### Variables a registry reads
 

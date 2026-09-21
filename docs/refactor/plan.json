@@ -901,17 +901,17 @@
     {
       "id": "CP-27",
       "title": "One baked default Registry so a first run starts connected",
-      "status": "todo",
+      "status": "in_progress",
       "steps": [
         {
           "id": "1",
           "title": "A generated default-registry module carries one alias and one URL and is empty in the source tree",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "2",
           "title": "The release build stamps it from AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL; unset bakes nothing and leaves the wheel unchanged",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "3",
