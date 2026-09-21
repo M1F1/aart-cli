@@ -4,6 +4,21 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-21, CP-27 task 5 — the matrix found an interpreter-dependent test (D-374).** The first
+`pr-check` for PR #40 (run `35566617453`) failed `unit` on Python 3.10, 3.11 and 3.14 with exactly
+one failure: a seed test pinning `" https://example.invalid/team/registry.git"` as invalid. It is,
+on the maintainer's 3.11.0, and it is not on CI's interpreters -- `urllib.parse` began stripping
+leading C0 control characters and spaces in 3.10.12, 3.11.4 and 3.12, so whether a padded location
+is a relative path or a clean URL was a patch-level property of the machine. `git_location_parts`
+now refuses any location that is not exactly its own `strip()` before `urlsplit` sees it; refusing
+rather than trimming, because these locations are identity-bearing (INV-253, `git_origin_key`) and
+quietly repairing an identity makes two different things look the same.
+`test_surrounding_whitespace_is_refused_on_every_interpreter` pins all five paddings and the clean
+control, and deleting the guard turns it red here on the tab and newline cases -- the space cases
+stay green locally, which is the disagreement being removed. The nine modules reaching
+`git_location_parts` re-run green (79 tests), and `lint`, `format-check`, `typecheck` and
+`docs-check` are clean. Task 5 remains open until `pr-check` is green on the fix.
+
 **2026-09-21, CP-27 tasks 1-4 — one baked default Registry, implemented (D-373).** A release may
 now bake one Registry into the wheel from `AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL`, and a first run
 with nothing configured connects it, makes it the default and says so. Unset bakes nothing and the

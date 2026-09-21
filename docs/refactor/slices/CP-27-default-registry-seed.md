@@ -3,6 +3,8 @@
 Status: tasks 1–4 done on `docs/cp-27-default-registry-plan` (PR #40). Task 5, the full
 quality/integration/release-facing verification, runs on `pr-check` rather than locally: the owner's
 standing rule is that the complete suite is CI's job, and D-317 reserves it for the epic's last task.
+Its first run was red on all three interpreters, for one interpreter-dependent seed case; that is
+recorded below under *What the matrix found*, and D-374 settles it.
 
 Date: 2026-09-21. Authority: the product owner, asking for issue #39 to be designed rather than
 implemented as written — *"niech informacja o urlu do default registry bedzie w github settings ktore
@@ -88,6 +90,37 @@ of "leaves no partial configuration when it cannot be used", proven rather than 
 
 `enterprise_ci_template_test` caught the omission that mattered on its own: a variable a workflow
 reads must appear on the Enterprise rollout page, and it did not.
+
+## What the matrix found, and no local run could
+
+Task 5's first `pr-check` (run `35566617453`) failed `unit` on Python 3.10, 3.11 and 3.14 with a
+single test — `MalformedValuesAreRefused.test_a_location_git_cannot_clone_is_refused`, on the case
+`" https://example.invalid/team/registry.git"`. The seed reader returned `Ok`, where the local run
+of the same commit returned `Err`.
+
+Nothing in the slice was wrong about the padded value being invalid. What was wrong was **who
+decided it**. `urllib.parse` began stripping leading C0 control characters and spaces from a URL in
+3.10.12, 3.11.4 and 3.12 — a security fix, and so a *patch-level* property of the machine. On the
+maintainer's 3.11.0 the leading space makes the location a relative path and it is refused; on CI's
+3.11.x it is stripped and the location is a clean URL. Tab and newline have been removed for longer
+still, which is how one interpreter can disagree with itself about which whitespace counts.
+
+So the decision moved to where the product makes it. `git_location_parts` now refuses any location
+that is not exactly its own `strip()`, before `urlsplit` sees it — refusing rather than trimming,
+because these locations are identity-bearing (INV-253 stamps an alias into installed paths, and
+`git_origin_key` keys the source store by origin) and quietly repairing an identity is how two
+things that differ come to look the same. D-374 records the choice.
+
+Evidence: `tests/configuration_model_test.py::test_surrounding_whitespace_is_refused_on_every_interpreter`
+pins all five paddings and the clean control. The targeted mutation is deleting the guard: on the
+maintainer's 3.11.0 it turns that test red on the tab and newline cases (the space cases stay green
+there, which is exactly the disagreement being removed), and it is what CI was already failing on.
+Scoped re-run of the nine modules that reach `git_location_parts` — configuration model, schema,
+policy, seed and source-input, the Git source adapter, install-state schema, marketplace boundary
+and maintainer source addition — 79 tests OK. `lint`, `format-check` and `typecheck` clean.
+
+The general lesson is the one the matrix exists for: a test that pins *invalid* must pin it for a
+reason the product holds, not for a reason the interpreter happens to supply.
 
 ## What this slice deliberately did not do
 

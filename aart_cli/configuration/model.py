@@ -258,8 +258,16 @@ def parse_source_alias(raw: str) -> SourceAlias | None:
 
 
 def git_location_parts(location: str) -> tuple[str, str] | None:
-    """Return normalized host/repository path without ever returning URL credentials."""
+    """Return normalized host/repository path without ever returning URL credentials.
 
+    Surrounding whitespace is refused before anything is parsed. `urlsplit` removes some of it on
+    every interpreter and the rest only since 3.10.12/3.11.4/3.12, so a padded location is read as
+    a relative path by one patch release and as a clean URL by the next. Refusing it here makes
+    the answer the same everywhere, and costs nothing a maintainer wanted: the padding is a typo.
+    """
+
+    if location != location.strip():
+        return None
     scp = _SCP_GIT_RE.fullmatch(location)
     if scp is not None:
         path = _valid_repository_path(scp.group("path"))

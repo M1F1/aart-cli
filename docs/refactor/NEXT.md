@@ -3,7 +3,13 @@
 ## Where CP-27 is (2026-09-21)
 
 **CP-27 tasks 1-4 are done on `docs/cp-27-default-registry-plan` (PR #40); task 5 is the full
-verification, which runs on `pr-check` rather than locally.** The slice document
+verification, which runs on `pr-check` rather than locally.** Its first run (`35566617453`) was red
+on 3.10, 3.11 and 3.14 with one failure, and only one: a seed test pinned a space-padded Git
+location as invalid, which it is on the maintainer's 3.11.0 and is not on CI's interpreters, because
+`urlsplit` began stripping leading spaces in 3.10.12/3.11.4/3.12. `git_location_parts` now refuses
+any location that is not exactly its own `strip()`, so the answer no longer depends on a patch
+release -- D-374, with the slice's *What the matrix found* section carrying the evidence. Next step
+is simply the re-run of `pr-check` on that fix. The slice document
 `docs/refactor/slices/CP-27-default-registry-seed.md` carries the evidence: sixteen targeted
 mutations with the test each one turned red, a scoped `make mutants` of 37/37 on
 `configuration/seed.py`, and the end-to-end proof that an unreachable seeded Registry leaves no

@@ -9540,3 +9540,27 @@ the wheel stops being reproducible from its tag alone and becomes reproducible f
 repository variables in effect -- already true of `_commit.py`, and the same question #24 must
 settle for the distribution name. The effective alias and URL go into the release receipt, so the
 difference between two same-version wheels is documented rather than mysterious.
+
+## D-374 — A Git location carrying surrounding whitespace is refused, on every interpreter
+
+CP-27's seed test pinned `" https://example.invalid/team/registry.git"` as invalid. It was, on the
+interpreter it was written on, and it was not on the one CI runs -- the release gate caught a
+disagreement no local run could have.
+
+The cause is in `urllib.parse`, not in the test. Stripping leading C0 control characters and spaces
+from a URL arrived as a security fix in 3.10.12, 3.11.4 and 3.12, so whether `urlsplit` reads a
+padded location as a relative path or as a clean URL is a *patch-level* property of the machine.
+Newline and tab have been stripped for longer still, which means one interpreter can disagree with
+itself about which whitespace matters.
+
+`git_location_parts` is where the product decides which Git locations exist -- every configured
+source, policy check, marketplace coordinate and installed-state key goes through it. Leaving that
+decision to the interpreter would make a source the maintainer configured work on one machine and
+fail on another, with nothing either machine could show to explain it.
+
+So the padding is settled before `urlsplit` sees it, and settled by **refusing**: a location that is
+not exactly its own `strip()` was mistyped. Trimming silently was the alternative and was dropped --
+these locations are identity-bearing (INV-253 stamps an alias into installed paths, and
+`git_origin_key` keys the source store by origin), and quietly repairing an identity is how two
+things that differ come to look the same. Refusing costs nothing anybody wanted, and every accepted
+location is now one no interpreter argues about.
