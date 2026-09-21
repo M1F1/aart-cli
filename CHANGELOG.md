@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/M1F1/aart-cli/compare/v0.4.1...v0.5.0) (2026-09-21)
+
+
+### Added
+
+* **config:** a release may bake one default Registry, so a first run starts connected ([38ed446](https://github.com/M1F1/aart-cli/commit/38ed4469ff68dae0a307e27792f87daf8056093b))
+
+
+### Fixed
+
+* **config:** a Git location carrying surrounding whitespace is refused on every interpreter ([38ed446](https://github.com/M1F1/aart-cli/commit/38ed4469ff68dae0a307e27792f87daf8056093b))
+
 ## [0.4.1](https://github.com/M1F1/aart-cli/compare/v0.4.0...v0.4.1) (2026-09-20)
 
 
