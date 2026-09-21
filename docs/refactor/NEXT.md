@@ -9,7 +9,13 @@ location as invalid, which it is on the maintainer's 3.11.0 and is not on CI's i
 `urlsplit` began stripping leading spaces in 3.10.12/3.11.4/3.12. `git_location_parts` now refuses
 any location that is not exactly its own `strip()`, so the answer no longer depends on a patch
 release -- D-374, with the slice's *What the matrix found* section carrying the evidence. Next step
-is simply the re-run of `pr-check` on that fix. The slice document
+is simply the re-run of `pr-check` on that fix.
+
+**That re-run is green.** Run `35568282527` on `b56ddb5` passed Python 3.10, 3.11 and 3.14 and the
+aggregate `pr-check`; the conditional private-image job was skipped by design. **CP-27 is complete**
+-- all five tasks. PR #40 is ready for owner review and the release-version decision. Three
+noncritical discoveries sit in the backlog (B-168, B-169, B-170) plus B-171 from task 5. The docs
+commits that followed `b56ddb5` are documentation only and re-run the same gates. The slice document
 `docs/refactor/slices/CP-27-default-registry-seed.md` carries the evidence: sixteen targeted
 mutations with the test each one turned red, a scoped `make mutants` of 37/37 on
 `configuration/seed.py`, and the end-to-end proof that an unreachable seeded Registry leaves no

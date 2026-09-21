@@ -901,7 +901,7 @@
     {
       "id": "CP-27",
       "title": "One baked default Registry so a first run starts connected",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -926,7 +926,7 @@
         {
           "id": "5",
           "title": "Run the full quality, integration and release-facing verification only after CP-27's implementation tasks are complete",
-          "status": "in_progress"
+          "status": "done"
         }
       ]
     }

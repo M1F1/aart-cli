@@ -4,6 +4,20 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-21, CP-27 complete — all five tasks VERIFIED.** `pr-check` run `35568282527` on
+`b56ddb5` is green: Python 3.10, 3.11 and 3.14 each passed the ten gates, the aggregate `pr-check`
+passed, and the conditional private-image job was skipped by design. The release-facing third of
+task 5 ran here instead, and needs no release: `wheel-digest` builds in a throwaway copy and applies
+every injector from the real environment, so a wheel built with
+`AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL` set carries the stamped alias and URL while the tracked
+`_default_registry.py` stays empty. That wheel was installed into a clean venv and driven against a
+fresh `AART_CLI_HOME` with an unreachable Registry: a warning naming what the build named, the
+remediation, the run not failed, no `config.json` -- rule 3 observed on the artefact a person
+receives rather than on a double. A hand-typed `source add` to the same URL leaves state that cannot
+be told apart, which is the filesystem-level evidence that the seed runs `source add`'s transaction
+rather than a copy. The empty mirror directory both leave is the acquisition transaction's and is
+B-171. PR #40 is ready for owner review and the release-version decision.
+
 **2026-09-21, CP-27 task 5 — the matrix found an interpreter-dependent test (D-374).** The first
 `pr-check` for PR #40 (run `35566617453`) failed `unit` on Python 3.10, 3.11 and 3.14 with exactly
 one failure: a seed test pinning `" https://example.invalid/team/registry.git"` as invalid. It is,

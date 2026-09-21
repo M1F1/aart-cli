@@ -1,10 +1,11 @@
 # CP-27 — one baked default Registry, so a first run starts connected
 
-Status: tasks 1–4 done on `docs/cp-27-default-registry-plan` (PR #40). Task 5, the full
-quality/integration/release-facing verification, runs on `pr-check` rather than locally: the owner's
-standing rule is that the complete suite is CI's job, and D-317 reserves it for the epic's last task.
-Its first run was red on all three interpreters, for one interpreter-dependent seed case; that is
-recorded below under *What the matrix found*, and D-374 settles it.
+Status: **complete**. Tasks 1–4 landed on `docs/cp-27-default-registry-plan` (PR #40); task 5, the
+full quality/integration/release-facing verification, ran on `pr-check` rather than locally, per the
+owner's standing rule and D-317. Its first run was red on all three interpreters for one
+interpreter-dependent seed case -- recorded below under *What the matrix found*, settled by D-374 --
+and run `35568282527` on `b56ddb5` is green on Python 3.10, 3.11 and 3.14, with the conditional
+private-image job skipped by design.
 
 Date: 2026-09-21. Authority: the product owner, asking for issue #39 to be designed rather than
 implemented as written — *"niech informacja o urlu do default registry bedzie w github settings ktore
