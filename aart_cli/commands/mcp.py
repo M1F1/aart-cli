@@ -388,7 +388,9 @@ def _target(
                 )
                 expectation_configured = resolved.expect is not None
                 service_configured = resolved.reaches_service
-                run = execute_stdio_smoke(receipt.launcher, resolved, cwd=receipt.root)
+                run = execute_stdio_smoke(
+                    receipt.launcher, resolved, cwd=receipt.root, harness=owner.harness
+                )
                 if isinstance(run, Err):
                     stages.extend(
                         (

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -34,7 +35,7 @@ class McpSmokeStdioTest(unittest.TestCase):
             launcher.chmod(0o700)
             declaration = SmokeDeclaration("read_identity", JsonObject(()), 15)
 
-            run = execute_stdio_smoke(str(launcher), declaration, cwd=str(root))
+            run = execute_stdio_smoke(str(launcher), declaration, cwd=str(root), harness="claude")
 
             assert isinstance(run, Ok), getattr(run, "diagnostics", ())
             evaluated = evaluate_tool_call(declaration, run.value.tools, run.value.result)
@@ -64,7 +65,7 @@ class McpSmokeStdioTest(unittest.TestCase):
                 True,
             )
 
-            run = execute_stdio_smoke(str(launcher), declaration, cwd=str(root))
+            run = execute_stdio_smoke(str(launcher), declaration, cwd=str(root), harness="claude")
 
             assert isinstance(run, Ok), getattr(run, "diagnostics", ())
             evaluated = evaluate_tool_call(declaration, run.value.tools, run.value.result)
@@ -82,7 +83,10 @@ class McpSmokeStdioTest(unittest.TestCase):
             launcher.chmod(0o700)
 
             run = execute_stdio_smoke(
-                str(launcher), SmokeDeclaration("read", JsonObject(()), 1), cwd=str(root)
+                str(launcher),
+                SmokeDeclaration("read", JsonObject(()), 1),
+                cwd=str(root),
+                harness="claude",
             )
 
             self.assertIsInstance(run, Err)
@@ -96,6 +100,7 @@ class McpSmokeStdioTest(unittest.TestCase):
                 f"{root}/missing;touch {marker}",
                 SmokeDeclaration("read", JsonObject(()), 1),
                 cwd=str(root),
+                harness="claude",
             )
             self.assertIsInstance(run, Err)
             self.assertFalse(marker.exists())
@@ -125,6 +130,7 @@ class McpSmokeStdioTest(unittest.TestCase):
                 # refusal. The two tests above own the timeout claim and keep their 1 second.
                 SmokeDeclaration("read", JsonObject(()), 30),
                 cwd=str(root),
+                harness="claude",
             )
             self.assertIsInstance(run, Err)
             self.assertIn("before invocation", run.diagnostics[0].message)
@@ -133,3 +139,75 @@ class McpSmokeStdioTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class McpSmokeLauncherContractTest(unittest.TestCase):
+    """The launcher is started the way a harness registration starts it, and is heard when it dies.
+
+    `SERVER` above is a Python fixture that ignores its argv, so every test using it passes whether
+    the harness name is handed over or not. A generated launcher does not ignore it: one carrying
+    configuration opens with `AART_CLI_HARNESS="${1-}"` and refuses anything that is not a slug,
+    because the harness is how it finds the configuration file it must read. This route started it
+    with no arguments at all, so every such installation refused, wrote the reason to a stderr the
+    route sent to `DEVNULL`, and was reported as a process that closed mid-exchange (B-172).
+    """
+
+    def _harness_aware_launcher(self, root: Path, *, witness: Path) -> Path:
+        """A launcher shaped like a generated one: it refuses without a harness, and records it."""
+
+        server = root / "server.py"
+        server.write_text(textwrap.dedent(SERVER), encoding="utf-8")
+        launcher = root / "launch.sh"
+        launcher.write_text(
+            "#!/bin/sh\n"
+            "set -eu\n"
+            'AART_CLI_HARNESS="${1-}"\n'
+            'case "$AART_CLI_HARNESS" in\n'
+            "  ''|*[!a-z0-9-]*)\n"
+            "    printf 'aart: fixture was started without the harness it belongs to; "
+            "repair the installation\\n' >&2\n"
+            "    exit 76\n"
+            "    ;;\n"
+            "esac\n"
+            f"printf '%s' \"$AART_CLI_HARNESS\" > {str(witness)!r}\n"
+            f"exec {sys.executable!r} {str(server)!r}\n",
+            encoding="utf-8",
+        )
+        launcher.chmod(0o700)
+        return launcher
+
+    def test_the_launcher_is_started_with_the_harness_it_belongs_to(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            witness = root / "started-with"
+            launcher = self._harness_aware_launcher(root, witness=witness)
+            declaration = SmokeDeclaration("read_identity", JsonObject(()), 15)
+
+            run = execute_stdio_smoke(str(launcher), declaration, cwd=str(root), harness="tabnine")
+
+            assert isinstance(run, Ok), getattr(run, "diagnostics", ())
+            # The exact slug, not merely something: the launcher composes a path from it.
+            self.assertEqual(witness.read_text(encoding="utf-8"), "tabnine")
+
+    def test_what_the_launcher_said_on_stderr_reaches_the_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            launcher = root / "launch.sh"
+            launcher.write_text(
+                "#!/bin/sh\nprintf 'aart: repair the installation\\n' >&2\nexit 76\n",
+                encoding="utf-8",
+            )
+            launcher.chmod(0o700)
+
+            run = execute_stdio_smoke(
+                str(launcher),
+                SmokeDeclaration("read_identity", JsonObject(()), 15),
+                cwd=str(root),
+                harness="tabnine",
+            )
+
+            assert isinstance(run, Err)
+            message = run.diagnostics[0].message
+            # Both halves: what the route observed, and the sentence that explains it.
+            self.assertIn("closed before the protocol exchange completed", message)
+            self.assertIn("aart: repair the installation", message)

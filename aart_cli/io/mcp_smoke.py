@@ -6,8 +6,10 @@ import json
 import os
 import select
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
+from typing import IO
 
 from aart_cli.application.mcp_smoke import (
     McpCallResult,
@@ -196,13 +198,68 @@ def _call(response: dict[str, object] | None) -> Result[McpCallResult]:
     )
 
 
+#: A launcher that died says why on stderr, and that sentence is the whole diagnosis. Bounded
+#: because it reaches a diagnostic a person reads, and a server that logs freely would otherwise
+#: put a megabyte there.
+_MAX_STDERR_BYTES = 2048
+
+
+def _annotate(failure: Err, errors: IO[bytes]) -> Err:
+    """Put what the launcher said on stderr into the diagnostic that says it stopped.
+
+    Without this the one sentence naming the cause is written to a file nobody reads and the
+    operator is told only that the exchange did not complete -- which is the symptom, never the
+    reason.
+    """
+
+    try:
+        errors.seek(0)
+        raw = errors.read(_MAX_STDERR_BYTES)
+    except (OSError, ValueError):
+        return failure
+    said = " ".join(raw.decode("utf-8", "replace").split())
+    if not said:
+        return failure
+    first = failure.diagnostics[0]
+    return Err(
+        (
+            Diagnostic(first.code, first.severity, f"{first.message}: {said}"),
+            *failure.diagnostics[1:],
+        )
+    )
+
+
 def execute_stdio_smoke(
     launcher: str,
     declaration: SmokeDeclaration,
     *,
     cwd: str,
+    harness: str,
 ) -> Result[DirectSmokeRun]:
-    """Start one exact installed launcher and invoke only its declared operation."""
+    """Start one exact installed launcher and invoke only its declared operation.
+
+    `harness` is passed to the launcher as its one argument, because that is how a launcher learns
+    which harness started it and therefore which configuration file under `config/` to read. A
+    harness registration passes it; this route is a second caller of the same contract and has to
+    pass it too. Omitting it made every launcher carrying configuration refuse to start, and the
+    refusal it printed went to a discarded stderr, so the smoke reported only that the process had
+    closed (B-172).
+    """
+
+    with tempfile.TemporaryFile() as errors:
+        outcome = _execute(launcher, declaration, cwd=cwd, harness=harness, errors=errors)
+        return _annotate(outcome, errors) if isinstance(outcome, Err) else outcome
+
+
+def _execute(
+    launcher: str,
+    declaration: SmokeDeclaration,
+    *,
+    cwd: str,
+    harness: str,
+    errors: IO[bytes],
+) -> Result[DirectSmokeRun]:
+    """The bounded exchange itself, with stderr going somewhere `execute_stdio_smoke` can read."""
 
     if (
         not os.path.isabs(launcher)
@@ -215,11 +272,11 @@ def execute_stdio_smoke(
     deadline = time.monotonic() + declaration.timeout_seconds
     try:
         process = subprocess.Popen(
-            [launcher],
+            [launcher, harness],
             cwd=cwd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            stderr=errors,
             bufsize=0,
             start_new_session=True,
         )
