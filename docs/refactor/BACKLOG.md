@@ -4243,6 +4243,103 @@ build and documentation assets outside the copied scripts/tests roots. Add expli
 support before claiming mutation adequacy for this gate. D-369 has real red/green E2E evidence and
 a targeted semantic mutation; this advisory runner limitation does not replace or block CI gates.
 
+**Recurred 2026-09-21, CP-27.2.** The same limitation, a different missing file:
+`make mutants ONLY=scripts/inject_default_registry.py TESTS="tests/release_default_registry_injection_test.py"`
+stops with `FileNotFoundError: .../mutants/.github/actions/release/action.yml`, because the parity
+test reads the release action to prove every injector reaches both builds. No mutations were
+evaluated, so no adequacy claim is made for that script. Four targeted semantic mutations are
+recorded in the slice instead, each red then restored. Two occurrences now, on two unrelated
+subjects, so the fixture-copy support is the fix rather than a per-test workaround: the workspace
+needs the repository files a test names, not only `scripts/` and `tests/`.
+
+## B-170 — the dashboard summary does not agree with itself about plurals
+
+**Found 2026-09-21, CP-27.4; noncritical, cosmetic.** The dashboard's summary line reads
+`1 registries — 0 credentials need attention`. It went unnoticed because no page had ever shown
+that frame; CP-27.4 puts it on the repository front page, where it is the first thing a reader
+sees of the product. The neighbouring line (`2 installed — 1 ready, 1 update, 0 attention`) does
+not have the problem, so this is one count, not a missing convention. Fixing it changes the frame
+and therefore `readme_tui_screen_test`, which is exactly the coupling that gate exists to create.
+Deliberately not folded into CP-27: it is a product change, and the slice is the page.
+
+## B-168 — the baked default Registry is connected by the terminal route only
+
+**Found 2026-09-21, CP-27.3; noncritical.** `tui.run` seeds the baked Registry before it composes
+the application, because that is where an implicit configuration mutation is allowed to happen --
+`load_runtime_configuration` promises not to make one, and it is the path every command shares. So
+a person whose first `aart-cli` invocation is a flag-form command rather than the terminal gets
+today's `no-source-configured` refusal instead of a connected Registry. Not critical: the terminal
+is the primary human route (§168) and the adoption page describes it. The fix is an explicit
+seeding step at the CLI boundary, once, with the same report.
+
+## B-169 — a startup notice has nowhere to go inside the curses terminal
+
+**Found 2026-09-21, CP-27.3; noncritical.** What the first run connected is printed before the
+terminal starts, which is the channel `run` already uses for startup failures. It survives in the
+line-oriented terminal and is cleared by `curses.wrapper` in the other. `ConsumerUiState` has no
+general notice field, so carrying it onto the dashboard is its own contained piece of UI work
+rather than a line in this slice. The consequence today is only that a curses user sees the
+connected Registry on the dashboard without reading the sentence explaining where it came from.
+
+## B-172 — a vendored artifact can be listed but not installed
+
+**Tracked as issue #41.**
+
+**Found 2026-09-21, exercising a real registry end to end; critical to the vendoring story, not to
+CP-27.** `registry vendor` writes an `artifact.json` with no `extensions`, and installation refuses
+any package whose manifest carries no `aart-cli.authoring`:
+
+```text
+error: skill/writing-plans does not say how it is installed: it carries no 'aart-cli.authoring',
+so what it needs is unknown rather than nothing
+```
+
+`protocol/authoring.py:2146` emits that extension on the native path only -- the one
+`compile_author_*` drives, reached by `registry scan` + `registry promote`.
+`registry_maintenance/vendoring.py` builds its manifest from the command's own flags and never adds
+it. So a vendored package passes `registry validate`, `audit` and `publish`, appears in
+`marketplace list` as `[registry-reviewed] [healthy]`, and cannot be installed.
+
+**Scope, corrected.** This is not "the CLI cannot fill a Registry". `registry adopt` is the native
+CLI route: it compiles explicit `aart-cli.yaml`/`aart-cli.json` manifests, needs no review digests,
+and writes `aart-cli.authoring` as a top-level key of `artifact.json`. Verified end to end against a
+real public Registry -- adopt, publish, push, first run on a baked wheel, `marketplace install
+--yes`, files delivered to `.claude/skills/`. So a CLI-only maintainer *can* stand up a Registry
+people install from; what they cannot do is get there by vendoring.
+
+What remains is still worth fixing. `registry promote` is closed to the CLI on purpose (QA-056),
+which leaves `adopt` and `vendor` as the two CLI doors, and one of them produces packages that only
+look complete. The tutorial `docs/tutorials/company-registry-tabnine-v1.md` vendors an artifact in
+§3 and installs it in §8, so that documented path does not work as written -- and neither does the
+repository's own acceptance walk: `docs/testing/END_TO_END_ACCEPTANCE.md` vendors
+`skill/manual-check` in §3 and installs `manual-registry/skill/manual-check@1.0.0` in §8. Anyone
+following that document to completion would hit this.
+
+It is not stale code, either. `registry_maintenance/vendoring.py` and the installation requirement
+in `protocol/authoring.py` arrived in the *same* commit (`12c83e8`), so the gap shipped with the
+feature rather than being left behind by it.
+
+No test covers it: `registry_vendor_*_test.py` cover the review, the delivery assessment and the
+audit, and none installs what vendoring produced. The fix is for vendoring to write an install
+description of its own -- for a skill, the copy-tree intent its `install` block already states --
+rather than for installation to relax what it requires.
+
+## B-171 — a source whose first fetch fails leaves an empty mirror directory behind
+
+**Found 2026-09-21, CP-27.5; noncritical.** An `aart-cli source add` whose fetch cannot reach the
+origin writes no `config.json` -- the compare-and-swap is atomic and the configuration is
+untouched -- but it leaves `sources/registry-<origin-hash>/` holding an empty `mirror.git` and an
+empty `tmp`, which nothing afterwards references. Observed on an installed wheel against
+`https://127.0.0.1:1/...`, for a hand-typed `source add` and for the baked seed alike, which is
+itself the evidence that the seed runs the ordinary transaction rather than a second one.
+
+Not critical, and not CP-27's: the directory is keyed by the origin hash, so a retry reuses it
+rather than accumulating, it holds no configuration, no secret and no artifact, and the invariant
+the slice claims -- no partial *configuration* -- holds exactly. What it costs is tidiness and one
+confusing artefact for anyone who looks in the application home after a failed first run. The fix
+belongs to the acquisition transaction, not to seeding: remove a source directory the transaction
+created when that transaction does not commit, leaving a pre-existing one alone.
+
 ## B-167 — the composite action still publishes the pre-CP-26 executable name
 
 **Found 2026-09-20, after the v0.4.0 release-artifact failure; noncritical, needs an owner decision.**

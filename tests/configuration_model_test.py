@@ -123,6 +123,36 @@ class ConfigurationModelTest(unittest.TestCase):
             with self.subTest(location=location):
                 self.assertIsNone(git_location_parts(location))
 
+    def test_surrounding_whitespace_is_refused_on_every_interpreter(self) -> None:
+        """A location is judged here, not by whatever `urlsplit` this interpreter ships.
+
+        `urllib.parse` strips leading C0 control characters and spaces as of 3.10.12, 3.11.4 and
+        3.12 -- a security fix, and therefore a *patch-level* difference. Handed the same padded
+        location, an older interpreter reads the space as part of a relative path and rejects it,
+        while a patched one strips the space and accepts the URL. Either answer is defensible;
+        having both in one product is not, because it makes a source the maintainer configured
+        work on one machine and fail on another for no reason either machine can show.
+
+        So the padding is settled before `urlsplit` sees it, and settled by refusing: a location
+        that is not exactly its own `strip()` was mistyped, and this is the layer that decides
+        which locations exist. Every accepted location is then one no interpreter argues about.
+        """
+
+        for padded in (
+            " https://example.test/agents/repo.git",
+            "https://example.test/agents/repo.git ",
+            "\thttps://example.test/agents/repo.git",
+            "https://example.test/agents/repo.git\n",
+            " git@example.test:agents/repo.git",
+        ):
+            with self.subTest(location=padded):
+                self.assertIsNone(git_location_parts(padded))
+
+        self.assertEqual(
+            git_location_parts("https://example.test/agents/repo.git"),
+            ("example.test", "agents/repo"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

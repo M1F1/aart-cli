@@ -12,10 +12,11 @@ one command that proves it worked.
 
 - **Python 3.10 or later** — and nothing else. aart-cli has no dependencies of its own.
 - **aart-cli itself.** Steps 1 and 2 below install it.
-- **The address of a Registry.** A Registry is a Git repository of approved artifacts that somebody
-  in your organization maintains. Ask whoever runs it for the URL — this is not a value you can
+- **A Registry.** A Registry is a Git repository of approved artifacts that somebody in your
+  organization maintains. A copy of AART built for your organization already knows its address; a
+  public build does not, and then you need the URL from whoever runs it. It is not a value you can
   invent.
-- **An artifact in that Registry** that you want. Finding one is step 4.
+- **An artifact in that Registry** that you want. Finding one is step 3.
 - **A harness to install it into** — one of `claude`, `opencode`, `tabnine` or `vibe`. This is the
   agent tool whose own configuration aart-cli writes.
 
@@ -70,50 +71,61 @@ Installing straight from a public repository — `git+<repository>`, or the whee
 in [Installing AART](docs/install/installing-aart-v1.md), together with what stops working when the
 release is private, and why.
 
-### 3. Connect a Registry, in the TUI
-
-A Registry is the approved catalog somebody in your organization maintains; `<registry-url>` is the
-repository your platform team points you at. Running `aart-cli` with no subcommand on a terminal
-opens the human-oriented interface, which is the primary route for a person rather than a script:
+### 3. Open AART
 
 ```sh
 aart-cli
 ```
 
-Open **Registries**, then **Add Registry**. The form validates a fresh snapshot *before* it saves
-anything, so a Registry that does not answer or does not validate never becomes configuration:
+Running `aart-cli` with no subcommand on a terminal opens the human-oriented interface. That is the
+primary route for a person rather than a script.
+
+If your copy of AART was built for your organization, it already carries the address of your
+Registry. The first run connects it and says so, and what you see is a working dashboard:
 
 ```text
-AART / Registries / Add Registry
-
-✓ Registries → ▸ Add Registry → · Review Registry
+AART / Dashboard
 
 ────────────────────────────────────────────────────────────────
 
-> Alias: <type a short name>
-  Transport: Remote Git
-  Registry URL: <type an HTTPS or SSH Git URL>
-  Branch or tag: <repository default>
-  Make default registry: yes
-  Continue: Validate and review
+> Marketplace
+  Installed
+  Updates
+  Registries
+  User Variables And Credentials
+  Activity
+  Doctor
+  Settings
 
 ────────────────────────────────────────────────────────────────
 
-- Connect an approved registry. AART validates a fresh snapshot before saving it.
-  A local checkout reads one branch's committed content; your worktree is never read.
+- AART
+  2 installed — 1 ready, 1 update, 0 attention
+  1 registries — 0 credentials need attention
 
-- This adds another registry. Nothing already connected is changed.
+- Recent activity:
+    - none yet
 
 ────────────────────────────────────────────────────────────────
 
-[Type] Edit   [Backspace] Delete   [Enter] Next
-[↑/↓] Move   [Esc] Back
+[Enter] Open   [v] Fast / Verbose
+[↑/↓] Move   [Esc] Back   [?] Help   [q] Quit
 ```
 
-The interface does the whole route, not just this step: it lists and searches the catalog (press
-`/` and keep typing), shows the same reviewed plan before anything is applied, and reports the same
-status. It submits the identical canonical requests as the commands below — it is not a second
-command engine, so nothing is available in one and missing from the other.
+Press **Enter** on **Marketplace**. That is the catalog your organization approved: press `/` and
+keep typing to narrow it, then open an artifact to install it. Every mutation shows you the plan
+first and changes nothing until you confirm it.
+
+**If you see `SETUP REQUIRED` instead**, your copy was not built with a Registry, which is true of
+every public build. Open **Registries**, choose **Add Registry**, and give it the address your
+platform team publishes. The form validates a fresh snapshot *before* it saves anything, so a
+Registry that does not answer never becomes configuration. You can connect more than one; an
+artifact keeps the alias of the Registry it came from.
+
+The interface does the whole route, not just this step: it lists and searches the catalog, shows
+the same reviewed plan before anything is applied, and reports the same status. It submits the
+identical canonical requests as the commands below — it is not a second command engine, so nothing
+is available in one and missing from the other.
 
 ### The same route, as commands
 

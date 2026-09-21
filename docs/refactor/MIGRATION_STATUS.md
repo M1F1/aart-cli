@@ -4,6 +4,66 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-09-21, CP-27 complete — all five tasks VERIFIED.** `pr-check` run `35568282527` on
+`b56ddb5` is green: Python 3.10, 3.11 and 3.14 each passed the ten gates, the aggregate `pr-check`
+passed, and the conditional private-image job was skipped by design. The release-facing third of
+task 5 ran here instead, and needs no release: `wheel-digest` builds in a throwaway copy and applies
+every injector from the real environment, so a wheel built with
+`AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL` set carries the stamped alias and URL while the tracked
+`_default_registry.py` stays empty. That wheel was installed into a clean venv and driven against a
+fresh `AART_CLI_HOME` with an unreachable Registry: a warning naming what the build named, the
+remediation, the run not failed, no `config.json` -- rule 3 observed on the artefact a person
+receives rather than on a double. A hand-typed `source add` to the same URL leaves state that cannot
+be told apart, which is the filesystem-level evidence that the seed runs `source add`'s transaction
+rather than a copy. The empty mirror directory both leave is the acquisition transaction's and is
+B-171. PR #40 is ready for owner review and the release-version decision.
+
+**2026-09-21, CP-27 task 5 — the matrix found an interpreter-dependent test (D-374).** The first
+`pr-check` for PR #40 (run `35566617453`) failed `unit` on Python 3.10, 3.11 and 3.14 with exactly
+one failure: a seed test pinning `" https://example.invalid/team/registry.git"` as invalid. It is,
+on the maintainer's 3.11.0, and it is not on CI's interpreters -- `urllib.parse` began stripping
+leading C0 control characters and spaces in 3.10.12, 3.11.4 and 3.12, so whether a padded location
+is a relative path or a clean URL was a patch-level property of the machine. `git_location_parts`
+now refuses any location that is not exactly its own `strip()` before `urlsplit` sees it; refusing
+rather than trimming, because these locations are identity-bearing (INV-253, `git_origin_key`) and
+quietly repairing an identity makes two different things look the same.
+`test_surrounding_whitespace_is_refused_on_every_interpreter` pins all five paddings and the clean
+control, and deleting the guard turns it red here on the tab and newline cases -- the space cases
+stay green locally, which is the disagreement being removed. The nine modules reaching
+`git_location_parts` re-run green (79 tests), and `lint`, `format-check`, `typecheck` and
+`docs-check` are clean. Task 5 remains open until `pr-check` is green on the fix.
+
+**2026-09-21, CP-27 tasks 1-4 — one baked default Registry, implemented (D-373).** A release may
+now bake one Registry into the wheel from `AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL`, and a first run
+with nothing configured connects it, makes it the default and says so. Unset bakes nothing and the
+public wheel is unchanged, which `render_from` proves by rendering the committed module byte for
+byte. Sixteen targeted mutations, each red then restored, are listed with their tests in
+`docs/refactor/slices/CP-27-default-registry-seed.md`; mutation 3 survived its first run and the
+finding was real -- `_SLUG_RE` is already anchored, so the only behaviour `match` adds is accepting
+the trailing newline a release variable arrives with from `echo`. Scoped `make mutants` over
+`configuration/seed.py`: 37/37 killed; over `scripts/inject_default_registry.py` it could not
+collect, which is B-166 a second time. The strongest evidence is not a mutation:
+`ARegistryThatCannotBeReachedLeavesNothingBehind` drives the real transaction against a real home and
+a loopback port that refuses, and leaves no `config.json`. The release receipt records the effective
+value, closing the last of issue #39's acceptance notes. Task 5 is the full suite, which runs on
+`pr-check`. Six gates and the release, packaging, configuration, TUI, source and consumer suites pass
+locally.
+
+
+**2026-09-21, CP-27 planned — one baked default Registry (D-373).** Planning only; no product
+code changed. The owner asked that a fork be able to carry its own Registry address so a first run
+starts connected, and steered the design away from policy-as-validation to a plain default. Both
+halves of the mechanism already exist and were confirmed by reading them: `aart_cli/_commit.py` is a
+generated module overwritten by `scripts/inject_commit.py` in a copy of the tree before Poetry
+builds (`scripts/release.py:169-179`), and `AART_CLI_REFERENCE_REGISTRY_URL`
+(`.github/workflows/release.yml:75`) is a per-fork repository variable that deliberately has no
+default (D-309). The collision with the existing `config.json` `default_registry` field
+(`configuration/schema.py:483`) was found while reading the serializer and is recorded rather than
+left to be discovered in implementation. CP-27 is five tasks, all `todo`; issue #39 carries the
+specification; step 4 (README) depends on step 3, since the README's first run is pinned by
+`tests/readme_tui_screen_test.py` and landing it first would document a build that does not exist.
+
+
 **2026-09-20, README — authenticated install first, TUI first (D-372).** The owner asked for the
 adoption page to lead with the Enterprise route rather than the public one, and for connecting a
 Registry to be shown in the TUI before the CLI. The second half is a divergence from §168, which

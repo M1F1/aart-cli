@@ -244,9 +244,30 @@ def _valid_repository_path(raw: str) -> str | None:
     return path
 
 
-def git_location_parts(location: str) -> tuple[str, str] | None:
-    """Return normalized host/repository path without ever returning URL credentials."""
+def parse_source_alias(raw: str) -> SourceAlias | None:
+    """Return the alias if it is one configuration would accept, otherwise ``None``.
 
+    The same grammar the configuration schema applies when it reads `config.json`. It lives here
+    as well because a caller outside the parser -- the build-time Registry seed (D-373) -- has to
+    ask the question before any JSON exists, and an alias the seed accepts but the store refuses
+    would fail on the one run that has no configuration to fall back on.
+    `configuration_default_registry_seed_test` holds the two spellings of the grammar together.
+    """
+
+    return SourceAlias(raw) if isinstance(raw, str) and _SLUG_RE.fullmatch(raw) else None
+
+
+def git_location_parts(location: str) -> tuple[str, str] | None:
+    """Return normalized host/repository path without ever returning URL credentials.
+
+    Surrounding whitespace is refused before anything is parsed. `urlsplit` removes some of it on
+    every interpreter and the rest only since 3.10.12/3.11.4/3.12, so a padded location is read as
+    a relative path by one patch release and as a clean URL by the next. Refusing it here makes
+    the answer the same everywhere, and costs nothing a maintainer wanted: the padding is a typo.
+    """
+
+    if location != location.strip():
+        return None
     scp = _SCP_GIT_RE.fullmatch(location)
     if scp is not None:
         path = _valid_repository_path(scp.group("path"))

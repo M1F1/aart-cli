@@ -9486,3 +9486,90 @@ iterates every enabled source into one graph, and `compile_marketplace_graph` ke
 `skill/reviewer` compile to two entries with no diagnostic, and reusing one alias is refused with
 `duplicate source alias`. So the page now says one or several, and says an artifact keeps its
 registry's alias, which is the question "several" immediately raises.
+
+## D-373 — A release may bake one default Registry; it is a default, never a restriction
+
+CP-27 opens with the question the owner asked of issue #39: a first run has nothing configured, and
+in an Enterprise fork the Registry address it is about to ask for is the same for everybody and was
+already known at release time. So a release may carry it.
+
+**One Registry, alias included, supplied per fork.** The repository variable is
+`AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL` and holds `<alias>=<url>`. Not a list: a list needs an
+answer to "which of these is *the* default" and a parser for the separator, and neither buys
+anything the second Registry's Add Registry cannot. The alias is inside the variable rather than
+derived from the repository name because an alias is stamped into the path of everything installed
+from that Registry (D-359, INV-253) -- two repositories of the same name in different organizations
+would collide exactly where it is hardest to undo. Unset bakes nothing and is not an error; that is
+the public build's state, and it keeps the public wheel byte-identical to today's.
+
+**Neither half of the mechanism is new**, which is why this is a short epic. `aart_cli/_commit.py`
+is already a generated module holding a neutral default in the tree, overwritten by
+`scripts/inject_commit.py` in a *copy* of the tree immediately before Poetry builds
+(`scripts/release.py:169-179`). `AART_CLI_REFERENCE_REGISTRY_URL` is already a per-fork repository
+variable whose comment explains why it deliberately has no default (D-309). CP-27 adds a second
+client of the first and a second instance of the second.
+
+**A default, not a restriction, and the distinction is not stylistic.** The alternative considered
+was baking an allowlist of permitted Registry addresses. It was rejected: a wheel is a file on the
+user's own machine, which they may edit or replace, so an allowlist baked into it restricts nobody
+and only resembles security. Authority over what may be connected stays in the machine policy file
+an administrator owns, outside any directory the user names. A baked *convenience* promises nothing
+it cannot keep.
+
+**Three boundaries that make the convenience safe.** It applies only when `sources` is empty, so an
+upgrade never overrides a choice the person made -- including a local Registry, which is a choice
+too. A seed that cannot be used (unreachable host, unparseable manifest, no network) degrades to
+today's `SETUP REQUIRED` screen and writes no partial entry, because a baked default must not turn a
+tool that works offline into one that will not start without a VPN. And the first run reports the
+alias and URL it added, since the person did not choose them and a silent seed cannot later answer
+"where did this come from".
+
+**Implemented 2026-09-21, and one thing the implementation settled.** The variable carries the
+alias as well as the URL and names exactly one Registry; a list was considered and dropped, because
+it needs an answer to "which of these is *the* default" and a separator to parse, and buys nothing
+the second Registry's Add Registry cannot. The seeded source is tracked at `main`, which is the ref
+`configuration/schema.py` already reads when an entry names none, so the seed agrees with a
+hand-written `config.json` instead of introducing a second answer. Seeding is composed in `tui.run`
+rather than in `load_runtime_configuration`, whose contract is that it makes no implicit source or
+configuration mutation -- B-168 records that the flag-form CLI therefore does not seed yet.
+
+**Two consequences recorded rather than deferred.** `config.json` already has a `default_registry`
+field meaning *which connected Registry to use when no alias is given*; the seeded value carries a
+distinct name in the code even though the first run sets both, so the two ideas stay separable. And
+the wheel stops being reproducible from its tag alone and becomes reproducible from its tag plus the
+repository variables in effect -- already true of `_commit.py`, and the same question #24 must
+settle for the distribution name. The effective alias and URL go into the release receipt, so the
+difference between two same-version wheels is documented rather than mysterious.
+
+## D-374 — A Git location carrying surrounding whitespace is refused, on every interpreter
+
+CP-27's seed test pinned `" https://example.invalid/team/registry.git"` as invalid. It was, on the
+interpreter it was written on, and it was not on the one CI runs -- the release gate caught a
+disagreement no local run could have.
+
+The cause is in `urllib.parse`, not in the test. Stripping leading C0 control characters and spaces
+from a URL arrived as a security fix in 3.10.12, 3.11.4 and 3.12, so whether `urlsplit` reads a
+padded location as a relative path or as a clean URL is a *patch-level* property of the machine.
+Newline and tab have been stripped for longer still, which means one interpreter can disagree with
+itself about which whitespace matters.
+
+`git_location_parts` is where the product decides which Git locations exist -- every configured
+source, policy check, marketplace coordinate and installed-state key goes through it. Leaving that
+decision to the interpreter would make a source the maintainer configured work on one machine and
+fail on another, with nothing either machine could show to explain it.
+
+So the padding is settled before `urlsplit` sees it, and settled by **refusing**: a location that is
+not exactly its own `strip()` was mistyped. Trimming silently was the alternative and was dropped --
+these locations are identity-bearing (INV-253 stamps an alias into installed paths, and
+`git_origin_key` keys the source store by origin), and quietly repairing an identity is how two
+things that differ come to look the same. Refusing costs nothing anybody wanted, and every accepted
+location is now one no interpreter argues about.
+
+It also strengthens the release gate rather than narrowing it. `render_from` trims the release
+variable once, where the provenance is known -- a variable set from `echo` arrives with a trailing
+newline, and that is the shell's whitespace, not the value's. Padding *inside* the value is another
+matter: `AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL="company= https://host/team/registry.git"` now
+fails the build with `baked default registry URL is invalid`, on every interpreter, instead of
+baking a URL with a leading space into the wheel wherever `urlsplit` happened to forgive it. A typo
+in a repository variable is caught by the maintainer who set it, not by the first person whose
+first run degrades.
