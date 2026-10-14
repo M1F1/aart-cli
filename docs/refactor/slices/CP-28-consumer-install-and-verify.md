@@ -2,7 +2,8 @@
 
 Status: **in flight**. Task 1 is on `fix/mcp-smoke-harness-argument` as PR #52, open and unmerged.
 Task 2 is on `fix/configuration-after-harness-choice` (PR #55), stacked on it; task 4 on
-`fix/one-row-per-installation`, stacked on that. Task 3 waits on the owner accepting the §170
+`fix/one-row-per-installation`, stacked on that; task 5 on `fix/local-registry-is-a-registry`,
+stacked on that. Task 3 waits on the owner accepting the §170
 revision; tasks 5 and 6 are not started.
 
 Date opened: 2026-10-14. Authority: the product owner, asking to ship the package inside their
@@ -64,8 +65,13 @@ key by installation (§169.3), so the coordinate row could never show anything -
 installation with configuration but no credential had no row of its own at all. Fixed by keying
 configuration by installation too.
 
-**5. Registry connectedness (#49).** A user cannot currently tell whether their Registry is
-connected, nor add another one with confidence.
+**5. Registry connectedness (#49).** A Registry connected from a local checkout (`registry-local`,
+D-350) was listed under maintainer Sources as an authoring Source and missing from the maintainer
+Registry screen, which showed only the same repository's remote connection. `read_maintainer_views`
+and the Candidate-history binding reader recognised only `REGISTRY_GIT` as a Registry; they now ask
+`is_registry`, which covers both transports. The Sources list also ran its entries together; one
+empty line now separates them, as issue #12 did for inputs. Other `REGISTRY_GIT`-only sites are an
+audit, B-176, off this slice.
 
 **6. Verification last.** Per D-317 and the owner's standing rule, implementation tasks carry
 proportionate focused checks and the full quality, integration and release-facing suite runs once,
@@ -99,4 +105,11 @@ coordinate as the only row; reverting the one-line change reproduces that exactl
 TUI, configuration and credential tests green. The real reader (`read_configuration_files`)
 already sets the installation key, so the fix holds outside the test double.
 
-Tasks 3, 5 and 6: none yet.
+Task 5: `tests/maintainer_composition_test.py` -- with a remote Registry, a local Registry
+checkout and an authoring Source configured, Sources is exactly the authoring Source and Registry
+lists both Registries. Red before the fix (`['authors', 'company-local']`). Narrowing only the
+Registry list back to Git turns exactly its assertion red. `tests/maintainer_views_test.py` -- two
+Sources are separated by one empty line and nowhere else; red before the fix. 1,450 maintainer,
+Source, Registry, TUI and consumer tests green; mypy and ruff clean.
+
+Tasks 3 and 6: none yet.

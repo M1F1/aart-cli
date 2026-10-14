@@ -958,7 +958,7 @@
         {
           "id": "5",
           "title": "A user can tell whether a Registry is connected, and add one (#49)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "6",

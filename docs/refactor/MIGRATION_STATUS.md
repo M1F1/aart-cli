@@ -4,6 +4,11 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-14, CP-28 step 5 — a local Registry checkout is a Registry on the maintainer screens
+(#49).** The maintainer views recognised only `REGISTRY_GIT`, so a `registry-local` connection was
+drawn as an authoring Source and left off the Registry screen. They ask `is_registry` now, and the
+Sources list separates its entries. B-176 records the other Git-only sites for audit.
+
 **2026-10-14, CP-28 step 4 — one row per installation in User Variables and Credentials (#48).**
 Two harness installations of one artifact drew a third, empty row named by the bare coordinate,
 because configuration was keyed by coordinate and every lookup by installation. Keyed by

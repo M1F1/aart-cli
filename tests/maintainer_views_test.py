@@ -217,6 +217,19 @@ class MaintainerRenderingTest(unittest.TestCase):
         self.assertIn("Synced", sources)
         self.assertIn("1 manifest", sources)
 
+    def test_sources_are_separated_by_one_empty_line_and_nowhere_else(self) -> None:
+        """#49: two Sources' lines ran together, the same fault issue #12 fixed for inputs."""
+
+        other = dataclasses.replace(self.source, alias="tools")
+        lines = render_maintainer_sources(
+            (self.source, other), cursor="authors", profile=PresentationProfile.FAST
+        )
+
+        self.assertEqual(lines.count(""), 1)
+        self.assertEqual(lines[lines.index("") + 1].split()[0], "tools")
+        self.assertNotEqual(lines[0], "")
+        self.assertNotEqual(lines[-1], "")
+
     def test_verbose_source_detail_discloses_the_full_pinned_revision(self) -> None:
         fast = "\n".join(render_maintainer_source(self.source, PresentationProfile.FAST))
         verbose = "\n".join(render_maintainer_source(self.source, PresentationProfile.VERBOSE))

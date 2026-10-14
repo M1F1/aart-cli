@@ -4281,6 +4281,19 @@ general notice field, so carrying it onto the dashboard is its own contained pie
 rather than a line in this slice. The consequence today is only that a curses user sees the
 connected Registry on the dashboard without reading the sentence explaining where it came from.
 
+## B-176 — Registry checks that recognise only the Git transport
+
+**Found 2026-10-14 while fixing #49.** Status: OPEN, not on CP-28.
+
+`registry-local` (D-350) arrived after much of the code that asks "is this a Registry?", and several
+sites still answer with `kind is SourceKind.REGISTRY_GIT`: `io/consumer_actions.py` (registry
+refresh focus), `io/maintainer_promotion.py` (promotion target, and the authoring-Source test),
+`io/maintainer_sync.py` (both), `application/maintainer_sync.py`, `application/consumer_views.py`,
+`consumer/runtime.py`, `marketplace/catalog.py` and `tui_sources.py`. Some are deliberate -- policy
+governs a local checkout through `allow_direct_sources`, not the host allowlist (`is_git`) -- and
+some are the #49 fault in places nobody has hit yet. Each needs its own judgement and a test; a
+blanket replacement would be wrong for the policy sites.
+
 ## B-175 — choosing the scope after the configuration form asks for the configuration again
 
 **Found 2026-10-14 while fixing #50 (D-377).** Status: OPEN, not on CP-28.

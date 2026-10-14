@@ -16,7 +16,7 @@ from aart_cli.application.maintainer_views import (
     UNBOUND_SCAN_DIAGNOSTIC,
     MaintainerSourceStatus,
 )
-from aart_cli.configuration.model import SourceKind
+from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.domain.candidates import assess_candidate
 from aart_cli.domain.identifiers import SourceAlias, SourceId
 from aart_cli.domain.result import Err, Ok
@@ -131,6 +131,31 @@ class MaintainerCompositionTest(unittest.TestCase):
         self.assertEqual(composed.value.dashboard.source_count, 1)
         self.assertEqual(composed.value.dashboard.candidate_count, 1)
         self.assertEqual(composed.value.dashboard.ready_count, 1)
+
+    def test_a_local_registry_checkout_is_a_registry_and_not_an_authoring_source(self) -> None:
+        """#49: a `registry-local` checkout was listed as a Source and missing from Registry."""
+
+        local = ConfiguredSource(
+            SourceAlias("company-local"),
+            SourceKind.REGISTRY_LOCAL,
+            "/work/company-registry",
+            "main",
+            True,
+        )
+        effective = effective_configuration(
+            (self.registry, local, self.authors), default_registry="company"
+        )
+
+        composed = read_maintainer_views(effective, data_root=self.data_root)
+
+        self.assertIsInstance(composed, Ok)
+        assert isinstance(composed, Ok)
+        self.assertEqual([source.alias for source in composed.value.sources], ["authors"])
+        self.assertEqual(composed.value.dashboard.source_count, 1)
+        self.assertEqual(
+            [item.alias for item in composed.value.registries or ()],
+            ["company", "company-local"],
+        )
 
     def test_missing_history_is_an_unscanned_source_not_a_reader_failure(self) -> None:
         self._publish()
