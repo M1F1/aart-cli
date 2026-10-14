@@ -39,7 +39,6 @@ from aart_cli.application.promotion import (
     load_registry_versions,
 )
 from aart_cli.application.sources import SourceStatusRequest, source_status
-from aart_cli.configuration.model import SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.policies import EffectivePolicy
@@ -104,7 +103,8 @@ def read_maintainer_views(
     projected = []
     scans = []
     for configured in effective.configuration.sources:
-        if configured.kind is SourceKind.REGISTRY_GIT:
+        # Either transport is a Registry, not an authoring Source (#49).
+        if configured.is_registry:
             continue
         paths = source_store_paths(data_root, source_instance_id(configured))
         health = source_status(
@@ -175,7 +175,7 @@ def read_maintainer_views(
                 (
                     item
                     for item in effective.configuration.sources
-                    if item.alias.value == alias_value and item.kind is SourceKind.REGISTRY_GIT
+                    if item.alias.value == alias_value and item.is_registry
                 ),
                 None,
             )
@@ -190,9 +190,7 @@ def read_maintainer_views(
         # registry, D-103 identifies the project root as that registry's checkout; otherwise no
         # checkout can be attributed safely (B-042), so synchronized evidence remains the answer.
         configured_registries = tuple(
-            item
-            for item in effective.configuration.sources
-            if item.enabled and item.kind is SourceKind.REGISTRY_GIT
+            item for item in effective.configuration.sources if item.enabled and item.is_registry
         )
         registry_workspace_present = (
             registry_root is not None and registry_absent_refusal(registry_root) is None
@@ -364,7 +362,8 @@ def read_unbound_candidate_histories(
         return _error("reading Candidate history bindings needs a non-negative observation time")
     unbound: list[UnboundCandidateHistory] = []
     for configured in effective.configuration.sources:
-        if configured.kind is SourceKind.REGISTRY_GIT:
+        # Either transport is a Registry, not an authoring Source (#49).
+        if configured.is_registry:
             continue
         paths = source_store_paths(data_root, source_instance_id(configured))
         health = source_status(

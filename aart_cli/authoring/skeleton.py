@@ -176,8 +176,6 @@ def _mcp_blueprint(name: str) -> _Blueprint:
             "smoke_test",
             _object(
                 ("arguments", _object(("limit", 1))),
-                ("expect", _object(("text_contains", "expected text"))),
-                ("reaches_service", True),
                 ("read_only", True),
                 ("timeout_seconds", 15),
                 ("tool", "get_current_user"),
@@ -289,7 +287,6 @@ _EXPLANATIONS: dict[str, str] = {
     "exclude": "Payload files to leave out of the package, applied after `include`.",
     "inputs": "Values AART collects from the installer and keeps for this artifact.",
     "python": "How the payload's Python dependencies are resolved at install time.",
-    "reaches_service": "Declares that this tool really reads the external service. With `expect`, it lets the service stage pass.",
     "smoke_test": "A reviewed read-only MCP tool call used by `aart-cli mcp test --harness <harness>`.",
     "summary": "One line shown wherever the artifact is listed. Derived from the name if absent.",
 }
@@ -321,12 +318,6 @@ _ALTERNATIVES: dict[str, tuple[str, ...]] = {
         "#?     inject:",
         "#?       type: stdin",
     ),
-    "smoke_test": (
-        "## Or check one deterministic field in structuredContent instead of text:",
-        "#?   expect:",
-        "#?     structured_path: user.login",
-        "#?     equals: expected-login",
-    ),
 }
 
 #: Root keys `parse_author_manifest` accepts and builds nothing from. There is no shape to
@@ -343,11 +334,6 @@ _SMOKE_NOT_GENERATED: tuple[str, ...] = (
     "## MCP-only smoke fields are not valid for this artifact kind:",
     "#? smoke_test:",
     "#?   arguments: null",
-    "#?   expect:",
-    "#?     equals: null",
-    "#?     structured_path: field",
-    "#?     text_contains: text",
-    "#?   reaches_service: true",
     "#?   read_only: true",
     "#?   timeout_seconds: 15",
     "#?   tool: tool-name",

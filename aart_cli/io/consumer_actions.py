@@ -52,8 +52,13 @@ from aart_cli.application.consumer_views import (
     HarnessTargetView,
     InstallScopeChoiceView,
     LifecyclePlanView,
+    McpTestEntryView,
+    McpTestResultView,
+    McpTestStageView,
+    McpTestView,
     PythonInstallerChoiceView,
     RunningInstallationView,
+    harness_choice_problems,
     offer_install_scopes,
     offer_python_installers,
     project_lifecycle_plan,
@@ -120,7 +125,11 @@ from aart_cli.domain.inputs import (
     SecretInput,
     SecretProviderReference,
 )
-from aart_cli.domain.installation_owner import InstallationOwner, credential_address
+from aart_cli.domain.installation_owner import (
+    InstallationOwner,
+    credential_address,
+    installation_key,
+)
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.python_runtime import PythonInstaller
 from aart_cli.domain.receipts import ArtifactReceipt, InstallationReceipt, InstalledRecord
@@ -165,6 +174,7 @@ from .consumer_machine import read_consumer_machine, read_installed_inspections
 from .consumer_settings import write_consumer_settings
 from .credentials import CredentialProviderPort
 from .execution import CredentialEffectInterpreter, TerminalHandover
+from .installed_smoke import LocalMcpTest, SmokePlanEntry, SmokeTargetResult
 from .maintainer_promotion import (
     PreparedConfiguredCandidatePromotion,
     complete_configured_candidate_promotion,
@@ -206,6 +216,12 @@ CONSUMER_ACTION_NOT_OFFERED = DiagnosticCode("consumer-action-not-offered")
 
 #: What a command names has no canonical record on this machine, so nothing here can act on it.
 CONSUMER_ACTION_NOT_INSTALLED = DiagnosticCode("consumer-action-not-installed")
+
+
+def _installation_of(record: InstalledRecord) -> str:
+    owner = record.receipt.owner
+    assert owner is not None
+    return installation_key(record.coordinate, owner)
 
 
 def _lines(*messages: str) -> tuple[str, ...]:
@@ -425,6 +441,47 @@ class _PendingCredentialAction:
     guidance: tuple[CredentialGuidance, ...] = ()
 
 
+class McpTestPort(Protocol):
+    """The optional post-installation test (§170.4): which installations, what it calls, the run."""
+
+    def installations(
+        self,
+        *,
+        scope: Scope,
+        root: str,
+        harnesses: frozenset[str],
+        coordinates: frozenset[str],
+    ) -> tuple[InstalledRecord, ...]: ...
+
+    def plan(self, records: tuple[InstalledRecord, ...]) -> tuple[SmokePlanEntry, ...]: ...
+
+    def run(self, records: tuple[InstalledRecord, ...]) -> tuple[SmokeTargetResult, ...]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class _AfterInstall:
+    """A committed install as Success shows it, and the MCP installations it made.
+
+    Kept so that the optional test can be offered, reviewed and answered without Success losing
+    what it reports: the test is drawn beside the install, never in place of it (§170.4).
+    """
+
+    transaction: object
+    pending_setup: tuple[DeclaredArtifactSetup, ...]
+    records: tuple[InstalledRecord, ...]
+    test: McpTestView | None
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingMcpTest:
+    records: tuple[InstalledRecord, ...]
+    review_digest: str
+
+
+#: Member statuses whose installation was made, so the test may be offered for it.
+_INSTALLED_MEMBER = frozenset({"completed", "completed-with-attention"})
+
+
 #: The credential intent each of screen 24's rows asks for (CP-23 task 12, D-262).
 _CREDENTIAL_INTENTS: dict[ConsumerActionKind, CredentialIntent] = {
     ConsumerActionKind.CREDENTIAL_VERIFY: CredentialIntent.VERIFY,
@@ -539,6 +596,7 @@ _Pending = (
     | PreparedAdoption
     | _PendingCredentialAction
     | PreparedConfiguredConfiguration
+    | _PendingMcpTest
 )
 
 #: The host is passed rather than closed over: setup describes the installation that just happened,
@@ -588,6 +646,7 @@ class LocalConsumerActions:
         repository_upstream_check: RepositoryUpstreamCheckPort | None = None,
         repository_adopted_list: RepositoryAdoptedListPort | None = None,
         terminal_handover: TerminalHandover | None = None,
+        mcp_test: McpTestPort | None = None,
     ) -> None:
         if not isinstance(context, ConsumerActionContext):
             raise ValueError("consumer actions need a composed action context")
@@ -622,6 +681,8 @@ class LocalConsumerActions:
         self._adoption_upstream: AdoptionUpstreamCheck | None = None
         self._promotion_transaction: PreparedCandidatePromotionTransaction | None = None
         self._promotion_result: CandidatePromotionExecutionResult | None = None
+        self._mcp_test = mcp_test
+        self._after_install: _AfterInstall | None = None
 
     def observe_progress(self, report: Callable[[RunningInstallationView], None] | None) -> None:
         """Take the screen's progress reporter for one execution, or give it back (None)."""
@@ -748,6 +809,8 @@ class LocalConsumerActions:
         notice: tuple[str, ...] = (),
         pending_setup: tuple[DeclaredArtifactSetup, ...] = (),
         installation_inputs=(),
+        install_targets: tuple[HarnessTargetView, ...] = (),
+        mcp_test: McpTestView | None = None,
     ) -> CanonicalScreenSource:
         """The screens for the machine as it currently stands, plus whatever a flow is holding."""
 
@@ -790,6 +853,8 @@ class LocalConsumerActions:
                     else _project_adoption_upstream(self._adoption_upstream)
                 ),
                 installation_inputs=installation_inputs,
+                install_targets=install_targets,
+                mcp_test=mcp_test,
             )
         )
 
@@ -863,6 +928,8 @@ class LocalConsumerActions:
             return self._prepare_bulk_promotion(command)
         if action in _CREDENTIAL_INTENTS:
             return self._prepare_credential_action(command)
+        if action is ConsumerActionKind.MCP_TEST:
+            return self._prepare_mcp_test(command)
         return self._prepare_uninstall(command)
 
     def _prepare_registry_push(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
@@ -1625,6 +1692,44 @@ class LocalConsumerActions:
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
+        # Eligibility is measured over every profile, before anything is narrowed: it is what the
+        # harness rows offer, and a choice is judged against it rather than against itself.
+        targets = (
+            _installation_targets(prepared.value, host.profiles)
+            if command.action is ConsumerActionKind.INSTALL
+            else ()
+        )
+        if targets and not prepared.value.ready:
+            # #50: configuration is per installation and an installation is a harness, so nothing
+            # is asked until the harness is chosen. Before then the answer is the choice itself; a
+            # field for a harness nobody picked is a question with no installation behind it.
+            eligible_artifacts = tuple(
+                dict.fromkeys(artifact for item in targets for artifact in item.artifacts)
+            )
+            if harness_choice_problems(targets, eligible_artifacts, command.targets):
+                return ConsumerActionUpdate(
+                    self.source(install_targets=targets),
+                    ConsumerUiEvent(
+                        ConsumerUiEventKind.ACTION_PREPARED,
+                        action=command.action,
+                        config_draft=InstallationConfigDraft(),
+                    ),
+                )
+            host = replace(host, profiles=command.targets)
+            prepared = prepare_configured_installation(
+                context.effective,
+                selection,
+                host=host,
+                sources=(),
+                policy=context.policy,
+                selected_remediations=None,
+                credential_providers=context.credential_providers,
+                resolvers=context.credential_providers,
+                previous=previous,
+                preferred_installer=preferred,
+            )
+            if isinstance(prepared, Err):
+                return self._declined(command, _refusal(prepared.diagnostics))
         fields_by_row = {
             f"{field.owner}\t{field.input.id.value}": field
             for field in prepared.value.draft.inputs.fields
@@ -1702,11 +1807,6 @@ class LocalConsumerActions:
                 )
                 if isinstance(prepared, Err):
                     return self._declined(command, _refusal(prepared.diagnostics))
-        targets = (
-            _installation_targets(prepared.value, host.profiles)
-            if command.action is ConsumerActionKind.INSTALL
-            else ()
-        )
         if not prepared.value.ready:
             config_fields: tuple[tuple[InstallationOwner, ConfigInput], ...] = ()
             for field in prepared.value.draft.inputs.unanswered:
@@ -1742,7 +1842,8 @@ class LocalConsumerActions:
                 )
                 return ConsumerActionUpdate(
                     self.source(
-                        installation_inputs=prepared.value.draft.inputs.views(tuple(observations))
+                        installation_inputs=prepared.value.draft.inputs.views(tuple(observations)),
+                        install_targets=targets,
                     ),
                     ConsumerUiEvent(
                         ConsumerUiEventKind.ACTION_PREPARED,
@@ -2084,6 +2185,8 @@ class LocalConsumerActions:
             return self._execute_candidate_promotion(command, pending)
         if isinstance(pending, _PendingCredentialAction):
             return self._execute_credential_action(command, pending)
+        if isinstance(pending, _PendingMcpTest):
+            return self._execute_mcp_test(command, pending)
         assert isinstance(pending, PreparedConfiguredUninstall)
         return self._execute_uninstall(command, pending)
 
@@ -2538,16 +2641,42 @@ class LocalConsumerActions:
         self._machine = completed.value.machine
         receipt = completed.value.action.flow.outcome
         assert receipt is not None
+        host = self._reviewed_host()
+        # Read after the commit and only to offer something: whatever it finds, or fails to find,
+        # the install above is already recorded and reported as it is (§170.4, INV-251).
+        after = _AfterInstall(
+            receipt,
+            completed.value.pending_setup,
+            (
+                self._installed_mcps(host, pending.chosen_targets, receipt)
+                if command.action is ConsumerActionKind.INSTALL
+                else ()
+            ),
+            None,
+        )
+        if after.records:
+            after = replace(
+                after,
+                test=McpTestView(tuple(_installation_of(record) for record in after.records)),
+            )
+        self._after_install = after
         completion = None
         if self._completion_factory is not None:
+
+            def remaining_source(remaining: tuple[DeclaredArtifactSetup, ...]):
+                if self._after_install is not None:
+                    self._after_install = replace(self._after_install, pending_setup=remaining)
+                return self.source(
+                    transaction=receipt,
+                    pending_setup=remaining,
+                    mcp_test=None if self._after_install is None else self._after_install.test,
+                )
+
             completion = self._completion_factory(
                 completed.value,
                 "update" if command.action is ConsumerActionKind.UPDATE else "install",
-                lambda remaining: self.source(
-                    transaction=receipt,
-                    pending_setup=remaining,
-                ),
-                self._reviewed_host(),
+                remaining_source,
+                host,
             )
         return self._recorded(
             command,
@@ -2555,6 +2684,122 @@ class LocalConsumerActions:
             completion=completion,
             transaction=receipt,
             pending_setup=completed.value.pending_setup,
+            mcp_test=after.test,
+        )
+
+    # -- the optional test after an installation (§170.4) ------------------- #
+
+    def _mcp_tester(self, host: InstallationHost) -> McpTestPort:
+        return self._mcp_test if self._mcp_test is not None else LocalMcpTest(host.data_root)
+
+    def _installed_mcps(
+        self, host: InstallationHost, harnesses: tuple[str, ...], receipt
+    ) -> tuple[InstalledRecord, ...]:
+        """The MCP installations this committed transaction made, or none when unreadable.
+
+        A failure here can only withhold the offer. It never reaches the install's outcome,
+        because the install is already recorded and somebody is about to be told it succeeded.
+        """
+
+        members = frozenset(
+            item.coordinate
+            for item in getattr(receipt, "artifacts", ())
+            if item.status in _INSTALLED_MEMBER
+        )
+        try:
+            return self._mcp_tester(host).installations(
+                scope=host.scope,
+                root=host.harness_root,
+                harnesses=frozenset(harnesses),
+                coordinates=members,
+            )
+        except Exception:  # noqa: BLE001 - an offer that cannot be made is simply not made
+            return ()
+
+    def _after_install_source(
+        self, test: McpTestView | None, notice: tuple[str, ...] = ()
+    ) -> CanonicalScreenSource:
+        after = self._after_install
+        if after is None:
+            return self.source(notice=notice)
+        return self.source(
+            transaction=after.transaction,
+            pending_setup=after.pending_setup,
+            mcp_test=test,
+            notice=notice,
+        )
+
+    def _prepare_mcp_test(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        after = self._after_install
+        if after is None or not after.records or after.test is None:
+            return ConsumerActionUpdate(
+                self._after_install_source(
+                    None if after is None else after.test,
+                    _lines("this install made no MCP installation to test"),
+                ),
+                ConsumerUiEvent(ConsumerUiEventKind.ACTION_PREPARED, action=command.action),
+            )
+        try:
+            planned = self._mcp_tester(self._reviewed_host()).plan(after.records)
+        except Exception:  # noqa: BLE001 - the offer is withheld, the install is untouched
+            return ConsumerActionUpdate(
+                self._after_install_source(
+                    after.test, _lines("the installed MCPs could not be read for a test")
+                ),
+                ConsumerUiEvent(ConsumerUiEventKind.ACTION_PREPARED, action=command.action),
+            )
+        plan = tuple(
+            McpTestEntryView(item.installation, item.tool, item.arguments) for item in planned
+        )
+        digest = hashlib.sha256(
+            json.dumps(
+                [[item.installation, item.tool, item.arguments] for item in plan],
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        self._pending, self._pending_action = _PendingMcpTest(after.records, digest), command.action
+        return ConsumerActionUpdate(
+            self._after_install_source(replace(after.test, plan=plan, results=None)),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=digest,
+            ),
+        )
+
+    def _execute_mcp_test(
+        self, command: ConsumerUiCommand, pending: _PendingMcpTest
+    ) -> ConsumerActionUpdate:
+        """Run the reviewed test once. Its outcome is an answer, never a change to the install."""
+
+        self._pending, self._pending_action = None, None
+        after = self._after_install
+        assert after is not None and after.test is not None
+        try:
+            ran = self._mcp_tester(self._reviewed_host()).run(pending.records)
+        except Exception:  # noqa: BLE001 - a test that cannot run is reported, not escalated
+            return ConsumerActionUpdate(
+                self._after_install_source(
+                    after.test, _lines("the MCP test could not be run; the install is unchanged")
+                ),
+                ConsumerUiEvent(ConsumerUiEventKind.ACTION_FAILED, action=command.action),
+            )
+        results = tuple(
+            McpTestResultView(
+                item.installation,
+                tuple(
+                    McpTestStageView(stage.stage.value, stage.outcome.value, stage.reason)
+                    for stage in item.stages
+                ),
+            )
+            for item in ran
+        )
+        recorded_at, _ = self._moment()
+        return ConsumerActionUpdate(
+            self._after_install_source(replace(after.test, results=results)),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_RECORDED, action=command.action, text=recorded_at
+            ),
         )
 
     def _execute_credential_action(

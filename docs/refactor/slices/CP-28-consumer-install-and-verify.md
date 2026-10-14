@@ -1,0 +1,157 @@
+# CP-28 — the consumer install-and-verify journey
+
+Status: **in flight**. Task 1 is on `fix/mcp-smoke-harness-argument` as PR #52, open and unmerged.
+Task 2 is on `fix/configuration-after-harness-choice` (PR #55), stacked on it; task 4 on
+`fix/one-row-per-installation`, stacked on that; task 5 on `fix/local-registry-is-a-registry`,
+stacked on that. Task 3 is on `feat/cp-28-two-stage-smoke`, stacked on the D-378 proposal branch
+`docs/cp-28-smoke-scope-proposal`. Task 6 is done: the full `pr-check` on #58, which carries the whole stack, passed. CP-28 is complete.
+
+Date opened: 2026-10-14. Authority: the product owner, asking to ship the package inside their
+company and to narrow the work to the person who only wants to install artifacts into a harness --
+now opencode -- and know they work. Tracked on GitHub as the epic #51, labelled `critical-path`,
+whose ordered list is the same as this slice's steps.
+
+## Goal and scope
+
+One person: a consumer who installs an artifact into a harness and wants to know whether it works.
+Every step below is something that person hits. Everything that serves an author, a Registry
+maintainer or a rollout is off this slice however ready it looks.
+
+Out of scope, deliberately: authoring, Registry maintenance beyond what a consumer reads, the
+Enterprise rollout documents (#43, #44, #45), the CLI reference (#47), the secret-name refactor
+(#46), branch protection (#35) and module boundaries (#32).
+
+Also off this slice, with a number of their own in the backlog rather than here: the D-375/D-376
+cleanup (#54 then #53). It makes the vocabulary say what may be deleted, which matters, but no
+consumer install depends on it.
+
+## Steps
+
+**1. Verification works at all (PR #52).** Two defects found by running `mcp test` against a live
+Airflow MCP, both fixed with mutation-proven tests:
+
+- **B-173** -- the route started a generated launcher with no arguments, while a launcher carrying
+  configuration opens by reading its harness from `$1` and refuses without it. The refusal went to a
+  discarded stderr, so the report said only that the process closed mid-exchange. Every installation
+  with configuration was affected, which is the whole class.
+- **B-174** -- the tool-schema validator refused `description` and `default`, which a real server
+  puts on nearly every property, so the declared call was rejected before invocation.
+
+Both VERIFIED end to end on the owner's machine against a live Airflow MCP under tabnine. This is
+step one because until it merges, verification is broken for every artifact with inputs, and an
+automatic post-install smoke would have nothing to stand on.
+
+**2. Credentials after the harness choice (#50).** They were collected before it, which asked a
+new user to decide something they had no basis for yet, and asked it once per *eligible* harness
+-- three fields for one value before anyone said which harnesses they wanted. The first screen a
+person could not get past. Fixed per D-377: screen 05 offers the harnesses first, the adapter
+builds the 07 form only for the chosen ones, and 07 opens from 05's Continue. Scope still follows
+the form, which is B-175 and off this slice.
+
+**3. Two stages, and a test offered after installation (#31, D-378).** Owner decision, accepted
+2026-10-14: keep only `installation-configuration` and `mcp-startup-and-protocol`, with no
+connectivity heuristic; do not run the test automatically, offer it right after installation; and
+never let it affect the install transaction. Done:
+
+- §170 rewritten to two stages and §170.4 "The optional test after installation"; INV-249 to INV-251
+  restated. The `smoke_test` block is exactly `tool`, `read_only`, `arguments`, `timeout_seconds`;
+  `expect` and `reaches_service` are refused as unknown keys.
+- The harness route is deleted outright: `mcp test --prompt`, `--report`, `mcp report`,
+  `application/harness_report.py` and its tests, and `MCP_SMOKE_REPORT_INVALID`.
+- `io/installed_smoke.py` is the one effect boundary both surfaces call: `smoke_installation` for
+  `mcp test`, `LocalMcpTest` for the TUI.
+- The TUI offers **Test installed MCPs** on Success only when the committed transaction made an MCP
+  installation. It is a row action into a new review screen 11a (D-379). 11a states each
+  installation's tool and arguments, and that the call reaches the configured service, before
+  Enter runs anything. The answer is drawn on 11a, and Enter returns to the same Success.
+
+`doctor --smoke` and a Doctor-screen action are B-177, off this slice.
+
+**4. The installed view reports every entity, and only those (#48).** Installing for two harnesses
+drew three entities in User Variables and Credentials: one per harness installation and a third,
+empty one named by the bare artifact coordinate. `user_input_artifacts` keyed configuration by the
+coordinate while both lookups that fill a row (`configurations_for`, the credential dependants)
+key by installation (§169.3), so the coordinate row could never show anything -- and an
+installation with configuration but no credential had no row of its own at all. Fixed by keying
+configuration by installation too.
+
+**5. Registry connectedness (#49).** A Registry connected from a local checkout (`registry-local`,
+D-350) was listed under maintainer Sources as an authoring Source and missing from the maintainer
+Registry screen, which showed only the same repository's remote connection. `read_maintainer_views`
+and the Candidate-history binding reader recognised only `REGISTRY_GIT` as a Registry; they now ask
+`is_registry`, which covers both transports. The Sources list also ran its entries together; one
+empty line now separates them, as issue #12 did for inputs. Other `REGISTRY_GIT`-only sites are an
+audit, B-176, off this slice.
+
+**6. Verification last.** Per D-317 and the owner's standing rule, implementation tasks carry
+proportionate focused checks and the full quality, integration and release-facing suite runs once,
+on `pr-check`, after they are all complete -- not after each one, and not locally.
+
+## Open question for the owner
+
+Recorded on #51: **#41 before #50, or not at all on this path.** It depends on whether the company
+Registry is filled by `registry vendor` -- in which case #41 blocks everything -- or by the native
+adopt/promote route, in which case it does not. D-375 settles the product rule in favour of the
+native route, so #41 is currently off the path; the question is only whether the company's existing
+Registry content was already produced the old way.
+
+## Evidence
+
+Task 1: see `MIGRATION_STATUS.md` under 2026-10-14 for the mutation evidence and the live run.
+Task 2: `tests/install_time_config_form_test.py` -- the adapter offers the harnesses with an
+empty draft until a valid choice and then a field per chosen harness only; the reducer keeps an
+unready answer on 05; 05 without a plan draws only harness rows and continues only once a choice
+has its fields; the full drive from Marketplace to Success answers two fields for two chosen
+harnesses where it used to answer three. Targeted mutations: dropping the host narrowing turns the
+adapter test and the full drive red; dropping the "no plan reviewed yet" condition on opening the
+form turns the reducer test and the full drive red. The 1,555 consumer, TUI, install,
+configuration, credential and setup tests pass; mypy and ruff are clean. `make mutants` not run:
+the changed modules are large enough that a scoped run is hours, and the targeted mutations cover
+the new claims.
+
+Task 4: `tests/user_inputs_area_test.py` -- two harness installations of one artifact are exactly
+two rows and no `Configuration: none (0 harness file(s))` row. Red before the fix with the bare
+coordinate as the only row; reverting the one-line change reproduces that exactly. 787 consumer,
+TUI, configuration and credential tests green. The real reader (`read_configuration_files`)
+already sets the installation key, so the fix holds outside the test double.
+
+Task 5: `tests/maintainer_composition_test.py` -- with a remote Registry, a local Registry
+checkout and an authoring Source configured, Sources is exactly the authoring Source and Registry
+lists both Registries. Red before the fix (`['authors', 'company-local']`). Narrowing only the
+Registry list back to Git turns exactly its assertion red. `tests/maintainer_views_test.py` -- two
+Sources are separated by one empty line and nowhere else; red before the fix. 1,450 maintainer,
+Source, Registry, TUI and consumer tests green; mypy and ruff clean.
+
+Task 3: `tests/post_install_mcp_test_test.py` drives a real MCP install through the TUI, then:
+
+- the offer names `read_identity {}` and the service, and nothing has run;
+- a confirmed test against a real stdio fixture shows both stages, and the installation records
+  read at the moment the test started equal the records afterwards;
+- a server that is not an MCP fails the test, and the records are still equal;
+- a test port that raises while finding installations leaves Success `Succeeded` with no offer;
+- a Skill install offers nothing.
+
+The reducer and drawing have their own cases. `mcp_smoke_cli_test.py` holds the two stages, the
+protocol stage being `NOT RUN` without starting the server when the first is blocked, an MCP error
+failing the protocol, and the harness route being gone from the parser. `authoring_smoke_test.py`
+holds the four-field block.
+
+Targeted mutations, each turning only its own tests red:
+
+- offering the row unconditionally turns the no-MCP e2e and the three-row screen test red;
+- removing the answered-in-place branch turns the confirmed-test e2e, the back-to-Success e2e and
+  the reducer test red;
+- starting the protocol stage while the installation is blocked turns the blocked-installation test
+  red;
+- accepting `expect` turns the four-field test red;
+- narrowing the offer guard to `ValueError` makes the unreadable-port e2e error.
+
+1,196 consumer, TUI, install, smoke, authoring and frame-matrix tests pass. mypy, ruff and
+`make docs-check` are clean. `make mutants` was not run, for the same size reason as task 2.
+
+Task 6: **`pr-check` passed on PR #58 at `fb8a1d6`, which contains every CP-28 step.** Run 38571928092, 2026-10-14.
+
+- Python 3.10, 3.11 and 3.14 all passed.
+- The canonical full run was format-check, lint, typecheck, unit, validate, coverage, packaging-check, docs-check and secret-shape-check. Integration runs inside unit (`scripts/quality.py:247`).
+- 4,828 tests ran.
+- The private-image job was skipped, which is normal for a pull request.

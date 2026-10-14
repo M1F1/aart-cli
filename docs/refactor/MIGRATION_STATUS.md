@@ -4,6 +4,81 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-14, CP-28 step 6 — full verification: VERIFIED on CI.** **`pr-check` passed on PR #58 at `fb8a1d6`, which contains every CP-28 step.** Run 38571928092, 2026-10-14.
+
+- Python 3.10, 3.11 and 3.14 all passed.
+- The canonical full run was format-check, lint, typecheck, unit, validate, coverage, packaging-check, docs-check and secret-shape-check. Integration runs inside unit (`scripts/quality.py:247`).
+- 4,828 tests ran.
+- The private-image job was skipped, which is normal for a pull request. CP-28 is complete. The draft stack still awaits review and merge.
+
+**2026-10-14, CP-28 step 3: two smoke stages and an optional test after installation (#31,
+D-378, D-379).**
+
+- §170 now verifies two stages, `installation-configuration` and `mcp-startup-and-protocol`.
+- The `smoke_test` block has exactly four fields.
+- The harness route is gone: `--prompt`, `--report`, `mcp report`, `harness_report.py` and its
+  tests.
+- `io/installed_smoke.py` is the one boundary for both the `mcp test` command and the new screen
+  11a. An install that made MCP installations offers 11a from Success. It runs only when Enter
+  confirms it, and its outcome never changes the committed transaction.
+
+Evidence is in the CP-28 slice: end-to-end TUI tests, five targeted mutations each red, and 1,196
+focused tests green. Not yet observed live.
+
+**2026-10-14, CP-28 step 5 — a local Registry checkout is a Registry on the maintainer screens
+(#49).** The maintainer views recognised only `REGISTRY_GIT`, so a `registry-local` connection was
+drawn as an authoring Source and left off the Registry screen. They ask `is_registry` now, and the
+Sources list separates its entries. B-176 records the other Git-only sites for audit.
+
+**2026-10-14, CP-28 step 4 — one row per installation in User Variables and Credentials (#48).**
+Two harness installations of one artifact drew a third, empty row named by the bare coordinate,
+because configuration was keyed by coordinate and every lookup by installation. Keyed by
+installation now; evidence in the CP-28 slice.
+
+**2026-10-14, CP-28 step 2 — the harness is chosen before anything is asked (#50, D-377).** An
+install whose artifact declares configuration used to open the 07 form straight from Marketplace
+with one field per *eligible* harness, and offered the harness choice only afterwards. Screen 05
+now offers the harnesses first; the adapter answers an unchosen request with the eligible
+harnesses and an empty draft, and a valid choice with a draft narrowed to exactly those profiles,
+so the form, the credential rows and the plan name only chosen installations. This is §161.5's own
+order; no specification change. Evidence in the CP-28 slice: new and rewritten tests in
+`tests/install_time_config_form_test.py`, two targeted mutations each red, 1,555 related tests
+green, mypy and ruff clean. Not yet observed in a live terminal on the owner's machine. Stacked on
+PR #52's branch. B-175 (scope still follows the form) is backlog.
+
+**2026-10-14, D-376 — the vendoring vocabulary is split in three, and the rename precedes the
+deletion.** `vendor` named two unrelated things: the command family D-375 removes, and the source
+mode §80 defines. That is why no occurrence of the identifier could be judged safe to delete. The
+accepted vocabulary gives each question one word -- **adoption** for where a declaration came from
+(after D-375, always an external manifest, with no variants left), **content mode** for what the
+Registry holds for an approved version, **upstream ref** for what `check-upstream` reads -- and
+renames `ArtifactSourceMode = Vendored | Referenced` to `RegistryContentMode = SelfContained |
+PinnedReference`. Those two values are the specification's own language (INV-019 "self-contained",
+§80 "pinned source reference"), so the rename changes wording and not one invariant's meaning.
+`Adopted` was considered for the mode and rejected: `registry adopt` is a command, so adoption
+names the route, and a mode of that name would reproduce today's collision in a new word. Scoped as
+#54, which needs an accepted §80 change before any code, and **sequenced before #53**: a grep for
+`vendor` currently reaches 21 source files, 39 test files and 33 documents, mostly the mode, so the
+deletion cannot be driven from it without risking INV-019, INV-020, INV-204 and INV-207. After the
+rename that grep is exactly the removal list. NOT STARTED; no code has moved.
+
+**2026-10-14, CP-28 opened — the consumer install-and-verify journey.**
+CP-27 is complete and released as 0.5.0. Active work is CP-28, slice document
+`docs/refactor/slices/CP-28-consumer-install-and-verify.md`, tracked as the epic #51 and labelled
+`critical-path` on GitHub, with members #41, #50, #31, #48 and #49: one consumer installing artifacts into opencode
+and learning whether they work. Step zero is the pushed, unmerged branch
+`fix/mcp-smoke-harness-argument` carrying **B-173** (the direct smoke route started a generated
+launcher with no arguments, so every installation carrying configuration refused before its first
+byte of protocol, and the refusal went to a discarded stderr) and **B-174** (the tool-schema
+validator refused a schema's annotations, so a real server's declared call was rejected before
+invocation). Both VERIFIED end to end on the owner's machine against a live Airflow MCP under
+tabnine: `installation-configuration` and `mcp-startup-and-protocol` both PASS where the first
+previously reported a process that closed mid-exchange. Both fixes carry mutation evidence -- each
+change reverted turns exactly its own test red. Verification scope is settled at those two stages
+plus a built-in connectivity heuristic; the `expect`-based stages are replaced by it and the three
+harness-run stages are dropped, because invoking a harness headless and supplying its variables
+costs more than the answer is worth. `NEXT.md` carries the two open owner questions.
+
 **2026-09-21, CP-27 complete — all five tasks VERIFIED.** `pr-check` run `35568282527` on
 `b56ddb5` is green: Python 3.10, 3.11 and 3.14 each passed the ten gates, the aggregate `pr-check`
 passed, and the conditional private-image job was skipped by design. The release-facing third of

@@ -87,6 +87,7 @@ __all__ = [
     "TARGET_ROW_PREFIX",
     "HarnessTargetView",
     "target_choice_problems",
+    "harness_choice_problems",
     "target_from_row",
     "target_row",
     "targets_confirmed",
@@ -107,6 +108,10 @@ __all__ = [
     "SETTING_PURPOSE",
     "SETTING_ROWS",
     "SUCCESS_CHOICES",
+    "McpTestEntryView",
+    "McpTestResultView",
+    "McpTestStageView",
+    "McpTestView",
     "SUCCESS_PURPOSE",
     "CredentialInputView",
     "CredentialRecordView",
@@ -182,6 +187,10 @@ class ConsumerScreen(str, Enum):
     READY = "09-ready"
     INSTALLING = "10-installing"
     SUCCESS = "11-success"
+    # 11a is the optional test of the MCP installations a committed install just made (§170.4,
+    # D-378). It follows the install rather than belonging to it: nothing on it can change what 11
+    # reports, and leaving it unvisited is a complete installation.
+    MCP_TEST = "11a-test-mcp-installations"
     INSTALLED = "12-installed"
     INSTALLED_ARTIFACT_DETAILS = "13-installed-artifact-details"
     INSTALLED_COLLECTION_DETAILS = "14-installed-collection-details"
@@ -318,11 +327,26 @@ def target_choice_problems(view: ConsumerPlanView, chosen: tuple[str, ...]) -> t
     every artifact must be hosted by some chosen harness.
     """
 
-    if not view.targets:
+    return harness_choice_problems(view.targets, view.selection.resolved, chosen)
+
+
+def harness_choice_problems(
+    targets: tuple[HarnessTargetView, ...],
+    resolved: tuple[str, ...],
+    chosen: tuple[str, ...],
+) -> tuple[str, ...]:
+    """`target_choice_problems` over eligibility alone, for a selection that has no plan yet.
+
+    Configuration belongs to one installation, and an installation is a harness, so the harness is
+    chosen before anything is asked (#50). That choice is made while the inputs are still
+    unanswered and no plan exists, so it is judged against what placement measured.
+    """
+
+    if not targets:
         return ()
     if not chosen:
         return ("Choose at least one harness to install into.",)
-    eligible = {item.harness: item for item in view.targets}
+    eligible = {item.harness: item for item in targets}
     problems = [
         f"{harness} cannot host anything in this selection; untick it."
         for harness in chosen
@@ -334,10 +358,10 @@ def target_choice_problems(view: ConsumerPlanView, chosen: tuple[str, ...]) -> t
         if harness in eligible
         for artifact in eligible[harness].artifacts
     }
-    for artifact in view.selection.resolved:
+    for artifact in resolved:
         if artifact in hosted:
             continue
-        options = ", ".join(item.harness for item in view.targets if artifact in item.artifacts)
+        options = ", ".join(item.harness for item in targets if artifact in item.artifacts)
         problems.append(
             f"None of the chosen harnesses can host {artifact}; it can go into {options}."
             if options
@@ -2090,7 +2114,9 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
         ConsumerScreen.MARKETPLACE,
         ConsumerScreen.INSTALLED,
         ConsumerScreen.RECEIPT_DETAILS,
+        ConsumerScreen.MCP_TEST,
     ),
+    ConsumerScreen.MCP_TEST: (),
     ConsumerScreen.INSTALLED: (
         ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
         ConsumerScreen.INSTALLED_COLLECTION_DETAILS,
@@ -2145,6 +2171,8 @@ _KEEPS_FOCUS: frozenset[tuple[ConsumerScreen, ConsumerScreen]] = frozenset(
         # CP-23 task 06: Success is focused on the receipt its operation recorded, so opening the
         # receipt from it opens that one rather than whichever row the cursor was on.
         (ConsumerScreen.SUCCESS, ConsumerScreen.RECEIPT_DETAILS),
+        # 11a tests the installations of the transaction Success is about, so it keeps that subject.
+        (ConsumerScreen.SUCCESS, ConsumerScreen.MCP_TEST),
         # CP-23 task 12: 24's rows are verbs, so the review they open is still about the credential
         # rather than about the word "replace" (D-262).
         (ConsumerScreen.CREDENTIAL_ACTION, ConsumerScreen.CREDENTIAL_REVIEW),
@@ -2427,9 +2455,13 @@ class ConsumerSettings:
 #: be carried forward as though it were the subject of the screen it opens. Undo is not one: this
 #: surface has no reviewed installation undo, so offering it would be a name without an action
 #: (D-256).
+#:
+#: Testing MCPs is offered only when the transaction installed at least one MCP (§170.4), so the
+#: screen drops that row otherwise; the order of the rest never changes.
 SUCCESS_CHOICES: tuple[tuple[ConsumerScreen, str], ...] = (
     (ConsumerScreen.INSTALLED, "View installed"),
     (ConsumerScreen.RECEIPT_DETAILS, "View receipt"),
+    (ConsumerScreen.MCP_TEST, "Test installed MCPs"),
     (ConsumerScreen.MARKETPLACE, "Done"),
 )
 
@@ -2437,10 +2469,55 @@ SUCCESS_PURPOSE: dict[ConsumerScreen, str] = {
     ConsumerScreen.INSTALLED: "Opens Installed: everything AART manages here and whether it is healthy.",
     ConsumerScreen.RECEIPT_DETAILS: "Opens the receipt this install recorded: what ran, its effects "
     "and why Undo is or is not possible.",
+    ConsumerScreen.MCP_TEST: "Reviews a test of the MCPs this install made: their startup and one "
+    "declared call each. Nothing runs until you confirm, and no result changes this install.",
     ConsumerScreen.MARKETPLACE: "Returns to Marketplace and leaves this finished install behind; "
     "nothing runs again.",
 }
 """Where each Success choice goes, for the block `[v]` opens."""
+
+
+@dataclass(frozen=True, slots=True)
+class McpTestEntryView:
+    """What testing one installation will call, as the offer states it (§170.4).
+
+    `tool` is empty where the installed content declares no smoke operation. `arguments` are as
+    declared, so a reference to a configuration input is drawn as that reference, never its value.
+    """
+
+    installation: str
+    tool: str
+    arguments: str
+
+
+@dataclass(frozen=True, slots=True)
+class McpTestStageView:
+    stage: str
+    outcome: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class McpTestResultView:
+    installation: str
+    stages: tuple[McpTestStageView, ...]
+
+    @property
+    def passed(self) -> bool:
+        return bool(self.stages) and all(item.outcome == "PASS" for item in self.stages)
+
+
+@dataclass(frozen=True, slots=True)
+class McpTestView:
+    """The optional test after an installation: which installations, the offer, and its answer.
+
+    `installations` are exactly the MCP installations the committed transaction made. `plan` is
+    filled once the test is prepared and `results` once it ran; neither is part of the install.
+    """
+
+    installations: tuple[str, ...]
+    plan: tuple[McpTestEntryView, ...] = ()
+    results: tuple[McpTestResultView, ...] | None = None
 
 
 #: The controls of accepted screen 28, in the order the Product Specification lists them. They are

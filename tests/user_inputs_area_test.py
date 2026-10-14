@@ -145,6 +145,37 @@ class UserInputsAreaProjectionTest(unittest.TestCase):
         self.assertIn("Configured securely", drawn)
         self.assertNotIn("credential value", drawn.lower())
 
+    def test_two_harnesses_are_two_rows_and_no_empty_artifact_row(self) -> None:
+        """#48: each installation is one row; the artifact both share is not a third, empty one."""
+
+        coordinate = str(inspection().record.coordinate)
+        configurations = tuple(
+            ConfigurationFileView(
+                coordinate,
+                harness,
+                f"/opt/agents/mcp/github/config/{harness}.conf",
+                "matched",
+                (("github-org", "acme"),),
+                "",
+                installation=f"{coordinate}#{harness}",
+            )
+            for harness in ("opencode", "tabnine")
+        )
+        machine = assemble_consumer_machine(
+            (inspection(),),
+            configurations=configurations,
+            today=dt.date(2026, 9, 14),
+        )
+        source = CanonicalScreenSource(screens_from(machine))
+        state = _reload(
+            source,
+            ConsumerUiState(ConsumerSession(ConsumerScreen.CREDENTIALS)),
+            entering=True,
+        )
+
+        self.assertEqual(state.rows, (f"{coordinate}#opencode", f"{coordinate}#tabnine"))
+        self.assertNotIn("Configuration: none (0 harness file(s))", "\n".join(frame(source, state)))
+
     def test_an_artifact_with_only_a_provider_reference_is_still_grouped(self) -> None:
         coordinate = str(inspection().record.coordinate)
         machine = assemble_consumer_machine(

@@ -1,5 +1,82 @@
 # AART Refactor — Next Work
 
+## Where the work is (2026-10-14)
+
+**CP-27 is complete and released as 0.5.0. The active work is CP-28, the consumer
+install-and-verify path: `docs/refactor/slices/CP-28-consumer-install-and-verify.md`, tracked on
+GitHub as the epic #51 and labelled `critical-path`.** Its six steps are in `plan.json`. Steps 1, 2, 4 and 5 are done as draft PRs #52, #55, #56 and
+#57. Step 3 (#31) is done on `feat/cp-28-two-stage-smoke`, stacked on the D-378 branch
+`docs/cp-28-smoke-scope-proposal`. Step 6 is done: the full `pr-check` passed on #58, which carries the
+whole stack (run 38571928092). **CP-28 is complete.** What remains is the owner reviewing and merging
+the draft stack #52 → #55 → #56 → #57 → D-378 → #58 in order, and seeing it once in a live terminal.
+
+The goal is a release somebody in the owner's company installs. That narrows the path to one
+person -- a consumer installing artifacts into opencode who wants to know they work -- and makes
+everything else backlog, however ready it looks. The ordered list lives on #51; its members are
+#41, #50, #31, #48 and #49, each tagged `critical-path`. Authoring, Registry maintenance beyond
+#41, the Enterprise rollout documents (#43, #44, #45), the CLI reference (#47), the secret-name
+refactor (#46), branch protection (#35) and module boundaries (#32) are all off it.
+
+**Step zero is the branch `fix/mcp-smoke-harness-argument`, which is pushed and unmerged.** Two
+defects on the direct MCP smoke route, both found by running `mcp test` against a live Airflow MCP
+and both fixed with mutation-proven tests:
+
+- **B-173** -- the route started a launcher with no arguments, while a generated launcher carrying
+  configuration opens by reading the harness name from its one argument and refuses without it. The
+  refusal went to a discarded stderr, so the report said only that the process closed mid-exchange.
+  Every installation with configuration was affected, which is the whole class.
+- **B-174** -- the tool-schema validator refused `description` and `default`, which a real server
+  puts on nearly every property, so the declared call was rejected before invocation.
+
+Verified end to end on the owner's machine: both stages now pass against a real Airflow MCP under
+tabnine. Until this merges, verification is broken for every artifact with inputs, so an automatic
+post-install smoke has nothing to stand on.
+
+**The verification scope is two stages and nothing else (D-378, accepted 2026-10-14).** The two
+stages are `installation-configuration` and `mcp-startup-and-protocol`. There is no connectivity
+heuristic, no `expect` and no `reaches_service`. The harness route (`--prompt`, `--report`,
+`mcp report`) is deleted.
+
+The test never runs automatically. After an install that made MCP installations, Success offers
+**Test installed MCPs**, which leads to screen 11a (§170.4, D-379). Nothing that test does changes
+the committed transaction. `doctor --smoke` is B-177. Authors are advised to break a server's
+configuration once and confirm stage 2 goes red; that advice is in the authoring guide, and it is
+not a stage.
+
+**D-375, accepted 2026-10-14: canonical Registry content enters only through a manifest in an
+external repository.** A Registry is never where artifacts are defined. That removes the `vendor`
+command family -- `vendor`, `vendor-batch`, `discover`, `revendor` -- which exists to ingest an
+upstream declaring nothing; scoped as #53. It does **not** touch `Vendored` *mode*: §80/§81,
+INV-019, INV-020, INV-025, INV-204 and INV-207 all stay, and reading D-375 as "the Registry stores
+nothing" would mean `Referenced` everywhere, which INV-025 makes unworkable because the Marketplace
+declines a referenced row whose snapshot holds no content. The accepted shape is `adopt` in
+`Vendored` mode: the declaration lives upstream, the approved bytes live here. #41/B-172 is closed
+by #53 rather than fixed.
+
+**D-376, accepted 2026-10-14: one word per question, and the rename goes first.** The owner could
+no longer tell which `vendor` was which, which is a naming defect rather than a memory problem --
+the word names two unrelated things. So: **adoption** is where a declaration came from (always an
+external manifest, no variants left), **content mode** is what the Registry holds for an approved
+version, and **upstream ref** is what `check-upstream` reads. `ArtifactSourceMode = Vendored |
+Referenced` becomes `RegistryContentMode = SelfContained | PinnedReference`, which are the
+specification's own words -- INV-019 already says "self-contained" and §80 already says "pinned
+source reference" -- so no invariant changes meaning, only wording. `Adopted` was rejected for the
+mode: `registry adopt` is a command, so adoption names the route, and a mode of that name would
+collide exactly as `Vendored` does now. Scoped as **#54**, and it needs an accepted §80 change
+before any code.
+
+**#54 runs before #53, and both are off CP-28.** Today `grep -ri vendor` reaches 21 source files, 39 test files and 33
+documents, mostly the mode, so the identifier is useless as a deletion list and #53 risks taking
+INV-019/020/204/207 out with the commands. After the rename every remaining `vendor` *is* the
+command family, and the grep is exactly the removal list -- which turns #53 from a judgement call
+into a mechanical one. That grep returning nothing but the command family is #54's acceptance test
+and #53's starting point.
+
+One open question for the owner, recorded on #51: **#41 or #50 first**, which depends on whether the
+company Registry is filled by `registry vendor` (then #41 blocks everything) or by the native
+`adopt`/promote route (then it does not).
+
+
 ## Where CP-27 is (2026-09-21)
 
 **CP-27 tasks 1-4 are done on `docs/cp-27-default-registry-plan` (PR #40); task 5 is the full
@@ -110,6 +187,8 @@ ids. CP-26 has no remaining execution task.
 
 ### Historical owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
 
+*Superseded by D-378 (2026-10-14): two stages only, no harness route.*
+
 This supersedes earlier requirements for mandatory Tabnine harness execution, blanket prohibition
 of model assessment and unconditional suppression of response display. Implement revised Product
 Specification §170 / INV-250–252. Unsupported allowed-tools capability means direct MCP testing with
@@ -125,6 +204,8 @@ half with an operator-run prompt and carried report. The final implementation an
 recorded under paragraph *(c)* below; CP-26.20a is done.
 
 ### Historical acceptance record — local MCP smoke verification (2026-09-19)
+
+*Superseded by D-378 (2026-10-14): two stages only, no harness route.*
 
 D-348 and Product Specification §170 originally added **CP-26.20a** after local Registry
 consumption. Deliver one CLI command for all or selected **already installed** MCPs in the local
@@ -360,7 +441,8 @@ driven.
 the backlog offered was taken -- §170.3 refuses one and §170.5 refuses the other, and the
 specification supplies the third itself, so B-164 is closed.
 
-**D-368** then removed the driver entirely. `mcp test --prompt` composes the prompt, the operator
+**D-368** then removed the driver entirely (itself superseded by D-378, which deletes the
+harness route). `mcp test --prompt` composes the prompt, the operator
 runs it in their own session, `mcp report <path>` lets that session check its own JSON against the
 schema, and `mcp test --harness <harness> --report <path>` grades the carried results with the same
 deterministic evaluator and labels coverage `direct-and-attested`. AART launches no harness, submits

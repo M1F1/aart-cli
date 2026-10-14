@@ -165,6 +165,9 @@ def render_maintainer_sources(
         return ("No authoring Sources are configured.",)
     lines: list[str] = []
     for source in sources:
+        # One empty line between Sources and nowhere else, as between inputs (issue #12, #49).
+        if lines:
+            lines.append("")
         lines.extend(
             (
                 f"{'>' if source.alias == cursor else ' '} {source.alias} — "

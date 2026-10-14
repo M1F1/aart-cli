@@ -9573,3 +9573,164 @@ fails the build with `baked default registry URL is invalid`, on every interpret
 baking a URL with a leading space into the wheel wherever `urlsplit` happened to forgive it. A typo
 in a repository variable is caught by the maintainer who set it, not by the first person whose
 first run degrades.
+
+## D-375 — Canonical Registry content enters only through a manifest in an external repository
+
+**Owner decision, 2026-10-14.** The only way an artifact reaches a Registry's canonical form is a
+manifest -- `aart-cli.yaml` or `aart-cli.json` -- committed in the repository that authors it. A
+Registry is never a place where artifacts are defined; it is where externally authored artifacts
+are reviewed, approved and snapshotted.
+
+**This is a rule about authorship, not about storage, and the distinction is load-bearing** because
+the word *vendored* names two different things in this product:
+
+- `ArtifactSourceMode = Vendored | Referenced` (§80) is a property of a **promotion**. `Vendored`
+  stores a durable canonical payload; `Referenced` stores only a pinned source reference.
+- The `registry vendor` command family copies a subtree out of a repository that carries **no AART
+  markers at all**, and makes the Registry the owner and version-declarer of the copy.
+
+D-375 constrains the second and leaves the first untouched. `Vendored` mode stays the default and
+stays mandatory: INV-204 (enterprise promotion vendors by default), INV-019 (approved vendored
+artifacts are self-contained), INV-020 and INV-207 (they survive upstream loss), and §81 (an
+approved snapshot is part of the trust and availability contract, not a cache). Reading D-375 as
+"the Registry stores nothing" would mean `Referenced` everywhere, and INV-025 makes that
+unworkable: the Marketplace declines a referenced row by name because its snapshot holds no
+content, so nothing would be installable.
+
+So the accepted shape is `adopt` (or `scan` + `promote`) in `Vendored` mode: the declaration lives
+upstream, the approved bytes live here.
+
+**Consequence.** The `vendor` family -- `registry vendor`, `vendor-batch`, `discover` and
+`revendor` -- exists precisely to ingest an upstream that declares nothing, which D-375 forbids as
+a route into canonical content. It is removed rather than deprecated, per this project's pre-1.0
+stance. Removal is scoped as its own change because a grep for `vendor` reaches 21 source files, 39
+test files and 33 documents, most of which are `Vendored` *mode* and must survive. `#41`/B-172 --
+vendoring writing no `aart-cli.authoring` -- is closed by the removal rather than fixed, and leaves
+the critical path for the same reason.
+
+**Preferred native route.** `adopt` records the upstream branch or tag, so `registry check-upstream`
+can later distinguish unchanged, changed, missing, unreachable and invalid. `scan` + `promote`
+records no upstream reference, so nothing can be re-checked afterwards. Where both would work,
+`adopt` is the one that keeps the subscription D-375 implies.
+
+## D-376 — One word per question: adoption, content mode, upstream ref
+
+**Owner decision, 2026-10-14. Needs an accepted Product Specification change (§80 renames a type).**
+
+The owner could no longer tell which `vendor` was which, and that is a naming defect rather than a
+memory problem: the word named two unrelated things at once. D-375 removes one of them, and this
+decision renames the other so the collision cannot come back.
+
+Three questions, three words, no overlap:
+
+| Question | Term | Values |
+|---|---|---|
+| Where did the declaration come from? | **adoption** | always a manifest in an external repository (D-375); after the `vendor` family goes there is no second route, so the concept has no variants |
+| What does the Registry hold for an approved version? | **content mode** | `SelfContained` or `PinnedReference` |
+| What moved upstream? | **upstream ref**, read by `check-upstream` | unchanged, changed, missing, unreachable, invalid |
+
+So `ArtifactSourceMode = Vendored | Referenced` becomes
+**`RegistryContentMode = SelfContained | PinnedReference`**, and `promote --mode` takes
+`self-contained` or `pinned-reference`.
+
+**The words are the specification's own, not new coinage.** INV-019 already reads "approved
+vendored artifacts are **self-contained**", and §80 already describes `Referenced` as storing "a
+**pinned source reference** rather than a durable canonical payload". The rename promotes the
+language the invariants use into the identifiers, which is why no invariant has to change meaning
+for it -- only wording.
+
+**`Adopted` was considered for the mode and rejected.** It would repeat the original mistake in a
+new word: `registry adopt` is a command and `check-upstream` already speaks of a
+"repository-adopted Registry package", so adoption names the *route*. A mode called `Adopted` would
+collide with it exactly as `Vendored` collides with `registry vendor` today.
+
+**This lands before #53, not after.** Today a grep for `vendor` reaches 21 source files, 39 test
+files and 33 documents, most of them the mode, so the identifier is useless as a deletion list and
+#53 carries a real risk of taking INV-019, INV-020, INV-204 and INV-207 out with the commands.
+After the rename every remaining occurrence of `vendor` *is* the command family, and the grep
+becomes exactly the removal list. The ordering is the whole point: it converts a judgement call
+into a mechanical one.
+
+## D-377 — The harness is chosen before any installation input is asked
+
+**Implementation choice, 2026-10-14, CP-28 step 2 (#50). No Product Specification change: this
+brings the TUI into line with §161.5.**
+
+§161.5 orders the fast flow Review Selection, then Required Inputs, and §161.5/07 asks for "four
+separate input sets when four harnesses are *selected*". The TUI did the reverse. An install whose
+artifact declared configuration was prepared over every eligible profile, the unready answer
+jumped straight from 05 to the 07 form, and the form held a field for every eligible harness --
+three for a GitHub MCP eligible for claude, opencode and tabnine -- before anyone had said which
+of them they wanted. The harness rows came only afterwards.
+
+The order now matches the specification:
+
+- **The adapter** measures eligibility over every profile, as before, because that is what the
+  harness rows offer. While inputs are unanswered and the request names no valid choice
+  (`harness_choice_problems`), it answers with the eligible harnesses (`install_targets` on the
+  screen snapshot) and an *empty* draft, so no question exists without an installation behind it.
+  Once the choice is valid it narrows the host to exactly those profiles before it builds the
+  draft, so the form, the credential rows and the later plan all name only chosen installations.
+- **The reducer** keeps an unready answer on 05 instead of opening 07, and drops any earlier plan's
+  identities with it. Continue from 05 opens 07 as the form only while no plan has been reviewed
+  and the draft has fields; after review, 07 is the plan's summary as before. Submitting the form
+  returns to 05 by rewinding over it, so the stack never holds the form.
+- **Screen 05 without a plan** draws only harness rows. Scope and the Python backend remain
+  amendments to a plan and still appear once there is one.
+
+`harness_choice_problems` is `target_choice_problems` over eligibility alone; the latter now
+delegates to it, so the two cannot judge a choice differently.
+
+Not changed, deliberately: changing the scope on the reviewed 05 re-prepares, and because an
+installation owner includes its scope, a new scope is a new owner whose fields must be asked again
+(no cross-installation prefill, §169). That is correct but repetitive, and is B-175.
+
+
+## D-378 — Two smoke stages, and a test offered after installation
+
+**Owner decision, accepted 2026-10-14. CP-28 step 3 (#31). §170 rewritten to match.**
+
+The proposal first written under this number kept an advisory connectivity reading and added
+`doctor --smoke`. The owner narrowed it further. In their words: keep only the two checks; the
+test does not run automatically, it is offered right after installation; and it must not break the
+installation transaction, only add to it.
+
+Accepted, and now in §170:
+
+- **Two stages and nothing else.** `installation-configuration`, then `mcp-startup-and-protocol`.
+  No keyword reading, no `expect`, no `reaches_service`, no harness route (`--prompt`, `--report`,
+  `mcp report`), no `NOT VERIFIED`. A protocol pass is not presented as proof of service access.
+  §170.2 names the gap, a server that turns an upstream failure into a successful text result, and
+  recommends the per-server check of breaking its configuration once and watching the protocol
+  stage go red.
+- **`smoke_test` is exactly `tool`, `read_only`, `arguments`, `timeout_seconds`.** Any other key,
+  including the former two, is refused as unknown, with no tolerant reader (pre-1.0, owner rule).
+- **The test after installation (§170.4, INV-251)** is offered on the success view once the
+  transaction has committed, covers exactly the MCP installations it made, runs only when chosen,
+  and no outcome of it changes the installation, its receipts or its reported success.
+- **Doctor is unchanged.** `doctor --smoke` from #31 is not part of this decision; it is B-177.
+
+INV-250 and INV-251 are restated; INV-249 loses the optional-expectation clause; INV-248 and
+INV-252 are unchanged.
+
+## D-379 — The post-installation MCP test is screen 11a, reached by a row action on Success
+
+Implementation choice, 2026-10-14, under D-378 and §170.4.
+
+- **The offer is a review screen of its own.** It is `11a-test-mcp-installations`, reached from a
+  Success row that is an action rather than a destination. §170.4 requires the offer to name the
+  installations, tools, arguments and the service before anything runs. A review screen that
+  `Enter` confirms is the shape every other reviewed action here already has, so this adds no new
+  confirmation mechanism.
+- **Which installations.** The installations come from the receipt store after the commit. They
+  are the MCP installations, in the reviewed scope, root and chosen harnesses, of members whose
+  status is `completed` or `completed-with-attention`. A recorded installation of that coordinate,
+  harness and root is the one this transaction wrote, because the install replaces it.
+- **The test never touches the install's outcome.** Finding the installations, preparing the plan
+  and running it are each guarded. A failure withholds the offer, or ends the test as failed, and
+  Success keeps the transaction it showed: the adapter holds it and redraws it with every MCP-test
+  update.
+- **The answer stays on 11a.** `ACTION_RECORDED` for the test leaves the screen and clears the
+  action, and `Enter` goes back to the same Success, whose focus is still the receipt.
+- **The test seam is a port.** `McpTestPort` lets the end-to-end tests observe the records at the
+  moment the test starts, and `LocalMcpTest` is the production implementation.

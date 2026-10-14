@@ -95,6 +95,9 @@ class ConsumerActionKind(str, Enum):
     CONFIGURE = "configure"
     CREDENTIAL_REPLACE = "credential-replace"
     CREDENTIAL_DELETE = "credential-delete"
+    #: The optional test of a committed install's MCP installations (§170.4). It reads and starts
+    #: what was installed and records nothing, so it is never part of the install it follows.
+    MCP_TEST = "mcp-test"
 
 
 class ConsumerUiEventKind(str, Enum):
@@ -851,6 +854,8 @@ _SUBJECT_PRESERVING_BACK_EDGES = frozenset(
         (MaintainerScreen.POLICY_REVIEW, MaintainerScreen.VALIDATION_DETAILS),
         # CP-23 task 12: backing out of a credential action is still about that credential.
         (ConsumerScreen.CREDENTIAL_REVIEW, ConsumerScreen.CREDENTIAL_ACTION),
+        # Leaving the MCP test returns to the Success it followed, still about that receipt.
+        (ConsumerScreen.MCP_TEST, ConsumerScreen.SUCCESS),
         (ConsumerScreen.CREDENTIAL_ACTION, ConsumerScreen.CREDENTIAL_DETAILS),
     }
 )
@@ -963,6 +968,14 @@ def _navigate(
         configuration_input=configuration_input,
         configuration_targets=configuration_targets,
         configuration_draft=configuration_draft,
+        # #50: 05 -> 07 before any plan exists is the way into the form; once a plan has been
+        # reviewed, 07 is its summary instead.
+        config_form_active=(
+            state.session.screen is ConsumerScreen.REVIEW_SELECTION
+            and screen is ConsumerScreen.REQUIRED_INPUTS
+            and state.session.review_digest is None
+            and bool(state.config_draft.fields)
+        ),
         search="",
         help_visible=False,
         quit_pending=False,
@@ -1256,6 +1269,8 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.CONFIGURE,
         ConsumerScreen.CONFIGURATION_VALUE,
     ): ConsumerScreen.CONFIGURATION_REVIEW,
+    # §170.4: the offer is a review of its own, so what will be called is stated before it is.
+    (ConsumerActionKind.MCP_TEST, ConsumerScreen.SUCCESS): ConsumerScreen.MCP_TEST,
 }
 
 #: The screens an action can be asked from, which are also the screens a declined preparation
@@ -1318,12 +1333,11 @@ def _request_action(
     ):
         if not state.config_draft.ready:
             return state, ()
-        # The form precedes screen 05 and is not part of its later summary route. Removing it from
-        # history here means Review -> Required Inputs remains a forward step over the immutable
-        # plan rather than rewinding into the editable form.
+        # The form is entered from screen 05 once the harness is chosen (#50) and is not part of
+        # its later summary route. Returning to 05 rewinds over the form, so Review -> Required
+        # Inputs remains a forward step over the immutable plan rather than back into the form.
         session = replace(
-            state.session,
-            screen=ConsumerScreen.REVIEW_SELECTION,
+            state.session.navigate(ConsumerScreen.REVIEW_SELECTION),
             semantic_identity=None,
             selection_identity=None,
             review_digest=None,
@@ -1487,9 +1501,11 @@ def _action_prepared(
     if action is ConsumerActionKind.INSTALL and event.config_draft is not None:
         if state.session.screen is not ConsumerScreen.REVIEW_SELECTION:
             return state, ()
+        # #50: the answer to a preparation that still needs inputs is not the form yet. It stays
+        # on 05, where the harness is chosen; the draft holds only the fields of the harnesses
+        # already chosen, and Continue opens it. Any earlier plan is gone with its identities.
         session = replace(
             state.session,
-            screen=ConsumerScreen.REQUIRED_INPUTS,
             semantic_identity=None,
             selection_identity=None,
             review_digest=None,
@@ -1499,13 +1515,13 @@ def _action_prepared(
                 state,
                 session=session,
                 config_draft=event.config_draft,
-                config_form_active=True,
+                config_form_active=False,
                 quit_pending=False,
             ),
             (
                 ConsumerUiCommand(
                     ConsumerUiCommandKind.LOAD_SCREEN,
-                    ConsumerScreen.REQUIRED_INPUTS,
+                    ConsumerScreen.REVIEW_SELECTION,
                 ),
             ),
         )
@@ -1574,6 +1590,7 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
     (ConsumerActionKind.CREDENTIAL_DELETE, ConsumerScreen.CREDENTIAL_REVIEW): None,
     (ConsumerActionKind.CONFIGURE, ConsumerScreen.CONFIGURATION_REVIEW): None,
     (ConsumerActionKind.REGISTRY_PUSH, MaintainerScreen.REGISTRY_PUSH): None,
+    (ConsumerActionKind.MCP_TEST, ConsumerScreen.MCP_TEST): None,
 }
 
 
@@ -1713,6 +1730,10 @@ def _action_recorded(
     action = event.action
     if action is None or action is not state.action or not event.text:
         return state, ()
+    if action is ConsumerActionKind.MCP_TEST:
+        # The answer is drawn where it was asked for, and Success behind it is unchanged: a test
+        # is not a lifecycle result, so it moves nothing and clears nothing the install left.
+        return replace(state, action=None, quit_pending=False), ()
     origins = {
         ConsumerActionKind.REGISTRY_INIT: RegistryCommitOrigin.INIT_REGISTRY,
         ConsumerActionKind.REGISTRY_REBUILD: RegistryCommitOrigin.REBUILD_REGISTRY,
@@ -2193,6 +2214,7 @@ _CONFIRM_SCREENS = frozenset(
         MaintainerScreen.REGISTRY_PUSH,
         ConsumerScreen.CREDENTIAL_REVIEW,
         ConsumerScreen.CONFIGURATION_REVIEW,
+        ConsumerScreen.MCP_TEST,
     }
 )
 
@@ -2206,6 +2228,11 @@ _ROW_ACTIONS: dict[ApplicationScreen, dict[str, tuple[ConsumerActionKind, str]]]
         "replace": (ConsumerActionKind.CREDENTIAL_REPLACE, "Review replacement"),
         "delete": (ConsumerActionKind.CREDENTIAL_DELETE, "Review deletion"),
     },
+    # One of Success's rows is an action rather than a destination: the test it reviews is about
+    # the transaction Success shows, which stays the subject (§170.4). The other rows still open.
+    ConsumerScreen.SUCCESS: {
+        ConsumerScreen.MCP_TEST.value: (ConsumerActionKind.MCP_TEST, "Review MCP test"),
+    },
 }
 
 
@@ -2218,6 +2245,16 @@ def _answered_in_place(state: ConsumerUiState) -> bool:
 
     return (
         state.session.screen is ConsumerScreen.CREDENTIAL_REVIEW
+        and state.action is None
+        and state.failed_action is None
+    )
+
+
+def _mcp_test_answered(state: ConsumerUiState) -> bool:
+    """The MCP test ran and its stages are on 11a: Enter goes back to the Success it followed."""
+
+    return (
+        state.session.screen is ConsumerScreen.MCP_TEST
         and state.action is None
         and state.failed_action is None
     )
@@ -2307,6 +2344,8 @@ def key_bindings(
             bindings.append(KeyBinding("Enter", chosen[1]))
         elif _answered_in_place(state) and "enter" not in keys:
             bindings.append(KeyBinding("Enter", "Credential details"))
+        elif _mcp_test_answered(state) and "enter" not in keys:
+            bindings.append(KeyBinding("Enter", "Back to Success"))
         elif state.failed_action is not None and "enter" not in keys:
             # The run is over. The only thing Enter can honestly do here is leave.
             bindings.append(KeyBinding("Enter", "Back to list"))
@@ -2702,15 +2741,17 @@ def key_event(
         return ConsumerUiEvent(
             ConsumerUiEventKind.NAVIGATE, screen=ConsumerScreen.CREDENTIAL_DETAILS
         )
+    if key == "enter" and _mcp_test_answered(state):
+        return ConsumerUiEvent(ConsumerUiEventKind.BACK)
     if key == "enter" and state.session.screen in _CONFIRM_SCREENS:
         return ConsumerUiEvent(ConsumerUiEventKind.CONFIRM_ACTION)
     if key == "enter" and state.session.screen in _ROW_ACTIONS:
         chosen = _row_action(state, cursor)
-        return (
-            None
-            if chosen is None
-            else ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=chosen[0])
-        )
+        if chosen is not None:
+            return ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=chosen[0])
+        # A screen whose rows are only partly actions still opens the rest (Success, §170.4).
+        if detail is None:
+            return None
     if key == "enter" and detail is not None:
         return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=detail)
     return None

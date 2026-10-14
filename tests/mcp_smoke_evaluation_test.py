@@ -26,8 +26,8 @@ EMPTY_INPUT = obj(type="object", properties=obj(), additionalProperties=False)
 
 
 class McpSmokeEvaluationTest(unittest.TestCase):
-    def declaration(self, expect=None, *, reaches_service=False):
-        return SmokeDeclaration("read_identity", obj(), 15, expect, reaches_service)
+    def declaration(self):
+        return SmokeDeclaration("read_identity", obj(), 15)
 
     def tool(self, output=None):
         return McpTool("read_identity", EMPTY_INPUT, output)
@@ -44,13 +44,10 @@ class McpSmokeEvaluationTest(unittest.TestCase):
         for result in results:
             with self.subTest(result=result):
                 evaluated = evaluate_tool_call(self.declaration(), (self.tool(),), result)
-                self.assertEqual(evaluated.protocol.outcome, SmokeOutcome.PASS)
-                self.assertEqual(evaluated.expectation.outcome, SmokeOutcome.NOT_CONFIGURED)
-                # This declaration claims neither, and a protocol pass never supplies either
-                # on its own (INV-250) -- whatever the content type happened to be.
-                self.assertEqual(evaluated.service.outcome, SmokeOutcome.NOT_CONFIGURED)
+                self.assertEqual(evaluated.stage, SmokeStage.PROTOCOL)
+                self.assertEqual(evaluated.outcome, SmokeOutcome.PASS)
 
-    def test_protocol_errors_and_malformed_results_do_not_run_dependants(self) -> None:
+    def test_protocol_errors_and_malformed_results_fail_the_protocol_stage(self) -> None:
         results = (
             McpCallResult(jsonrpc_error="server failed"),
             McpCallResult(is_error=True),
@@ -60,9 +57,7 @@ class McpSmokeEvaluationTest(unittest.TestCase):
         for result in results:
             with self.subTest(result=result):
                 evaluated = evaluate_tool_call(self.declaration(), (self.tool(),), result)
-                self.assertEqual(evaluated.protocol.outcome, SmokeOutcome.FAIL)
-                self.assertEqual(evaluated.expectation.outcome, SmokeOutcome.NOT_RUN)
-                self.assertEqual(evaluated.service.outcome, SmokeOutcome.NOT_RUN)
+                self.assertEqual(evaluated.outcome, SmokeOutcome.FAIL)
 
     def test_required_arguments_fail_before_invocation(self) -> None:
         schema = obj(
@@ -73,8 +68,8 @@ class McpSmokeEvaluationTest(unittest.TestCase):
         evaluated = evaluate_tool_call(
             self.declaration(), (McpTool("read_identity", schema),), None
         )
-        self.assertEqual(evaluated.protocol.outcome, SmokeOutcome.FAIL)
-        self.assertIn("required field", evaluated.protocol.reason)
+        self.assertEqual(evaluated.outcome, SmokeOutcome.FAIL)
+        self.assertIn("required field", evaluated.reason)
 
     def test_output_schema_is_checked_and_unsupported_keywords_are_visible(self) -> None:
         output = obj(
@@ -87,92 +82,27 @@ class McpSmokeEvaluationTest(unittest.TestCase):
             (self.tool(output),),
             McpCallResult(structured_content=obj(id=7)),
         )
-        self.assertEqual(failed.protocol.outcome, SmokeOutcome.FAIL)
+        self.assertEqual(failed.outcome, SmokeOutcome.FAIL)
 
         unsupported = evaluate_tool_call(
             self.declaration(),
             (self.tool(obj(oneOf=JsonArray((obj(type="string"),)))),),
             McpCallResult(structured_content="Ada"),
         )
-        self.assertEqual(unsupported.protocol.outcome, SmokeOutcome.UNSUPPORTED)
+        self.assertEqual(unsupported.outcome, SmokeOutcome.UNSUPPORTED)
 
-    def test_both_expectation_forms_share_the_protocol_result(self) -> None:
-        text = evaluate_tool_call(
-            self.declaration(obj(text_contains="Ada")),
-            (self.tool(),),
-            McpCallResult(content=JsonArray((obj(type="text", text="Hello Ada"),))),
-        )
-        structured = evaluate_tool_call(
-            self.declaration(obj(structured_path="user.login", equals="ada")),
-            (self.tool(),),
-            McpCallResult(structured_content=obj(user=obj(login="ada"))),
-        )
-        self.assertEqual(text.expectation.outcome, SmokeOutcome.PASS)
-        self.assertEqual(structured.expectation.outcome, SmokeOutcome.PASS)
-
-        wrong = evaluate_tool_call(
-            self.declaration(obj(text_contains="Grace")),
-            (self.tool(),),
-            McpCallResult(content=JsonArray((obj(type="text", text="Hello Ada"),))),
-        )
-        self.assertEqual(wrong.protocol.outcome, SmokeOutcome.PASS)
-        self.assertEqual(wrong.expectation.outcome, SmokeOutcome.FAIL)
-
-    def test_an_undeclared_service_read_is_not_configured_rather_than_unverified(self) -> None:
-        """No claim was made, so there is nothing to verify (§170.3).
-
-        `NOT CONFIGURED` is what the specification names for an operation-dependent stage whose
-        declaration is absent, and §170.5 keeps an absent optional declaration outside the
-        required set. Reporting `NOT VERIFIED` here would be the older behaviour, and it made
-        every perfectly working installation fail.
-        """
+    def test_a_passing_call_says_nothing_about_the_service(self) -> None:
+        """INV-250: the reason names the call, never service access, whatever the text says."""
 
         evaluated = evaluate_tool_call(
-            self.declaration(obj(text_contains="Ada")),
+            self.declaration(),
             (self.tool(),),
-            McpCallResult(content=JsonArray((obj(type="text", text="Ada"),))),
+            McpCallResult(content=JsonArray((obj(type="text", text="Error: unauthorized"),))),
         )
-        self.assertEqual(evaluated.protocol.outcome, SmokeOutcome.PASS)
-        self.assertEqual(evaluated.expectation.outcome, SmokeOutcome.PASS)
-        self.assertEqual(evaluated.service.outcome, SmokeOutcome.NOT_CONFIGURED)
+        self.assertEqual(evaluated.outcome, SmokeOutcome.PASS)
+        self.assertNotIn("service", evaluated.reason)
 
-    def test_a_declared_service_read_without_an_expectation_stays_unverified(self) -> None:
-        """The author's word is one of the two inputs §170.3 names, not both.
-
-        "An error disguised as normal text, cached data or a static response may pass the protocol
-        checks; that cannot alone produce a service-access PASS." A declaration that the tool reads
-        the service, with nothing asserted about what came back, is exactly that case.
-        """
-
-        evaluated = evaluate_tool_call(
-            self.declaration(reaches_service=True),
-            (self.tool(),),
-            McpCallResult(content=JsonArray((obj(type="text", text="Ada"),))),
-        )
-        self.assertEqual(evaluated.protocol.outcome, SmokeOutcome.PASS)
-        self.assertEqual(evaluated.service.outcome, SmokeOutcome.NOT_VERIFIED)
-
-    def test_a_declared_service_read_passes_only_when_its_expectation_holds(self) -> None:
-        """Reviewed behaviour plus observed result, which is what §170.2 asks evidence to be."""
-
-        held = evaluate_tool_call(
-            self.declaration(obj(text_contains="Ada"), reaches_service=True),
-            (self.tool(),),
-            McpCallResult(content=JsonArray((obj(type="text", text="Ada"),))),
-        )
-        self.assertEqual(held.expectation.outcome, SmokeOutcome.PASS)
-        self.assertEqual(held.service.outcome, SmokeOutcome.PASS)
-
-        broke = evaluate_tool_call(
-            self.declaration(obj(text_contains="Grace"), reaches_service=True),
-            (self.tool(),),
-            McpCallResult(content=JsonArray((obj(type="text", text="Ada"),))),
-        )
-        self.assertEqual(broke.expectation.outcome, SmokeOutcome.FAIL)
-        # Not FAIL: the claim is unproven rather than disproven, which is what NOT VERIFIED means.
-        self.assertEqual(broke.service.outcome, SmokeOutcome.NOT_VERIFIED)
-
-    def test_aggregate_refuses_empty_skipped_and_unverified_runs(self) -> None:
+    def test_aggregate_refuses_empty_and_skipped_runs(self) -> None:
         self.assertFalse(aggregate_success(()))
         self.assertTrue(
             aggregate_success((SmokeStageResult(SmokeStage.PROTOCOL, SmokeOutcome.PASS, "ok"),))
@@ -200,3 +130,54 @@ class McpSmokeEvaluationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class McpSmokeSchemaAnnotationTest(unittest.TestCase):
+    """A schema's annotations are read past; a constraint this validator lacks is still refused.
+
+    The shape below is copied from a real server's `tools/list`: every property carries a
+    `description`, and every optional one a `default`. Under a closed allowlist that was an
+    unsupported keyword, so a declared call was refused before invocation over a word that cannot
+    make any value invalid -- the validator refused the server rather than the schema (B-173).
+    """
+
+    ANNOTATED = obj(
+        type="object",
+        title="list_dags arguments",
+        description="Arguments for listing DAGs.",
+        properties=obj(
+            tag=obj(type="string", description="Optional tag to filter by", default=""),
+            limit=obj(type="integer", description="How many to return", default=100),
+        ),
+    )
+
+    def _refusal(self, schema, arguments):
+        declaration = SmokeDeclaration("list_dags", arguments, 15)
+        tool = McpTool("list_dags", schema, None)
+        # `None` is the preflight the stdio route makes before it sends anything: NOT_RUN means
+        # the call was allowed to happen, anything else is the refusal it reports instead.
+        return evaluate_tool_call(declaration, (tool,), None)
+
+    def test_annotations_do_not_refuse_a_declared_call(self) -> None:
+        protocol = self._refusal(self.ANNOTATED, obj(limit=5))
+
+        self.assertEqual(protocol.outcome, SmokeOutcome.NOT_RUN)
+
+    def test_a_constraint_this_validator_cannot_apply_is_still_refused(self) -> None:
+        constrained = obj(
+            type="object",
+            properties=obj(limit=obj(type="integer", description="How many", minimum=1)),
+        )
+
+        protocol = self._refusal(constrained, obj(limit=5))
+
+        self.assertNotEqual(protocol.outcome, SmokeOutcome.NOT_RUN)
+        # Named, because the point of refusing is to say which constraint went unapplied.
+        self.assertIn("'minimum'", protocol.reason)
+
+    def test_an_annotation_never_makes_a_value_invalid(self) -> None:
+        # `default` says what an absent value would have been. Supplying a different one is the
+        # ordinary case, and a validator that read `default` as a constraint would refuse it.
+        protocol = self._refusal(self.ANNOTATED, obj(tag="project:x", limit=7))
+
+        self.assertEqual(protocol.outcome, SmokeOutcome.NOT_RUN)

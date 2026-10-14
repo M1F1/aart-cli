@@ -48,18 +48,21 @@ from aart_cli.application.consumer_views import (
     CredentialRecordView,
     DashboardView,
     DoctorView,
+    HarnessTargetView,
     InputView,
     InstalledArtifactView,
     InstalledCollectionView,
     LifecycleOutcomeView,
     LifecyclePlanView,
     MarketplaceCollectionView,
+    McpTestView,
     PresentationProfile,
     ReceiptArtifactView,
     ReceiptDetailView,
     RegistryView,
     RemediationView,
     RunningInstallationView,
+    harness_choice_problems,
     installer_from_row,
     installer_row,
     navigation_targets,
@@ -973,6 +976,41 @@ def render_transaction_success(
         if view.undo.available
         else f"Undo unavailable: {view.undo.reason}"
     )
+    return tuple(lines)
+
+
+def render_mcp_test(view: McpTestView | None) -> tuple[str, ...]:
+    """Screen 11a: the offer before it runs, and both stages per installation after (§170.4).
+
+    Every line is a statement about the test, never about the install, which Success has already
+    reported and which nothing here changes.
+    """
+
+    if view is None or not view.installations:
+        return ("This install made no MCP installation to test.",)
+    if view.results is not None:
+        lines = []
+        for result in view.results:
+            lines.append(f"{'✓' if result.passed else '✗'} {result.installation}")
+            for stage in result.stages:
+                lines.append(f"  {stage.outcome:<14} {stage.stage}: {stage.reason}")
+        lines.append(
+            "The installation is unchanged whatever these say; a failed stage is yours to repair "
+            "or reconfigure when you choose."
+        )
+        return tuple(lines)
+    if not view.plan:
+        return ("Preparing the test of: " + ", ".join(view.installations),)
+    lines = ["Confirming starts each installed MCP once and makes one declared call:"]
+    for entry in view.plan:
+        if entry.tool:
+            lines.append(f"  {entry.installation}: {entry.tool} {entry.arguments}")
+        else:
+            lines.append(f"  {entry.installation}: NOT CONFIGURED (declares no smoke operation)")
+    lines.append(
+        "Each call reaches that installation's configured service with its own credentials."
+    )
+    lines.append("Nothing here changes the installation, its receipts or its success.")
     return tuple(lines)
 
 
@@ -1920,6 +1958,7 @@ _REVIEW_SCREENS: frozenset[ApplicationScreen] = frozenset(
         ConsumerScreen.REGISTRY_SYNC,
         ConsumerScreen.CREDENTIAL_REVIEW,
         ConsumerScreen.CONFIGURATION_REVIEW,
+        ConsumerScreen.MCP_TEST,
     }
 )
 
@@ -2020,8 +2059,12 @@ _FIRST_RUN_LINES: tuple[str, ...] = (
 )
 
 
+#: Titles the identifier cannot spell, because `.title()` would write an acronym as a word.
+_TITLES: dict[ApplicationScreen, str] = {ConsumerScreen.MCP_TEST: "Test MCP Installations"}
+
+
 def _title(screen: ApplicationScreen) -> str:
-    return _human(screen.value.split("-", 1)[1]).title()
+    return _TITLES.get(screen) or _human(screen.value.split("-", 1)[1]).title()
 
 
 _WORKFLOW_LABELS: dict[ApplicationScreen, str] = {
@@ -2137,6 +2180,8 @@ def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[s
         if record is None:
             return ("That credential is not known here any more.",)
         return render_credential_review(record, state.action)
+    if screen is ConsumerScreen.MCP_TEST:
+        return render_mcp_test(screens.mcp_test)
     if screen is ConsumerScreen.CONFIGURATION_REVIEW:
         if screens.lifecycle is None:
             return ("That configuration change is not prepared any more.",)
@@ -2594,6 +2639,13 @@ class ConsumerScreens:
     #: Where a reviewed plan has got to while it is still running. It is held apart from `outcome`
     #: because it is not a result: it is replaced on every step and dropped the moment there is one.
     running: RunningInstallationView | None = None
+    #: The harnesses screen 05 offers while no plan exists yet. An install with unanswered inputs
+    #: has no plan until they are answered, and they are answered per harness, so the harness is
+    #: chosen from this first (#50).
+    install_targets: tuple[HarnessTargetView, ...] = ()
+    #: The optional test after an install (§170.4): present only when the committed transaction
+    #: made at least one MCP installation, and drawn beside Success rather than in it.
+    mcp_test: McpTestView | None = None
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -2622,9 +2674,14 @@ class ConsumerScreens:
         return next((item for item in self.credentials if item.reference == reference), None)
 
     def user_input_artifacts(self) -> tuple[str, ...]:
-        """Installed artifacts that own config or depend on a provider reference."""
+        """Installations that own config or depend on a provider reference.
 
-        configured = {item.coordinate for item in self.configurations}
+        Keyed the way both lookups below address them -- by installation (§169.3) -- so a row is
+        always one that has something to show. Keying configuration by its bare coordinate drew
+        that coordinate as a third, empty entity beside its two harness installations (#48).
+        """
+
+        configured = {item.row for item in self.configurations}
         dependants = {owner for item in self.credentials for owner in item.dependants}
         return tuple(sorted(configured | dependants))
 
@@ -2823,6 +2880,8 @@ def screens_from(
     adopted_artifacts: tuple[MaintainerAdoptedArtifactView, ...] = (),
     adoption_upstream: MaintainerAdoptionUpstreamView | None = None,
     installation_inputs: tuple[InputView, ...] = (),
+    install_targets: tuple[HarnessTargetView, ...] = (),
+    mcp_test: McpTestView | None = None,
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -2874,6 +2933,8 @@ def screens_from(
         installation_inputs,
         machine.configurations,
         running,
+        install_targets,
+        mcp_test,
     )
 
 
@@ -3034,14 +3095,17 @@ class CanonicalScreenSource:
             return (*fields, CONFIG_CONTINUE_ROW) if fields else ()
         if screen is ConsumerScreen.REVIEW_SELECTION:
             plan = self._screens.plan
-            if plan is None:
-                return ()
-            eligible = tuple(target_row(item.harness) for item in plan.targets)
+            offered = self._offered_targets()
+            eligible = tuple(target_row(item.harness) for item in offered)
             stale = tuple(
                 target_row(harness)
                 for harness in state.targets
-                if all(item.harness != harness for item in plan.targets)
+                if all(item.harness != harness for item in offered)
             )
+            if plan is None:
+                # #50: no plan yet because inputs are unanswered, so the harness is the only
+                # thing to decide here; scope and backend are amendments to a plan.
+                return (*eligible, *stale) if offered else ()
             # Scope follows the harnesses rather than leading them. Row order is cursor order on
             # this screen, and this screen's act is choosing what to install into; putting the
             # scope first would move the first keypress of every existing install onto a different
@@ -3090,7 +3154,7 @@ class CanonicalScreenSource:
             # to view, and a row that opens nothing is the gap this replaced.
             if self._screens.transaction is None and self._screens.outcome is None:
                 return ()
-            return tuple(target.value for target, _label in SUCCESS_CHOICES)
+            return tuple(target.value for target, _label in self._success_choices())
         if screen is ConsumerScreen.DASHBOARD:
             return tuple(
                 target.value
@@ -3289,6 +3353,15 @@ class CanonicalScreenSource:
         entry = self._screens.offered_collection(state.focus)
         return None if entry is None else entry.members
 
+    def _success_choices(self) -> tuple[tuple[ConsumerScreen, str], ...]:
+        """Success's rows: the test is offered only for an install that made an MCP (§170.4)."""
+
+        return tuple(
+            (target, label)
+            for target, label in SUCCESS_CHOICES
+            if target is not ConsumerScreen.MCP_TEST or self._screens.mcp_test is not None
+        )
+
     def detail(self, state: ConsumerUiState) -> ApplicationScreen | None:
         """Enter opens the detail of whatever this screen is currently about."""
 
@@ -3433,7 +3506,17 @@ class CanonicalScreenSource:
             return ConsumerScreen.INSTALLED_ARTIFACT_DETAILS if state.current_row else None
         if screen is ConsumerScreen.REVIEW_SELECTION:
             plan = self._screens.plan
-            if plan is None or not targets_confirmed(plan, state.targets):
+            if plan is None:
+                # The harness is chosen; what those installations need is asked next, and only
+                # for them (#50). The preparation answering the choice built the form.
+                return (
+                    ConsumerScreen.REQUIRED_INPUTS
+                    if self._screens.install_targets
+                    and not self._harness_choice_problems(state)
+                    and state.config_draft.fields
+                    else None
+                )
+            if not targets_confirmed(plan, state.targets):
                 return None
             # Inspection has already happened to produce this immutable plan. It remains
             # available as a detailed projection, but is not a mandatory click-through step.
@@ -3616,11 +3699,12 @@ class CanonicalScreenSource:
             chosen = self.detail(state)
             return () if not isinstance(chosen, ConsumerScreen) else (SUCCESS_PURPOSE[chosen],)
         if state.session.screen is ConsumerScreen.REVIEW_SELECTION:
-            plan = self._screens.plan
             harness = target_from_row(state.current_row)
-            if plan is None or harness is None:
+            if harness is None or not self._offered_targets():
                 return ()
-            target = next((item for item in plan.targets if item.harness == harness), None)
+            target = next(
+                (item for item in self._offered_targets() if item.harness == harness), None
+            )
             if target is None:
                 return (f"{harness} is no longer eligible for this selection.",)
             return (
@@ -3855,6 +3939,16 @@ class CanonicalScreenSource:
             return render_remediation(screens.plan, state.session.profile)
         if (
             screen is ConsumerScreen.REVIEW_SELECTION
+            and screens.plan is None
+            and screens.install_targets
+        ):
+            problems = self._harness_choice_problems(state)
+            return problems or (
+                f"Installing into: {', '.join(state.targets)}",
+                "Configuration for these harnesses is asked next.",
+            )
+        if (
+            screen is ConsumerScreen.REVIEW_SELECTION
             and screens.plan is not None
             and (screens.plan.targets or state.targets)
         ):
@@ -3890,6 +3984,20 @@ class CanonicalScreenSource:
                 return ("Maintainer state is not available yet.",)
             return render_maintainer_dashboard(screens.maintainer.dashboard, state.session.profile)
         return ()
+
+    def _offered_targets(self) -> tuple[HarnessTargetView, ...]:
+        """The harnesses screen 05 offers: the plan's, or before there is one, placement's."""
+
+        plan = self._screens.plan
+        return plan.targets if plan is not None else self._screens.install_targets
+
+    def _harness_choice_problems(self, state: ConsumerUiState) -> tuple[str, ...]:
+        offered = self._screens.install_targets
+        return harness_choice_problems(
+            offered,
+            tuple(dict.fromkeys(artifact for item in offered for artifact in item.artifacts)),
+            state.targets,
+        )
 
     def _review_row(self, row: str, state: ConsumerUiState) -> str:
         """One line of the review screen: a harness to install into, or where it all lands.
@@ -3944,7 +4052,7 @@ class CanonicalScreenSource:
         if screen is ConsumerScreen.SUCCESS and self.rows(state):
             return tuple(
                 f"{'>' if target.value == state.current_row else ' '} {label}"
-                for target, label in SUCCESS_CHOICES
+                for target, label in self._success_choices()
             )
         if screen is ConsumerScreen.DASHBOARD:
             targets = navigation_targets(screen, maintainer_mode=state.settings.maintainer_mode)
