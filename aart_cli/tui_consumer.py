@@ -230,7 +230,6 @@ __all__ = [
     "render_remediation",
     "render_required_inputs",
     "render_installation_config_form",
-    "installation_config_status",
     "installation_config_purpose",
     "configuration_review_status",
     "configuration_value_status",
@@ -1567,9 +1566,10 @@ def render_installation_config_form(
 ) -> tuple[str, ...]:
     """Screen 07's rows: the editable non-secrets and Continue (INV-067).
 
-    What the form explains, and the credentials a provider will ask for, are not rows a cursor can
-    stand on, so they are :func:`installation_config_status`; what a field binds to is Verbose's
-    description of it, :func:`installation_config_purpose`.
+    One blank line separates each field from the next, as §161.5/07 draws them, so the values of
+    several installations do not run together. Nothing else is said under the form (D-380): the
+    credentials are asked for by their provider, with their guidance, at the moment it asks. What a
+    field binds to is Verbose's description of it, :func:`installation_config_purpose`.
     """
 
     if (
@@ -1581,6 +1581,7 @@ def render_installation_config_form(
     projected = {item.row: item for item in inputs if isinstance(item, ConfigInputView)}
     lines = ["Configuration"] if draft.fields else []
     for field in draft.fields:
+        lines.append("")
         view = projected.get(field.row)
         label = field.id if view is None else view.label
         if view is not None and view.owner:
@@ -1601,41 +1602,9 @@ def render_installation_config_form(
         elif view is not None and view.validation_hint:
             lines.append(f"    {view.validation_hint}")
     mark = ">" if current_row == CONFIG_CONTINUE_ROW else " "
-    readiness = "Review selection" if draft.ready else "Accept every configuration value first"
-    lines.append(f"{mark} Continue: {readiness}")
+    readiness = "Continue" if draft.ready else "Continue: Accept every configuration value first"
+    lines.extend(("", f"{mark} {readiness}"))
     return tuple(lines)
-
-
-def installation_config_status(inputs: tuple[InputView, ...]) -> tuple[str, ...]:
-    """Screen 07's state: why it asks, where the values go, and what the provider will ask for.
-
-    The credential guidance is a Fast fact (D-263): a person needs it before the provider asks.
-    """
-
-    statements: list[tuple[str, ...]] = [
-        ("A few things are needed before installation",),
-        ("These ordinary values will be kept beside the installed artifact, per harness.",),
-    ]
-    credentials = tuple(item for item in inputs if isinstance(item, CredentialInputView))
-    if credentials:
-        statements.append(
-            ("Credentials", "Values stay with the credential provider; AART keeps only references.")
-        )
-    for item in credentials:
-        status = (
-            "Configured securely"
-            if item.health == "present"
-            else (
-                "Enter securely during installation"
-                if item.provider_reference is not None
-                else "Required"
-            )
-        )
-        owner = f" — {item.owner}" if item.owner else ""
-        statements.append(
-            (*credential_guidance_lines(item.guidance), f"{item.label}{owner}: {status}")
-        )
-    return separate(*statements)
 
 
 def installation_config_purpose(
@@ -3124,6 +3093,9 @@ class CanonicalScreenSource:
                 if plan.installer_choice is not None and plan.installer_choice.is_a_choice
                 else ()
             )
+            if state.inputs_submitted:
+                # D-380: the answers were given for these harnesses; what is left is the choice.
+                return (*scopes, *installers)
             return (*eligible, *stale, *scopes, *installers)
         if screen is ConsumerScreen.REMEDIATION:
             # CP-23 task 08: Continue is a row, so it is a control rather than a printed string.
@@ -3520,7 +3492,8 @@ class CanonicalScreenSource:
                 return None
             # Inspection has already happened to produce this immutable plan. It remains
             # available as a detailed projection, but is not a mandatory click-through step.
-            if plan.inputs:
+            # Once the form was submitted its answers are in the plan, so 07 is not asked again.
+            if plan.inputs and not state.inputs_submitted:
                 return ConsumerScreen.REQUIRED_INPUTS
             if remediation_needs_decision(plan):
                 return ConsumerScreen.REMEDIATION
@@ -3839,8 +3812,6 @@ class CanonicalScreenSource:
         prose = self._form_prose(state)
         if prose:
             return prose
-        if screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
-            return installation_config_status(screens.installation_inputs)
         if screen is MaintainerScreen.REGISTRY_PUSH and self.rows(state):
             # What is being pushed is the state of the view; the branch field and Continue are the
             # only things the cursor acts on. With no rows there is no actions block at all, so

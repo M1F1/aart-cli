@@ -48,6 +48,7 @@ from aart_cli.application.consumer_ui import (
 )
 from aart_cli.application.consumer_views import (
     ConsumerPlanView,
+    ConsumerScreen,
     ConsumerSettings,
     HarnessTargetView,
     InstallScopeChoiceView,
@@ -63,6 +64,7 @@ from aart_cli.application.consumer_views import (
     offer_python_installers,
     project_lifecycle_plan,
     project_running_installation,
+    remediation_needs_decision,
     target_choice_problems,
 )
 from aart_cli.application.credential_guidance import (
@@ -372,6 +374,23 @@ class _PendingInstall:
     previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = ()
     targets: tuple[HarnessTargetView, ...] = ()
     chosen_targets: tuple[str, ...] = ()
+
+
+def _after_inputs(plan: ConsumerPlanView) -> ConsumerScreen:
+    """Where a reviewed install goes once its form was submitted (D-380, §161.5).
+
+    05 again only while the plan still offers a real choice of scope or backend; otherwise the
+    next screen that asks anything, which is Remediation only when a decision is needed.
+    """
+
+    if any(
+        choice is not None and choice.is_a_choice
+        for choice in (plan.scope_choice, plan.installer_choice)
+    ):
+        return ConsumerScreen.REVIEW_SELECTION
+    if remediation_needs_decision(plan):
+        return ConsumerScreen.REMEDIATION
+    return ConsumerScreen.READY
 
 
 def _installation_targets(
@@ -1916,6 +1935,7 @@ class LocalConsumerActions:
                 semantic_identity=plan.semantic_identity,
                 selection_identity=plan.selection.semantic_identity,
                 review_digest=plan.review_digest,
+                screen=_after_inputs(plan),
             ),
         )
 

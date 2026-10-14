@@ -179,7 +179,9 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
             replace(base, installation_inputs=(_config_view(), _credential_view()))
         )
 
-    def test_form_has_config_rows_continue_and_a_visibly_separate_credential_section(self) -> None:
+    def test_form_has_config_rows_continue_and_nothing_else_under_it(self) -> None:
+        """D-380: the credential is asked for by its provider, with its guidance, when it asks."""
+
         source = self._source()
         state = _state()
         state = replace(state, rows=source.rows(state))
@@ -187,24 +189,16 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
         drawn = "\n".join(frame(source, state))
 
         self.assertEqual(source.rows(state), ("organization", CONFIG_CONTINUE_ROW))
-        self.assertIn("Configuration", drawn)
         self.assertIn("GitHub organization", drawn)
         self.assertIn("[acme]", drawn)
-        self.assertIn("Credentials", drawn)
-        self.assertIn("GitHub token", drawn)
-        self.assertIn("Enter securely during installation", drawn)
         self.assertIn("Continue", drawn)
         self.assertIn("[Type] Edit", drawn)
-        # §167: the fields are the rows; the credentials a provider will ask for are not rows a
-        # cursor can stand on, so they are the state of the view (CP-23 task 14).
         blocks = compose_frame(source, state)
         self.assertEqual(blocks.actions[0], "Configuration")
-        self.assertNotIn("Credentials", blocks.actions)
-        self.assertNotIn("GitHub token", "\n".join(blocks.actions))
-        self.assertIn("- Credentials", blocks.status)
-        self.assertIn("- GitHub token: Enter securely during installation", blocks.status)
+        for gone in ("Credentials", "GitHub token", "kept beside", "AART keeps only references"):
+            self.assertNotIn(gone, drawn)
 
-    def test_each_installation_has_its_own_visible_config_and_credential_row(self) -> None:
+    def test_each_installation_has_its_own_field_set_apart_by_a_blank_line(self) -> None:
         owners = (
             "claude/project:company/mcp/github",
             "tabnine/project:company/mcp/github",
@@ -242,9 +236,18 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
             source.rows(state),
             tuple(f"{owner}\torganization" for owner in owners) + (CONFIG_CONTINUE_ROW,),
         )
+        actions = compose_frame(source, state).actions
+        starts = [
+            index
+            for index, line in enumerate(actions)
+            if "GitHub organization —" in line or "Continue" in line
+        ]
+        self.assertEqual(len(starts), 3, actions)
         for owner in owners:
             self.assertIn(f"GitHub organization — {owner}", drawn)
-            self.assertIn(f"GitHub token — {owner}: Enter securely during installation", drawn)
+        for index in starts:
+            self.assertEqual(actions[index - 1], "", "a field is not set apart by a blank line")
+        self.assertNotIn("GitHub token", drawn)
 
     def test_05_without_a_plan_offers_the_harnesses_and_continues_only_once_chosen(self) -> None:
         """#50: before any field is drawn, 05 asks only which harnesses to install into."""
@@ -569,8 +572,7 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 ENTER,
                 value,
                 ENTER,
-                ENTER,
-                ENTER,
+                # Submit, then Remediation and Ready: the form goes forward, not back to 05 (D-380).
                 ENTER,
                 ENTER,
                 ENTER,

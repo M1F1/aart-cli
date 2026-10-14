@@ -42,6 +42,7 @@ from aart_cli.protocol.native_tree import SnapshotEntryKind
 from aart_cli.store.model import ObjectReadRequest, object_store_paths
 
 _MAX_RESPONSE_BYTES = 64 * 1024
+_SMOKE_TEST_FIELDS = frozenset({"tool", "read_only", "arguments", "timeout_seconds"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,12 +192,35 @@ def _declaration(
     parsed = parse_artifact_manifest(entry.content, path="artifact.json")
     if isinstance(parsed, Err):
         return None, "the installed canonical artifact manifest is invalid"
-    intent = dict(parsed.value.extensions).get(AUTHORING_EXTENSION)
+    return declared_smoke(dict(parsed.value.extensions).get(AUTHORING_EXTENSION))
+
+
+def declared_smoke(intent: JsonValue | None) -> tuple[SmokeDeclaration | None, str | None]:
+    """The smoke operation an installed artifact's authoring intent declares, or why there is none.
+
+    An artifact that declares nothing and one whose declaration this version refuses are told
+    apart, because only the second is fixed by republishing what is already there (D-378).
+    """
+
     smoke = intent.get("smoke_test") if isinstance(intent, JsonObject) else None
+    if smoke is None:
+        return None, (
+            "the installed artifact declares no smoke_test; its author adds one to aart-cli.json "
+            "(tool and read_only: true) and publishes a new version"
+        )
     declaration = declaration_from_intent(smoke)
-    if declaration is None:
-        return None, "the installed content has no valid declared read-only smoke operation"
-    return declaration, None
+    if declaration is not None:
+        return declaration, None
+    unknown = (
+        sorted({key for key, _ in smoke.entries} - _SMOKE_TEST_FIELDS)
+        if isinstance(smoke, JsonObject)
+        else []
+    )
+    detail = f" (no longer accepted: {', '.join(unknown)})" if unknown else ""
+    return None, (
+        f"the installed artifact's smoke_test is not valid for this version{detail}; "
+        "its author republishes it with only tool, read_only, arguments and timeout_seconds"
+    )
 
 
 def _depends_on_installation() -> SmokeStageResult:

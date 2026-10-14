@@ -4281,6 +4281,28 @@ general notice field, so carrying it onto the dashboard is its own contained pie
 rather than a line in this slice. The consequence today is only that a curses user sees the
 connected Registry on the dashboard without reading the sentence explaining where it came from.
 
+## B-178 — a narrowed install plan drops its scope and backend choices
+
+**Found 2026-10-14 while fixing the repeated harness choice (D-380).** Status: OPEN.
+
+When a harness is chosen, `_offer_installation` prepares again for exactly those profiles and
+builds the plan from `replace(narrowed_action.flow.plan, targets=..., chosen_targets=...)`. That
+rebuild does not carry `scope_choice` or `installer_choice`, while the plan for an unchosen request
+does. So after a harness is chosen, 05 offers no scope or backend rows, even when the selection
+supports both scopes or both backends are usable. D-380 already sends a submitted form on to 05
+when the plan offers such a choice; this is why that branch is not reached today. The fix needs a
+test showing a chosen harness keeps the offer, and it overlaps with B-175, since scope belongs
+before the form.
+
+## B-179 — a smoke_test lost to a vendored package reads as "declares no smoke_test"
+
+**Found 2026-10-14 from an owner report.** Status: OPEN, folded into #41/#53.
+
+A package produced by `registry vendor` carries no `aart-cli.authoring` extension (#41), so an
+installed MCP whose upstream declares a `smoke_test` reports the protocol stage as `NOT
+CONFIGURED`. The reason is now specific ("declares no smoke_test"), but it cannot tell a vendored
+package from an author who declared nothing. #53 removes the vendor route, and with it this case.
+
 ## B-177 — `doctor --smoke` and a Doctor-screen test action
 
 **Split from #31 on 2026-10-14 by D-378.** Status: OPEN, not on CP-28.

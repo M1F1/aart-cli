@@ -629,6 +629,9 @@ class ConsumerUiState:
     #: summary of the immutable plan.
     config_draft: InstallationConfigDraft = InstallationConfigDraft()
     config_form_active: bool = False
+    #: The form was submitted for the harnesses chosen on 05 (D-380). The install then goes
+    #: forward from it and 05 no longer offers the harness, until a Back to 05 makes it a choice.
+    inputs_submitted: bool = False
     #: The artifact whose two input sections screen 22a shows. Credential drill-down changes
     #: ``focus`` to a provider reference, so this parent identity is carried separately.
     user_inputs_artifact: str = ""
@@ -661,6 +664,7 @@ class ConsumerUiState:
             or not _rows_valid(self.targets)
             or not isinstance(self.config_draft, InstallationConfigDraft)
             or not isinstance(self.config_form_active, bool)
+            or not isinstance(self.inputs_submitted, bool)
             or not isinstance(self.user_inputs_artifact, str)
             or any(character in self.user_inputs_artifact for character in "\r\n")
             or not isinstance(self.configuration_input, str)
@@ -1027,6 +1031,11 @@ def _back(state: ConsumerUiState) -> tuple[ConsumerUiState, tuple[ConsumerUiComm
         help_visible=False,
         quit_pending=False,
         failed_action=None,
+        # D-380: going back to 05 is asking to choose again, so the harness is a row there again.
+        inputs_submitted=(
+            state.inputs_submitted
+            and session.screen in (ConsumerScreen.REMEDIATION, ConsumerScreen.READY)
+        ),
     )
     return updated, (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, session.screen),)
 
@@ -1347,6 +1356,7 @@ def _request_action(
             session=session,
             action=action,
             config_form_active=False,
+            inputs_submitted=True,
             quit_pending=False,
         )
         command = ConsumerUiCommand(
@@ -1516,6 +1526,7 @@ def _action_prepared(
                 session=session,
                 config_draft=event.config_draft,
                 config_form_active=False,
+                inputs_submitted=False,
                 quit_pending=False,
             ),
             (
@@ -1547,6 +1558,17 @@ def _action_prepared(
         selection_identity=event.selection_identity or None,
         review_digest=event.review_digest,
     )
+    if (
+        action is ConsumerActionKind.INSTALL
+        and state.inputs_submitted
+        and state.session.screen is ConsumerScreen.REVIEW_SELECTION
+        and event.screen is not None
+        and event.screen is not ConsumerScreen.REVIEW_SELECTION
+    ):
+        # D-380: the answers are in, so the plan goes on to whatever needs deciding next rather
+        # than back through the harness choice and a second Required Inputs.
+        reviewed = replace(state, session=session, config_form_active=False, quit_pending=False)
+        return _navigate(reviewed, event.screen)
     return replace(
         state,
         session=session,
@@ -1776,6 +1798,7 @@ def _action_recorded(
         targets=(),
         config_draft=InstallationConfigDraft(),
         config_form_active=False,
+        inputs_submitted=False,
         focus=focus,
         quit_pending=False,
         action=None,

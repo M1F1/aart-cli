@@ -4,6 +4,26 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-14, D-380: Required Inputs goes forward, and the form is spaced and quiet.** These are
+fixes from the owner's first use of 0.6.0.
+
+- After the 07 form, the install no longer returns to 05 to ask for the harness, or to a 07
+  summary. It goes to Remediation only when a decision is needed, then Ready.
+- Fields are separated by blank lines, and the credential and storage prose under the form is gone.
+- A `NOT CONFIGURED` protocol stage now says whether the artifact declares no `smoke_test` or one
+  with a refused key.
+
+Evidence:
+
+- New `tests/inputs_go_forward_test.py`. Its end-to-end case runs from Marketplace to Success with
+  no 05 frame after the form.
+- Rewritten form tests in `install_time_config_form_test.py`, and `TheReasonNamesWhatIsMissingTest`.
+- Three targeted mutations, each red: following the named screen, hiding the harness rows, and the
+  blank line.
+- 1,025 focused tests and the frame matrix are green. Typecheck, lint and docs-check are clean.
+
+Not yet observed live.
+
 **2026-10-14, CP-28 step 6 — full verification: VERIFIED on CI.** **`pr-check` passed on PR #58 at `fb8a1d6`, which contains every CP-28 step.** Run 38571928092, 2026-10-14.
 
 - Python 3.10, 3.11 and 3.14 all passed.

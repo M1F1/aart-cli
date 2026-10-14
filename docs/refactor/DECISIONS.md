@@ -9734,3 +9734,35 @@ Implementation choice, 2026-10-14, under D-378 and §170.4.
   action, and `Enter` goes back to the same Success, whose focus is still the receipt.
 - **The test seam is a port.** `McpTestPort` lets the end-to-end tests observe the records at the
   moment the test starts, and `LocalMcpTest` is the production implementation.
+
+## D-380 — Required Inputs goes forward, and the form says nothing under it
+
+Implementation choices, 2026-10-14, from an owner report. No Product Specification change: this
+brings the TUI into line with §161.5.
+
+- **The harness is not asked again.** Submitting the 07 form used to rewind to 05, which drew the
+  harness rows a second time, and 05's Continue then reopened 07 as a summary, before Remediation
+  and Ready. The canonical flow is Review Selection, Required Inputs, Remediation only when a
+  decision is needed, then Ready.
+  - Submitting sets `inputs_submitted` on the state.
+  - The adapter's ready answer names the next screen (`_after_inputs`). That screen is 05 only
+    while the plan still offers a real scope or backend choice; otherwise it is Remediation when a
+    decision is needed, and Ready when not.
+  - The reducer follows the named screen only when the form was just submitted, so re-preparing
+    after a scope toggle stays on 05.
+  - On 05 after the form, only the scope and backend rows are drawn, and Continue skips the 07
+    summary.
+  - Back to 05 clears the flag, so the harness is a choice there again.
+- **The form is spaced and carries nothing else.** A blank line separates each field and Continue,
+  as §161.5/07 draws them. The status under the form is deleted with `installation_config_status`:
+  "kept beside the installed artifact", the credentials heading, every token's "Enter securely
+  during installation" line and its guidance. That guidance still reaches the person on the lent
+  terminal just before the provider's prompt (CP-23 task 13), which is the moment it is needed. The
+  07 summary for a credential-only install is unchanged.
+- **A NOT CONFIGURED protocol stage says why.** `declared_smoke` tells an artifact that declares no
+  `smoke_test` apart from one whose declaration this version refuses, and names the refused keys,
+  such as the `expect` that D-378 removed.
+
+B-178 (the narrowed plan drops its choices) and B-179 (vendored packages lose `smoke_test`) are
+backlog.
+
