@@ -6,7 +6,7 @@
 install-and-verify path: `docs/refactor/slices/CP-28-consumer-install-and-verify.md`, tracked on
 GitHub as the epic #51 and labelled `critical-path`.** Its six steps are in `plan.json`; step 1 is
 `in_progress` as PR #52, step 2 is `in_progress` on `fix/configuration-after-harness-choice`
-(stacked on #52; D-377), and the rest are `todo`. The next executable work is step 3 (#31).
+(stacked on #52; D-377), and the rest are `todo`. Steps 4 (#48, PR #56) and 5 (#49, PR #57) are done and stacked on it. **Step 3 (#31) is blocked on the owner accepting D-378**, the proposed §170 rewrite it needs, including one open question: does the smoke run by default after install, or is it offered on Success? After that comes step 6, the full verification on `pr-check`.
 
 The goal is a release somebody in the owner's company installs. That narrows the path to one
 person -- a consumer installing artifacts into opencode who wants to know they work -- and makes

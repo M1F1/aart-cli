@@ -9685,3 +9685,79 @@ Not changed, deliberately: changing the scope on the reviewed 05 re-prepares, an
 installation owner includes its scope, a new scope is a new owner whose fields must be asked again
 (no cross-installation prefill, §169). That is correct but repetitive, and is B-175.
 
+
+## D-378 — Two smoke stages and an advisory connectivity reading replace §170's hierarchy
+
+**PROPOSED 2026-10-14, awaiting owner acceptance. CP-28 step 3 (#31). Rewrites §170.2–§170.6; no
+code moves until it is accepted.**
+
+The owner settled the scope on #31 on 2026-10-14. It contradicts the accepted §170 in four
+places, so the specification has to change first rather than the code drifting from it:
+
+- §170.2 and INV-250 require five evidenced stages; the settled scope keeps two.
+- §170.3 says "without `expect`, the direct route does not guess business meaning from keywords";
+  the settled scope adds exactly such a reading, and removes `expect`.
+- §170.4 and INV-251 define the operator-run harness route; the settled scope removes it.
+- §170.1 says "this increment has no new TUI flow"; CP-28 runs the smoke after install and from
+  Doctor.
+
+### Proposed replacement text
+
+**§170.2 Verification stages.** Each selected installation receives two independently evidenced
+stages, and an advisory reading:
+
+| Stage | Claim |
+| --- | --- |
+| Installation configuration | Unchanged from today. |
+| MCP startup and protocol | Unchanged from today, including the declared `tools/call` and its result checks. |
+| Connectivity reading (advisory) | Whether the declared call's result looks like the service answered. |
+
+The reading runs only when the protocol stage passed. It never changes the protocol stage's
+outcome, the run's exit status or any other stage.
+
+**§170.3, amended.** `smoke_test` takes `tool`, `read_only: true`, optional `arguments` and
+optional `timeout_seconds`. Nothing else. `expect` leaves the contract: a manifest that carries it
+is refused as an unknown key, with no reader that tolerates it. The paragraph ending "the direct
+route does not guess business meaning from keywords" is replaced by:
+
+> **Connectivity reading.** Over the text content of the declared call's result, after the protocol
+> stage passed: no content at all reads `EMPTY`. Content containing a transport or authorization
+> failure marker reads `PROBABLY UNREACHED` and names the matched phrase. The markers are:
+> connection refused, could not connect, timed out, name or service not known, certificate and
+> TLS failures, and HTTP 401, 403, 502, 503 and 504. Anything else reads `ANSWERED`. These words
+> are the reading's own and are never `PASS` or `FAIL`, because a phrase match is evidence and not
+> proof. Every reading names its evidence. The marker list lives in one place in the code: not in
+> a manifest, not in configuration, not per artifact. Changing it is a code change with a test.
+
+The rest of §170.3 stays: one declared call, no tool guessing, read-only as a reviewed contract,
+and secrets never arguments.
+
+**§170.4, removed.** AART neither composes a harness prompt nor reads a harness report. The
+`--prompt` and `--report` route goes with no deprecation window (pre-1.0; owner rule).
+
+**§170.5, amended.** Outcomes are `PASS`, `FAIL`, `BLOCKED`, `NOT CONFIGURED`, `NOT RUN` and
+`UNSUPPORTED`, plus the three reading words. `NOT VERIFIED` leaves, because nothing remains that
+could produce it. Coverage is `direct` only. Success and a zero exit mean both stages pass for
+every selected target. `--show-response` and the persistence rules stay unchanged.
+
+**§170.1, amended.** The "no new TUI flow" sentence is replaced by §170.7.
+
+**§170.7, new: when the smoke runs.**
+- `aart-cli doctor --smoke [SELECTOR ...]` adds the stage section to Doctor's report. Without the
+  flag Doctor is unchanged and starts no process (INV-194).
+- After an MCP installation succeeds, the direct smoke runs for the installations just made that
+  declare `smoke_test`. The install's Ready review states before confirmation that it will run,
+  which tool and arguments it uses, and that the call reaches the configured service. The smoke's
+  result never changes the install's outcome.
+- *Owner question:* run by default after install as written, or offered as a choice on Success?
+
+**Invariants.** INV-249 loses "optional expectations…". INV-250 is restated for two stages plus
+an advisory reading that never establishes a pass. INV-251 is withdrawn. INV-248 and INV-252 are
+unchanged.
+
+### The cheaper per-server answer, kept as guidance
+
+For a server somebody controls: break its configuration once on purpose and confirm that the
+protocol stage goes red. From then on a protocol pass is a trustworthy connectivity verdict for
+that server, and the reading is only a safety net for servers nobody here can fix. This belongs
+in author documentation, not in code.

@@ -948,7 +948,7 @@
         {
           "id": "3",
           "title": "Two smoke stages and a built-in connectivity heuristic, run after install and available in doctor (#31)",
-          "status": "todo"
+          "status": "blocked"
         },
         {
           "id": "4",
