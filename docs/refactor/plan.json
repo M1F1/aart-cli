@@ -943,7 +943,7 @@
         {
           "id": "2",
           "title": "Credentials are collected after the harness choice, not before it (#50)",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "3",

@@ -963,6 +963,14 @@ def _navigate(
         configuration_input=configuration_input,
         configuration_targets=configuration_targets,
         configuration_draft=configuration_draft,
+        # #50: 05 -> 07 before any plan exists is the way into the form; once a plan has been
+        # reviewed, 07 is its summary instead.
+        config_form_active=(
+            state.session.screen is ConsumerScreen.REVIEW_SELECTION
+            and screen is ConsumerScreen.REQUIRED_INPUTS
+            and state.session.review_digest is None
+            and bool(state.config_draft.fields)
+        ),
         search="",
         help_visible=False,
         quit_pending=False,
@@ -1318,12 +1326,11 @@ def _request_action(
     ):
         if not state.config_draft.ready:
             return state, ()
-        # The form precedes screen 05 and is not part of its later summary route. Removing it from
-        # history here means Review -> Required Inputs remains a forward step over the immutable
-        # plan rather than rewinding into the editable form.
+        # The form is entered from screen 05 once the harness is chosen (#50) and is not part of
+        # its later summary route. Returning to 05 rewinds over the form, so Review -> Required
+        # Inputs remains a forward step over the immutable plan rather than back into the form.
         session = replace(
-            state.session,
-            screen=ConsumerScreen.REVIEW_SELECTION,
+            state.session.navigate(ConsumerScreen.REVIEW_SELECTION),
             semantic_identity=None,
             selection_identity=None,
             review_digest=None,
@@ -1487,9 +1494,11 @@ def _action_prepared(
     if action is ConsumerActionKind.INSTALL and event.config_draft is not None:
         if state.session.screen is not ConsumerScreen.REVIEW_SELECTION:
             return state, ()
+        # #50: the answer to a preparation that still needs inputs is not the form yet. It stays
+        # on 05, where the harness is chosen; the draft holds only the fields of the harnesses
+        # already chosen, and Continue opens it. Any earlier plan is gone with its identities.
         session = replace(
             state.session,
-            screen=ConsumerScreen.REQUIRED_INPUTS,
             semantic_identity=None,
             selection_identity=None,
             review_digest=None,
@@ -1499,13 +1508,13 @@ def _action_prepared(
                 state,
                 session=session,
                 config_draft=event.config_draft,
-                config_form_active=True,
+                config_form_active=False,
                 quit_pending=False,
             ),
             (
                 ConsumerUiCommand(
                     ConsumerUiCommandKind.LOAD_SCREEN,
-                    ConsumerScreen.REQUIRED_INPUTS,
+                    ConsumerScreen.REVIEW_SELECTION,
                 ),
             ),
         )

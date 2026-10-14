@@ -54,6 +54,7 @@ from aart_cli.application.consumer_views import (
     LifecyclePlanView,
     PythonInstallerChoiceView,
     RunningInstallationView,
+    harness_choice_problems,
     offer_install_scopes,
     offer_python_installers,
     project_lifecycle_plan,
@@ -748,6 +749,7 @@ class LocalConsumerActions:
         notice: tuple[str, ...] = (),
         pending_setup: tuple[DeclaredArtifactSetup, ...] = (),
         installation_inputs=(),
+        install_targets: tuple[HarnessTargetView, ...] = (),
     ) -> CanonicalScreenSource:
         """The screens for the machine as it currently stands, plus whatever a flow is holding."""
 
@@ -790,6 +792,7 @@ class LocalConsumerActions:
                     else _project_adoption_upstream(self._adoption_upstream)
                 ),
                 installation_inputs=installation_inputs,
+                install_targets=install_targets,
             )
         )
 
@@ -1625,6 +1628,44 @@ class LocalConsumerActions:
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
+        # Eligibility is measured over every profile, before anything is narrowed: it is what the
+        # harness rows offer, and a choice is judged against it rather than against itself.
+        targets = (
+            _installation_targets(prepared.value, host.profiles)
+            if command.action is ConsumerActionKind.INSTALL
+            else ()
+        )
+        if targets and not prepared.value.ready:
+            # #50: configuration is per installation and an installation is a harness, so nothing
+            # is asked until the harness is chosen. Before then the answer is the choice itself; a
+            # field for a harness nobody picked is a question with no installation behind it.
+            eligible_artifacts = tuple(
+                dict.fromkeys(artifact for item in targets for artifact in item.artifacts)
+            )
+            if harness_choice_problems(targets, eligible_artifacts, command.targets):
+                return ConsumerActionUpdate(
+                    self.source(install_targets=targets),
+                    ConsumerUiEvent(
+                        ConsumerUiEventKind.ACTION_PREPARED,
+                        action=command.action,
+                        config_draft=InstallationConfigDraft(),
+                    ),
+                )
+            host = replace(host, profiles=command.targets)
+            prepared = prepare_configured_installation(
+                context.effective,
+                selection,
+                host=host,
+                sources=(),
+                policy=context.policy,
+                selected_remediations=None,
+                credential_providers=context.credential_providers,
+                resolvers=context.credential_providers,
+                previous=previous,
+                preferred_installer=preferred,
+            )
+            if isinstance(prepared, Err):
+                return self._declined(command, _refusal(prepared.diagnostics))
         fields_by_row = {
             f"{field.owner}\t{field.input.id.value}": field
             for field in prepared.value.draft.inputs.fields
@@ -1702,11 +1743,6 @@ class LocalConsumerActions:
                 )
                 if isinstance(prepared, Err):
                     return self._declined(command, _refusal(prepared.diagnostics))
-        targets = (
-            _installation_targets(prepared.value, host.profiles)
-            if command.action is ConsumerActionKind.INSTALL
-            else ()
-        )
         if not prepared.value.ready:
             config_fields: tuple[tuple[InstallationOwner, ConfigInput], ...] = ()
             for field in prepared.value.draft.inputs.unanswered:
@@ -1742,7 +1778,8 @@ class LocalConsumerActions:
                 )
                 return ConsumerActionUpdate(
                     self.source(
-                        installation_inputs=prepared.value.draft.inputs.views(tuple(observations))
+                        installation_inputs=prepared.value.draft.inputs.views(tuple(observations)),
+                        install_targets=targets,
                     ),
                     ConsumerUiEvent(
                         ConsumerUiEventKind.ACTION_PREPARED,

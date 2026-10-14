@@ -9651,3 +9651,37 @@ After the rename every remaining occurrence of `vendor` *is* the command family,
 becomes exactly the removal list. The ordering is the whole point: it converts a judgement call
 into a mechanical one.
 
+## D-377 — The harness is chosen before any installation input is asked
+
+**Implementation choice, 2026-10-14, CP-28 step 2 (#50). No Product Specification change: this
+brings the TUI into line with §161.5.**
+
+§161.5 orders the fast flow Review Selection, then Required Inputs, and §161.5/07 asks for "four
+separate input sets when four harnesses are *selected*". The TUI did the reverse. An install whose
+artifact declared configuration was prepared over every eligible profile, the unready answer
+jumped straight from 05 to the 07 form, and the form held a field for every eligible harness --
+three for a GitHub MCP eligible for claude, opencode and tabnine -- before anyone had said which
+of them they wanted. The harness rows came only afterwards.
+
+The order now matches the specification:
+
+- **The adapter** measures eligibility over every profile, as before, because that is what the
+  harness rows offer. While inputs are unanswered and the request names no valid choice
+  (`harness_choice_problems`), it answers with the eligible harnesses (`install_targets` on the
+  screen snapshot) and an *empty* draft, so no question exists without an installation behind it.
+  Once the choice is valid it narrows the host to exactly those profiles before it builds the
+  draft, so the form, the credential rows and the later plan all name only chosen installations.
+- **The reducer** keeps an unready answer on 05 instead of opening 07, and drops any earlier plan's
+  identities with it. Continue from 05 opens 07 as the form only while no plan has been reviewed
+  and the draft has fields; after review, 07 is the plan's summary as before. Submitting the form
+  returns to 05 by rewinding over it, so the stack never holds the form.
+- **Screen 05 without a plan** draws only harness rows. Scope and the Python backend remain
+  amendments to a plan and still appear once there is one.
+
+`harness_choice_problems` is `target_choice_problems` over eligibility alone; the latter now
+delegates to it, so the two cannot judge a choice differently.
+
+Not changed, deliberately: changing the scope on the reviewed 05 re-prepares, and because an
+installation owner includes its scope, a new scope is a new owner whose fields must be asked again
+(no cross-installation prefill, §169). That is correct but repetitive, and is B-175.
+

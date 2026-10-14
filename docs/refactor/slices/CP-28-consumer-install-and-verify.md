@@ -1,7 +1,7 @@
 # CP-28 — the consumer install-and-verify journey
 
-Status: **in flight**. Task 1 is on `fix/mcp-smoke-harness-argument` as PR #52, open and unmerged;
-tasks 2 to 6 are not started.
+Status: **in flight**. Task 1 is on `fix/mcp-smoke-harness-argument` as PR #52, open and unmerged.
+Task 2 is on `fix/configuration-after-harness-choice`, stacked on it. Tasks 3 to 6 are not started.
 
 Date opened: 2026-10-14. Authority: the product owner, asking to ship the package inside their
 company and to narrow the work to the person who only wants to install artifacts into a harness --
@@ -38,8 +38,12 @@ Both VERIFIED end to end on the owner's machine against a live Airflow MCP under
 step one because until it merges, verification is broken for every artifact with inputs, and an
 automatic post-install smoke would have nothing to stand on.
 
-**2. Credentials after the harness choice (#50).** Today they are collected before it, which asks a
-new user to decide something they have no basis for yet. The first screen a person cannot get past.
+**2. Credentials after the harness choice (#50).** They were collected before it, which asked a
+new user to decide something they had no basis for yet, and asked it once per *eligible* harness
+-- three fields for one value before anyone said which harnesses they wanted. The first screen a
+person could not get past. Fixed per D-377: screen 05 offers the harnesses first, the adapter
+builds the 07 form only for the chosen ones, and 07 opens from 05's Continue. Scope still follows
+the form, which is B-175 and off this slice.
 
 **3. Two stages and a connectivity heuristic (#31).** The scope is settled and narrower than #31
 originally proposed: `installation-configuration` and `mcp-startup-and-protocol` run, and a built-in
@@ -71,4 +75,15 @@ Registry content was already produced the old way.
 ## Evidence
 
 Task 1: see `MIGRATION_STATUS.md` under 2026-10-14 for the mutation evidence and the live run.
-Tasks 2 to 6: none yet.
+Task 2: `tests/install_time_config_form_test.py` -- the adapter offers the harnesses with an
+empty draft until a valid choice and then a field per chosen harness only; the reducer keeps an
+unready answer on 05; 05 without a plan draws only harness rows and continues only once a choice
+has its fields; the full drive from Marketplace to Success answers two fields for two chosen
+harnesses where it used to answer three. Targeted mutations: dropping the host narrowing turns the
+adapter test and the full drive red; dropping the "no plan reviewed yet" condition on opening the
+form turns the reducer test and the full drive red. The 1,555 consumer, TUI, install,
+configuration, credential and setup tests pass; mypy and ruff are clean. `make mutants` not run:
+the changed modules are large enough that a scoped run is hours, and the targeted mutations cover
+the new claims.
+
+Tasks 3 to 6: none yet.

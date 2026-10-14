@@ -5,7 +5,8 @@
 **CP-27 is complete and released as 0.5.0. The active work is CP-28, the consumer
 install-and-verify path: `docs/refactor/slices/CP-28-consumer-install-and-verify.md`, tracked on
 GitHub as the epic #51 and labelled `critical-path`.** Its six steps are in `plan.json`; step 1 is
-`in_progress` as PR #52 and the rest are `todo`.
+`in_progress` as PR #52, step 2 is `in_progress` on `fix/configuration-after-harness-choice`
+(stacked on #52; D-377), and the rest are `todo`. The next executable work is step 3 (#31).
 
 The goal is a release somebody in the owner's company installs. That narrows the path to one
 person -- a consumer installing artifacts into opencode who wants to know they work -- and makes

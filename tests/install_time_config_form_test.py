@@ -24,6 +24,8 @@ from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     CredentialInputView,
+    HarnessTargetView,
+    target_row,
 )
 from aart_cli.domain.credentials import (
     CredentialObservation,
@@ -244,6 +246,42 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
             self.assertIn(f"GitHub organization — {owner}", drawn)
             self.assertIn(f"GitHub token — {owner}: Enter securely during installation", drawn)
 
+    def test_05_without_a_plan_offers_the_harnesses_and_continues_only_once_chosen(self) -> None:
+        """#50: before any field is drawn, 05 asks only which harnesses to install into."""
+
+        base = screens()
+        source = CanonicalScreenSource(
+            replace(
+                base,
+                plan=None,
+                install_targets=(
+                    HarnessTargetView("opencode", ("company/mcp/github@1.5.0",)),
+                    HarnessTargetView("tabnine", ("company/mcp/github@1.5.0",)),
+                ),
+            )
+        )
+        state = replace(
+            _state(),
+            session=ConsumerSession(
+                ConsumerScreen.REVIEW_SELECTION, history=(ConsumerScreen.MARKETPLACE,)
+            ),
+            config_form_active=False,
+        )
+        state = replace(state, rows=source.rows(state))
+        unchosen = "\n".join(frame(source, state))
+        chosen = replace(state, targets=("tabnine",))
+        empty = replace(chosen, config_draft=InstallationConfigDraft())
+
+        self.assertEqual(source.rows(state), (target_row("opencode"), target_row("tabnine")))
+        self.assertIn("[ ] opencode", unchosen)
+        self.assertIn("Choose at least one harness", unchosen)
+        self.assertNotIn("GitHub organization", unchosen)
+        self.assertIsNone(source.detail(state))
+        self.assertIs(source.detail(chosen), ConsumerScreen.REQUIRED_INPUTS)
+        self.assertIn("Installing into: tabnine", "\n".join(frame(source, chosen)))
+        # A choice whose preparation has not yet answered with its fields has nothing to open.
+        self.assertIsNone(source.detail(empty))
+
     def test_verbose_describes_what_the_field_under_the_cursor_binds_to(self) -> None:
         source = self._source()
         state = _state()
@@ -281,8 +319,8 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
 
         self.assertFalse(prepared.config_form_active)
 
-    def test_a_preparation_that_needs_answers_opens_07_without_the_previous_review(self) -> None:
-        """Task 15: nothing held that the form replaces an earlier plan's identities (mutmut)."""
+    def test_a_preparation_that_needs_answers_stays_on_05_without_the_previous_review(self) -> None:
+        """#50: the harness is chosen on 05 before the form; an earlier plan's identities go."""
 
         review = replace(
             _state(),
@@ -307,18 +345,56 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
             replace(review, session=replace(review.session, screen=ConsumerScreen.READY)), needs
         )
 
-        self.assertIs(prepared.session.screen, ConsumerScreen.REQUIRED_INPUTS)
+        self.assertIs(prepared.session.screen, ConsumerScreen.REVIEW_SELECTION)
         self.assertIsNone(prepared.session.semantic_identity)
         self.assertIsNone(prepared.session.selection_identity)
         self.assertIsNone(prepared.session.review_digest)
         self.assertEqual(prepared.config_draft, _draft())
-        self.assertTrue(prepared.config_form_active)
+        self.assertFalse(prepared.config_form_active)
         self.assertEqual(
             commands,
-            (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, ConsumerScreen.REQUIRED_INPUTS),),
+            (
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.LOAD_SCREEN, ConsumerScreen.REVIEW_SELECTION
+                ),
+            ),
         )
         self.assertIs(elsewhere.session.screen, ConsumerScreen.READY)
         self.assertEqual(ignored, ())
+
+    def test_05_opens_the_form_only_before_a_plan_and_only_with_fields_to_ask(self) -> None:
+        """#50: Continue from 05 is the way into the form; after review 07 is a summary."""
+
+        review = replace(
+            _state(),
+            session=ConsumerSession(
+                ConsumerScreen.REVIEW_SELECTION,
+                history=(ConsumerScreen.MARKETPLACE,),
+            ),
+            config_form_active=False,
+        )
+        go = ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=ConsumerScreen.REQUIRED_INPUTS)
+
+        form, _ = reduce_consumer_ui(review, go)
+        empty, _ = reduce_consumer_ui(replace(review, config_draft=InstallationConfigDraft()), go)
+        reviewed, _ = reduce_consumer_ui(
+            replace(
+                review,
+                session=replace(review.session, review_digest="sha256:" + "1" * 64),
+            ),
+            go,
+        )
+
+        self.assertIs(form.session.screen, ConsumerScreen.REQUIRED_INPUTS)
+        self.assertTrue(form.config_form_active)
+        self.assertFalse(empty.config_form_active)
+        self.assertFalse(reviewed.config_form_active)
+
+        # Submitting the form returns to 05 by rewinding: the form is not left on the stack.
+        accepted = replace(form, config_draft=form.config_draft.accept("organization"))
+        submitted, _ = reduce_consumer_ui(accepted, key_event("enter", replace(accepted, cursor=1)))  # type: ignore[arg-type]
+        self.assertIs(submitted.session.screen, ConsumerScreen.REVIEW_SELECTION)
+        self.assertEqual(submitted.session.history, (ConsumerScreen.MARKETPLACE,))
 
 
 class _MemoryCredentialProvider:
@@ -383,15 +459,34 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 handler._context,
                 credential_providers=(_MemoryCredentialProvider(),),
             )
-            first = handler.handle(
+            unchosen = handler.handle(
                 ConsumerUiCommand(
                     ConsumerUiCommandKind.PREPARE_ACTION,
                     action=ConsumerActionKind.INSTALL,
                     selection=("company/mcp/github@1.5.0",),
                 )
             )
+            # #50: nothing is asked before the harness is chosen; the answer is the choice.
+            self.assertFalse(unchosen.event.review_digest)
+            self.assertEqual(unchosen.event.config_draft, InstallationConfigDraft())
+            self.assertEqual(unchosen.source.screens.installation_inputs, ())
+            offered = tuple(item.harness for item in unchosen.source.screens.install_targets)
+            self.assertEqual(set(offered), {"claude", "opencode", "tabnine"})
+
+            chosen = ("opencode", "tabnine")
+            first = handler.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.INSTALL,
+                    selection=("company/mcp/github@1.5.0",),
+                    targets=chosen,
+                )
+            )
 
             self.assertFalse(first.event.review_digest)
+            self.assertEqual(
+                first.source.screens.install_targets, unchosen.source.screens.install_targets
+            )
             self.assertIsNotNone(first.event.config_draft)
             assert first.event.config_draft is not None
             config_views = tuple(
@@ -400,7 +495,8 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 if isinstance(item, ConfigInputView)
             )
             config_rows = tuple(item.row for item in config_views)
-            self.assertGreater(len(config_rows), 1)
+            # One field per chosen harness, and none for the harness nobody chose.
+            self.assertEqual(sorted(row.split("/", 1)[0] for row in config_rows), sorted(chosen))
             self.assertEqual(len(config_rows), len(set(config_rows)))
             for row in config_rows:
                 self.assertEqual(first.event.config_draft.value(row), "acme")
@@ -420,6 +516,7 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                     ConsumerUiCommandKind.PREPARE_ACTION,
                     action=ConsumerActionKind.INSTALL,
                     selection=("company/mcp/github@1.5.0",),
+                    targets=chosen,
                     config_answers=((config_rows[0], "platform-team"),),
                 )
             )
@@ -430,6 +527,7 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                     ConsumerUiCommandKind.PREPARE_ACTION,
                     action=ConsumerActionKind.INSTALL,
                     selection=("company/mcp/github@1.5.0",),
+                    targets=chosen,
                     config_answers=tuple((row, "platform-team") for row in config_rows),
                 )
             )
@@ -461,17 +559,17 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 _at(ConsumerScreen.MARKETPLACE),
                 SPACE,
                 ord("i"),
-                value,
-                ENTER,
-                value,
-                ENTER,
-                value,
-                ENTER,
-                ENTER,
+                # #50: the harnesses first, then a field for each of them and no other.
                 DOWN,
                 SPACE,
                 DOWN,
                 SPACE,
+                ENTER,
+                value,
+                ENTER,
+                value,
+                ENTER,
+                ENTER,
                 ENTER,
                 ENTER,
                 ENTER,

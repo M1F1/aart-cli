@@ -4281,6 +4281,17 @@ general notice field, so carrying it onto the dashboard is its own contained pie
 rather than a line in this slice. The consequence today is only that a curses user sees the
 connected Registry on the dashboard without reading the sentence explaining where it came from.
 
+## B-175 — choosing the scope after the configuration form asks for the configuration again
+
+**Found 2026-10-14 while fixing #50 (D-377).** Status: OPEN, not on CP-28.
+
+Scope and the Python backend are rows of a reviewed plan, so they appear on screen 05 only after
+the 07 form has been answered. An installation owner includes its scope, so changing the scope
+there is a new owner and its fields are asked again -- correctly, since §169 forbids prefill
+across installations, but it is a second form for a decision that could have been made with the
+harness. Offering the scope beside the harness rows before the form would remove it; it needs the
+scope offer measured without a plan, which today only a plan carries.
+
 ## B-174 — the tool-schema validator refused a schema's annotations
 
 **Found 2026-10-14, running `mcp test` against a live Airflow MCP; fixed in the same session.**

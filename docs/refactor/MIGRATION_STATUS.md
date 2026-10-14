@@ -4,6 +4,17 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-14, CP-28 step 2 — the harness is chosen before anything is asked (#50, D-377).** An
+install whose artifact declares configuration used to open the 07 form straight from Marketplace
+with one field per *eligible* harness, and offered the harness choice only afterwards. Screen 05
+now offers the harnesses first; the adapter answers an unchosen request with the eligible
+harnesses and an empty draft, and a valid choice with a draft narrowed to exactly those profiles,
+so the form, the credential rows and the plan name only chosen installations. This is §161.5's own
+order; no specification change. Evidence in the CP-28 slice: new and rewritten tests in
+`tests/install_time_config_form_test.py`, two targeted mutations each red, 1,555 related tests
+green, mypy and ruff clean. Not yet observed in a live terminal on the owner's machine. Stacked on
+PR #52's branch. B-175 (scope still follows the form) is backlog.
+
 **2026-10-14, D-376 — the vendoring vocabulary is split in three, and the rename precedes the
 deletion.** `vendor` named two unrelated things: the command family D-375 removes, and the source
 mode §80 defines. That is why no occurrence of the identifier could be judged safe to delete. The

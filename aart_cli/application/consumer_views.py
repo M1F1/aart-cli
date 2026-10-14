@@ -87,6 +87,7 @@ __all__ = [
     "TARGET_ROW_PREFIX",
     "HarnessTargetView",
     "target_choice_problems",
+    "harness_choice_problems",
     "target_from_row",
     "target_row",
     "targets_confirmed",
@@ -318,11 +319,26 @@ def target_choice_problems(view: ConsumerPlanView, chosen: tuple[str, ...]) -> t
     every artifact must be hosted by some chosen harness.
     """
 
-    if not view.targets:
+    return harness_choice_problems(view.targets, view.selection.resolved, chosen)
+
+
+def harness_choice_problems(
+    targets: tuple[HarnessTargetView, ...],
+    resolved: tuple[str, ...],
+    chosen: tuple[str, ...],
+) -> tuple[str, ...]:
+    """`target_choice_problems` over eligibility alone, for a selection that has no plan yet.
+
+    Configuration belongs to one installation, and an installation is a harness, so the harness is
+    chosen before anything is asked (#50). That choice is made while the inputs are still
+    unanswered and no plan exists, so it is judged against what placement measured.
+    """
+
+    if not targets:
         return ()
     if not chosen:
         return ("Choose at least one harness to install into.",)
-    eligible = {item.harness: item for item in view.targets}
+    eligible = {item.harness: item for item in targets}
     problems = [
         f"{harness} cannot host anything in this selection; untick it."
         for harness in chosen
@@ -334,10 +350,10 @@ def target_choice_problems(view: ConsumerPlanView, chosen: tuple[str, ...]) -> t
         if harness in eligible
         for artifact in eligible[harness].artifacts
     }
-    for artifact in view.selection.resolved:
+    for artifact in resolved:
         if artifact in hosted:
             continue
-        options = ", ".join(item.harness for item in view.targets if artifact in item.artifacts)
+        options = ", ".join(item.harness for item in targets if artifact in item.artifacts)
         problems.append(
             f"None of the chosen harnesses can host {artifact}; it can go into {options}."
             if options
