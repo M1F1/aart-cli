@@ -38,14 +38,15 @@ along with the cheaper per-server alternative: break one server's configuration 
 confirm its failures turn stage 2 red, after which a stage-2 pass is trustworthy for that server
 with no heuristic at all.
 
-Two open questions for the owner, both recorded on #51:
+Stages 3 to 7 are **removed, not hidden**, and so is everything only they read: `expect` leaves the
+manifest surface, `_expectation_failure` and the two service-reading stages leave the evaluator, and
+the harness-run trio leaves with the `--prompt`/`--report` route that feeds it. No deprecation
+window -- the project is pre-1.0 and deletes directly. `reaches_service` survives only if the
+heuristic needs to know whether a service was claimed at all.
 
-1. **#41 or #50 first**, which depends on whether the company Registry is filled by `registry
-   vendor` (then #41 blocks everything) or by the native `adopt`/promote route (then it does not).
-2. Whether stage 4's message changes. Today `NOT VERIFIED — a declared service read needs an
-   expectation the response satisfies` reads as "connectivity was not tested", and it misled the
-   owner into thinking the check was missing. It was not; what went unchecked was whether the
-   response *says* the service answered.
+One open question for the owner, recorded on #51: **#41 or #50 first**, which depends on whether the
+company Registry is filled by `registry vendor` (then #41 blocks everything) or by the native
+`adopt`/promote route (then it does not).
 
 
 ## Where CP-27 is (2026-09-21)
