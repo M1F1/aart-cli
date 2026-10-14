@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-14, CP-28 step 6 — full verification: VERIFIED on CI.** **`pr-check` passed on PR #58 at `fb8a1d6`, which contains every CP-28 step.** Run 38571928092, 2026-10-14.
+
+- Python 3.10, 3.11 and 3.14 all passed.
+- The canonical full run was format-check, lint, typecheck, unit, validate, coverage, packaging-check, docs-check and secret-shape-check. Integration runs inside unit (`scripts/quality.py:247`).
+- 4,828 tests ran.
+- The private-image job was skipped, which is normal for a pull request. CP-28 is complete. The draft stack still awaits review and merge.
+
 **2026-10-14, CP-28 step 3: two smoke stages and an optional test after installation (#31,
 D-378, D-379).**
 

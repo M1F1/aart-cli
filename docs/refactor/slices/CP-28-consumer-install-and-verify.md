@@ -4,7 +4,7 @@ Status: **in flight**. Task 1 is on `fix/mcp-smoke-harness-argument` as PR #52, 
 Task 2 is on `fix/configuration-after-harness-choice` (PR #55), stacked on it; task 4 on
 `fix/one-row-per-installation`, stacked on that; task 5 on `fix/local-registry-is-a-registry`,
 stacked on that. Task 3 is on `feat/cp-28-two-stage-smoke`, stacked on the D-378 proposal branch
-`docs/cp-28-smoke-scope-proposal`. Task 6 runs once all of them are merged into one line.
+`docs/cp-28-smoke-scope-proposal`. Task 6 is done: the full `pr-check` on #58, which carries the whole stack, passed. CP-28 is complete.
 
 Date opened: 2026-10-14. Authority: the product owner, asking to ship the package inside their
 company and to narrow the work to the person who only wants to install artifacts into a harness --
@@ -149,4 +149,9 @@ Targeted mutations, each turning only its own tests red:
 1,196 consumer, TUI, install, smoke, authoring and frame-matrix tests pass. mypy, ruff and
 `make docs-check` are clean. `make mutants` was not run, for the same size reason as task 2.
 
-Task 6: not yet.
+Task 6: **`pr-check` passed on PR #58 at `fb8a1d6`, which contains every CP-28 step.** Run 38571928092, 2026-10-14.
+
+- Python 3.10, 3.11 and 3.14 all passed.
+- The canonical full run was format-check, lint, typecheck, unit, validate, coverage, packaging-check, docs-check and secret-shape-check. Integration runs inside unit (`scripts/quality.py:247`).
+- 4,828 tests ran.
+- The private-image job was skipped, which is normal for a pull request.

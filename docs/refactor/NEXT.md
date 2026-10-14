@@ -6,8 +6,9 @@
 install-and-verify path: `docs/refactor/slices/CP-28-consumer-install-and-verify.md`, tracked on
 GitHub as the epic #51 and labelled `critical-path`.** Its six steps are in `plan.json`. Steps 1, 2, 4 and 5 are done as draft PRs #52, #55, #56 and
 #57. Step 3 (#31) is done on `feat/cp-28-two-stage-smoke`, stacked on the D-378 branch
-`docs/cp-28-smoke-scope-proposal`. **Next is step 6:** merge the stack into one line and run the
-full verification on `pr-check`. Nothing is waiting on the owner.
+`docs/cp-28-smoke-scope-proposal`. Step 6 is done: the full `pr-check` passed on #58, which carries the
+whole stack (run 38571928092). **CP-28 is complete.** What remains is the owner reviewing and merging
+the draft stack #52 → #55 → #56 → #57 → D-378 → #58 in order, and seeing it once in a live terminal.
 
 The goal is a release somebody in the owner's company installs. That narrows the path to one
 person -- a consumer installing artifacts into opencode who wants to know they work -- and makes
