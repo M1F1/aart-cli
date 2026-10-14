@@ -44,6 +44,16 @@ the harness-run trio leaves with the `--prompt`/`--report` route that feeds it. 
 window -- the project is pre-1.0 and deletes directly. `reaches_service` survives only if the
 heuristic needs to know whether a service was claimed at all.
 
+**D-375, accepted 2026-10-14: canonical Registry content enters only through a manifest in an
+external repository.** A Registry is never where artifacts are defined. That removes the `vendor`
+command family -- `vendor`, `vendor-batch`, `discover`, `revendor` -- which exists to ingest an
+upstream declaring nothing; scoped as #53. It does **not** touch `Vendored` *mode*: §80/§81,
+INV-019, INV-020, INV-025, INV-204 and INV-207 all stay, and reading D-375 as "the Registry stores
+nothing" would mean `Referenced` everywhere, which INV-025 makes unworkable because the Marketplace
+declines a referenced row whose snapshot holds no content. The accepted shape is `adopt` in
+`Vendored` mode: the declaration lives upstream, the approved bytes live here. #41/B-172 is closed
+by #53 rather than fixed.
+
 One open question for the owner, recorded on #51: **#41 or #50 first**, which depends on whether the
 company Registry is filled by `registry vendor` (then #41 blocks everything) or by the native
 `adopt`/promote route (then it does not).

@@ -9573,3 +9573,43 @@ fails the build with `baked default registry URL is invalid`, on every interpret
 baking a URL with a leading space into the wheel wherever `urlsplit` happened to forgive it. A typo
 in a repository variable is caught by the maintainer who set it, not by the first person whose
 first run degrades.
+
+## D-375 — Canonical Registry content enters only through a manifest in an external repository
+
+**Owner decision, 2026-10-14.** The only way an artifact reaches a Registry's canonical form is a
+manifest -- `aart-cli.yaml` or `aart-cli.json` -- committed in the repository that authors it. A
+Registry is never a place where artifacts are defined; it is where externally authored artifacts
+are reviewed, approved and snapshotted.
+
+**This is a rule about authorship, not about storage, and the distinction is load-bearing** because
+the word *vendored* names two different things in this product:
+
+- `ArtifactSourceMode = Vendored | Referenced` (§80) is a property of a **promotion**. `Vendored`
+  stores a durable canonical payload; `Referenced` stores only a pinned source reference.
+- The `registry vendor` command family copies a subtree out of a repository that carries **no AART
+  markers at all**, and makes the Registry the owner and version-declarer of the copy.
+
+D-375 constrains the second and leaves the first untouched. `Vendored` mode stays the default and
+stays mandatory: INV-204 (enterprise promotion vendors by default), INV-019 (approved vendored
+artifacts are self-contained), INV-020 and INV-207 (they survive upstream loss), and §81 (an
+approved snapshot is part of the trust and availability contract, not a cache). Reading D-375 as
+"the Registry stores nothing" would mean `Referenced` everywhere, and INV-025 makes that
+unworkable: the Marketplace declines a referenced row by name because its snapshot holds no
+content, so nothing would be installable.
+
+So the accepted shape is `adopt` (or `scan` + `promote`) in `Vendored` mode: the declaration lives
+upstream, the approved bytes live here.
+
+**Consequence.** The `vendor` family -- `registry vendor`, `vendor-batch`, `discover` and
+`revendor` -- exists precisely to ingest an upstream that declares nothing, which D-375 forbids as
+a route into canonical content. It is removed rather than deprecated, per this project's pre-1.0
+stance. Removal is scoped as its own change because a grep for `vendor` reaches 21 source files, 39
+test files and 33 documents, most of which are `Vendored` *mode* and must survive. `#41`/B-172 --
+vendoring writing no `aart-cli.authoring` -- is closed by the removal rather than fixed, and leaves
+the critical path for the same reason.
+
+**Preferred native route.** `adopt` records the upstream branch or tag, so `registry check-upstream`
+can later distinguish unchanged, changed, missing, unreachable and invalid. `scan` + `promote`
+records no upstream reference, so nothing can be re-checked afterwards. Where both would work,
+`adopt` is the one that keeps the subscription D-375 implies.
+
