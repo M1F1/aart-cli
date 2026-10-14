@@ -2,8 +2,10 @@
 
 ## Where the work is (2026-10-14)
 
-**CP-27 is complete and released as 0.5.0. The active work is no longer a CP slice: it is the
-consumer install-and-verify path, tracked as the epic #51 and labelled `critical-path` on GitHub.**
+**CP-27 is complete and released as 0.5.0. The active work is CP-28, the consumer
+install-and-verify path: `docs/refactor/slices/CP-28-consumer-install-and-verify.md`, tracked on
+GitHub as the epic #51 and labelled `critical-path`.** Its six steps are in `plan.json`; step 1 is
+`in_progress` as PR #52 and the rest are `todo`.
 
 The goal is a release somebody in the owner's company installs. That narrows the path to one
 person -- a consumer installing artifacts into opencode who wants to know they work -- and makes
@@ -66,7 +68,7 @@ mode: `registry adopt` is a command, so adoption names the route, and a mode of 
 collide exactly as `Vendored` does now. Scoped as **#54**, and it needs an accepted §80 change
 before any code.
 
-**#54 runs before #53.** Today `grep -ri vendor` reaches 21 source files, 39 test files and 33
+**#54 runs before #53, and both are off CP-28.** Today `grep -ri vendor` reaches 21 source files, 39 test files and 33
 documents, mostly the mode, so the identifier is useless as a deletion list and #53 risks taking
 INV-019/020/204/207 out with the commands. After the rename every remaining `vendor` *is* the
 command family, and the grep is exactly the removal list -- which turns #53 from a judgement call

@@ -433,12 +433,12 @@
         },
         {
           "id": "8",
-          "title": "Harness delivery is one honest answer across Artifact Details, review, Remediation and Success (QA-078/QA-079/QA-080) — diagnosed in D-231, lands with step 3's setup path",
+          "title": "Harness delivery is one honest answer across Artifact Details, review, Remediation and Success (QA-078/QA-079/QA-080) \u2014 diagnosed in D-231, lands with step 3's setup path",
           "status": "done"
         },
         {
           "id": "9",
-          "title": "Publish the reviewed registry commit from inside AART to a configured branch that is never the default (QA-082/QA-055, D-228) — rule, command and push adapter done; the Registry Commit screen action is next",
+          "title": "Publish the reviewed registry commit from inside AART to a configured branch that is never the default (QA-082/QA-055, D-228) \u2014 rule, command and push adapter done; the Registry Commit screen action is next",
           "status": "done"
         },
         {
@@ -927,6 +927,43 @@
           "id": "5",
           "title": "Run the full quality, integration and release-facing verification only after CP-27's implementation tasks are complete",
           "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-28",
+      "title": "The consumer install-and-verify journey: install an artifact into a harness and learn whether it works",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "The direct MCP smoke route starts a launcher with its harness and reports what the launcher said (B-173, B-174, PR #52)",
+          "status": "in_progress"
+        },
+        {
+          "id": "2",
+          "title": "Credentials are collected after the harness choice, not before it (#50)",
+          "status": "todo"
+        },
+        {
+          "id": "3",
+          "title": "Two smoke stages and a built-in connectivity heuristic, run after install and available in doctor (#31)",
+          "status": "todo"
+        },
+        {
+          "id": "4",
+          "title": "The installed view reports every entity an install leaves behind (#48)",
+          "status": "todo"
+        },
+        {
+          "id": "5",
+          "title": "A user can tell whether a Registry is connected, and add one (#49)",
+          "status": "todo"
+        },
+        {
+          "id": "6",
+          "title": "Run the full quality, integration and release-facing verification only after CP-28's implementation tasks are complete",
+          "status": "todo"
         }
       ]
     }

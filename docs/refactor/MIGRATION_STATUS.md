@@ -20,9 +20,10 @@ names the route, and a mode of that name would reproduce today's collision in a 
 deletion cannot be driven from it without risking INV-019, INV-020, INV-204 and INV-207. After the
 rename that grep is exactly the removal list. NOT STARTED; no code has moved.
 
-**2026-10-14, the critical path moves off CP slices — the consumer install-and-verify journey.**
-CP-27 is complete and released as 0.5.0. Active work is the epic #51, labelled `critical-path` on
-GitHub, with members #41, #50, #31, #48 and #49: one consumer installing artifacts into opencode
+**2026-10-14, CP-28 opened — the consumer install-and-verify journey.**
+CP-27 is complete and released as 0.5.0. Active work is CP-28, slice document
+`docs/refactor/slices/CP-28-consumer-install-and-verify.md`, tracked as the epic #51 and labelled
+`critical-path` on GitHub, with members #41, #50, #31, #48 and #49: one consumer installing artifacts into opencode
 and learning whether they work. Step zero is the pushed, unmerged branch
 `fix/mcp-smoke-harness-argument` carrying **B-173** (the direct smoke route started a generated
 launcher with no arguments, so every installation carrying configuration refused before its first
