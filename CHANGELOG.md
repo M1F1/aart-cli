@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.6.0](https://github.com/M1F1/aart-cli/compare/v0.5.0...v0.6.0) (2026-10-14)
+
+
+### Added
+
+* **mcp:** verify an installed MCP in two stages, installation configuration and MCP startup and protocol; a smoke_test block takes exactly tool, read_only, arguments and timeout_seconds ([5c9416d](https://github.com/M1F1/aart-cli/commit/5c9416dcbefaddb761433545fb791b7db0822dc2))
+* **tui:** offer "Test installed MCPs" on Success after an install that made MCP installations; the test runs only when confirmed and never changes the installation ([5c9416d](https://github.com/M1F1/aart-cli/commit/5c9416dcbefaddb761433545fb791b7db0822dc2))
+
+
+### Fixed
+
+* **mcp:** accept JSON Schema annotations such as description and default in a server's tool schema ([5c9416d](https://github.com/M1F1/aart-cli/commit/5c9416dcbefaddb761433545fb791b7db0822dc2))
+* **mcp:** start an installed launcher with the harness it belongs to ([5c9416d](https://github.com/M1F1/aart-cli/commit/5c9416dcbefaddb761433545fb791b7db0822dc2))
+* **tui:** choose the harness before any installation input is asked ([5c9416d](https://github.com/M1F1/aart-cli/commit/5c9416dcbefaddb761433545fb791b7db0822dc2))
+* **tui:** show one row per installation in User Variables and Credentials ([5c9416d](https://github.com/M1F1/aart-cli/commit/5c9416dcbefaddb761433545fb791b7db0822dc2))
+* **tui:** treat a local Registry checkout as a Registry on the maintainer screens ([5c9416d](https://github.com/M1F1/aart-cli/commit/5c9416dcbefaddb761433545fb791b7db0822dc2))
+
+
+### Changed
+
+* **mcp:** remove the harness route, which was mcp test --prompt, mcp test --report and mcp report, together with the expect and reaches_service smoke_test keys ([5c9416d](https://github.com/M1F1/aart-cli/commit/5c9416dcbefaddb761433545fb791b7db0822dc2))
+
+
+### Documentation
+
+* describe the two smoke stages and the test after installation in the authoring and consumer guides ([5c9416d](https://github.com/M1F1/aart-cli/commit/5c9416dcbefaddb761433545fb791b7db0822dc2))
+
 ## [0.5.0](https://github.com/M1F1/aart-cli/compare/v0.4.1...v0.5.0) (2026-09-21)
 
 
