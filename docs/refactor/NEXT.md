@@ -4,9 +4,10 @@
 
 **CP-27 is complete and released as 0.5.0. The active work is CP-28, the consumer
 install-and-verify path: `docs/refactor/slices/CP-28-consumer-install-and-verify.md`, tracked on
-GitHub as the epic #51 and labelled `critical-path`.** Its six steps are in `plan.json`; step 1 is
-`in_progress` as PR #52, step 2 is `in_progress` on `fix/configuration-after-harness-choice`
-(stacked on #52; D-377), and the rest are `todo`. Steps 4 (#48, PR #56) and 5 (#49, PR #57) are done and stacked on it. **Step 3 (#31) is blocked on the owner accepting D-378**, the proposed §170 rewrite it needs, including one open question: does the smoke run by default after install, or is it offered on Success? After that comes step 6, the full verification on `pr-check`.
+GitHub as the epic #51 and labelled `critical-path`.** Its six steps are in `plan.json`. Steps 1, 2, 4 and 5 are done as draft PRs #52, #55, #56 and
+#57. Step 3 (#31) is done on `feat/cp-28-two-stage-smoke`, stacked on the D-378 branch
+`docs/cp-28-smoke-scope-proposal`. **Next is step 6:** merge the stack into one line and run the
+full verification on `pr-check`. Nothing is waiting on the owner.
 
 The goal is a release somebody in the owner's company installs. That narrows the path to one
 person -- a consumer installing artifacts into opencode who wants to know they work -- and makes
@@ -30,22 +31,16 @@ Verified end to end on the owner's machine: both stages now pass against a real 
 tabnine. Until this merges, verification is broken for every artifact with inputs, so an automatic
 post-install smoke has nothing to stand on.
 
-**The verification scope is settled and narrower than #31 originally proposed.** Two stages run --
-`installation-configuration` and `mcp-startup-and-protocol` -- and a built-in heuristic over the
-response answers the connectivity question. The `expect`-based stages are replaced by it and the
-three harness-run stages are dropped: invoking a harness headless and supplying every variable it
-needs costs more than the answer is worth. Nothing is declared per artifact beyond one read-only
-tool, and no marker list or expectation is maintained by hand. The constraints the heuristic has to
-meet -- advisory outcome, evidence always named, markers in code only -- are written down on #31,
-along with the cheaper per-server alternative: break one server's configuration on purpose once and
-confirm its failures turn stage 2 red, after which a stage-2 pass is trustworthy for that server
-with no heuristic at all.
+**The verification scope is two stages and nothing else (D-378, accepted 2026-10-14).** The two
+stages are `installation-configuration` and `mcp-startup-and-protocol`. There is no connectivity
+heuristic, no `expect` and no `reaches_service`. The harness route (`--prompt`, `--report`,
+`mcp report`) is deleted.
 
-Stages 3 to 7 are **removed, not hidden**, and so is everything only they read: `expect` leaves the
-manifest surface, `_expectation_failure` and the two service-reading stages leave the evaluator, and
-the harness-run trio leaves with the `--prompt`/`--report` route that feeds it. No deprecation
-window -- the project is pre-1.0 and deletes directly. `reaches_service` survives only if the
-heuristic needs to know whether a service was claimed at all.
+The test never runs automatically. After an install that made MCP installations, Success offers
+**Test installed MCPs**, which leads to screen 11a (§170.4, D-379). Nothing that test does changes
+the committed transaction. `doctor --smoke` is B-177. Authors are advised to break a server's
+configuration once and confirm stage 2 goes red; that advice is in the authoring guide, and it is
+not a stage.
 
 **D-375, accepted 2026-10-14: canonical Registry content enters only through a manifest in an
 external repository.** A Registry is never where artifacts are defined. That removes the `vendor`
@@ -191,6 +186,8 @@ ids. CP-26 has no remaining execution task.
 
 ### Historical owner revision — capability-dependent smoke coverage (2026-09-20, D-365)
 
+*Superseded by D-378 (2026-10-14): two stages only, no harness route.*
+
 This supersedes earlier requirements for mandatory Tabnine harness execution, blanket prohibition
 of model assessment and unconditional suppression of response display. Implement revised Product
 Specification §170 / INV-250–252. Unsupported allowed-tools capability means direct MCP testing with
@@ -206,6 +203,8 @@ half with an operator-run prompt and carried report. The final implementation an
 recorded under paragraph *(c)* below; CP-26.20a is done.
 
 ### Historical acceptance record — local MCP smoke verification (2026-09-19)
+
+*Superseded by D-378 (2026-10-14): two stages only, no harness route.*
 
 D-348 and Product Specification §170 originally added **CP-26.20a** after local Registry
 consumption. Deliver one CLI command for all or selected **already installed** MCPs in the local
@@ -441,7 +440,8 @@ driven.
 the backlog offered was taken -- §170.3 refuses one and §170.5 refuses the other, and the
 specification supplies the third itself, so B-164 is closed.
 
-**D-368** then removed the driver entirely. `mcp test --prompt` composes the prompt, the operator
+**D-368** then removed the driver entirely (itself superseded by D-378, which deletes the
+harness route). `mcp test --prompt` composes the prompt, the operator
 runs it in their own session, `mcp report <path>` lets that session check its own JSON against the
 schema, and `mcp test --harness <harness> --report <path>` grades the carried results with the same
 deterministic evaluator and labels coverage `direct-and-attested`. AART launches no harness, submits

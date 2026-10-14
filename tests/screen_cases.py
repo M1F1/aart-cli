@@ -22,6 +22,8 @@ from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
+    McpTestEntryView,
+    McpTestView,
     project_dashboard,
 )
 from aart_cli.application.maintainer_views import (
@@ -79,6 +81,7 @@ RECORDED_SCREENS: tuple[ApplicationScreen, ...] = (
     ConsumerScreen.READY,
     ConsumerScreen.INSTALLING,
     ConsumerScreen.SUCCESS,
+    ConsumerScreen.MCP_TEST,
     ConsumerScreen.INSTALLED,
     ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
     ConsumerScreen.INSTALLED_COLLECTION_DETAILS,
@@ -222,6 +225,28 @@ def _consumer_cases() -> dict[ConsumerScreen, ScreenCase]:
     review_source, review = ConfigurationReviewNamesTheChangeTest()._review()
     cases[ConsumerScreen.CONFIGURATION_REVIEW] = ScreenCase(
         "22d:reviewed-change", review_source, review
+    )
+
+    # 11a is reached only from a Success that offered it, so it is recorded holding a prepared
+    # offer for two installations, one of which declares nothing to call (§170.4).
+    mcp_source = CanonicalScreenSource(
+        replace(
+            consumer_install_flow_shell_test.screens(),
+            mcp_test=McpTestView(
+                ("company/mcp/github@1.0.0#opencode", "company/mcp/jira@2.0.0#opencode"),
+                (
+                    McpTestEntryView("company/mcp/github@1.0.0#opencode", "get_me", "{}"),
+                    McpTestEntryView("company/mcp/jira@2.0.0#opencode", "", ""),
+                ),
+            ),
+        )
+    )
+    mcp_state = ConsumerUiState(
+        ConsumerSession(ConsumerScreen.MCP_TEST, review_digest="d" * 64),
+        action=ConsumerActionKind.MCP_TEST,
+    )
+    cases[ConsumerScreen.MCP_TEST] = ScreenCase(
+        "11a:prepared-offer", mcp_source, _reload(mcp_source, mcp_state, entering=True)
     )
 
     activity_source = CanonicalScreenSource(activity_screens())

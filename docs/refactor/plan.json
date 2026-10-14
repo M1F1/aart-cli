@@ -948,7 +948,7 @@
         {
           "id": "3",
           "title": "Two smoke stages and a built-in connectivity heuristic, run after install and available in doctor (#31)",
-          "status": "blocked"
+          "status": "done"
         },
         {
           "id": "4",
@@ -963,7 +963,7 @@
         {
           "id": "6",
           "title": "Run the full quality, integration and release-facing verification only after CP-28's implementation tasks are complete",
-          "status": "blocked"
+          "status": "todo"
         }
       ]
     }

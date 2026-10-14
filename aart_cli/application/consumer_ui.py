@@ -95,6 +95,9 @@ class ConsumerActionKind(str, Enum):
     CONFIGURE = "configure"
     CREDENTIAL_REPLACE = "credential-replace"
     CREDENTIAL_DELETE = "credential-delete"
+    #: The optional test of a committed install's MCP installations (§170.4). It reads and starts
+    #: what was installed and records nothing, so it is never part of the install it follows.
+    MCP_TEST = "mcp-test"
 
 
 class ConsumerUiEventKind(str, Enum):
@@ -851,6 +854,8 @@ _SUBJECT_PRESERVING_BACK_EDGES = frozenset(
         (MaintainerScreen.POLICY_REVIEW, MaintainerScreen.VALIDATION_DETAILS),
         # CP-23 task 12: backing out of a credential action is still about that credential.
         (ConsumerScreen.CREDENTIAL_REVIEW, ConsumerScreen.CREDENTIAL_ACTION),
+        # Leaving the MCP test returns to the Success it followed, still about that receipt.
+        (ConsumerScreen.MCP_TEST, ConsumerScreen.SUCCESS),
         (ConsumerScreen.CREDENTIAL_ACTION, ConsumerScreen.CREDENTIAL_DETAILS),
     }
 )
@@ -1264,6 +1269,8 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.CONFIGURE,
         ConsumerScreen.CONFIGURATION_VALUE,
     ): ConsumerScreen.CONFIGURATION_REVIEW,
+    # §170.4: the offer is a review of its own, so what will be called is stated before it is.
+    (ConsumerActionKind.MCP_TEST, ConsumerScreen.SUCCESS): ConsumerScreen.MCP_TEST,
 }
 
 #: The screens an action can be asked from, which are also the screens a declined preparation
@@ -1583,6 +1590,7 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
     (ConsumerActionKind.CREDENTIAL_DELETE, ConsumerScreen.CREDENTIAL_REVIEW): None,
     (ConsumerActionKind.CONFIGURE, ConsumerScreen.CONFIGURATION_REVIEW): None,
     (ConsumerActionKind.REGISTRY_PUSH, MaintainerScreen.REGISTRY_PUSH): None,
+    (ConsumerActionKind.MCP_TEST, ConsumerScreen.MCP_TEST): None,
 }
 
 
@@ -1722,6 +1730,10 @@ def _action_recorded(
     action = event.action
     if action is None or action is not state.action or not event.text:
         return state, ()
+    if action is ConsumerActionKind.MCP_TEST:
+        # The answer is drawn where it was asked for, and Success behind it is unchanged: a test
+        # is not a lifecycle result, so it moves nothing and clears nothing the install left.
+        return replace(state, action=None, quit_pending=False), ()
     origins = {
         ConsumerActionKind.REGISTRY_INIT: RegistryCommitOrigin.INIT_REGISTRY,
         ConsumerActionKind.REGISTRY_REBUILD: RegistryCommitOrigin.REBUILD_REGISTRY,
@@ -2202,6 +2214,7 @@ _CONFIRM_SCREENS = frozenset(
         MaintainerScreen.REGISTRY_PUSH,
         ConsumerScreen.CREDENTIAL_REVIEW,
         ConsumerScreen.CONFIGURATION_REVIEW,
+        ConsumerScreen.MCP_TEST,
     }
 )
 
@@ -2215,6 +2228,11 @@ _ROW_ACTIONS: dict[ApplicationScreen, dict[str, tuple[ConsumerActionKind, str]]]
         "replace": (ConsumerActionKind.CREDENTIAL_REPLACE, "Review replacement"),
         "delete": (ConsumerActionKind.CREDENTIAL_DELETE, "Review deletion"),
     },
+    # One of Success's rows is an action rather than a destination: the test it reviews is about
+    # the transaction Success shows, which stays the subject (§170.4). The other rows still open.
+    ConsumerScreen.SUCCESS: {
+        ConsumerScreen.MCP_TEST.value: (ConsumerActionKind.MCP_TEST, "Review MCP test"),
+    },
 }
 
 
@@ -2227,6 +2245,16 @@ def _answered_in_place(state: ConsumerUiState) -> bool:
 
     return (
         state.session.screen is ConsumerScreen.CREDENTIAL_REVIEW
+        and state.action is None
+        and state.failed_action is None
+    )
+
+
+def _mcp_test_answered(state: ConsumerUiState) -> bool:
+    """The MCP test ran and its stages are on 11a: Enter goes back to the Success it followed."""
+
+    return (
+        state.session.screen is ConsumerScreen.MCP_TEST
         and state.action is None
         and state.failed_action is None
     )
@@ -2316,6 +2344,8 @@ def key_bindings(
             bindings.append(KeyBinding("Enter", chosen[1]))
         elif _answered_in_place(state) and "enter" not in keys:
             bindings.append(KeyBinding("Enter", "Credential details"))
+        elif _mcp_test_answered(state) and "enter" not in keys:
+            bindings.append(KeyBinding("Enter", "Back to Success"))
         elif state.failed_action is not None and "enter" not in keys:
             # The run is over. The only thing Enter can honestly do here is leave.
             bindings.append(KeyBinding("Enter", "Back to list"))
@@ -2711,15 +2741,17 @@ def key_event(
         return ConsumerUiEvent(
             ConsumerUiEventKind.NAVIGATE, screen=ConsumerScreen.CREDENTIAL_DETAILS
         )
+    if key == "enter" and _mcp_test_answered(state):
+        return ConsumerUiEvent(ConsumerUiEventKind.BACK)
     if key == "enter" and state.session.screen in _CONFIRM_SCREENS:
         return ConsumerUiEvent(ConsumerUiEventKind.CONFIRM_ACTION)
     if key == "enter" and state.session.screen in _ROW_ACTIONS:
         chosen = _row_action(state, cursor)
-        return (
-            None
-            if chosen is None
-            else ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=chosen[0])
-        )
+        if chosen is not None:
+            return ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=chosen[0])
+        # A screen whose rows are only partly actions still opens the rest (Success, §170.4).
+        if detail is None:
+            return None
     if key == "enter" and detail is not None:
         return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=detail)
     return None

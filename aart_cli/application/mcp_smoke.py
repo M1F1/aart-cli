@@ -1,8 +1,8 @@
 """Pure planning and result evaluation for installed MCP smoke verification.
 
-Process execution, filesystem reads, credential providers and harness CLIs stay outside this
-module. The types here keep each claim separate so a successful JSON-RPC call cannot silently
-become proof of service access or harness execution.
+Process execution, filesystem reads and credential providers stay outside this module. Two stages
+are evaluated (§170.2, D-378): the installation is usable, and its server completes the declared
+call. Neither is presented as proof that the service behind the server was reached.
 """
 
 from __future__ import annotations
@@ -23,18 +23,12 @@ class SmokeOutcome(str, Enum):
     BLOCKED = "BLOCKED"
     NOT_CONFIGURED = "NOT CONFIGURED"
     NOT_RUN = "NOT RUN"
-    NOT_VERIFIED = "NOT VERIFIED"
     UNSUPPORTED = "UNSUPPORTED"
 
 
 class SmokeStage(str, Enum):
     INSTALLATION = "installation-configuration"
     PROTOCOL = "mcp-startup-and-protocol"
-    EXPECTATION = "result-expectation"
-    SERVICE = "mcp-to-external-service"
-    MODEL_PROVIDER = "harness-to-model-provider"
-    HARNESS = "harness-to-mcp-to-external-service"
-    MODEL_ASSESSMENT = "model-assessment"
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,11 +43,6 @@ class SmokeDeclaration:
     tool: str
     arguments: JsonObject
     timeout_seconds: int
-    expect: JsonObject | None = None
-    #: The author's reviewed statement that this tool performs a real read against the configured
-    #: external service using this installation's credentials (§170.2, §170.3).  It is one half
-    #: of the service-stage evidence; the declared expectation is the other.
-    reaches_service: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,13 +60,6 @@ class McpCallResult:
     structured_content: JsonValue | None = None
     is_error: bool | None = None
     jsonrpc_error: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class SmokeEvaluation:
-    protocol: SmokeStageResult
-    expectation: SmokeStageResult
-    service: SmokeStageResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,20 +130,17 @@ def declaration_from_intent(value: JsonValue | None) -> SmokeDeclaration | None:
     tool = fields.get("tool")
     arguments = fields.get("arguments")
     timeout = fields.get("timeout_seconds")
-    expectation = fields.get("expect")
-    reaches_service = fields.get("reaches_service", False)
     if (
-        not isinstance(tool, str)
+        fields.keys() != {"tool", "arguments", "timeout_seconds", "read_only"}
+        or not isinstance(tool, str)
         or not isinstance(arguments, JsonObject)
         or isinstance(timeout, bool)
         or not isinstance(timeout, int)
         or not 1 <= timeout <= 60
-        or not (expectation is None or isinstance(expectation, JsonObject))
-        or reaches_service not in (True, False)
         or fields.get("read_only") is not True
     ):
         return None
-    return SmokeDeclaration(tool, arguments, timeout, expectation, reaches_service is True)
+    return SmokeDeclaration(tool, arguments, timeout)
 
 
 def _python(value: JsonValue) -> object:
@@ -299,41 +278,13 @@ def _content_failure(content: JsonArray | None) -> str | None:
     return None
 
 
-def _expectation_failure(expect: JsonObject, result: McpCallResult) -> str | None:
-    fields = dict(expect.entries)
-    if set(fields) == {"text_contains"}:
-        needle = fields["text_contains"]
-        assert isinstance(needle, str)
-        text = "\n".join(
-            str(dict(item.entries)["text"])
-            for item in (() if result.content is None else result.content.items)
-            if isinstance(item, JsonObject)
-            and dict(item.entries).get("type") == "text"
-            and isinstance(dict(item.entries).get("text"), str)
-        )
-        return None if needle in text else "declared text was not present"
-    path = fields.get("structured_path")
-    if not isinstance(path, str) or "equals" not in fields:
-        return "expectation is malformed"
-    current = result.structured_content
-    for component in path.split("."):
-        if not isinstance(current, JsonObject):
-            return f"structured path {path!r} was not present"
-        current = current.get(component)
-        if current is None:
-            return f"structured path {path!r} was not present"
-    return (
-        None
-        if current == fields["equals"]
-        else f"structured path {path!r} did not equal expected value"
-    )
-
-
 def evaluate_tool_call(
     declaration: SmokeDeclaration,
     tools: Iterable[McpTool],
     result: McpCallResult | None,
-) -> SmokeEvaluation:
+) -> SmokeStageResult:
+    """The protocol stage: the declared tool exists, takes these arguments, and its call is valid."""
+
     available = {tool.name: tool for tool in tools}
     tool = available.get(declaration.tool)
     if tool is None:
@@ -385,67 +336,7 @@ def evaluate_tool_call(
                 )
                 protocol = SmokeStageResult(SmokeStage.PROTOCOL, outcome, failure)
 
-    if protocol.outcome is not SmokeOutcome.PASS:
-        expectation = SmokeStageResult(
-            SmokeStage.EXPECTATION,
-            SmokeOutcome.NOT_RUN,
-            f"depends on {SmokeStage.PROTOCOL.value}",
-        )
-        service = SmokeStageResult(
-            SmokeStage.SERVICE,
-            SmokeOutcome.NOT_RUN,
-            f"depends on {SmokeStage.PROTOCOL.value}",
-        )
-        return SmokeEvaluation(protocol, expectation, service)
-
-    assert result is not None
-    if declaration.expect is None:
-        expectation = SmokeStageResult(
-            SmokeStage.EXPECTATION,
-            SmokeOutcome.NOT_CONFIGURED,
-            "the declaration has no optional expectation",
-        )
-    else:
-        failed = _expectation_failure(declaration.expect, result)
-        expectation = SmokeStageResult(
-            SmokeStage.EXPECTATION,
-            SmokeOutcome.PASS if failed is None else SmokeOutcome.FAIL,
-            "declared expectation matched" if failed is None else failed,
-        )
-    return SmokeEvaluation(protocol, expectation, _service(declaration, expectation))
-
-
-def _service(declaration: SmokeDeclaration, expectation: SmokeStageResult) -> SmokeStageResult:
-    """Grade the external-service claim from its two declared inputs (§170.2, §170.3).
-
-    The specification asks for "the selected tool's reviewed behavior and the observed result",
-    and refuses to let either stand alone: protocol success cannot prove the read reached the
-    service, and "output shape alone does not prove a fresh network request".  So the reviewed
-    behaviour comes from `reaches_service` and the observed result from the declared expectation,
-    and an absent claim is `NOT CONFIGURED` rather than a failure nothing could have avoided.
-    """
-
-    if not declaration.reaches_service:
-        return SmokeStageResult(
-            SmokeStage.SERVICE,
-            SmokeOutcome.NOT_CONFIGURED,
-            "the declaration does not claim this tool reads the external service",
-        )
-    if expectation.outcome is not SmokeOutcome.PASS:
-        return SmokeStageResult(
-            SmokeStage.SERVICE,
-            SmokeOutcome.NOT_VERIFIED,
-            (
-                "a declared service read needs an expectation the response satisfies"
-                if declaration.expect is None
-                else "the declared expectation did not hold, so the service read is unproven"
-            ),
-        )
-    return SmokeStageResult(
-        SmokeStage.SERVICE,
-        SmokeOutcome.PASS,
-        "the declared read reached the external service and its expectation held",
-    )
+    return protocol
 
 
 def aggregate_success(results: Iterable[SmokeStageResult]) -> bool:
@@ -457,7 +348,6 @@ __all__ = [
     "McpCallResult",
     "McpTool",
     "SmokeDeclaration",
-    "SmokeEvaluation",
     "SmokeOutcome",
     "SmokeSelection",
     "SmokeStage",

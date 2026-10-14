@@ -131,44 +131,33 @@ class AuthoringSmokeDeclarationTest(unittest.TestCase):
         self.assertIsInstance(refused, Err)
         self.assertIn("non-secret configuration", refused.diagnostics[0].message)
 
-    def test_expectation_vocabulary_is_bounded(self) -> None:
-        parsed = _parse(
+    def test_the_block_has_exactly_four_fields(self) -> None:
+        """INV-249, D-378: `expect` and `reaches_service` are unknown keys, not optional ones."""
+
+        for extra in (
+            "expect:\n    text_contains: Ada\n",
+            "reaches_service: true\n",
+            "script: x\n",
+        ):
+            with self.subTest(extra=extra):
+                parsed = _parse(
+                    _manifest("smoke_test:\n  tool: read_identity\n  read_only: true\n  " + extra)
+                )
+                self.assertIsInstance(parsed, Err)
+                self.assertIn("unknown field", parsed.diagnostics[0].message)
+
+        full = _parse(
             _manifest(
-                "smoke_test:\n  tool: get_current_user\n  read_only: true\n  expect:\n    script: rm -rf /\n"
+                "smoke_test:\n  tool: read_identity\n  read_only: true\n  timeout_seconds: 5\n"
+                "  arguments:\n    limit: 1\n"
             )
         )
-        self.assertIsInstance(parsed, Err)
-        self.assertIn("unknown field 'script'", parsed.diagnostics[0].message)
-
-    def test_the_service_read_claim_is_an_explicit_opt_in_that_must_be_true(self) -> None:
-        """`reaches_service` is the author's reviewed statement, so only `true` states it.
-
-        §170.3 keeps the minimal declaration at tool and read-only, so this stays optional; and
-        a field that accepted `false` or a string would let a manifest look like it made the claim
-        without making it.
-        """
-
-        absent = _parse(_manifest("smoke_test:\n  tool: read_identity\n  read_only: true\n"))
-        assert isinstance(absent, Ok), getattr(absent, "diagnostics", ())
-        assert absent.value.smoke_test is not None
-        self.assertNotIn("reaches_service", dict(absent.value.smoke_test.entries))
-
-        declared = _parse(
-            _manifest(
-                "smoke_test:\n  tool: read_identity\n  read_only: true\n  reaches_service: true\n"
-            )
+        assert isinstance(full, Ok), getattr(full, "diagnostics", ())
+        assert full.value.smoke_test is not None
+        self.assertEqual(
+            sorted(dict(full.value.smoke_test.entries)),
+            ["arguments", "read_only", "timeout_seconds", "tool"],
         )
-        assert isinstance(declared, Ok), getattr(declared, "diagnostics", ())
-        assert declared.value.smoke_test is not None
-        self.assertIs(dict(declared.value.smoke_test.entries)["reaches_service"], True)
-
-        refused = _parse(
-            _manifest(
-                "smoke_test:\n  tool: read_identity\n  read_only: true\n  reaches_service: false\n"
-            )
-        )
-        self.assertIsInstance(refused, Err)
-        self.assertIn("smoke_test.reaches_service must be true", refused.diagnostics[0].message)
 
 
 if __name__ == "__main__":

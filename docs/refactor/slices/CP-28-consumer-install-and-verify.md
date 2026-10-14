@@ -3,8 +3,8 @@
 Status: **in flight**. Task 1 is on `fix/mcp-smoke-harness-argument` as PR #52, open and unmerged.
 Task 2 is on `fix/configuration-after-harness-choice` (PR #55), stacked on it; task 4 on
 `fix/one-row-per-installation`, stacked on that; task 5 on `fix/local-registry-is-a-registry`,
-stacked on that. Task 3 waits on the owner accepting the §170
-revision; tasks 5 and 6 are not started.
+stacked on that. Task 3 is on `feat/cp-28-two-stage-smoke`, stacked on the D-378 proposal branch
+`docs/cp-28-smoke-scope-proposal`. Task 6 runs once all of them are merged into one line.
 
 Date opened: 2026-10-14. Authority: the product owner, asking to ship the package inside their
 company and to narrow the work to the person who only wants to install artifacts into a harness --
@@ -48,14 +48,24 @@ person could not get past. Fixed per D-377: screen 05 offers the harnesses first
 builds the 07 form only for the chosen ones, and 07 opens from 05's Continue. Scope still follows
 the form, which is B-175 and off this slice.
 
-**3. Two stages and a connectivity heuristic (#31).** The scope is settled and narrower than #31
-originally proposed: `installation-configuration` and `mcp-startup-and-protocol` run, and a built-in
-heuristic over the response answers the connectivity question. The `expect`-based stages are
-replaced by it; the three harness-run stages are dropped, because invoking a harness headless and
-supplying every variable it needs costs more than the answer is worth. Nothing is declared per
-artifact beyond one read-only tool, and no marker list or expectation is maintained by hand. Stages
-3 to 7 are removed, not hidden. What CP-28 adds beyond #31 is the post-install run and the ordering:
-the smoke happens right after an MCP is installed, and `doctor` can run it in bulk, opt-in.
+**3. Two stages, and a test offered after installation (#31, D-378).** Owner decision, accepted
+2026-10-14: keep only `installation-configuration` and `mcp-startup-and-protocol`, with no
+connectivity heuristic; do not run the test automatically, offer it right after installation; and
+never let it affect the install transaction. Done:
+
+- §170 rewritten to two stages and §170.4 "The optional test after installation"; INV-249 to INV-251
+  restated. The `smoke_test` block is exactly `tool`, `read_only`, `arguments`, `timeout_seconds`;
+  `expect` and `reaches_service` are refused as unknown keys.
+- The harness route is deleted outright: `mcp test --prompt`, `--report`, `mcp report`,
+  `application/harness_report.py` and its tests, and `MCP_SMOKE_REPORT_INVALID`.
+- `io/installed_smoke.py` is the one effect boundary both surfaces call: `smoke_installation` for
+  `mcp test`, `LocalMcpTest` for the TUI.
+- The TUI offers **Test installed MCPs** on Success only when the committed transaction made an MCP
+  installation. It is a row action into a new review screen 11a (D-379). 11a states each
+  installation's tool and arguments, and that the call reaches the configured service, before
+  Enter runs anything. The answer is drawn on 11a, and Enter returns to the same Success.
+
+`doctor --smoke` and a Doctor-screen action are B-177, off this slice.
 
 **4. The installed view reports every entity, and only those (#48).** Installing for two harnesses
 drew three entities in User Variables and Credentials: one per harness installation and a third,
@@ -112,4 +122,31 @@ Registry list back to Git turns exactly its assertion red. `tests/maintainer_vie
 Sources are separated by one empty line and nowhere else; red before the fix. 1,450 maintainer,
 Source, Registry, TUI and consumer tests green; mypy and ruff clean.
 
-Tasks 3 and 6: none yet.
+Task 3: `tests/post_install_mcp_test_test.py` drives a real MCP install through the TUI, then:
+
+- the offer names `read_identity {}` and the service, and nothing has run;
+- a confirmed test against a real stdio fixture shows both stages, and the installation records
+  read at the moment the test started equal the records afterwards;
+- a server that is not an MCP fails the test, and the records are still equal;
+- a test port that raises while finding installations leaves Success `Succeeded` with no offer;
+- a Skill install offers nothing.
+
+The reducer and drawing have their own cases. `mcp_smoke_cli_test.py` holds the two stages, the
+protocol stage being `NOT RUN` without starting the server when the first is blocked, an MCP error
+failing the protocol, and the harness route being gone from the parser. `authoring_smoke_test.py`
+holds the four-field block.
+
+Targeted mutations, each turning only its own tests red:
+
+- offering the row unconditionally turns the no-MCP e2e and the three-row screen test red;
+- removing the answered-in-place branch turns the confirmed-test e2e, the back-to-Success e2e and
+  the reducer test red;
+- starting the protocol stage while the installation is blocked turns the blocked-installation test
+  red;
+- accepting `expect` turns the four-field test red;
+- narrowing the offer guard to `ValueError` makes the unreadable-port e2e error.
+
+1,196 consumer, TUI, install, smoke, authoring and frame-matrix tests pass. mypy, ruff and
+`make docs-check` are clean. `make mutants` was not run, for the same size reason as task 2.
+
+Task 6: not yet.

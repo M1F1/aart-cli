@@ -9686,78 +9686,51 @@ installation owner includes its scope, a new scope is a new owner whose fields m
 (no cross-installation prefill, §169). That is correct but repetitive, and is B-175.
 
 
-## D-378 — Two smoke stages and an advisory connectivity reading replace §170's hierarchy
+## D-378 — Two smoke stages, and a test offered after installation
 
-**PROPOSED 2026-10-14, awaiting owner acceptance. CP-28 step 3 (#31). Rewrites §170.2–§170.6; no
-code moves until it is accepted.**
+**Owner decision, accepted 2026-10-14. CP-28 step 3 (#31). §170 rewritten to match.**
 
-The owner settled the scope on #31 on 2026-10-14. It contradicts the accepted §170 in four
-places, so the specification has to change first rather than the code drifting from it:
+The proposal first written under this number kept an advisory connectivity reading and added
+`doctor --smoke`. The owner narrowed it further. In their words: keep only the two checks; the
+test does not run automatically, it is offered right after installation; and it must not break the
+installation transaction, only add to it.
 
-- §170.2 and INV-250 require five evidenced stages; the settled scope keeps two.
-- §170.3 says "without `expect`, the direct route does not guess business meaning from keywords";
-  the settled scope adds exactly such a reading, and removes `expect`.
-- §170.4 and INV-251 define the operator-run harness route; the settled scope removes it.
-- §170.1 says "this increment has no new TUI flow"; CP-28 runs the smoke after install and from
-  Doctor.
+Accepted, and now in §170:
 
-### Proposed replacement text
+- **Two stages and nothing else.** `installation-configuration`, then `mcp-startup-and-protocol`.
+  No keyword reading, no `expect`, no `reaches_service`, no harness route (`--prompt`, `--report`,
+  `mcp report`), no `NOT VERIFIED`. A protocol pass is not presented as proof of service access.
+  §170.2 names the gap, a server that turns an upstream failure into a successful text result, and
+  recommends the per-server check of breaking its configuration once and watching the protocol
+  stage go red.
+- **`smoke_test` is exactly `tool`, `read_only`, `arguments`, `timeout_seconds`.** Any other key,
+  including the former two, is refused as unknown, with no tolerant reader (pre-1.0, owner rule).
+- **The test after installation (§170.4, INV-251)** is offered on the success view once the
+  transaction has committed, covers exactly the MCP installations it made, runs only when chosen,
+  and no outcome of it changes the installation, its receipts or its reported success.
+- **Doctor is unchanged.** `doctor --smoke` from #31 is not part of this decision; it is B-177.
 
-**§170.2 Verification stages.** Each selected installation receives two independently evidenced
-stages, and an advisory reading:
+INV-250 and INV-251 are restated; INV-249 loses the optional-expectation clause; INV-248 and
+INV-252 are unchanged.
 
-| Stage | Claim |
-| --- | --- |
-| Installation configuration | Unchanged from today. |
-| MCP startup and protocol | Unchanged from today, including the declared `tools/call` and its result checks. |
-| Connectivity reading (advisory) | Whether the declared call's result looks like the service answered. |
+## D-379 — The post-installation MCP test is screen 11a, reached by a row action on Success
 
-The reading runs only when the protocol stage passed. It never changes the protocol stage's
-outcome, the run's exit status or any other stage.
+Implementation choice, 2026-10-14, under D-378 and §170.4.
 
-**§170.3, amended.** `smoke_test` takes `tool`, `read_only: true`, optional `arguments` and
-optional `timeout_seconds`. Nothing else. `expect` leaves the contract: a manifest that carries it
-is refused as an unknown key, with no reader that tolerates it. The paragraph ending "the direct
-route does not guess business meaning from keywords" is replaced by:
-
-> **Connectivity reading.** Over the text content of the declared call's result, after the protocol
-> stage passed: no content at all reads `EMPTY`. Content containing a transport or authorization
-> failure marker reads `PROBABLY UNREACHED` and names the matched phrase. The markers are:
-> connection refused, could not connect, timed out, name or service not known, certificate and
-> TLS failures, and HTTP 401, 403, 502, 503 and 504. Anything else reads `ANSWERED`. These words
-> are the reading's own and are never `PASS` or `FAIL`, because a phrase match is evidence and not
-> proof. Every reading names its evidence. The marker list lives in one place in the code: not in
-> a manifest, not in configuration, not per artifact. Changing it is a code change with a test.
-
-The rest of §170.3 stays: one declared call, no tool guessing, read-only as a reviewed contract,
-and secrets never arguments.
-
-**§170.4, removed.** AART neither composes a harness prompt nor reads a harness report. The
-`--prompt` and `--report` route goes with no deprecation window (pre-1.0; owner rule).
-
-**§170.5, amended.** Outcomes are `PASS`, `FAIL`, `BLOCKED`, `NOT CONFIGURED`, `NOT RUN` and
-`UNSUPPORTED`, plus the three reading words. `NOT VERIFIED` leaves, because nothing remains that
-could produce it. Coverage is `direct` only. Success and a zero exit mean both stages pass for
-every selected target. `--show-response` and the persistence rules stay unchanged.
-
-**§170.1, amended.** The "no new TUI flow" sentence is replaced by §170.7.
-
-**§170.7, new: when the smoke runs.**
-- `aart-cli doctor --smoke [SELECTOR ...]` adds the stage section to Doctor's report. Without the
-  flag Doctor is unchanged and starts no process (INV-194).
-- After an MCP installation succeeds, the direct smoke runs for the installations just made that
-  declare `smoke_test`. The install's Ready review states before confirmation that it will run,
-  which tool and arguments it uses, and that the call reaches the configured service. The smoke's
-  result never changes the install's outcome.
-- *Owner question:* run by default after install as written, or offered as a choice on Success?
-
-**Invariants.** INV-249 loses "optional expectations…". INV-250 is restated for two stages plus
-an advisory reading that never establishes a pass. INV-251 is withdrawn. INV-248 and INV-252 are
-unchanged.
-
-### The cheaper per-server answer, kept as guidance
-
-For a server somebody controls: break its configuration once on purpose and confirm that the
-protocol stage goes red. From then on a protocol pass is a trustworthy connectivity verdict for
-that server, and the reading is only a safety net for servers nobody here can fix. This belongs
-in author documentation, not in code.
+- **The offer is a review screen of its own.** It is `11a-test-mcp-installations`, reached from a
+  Success row that is an action rather than a destination. §170.4 requires the offer to name the
+  installations, tools, arguments and the service before anything runs. A review screen that
+  `Enter` confirms is the shape every other reviewed action here already has, so this adds no new
+  confirmation mechanism.
+- **Which installations.** The installations come from the receipt store after the commit. They
+  are the MCP installations, in the reviewed scope, root and chosen harnesses, of members whose
+  status is `completed` or `completed-with-attention`. A recorded installation of that coordinate,
+  harness and root is the one this transaction wrote, because the install replaces it.
+- **The test never touches the install's outcome.** Finding the installations, preparing the plan
+  and running it are each guarded. A failure withholds the offer, or ends the test as failed, and
+  Success keeps the transaction it showed: the adapter holds it and redraws it with every MCP-test
+  update.
+- **The answer stays on 11a.** `ACTION_RECORDED` for the test leaves the screen and clears the
+  action, and `Enter` goes back to the same Success, whose focus is still the receipt.
+- **The test seam is a port.** `McpTestPort` lets the end-to-end tests observe the records at the
+  moment the test starts, and `LocalMcpTest` is the production implementation.

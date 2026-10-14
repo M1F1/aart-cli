@@ -4,6 +4,20 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-14, CP-28 step 3: two smoke stages and an optional test after installation (#31,
+D-378, D-379).**
+
+- §170 now verifies two stages, `installation-configuration` and `mcp-startup-and-protocol`.
+- The `smoke_test` block has exactly four fields.
+- The harness route is gone: `--prompt`, `--report`, `mcp report`, `harness_report.py` and its
+  tests.
+- `io/installed_smoke.py` is the one boundary for both the `mcp test` command and the new screen
+  11a. An install that made MCP installations offers 11a from Success. It runs only when Enter
+  confirms it, and its outcome never changes the committed transaction.
+
+Evidence is in the CP-28 slice: end-to-end TUI tests, five targeted mutations each red, and 1,196
+focused tests green. Not yet observed live.
+
 **2026-10-14, CP-28 step 5 — a local Registry checkout is a Registry on the maintainer screens
 (#49).** The maintainer views recognised only `REGISTRY_GIT`, so a `registry-local` connection was
 drawn as an authoring Source and left off the Registry screen. They ask `is_registry` now, and the

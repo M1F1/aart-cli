@@ -55,6 +55,7 @@ from aart_cli.application.consumer_views import (
     LifecycleOutcomeView,
     LifecyclePlanView,
     MarketplaceCollectionView,
+    McpTestView,
     PresentationProfile,
     ReceiptArtifactView,
     ReceiptDetailView,
@@ -975,6 +976,41 @@ def render_transaction_success(
         if view.undo.available
         else f"Undo unavailable: {view.undo.reason}"
     )
+    return tuple(lines)
+
+
+def render_mcp_test(view: McpTestView | None) -> tuple[str, ...]:
+    """Screen 11a: the offer before it runs, and both stages per installation after (§170.4).
+
+    Every line is a statement about the test, never about the install, which Success has already
+    reported and which nothing here changes.
+    """
+
+    if view is None or not view.installations:
+        return ("This install made no MCP installation to test.",)
+    if view.results is not None:
+        lines = []
+        for result in view.results:
+            lines.append(f"{'✓' if result.passed else '✗'} {result.installation}")
+            for stage in result.stages:
+                lines.append(f"  {stage.outcome:<14} {stage.stage}: {stage.reason}")
+        lines.append(
+            "The installation is unchanged whatever these say; a failed stage is yours to repair "
+            "or reconfigure when you choose."
+        )
+        return tuple(lines)
+    if not view.plan:
+        return ("Preparing the test of: " + ", ".join(view.installations),)
+    lines = ["Confirming starts each installed MCP once and makes one declared call:"]
+    for entry in view.plan:
+        if entry.tool:
+            lines.append(f"  {entry.installation}: {entry.tool} {entry.arguments}")
+        else:
+            lines.append(f"  {entry.installation}: NOT CONFIGURED (declares no smoke operation)")
+    lines.append(
+        "Each call reaches that installation's configured service with its own credentials."
+    )
+    lines.append("Nothing here changes the installation, its receipts or its success.")
     return tuple(lines)
 
 
@@ -1922,6 +1958,7 @@ _REVIEW_SCREENS: frozenset[ApplicationScreen] = frozenset(
         ConsumerScreen.REGISTRY_SYNC,
         ConsumerScreen.CREDENTIAL_REVIEW,
         ConsumerScreen.CONFIGURATION_REVIEW,
+        ConsumerScreen.MCP_TEST,
     }
 )
 
@@ -2022,8 +2059,12 @@ _FIRST_RUN_LINES: tuple[str, ...] = (
 )
 
 
+#: Titles the identifier cannot spell, because `.title()` would write an acronym as a word.
+_TITLES: dict[ApplicationScreen, str] = {ConsumerScreen.MCP_TEST: "Test MCP Installations"}
+
+
 def _title(screen: ApplicationScreen) -> str:
-    return _human(screen.value.split("-", 1)[1]).title()
+    return _TITLES.get(screen) or _human(screen.value.split("-", 1)[1]).title()
 
 
 _WORKFLOW_LABELS: dict[ApplicationScreen, str] = {
@@ -2139,6 +2180,8 @@ def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[s
         if record is None:
             return ("That credential is not known here any more.",)
         return render_credential_review(record, state.action)
+    if screen is ConsumerScreen.MCP_TEST:
+        return render_mcp_test(screens.mcp_test)
     if screen is ConsumerScreen.CONFIGURATION_REVIEW:
         if screens.lifecycle is None:
             return ("That configuration change is not prepared any more.",)
@@ -2600,6 +2643,9 @@ class ConsumerScreens:
     #: has no plan until they are answered, and they are answered per harness, so the harness is
     #: chosen from this first (#50).
     install_targets: tuple[HarnessTargetView, ...] = ()
+    #: The optional test after an install (§170.4): present only when the committed transaction
+    #: made at least one MCP installation, and drawn beside Success rather than in it.
+    mcp_test: McpTestView | None = None
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -2835,6 +2881,7 @@ def screens_from(
     adoption_upstream: MaintainerAdoptionUpstreamView | None = None,
     installation_inputs: tuple[InputView, ...] = (),
     install_targets: tuple[HarnessTargetView, ...] = (),
+    mcp_test: McpTestView | None = None,
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -2887,6 +2934,7 @@ def screens_from(
         machine.configurations,
         running,
         install_targets,
+        mcp_test,
     )
 
 
@@ -3106,7 +3154,7 @@ class CanonicalScreenSource:
             # to view, and a row that opens nothing is the gap this replaced.
             if self._screens.transaction is None and self._screens.outcome is None:
                 return ()
-            return tuple(target.value for target, _label in SUCCESS_CHOICES)
+            return tuple(target.value for target, _label in self._success_choices())
         if screen is ConsumerScreen.DASHBOARD:
             return tuple(
                 target.value
@@ -3304,6 +3352,15 @@ class CanonicalScreenSource:
             return None
         entry = self._screens.offered_collection(state.focus)
         return None if entry is None else entry.members
+
+    def _success_choices(self) -> tuple[tuple[ConsumerScreen, str], ...]:
+        """Success's rows: the test is offered only for an install that made an MCP (§170.4)."""
+
+        return tuple(
+            (target, label)
+            for target, label in SUCCESS_CHOICES
+            if target is not ConsumerScreen.MCP_TEST or self._screens.mcp_test is not None
+        )
 
     def detail(self, state: ConsumerUiState) -> ApplicationScreen | None:
         """Enter opens the detail of whatever this screen is currently about."""
@@ -3995,7 +4052,7 @@ class CanonicalScreenSource:
         if screen is ConsumerScreen.SUCCESS and self.rows(state):
             return tuple(
                 f"{'>' if target.value == state.current_row else ' '} {label}"
-                for target, label in SUCCESS_CHOICES
+                for target, label in self._success_choices()
             )
         if screen is ConsumerScreen.DASHBOARD:
             targets = navigation_targets(screen, maintainer_mode=state.settings.maintainer_mode)

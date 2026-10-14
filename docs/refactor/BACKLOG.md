@@ -4281,6 +4281,15 @@ general notice field, so carrying it onto the dashboard is its own contained pie
 rather than a line in this slice. The consequence today is only that a curses user sees the
 connected Registry on the dashboard without reading the sentence explaining where it came from.
 
+## B-177 — `doctor --smoke` and a Doctor-screen test action
+
+**Split from #31 on 2026-10-14 by D-378.** Status: OPEN, not on CP-28.
+
+#31 proposed an opt-in `doctor --smoke [SELECTOR ...]` and a `[t] Test MCPs` action on screen 29.
+The owner accepted only the test offered after installation for CP-28. The rest stays as #31
+described it: opt-in only, Doctor byte-for-byte unchanged without the flag (INV-194), and a review
+that names the tool, arguments and service before anything runs.
+
 ## B-176 — Registry checks that recognise only the Git transport
 
 **Found 2026-10-14 while fixing #49.** Status: OPEN, not on CP-28.

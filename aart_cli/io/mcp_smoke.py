@@ -295,7 +295,7 @@ def _execute(
         tools = _tools(_response(started.value, 2))
         if isinstance(tools, Err):
             return tools
-        preflight = evaluate_tool_call(declaration, tools.value, None).protocol
+        preflight = evaluate_tool_call(declaration, tools.value, None)
         if preflight.outcome is not SmokeOutcome.NOT_RUN:
             return _error(f"declared MCP call was refused before invocation: {preflight.reason}")
         process.stdin.write(_call_message(declaration))

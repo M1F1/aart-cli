@@ -65,50 +65,36 @@ registry, state, JSON output, or logs. Registries may use safe placeholders such
 `mcp test` is a read-only verification command for installations that already exist in one explicit
 scope, root and harness set. It does not install, update, repair, configure, synchronize or publish.
 
-```sh
-# One exact installed coordinate in this project and harness
-aart-cli mcp test company/mcp/github@1.0.0 \
-  --harness opencode --scope project --project "$PWD"
+To test one exact installed coordinate in this project and harness:
 
-# Every installed MCP for two user-scope harnesses
+```sh
+aart-cli mcp test company/mcp/github@1.0.0 --harness opencode --scope project --project "$PWD"
+```
+
+To test every installed MCP for two user-scope harnesses:
+
+```sh
 aart-cli mcp test --all --harness opencode,claude --scope user --json
 ```
 
-The report keeps installation/configuration, MCP protocol, optional output expectation, external
-service, model provider, and harness route as separate stages. `PASS` for a tool invocation does
-not prove the tool reached its external service: that stage needs the manifest's `reaches_service`
-claim *and* a declared `expect` that holds, and it reports `NOT CONFIGURED` when the manifest makes
-no such claim. A missing declaration, credential or executable is also visible and cannot produce
-an aggregate pass. Reports do not retain configuration values, secrets, raw service payloads or
-harness transcripts.
+The report gives each installation two stages. `installation-configuration` checks that the
+receipt, launcher, configuration file and credential references are usable; when it does not pass,
+`mcp-startup-and-protocol` is `NOT RUN`. `mcp-startup-and-protocol` starts the installed launcher,
+checks the protocol, and makes the one declared call. Its `PASS` does not prove the tool reached
+its external service. A missing declaration, credential or executable is visible and cannot produce
+an aggregate pass. Reports do not retain configuration values, secrets or raw service payloads.
 
-### Verifying through your harness, which you run yourself
+### Testing right after an install
 
-AART does not launch a harness or submit a prompt to one. The harness leg is optional and you run
-it:
-
-```sh
-# 1. Get the prompt: which installations, which tool per installation, and the report shape
-aart-cli mcp test --all --harness claude --scope user --prompt
-
-# 2. Paste it into your own harness session. It writes aart-cli-smoke-report.json.
-#    The session can check its own output first:
-aart-cli mcp report aart-cli-smoke-report.json
-
-# 3. Grade what came back, alongside the direct checks
-aart-cli mcp test --all --harness claude --scope user --report aart-cli-smoke-report.json
-```
-
-The report only *carries* the observation. Each tool result it holds is graded by the same
-deterministic evaluator the direct route uses, and the model's English assessment stays a separate
-stage that cannot establish protocol success or service access. Because AART did not watch the
-session, this evidence is declared as coverage `direct-and-attested` and never counts as direct
-evidence; what makes it hard to fabricate is the declared `expect`, which asks for a value only the
-real service returns. Supplying no report is an honest `NOT RUN`, never a failure of the direct run.
+When an install in the interactive application made at least one MCP installation, Success offers
+**Test installed MCPs**. Choosing it shows what will run first: each installation, its declared
+tool and arguments, and that the call reaches the configured service with that installation's
+credentials. Nothing runs until you confirm. The result is the same two stages as `mcp test`.
+Whatever it says, the install, its receipts and its success are unchanged. Declining the offer is a
+complete installation.
 
 The manifest's `read_only: true` is a reviewed server/tool contract; it is not an operating-system
-sandbox for arbitrary startup code, and the prompt's restrictions are instructions to your
-assistant rather than something AART enforces.
+sandbox for arbitrary startup code.
 
 ## Reading, checking, and undoing a setup
 

@@ -476,7 +476,8 @@ def _parse_smoke_test(
     fields = _fields(
         parsed.value,
         required=frozenset({"tool", "read_only"}),
-        optional=frozenset({"arguments", "timeout_seconds", "expect", "reaches_service"}),
+        # Exactly these four (§170.3, D-378): `expect` and `reaches_service` are unknown keys now.
+        optional=frozenset({"arguments", "timeout_seconds"}),
         path=path,
         label="smoke_test",
     )
@@ -519,60 +520,6 @@ def _parse_smoke_test(
         ("timeout_seconds", timeout),
         ("tool", tool.value),
     ]
-    if "reaches_service" in fields.value:
-        # Only `true` states the claim.  A field that also accepted `false` would let a manifest
-        # carry the word without carrying the statement, and there is nothing to record for an
-        # author who is not making it -- absence is already the answer the evaluator reads.
-        if fields.value["reaches_service"] is not True:
-            return _error(
-                AUTHOR_MANIFEST_INVALID,
-                "smoke_test.reaches_service must be true",
-                path=path,
-            )
-        entries.append(("reaches_service", True))
-    if "expect" in fields.value:
-        expectation = _object(fields.value["expect"], "smoke_test.expect", path=path)
-        if isinstance(expectation, Err):
-            return expectation
-        expected = _fields(
-            expectation.value,
-            required=frozenset(),
-            optional=frozenset({"text_contains", "structured_path", "equals"}),
-            path=path,
-            label="smoke_test.expect",
-        )
-        if isinstance(expected, Err):
-            return expected
-        names = expected.value.keys()
-        text_form = names == {"text_contains"}
-        structured_form = names == {"structured_path", "equals"}
-        if not (text_form or structured_form):
-            return _error(
-                AUTHOR_MANIFEST_INVALID,
-                "smoke_test.expect must contain text_contains, or structured_path and equals",
-                path=path,
-            )
-        if text_form:
-            text_value = _string(
-                expected.value["text_contains"], "smoke_test.expect.text_contains", path=path
-            )
-            if isinstance(text_value, Err):
-                return text_value
-        else:
-            structured_path = _string(
-                expected.value["structured_path"],
-                "smoke_test.expect.structured_path",
-                path=path,
-            )
-            if isinstance(structured_path, Err):
-                return structured_path
-            if any(not part or part in {".", ".."} for part in structured_path.value.split(".")):
-                return _error(
-                    AUTHOR_MANIFEST_INVALID,
-                    "smoke_test.expect.structured_path must be a dotted field path",
-                    path=path,
-                )
-        entries.append(("expect", expectation.value))
     return Ok(JsonObject(tuple(entries)))
 
 
