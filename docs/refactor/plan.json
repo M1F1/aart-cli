@@ -433,12 +433,12 @@
         },
         {
           "id": "8",
-          "title": "Harness delivery is one honest answer across Artifact Details, review, Remediation and Success (QA-078/QA-079/QA-080) \u2014 diagnosed in D-231, lands with step 3's setup path",
+          "title": "Harness delivery is one honest answer across Artifact Details, review, Remediation and Success (QA-078/QA-079/QA-080) — diagnosed in D-231, lands with step 3's setup path",
           "status": "done"
         },
         {
           "id": "9",
-          "title": "Publish the reviewed registry commit from inside AART to a configured branch that is never the default (QA-082/QA-055, D-228) \u2014 rule, command and push adapter done; the Registry Commit screen action is next",
+          "title": "Publish the reviewed registry commit from inside AART to a configured branch that is never the default (QA-082/QA-055, D-228) — rule, command and push adapter done; the Registry Commit screen action is next",
           "status": "done"
         },
         {
@@ -938,12 +938,12 @@
         {
           "id": "1",
           "title": "The direct MCP smoke route starts a launcher with its harness and reports what the launcher said (B-173, B-174, PR #52)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "2",
           "title": "Credentials are collected after the harness choice, not before it (#50)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "3",
