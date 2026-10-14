@@ -9613,3 +9613,41 @@ can later distinguish unchanged, changed, missing, unreachable and invalid. `sca
 records no upstream reference, so nothing can be re-checked afterwards. Where both would work,
 `adopt` is the one that keeps the subscription D-375 implies.
 
+## D-376 — One word per question: adoption, content mode, upstream ref
+
+**Owner decision, 2026-10-14. Needs an accepted Product Specification change (§80 renames a type).**
+
+The owner could no longer tell which `vendor` was which, and that is a naming defect rather than a
+memory problem: the word named two unrelated things at once. D-375 removes one of them, and this
+decision renames the other so the collision cannot come back.
+
+Three questions, three words, no overlap:
+
+| Question | Term | Values |
+|---|---|---|
+| Where did the declaration come from? | **adoption** | always a manifest in an external repository (D-375); after the `vendor` family goes there is no second route, so the concept has no variants |
+| What does the Registry hold for an approved version? | **content mode** | `SelfContained` or `PinnedReference` |
+| What moved upstream? | **upstream ref**, read by `check-upstream` | unchanged, changed, missing, unreachable, invalid |
+
+So `ArtifactSourceMode = Vendored | Referenced` becomes
+**`RegistryContentMode = SelfContained | PinnedReference`**, and `promote --mode` takes
+`self-contained` or `pinned-reference`.
+
+**The words are the specification's own, not new coinage.** INV-019 already reads "approved
+vendored artifacts are **self-contained**", and §80 already describes `Referenced` as storing "a
+**pinned source reference** rather than a durable canonical payload". The rename promotes the
+language the invariants use into the identifiers, which is why no invariant has to change meaning
+for it -- only wording.
+
+**`Adopted` was considered for the mode and rejected.** It would repeat the original mistake in a
+new word: `registry adopt` is a command and `check-upstream` already speaks of a
+"repository-adopted Registry package", so adoption names the *route*. A mode called `Adopted` would
+collide with it exactly as `Vendored` collides with `registry vendor` today.
+
+**This lands before #53, not after.** Today a grep for `vendor` reaches 21 source files, 39 test
+files and 33 documents, most of them the mode, so the identifier is useless as a deletion list and
+#53 carries a real risk of taking INV-019, INV-020, INV-204 and INV-207 out with the commands.
+After the rename every remaining occurrence of `vendor` *is* the command family, and the grep
+becomes exactly the removal list. The ordering is the whole point: it converts a judgement call
+into a mechanical one.
+

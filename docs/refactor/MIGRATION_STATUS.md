@@ -4,6 +4,22 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-14, D-376 — the vendoring vocabulary is split in three, and the rename precedes the
+deletion.** `vendor` named two unrelated things: the command family D-375 removes, and the source
+mode §80 defines. That is why no occurrence of the identifier could be judged safe to delete. The
+accepted vocabulary gives each question one word -- **adoption** for where a declaration came from
+(after D-375, always an external manifest, with no variants left), **content mode** for what the
+Registry holds for an approved version, **upstream ref** for what `check-upstream` reads -- and
+renames `ArtifactSourceMode = Vendored | Referenced` to `RegistryContentMode = SelfContained |
+PinnedReference`. Those two values are the specification's own language (INV-019 "self-contained",
+§80 "pinned source reference"), so the rename changes wording and not one invariant's meaning.
+`Adopted` was considered for the mode and rejected: `registry adopt` is a command, so adoption
+names the route, and a mode of that name would reproduce today's collision in a new word. Scoped as
+#54, which needs an accepted §80 change before any code, and **sequenced before #53**: a grep for
+`vendor` currently reaches 21 source files, 39 test files and 33 documents, mostly the mode, so the
+deletion cannot be driven from it without risking INV-019, INV-020, INV-204 and INV-207. After the
+rename that grep is exactly the removal list. NOT STARTED; no code has moved.
+
 **2026-10-14, the critical path moves off CP slices — the consumer install-and-verify journey.**
 CP-27 is complete and released as 0.5.0. Active work is the epic #51, labelled `critical-path` on
 GitHub, with members #41, #50, #31, #48 and #49: one consumer installing artifacts into opencode

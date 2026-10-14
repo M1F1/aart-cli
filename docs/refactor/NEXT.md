@@ -54,6 +54,25 @@ declines a referenced row whose snapshot holds no content. The accepted shape is
 `Vendored` mode: the declaration lives upstream, the approved bytes live here. #41/B-172 is closed
 by #53 rather than fixed.
 
+**D-376, accepted 2026-10-14: one word per question, and the rename goes first.** The owner could
+no longer tell which `vendor` was which, which is a naming defect rather than a memory problem --
+the word names two unrelated things. So: **adoption** is where a declaration came from (always an
+external manifest, no variants left), **content mode** is what the Registry holds for an approved
+version, and **upstream ref** is what `check-upstream` reads. `ArtifactSourceMode = Vendored |
+Referenced` becomes `RegistryContentMode = SelfContained | PinnedReference`, which are the
+specification's own words -- INV-019 already says "self-contained" and §80 already says "pinned
+source reference" -- so no invariant changes meaning, only wording. `Adopted` was rejected for the
+mode: `registry adopt` is a command, so adoption names the route, and a mode of that name would
+collide exactly as `Vendored` does now. Scoped as **#54**, and it needs an accepted §80 change
+before any code.
+
+**#54 runs before #53.** Today `grep -ri vendor` reaches 21 source files, 39 test files and 33
+documents, mostly the mode, so the identifier is useless as a deletion list and #53 risks taking
+INV-019/020/204/207 out with the commands. After the rename every remaining `vendor` *is* the
+command family, and the grep is exactly the removal list -- which turns #53 from a judgement call
+into a mechanical one. That grep returning nothing but the command family is #54's acceptance test
+and #53's starting point.
+
 One open question for the owner, recorded on #51: **#41 or #50 first**, which depends on whether the
 company Registry is filled by `registry vendor` (then #41 blocks everything) or by the native
 `adopt`/promote route (then it does not).
