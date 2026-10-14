@@ -4,6 +4,22 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-14, the critical path moves off CP slices — the consumer install-and-verify journey.**
+CP-27 is complete and released as 0.5.0. Active work is the epic #51, labelled `critical-path` on
+GitHub, with members #41, #50, #31, #48 and #49: one consumer installing artifacts into opencode
+and learning whether they work. Step zero is the pushed, unmerged branch
+`fix/mcp-smoke-harness-argument` carrying **B-173** (the direct smoke route started a generated
+launcher with no arguments, so every installation carrying configuration refused before its first
+byte of protocol, and the refusal went to a discarded stderr) and **B-174** (the tool-schema
+validator refused a schema's annotations, so a real server's declared call was rejected before
+invocation). Both VERIFIED end to end on the owner's machine against a live Airflow MCP under
+tabnine: `installation-configuration` and `mcp-startup-and-protocol` both PASS where the first
+previously reported a process that closed mid-exchange. Both fixes carry mutation evidence -- each
+change reverted turns exactly its own test red. Verification scope is settled at those two stages
+plus a built-in connectivity heuristic; the `expect`-based stages are replaced by it and the three
+harness-run stages are dropped, because invoking a harness headless and supplying its variables
+costs more than the answer is worth. `NEXT.md` carries the two open owner questions.
+
 **2026-09-21, CP-27 complete — all five tasks VERIFIED.** `pr-check` run `35568282527` on
 `b56ddb5` is green: Python 3.10, 3.11 and 3.14 each passed the ten gates, the aggregate `pr-check`
 passed, and the conditional private-image job was skipped by design. The release-facing third of

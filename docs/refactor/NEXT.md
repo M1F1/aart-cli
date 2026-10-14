@@ -1,5 +1,53 @@
 # AART Refactor — Next Work
 
+## Where the work is (2026-10-14)
+
+**CP-27 is complete and released as 0.5.0. The active work is no longer a CP slice: it is the
+consumer install-and-verify path, tracked as the epic #51 and labelled `critical-path` on GitHub.**
+
+The goal is a release somebody in the owner's company installs. That narrows the path to one
+person -- a consumer installing artifacts into opencode who wants to know they work -- and makes
+everything else backlog, however ready it looks. The ordered list lives on #51; its members are
+#41, #50, #31, #48 and #49, each tagged `critical-path`. Authoring, Registry maintenance beyond
+#41, the Enterprise rollout documents (#43, #44, #45), the CLI reference (#47), the secret-name
+refactor (#46), branch protection (#35) and module boundaries (#32) are all off it.
+
+**Step zero is the branch `fix/mcp-smoke-harness-argument`, which is pushed and unmerged.** Two
+defects on the direct MCP smoke route, both found by running `mcp test` against a live Airflow MCP
+and both fixed with mutation-proven tests:
+
+- **B-173** -- the route started a launcher with no arguments, while a generated launcher carrying
+  configuration opens by reading the harness name from its one argument and refuses without it. The
+  refusal went to a discarded stderr, so the report said only that the process closed mid-exchange.
+  Every installation with configuration was affected, which is the whole class.
+- **B-174** -- the tool-schema validator refused `description` and `default`, which a real server
+  puts on nearly every property, so the declared call was rejected before invocation.
+
+Verified end to end on the owner's machine: both stages now pass against a real Airflow MCP under
+tabnine. Until this merges, verification is broken for every artifact with inputs, so an automatic
+post-install smoke has nothing to stand on.
+
+**The verification scope is settled and narrower than #31 originally proposed.** Two stages run --
+`installation-configuration` and `mcp-startup-and-protocol` -- and a built-in heuristic over the
+response answers the connectivity question. The `expect`-based stages are replaced by it and the
+three harness-run stages are dropped: invoking a harness headless and supplying every variable it
+needs costs more than the answer is worth. Nothing is declared per artifact beyond one read-only
+tool, and no marker list or expectation is maintained by hand. The constraints the heuristic has to
+meet -- advisory outcome, evidence always named, markers in code only -- are written down on #31,
+along with the cheaper per-server alternative: break one server's configuration on purpose once and
+confirm its failures turn stage 2 red, after which a stage-2 pass is trustworthy for that server
+with no heuristic at all.
+
+Two open questions for the owner, both recorded on #51:
+
+1. **#41 or #50 first**, which depends on whether the company Registry is filled by `registry
+   vendor` (then #41 blocks everything) or by the native `adopt`/promote route (then it does not).
+2. Whether stage 4's message changes. Today `NOT VERIFIED — a declared service read needs an
+   expectation the response satisfies` reads as "connectivity was not tested", and it misled the
+   owner into thinking the check was missing. It was not; what went unchecked was whether the
+   response *says* the service answered.
+
+
 ## Where CP-27 is (2026-09-21)
 
 **CP-27 tasks 1-4 are done on `docs/cp-27-default-registry-plan` (PR #40); task 5 is the full

@@ -4281,6 +4281,50 @@ general notice field, so carrying it onto the dashboard is its own contained pie
 rather than a line in this slice. The consequence today is only that a curses user sees the
 connected Registry on the dashboard without reading the sentence explaining where it came from.
 
+## B-174 — the tool-schema validator refused a schema's annotations
+
+**Found 2026-10-14, running `mcp test` against a live Airflow MCP; fixed in the same session.**
+Status: DONE
+
+`_validate_schema` held a closed allowlist -- `type`, `properties`, `required`,
+`additionalProperties`, `items`, `enum`, `const` -- and refused anything else. The closure is right:
+a keyword it does not implement is a constraint it would leave unapplied, and validating less than
+a schema states is worth refusing over. But that reason does not reach an annotation. JSON Schema
+files `title`, `description`, `default`, `examples` and the rest under basic meta-data: they
+describe a value for whoever reads the schema, and no instance is ever invalid because of one.
+
+A real server puts a description on nearly every property and a default on every optional one, so
+the declared call was refused before invocation with `unsupported JSON Schema keyword 'default' at
+$.limit`. The validator refused the server rather than the schema.
+
+Fixed by `_ANNOTATION_SCHEMA_KEYS`, allowed and acted on by nothing. The refusal for a genuinely
+constraining keyword is unchanged and has its own test, because ignoring one of those is the
+failure the allowlist exists to prevent. Both claims were mutated: removing the annotation set
+turns three tests red, and moving `minimum` into it turns exactly the constraint test red.
+
+## B-173 — the direct MCP smoke route started a launcher without the harness it belongs to
+
+**Found 2026-10-14, running `mcp test` against a live Airflow MCP under tabnine; fixed in the same
+session.** Status: DONE
+
+A generated launcher that carries configuration opens with `AART_CLI_HARNESS="${1-}"` and refuses
+anything that is not a slug, because the harness is how it finds the configuration file it must
+read (`application/runtime_projection.py:148`). A harness registration passes it. The direct smoke
+route is a second caller of the same contract and started `[launcher]` with no arguments at all, so
+**every installation carrying configuration refused before its first byte of protocol** -- the
+whole class, not an edge case. Artifacts without inputs get no preamble, which is why the defect
+was invisible until the first artifact with credentials.
+
+The refusal said exactly what was wrong, on a stderr the route sent to `DEVNULL`, so what reached
+the operator was `installed MCP closed before the protocol exchange completed`: the symptom, never
+the reason. Diagnosis took a hand-rolled JSON-RPC handshake against the launcher to recover the
+sentence the tool had thrown away.
+
+Fixed by passing `receipt.owner.harness` as the launcher's one argument, and by sending stderr to a
+bounded temporary file whose contents are appended to the diagnostic. The stdio fixtures are Python
+scripts that ignore argv, so they passed either way; the new tests use a launcher shaped like a
+generated one and assert the exact slug it received.
+
 ## B-172 — a vendored artifact can be listed but not installed
 
 **Tracked as issue #41.**

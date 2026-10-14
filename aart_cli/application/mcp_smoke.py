@@ -186,7 +186,7 @@ _SUPPORTED_SCHEMA_KEYS = frozenset(
 #:
 #: Refusing them refused the servers rather than the schemas. A real MCP server puts `description`
 #: on nearly every property and `default` on every optional one, so a declared call against it was
-#: rejected before invocation over a word that could not have changed the verdict (B-173).
+#: rejected before invocation over a word that could not have changed the verdict (B-174).
 _ANNOTATION_SCHEMA_KEYS = frozenset(
     {
         "$comment",

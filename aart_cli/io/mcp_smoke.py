@@ -243,7 +243,7 @@ def execute_stdio_smoke(
     harness registration passes it; this route is a second caller of the same contract and has to
     pass it too. Omitting it made every launcher carrying configuration refuse to start, and the
     refusal it printed went to a discarded stderr, so the smoke reported only that the process had
-    closed (B-172).
+    closed (B-173).
     """
 
     with tempfile.TemporaryFile() as errors:
