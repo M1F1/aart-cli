@@ -1,7 +1,9 @@
 # CP-28 — the consumer install-and-verify journey
 
 Status: **in flight**. Task 1 is on `fix/mcp-smoke-harness-argument` as PR #52, open and unmerged.
-Task 2 is on `fix/configuration-after-harness-choice`, stacked on it. Tasks 3 to 6 are not started.
+Task 2 is on `fix/configuration-after-harness-choice` (PR #55), stacked on it; task 4 on
+`fix/one-row-per-installation`, stacked on that. Task 3 waits on the owner accepting the §170
+revision; tasks 5 and 6 are not started.
 
 Date opened: 2026-10-14. Authority: the product owner, asking to ship the package inside their
 company and to narrow the work to the person who only wants to install artifacts into a harness --
@@ -54,8 +56,13 @@ artifact beyond one read-only tool, and no marker list or expectation is maintai
 3 to 7 are removed, not hidden. What CP-28 adds beyond #31 is the post-install run and the ordering:
 the smoke happens right after an MCP is installed, and `doctor` can run it in bulk, opt-in.
 
-**4. The installed view reports every entity (#48).** Installing for two harnesses leaves three
-entities behind and the view shows fewer.
+**4. The installed view reports every entity, and only those (#48).** Installing for two harnesses
+drew three entities in User Variables and Credentials: one per harness installation and a third,
+empty one named by the bare artifact coordinate. `user_input_artifacts` keyed configuration by the
+coordinate while both lookups that fill a row (`configurations_for`, the credential dependants)
+key by installation (§169.3), so the coordinate row could never show anything -- and an
+installation with configuration but no credential had no row of its own at all. Fixed by keying
+configuration by installation too.
 
 **5. Registry connectedness (#49).** A user cannot currently tell whether their Registry is
 connected, nor add another one with confidence.
@@ -86,4 +93,10 @@ configuration, credential and setup tests pass; mypy and ruff are clean. `make m
 the changed modules are large enough that a scoped run is hours, and the targeted mutations cover
 the new claims.
 
-Tasks 3 to 6: none yet.
+Task 4: `tests/user_inputs_area_test.py` -- two harness installations of one artifact are exactly
+two rows and no `Configuration: none (0 harness file(s))` row. Red before the fix with the bare
+coordinate as the only row; reverting the one-line change reproduces that exactly. 787 consumer,
+TUI, configuration and credential tests green. The real reader (`read_configuration_files`)
+already sets the installation key, so the fix holds outside the test double.
+
+Tasks 3, 5 and 6: none yet.

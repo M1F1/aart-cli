@@ -2628,9 +2628,14 @@ class ConsumerScreens:
         return next((item for item in self.credentials if item.reference == reference), None)
 
     def user_input_artifacts(self) -> tuple[str, ...]:
-        """Installed artifacts that own config or depend on a provider reference."""
+        """Installations that own config or depend on a provider reference.
 
-        configured = {item.coordinate for item in self.configurations}
+        Keyed the way both lookups below address them -- by installation (§169.3) -- so a row is
+        always one that has something to show. Keying configuration by its bare coordinate drew
+        that coordinate as a third, empty entity beside its two harness installations (#48).
+        """
+
+        configured = {item.row for item in self.configurations}
         dependants = {owner for item in self.credentials for owner in item.dependants}
         return tuple(sorted(configured | dependants))
 

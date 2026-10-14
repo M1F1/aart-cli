@@ -4,6 +4,11 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-14, CP-28 step 4 — one row per installation in User Variables and Credentials (#48).**
+Two harness installations of one artifact drew a third, empty row named by the bare coordinate,
+because configuration was keyed by coordinate and every lookup by installation. Keyed by
+installation now; evidence in the CP-28 slice.
+
 **2026-10-14, CP-28 step 2 — the harness is chosen before anything is asked (#50, D-377).** An
 install whose artifact declares configuration used to open the 07 form straight from Marketplace
 with one field per *eligible* harness, and offered the harness choice only afterwards. Screen 05
