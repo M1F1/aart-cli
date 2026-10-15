@@ -4484,3 +4484,13 @@ source symlinks are forbidden: .venv/bin/python"). An author has to move their v
 repository to promote. Excluding ignored paths, or paths outside every manifest's
 `payload.include`, from the cleanliness and symlink checks would fix it. That changes what a
 pinned observation covers, so the change needs its own decision against D-103's exact-checkout rule.
+
+## B-182 — nothing names the default Registry once it is cleared
+
+Disconnecting the default Registry (TUI Registries, or `aart-cli source remove`) clears
+`default_registry` and names no replacement ("default Registry: cleared; no replacement is
+selected"). `--default` exists only on `source add`, so with two or more Registries still
+connected, the only way back to a default is to remove one and add it again. D-390 covers the
+single-Registry case in Source Sync. The full fix is a "make default" action on a connected Registry,
+plus, on removal, handing the default to the sole remaining Registry. That changes the removal
+review's identity and invariants (`SourceRemovalRequest`), so it is its own slice.

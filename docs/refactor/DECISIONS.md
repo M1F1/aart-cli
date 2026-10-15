@@ -9930,3 +9930,18 @@ statement numbered again, so the numbers read as data.
 helpers are `listed` / `list_item` / `under_item`. Everything else D-386 settled stays: items open
 lower-case, a blank line separates items, and long lines wrap with a hanging indent. Targeted
 mutation: `MARKER = "1. "` turns `tests/list_items_and_wrapping_test.py` red.
+
+## D-390 — Source Sync targets the only enabled Registry when none is the default
+
+The operator changed manifests in their authoring repository, pushed, and could not sync it from
+Maintainer Sources: "Source Sync needs an explicit default target registry". Disconnecting the
+default Registry clears the default and selects no replacement, and no command can make an
+already-connected Registry the default (B-182), so the refusal could not be cleared from either
+surface.
+
+`io/maintainer_sync._target_registry` returns the configured default, or else the only enabled
+Registry. With none, or several and no default, it still refuses, and the headline now says which.
+A single enabled Registry is not a choice, so nothing is chosen on the operator's behalf. Evidence:
+`tests/local_registry_promotion_e2e_test.py` connects the Registry with `--no-default`, then walks
+Source Sync and the review screens to the commit. The mutation `len(registries) == 2` turns only
+that test red.

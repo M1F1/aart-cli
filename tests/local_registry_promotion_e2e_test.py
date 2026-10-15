@@ -75,7 +75,7 @@ class _Terminal(FakeTerminal):
 
 class LocalRegistryPromotionTest(unittest.TestCase):
     @contextlib.contextmanager
-    def _machine(self):
+    def _machine(self, *, default: bool = True):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw).resolve()
             home, author, registry, project = (
@@ -139,7 +139,7 @@ class LocalRegistryPromotionTest(unittest.TestCase):
                         str(registry),
                         "--ref",
                         "main",
-                        "--default",
+                        "--default" if default else "--no-default",
                     ),
                     (
                         "source",
@@ -203,6 +203,22 @@ class LocalRegistryPromotionTest(unittest.TestCase):
                 (registry / "registry" / "versions" / "mcp" / "github-mcp" / "1.1.0.json").is_file()
             )
             self.assertEqual(_git(registry, "status", "--porcelain=v1"), "")
+
+    def test_source_sync_targets_the_only_registry_when_none_is_the_default(self) -> None:
+        # D-390: disconnecting the default Registry left the other one connected but no default,
+        # and Source Sync refused with no way to name one. One enabled Registry is unambiguous.
+        with self._machine(default=False) as (home, registry):
+            self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 4, ENTER, ESCAPE)
+            synced = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
+
+            drawn = "\n".join("\n".join(frame) for frame in synced.frames)
+            self.assertNotIn("explicit default target registry", drawn)
+            self.assertTrue(synced.screen_containing("/ Source Sync Result"), synced.last)
+            before = _git(registry, "rev-parse", "HEAD")
+            walked = self._shell(
+                home, registry, *(DOWN,) * 8, ENTER, DOWN, ENTER, ENTER, ord("d"), *(ENTER,) * 9
+            )
+            self.assertNotEqual(_git(registry, "rev-parse", "HEAD"), before, walked.last)
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest entry point

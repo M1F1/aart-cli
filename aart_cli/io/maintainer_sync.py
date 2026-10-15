@@ -127,6 +127,29 @@ def read_approved_registry_state(
         return _error(str(error))
 
 
+def _enabled_registries(effective: EffectiveConfiguration) -> tuple[SourceAlias, ...]:
+    return tuple(
+        source.alias
+        for source in effective.configuration.sources
+        if source.enabled and source.is_registry
+    )
+
+
+def _target_registry(effective: EffectiveConfiguration) -> SourceAlias | None:
+    """The configured default registry, or the only enabled one when none is the default.
+
+    Disconnecting the default Registry clears the default and names no replacement, and nothing
+    else can name one for a Registry that is already connected, so Source Sync refused for good
+    with one Registry plainly in place (D-390). A single enabled Registry is not a choice.
+    """
+
+    default = effective.configuration.default_registry
+    if default is not None:
+        return default
+    registries = _enabled_registries(effective)
+    return registries[0] if len(registries) == 1 else None
+
+
 def prepare_configured_source_sync(
     effective: EffectiveConfiguration,
     source_alias: SourceAlias,
@@ -146,10 +169,15 @@ def prepare_configured_source_sync(
     source = _configured(effective, source_alias)
     if source is None or source.is_registry:
         return _error(f"authoring Source {source_alias} is not configured and enabled")
-    target = effective.configuration.default_registry
+    target = _target_registry(effective)
     if target is None:
         return _error(
-            "Source Sync needs an explicit default target registry",
+            "Source Sync needs a default target registry: "
+            + (
+                "no Registry is connected"
+                if not _enabled_registries(effective)
+                else "several Registries are connected and none is the default"
+            ),
             # `D-238`: remediation is a sorted set of independent remedies, so an ordered
             # sequence of steps has to be one of them (`QA-060`).
             "publish the Registry to its branch, subscribe to it in this project, then "
