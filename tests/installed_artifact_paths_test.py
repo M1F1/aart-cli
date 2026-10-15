@@ -287,7 +287,7 @@ class ThePathsSurviveTheSessionThatWroteThemTest(unittest.TestCase):
             named = [
                 line.split(": ", 1)[1].split(" (")[0].split(" — ")[0].strip()
                 for line in (drawn or "").splitlines()
-                if re.match(r"\s*- ", line) and ": /" in line
+                if re.match(r"\s+\S", line) and ": /" in line
             ]
 
             self.assertTrue(named, "the Installation section listed no paths")

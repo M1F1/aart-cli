@@ -9967,3 +9967,30 @@ Evidence: `tests/local_registry_promotion_e2e_test.py` syncs a Source, removes i
 checks with `aart-cli source list` that only the Registry remains, adds it again through the Add
 Source form, then syncs and promotes into the Registry. The mutation that offers removal only for
 Registries turns that test red.
+
+## D-392 — One dash per item: a heading over a list is not itself an item
+
+After D-389 the operator found too many dashes: *"w market place w artifact details jest za duzo
+myslinkow"*, then *"w Remediation tak samo podwojne myslinki"*. `bulleted` marked every
+blank-separated group, and lists nested in a group kept their own marker, which caused three
+problems:
+
+- a heading over its list was dashed beside its items;
+- a nested item was dashed twice;
+- the second item of a nested list split off as a new statement (`-   - tune cache`).
+
+`bulleted` now applies three rules:
+
+- **A heading over its own indented block is drawn unmarked**, and the block carries the dashes.
+  A heading is a first line that does not end like a sentence (`.`, `!`, `?`). Examples are the
+  changes a review will make, one section of a record, and `recent activity:`.
+- **A list nested inside a marked statement loses its own marker** and no blank line separates
+  its items.
+- **An indented line after a blank line continues the statement above it.**
+
+A sentence that runs on keeps its marker. This narrows `QA-096` ("every status line is a list
+item"): the invariant test now accepts a heading as the one unmarked line above its block.
+
+Evidence: `tests/list_items_and_wrapping_test.py::OneDashPerItemTest`, including a Hypothesis
+property that no drawn line is ever dashed twice. Disabling the continuation rule, or the nested
+unmarking, each turns those tests red.

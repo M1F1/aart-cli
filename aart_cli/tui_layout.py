@@ -414,6 +414,8 @@ def stated(lines: Sequence[str]) -> Tuple[str, ...]:
 #: What opens one item of a list. Briefly a number (D-386); D-389 took it back, because a number
 #: beside a count -- "1. AART / 2 installed" on the Dashboard -- read as the count.
 MARKER = "- "
+#: A list item nested inside a marked statement; it stands at its indent, unmarked.
+_NESTED_MARKER = re.compile(r"^(\s+)- ")
 
 
 def bulleted(lines: Sequence[str]) -> Tuple[str, ...]:
@@ -439,10 +441,32 @@ def bulleted(lines: Sequence[str]) -> Tuple[str, ...]:
             continue
         if not groups:
             groups.append([])
+        elif not groups[-1] and line[:1].isspace() and len(groups) > 1:
+            # An indented line after a blank is the next item of the list above it, not a new
+            # statement: without this the second item of a nested list read "-   - tune cache".
+            groups.pop()
+            groups[-1].append("")
         groups[-1].append(line)
     items = []
     for group in (group for group in groups if group):
-        items.append((MARKER + group[0], *(" " * len(MARKER) + line for line in group[1:])))
+        block = [line for line in group[1:] if line]
+        if (
+            block
+            and all(line[:1].isspace() for line in block)
+            and not group[0].rstrip().endswith((".", "!", "?"))
+        ):
+            # A heading over its own indented block -- the changes a review will make, one
+            # section of a record -- is not a statement in the list; what stands under it is
+            # (D-392). A sentence is never a heading, so one that runs on keeps its marker. Marking both drew a dash beside a dash (*"podwojne myslinki"*).
+            items.append(tuple(group))
+            continue
+        items.append(
+            (
+                MARKER + group[0],
+                # Unmarked, the nested items need no blank between them to read as separate.
+                *(" " * len(MARKER) + _NESTED_MARKER.sub(r"\1", line) for line in block),
+            )
+        )
     return separate(*items)
 
 

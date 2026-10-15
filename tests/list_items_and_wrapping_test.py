@@ -19,6 +19,7 @@ from aart_cli.tui_layout import (
     bulleted,
     listed,
     lowercase_first,
+    separate,
     stated,
     wrap_lines,
 )
@@ -50,6 +51,54 @@ class NumberedListsTest(unittest.TestCase):
             bulleted(stated(("2 ready", "", "Actions: repair issues."))),
             ("- 2 ready", "", "- actions: repair issues."),
         )
+
+
+class OneDashPerItemTest(unittest.TestCase):
+    """D-392: *"za duzo myslinkow"*, *"w Remediation tak samo podwojne myslinki"*."""
+
+    def test_a_heading_over_a_list_leaves_the_dashes_to_the_items(self) -> None:
+        changes = ("AART will make these changes:", *listed(("Store the credential", "Tune cache")))
+
+        self.assertEqual(
+            bulleted(stated(changes)),
+            (
+                "AART will make these changes:",
+                "  - store the credential",
+                "",
+                "  - tune cache",
+            ),
+        )
+
+    def test_a_list_inside_a_statement_is_not_dashed_a_second_time(self) -> None:
+        record = ("pkg@1.0.0", "Eligible harnesses", *listed(("claude", "codex")))
+
+        self.assertEqual(
+            bulleted(stated(record)),
+            ("- pkg@1.0.0", "  Eligible harnesses", "    claude", "    codex"),
+        )
+
+    def test_a_sentence_that_runs_on_keeps_its_dash(self) -> None:
+        self.assertEqual(
+            bulleted(("Re-run the generated files.", "  Nothing is pushed.")),
+            ("- Re-run the generated files.", "    Nothing is pushed."),
+        )
+
+    @given(
+        st.lists(
+            st.tuples(
+                st.text(alphabet="abc :.", min_size=1, max_size=8).filter(str.strip),
+                st.lists(st.text(alphabet="abc", min_size=1, max_size=5), max_size=3),
+            ),
+            min_size=1,
+            max_size=4,
+        )
+    )
+    def test_no_line_is_ever_dashed_twice(self, statements) -> None:
+        lines = separate(*((head.strip(), *listed(items)) for head, items in statements))
+
+        for line in bulleted(lines):
+            self.assertNotRegex(line, r"^\s*- +- ")
+            self.assertFalse(line.startswith("-   "), line)
 
 
 class WrappingTest(unittest.TestCase):

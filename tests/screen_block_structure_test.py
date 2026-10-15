@@ -420,7 +420,7 @@ class DoctorBlockTest(TestCase):
 
         self.assertEqual(_spoken(blocks[1])[-1], "    launcher: missing")
         self.assertEqual(
-            _statements(blocks[2])[-2:], ("independently repairable:", "  - public/mcp/jira@2.2.0")
+            _statements(blocks[2])[-2:], ("independently repairable:", "- public/mcp/jira@2.2.0")
         )
 
     def test_the_screen_does_not_name_itself_again_under_the_trail(self) -> None:
@@ -988,8 +988,8 @@ class BulletedStatusTest(TestCase):
                 "",
                 "- ready for promotion: 0",
                 "",
-                "- recent maintainer activity:",
-                "    none yet",
+                "recent maintainer activity:",
+                "  none yet",
                 "",
             ),
         )
@@ -1011,5 +1011,13 @@ class BulletedStatusTest(TestCase):
             with self.subTest(screen=screen):
                 drawn = self._status(frame(source, state))
                 self.assertTrue(drawn)
-                for line in drawn:
-                    self.assertTrue(_ITEM.match(line), (screen, line))
+                for index, line in enumerate(drawn):
+                    # D-392: a heading over its own indented block is the one unmarked line; what
+                    # stands under it is the list.
+                    under = drawn[index + 1] if index + 1 < len(drawn) else ""
+                    heading = (
+                        not line[:1].isspace()
+                        and not line.rstrip().endswith((".", "!", "?"))
+                        and under[:1].isspace()
+                    )
+                    self.assertTrue(_ITEM.match(line) or heading, (screen, line))
