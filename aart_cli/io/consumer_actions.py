@@ -100,12 +100,6 @@ from aart_cli.application.maintainer_views import (
     project_source_sync_result,
     project_source_sync_review,
 )
-from aart_cli.application.registry_publication import (
-    RegistryPublicationCommand,
-    RegistryPublicationReceipt,
-    prepare_registry_publication,
-    publication_summary,
-)
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.configuration.schema import configured_source_from_input
@@ -140,6 +134,12 @@ from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import ArtifactRequest, ArtifactSelection, VersionConstraint
 from aart_cli.protocol.authoring import read_package_description
 from aart_cli.protocol.hashing import parse_sha256
+from aart_cli.registry_commands.publication_state import (
+    RegistryPublicationCommand,
+    RegistryPublicationReceipt,
+    prepare_registry_publication,
+    publication_summary,
+)
 from aart_cli.store.model import ObjectReadRequest, object_store_paths
 from aart_cli.tui_consumer import (
     CanonicalScreenSource,

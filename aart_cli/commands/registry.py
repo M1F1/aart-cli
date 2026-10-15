@@ -17,10 +17,6 @@ from aart_cli.application.promotion import (
     load_registry_versions,
     plan_bulk_promotion,
 )
-from aart_cli.application.registry_publication import (
-    prepare_registry_publication,
-    publication_summary,
-)
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.curation.model import (
     DEFAULT_MAXIMUM_AART,
@@ -76,6 +72,10 @@ from aart_cli.registry_commands.planning import (
     audit_registry_workspace,
     test_registry_compatibility,
     validate_registry_workspace,
+)
+from aart_cli.registry_commands.publication_state import (
+    prepare_registry_publication,
+    publication_summary,
 )
 from aart_cli.registry_maintenance.discovery import discover_vendor_candidates
 from aart_cli.registry_maintenance.promoted import (

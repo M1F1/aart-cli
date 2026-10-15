@@ -9,15 +9,6 @@ import tempfile
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-from aart_cli.application.registry_commands import (
-    finalize_registry_workspace,
-    prepare_artifact_revendor,
-    prepare_artifact_vendor,
-    prepare_registry_collection,
-    prepare_registry_init,
-    read_vendored_artifact_origin,
-)
-from aart_cli.application.registry_publication import prepare_registry_publication_state
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
@@ -46,6 +37,15 @@ from aart_cli.registry_commands.planning import (
     project_registry_workspace_plan,
     validate_registry_workspace,
     verify_vendored_artifact,
+)
+from aart_cli.registry_commands.publication_state import prepare_registry_publication_state
+from aart_cli.registry_commands.workspace import (
+    finalize_registry_workspace,
+    prepare_artifact_revendor,
+    prepare_artifact_vendor,
+    prepare_registry_collection,
+    prepare_registry_init,
+    read_vendored_artifact_origin,
 )
 from aart_cli.registry_maintenance.model import (
     NativeAcquirer,

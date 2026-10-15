@@ -2,11 +2,6 @@ from __future__ import annotations
 
 import unittest
 
-from aart_cli.application.registry_commands import (
-    finalize_registry_workspace,
-    prepare_registry_format,
-    prepare_registry_init,
-)
 from aart_cli.domain.identifiers import ObjectDigest
 from aart_cli.domain.result import Err, Ok
 from aart_cli.protocol.native_tree import (
@@ -23,6 +18,11 @@ from aart_cli.registry_commands.model import (
     RegistryInitOptions,
 )
 from aart_cli.registry_commands.planning import project_registry_workspace_plan
+from aart_cli.registry_commands.workspace import (
+    finalize_registry_workspace,
+    prepare_registry_format,
+    prepare_registry_init,
+)
 
 
 class MemoryWorkspace:
