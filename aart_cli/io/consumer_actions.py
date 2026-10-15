@@ -2370,7 +2370,7 @@ class LocalConsumerActions:
             (
                 item
                 for item in self._context.effective.configuration.sources
-                if item.alias.value == command.focus and item.kind is SourceKind.REGISTRY_GIT
+                if item.alias.value == command.focus and item.is_registry
             ),
             None,
         )

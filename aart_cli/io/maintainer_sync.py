@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 
 from aart_cli.application.maintainer_sync import (
     ApprovedRegistryState,
@@ -17,7 +18,7 @@ from aart_cli.application.sources import SourceSyncRequest
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.identifiers import ArtifactCoordinate, ObjectDigest, SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.protocol.authoring import compile_author_source
 from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
@@ -84,8 +85,9 @@ def read_approved_registry_state(
 
     if not isinstance(effective, EffectiveConfiguration) or not isinstance(alias, SourceAlias):
         return _error("reading approved registry state needs effective configuration and an alias")
-    registry = _configured(effective, alias, kind=SourceKind.REGISTRY_GIT)
-    if registry is None:
+    registry = _configured(effective, alias)
+    # Either transport (D-350): a local Registry has an approved state exactly like a Git one.
+    if registry is None or not registry.is_registry:
         return _error(f"target registry {alias} is not configured and enabled")
     paths = source_store_paths(data_root, source_instance_id(registry))
     current = read_current_source(CurrentSourceRequest(paths, alias))
@@ -105,7 +107,20 @@ def read_approved_registry_state(
                 alias,
                 current.value.candidate.resolved_revision,
                 current.value.candidate.snapshot_digest,
-                versions.value,
+                # A version record names the registry that approved it; this connection may be
+                # configured under another alias (D-350). The alias wins, as it does where the
+                # same versions are offered, and the publication stage is kept as written.
+                tuple(
+                    version
+                    if version.coordinate.source == alias
+                    else replace(
+                        version,
+                        coordinate=ArtifactCoordinate(
+                            alias, version.coordinate.artifact, version.coordinate.version
+                        ),
+                    )
+                    for version in versions.value
+                ),
             )
         )
     except ValueError as error:

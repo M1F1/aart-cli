@@ -2648,7 +2648,8 @@ def project_registries(catalog: MarketplaceCatalog) -> tuple[RegistryView, ...]:
         raise ValueError("registry projection needs a marketplace catalog")
     rows = []
     for source in catalog.sources:
-        if source.kind is not SourceKind.REGISTRY_GIT:
+        # Either transport (D-350): a local Registry is synced and disconnected from here too.
+        if source.kind not in {SourceKind.REGISTRY_GIT, SourceKind.REGISTRY_LOCAL}:
             continue
         source_items = tuple(item for item in catalog.items if item.source.alias == source.alias)
         availability = (

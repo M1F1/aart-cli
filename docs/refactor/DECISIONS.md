@@ -9814,3 +9814,24 @@ step (falling back to the CLI one), redacted. The generic sentence remains only 
 given. Evidence is `tests/maintainer_registry_view_test.py` (`AnUnreadRegistrySaysWhyTest`). A
 targeted mutation dropping `unavailable` turned exactly that test red. The adapter wiring has no
 end-to-end test yet.
+
+## D-384 — A local Registry is a Registry on Registries and screen 46 too
+
+Implementation choice, 2026-10-15, from an owner report. A Registry showed on screen 46 as having
+"no synchronized approved state yet", and the owner could not remove it because Registries listed
+nothing. D-350 added `registry-local`, and screen 46 lists every source that `is_registry`, but
+three paths still accepted only `registry-git`:
+- `project_registries`, which builds the Registries rows;
+- `_prepare_registry_removal`, which handles Disconnect;
+- `read_approved_registry_state`.
+
+All three now accept either transport. The approved-state read also failed for any Registry
+configured under an alias other than the name its version records carry. It now addresses those
+versions by the configured alias, as `load_configured_registry_versions` does for the Marketplace.
+It keeps the publication stage as written, because Source Sync and promotion read the durable
+record (INV-242).
+
+Evidence is `tests/local_registry_screens_test.py`, which uses a real local Registry checkout: it
+is listed, its approved state reads, screen 46 names its revision, and Disconnect removes it. Four
+targeted mutations, one per fix, each turned red only the tests for that fix. Other
+`registry-git`-only checks are recorded as B-180.

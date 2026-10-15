@@ -4281,6 +4281,23 @@ general notice field, so carrying it onto the dashboard is its own contained pie
 rather than a line in this slice. The consequence today is only that a curses user sees the
 connected Registry on the dashboard without reading the sentence explaining where it came from.
 
+## B-180 — other `registry-git`-only checks may leave out a local Registry
+
+**Found 2026-10-15 while fixing D-384.** Status: OPEN.
+
+D-384 fixed the Registries list, Disconnect and the approved-state read. Other checks still name
+`SourceKind.REGISTRY_GIT` alone:
+- `tui_sources.py` (health rows and the direct-source policy);
+- `configuration/policy.py:62`, where a disallowed direct source may now refuse a local Registry;
+- `io/maintainer_promotion.py` (promotion target lookup and source sync);
+- `application/maintainer_views.py:2660`;
+- `consumer/runtime.py:565`;
+- `marketplace/catalog.py:104`.
+
+Some are correct, because a company-reviewed identity really is a remote host. Each needs to be
+judged against D-350 with a test that uses a local Registry. Promotion into a local Registry is the
+one most likely to matter.
+
 ## B-178 — a narrowed install plan drops its scope and backend choices
 
 **Found 2026-10-14 while fixing the repeated harness choice (D-380).** Status: OPEN.
