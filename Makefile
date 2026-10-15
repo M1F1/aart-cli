@@ -9,7 +9,7 @@ PYTHON ?= python
 REGISTRY ?=
 QUALITY = $(PYTHON) scripts/quality.py
 
-.PHONY: check test unit integration system-matrix release-freeze release-check wheel validate clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality mutants manual-test-setup manual-test-setup-empty manual-test-reset manual-test-maintainer manual-test-consumer manual-test-shell-maintainer manual-test-shell-consumer
+.PHONY: check test unit integration system-matrix release-freeze release-check wheel validate tach clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality mutants manual-test-setup manual-test-setup-empty manual-test-reset manual-test-maintainer manual-test-consumer manual-test-shell-maintainer manual-test-shell-consumer
 
 # Aggregate. The Python discovery is the broad unit/regression gate; integration is end to end.
 test: unit integration
@@ -37,6 +37,11 @@ wheel:
 
 validate:
 	$(QUALITY) validate
+
+# Module boundaries as data (#32): `tach.toml` declares the import graph; `tach check` refuses an
+# undeclared edge.
+tach:
+	$(QUALITY) tach
 
 # --------------------------------------------------------------------------- #
 # Optional developer tooling. Requires Poetry's dev group:  poetry install --with dev

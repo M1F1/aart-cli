@@ -1,0 +1,204 @@
+# Module boundaries as data (#32, CP-29, D-404).
+#
+# Every top-level module of `aart_cli` is a tach module and `depends_on` is the graph the code
+# has: `tach sync` wrote it and it was read by hand (D-404).  `domain` is the one layer whose
+# target is declared rather than described -- stdlib, itself and the `redaction` leaf only, as
+# `tests/architecture_boundary_test.py` has always held.  A new edge anywhere is a diff here that a
+# reviewer reads, and `make tach` refuses one that is not.
+
+exclude = ["**/__pycache__", "tests", "scripts", "build", "dist", ".venv"]
+source_roots = ["."]
+exact = true
+forbid_circular_dependencies = false
+
+[[modules]]
+path = "aart_cli"
+depends_on = []
+
+[[modules]]
+path = "aart_cli.__main__"
+depends_on = ["aart_cli.cli"]
+
+[[modules]]
+path = "aart_cli._commit"
+depends_on = []
+
+[[modules]]
+path = "aart_cli._default_registry"
+depends_on = []
+
+[[modules]]
+path = "aart_cli.adapters"
+depends_on = []
+
+[[modules]]
+path = "aart_cli.application"
+depends_on = ["aart_cli.registry_commands", "aart_cli.sources", "aart_cli.redaction", "aart_cli.store", "aart_cli.domain", "aart_cli.protocol", "aart_cli.marketplace", "aart_cli.configuration", "aart_cli.registry_maintenance"]
+
+[[modules]]
+path = "aart_cli.authoring"
+depends_on = ["aart_cli.protocol", "aart_cli.domain"]
+
+[[modules]]
+path = "aart_cli.cli"
+depends_on = ["aart_cli.tui", "aart_cli.curation", "aart_cli.command_outcome", "aart_cli", "aart_cli.protocol", "aart_cli.outcomes", "aart_cli.commands", "aart_cli.model"]
+
+[[modules]]
+path = "aart_cli.command_outcome"
+depends_on = []
+
+[[modules]]
+path = "aart_cli.commands"
+depends_on = ["aart_cli.redaction", "aart_cli.tui_sources", "aart_cli.configuration", "aart_cli.setup", "aart_cli.consumer", "aart_cli.registry_commands", "aart_cli.store", "aart_cli.receipt_service", "aart_cli.protocol", "aart_cli.registry_maintenance", "aart_cli.curation", "aart_cli.io", "aart_cli.runtime_contract", "aart_cli.command_outcome", "aart_cli.setup_render", "aart_cli.application", "aart_cli.marketplace", "aart_cli.model", "aart_cli.tui_consumer", "aart_cli.security", "aart_cli.authoring", "aart_cli.domain", "aart_cli.sources"]
+
+[[modules]]
+path = "aart_cli.compiler"
+depends_on = ["aart_cli.domain", "aart_cli.protocol"]
+
+[[modules]]
+path = "aart_cli.configuration"
+depends_on = ["aart_cli.redaction", "aart_cli.domain", "aart_cli._default_registry", "aart_cli.protocol"]
+
+[[modules]]
+path = "aart_cli.consumer"
+depends_on = ["aart_cli.application", "aart_cli.install_state", "aart_cli.registry_maintenance", "aart_cli.io", "aart_cli.tui_marketplace", "aart_cli.sources", "aart_cli.compiler", "aart_cli.store", "aart_cli.marketplace", "aart_cli.lifecycle", "aart_cli.protocol", "aart_cli.configuration", "aart_cli.security", "aart_cli.runtime_contract", "aart_cli.installation", "aart_cli.setup_engine", "aart_cli.setup_runtime", "aart_cli.model", "aart_cli.domain", "aart_cli.profiles"]
+
+[[modules]]
+path = "aart_cli.curation"
+depends_on = ["aart_cli.protocol", "aart_cli.io", "aart_cli.configuration", "aart_cli.domain", "aart_cli.security", "aart_cli.sources", "aart_cli.registry_commands", "aart_cli.registry_maintenance", "aart_cli.application", "aart_cli.runtime_contract"]
+
+[[modules]]
+path = "aart_cli.domain"
+depends_on = ["aart_cli.redaction"]
+
+[[modules]]
+path = "aart_cli.install_state"
+depends_on = ["aart_cli.model", "aart_cli.domain", "aart_cli.configuration", "aart_cli.protocol"]
+
+[[modules]]
+path = "aart_cli.installation"
+depends_on = ["aart_cli.protocol", "aart_cli.io", "aart_cli.compiler", "aart_cli.runtime_contract", "aart_cli.marketplace", "aart_cli.profiles", "aart_cli.configuration", "aart_cli.install_state", "aart_cli.application", "aart_cli.store", "aart_cli.domain"]
+
+[[modules]]
+path = "aart_cli.io"
+depends_on = ["aart_cli.sources", "aart_cli.setup_runtime", "aart_cli.setup", "aart_cli.tui_consumer", "aart_cli.redaction", "aart_cli.application", "aart_cli.consumer", "aart_cli.registry_commands", "aart_cli.install_state", "aart_cli.registry_maintenance", "aart_cli.model", "aart_cli.store", "aart_cli.domain", "aart_cli.security", "aart_cli.authoring", "aart_cli.setup_engine", "aart_cli.installation", "aart_cli.marketplace", "aart_cli.runtime_contract", "aart_cli.configuration", "aart_cli.compiler", "aart_cli.curation", "aart_cli.protocol"]
+
+[[modules]]
+path = "aart_cli.lifecycle"
+depends_on = ["aart_cli.configuration", "aart_cli.install_state", "aart_cli.io", "aart_cli.profiles", "aart_cli.application", "aart_cli.protocol", "aart_cli.domain", "aart_cli.installation", "aart_cli.store", "aart_cli.marketplace"]
+
+[[modules]]
+path = "aart_cli.marketplace"
+depends_on = ["aart_cli.domain", "aart_cli.configuration", "aart_cli.sources", "aart_cli.compiler", "aart_cli.protocol"]
+
+[[modules]]
+path = "aart_cli.model"
+depends_on = []
+
+[[modules]]
+path = "aart_cli.outcomes"
+depends_on = ["aart_cli.model"]
+
+[[modules]]
+path = "aart_cli.profiles"
+depends_on = ["aart_cli.install_state"]
+
+[[modules]]
+path = "aart_cli.protocol"
+depends_on = ["aart_cli.domain", "aart_cli.setup", "aart_cli.model"]
+
+[[modules]]
+path = "aart_cli.receipt_service"
+depends_on = ["aart_cli.io", "aart_cli.setup_runtime", "aart_cli.setup_receipt", "aart_cli.setup_undo", "aart_cli.setup_render", "aart_cli.setup", "aart_cli.setup_verify_probes", "aart_cli.install_state", "aart_cli.domain", "aart_cli.model", "aart_cli.setup_verify"]
+
+[[modules]]
+path = "aart_cli.redaction"
+depends_on = []
+
+[[modules]]
+path = "aart_cli.registry_commands"
+depends_on = ["aart_cli.security", "aart_cli.domain", "aart_cli.sources", "aart_cli.protocol", "aart_cli.runtime_contract", "aart_cli.registry_maintenance", "aart_cli.application"]
+
+[[modules]]
+path = "aart_cli.registry_maintenance"
+depends_on = ["aart_cli.store", "aart_cli.protocol", "aart_cli.sources", "aart_cli.security", "aart_cli.domain", "aart_cli.application"]
+
+[[modules]]
+path = "aart_cli.runtime_contract"
+depends_on = ["aart_cli.protocol", "aart_cli", "aart_cli.domain"]
+
+[[modules]]
+path = "aart_cli.security"
+depends_on = ["aart_cli.marketplace", "aart_cli.domain", "aart_cli.protocol", "aart_cli.store"]
+
+[[modules]]
+path = "aart_cli.setup"
+depends_on = ["aart_cli.tui_layout", "aart_cli.model", "aart_cli.redaction"]
+
+[[modules]]
+path = "aart_cli.setup_engine"
+depends_on = ["aart_cli.setup", "aart_cli.configuration", "aart_cli.installation", "aart_cli.model", "aart_cli.protocol", "aart_cli.marketplace", "aart_cli.io", "aart_cli.install_state", "aart_cli.application", "aart_cli.domain", "aart_cli.setup_runtime", "aart_cli.store", "aart_cli.redaction"]
+
+[[modules]]
+path = "aart_cli.setup_receipt"
+depends_on = ["aart_cli.setup", "aart_cli.install_state", "aart_cli.domain", "aart_cli.model"]
+
+[[modules]]
+path = "aart_cli.setup_render"
+depends_on = ["aart_cli.setup", "aart_cli.tui_layout"]
+
+[[modules]]
+path = "aart_cli.setup_runtime"
+depends_on = ["aart_cli.io", "aart_cli.setup", "aart_cli.model"]
+
+[[modules]]
+path = "aart_cli.setup_undo"
+depends_on = ["aart_cli.domain", "aart_cli.model", "aart_cli.protocol"]
+
+[[modules]]
+path = "aart_cli.setup_verify"
+depends_on = ["aart_cli.redaction", "aart_cli.setup", "aart_cli.model"]
+
+[[modules]]
+path = "aart_cli.setup_verify_probes"
+depends_on = ["aart_cli.setup_verify", "aart_cli.cli"]
+
+[[modules]]
+path = "aart_cli.sources"
+depends_on = ["aart_cli.io", "aart_cli.registry_maintenance", "aart_cli.protocol", "aart_cli.runtime_contract", "aart_cli.application", "aart_cli.domain", "aart_cli.configuration"]
+
+[[modules]]
+path = "aart_cli.store"
+depends_on = ["aart_cli.domain", "aart_cli.protocol"]
+
+[[modules]]
+path = "aart_cli.tui"
+depends_on = ["aart_cli.application", "aart_cli.tui_marketplace", "aart_cli.tui_consumer", "aart_cli.redaction", "aart_cli.commands", "aart_cli.wizard", "aart_cli.cli", "aart_cli.configuration", "aart_cli.io", "aart_cli.setup", "aart_cli.tui_failures", "aart_cli.model", "aart_cli.tui_layout", "aart_cli.consumer", "aart_cli.domain"]
+
+[[modules]]
+path = "aart_cli.tui_consumer"
+depends_on = ["aart_cli.tui_layout", "aart_cli.io", "aart_cli.domain", "aart_cli.tui_maintainer", "aart_cli.application", "aart_cli.tui_marketplace"]
+
+[[modules]]
+path = "aart_cli.tui_failures"
+depends_on = ["aart_cli.domain", "aart_cli.wizard", "aart_cli.tui_layout"]
+
+[[modules]]
+path = "aart_cli.tui_layout"
+depends_on = []
+
+[[modules]]
+path = "aart_cli.tui_maintainer"
+depends_on = ["aart_cli.domain", "aart_cli.tui_layout", "aart_cli.application"]
+
+[[modules]]
+path = "aart_cli.tui_marketplace"
+depends_on = ["aart_cli.tui_layout", "aart_cli.marketplace", "aart_cli.lifecycle", "aart_cli.security", "aart_cli.install_state", "aart_cli.runtime_contract", "aart_cli.installation", "aart_cli.compiler", "aart_cli.domain", "aart_cli.protocol"]
+
+[[modules]]
+path = "aart_cli.tui_sources"
+depends_on = ["aart_cli.domain", "aart_cli.configuration", "aart_cli.sources"]
+
+[[modules]]
+path = "aart_cli.wizard"
+depends_on = ["aart_cli.tui_layout", "aart_cli.tui_sources"]

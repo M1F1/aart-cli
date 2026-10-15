@@ -10218,3 +10218,26 @@ are amended. No compatibility for the old screen id is kept (no-backward-compat,
 Evidence: `tests/remediation_changes_test.py`, rewritten with a property over every remediation
 mix. The flow goes to Ready, and Ready lists exactly the non-routine changes. Emptying the list,
 and dropping the network clause, each turned their tests red.
+
+## D-404 - tach declares the import graph; the gate refuses an undeclared edge
+
+#32, step 1 of CP-29.
+- `tach==0.35.3` is pinned exactly in the dev group, for the same reason `ruff` is.
+- `tach.toml` has one module per top-level `aart_cli` module, and the package root is a module of
+  its own. Its `depends_on` lists are what `tach sync` wrote, so the file describes the graph as it
+  is, and no code changed to produce it.
+- `exact = true`, so an edge that is declared but no longer used is also a failure, and the file
+  cannot accumulate dead permissions.
+- `domain` is the one declared target. It may depend on `aart_cli.redaction` only, which is
+  `DOMAIN_ALLOWED_LEAVES`.
+
+`forbid_circular_dependencies` stays false. With it on, tach reports 11 modules in cycles, and
+breaking them is code change outside this step (B-186).
+
+The hand-written boundary tests stay, as #32 requires. Some of them hold module shape (frozen
+dataclasses, a leaf that imports nothing), which tach cannot express. None is removed until a
+commit shows the rule that replaces it.
+
+Evidence: a planted `aart_cli.io` import in `domain` made `tach check` fail on exactly that line.
+`tests/tach_config_test.py` ties `tach.toml` to the package and to the domain rule. Removing a
+module entry turned it red.

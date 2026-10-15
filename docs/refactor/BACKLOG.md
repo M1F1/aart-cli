@@ -4519,3 +4519,12 @@ detect one (CI containers), the Registry Commit screen reads "did not run" and d
 `tests/local_registry_promotion_e2e_test.py` failed on CI for this reason since a8d473d and now
 sets a repository identity, as the other promotion tests do. The screen should name the refusal and
 the `git config user.name/user.email` remedy.
+
+## B-186 — eleven top-level modules sit in import cycles
+
+With `forbid_circular_dependencies = true`, `tach check` reports cycles through `setup_engine`,
+`setup_runtime`, `consumer`, `lifecycle`, `tui_consumer`, `tui_maintainer`, `tui`, `cli`,
+`commands`, `receipt_service` and `setup_verify_probes`. D-404 records the graph as it is, so the
+flag is off. Breaking the cycles, mostly legacy `setup_*` and the TUI front ends reaching back into
+`cli`/`commands`, and then turning the flag on, is noncritical refactoring. `tach show` draws the
+graph.

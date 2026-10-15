@@ -35,7 +35,7 @@ internal index, set `PIP_INDEX_URL` and use the second command.
 `ensurepip` error, that interpreter's venv support is broken — use another one, for example
 `python3.11 -m venv .venv`.
 
-Without these tools six of the ten gates cannot run. `scripts/quality.py` says so before it starts,
+Without these tools seven of the eleven gates cannot run. `scripts/quality.py` says so before it starts,
 names the ones that are missing, and prints the install command; the other four — `unit`,
 `integration`, `validate`, `docs-check` — need nothing but Python and can be run on their own.
 
@@ -44,6 +44,7 @@ names the ones that are missing, and prints the install command; the other four 
 | `ruff` | `0.16.4` | formatting and linting — the `format-check` and `lint` gates. Pinned exactly: a formatter that changes its mind between two versions fails the gate on a file nobody edited |
 | `mypy` | `^1.11` | the `typecheck` gate |
 | `coverage` | `^7.6` | the `coverage` gate, branch coverage with `fail_under = 82` |
+| `tach` | `0.35.3` | the `tach` gate: module boundaries declared in `tach.toml` (#32). Pinned exactly, as `ruff` is: a boundary checker whose reading of the rules moves between versions is red in one place and green in another |
 | `poetry-core` | `2.4.0` | the build backend, at the exact version `[build-system]` pins. Present in the environment so an offline editable install has a backend to build with |
 
 Tests are **stdlib `unittest`** — there is no test-runner dependency. The wheel is built by
@@ -51,9 +52,9 @@ Poetry, wrapped by `scripts/build_wheel.py`; see
 [docs/release/wheel-reproducibility-v1.md](../release/wheel-reproducibility-v1.md) for what that
 wrapper holds and why building now needs Poetry on the machine.
 
-## The ten gates
+## The eleven gates
 
-`python scripts/quality.py` runs all ten, each in a temporary cache directory with
+`python scripts/quality.py` runs all eleven, each in a temporary cache directory with
 `PYTHONDONTWRITEBYTECODE=1`, stopping at the first failure. `make quality` is a wrapper around
 the same script; CI calls the script directly, because a CI image is not obliged to carry GNU Make
 and a real one did not. Run a single gate with `make <gate>`.
@@ -66,12 +67,13 @@ and a real one did not. Run a single gate with `make <gate>`.
 | `unit` | `unittest discover -s tests -p "*_test.py"` | stdlib |
 | `integration` | `unittest discover -s tests -p "*e2e_test.py"` — drives the real CLI over real trees | stdlib |
 | `validate` | `scripts/validate.py` | stdlib |
+| `tach` | `tach check` — every import between top-level `aart_cli` modules must be an edge `tach.toml` declares; `domain` may reach only `redaction` | `tach` |
 | `coverage` | `coverage run --branch --source=aart_cli` over the unit suite, then `coverage report` | `coverage` |
 | `packaging-check` | `scripts/packaging_check.py` — builds the wheel and inspects it | stdlib |
 | `docs-check` | `scripts/docs_check.py` | stdlib |
 | `secret-shape-check` | `scripts/secret_shape_check.py` — refuses credential-shaped literals anywhere in the tracked tree, so the repository stays pushable to an instance with push protection on | stdlib |
 
-Four of the ten — `unit`, `integration`, `validate`, `docs-check` — need nothing installed beyond
+Four of the eleven — `unit`, `integration`, `validate`, `docs-check` — need nothing installed beyond
 Python itself.
 
 One more gate exists that the full run does not include:

@@ -1,6 +1,18 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-14)
+## Where the work is (2026-10-15)
+
+**CP-28 is released (0.6.0, then 0.7.0). The active work is CP-29:
+`docs/refactor/slices/CP-29-boundaries-and-opencode-plugins.md`, on
+`feat/cp-29-tach-and-opencode-plugins`.** Its six steps are in `plan.json`:
+1. tach as a gate (#32, D-404);
+2. superpowers through Skills and Memory;
+3. the OpenCode plugin kind specified;
+4. the plugin kind implemented;
+5. superpowers as a plugin, checked live;
+6. full verification.
+
+## Before CP-29 (2026-10-14)
 
 **CP-27 is complete and released as 0.5.0. The active work is CP-28, the consumer
 install-and-verify path: `docs/refactor/slices/CP-28-consumer-install-and-verify.md`, tracked on
