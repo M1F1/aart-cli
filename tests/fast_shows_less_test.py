@@ -30,6 +30,10 @@ class TheSelectedCountTest(unittest.TestCase):
             with self.subTest(screen=screen):
                 self.assertNotIn("1 selected", _drawn(screen))
 
+    def test_the_harness_choice_does_not_count_the_artifacts_ticked_before_it(self) -> None:
+        # D-401: on 05 Space ticks harnesses, so a count of Marketplace ticks reads as theirs.
+        self.assertNotIn("1 selected", _drawn(ConsumerScreen.REVIEW_SELECTION))
+
     def test_the_screen_rows_are_ticked_on_still_counts_them(self) -> None:
         self.assertIn("1 selected", _drawn(ConsumerScreen.MARKETPLACE))
 

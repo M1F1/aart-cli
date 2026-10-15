@@ -103,7 +103,7 @@ AART / Dashboard
   2 installed — 1 ready, 1 update, 0 attention
   1 registries — 0 credentials need attention
 
-recent activity:
+- recent activity
   none yet
 
 ────────────────────────────────────────────────────────────────

@@ -129,6 +129,7 @@ from aart_cli.tui_layout import (
     is_action_prompt,
     list_item,
     listed,
+    lowercase_first,
     render,
     separate,
     stated,
@@ -711,9 +712,10 @@ def render_review_selection(
                 f"Selection mode: {_human(selection.mode.value)}",
                 f"Selection identity: {selection.semantic_identity}",
                 f"Platform: {view.platform}",
+                # Kept with the other identities for More info, as on Ready (D-398, D-401).
+                f"Review identity: {view.review_digest}",
             )
         )
-    lines.append(f"Review identity: {view.review_digest}")
     return tuple(lines)
 
 
@@ -800,7 +802,8 @@ def render_remediation(view: ConsumerPlanView, profile: PresentationProfile) -> 
     lines = [
         "AART will make this change after you confirm the final review:"
         if len(view.remediations) == 1
-        else "AART will make these changes after you confirm the final review:"
+        else "AART will make these changes after you confirm the final review:",
+        "",
     ]
     for number, item in enumerate(view.remediations, start=1):
         if number > 1:
@@ -897,7 +900,7 @@ def render_running(view: RunningInstallationView, profile: PresentationProfile) 
     ):
         raise ValueError("running rendering needs a running view and presentation profile")
     heading = f"Installing {view.artifact}" if view.artifact else "Installing"
-    lines = [f"{heading} ({view.done} of {view.total} done)"]
+    lines = [f"{heading} ({view.done} of {view.total} done)", ""]
     for item in view.steps:
         mark = _STEP_MARKS.get(item.status, "·")
         if profile is PresentationProfile.VERBOSE:
@@ -915,7 +918,7 @@ def render_progress(view: LifecycleOutcomeView, profile: PresentationProfile) ->
 
     if not isinstance(view, LifecycleOutcomeView) or not isinstance(profile, PresentationProfile):
         raise ValueError("progress rendering needs an outcome view and presentation profile")
-    lines = [f"{_human(view.kind).capitalize()} {view.artifact}"]
+    lines = [f"{_human(view.kind).capitalize()} {view.artifact}", ""]
     for item in view.steps:
         mark = _STEP_MARKS.get(item.status, "·")
         if profile is PresentationProfile.VERBOSE:
@@ -1016,11 +1019,13 @@ def render_mcp_test(view: McpTestView | None) -> tuple[str, ...]:
     if view is None or not view.installations:
         return ("This install made no MCP installation to test.",)
     if view.results is not None:
-        lines = []
+        # Each result below opens unindented, so the heading is a statement of its own (D-402).
+        lines = ["Test results:", ""]
         for result in view.results:
             lines.append(f"{'✓' if result.passed else '✗'} {result.installation}")
             for stage in result.stages:
                 lines.append(f"  {stage.outcome:<14} {stage.stage}: {stage.reason}")
+            lines.append("")
         lines.append(
             "The installation is unchanged whatever these say; a failed stage is yours to repair "
             "or reconfigure when you choose."
@@ -1028,15 +1033,24 @@ def render_mcp_test(view: McpTestView | None) -> tuple[str, ...]:
         return tuple(lines)
     if not view.plan:
         return ("Preparing the test of: " + ", ".join(view.installations),)
-    lines = ["Confirming starts each installed MCP once and makes one declared call:"]
+    # Blank lines part the statements so each reads on its own, and the heading carries its own
+    # marker: over an indented block `bulleted` would leave it bare (D-402).
+    lines = [
+        list_item(
+            "Confirming starts each installed MCP once and makes one declared call:", indent=""
+        ),
+        "",
+    ]
     for entry in view.plan:
         if entry.tool:
             lines.append(f"  {entry.installation}: {entry.tool} {entry.arguments}")
         else:
             lines.append(f"  {entry.installation}: NOT CONFIGURED (declares no smoke operation)")
+    lines.append("")
     lines.append(
         "Each call reaches that installation's configured service with its own credentials."
     )
+    lines.append("")
     lines.append("Nothing here changes the installation, its receipts or its success.")
     return tuple(lines)
 
@@ -1382,11 +1396,10 @@ def render_dashboard(view: DashboardView) -> tuple[str, ...]:
         f"{view.registry_count} registries — "
         f"{view.credential_attention_count} credentials need attention",
         "",
-        "Recent activity:",
+        # One marked statement like AART's above, its entries the lines under it (D-402).
+        "Recent activity",
+        *(lowercase_first(item) for item in view.recent_activity or ("none yet",)),
     ]
-    lines.extend(listed(f"{item}" for item in view.recent_activity))
-    if not view.recent_activity:
-        lines.append("  none yet")
     return tuple(lines)
 
 
@@ -3980,7 +3993,11 @@ class CanonicalScreenSource:
             and screens.install_targets
         ):
             problems = self._harness_choice_problems(state)
-            return problems or (
+            if problems or state.session.profile is not PresentationProfile.VERBOSE:
+                # The ticked rows are the choice; restating them, and what comes after, is for
+                # More info (D-401). A choice that cannot continue still says why.
+                return problems
+            return (
                 f"Installing into: {', '.join(state.targets)}",
                 "Configuration for these harnesses is asked next.",
             )
@@ -3991,7 +4008,9 @@ class CanonicalScreenSource:
         ):
             problems = target_choice_problems(screens.plan, state.targets)
             target_status = (
-                problems if problems else (f"Installing into: {', '.join(state.targets)}",)
+                problems
+                if problems or state.session.profile is not PresentationProfile.VERBOSE
+                else (f"Installing into: {', '.join(state.targets)}",)
             )
             return separate(
                 render_review_selection(screens.plan, state.session.profile),

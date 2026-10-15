@@ -128,7 +128,11 @@ class InstallFlowScreenTest(unittest.TestCase):
         fast = drawn(ConsumerScreen.REVIEW_SELECTION)
 
         self.assertIn("company/mcp/github@1.0.0", fast)
-        self.assertIn("Review identity:", fast)
+        # D-401: the identity is More info's, as on Ready.
+        self.assertNotIn("Review identity:", fast)
+        self.assertIn(
+            "Review identity:", drawn(ConsumerScreen.REVIEW_SELECTION, PresentationProfile.VERBOSE)
+        )
 
     def test_inspection_reports_what_it_found_without_asking_anything(self):
         fast = drawn(ConsumerScreen.AUTOMATIC_INSPECTION)

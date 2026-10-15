@@ -182,7 +182,12 @@ class HarnessTargetScreenTest(unittest.TestCase):
             self.assertEqual(key_violations(pending, state), ())
         confirmed = replace(confirmed, rows=pending.rows(confirmed))
         self.assertIn("[Enter] Continue", "\n".join(frame(pending, confirmed)))
-        self.assertIn("Installing into: opencode", "\n".join(pending.status(confirmed)))
+        # D-401: the ticked row is the choice; Fast does not restate it, More info does.
+        self.assertNotIn("Installing into", "\n".join(pending.status(confirmed)))
+        verbose = replace(
+            confirmed, session=confirmed.session.switch_profile(PresentationProfile.VERBOSE)
+        )
+        self.assertIn("Installing into: opencode", "\n".join(pending.status(verbose)))
 
     def test_verbose_cursor_description_names_artifacts_the_harness_can_host(self) -> None:
         source = _source()

@@ -10165,3 +10165,35 @@ Details. Update and Repair have the same ending and are B-184.
 
 Evidence: two cases in `tests/installed_multi_uninstall_e2e_test.py`, for Enter and Esc and from
 details. Disabling the rule turned all three red.
+
+## D-401 - the harness choice says only what is still wrong
+
+The operator, on Review Selection (05): *"nie potrzebna jest informacja installing into: <harness>
+/ Configuration for these harnesses is asked next. / - 1 selected / to wszystko mozna wywalic"*.
+The ticked boxes already are the choice, so in Fast the screen's status now keeps only the
+problems (no harness chosen, a harness the artifact does not support). "Installing into" and
+"Configuration ... asked next" stay in Verbose. `selects_rows` no longer counts 05 or 23a: Space
+ticks harnesses there, so "N selected" was counting the Marketplace ticks behind the screen.
+The review identity on 05 moves into Verbose with the other identities, as on Ready (D-398).
+
+Evidence: `tests/installation_harness_choice_test.py`, `tests/fast_shows_less_test.py` and
+`tests/consumer_install_flow_shell_test.py`. Restoring 05 to `selects_rows` turned the count test
+red.
+
+## D-402 - blank lines part statements; recent activity is marked like AART
+
+The operator asked for blank lines in several places. On Remediation, after the opening sentence
+and before the first change. On Installing (and Updating or Repairing), after the heading. On the
+MCP test, between the offer's heading, its calls and each closing statement, and between the
+results heading, each installation's result and the last sentence. The offer's heading carries its
+own marker. Over an indented block `bulleted` would leave it bare, and the operator reads it as the
+first statement.
+
+On the Dashboard, "recent activity" is now a marked statement like "AART" above it, with its
+entries as unmarked lines under it rather than a nested list.
+
+Merging Remediation into Ready is not done here. Both are numbered screens of the catalog (08, 09),
+so the merge is a specification change, offered to the operator.
+
+Evidence: `tests/statements_breathe_test.py`. Removing the Remediation blank and restoring the
+old activity heading each turned their tests red.

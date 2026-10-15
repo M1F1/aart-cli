@@ -548,9 +548,16 @@ _SELECTABLE = frozenset(
 
 
 def selects_rows(screen: ApplicationScreen) -> bool:
-    """Whether rows are ticked on this screen, which is where a count of the ticks means anything."""
+    """Whether the session's ticked rows are ticked on this screen, where a count of them is read.
 
-    return screen in _SELECTABLE
+    05 and 23a are selectable too, but what Space ticks there is a harness, held apart from the
+    selection; a count of the artifacts ticked on Marketplace says nothing on either (D-401).
+    """
+
+    return screen in _SELECTABLE and screen not in (
+        ConsumerScreen.REVIEW_SELECTION,
+        ConsumerScreen.CONFIGURATION_TARGETS,
+    )
 
 
 def _rows_valid(rows: tuple[str, ...]) -> bool:

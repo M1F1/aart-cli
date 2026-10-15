@@ -281,7 +281,8 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
         self.assertNotIn("GitHub organization", unchosen)
         self.assertIsNone(source.detail(state))
         self.assertIs(source.detail(chosen), ConsumerScreen.REQUIRED_INPUTS)
-        self.assertIn("installing into: tabnine", "\n".join(frame(source, chosen)))
+        # D-401: the ticked box is the choice; Fast does not restate it.
+        self.assertNotIn("installing into", "\n".join(frame(source, chosen)).lower())
         # A choice whose preparation has not yet answered with its fields has nothing to open.
         self.assertIsNone(source.detail(empty))
 
