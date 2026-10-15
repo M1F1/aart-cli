@@ -939,6 +939,8 @@ class LocalConsumerActions:
             return self._prepare_registry_refresh(command)
         if action is ConsumerActionKind.REGISTRY_REMOVE:
             return self._prepare_registry_removal(command)
+        if action is ConsumerActionKind.SOURCE_REMOVE:
+            return self._prepare_source_removal(command)
         if action is ConsumerActionKind.SOURCE_SYNC:
             return self._prepare_source_sync(command)
         if action is ConsumerActionKind.CANDIDATE_PROMOTION:
@@ -2407,6 +2409,60 @@ class LocalConsumerActions:
                     default_effect,
                     "  keeps: all installed artifacts and receipts",
                     "  Marketplace will be reloaded from the Registries that remain connected.",
+                )
+            ),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=review_digest,
+            ),
+        )
+
+    def _prepare_source_removal(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Review removing one authoring Source: the same unsubscribe as `aart-cli source remove`.
+
+        Removing is how a Source whose origin, branch or kind was entered wrong is corrected:
+        removed here, then added again from Add Source (D-391). The port is the Registry one,
+        because the transaction is one; only the subject it is offered for differs.
+        """
+
+        if self._registry_removal is None:
+            return self._declined(command, _lines("Source removal is unavailable"))
+        source = next(
+            (
+                item
+                for item in self._context.effective.configuration.sources
+                if item.alias.value == command.focus and not item.is_registry
+            ),
+            None,
+        )
+        if source is None:
+            return self._declined(command, _lines(f"no authoring Source here is {command.focus}"))
+        identity = json.dumps(
+            {
+                "alias": source.alias.value,
+                "kind": source.kind.value,
+                "location": source.location,
+                "ref": source.ref,
+                "operation": "source-remove",
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        review_digest = "sha256:" + hashlib.sha256(identity).hexdigest()
+        self._pending = _PendingRegistryRemoval(source, review_digest)
+        self._pending_action = command.action
+        return ConsumerActionUpdate(
+            self.source(
+                notice=(
+                    "Remove Source review:",
+                    f"  Source: {source.alias}",
+                    f"  kind: {source.kind.value}",
+                    f"  origin: {redact_text(source.location)}",
+                    f"  branch or tag: {source.ref or 'repository default'}",
+                    "  removes: this Source, its AART-managed snapshot and its Candidates",
+                    "  keeps: every version already promoted into a Registry",
+                    "  Add it again from Add Source; Source Sync then rebuilds its Candidates.",
                 )
             ),
             ConsumerUiEvent(

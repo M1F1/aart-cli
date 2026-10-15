@@ -67,7 +67,7 @@ class MaintainerScreenCatalogTest(unittest.TestCase):
     def test_catalog_names_every_accepted_screen_30_through_53_once(self) -> None:
         """The 24 accepted screens, plus sub-screens that are numbered inside one of them.
 
-        `31a`/`31b` are the Add Source form and its review (B-083). `46a` through `46j` hold
+        `31a`/`31b` are the Add Source form and its review (B-083), `31c` the Remove Source review (D-391). `46a` through `46j` hold
         initialization, one-off repository adoption, the rebuild of the registry's generated files
         (B-090/B-095/B-099) and the Push review that CP-26.18 moved off screen 45 and onto the
         local workspace row it acts on (D-312), spelled the way screen 21's
@@ -91,6 +91,7 @@ class MaintainerScreenCatalogTest(unittest.TestCase):
             [
                 "31a-add-source",
                 "31b-review-source",
+                "31c-remove-source",
                 "46a-init-registry",
                 "46b-review-init",
                 "46c-scan-repository",

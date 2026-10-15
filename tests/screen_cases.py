@@ -113,6 +113,7 @@ RECORDED_SCREENS: tuple[ApplicationScreen, ...] = (
     MaintainerScreen.SOURCES,
     MaintainerScreen.SOURCE_ADD,
     MaintainerScreen.SOURCE_ADD_REVIEW,
+    MaintainerScreen.SOURCE_REMOVE,
     MaintainerScreen.SOURCE_DETAILS,
     MaintainerScreen.SOURCE_SYNC,
     MaintainerScreen.SOURCE_SYNC_RESULT,

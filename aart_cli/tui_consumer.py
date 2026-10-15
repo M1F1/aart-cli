@@ -1951,6 +1951,7 @@ _REVIEW_SCREENS: frozenset[ApplicationScreen] = frozenset(
         ConsumerScreen.REGISTRY_REVIEW,
         ConsumerScreen.REGISTRY_REMOVE,
         MaintainerScreen.SOURCE_ADD_REVIEW,
+        MaintainerScreen.SOURCE_REMOVE,
         MaintainerScreen.REGISTRY_INIT_REVIEW,
         MaintainerScreen.REGISTRY_REBUILD_REVIEW,
         ConsumerScreen.REGISTRY_SYNC,
@@ -2173,6 +2174,8 @@ def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[s
         return () if purpose is None else (f"Run {stage} only: {purpose}.",)
     if screen is ConsumerScreen.REGISTRY_REMOVE:
         return () if not state.focus else (f"Disconnect {state.focus} from this project.",)
+    if screen is MaintainerScreen.SOURCE_REMOVE:
+        return () if not state.focus else (f"Remove Source {state.focus} from this project.",)
     if screen is ConsumerScreen.CREDENTIAL_REVIEW:
         record = screens.credential(state.focus)
         if record is None:

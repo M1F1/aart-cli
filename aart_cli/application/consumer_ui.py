@@ -83,6 +83,7 @@ class ConsumerActionKind(str, Enum):
     REGISTRY_SYNC = "registry-sync"
     REGISTRY_REMOVE = "registry-remove"
     SOURCE_ADD = "source-add"
+    SOURCE_REMOVE = "source-remove"
     REGISTRY_INIT = "registry-init"
     REGISTRY_REBUILD = "registry-rebuild"
     REGISTRY_PUSH = "registry-push"
@@ -1186,6 +1187,7 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     # cursor; its review is a screen of its own so the fetch is stated before it happens (B-084).
     (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRIES): ConsumerScreen.REGISTRY_SYNC,
     (ConsumerActionKind.REGISTRY_REMOVE, ConsumerScreen.REGISTRIES): ConsumerScreen.REGISTRY_REMOVE,
+    (ConsumerActionKind.SOURCE_REMOVE, MaintainerScreen.SOURCES): MaintainerScreen.SOURCE_REMOVE,
     (
         ConsumerActionKind.SOURCE_ADD,
         MaintainerScreen.SOURCE_ADD,
@@ -1304,6 +1306,7 @@ _ROW_IS_THE_REQUEST = frozenset(
         # always about the visible row, never that stale workflow subject (`QA-043`).
         ConsumerActionKind.REGISTRY_SYNC,
         ConsumerActionKind.REGISTRY_REMOVE,
+        ConsumerActionKind.SOURCE_REMOVE,
     }
 )
 
@@ -1586,6 +1589,7 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
     (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_REVIEW): None,
     (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRY_SYNC): None,
     (ConsumerActionKind.REGISTRY_REMOVE, ConsumerScreen.REGISTRY_REMOVE): None,
+    (ConsumerActionKind.SOURCE_REMOVE, MaintainerScreen.SOURCE_REMOVE): None,
     (ConsumerActionKind.SOURCE_ADD, MaintainerScreen.SOURCE_ADD_REVIEW): None,
     (ConsumerActionKind.REGISTRY_INIT, MaintainerScreen.REGISTRY_INIT_REVIEW): None,
     (ConsumerActionKind.REGISTRY_REBUILD, MaintainerScreen.REGISTRY_REBUILD_REVIEW): None,
@@ -1657,6 +1661,7 @@ _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_REVIEW): ConsumerScreen.REGISTRIES,
     (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRY_SYNC): ConsumerScreen.REGISTRIES,
     (ConsumerActionKind.REGISTRY_REMOVE, ConsumerScreen.REGISTRY_REMOVE): ConsumerScreen.REGISTRIES,
+    (ConsumerActionKind.SOURCE_REMOVE, MaintainerScreen.SOURCE_REMOVE): MaintainerScreen.SOURCES,
     (
         ConsumerActionKind.SOURCE_ADD,
         MaintainerScreen.SOURCE_ADD_REVIEW,
@@ -2104,6 +2109,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     MaintainerScreen.SOURCES: (
         _navigate_binding("a", "Add Source", MaintainerScreen.SOURCE_ADD),
         _action_binding("s", "Sync", ConsumerActionKind.SOURCE_SYNC),
+        _action_binding("d", "Remove", ConsumerActionKind.SOURCE_REMOVE),
     ),
     MaintainerScreen.SOURCE_DETAILS: (
         _action_binding("s", "Sync", ConsumerActionKind.SOURCE_SYNC),
@@ -2228,6 +2234,7 @@ _CONFIRM_SCREENS = frozenset(
         ConsumerScreen.REGISTRY_REVIEW,
         ConsumerScreen.REGISTRY_SYNC,
         ConsumerScreen.REGISTRY_REMOVE,
+        MaintainerScreen.SOURCE_REMOVE,
         MaintainerScreen.SOURCE_SYNC,
         MaintainerScreen.REGISTRY_COMMIT,
         MaintainerScreen.ADOPTION_REVIEW,
@@ -2287,6 +2294,7 @@ def _binding_enabled(binding: _ScreenBinding, state: ConsumerUiState) -> bool:
     if binding.event.action in (
         ConsumerActionKind.REGISTRY_SYNC,
         ConsumerActionKind.REGISTRY_REMOVE,
+        ConsumerActionKind.SOURCE_REMOVE,
     ):
         return state.current_row not in ("", "add-registry")
     if binding.event.action is ConsumerActionKind.REGISTRY_PUSH:

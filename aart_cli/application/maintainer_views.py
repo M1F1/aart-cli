@@ -198,6 +198,8 @@ class MaintainerScreen(str, Enum):
     # one.
     SOURCE_ADD = "31a-add-source"
     SOURCE_ADD_REVIEW = "31b-review-source"
+    # 31c is the review a Source is removed from, the way 21d is a Registry's (D-391).
+    SOURCE_REMOVE = "31c-remove-source"
     SOURCE_DETAILS = "32-source-details"
     SOURCE_SYNC = "33-source-sync"
     SOURCE_SYNC_RESULT = "34-source-sync-result"
@@ -2742,9 +2744,11 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
         MaintainerScreen.SOURCE_ADD,
         MaintainerScreen.SOURCE_DETAILS,
         MaintainerScreen.SOURCE_SYNC,
+        MaintainerScreen.SOURCE_REMOVE,
     ),
     MaintainerScreen.SOURCE_ADD: (MaintainerScreen.SOURCE_ADD_REVIEW,),
     MaintainerScreen.SOURCE_ADD_REVIEW: (MaintainerScreen.SOURCES,),
+    MaintainerScreen.SOURCE_REMOVE: (MaintainerScreen.SOURCES,),
     MaintainerScreen.SOURCE_DETAILS: (MaintainerScreen.SOURCE_SYNC,),
     MaintainerScreen.SOURCE_SYNC: (MaintainerScreen.SOURCE_SYNC_RESULT,),
     # A finished sync is the end of a Source journey, so it offers the list that journey

@@ -23,7 +23,9 @@ from pathlib import Path
 from unittest import mock
 
 from aart_cli import cli, tui
-from aart_cli.application.consumer_ui import opening_state
+from aart_cli.application.consumer_ui import ConsumerUiState, SourceDraft, opening_state
+from aart_cli.application.consumer_views import ConsumerSession
+from aart_cli.application.maintainer_views import MaintainerScreen
 from aart_cli.domain.result import Ok
 from tests.consumer_shell_test import DOWN, ENTER, ESCAPE, FakeTerminal
 
@@ -157,26 +159,38 @@ class LocalRegistryPromotionTest(unittest.TestCase):
 
                 (author / "gh" / "aart-cli.json").write_text(_manifest("1.1.0"), encoding="utf-8")
                 _git(author, "commit", "-qam", "v1.1")
-                yield home, registry
+                yield home, registry, author
 
-    def _shell(self, home: Path, registry: Path, *codes: int) -> _Terminal:
+    def _shell(
+        self, home: Path, registry: Path, *codes: int, draft: SourceDraft | None = None
+    ) -> _Terminal:
         composed = tui._canonical_consumer_actions(
             project=str(registry), user_home=str(home), today=TODAY
         )
         assert isinstance(composed, Ok), composed
         handler = composed.value
         terminal = _Terminal(*codes)
+        state = opening_state(handler.settings)
+        if draft is not None:
+            # The Add Source form, filled in, with the cursor on its submit row.
+            state = ConsumerUiState(
+                ConsumerSession(MaintainerScreen.SOURCE_ADD),
+                settings=handler.settings,
+                source_draft=draft,
+                rows=("alias", "kind", "location", "ref", "connect"),
+                cursor=4,
+            )
         tui.run_consumer_shell(
             handler.source(),
             terminal,
-            state=opening_state(handler.settings),
+            state=state,
             action_handler=handler,
             settings_writer=handler.save_settings,
         )
         return terminal
 
     def test_a_bumped_version_is_promoted_and_committed_into_the_local_registry(self) -> None:
-        with self._machine() as (home, registry):
+        with self._machine() as (home, registry, _author):
             before = _git(registry, "rev-parse", "HEAD")
             # Settings → Maintainer Mode on.
             self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 4, ENTER, ESCAPE)
@@ -207,7 +221,7 @@ class LocalRegistryPromotionTest(unittest.TestCase):
     def test_source_sync_targets_the_only_registry_when_none_is_the_default(self) -> None:
         # D-390: disconnecting the default Registry left the other one connected but no default,
         # and Source Sync refused with no way to name one. One enabled Registry is unambiguous.
-        with self._machine(default=False) as (home, registry):
+        with self._machine(default=False) as (home, registry, _author):
             self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 4, ENTER, ESCAPE)
             synced = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
 
@@ -215,6 +229,38 @@ class LocalRegistryPromotionTest(unittest.TestCase):
             self.assertNotIn("explicit default target registry", drawn)
             self.assertTrue(synced.screen_containing("/ Source Sync Result"), synced.last)
             before = _git(registry, "rev-parse", "HEAD")
+            walked = self._shell(
+                home, registry, *(DOWN,) * 8, ENTER, DOWN, ENTER, ENTER, ord("d"), *(ENTER,) * 9
+            )
+            self.assertNotEqual(_git(registry, "rev-parse", "HEAD"), before, walked.last)
+
+    def test_a_source_is_removed_from_maintainer_sources_and_added_again(self) -> None:
+        # D-391: a Source entered wrong had no way out of the TUI; `aart-cli source remove` did.
+        with self._machine() as (home, registry, author):
+            self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 4, ENTER, ESCAPE)
+            synced = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
+            self.assertTrue(synced.screen_containing("/ Source Sync Result"), synced.last)
+
+            removed = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("d"), ENTER)
+            review = removed.screen_containing("remove Source review")
+            self.assertIn("[d] Remove", removed.screen_containing("/ Sources"))
+            self.assertIn("Source: authors", review)
+            self.assertIn("its Candidates", review)
+            code, listed = _cli("source", "list")
+            self.assertEqual(code, 0, listed)
+            self.assertNotIn("authors", listed)
+            self.assertIn("company", listed)
+
+            added = self._shell(
+                home,
+                registry,
+                ENTER,
+                ENTER,
+                draft=SourceDraft("authors", "source-local", str(author), ""),
+            )
+            self.assertTrue(added.screen_containing("source authors added"), added.last)
+            before = _git(registry, "rev-parse", "HEAD")
+            self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
             walked = self._shell(
                 home, registry, *(DOWN,) * 8, ENTER, DOWN, ENTER, ENTER, ord("d"), *(ENTER,) * 9
             )

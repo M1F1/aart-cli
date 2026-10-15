@@ -9945,3 +9945,25 @@ A single enabled Registry is not a choice, so nothing is chosen on the operator'
 `tests/local_registry_promotion_e2e_test.py` connects the Registry with `--no-default`, then walks
 Source Sync and the review screens to the commit. The mutation `len(registries) == 2` turns only
 that test red.
+
+## D-391 — Maintainer Sources removes an authoring Source, behind its own review (screen 31c)
+
+The operator: *"i think deleting source also should be an option from tui and adding it one more
+time"*. Registries could be disconnected from the TUI (21d). An authoring Source could only be
+removed with `aart-cli source remove`, so a Source entered with the wrong origin, branch or kind
+could not be corrected without leaving the TUI. The specification already lists `Source Removed`
+among Candidate states (§164.3), so removal is part of the product, not a new surface.
+
+`[d] Remove` on screen 31 opens `31c-remove-source`. That review states the Source's kind,
+origin and ref. It says what goes (the Source, its AART-managed snapshot and its Candidates) and
+what stays (every version already promoted into a Registry). Confirming runs the same port and
+transaction as Disconnect and `aart-cli source remove`, bound to the reviewed identity. The
+review digest names the operation, so a Registry review cannot confirm a Source removal or the
+reverse. Adding it again is the existing Add Source form; nothing new was needed. The refusal
+for a source repointed after Review now says "source", not "registry", because both paths share
+it.
+
+Evidence: `tests/local_registry_promotion_e2e_test.py` syncs a Source, removes it from screen 31,
+checks with `aart-cli source list` that only the Registry remains, adds it again through the Add
+Source form, then syncs and promotes into the Registry. The mutation that offers removal only for
+Registries turns that test red.

@@ -345,8 +345,8 @@ def remove_configured_source(
     if expected_source is not None and planned.value.source != expected_source:
         return _failure(
             "source-selection-invalid",
-            f"registry {alias} changed after Review",
-            "review the current Registry connection before disconnecting it",
+            f"source {alias} changed after Review",
+            "review the current connection before removing it",
         )
 
     discarded = discard_configured_source(
