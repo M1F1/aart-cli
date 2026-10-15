@@ -56,7 +56,7 @@ class TuiVisualHierarchyTest(TestCase):
         self.assertEqual(lines[explanation + 2], SECTION_RULE)
         self.assertNotIn("About Marketplace:", lines)
         # `QA-096`: the dashboard's counts are statements in a list, so the heading is marked.
-        recent = next(i for i, line in enumerate(lines) if line.endswith(". recent activity:"))
+        recent = next(i for i, line in enumerate(lines) if line == "- recent activity:")
         self.assertEqual(lines[recent - 1], "")
 
     def test_each_registry_is_a_separate_card_and_every_actionable_row_shows_focus(self) -> None:

@@ -40,8 +40,8 @@ from aart_cli.tui_layout import (
     action_prompt,
     columns,
     field_block,
-    numbered,
-    numbered_item,
+    list_item,
+    listed,
     separate,
     under_item,
 )
@@ -138,7 +138,7 @@ def render_maintainer_dashboard(
     # that says so is the fault `QA-067` removed from `Navigation:` wearing another name.
     # `QA-096`: each count is a separate statement, so each is separated -- the blank line is what
     # the status block reads to tell one list item from the next.
-    activity = list(numbered(view.recent_activity)) or ["  none yet"]
+    activity = list(listed(view.recent_activity)) or ["  none yet"]
     candidates = [_candidate_summary(view.active_candidate_count, view.settled_candidate_count)]
     if profile is PresentationProfile.VERBOSE and view.lifecycle_counts:
         candidates.append(f"Candidate lifecycle: {_lifecycle(view.lifecycle_counts)}")
@@ -417,7 +417,7 @@ def render_maintainer_candidate(
             if profile is PresentationProfile.VERBOSE and item.obtain_from_url is not None:
                 lines.append(f"    guidance URL: {item.obtain_from_url}")
     lines.append("Validation findings:")
-    lines.extend(numbered(f"{item}" for item in view.findings))
+    lines.extend(listed(f"{item}" for item in view.findings))
     if not view.findings:
         lines.append("  none recorded")
     if view.rejection_reason is not None:
@@ -472,11 +472,11 @@ def render_maintainer_provenance(
         f"Importer: {view.importer_id} {view.importer_version}",
         "Payload paths:",
     ]
-    lines.extend(numbered(f"{item}" for item in view.payload_paths))
+    lines.extend(listed(f"{item}" for item in view.payload_paths))
     if not view.payload_paths:
         lines.append("  none")
     lines.append("Warnings:")
-    lines.extend(numbered(f"{item}" for item in view.warnings))
+    lines.extend(listed(f"{item}" for item in view.warnings))
     if not view.warnings:
         lines.append("  none")
     if profile is PresentationProfile.VERBOSE:
@@ -618,7 +618,7 @@ def maintainer_collection_candidate_detail(
         f"Manifest: {candidate.manifest_path}",
         f"Candidate: {candidate.candidate_id}",
         "Members:",
-        *numbered(f"{item}" for item in candidate.members),
+        *listed(f"{item}" for item in candidate.members),
     )
 
 
@@ -759,7 +759,7 @@ def maintainer_validation_check_detail(
         return ()
     if not check.details:
         return (f"{check.label}: nothing to report",)
-    return (f"{check.label}:", *numbered(f"{detail.message}" for detail in check.details))
+    return (f"{check.label}:", *listed(f"{detail.message}" for detail in check.details))
 
 
 def render_maintainer_validation_check(
@@ -781,13 +781,13 @@ def render_maintainer_validation_check(
     for number, detail in enumerate(view.details, start=1):
         if number > 1:
             lines.append("")
-        lines.append(numbered_item(number, detail.message))
+        lines.append(list_item(detail.message))
         if detail.path is not None:
-            lines.append(under_item(number, f"path: {detail.path}"))
+            lines.append(under_item(f"path: {detail.path}"))
         if detail.declared is not None:
-            lines.append(under_item(number, f"declared: {detail.declared}"))
+            lines.append(under_item(f"declared: {detail.declared}"))
         if detail.expected is not None:
-            lines.append(under_item(number, f"expected: {detail.expected}"))
+            lines.append(under_item(f"expected: {detail.expected}"))
     return tuple(lines)
 
 
@@ -809,7 +809,7 @@ def render_maintainer_policy_review(
         f"  Risk ceiling: {view.risk_ceiling}",
         "Policy requires:",
     ]
-    lines.extend(numbered(f"{item}" for item in view.required_checks))
+    lines.extend(listed(f"{item}" for item in view.required_checks))
     if not view.required_checks:
         lines.append("  nothing beyond the pipeline itself")
     if view.forbidden_effects:
@@ -817,7 +817,7 @@ def render_maintainer_policy_review(
     if view.unmet_requirements:
         lines.append(f"Unmet requirements: {', '.join(view.unmet_requirements)}")
     lines.append("Blocking findings:")
-    lines.extend(numbered(f"{item}" for item in view.blocking_findings))
+    lines.extend(listed(f"{item}" for item in view.blocking_findings))
     if not view.blocking_findings:
         lines.append("  none; nothing here refuses promotion")
     return tuple(lines)
@@ -862,13 +862,13 @@ def render_maintainer_promotion_review(
         # The refusal replaces the review rather than sitting beside it: a digest on screen is an
         # invitation to confirm, and there is nothing here to confirm.
         lines.append("This Candidate cannot be promoted:")
-        lines.extend(numbered(f"{item}" for item in view.refusals))
+        lines.extend(listed(f"{item}" for item in view.refusals))
         return tuple(lines)
     lines.append(f"Validation report: {_short(view.validation_report_digest or '', profile)}")
     lines.append(f"Effective policy: {_short(view.effective_policy_digest or '', profile)}")
     if view.warnings:
         lines.append("Warnings carried into the audit record:")
-        lines.extend(numbered(f"{item}" for item in view.warnings))
+        lines.extend(listed(f"{item}" for item in view.warnings))
     lines.append(f"Review digest: {_short(view.review_digest or '', profile)}")
     return tuple(lines)
 
@@ -886,7 +886,7 @@ def render_maintainer_registry_diff(
     ]
     if not view.plannable:
         lines.append("No registry transaction can be planned:")
-        lines.extend(numbered(f"{item}" for item in view.refusals))
+        lines.extend(listed(f"{item}" for item in view.refusals))
         return tuple(lines)
     lines.append(
         f"Registry snapshot before: {_short(view.expected_registry_snapshot or '', profile)}"
@@ -1007,7 +1007,7 @@ def render_maintainer_registry(
     lines = [
         f"{'>' if selected else ' '} {view.alias}  {'✓ Valid' if view.valid else '⚠ Attention'}",
     ]
-    lines.extend(numbered(view.diagnostics, indent="    "))
+    lines.extend(listed(view.diagnostics, indent="    "))
     if view.snapshot is None:
         return tuple(lines)
     lines.append(f"    Revision: {_short(view.revision or '', fast)}")
@@ -1534,7 +1534,7 @@ def maintainer_bulk_promotion_status(
     statements: list[tuple[str, ...]] = []
     for view in views:
         said = (
-            *numbered(f"{item}" for item in view.refusals),
+            *listed(f"{item}" for item in view.refusals),
             *(
                 ("  No Candidate of this registry can be promoted right now.",)
                 if not view.candidates and not view.refusals

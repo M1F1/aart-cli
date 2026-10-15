@@ -522,7 +522,7 @@ class BulletedStatementsTest(TestCase):
     def test_each_blank_separated_group_becomes_one_item(self) -> None:
         self.assertEqual(
             bulleted(("Sources: 0", "", "Candidates: 0")),
-            ("1. Sources: 0", "", "2. Candidates: 0"),
+            ("- Sources: 0", "", "- Candidates: 0"),
         )
 
     def test_a_statement_that_runs_on_keeps_its_lines_under_its_own_marker(self) -> None:
@@ -530,13 +530,13 @@ class BulletedStatementsTest(TestCase):
 
         self.assertEqual(
             bulleted(("Re-run this registry's generated files.", "  Nothing is pushed.")),
-            ("1. Re-run this registry's generated files.", "     Nothing is pushed."),
+            ("- Re-run this registry's generated files.", "    Nothing is pushed."),
         )
 
     def test_a_lone_statement_is_a_list_of_one(self) -> None:
         """*"zawsze, nawet pojedyncze"* -- nothing has to decide which kind of block this is."""
 
-        self.assertEqual(bulleted(("Only one thing to say.",)), ("1. Only one thing to say.",))
+        self.assertEqual(bulleted(("Only one thing to say.",)), ("- Only one thing to say.",))
 
     def test_nothing_to_say_stays_nothing(self) -> None:
         self.assertEqual(bulleted(()), ())
@@ -554,11 +554,11 @@ class BulletedPropertyTest(TestCase):
 
         spoken = [line for line in drawn if line.strip()]
         for line in spoken:
-            self.assertRegex(line, r"^(\d+\. |   )")
+            self.assertRegex(line, r"^(- |  )")
         # The marker comes off first: `bulleted` keeps whatever indent a line arrived with, so
         # stripping before removing it would read that indent as part of the marker.
         self.assertEqual(
-            [re.sub(r"^\d+\. ", "", line).strip() for line in spoken],
+            [re.sub(r"^- ", "", line).strip() for line in spoken],
             [line.strip() for line in block if line.strip()],
         )
 

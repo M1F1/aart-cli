@@ -105,10 +105,10 @@ class MaintainerSourceOnboardingTest(unittest.TestCase):
             self.assertEqual(
                 _spoken(notice),
                 (
-                    "1. source z-authors added.",
-                    "2. run Source Sync to discover artifacts and create or refresh Candidates, "
+                    "- source z-authors added.",
+                    "- run Source Sync to discover artifacts and create or refresh Candidates, "
                     "including new upstream versions. Adding a Source only connects it.",
-                    "3. Source Sync does not promote Candidates or update installed artifacts.",
+                    "- Source Sync does not promote Candidates or update installed artifacts.",
                 ),
             )
 

@@ -1,8 +1,10 @@
-"""D-386: lists are numbered, open lower-case, stand a blank line apart, and wrap instead of being cut.
+"""D-386, D-389: list items take a dash, open lower-case, stand a blank line apart, and wrap.
 
-The operator asked for all of it in two messages: *"wypisuj te rzeczy jako lista z numerkami i
-zaczynaj od malej litery podpunkt"*, then *"gdy tekst nie miesci sie w linijce mozesz go
-zawijac? ... przy kazdym bullet albo podpunkcie mozesz je oddzielac pusta linia"*.
+The operator asked for numbers and lower case (*"wypisuj te rzeczy jako lista z numerkami i
+zaczynaj od malej litery podpunkt"*), then wrapping and a blank line between items (*"gdy tekst
+nie miesci sie w linijce mozesz go zawijac? ... przy kazdym bullet albo podpunkcie mozesz je
+oddzielac pusta linia"*), then took the numbers back: *"jednak wrzucanie wszedzie tych cyferek
+bylo bledem"* -- a number beside a count read as the count on the Dashboard (D-389).
 """
 
 from __future__ import annotations
@@ -15,18 +17,18 @@ from hypothesis import strategies as st
 from aart_cli.tui_layout import (
     SECTION_RULE,
     bulleted,
+    listed,
     lowercase_first,
-    numbered,
     stated,
     wrap_lines,
 )
 
 
 class NumberedListsTest(unittest.TestCase):
-    def test_items_are_numbered_lower_case_and_a_blank_line_apart(self) -> None:
+    def test_items_are_dashed_lower_case_and_a_blank_line_apart(self) -> None:
         self.assertEqual(
-            numbered(("Install its Python dependencies with pip", "Store the credential")),
-            ("  1. install its Python dependencies with pip", "", "  2. store the credential"),
+            listed(("Install its Python dependencies with pip", "Store the credential")),
+            ("  - install its Python dependencies with pip", "", "  - store the credential"),
         )
 
     def test_a_hyphenated_word_is_lowered_like_any_other(self) -> None:
@@ -43,23 +45,23 @@ class NumberedListsTest(unittest.TestCase):
         ):
             self.assertEqual(lowercase_first(name), name)
 
-    def test_a_status_is_a_numbered_list_of_lower_case_statements(self) -> None:
+    def test_a_status_is_a_dashed_list_of_lower_case_statements(self) -> None:
         self.assertEqual(
             bulleted(stated(("2 ready", "", "Actions: repair issues."))),
-            ("1. 2 ready", "", "2. actions: repair issues."),
+            ("- 2 ready", "", "- actions: repair issues."),
         )
 
 
 class WrappingTest(unittest.TestCase):
     def test_a_long_item_wraps_under_its_own_text(self) -> None:
-        line = "  1. install its Python dependencies with pip into the private environment"
+        line = "  - install its Python dependencies with pip into the private environment"
 
         self.assertEqual(
             wrap_lines((line,), width=40),
             (
-                "  1. install its Python dependencies",
-                "     with pip into the private",
-                "     environment",
+                "  - install its Python dependencies",
+                "    with pip into the private",
+                "    environment",
             ),
         )
 
@@ -97,12 +99,12 @@ class TheTerminalWrapsTest(unittest.TestCase):
         from tests.screen_skeleton_test import _Screen
 
         screen = _Screen(height=24, width=40)
-        item = "  1. install its Python dependencies with pip into the private environment"
+        item = "  - install its Python dependencies with pip into the private environment"
         tui._CursesTerminal(screen).draw(render(Frame(trail=("heading",), status=(item,))))
 
         painted = [value for _, _, value in screen.written]
-        self.assertIn("  1. install its Python dependencies", painted)
-        self.assertIn("     environment", painted)
+        self.assertIn("  - install its Python dependencies", painted)
+        self.assertIn("    environment", painted)
 
 
 if __name__ == "__main__":

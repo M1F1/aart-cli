@@ -53,7 +53,7 @@ def _statements(drawn: tuple[str, ...]) -> list[str]:
     body = drawn[: footer_start(drawn)]
     items: list[list[str]] = []
     for line in body:
-        marked = re.match(r"\d+\. ", line)
+        marked = re.match(r"- ", line)
         if marked:
             items.append([line[marked.end() :]])
         elif line.startswith("  ") and items:

@@ -99,12 +99,12 @@ AART / Dashboard
 
 ────────────────────────────────────────────────────────────────
 
-1. AART
-   2 installed — 1 ready, 1 update, 0 attention
-   1 registries — 0 credentials need attention
+- AART
+  2 installed — 1 ready, 1 update, 0 attention
+  1 registries — 0 credentials need attention
 
-2. recent activity:
-     none yet
+- recent activity:
+    none yet
 
 ────────────────────────────────────────────────────────────────
 

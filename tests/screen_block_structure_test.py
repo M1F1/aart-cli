@@ -109,9 +109,9 @@ def _statements(block: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(_ITEM.sub("", line) for line in _spoken(block))
 
 
-#: One numbered statement's marker, or the indent its continuation hangs at (D-386).
-_ITEM = re.compile(r"^(\d+\. | {3})")
-_NUMBERED = re.compile(r"^\d+\. ")
+#: One statement's marker, or the indent its continuation hangs at (D-386).
+_ITEM = re.compile(r"^(- | {2})")
+_MARKED = re.compile(r"^- ")
 
 
 class DashboardBlockTest(TestCase):
@@ -420,7 +420,7 @@ class DoctorBlockTest(TestCase):
 
         self.assertEqual(_spoken(blocks[1])[-1], "    launcher: missing")
         self.assertEqual(
-            _statements(blocks[2])[-2:], ("independently repairable:", "  1. public/mcp/jira@2.2.0")
+            _statements(blocks[2])[-2:], ("independently repairable:", "  - public/mcp/jira@2.2.0")
         )
 
     def test_the_screen_does_not_name_itself_again_under_the_trail(self) -> None:
@@ -464,8 +464,8 @@ class RegistryMaintainerBlockTest(TestCase):
         self.assertEqual(
             _spoken(blocks[1]),
             (
-                "1. current project contains a Registry. Rebuild updates its generated files.",
-                "2. no Registry is subscribed in this project yet.",
+                "- current project contains a Registry. Rebuild updates its generated files.",
+                "- no Registry is subscribed in this project yet.",
             ),
         )
 
@@ -917,7 +917,7 @@ class NoticeBlockTest(TestCase):
         status = next(
             index
             for index, block in enumerate(blocks)
-            if index != notice and any(_NUMBERED.match(line) for line in _spoken(block))
+            if index != notice and any(_MARKED.match(line) for line in _spoken(block))
         )
 
         self.assertLess(status, notice)
@@ -958,7 +958,7 @@ class BulletedStatusTest(TestCase):
 
         self.assertEqual(
             self._status(frame(source, state)),
-            ("1. maintainer screens are reachable from the Dashboard.",),
+            ("- maintainer screens are reachable from the Dashboard.",),
         )
 
     def test_separate_facts_are_separate_items_with_a_blank_line_between_them(self) -> None:
@@ -980,16 +980,16 @@ class BulletedStatusTest(TestCase):
             blocks[2],
             (
                 "",
-                "1. sources: 0",
+                "- sources: 0",
                 "",
-                "2. candidates: 0",
+                "- candidates: 0",
                 "",
-                "3. validation failures: 0",
+                "- validation failures: 0",
                 "",
-                "4. ready for promotion: 0",
+                "- ready for promotion: 0",
                 "",
-                "5. recent maintainer activity:",
-                "     none yet",
+                "- recent maintainer activity:",
+                "    none yet",
                 "",
             ),
         )

@@ -126,8 +126,8 @@ from aart_cli.tui_layout import (
     cards,
     field_block,
     is_action_prompt,
-    numbered,
-    numbered_item,
+    list_item,
+    listed,
     render,
     separate,
     stated,
@@ -624,10 +624,10 @@ def _verbose_plan(view: ConsumerPlanView) -> tuple[str, ...]:
         view.selection.explanation,
         "Resolved artifacts:",
     ]
-    lines.extend(numbered(f"{item}" for item in view.selection.resolved))
+    lines.extend(listed(f"{item}" for item in view.selection.resolved))
     lines.append("Requirements:")
     lines.extend(
-        numbered(
+        listed(
             f"{item.id} [{item.state}] ({item.kind}): {item.detail}; owners: "
             f"{', '.join(item.owners)}"
             for item in view.requirements
@@ -635,7 +635,7 @@ def _verbose_plan(view: ConsumerPlanView) -> tuple[str, ...]:
     )
     lines.append("Remediations:")
     lines.extend(
-        numbered(
+        listed(
             f"{item.summary}; risk: {_human(item.risk)}; owners: {', '.join(item.owners)}"
             for item in view.remediations
         )
@@ -644,7 +644,7 @@ def _verbose_plan(view: ConsumerPlanView) -> tuple[str, ...]:
         lines.append("  none")
     lines.append("Effects:")
     lines.extend(
-        numbered(
+        listed(
             f"{item.summary}; risk: {_human(item.risk)}; inspectable: "
             f"{'yes' if item.inspectable else 'no'}; reversible: "
             f"{'yes' if item.reversible else 'no'}; owners: {', '.join(item.owners)}"
@@ -814,11 +814,10 @@ def render_remediation(view: ConsumerPlanView, profile: PresentationProfile) -> 
     for number, item in enumerate(view.remediations, start=1):
         if number > 1:
             lines.append("")
-        lines.append(numbered_item(number, remediation_change(item)))
+        lines.append(list_item(remediation_change(item)))
         if profile is PresentationProfile.VERBOSE:
             lines.append(
                 under_item(
-                    number,
                     f"{item.summary} ({_human(item.risk)}); owners: {', '.join(item.owners)}",
                 )
             )
@@ -1219,7 +1218,7 @@ def render_installed_artifact(
             "Installation" + (f" — {view.scope.title()} scope" if view.scope else "") + ":"
         )
         lines.extend(
-            numbered(
+            listed(
                 f"{item.role}: {item.path}"
                 + (f" ({item.harness})" if item.harness else "")
                 + f" — {_human(item.state)}"
@@ -1228,10 +1227,10 @@ def render_installed_artifact(
         )
     if profile is PresentationProfile.VERBOSE:
         lines.append("Ownership:")
-        lines.extend(numbered(f"{item.kind}: {item.owner}" for item in view.ownership))
+        lines.extend(listed(f"{item.kind}: {item.owner}" for item in view.ownership))
         lines.append("Measured drift:")
         lines.extend(
-            numbered(
+            listed(
                 f"{item.component}: {_human(item.kind)}; "
                 f"independently repairable: {'yes' if item.repairable else 'no'}"
                 for item in view.drift
@@ -1259,7 +1258,7 @@ def render_installed_collection(
     if profile is PresentationProfile.VERBOSE:
         lines.append("Members:")
         lines.extend(
-            numbered(f"{item.artifact}: {_human(item.health.value)}" for item in view.members)
+            listed(f"{item.artifact}: {_human(item.health.value)}" for item in view.members)
         )
     return tuple(lines)
 
@@ -1286,7 +1285,7 @@ def render_lifecycle_plan(view: LifecyclePlanView, profile: PresentationProfile)
     if profile is PresentationProfile.VERBOSE:
         lines.append("Drift:")
         lines.extend(
-            numbered(
+            listed(
                 f"{item.component}: {_human(item.kind)}; repairable: "
                 f"{'yes' if item.repairable else 'no'}"
                 for item in view.drift
@@ -1296,7 +1295,7 @@ def render_lifecycle_plan(view: LifecyclePlanView, profile: PresentationProfile)
             lines.append("  none")
         lines.append("Steps:")
         lines.extend(
-            numbered(
+            listed(
                 f"{item.component}: {item.summary}; risk: {_human(item.risk)}"
                 for item in view.steps
             )
@@ -1334,7 +1333,7 @@ def render_lifecycle_outcome(
     if profile is PresentationProfile.VERBOSE:
         lines.append("Steps:")
         lines.extend(
-            numbered(
+            listed(
                 f"{item.component}: {_human(item.effect)} — {_human(item.status)}"
                 + ("" if not item.detail else f" ({item.detail})")
                 for item in view.steps
@@ -1356,7 +1355,7 @@ def render_dashboard(view: DashboardView) -> tuple[str, ...]:
         "",
         "Recent activity:",
     ]
-    lines.extend(numbered(f"{item}" for item in view.recent_activity))
+    lines.extend(listed(f"{item}" for item in view.recent_activity))
     if not view.recent_activity:
         lines.append("  none yet")
     return tuple(lines)
@@ -1516,7 +1515,7 @@ def doctor_status(view: DoctorView, profile: PresentationProfile) -> tuple[str, 
     # `QA-096`: separate statements, separately -- the blank line is what the status block reads
     # to tell one list item from the next, and a count is not a continuation of the count above it.
     repairable = (
-        ("Independently repairable:", *numbered(f"{item}" for item in view.repairable_issues))
+        ("Independently repairable:", *listed(f"{item}" for item in view.repairable_issues))
         if profile is PresentationProfile.VERBOSE and view.repairable_issues
         else ()
     )
@@ -1670,16 +1669,16 @@ def render_marketplace_artifact(
     )
     lines = [row.key, approval, state, "Eligible installation harnesses"]
     if row.eligible_harnesses:
-        lines.extend(numbered(f"{harness}" for harness in row.eligible_harnesses))
+        lines.extend(listed(f"{harness}" for harness in row.eligible_harnesses))
     else:
         lines.append("  no eligible installation harness is available on this machine.")
     if row.unavailable_harnesses:
         lines.append("Detected but not eligible")
-        lines.extend(numbered(f"{harness}" for harness in row.unavailable_harnesses))
+        lines.extend(listed(f"{harness}" for harness in row.unavailable_harnesses))
     if not row.compatible:
         lines.append("Why installation is unavailable")
         lines.extend(
-            numbered(
+            listed(
                 f"{item.profile}: "
                 + (
                     "; ".join(reason.message for reason in item.reasons)
@@ -1691,7 +1690,7 @@ def render_marketplace_artifact(
         )
     lines.append("What it needs")
     if inputs:
-        lines.extend(numbered(f"{item.label}" for item in inputs))
+        lines.extend(listed(f"{item.label}" for item in inputs))
     else:
         lines.append("  nothing else before choosing an eligible harness")
     return tuple(lines)
@@ -1720,9 +1719,7 @@ def render_collection(
         ),
     ]
     if view.inputs:
-        statements.append(
-            ("What you will need", *numbered(f"{item.label}" for item in view.inputs))
-        )
+        statements.append(("What you will need", *listed(f"{item.label}" for item in view.inputs)))
     statements.append((f"{len(view.selected)} / {len(view.members)} selected",))
     if not view.exact:
         statements.append(
@@ -1823,7 +1820,7 @@ def render_receipt_detail(view: ReceiptDetailView, profile: PresentationProfile)
     if profile is PresentationProfile.VERBOSE:
         lines.append("Effects:")
         lines.extend(
-            numbered(
+            listed(
                 f"{item.component}: {_human(item.effect)} — {_human(item.status)}"
                 + ("" if not item.detail else f" ({item.detail})")
                 for item in view.steps

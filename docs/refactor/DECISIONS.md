@@ -9918,3 +9918,15 @@ Evidence is `tests/local_registry_promotion_e2e_test.py`. It initializes, promot
 Registry with the CLI, connects it by its local path, bumps the authored version, then walks the
 real composition from Settings through Source Sync and the review screens to the commit. Restoring
 the `registry-git` test in `_configured_registry` alone turned it red.
+
+## D-389 — List items take a dash again; D-386's numbers are withdrawn
+
+The operator, after living with D-386: *"jednak wrzucanie wszedzie tych cyferek bylo bledem teraz
+to glupio wyglada zwaszlacza glwony dashboard gdzie te cyfy sa podwojne"*. On the Dashboard the
+item number stood beside a count (`1. AART` / `2 installed …`), and a list nested in a numbered
+statement numbered again, so the numbers read as data.
+
+`tui_layout.MARKER` is `- ` (the `QA-096` marker), continuation lines hang two columns in, and the
+helpers are `listed` / `list_item` / `under_item`. Everything else D-386 settled stays: items open
+lower-case, a blank line separates items, and long lines wrap with a hanging indent. Targeted
+mutation: `MARKER = "1. "` turns `tests/list_items_and_wrapping_test.py` red.

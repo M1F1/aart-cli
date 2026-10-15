@@ -284,8 +284,8 @@ def is_action_prompt(line: str) -> bool:
     return any(word.strip(",;:.") in KEY_NAMES for word in stripped.split())
 
 
-#: What a wrapped line's continuation hangs under: a number, a dash, a cursor, a check box.
-_HANGING = re.compile(r"^( *)((?:\d+\. )|(?:- )|(?:> |  (?=\[)))?((?:\[[^\]]\] )?)")
+#: What a wrapped line's continuation hangs under: a dash, a cursor, a check box.
+_HANGING = re.compile(r"^( *)((?:- )|(?:> |  (?=\[)))?((?:\[[^\]]\] )?)")
 
 
 def wrap_lines(lines: Sequence[str], *, width: int) -> Tuple[str, ...]:
@@ -411,17 +411,18 @@ def stated(lines: Sequence[str]) -> Tuple[str, ...]:
     return tuple(said)
 
 
-def _marker(number: int) -> str:
-    return f"{number}. "
+#: What opens one item of a list. Briefly a number (D-386); D-389 took it back, because a number
+#: beside a count -- "1. AART / 2 installed" on the Dashboard -- read as the count.
+MARKER = "- "
 
 
 def bulleted(lines: Sequence[str]) -> Tuple[str, ...]:
-    """Statements as a numbered list: one number each, one blank line between them.
+    """Statements as a list: one marker each, one blank line between them.
 
     The operator read a view's status as a paragraph, because three unrelated facts were three
     consecutive lines -- *"kazda linia statusu/informacji powinna byc oznaczona jako element
     listy"* (`QA-096`), and *"zawsze, nawet pojedyncze"*: a lone statement is a list of one rather
-    than an exception. Since D-386 the marker is a number.
+    than an exception.
 
     What counts as one statement is the blank line, which is already how every composed block in
     this module says "different thing" (`separate`). A statement that runs to several lines keeps
@@ -440,37 +441,36 @@ def bulleted(lines: Sequence[str]) -> Tuple[str, ...]:
             groups.append([])
         groups[-1].append(line)
     items = []
-    for number, group in enumerate((group for group in groups if group), start=1):
-        marker = _marker(number)
-        items.append((marker + group[0], *(" " * len(marker) + line for line in group[1:])))
+    for group in (group for group in groups if group):
+        items.append((MARKER + group[0], *(" " * len(MARKER) + line for line in group[1:])))
     return separate(*items)
 
 
-def numbered(items: Iterable[str], *, indent: str = "  ") -> Tuple[str, ...]:
-    """Items of one list, numbered from 1, opening lower-case, a blank line apart (D-386).
+def listed(items: Iterable[str], *, indent: str = "  ") -> Tuple[str, ...]:
+    """Items of one list, each opening lower-case, a blank line apart (D-386, D-389).
 
     The blank line is the operator's: items one under another ran together
     (*"przy kazdym bullet albo podpunkcie mozesz je oddzielac pusta linia"*).
     """
 
     lines: list[str] = []
-    for number, item in enumerate(items, start=1):
+    for item in items:
         if lines:
             lines.append("")
-        lines.append(numbered_item(number, item, indent=indent))
+        lines.append(list_item(item, indent=indent))
     return tuple(lines)
 
 
-def numbered_item(number: int, text: str, *, indent: str = "  ") -> str:
-    """One numbered item, for a list whose items carry lines of their own underneath."""
+def list_item(text: str, *, indent: str = "  ") -> str:
+    """One item, for a list whose items carry lines of their own underneath."""
 
-    return f"{indent}{_marker(number)}{lowercase_first(text)}"
+    return f"{indent}{MARKER}{lowercase_first(text)}"
 
 
-def under_item(number: int, text: str, *, indent: str = "  ") -> str:
-    """A line belonging to item ``number``, aligned with that item's text."""
+def under_item(text: str, *, indent: str = "  ") -> str:
+    """A line belonging to the item above it, aligned with that item's text."""
 
-    return f"{indent}{' ' * len(_marker(number))}{text}"
+    return f"{indent}{' ' * len(MARKER)}{text}"
 
 
 def section(lines: Sequence[str]) -> Tuple[str, ...]:
@@ -653,8 +653,9 @@ BOX_MARKERS: Mapping[str, str] = {
 __all__ = [
     "wrap_lines",
     "lowercase_first",
-    "numbered",
-    "numbered_item",
+    "MARKER",
+    "listed",
+    "list_item",
     "under_item",
     "BOX_CHECKED",
     "BOX_DISABLED",
