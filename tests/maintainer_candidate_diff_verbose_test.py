@@ -105,7 +105,7 @@ class CandidateDiffVerboseTest(unittest.TestCase):
         drawn = frame(self.source, self._diff())
         footer = "\n".join(drawn[footer_start(drawn) :])
 
-        self.assertIn("[v] Fast / Verbose", footer)
+        self.assertIn("[v] More info", footer)
         self.assertNotIn("[f]", footer)
         self.assertIsNone(key_event("f", self._diff()))
 

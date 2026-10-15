@@ -10103,3 +10103,35 @@ themselves; Verbose still adds the effect vocabulary and owners.
 
 Evidence: `tests/remediation_changes_test.py`. The new case was red against the summary lines
 before they were removed.
+
+## D-398 - Fast shows less, and `[v]` is named More info / Less info
+
+The operator, on Ready and the install flow: *"AART will also: configure the opencode integration i
+Risks i Review [identity] sa zbedne dla widoku non verbose ... moze zostac show details for the full
+plan, i zeby bylo ze klikajac [v] ... lepiej jakby bylo less/more info a nie fast/verbose"*, then
+*"1 selected niemalze na kazdym widoku w trakcie instalacji tez wydaje mi sie zbedne ... minimalistyczne
+intuicyjne TUI ktore nie przytloczy informacjami jesli nie wlaczy more info klikajac [v]"*, and
+*"verbose widok jest spoko, tam nic nie zmieniaj"*.
+
+- **Ready (09) in Fast** keeps the outcome counts and the Harnesses line and ends with
+  "Press [v] for more info: the full plan." The `AART will also:` remediation line, the
+  `Risks:` vocabulary and the review identity are left to Verbose, which is unchanged.
+- **INV-151 still holds.** A material risk (§152.4) is said in Fast in plain words, once:
+  "This install stores a credential / changes network access / runs high-risk code", leaving out
+  the credential when a count has already said "credential(s) stored securely". Local,
+  configuration and executable-install mutations are what installing is, and the counts already
+  name them as outcomes. The property test that asserted every risk name and the digest on screen
+  09 now asserts every material risk instead.
+- **"N selected" in Fast is drawn only on screens where rows are ticked** (`selects_rows`, the
+  existing `_SELECTABLE`). Ready, Installing, Success and the rest no longer repeat it. Verbose
+  still draws it everywhere.
+- **`[v]` is named for what pressing it gives**: `More info` in Fast, `Less info` in Verbose. Help
+  reads `[v] More info / less info`, and Settings' detail level reads `Less info` / `More info`
+  (`DETAIL_LEVEL_NAMES`). Stored values stay `fast` / `verbose`.
+
+Installing (10) was checked on a real install: in Fast it draws only the steps, so the one change
+there is the dropped selected count.
+
+Evidence: `tests/fast_shows_less_test.py` and the rewritten Ready property and examples.
+Mutations: counting ticks everywhere, dropping the material-risk line and a fixed `[v]` label each
+turned their tests red.

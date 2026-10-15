@@ -160,9 +160,9 @@ class ConsumerOverviewTest(unittest.TestCase):
         self.assertTrue(enabled.maintainer_mode)
         self.assertFalse(settings.maintainer_mode)
         rendered = "\n".join(render_settings(settings))
-        self.assertIn("Fast", rendered)
+        self.assertIn("Less info", rendered)
         self.assertIn("Registry Maintainer Mode: off", rendered)
-        self.assertIn("Experience\n  Detail level: Fast\n\nInstallation", rendered)
+        self.assertIn("Experience\n  Detail level: Less info\n\nInstallation", rendered)
         self.assertIn("Updates\n  Show available updates: on\n\nAdvanced", rendered)
         # `QA-087`: what the toggle implies is the state of the view, not a fifth row under the
         # four toggles, so it is no longer part of what the rows render to.

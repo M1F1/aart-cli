@@ -25,7 +25,7 @@ from aart_cli.application.consumer_ui import (
     typing_text,
 )
 from aart_cli.application.consumer_views import PresentationProfile
-from aart_cli.tui_consumer import ConsumerScreenSource, compose_frame
+from aart_cli.tui_consumer import DETAIL_LEVEL_NAMES, ConsumerScreenSource, compose_frame
 
 #: A row as the actions block draws it: the cursor gutter, then the row itself.
 _ROW = re.compile(r"^(> |  )\S")
@@ -189,7 +189,7 @@ def _same_rows(
     it keeps the two in step -- so the allowance is stated on the drawn lines instead.
     """
 
-    was, now = (item.session.profile.value.title() for item in (old, new))
+    was, now = (DETAIL_LEVEL_NAMES[item.session.profile] for item in (old, new))
     return len(before) == len(after) and all(
         line == drawn or (was in line and line.replace(was, now) == drawn)
         for line, drawn in zip(before, after, strict=True)

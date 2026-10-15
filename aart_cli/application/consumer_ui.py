@@ -28,6 +28,7 @@ from .consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
+    PresentationProfile,
     installer_from_row,
     is_screen_identifier,
     keeps_focus,
@@ -45,6 +46,7 @@ from .maintainer_views import (
 
 __all__ = [
     "installation_is_mcp",
+    "selects_rows",
     "ConsumerActionKind",
     "ConsumerUiCommand",
     "ConsumerUiCommandKind",
@@ -543,6 +545,12 @@ _SELECTABLE = frozenset(
         MaintainerScreen.SCAN_RESULT,
     }
 )
+
+
+def selects_rows(screen: ApplicationScreen) -> bool:
+    """Whether rows are ticked on this screen, which is where a count of the ticks means anything."""
+
+    return screen in _SELECTABLE
 
 
 def _rows_valid(rows: tuple[str, ...]) -> bool:
@@ -2470,7 +2478,15 @@ def key_bindings(
     if state.session.screen in _SEARCHABLE:
         bindings.append(KeyBinding("/", "Search"))
     if not typing:
-        bindings.append(KeyBinding("v", "Fast / Verbose"))
+        # Named for what pressing it gives, not for the mode it is in (D-398).
+        bindings.append(
+            KeyBinding(
+                "v",
+                "Less info"
+                if state.session.profile is PresentationProfile.VERBOSE
+                else "More info",
+            )
+        )
     bindings.extend((KeyBinding("↑/↓", "Move"), KeyBinding("Esc", "Back")))
     if not typing:
         bindings.extend((KeyBinding("?", "Help"), KeyBinding("q", "Quit")))

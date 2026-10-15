@@ -359,7 +359,7 @@ class ConsumerShellTest(unittest.TestCase):
     def test_help_is_drawn_over_the_screen_it_was_asked_for(self):
         state, terminal = drive(ord("?"), state=_at(ConsumerScreen.INSTALLED))
 
-        helped = terminal.screen_containing("Fast / Verbose")
+        helped = terminal.screen_containing("More info / less info")
         self.assertIn("AART / Installed", helped)
         self.assertIn("public/mcp/github@1.6.0", helped)
         self.assertTrue(state.exited)

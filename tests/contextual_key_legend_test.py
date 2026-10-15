@@ -83,7 +83,7 @@ class ContextualKeyLegendTest(unittest.TestCase):
         expected = {
             MaintainerScreen.SOURCES: ("[a] Add Source", "[s] Sync"),
             MaintainerScreen.CANDIDATES: ("[f] Filters", "[c] Collections"),
-            MaintainerScreen.CANDIDATE_DIFF: ("[v] Fast / Verbose",),
+            MaintainerScreen.CANDIDATE_DIFF: ("[v] More info",),
             MaintainerScreen.SCAN_RESULT: ("[a] Adopt",),
             MaintainerScreen.ADOPTED_ARTIFACTS: ("[Enter] Check upstream",),
             MaintainerScreen.UPSTREAM_CHECK: ("[a] Review new version",),

@@ -170,7 +170,11 @@ class RemediationStatesTheChangesAartWillMakeTest(unittest.TestCase):
         # the list said again what the list had just said.
         drawn = _drawn(*_DECISIONS)
 
-        for repeated in ("installed on this machine", "never shows its value", "will be configured"):
+        for repeated in (
+            "installed on this machine",
+            "never shows its value",
+            "will be configured",
+        ):
             self.assertNotIn(repeated, drawn)
 
     def test_no_profile_claims_a_guarantee_the_plan_does_not_establish(self) -> None:
@@ -243,14 +247,17 @@ class TheStopIsConditionalTest(unittest.TestCase):
             ConsumerScreen.REMEDIATION, install_flow_screens(_plan(*routine, inputs=False))
         )
 
-    def test_ready_still_discloses_the_routine_changes_it_skipped_to(self) -> None:
-        drawn = "\n".join(
-            render_ready(_plan(_harness("claude"), _harness("codex")), PresentationProfile.FAST)
-        )
+    def test_ready_leaves_the_routine_changes_to_more_info(self) -> None:
+        # D-398: *"AART will also: configure the opencode integration ... zbedne dla widoku non
+        # verbose"*. The harness counts and Harnesses line already say it; `[v]` keeps the rest.
+        plan = _plan(_harness("claude"), _harness("codex"))
+        fast = "\n".join(render_ready(plan, PresentationProfile.FAST))
+        verbose = "\n".join(render_ready(plan, PresentationProfile.VERBOSE))
 
-        self.assertIn("claude", drawn)
-        self.assertIn("codex", drawn)
-        self.assertIn("integration", drawn)
+        self.assertNotIn("AART will also", fast)
+        self.assertIn("[v] for more info", fast)
+        for harness in ("claude", "codex"):
+            self.assertIn(harness, verbose)
 
     def test_every_non_routine_change_is_a_stop(self) -> None:
         for remediation in _DECISIONS:

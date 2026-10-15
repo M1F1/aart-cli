@@ -29,6 +29,7 @@ from aart_cli.application.consumer_ui import (
     key_bindings,
     key_event,
     reduce_consumer_ui,
+    selects_rows,
     typing_text,
     workflow_progress,
 )
@@ -187,6 +188,7 @@ from aart_cli.tui_marketplace import (
 )
 
 __all__ = [
+    "DETAIL_LEVEL_NAMES",
     "CanonicalScreenSource",
     "ConsumerActionCompletion",
     "ConsumerActionHandler",
@@ -832,6 +834,24 @@ def _planned_harnesses(view: ConsumerPlanView) -> tuple[str, ...]:
     )
 
 
+#: What each detail level is called where a person reads it: by how much it shows, the words `[v]`
+#: uses, rather than Fast / Verbose (D-398). The stored values keep their names.
+DETAIL_LEVEL_NAMES: dict[PresentationProfile, str] = {
+    PresentationProfile.FAST: "Less info",
+    PresentationProfile.VERBOSE: "More info",
+}
+
+
+#: The risks a Fast review never leaves out (§152.4, INV-151), in the words the reader acts on.
+#: The rest -- local, configuration and executable-install mutations -- are what installing is,
+#: and the counts on screen 09 already name them as outcomes.
+_MATERIAL_RISKS: tuple[tuple[str, str], ...] = (
+    ("credential-mutation", "stores a credential"),
+    ("network-mutation", "changes network access"),
+    ("high-risk-execution", "runs high-risk code"),
+)
+
+
 def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
     """Screen 09. Outcomes in Fast; the same InstallPlan, undiminished, in Verbose."""
 
@@ -848,24 +868,19 @@ def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[
     if harnesses:
         suffix = " (chosen for this installation)." if view.chosen_targets else "."
         lines.append(f"Harnesses: {', '.join(harnesses)}{suffix}")
-    # Compressed, never quieter: this is the screen somebody confirms from, so every risk the plan
-    # carries and every remediation it decided is named here as well as in the full plan.
-    # CP-23 task 08: in the outcome wording Remediation uses, because a plan with only routine
-    # harness configuration skips that screen and this is where those changes are disclosed.
-    if view.remediations:
-        lines.append(
-            "AART will also: "
-            + "; ".join(remediation_change(item) for item in view.remediations)
-            + "."
-        )
-    risks = ", ".join(_human(item) for item in view.risks) or "read only"
-    lines.extend(
-        (
-            f"Risks: {risks}.",
-            f"Review identity: {view.review_digest}",
-            "Show details for the full plan.",
-        )
+    # The outcomes and the harnesses are the summary (§161.5 09). The remediations, the risk
+    # vocabulary and the review identity are the full plan, which `[v]` opens (D-398). What INV-151
+    # keeps in every mode is a material risk, said once in plain words, and not where a count above
+    # has already said it.
+    counted = " ".join(outcomes)
+    attention = tuple(
+        words
+        for risk, words in _MATERIAL_RISKS
+        if risk in view.risks and not (risk == "credential-mutation" and "credential" in counted)
     )
+    if attention:
+        lines.append("This install " + ", ".join(attention) + ".")
+    lines.append("Press [v] for more info: the full plan.")
     return tuple(lines)
 
 
@@ -1436,7 +1451,7 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
     if not isinstance(view, ConsumerSettings) or not isinstance(focus, str):
         raise ValueError("settings rendering needs consumer settings")
     values = {
-        "detail-level": f"Detail level: {view.profile.value.title()}",
+        "detail-level": f"Detail level: {DETAIL_LEVEL_NAMES[view.profile]}",
         "default-scope": f"Default scope: {view.default_scope.title()}",
         "python-installer": f"Python installer: {view.python_installer}",
         "show-updates": f"Show available updates: {'on' if view.show_updates else 'off'}",
@@ -1951,7 +1966,7 @@ _HELP_LINES: tuple[str, ...] = (
     "[s] Sync or scan repository",
     "[a] Add or adopt",
     "[/] Search",
-    "[v] Fast / Verbose",
+    "[v] More info / less info",
     "[?] Help",
     "[q] Quit",
 )
@@ -2306,7 +2321,12 @@ def compose_frame(source: ConsumerScreenSource, state: ConsumerUiState) -> Frame
     spoken = source.status(state)
     # A screen that already states how much of its own list is selected ("1 / 2 selected") has
     # said it more exactly; the session's bare count would be the same statement twice.
-    if state.selection and not any(line.endswith(" selected") for line in spoken):
+    # And only where rows are ticked, unless more is asked for: on the screens an install passes
+    # through afterwards the count says nothing the reader can act on (D-398).
+    counted = selects_rows(state.session.screen) or (
+        state.session.profile is PresentationProfile.VERBOSE
+    )
+    if counted and state.selection and not any(line.endswith(" selected") for line in spoken):
         session.append((f"{len(state.selection)} selected",))
     if state.quit_pending:
         session.append((f"Discard {len(state.selection)} selected item(s) and quit? y/n",))

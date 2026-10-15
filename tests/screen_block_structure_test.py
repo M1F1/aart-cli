@@ -354,7 +354,7 @@ class SettingsBlockTest(TestCase):
             _spoken(blocks[1]),
             (
                 "Experience",
-                "> Detail level: Fast",
+                "> Detail level: Less info",
                 "Installation",
                 "  Default scope: Project",
                 "  Python installer: pip",

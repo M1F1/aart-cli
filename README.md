@@ -108,7 +108,7 @@ recent activity:
 
 ────────────────────────────────────────────────────────────────
 
-[Enter] Open   [v] Fast / Verbose
+[Enter] Open   [v] More info
 [↑/↓] Move   [Esc] Back   [?] Help   [q] Quit
 ```
 

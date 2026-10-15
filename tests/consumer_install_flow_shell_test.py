@@ -157,7 +157,9 @@ class InstallFlowScreenTest(unittest.TestCase):
 
         self.assertIn("securely", fast.lower())
         self.assertNotIn("copy-tree", fast)
-        self.assertIn("Review identity:", fast)
+        # D-398: the review identity is the full plan's, behind `[v]`.
+        self.assertNotIn("Review identity:", fast)
+        self.assertIn("Review identity:", verbose)
         self.assertIn("Effects:", verbose)
 
     def test_progress_is_meaningful_rather_than_a_log_until_verbose(self):
