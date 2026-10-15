@@ -19,6 +19,10 @@ from aart_cli.protocol.native_tree import (
 )
 from aart_cli.protocol.paths import parse_relative_path
 from aart_cli.protocol.semver import parse_semver
+from aart_cli.registry_maintenance.source_validation import (
+    validate_authoring_source_candidate,
+    validate_source_candidate,
+)
 from aart_cli.sources.local import read_local_snapshot
 from aart_cli.sources.model import (
     LocalSnapshotRequest,
@@ -26,10 +30,6 @@ from aart_cli.sources.model import (
     SourceInstanceId,
     SourceValidationRequest,
     make_source_candidate,
-)
-from aart_cli.sources.validation import (
-    validate_authoring_source_candidate,
-    validate_source_candidate,
 )
 from tests.credential_fixtures import secret_field
 

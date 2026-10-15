@@ -32,6 +32,7 @@ from aart_cli.domain.candidates import (
 )
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.result import Err, Ok
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from aart_cli.io.registry_adoption import (
     AdoptionUpstreamDisposition,
     apply_adoption,
@@ -41,7 +42,6 @@ from aart_cli.io.registry_adoption import (
     scan_repository,
 )
 from aart_cli.io.registry_bootstrap import bootstrap_registry_workspace
-from aart_cli.sources.git import acquire_git_snapshot
 from aart_cli.sources.model import GitSnapshotRequest
 
 SKILL_MANIFEST = """schema: aart-cli.dev/skill/v1

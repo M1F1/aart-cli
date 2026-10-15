@@ -37,7 +37,7 @@ def _candidate(env: _Environment):
     code, payload = env.add_author_source()
     assert code == 0, payload
     with mock.patch(
-        "aart_cli.sources.runtime.acquire_git_snapshot",
+        "aart_cli.io.source_runtime.acquire_git_snapshot",
         side_effect=env._local_transport,
     ):
         prepared = prepare_configured_source_sync(

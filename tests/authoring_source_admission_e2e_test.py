@@ -58,6 +58,7 @@ from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.registry import PromotionMode
 from aart_cli.domain.result import Err, Ok
 from aart_cli.io.candidate_store import candidate_history_paths, read_candidate_history
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from aart_cli.io.maintainer_promotion import (
     complete_configured_candidate_promotion,
     prepare_configured_candidate_promotion,
@@ -69,7 +70,6 @@ from aart_cli.io.maintainer_sync import (
 from aart_cli.io.maintainer_views import read_maintainer_views
 from aart_cli.io.registry_promotion import FilesystemPromotionOutput
 from aart_cli.io.source_store import read_current_source
-from aart_cli.sources.git import acquire_git_snapshot
 from aart_cli.sources.model import (
     CurrentSourceRequest,
     GitSnapshotRequest,
@@ -208,7 +208,7 @@ class _Environment:
             contextlib.redirect_stdout(output),
             mock.patch("os.getcwd", return_value=str(self.project)),
             mock.patch(
-                "aart_cli.sources.runtime.acquire_git_snapshot",
+                "aart_cli.io.source_runtime.acquire_git_snapshot",
                 side_effect=self._local_transport,
             ),
         ):
@@ -418,7 +418,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
         """One reviewed Source Sync, exactly as the screen performs it: prepare then confirm."""
 
         with mock.patch(
-            "aart_cli.sources.runtime.acquire_git_snapshot",
+            "aart_cli.io.source_runtime.acquire_git_snapshot",
             side_effect=env._local_transport,
         ):
             prepared = self._prepare(env, alias)
@@ -613,7 +613,7 @@ class PromotionFromAnAdmittedGitSourceTest(unittest.TestCase):
             env.synchronize_registry()
             self.assertEqual(env.add_author_source()[0], 0)
             with mock.patch(
-                "aart_cli.sources.runtime.acquire_git_snapshot",
+                "aart_cli.io.source_runtime.acquire_git_snapshot",
                 side_effect=env._local_transport,
             ):
                 prepared_sync = prepare_configured_source_sync(

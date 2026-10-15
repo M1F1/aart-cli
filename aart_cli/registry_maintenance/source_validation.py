@@ -22,8 +22,7 @@ from aart_cli.registry_maintenance.promoted import (
     is_promoted_registry,
     legacy_registry_paths,
 )
-
-from .model import (
+from aart_cli.sources.model import (
     SOURCE_INVALID,
     SourceValidationRequest,
     ValidatedSourceCandidate,

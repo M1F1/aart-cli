@@ -26,8 +26,7 @@ from aart_cli.protocol.native_tree import (
     SourceSnapshot,
 )
 from aart_cli.protocol.paths import parse_relative_path
-
-from .model import GitSnapshotRequest, SourceCandidate, make_source_candidate
+from aart_cli.sources.model import GitSnapshotRequest, SourceCandidate, make_source_candidate
 
 SOURCE_INVALID = DiagnosticCode("source-invalid")
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")

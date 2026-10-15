@@ -31,6 +31,7 @@ from aart_cli.application.maintainer_views import (
     maintainer_navigation_targets,
 )
 from aart_cli.domain.result import Ok
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from aart_cli.io.registry_adoption import (
     AdoptedArtifact,
     AdoptionUpstreamCheck,
@@ -39,7 +40,6 @@ from aart_cli.io.registry_adoption import (
     RepositoryScan,
     ScannedArtifact,
 )
-from aart_cli.sources.git import acquire_git_snapshot
 from aart_cli.tui_consumer import CanonicalScreenSource, frame
 from tests.consumer_shell_test import screens
 from tests.registry_repository_scan_test import OTHER_MANIFEST, _git, _Lab

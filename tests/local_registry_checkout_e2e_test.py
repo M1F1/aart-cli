@@ -31,7 +31,7 @@ from aart_cli import cli
 from aart_cli.configuration.model import SyncSettings, UserConfiguration
 from aart_cli.configuration.paths import Platform, resolve_config_paths
 from aart_cli.configuration.schema import user_configuration_bytes
-from aart_cli.sources.git import acquire_git_snapshot
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from tests.configured_update_command_e2e_test import (
     AUTHORED_SKILL_1_3_0,
     UPDATED_SKILL_BODY,
@@ -211,7 +211,9 @@ class _Checkout:
             arguments.extend(("--project", str(self.project)))
         output = io.StringIO()
         transport = (
-            mock.patch("aart_cli.sources.runtime.acquire_git_snapshot", side_effect=self._transport)
+            mock.patch(
+                "aart_cli.io.source_runtime.acquire_git_snapshot", side_effect=self._transport
+            )
             if source_transport
             else contextlib.nullcontext()
         )

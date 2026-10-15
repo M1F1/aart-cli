@@ -11,7 +11,7 @@ class LifecycleBoundaryTest(unittest.TestCase):
         forbidden_roots = {"http", "os", "pathlib", "shutil", "socket", "subprocess", "urllib"}
         forbidden_modules = {
             "aart_cli.io",
-            "aart_cli.sources.git",
+            "aart_cli.io.git_acquisition",
             "aart_cli.sources.local",
         }
 

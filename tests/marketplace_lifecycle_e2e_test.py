@@ -30,6 +30,7 @@ from aart_cli.configuration.paths import Platform, resolve_config_paths
 from aart_cli.configuration.schema import user_configuration_bytes
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Ok
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from aart_cli.io.source_store import (
     acquire_source_lock,
     publish_source_snapshot,
@@ -37,11 +38,10 @@ from aart_cli.io.source_store import (
     release_source_lock,
 )
 from aart_cli.protocol.capabilities import parse_capability
+from aart_cli.registry_maintenance.source_validation import validate_source_candidate
 from aart_cli.runtime_contract import EXECUTABLE_VERSION
-from aart_cli.sources.git import acquire_git_snapshot
 from aart_cli.sources.local import read_local_snapshot
 from aart_cli.sources.model import SyncFallback
-from aart_cli.sources.validation import validate_source_candidate
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "native-source-v1"
 _COORDINATE = "reference/skill/code-review"

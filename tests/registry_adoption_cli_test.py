@@ -16,7 +16,7 @@ from unittest import mock
 
 from aart_cli import cli
 from aart_cli.domain.result import Ok
-from aart_cli.sources.git import acquire_git_snapshot
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from tests.registry_repository_scan_test import OTHER_MANIFEST, _git, _Lab
 
 

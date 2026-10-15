@@ -8,10 +8,11 @@ from pathlib import Path
 
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Ok
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from aart_cli.io.source_store import publish_source_snapshot, read_current_source
 from aart_cli.protocol.capabilities import parse_capability
 from aart_cli.protocol.semver import parse_semver
-from aart_cli.sources.git import acquire_git_snapshot
+from aart_cli.registry_maintenance.source_validation import validate_source_candidate
 from aart_cli.sources.model import (
     CurrentSourceRequest,
     GitSnapshotRequest,
@@ -21,7 +22,6 @@ from aart_cli.sources.model import (
     SourceValidationRequest,
     source_store_paths,
 )
-from aart_cli.sources.validation import validate_source_candidate
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "native-source-v1"
 _INSTANCE_ID = SourceInstanceId("git-" + "d" * 32)

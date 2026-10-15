@@ -13,6 +13,7 @@ from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from aart_cli.io.registry_workspace import FilesystemRegistryWorkspace
 from aart_cli.protocol.native_models import CanonicalArtifactType
 from aart_cli.protocol.native_tree import SnapshotEntryKind, SourceSnapshot
@@ -65,7 +66,6 @@ from aart_cli.registry_maintenance.vendoring import (
 )
 from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
 from aart_cli.security.model import AssessmentStatus, SecurityAssessment
-from aart_cli.sources.git import acquire_git_snapshot
 from aart_cli.sources.model import (
     GitSnapshotRequest,
     SnapshotLimits,
