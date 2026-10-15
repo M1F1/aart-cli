@@ -150,11 +150,15 @@ def credential_prompt_briefing(
         "AART is replacing a credential." if replacing else "AART needs a credential to continue."
     )
     asks = "the new value" if replacing else "it"
-    return (
+    said = (
         heading,
         *credential_guidance_lines(groups),
         f"{provider} asks for {asks} next. Type it there; AART never sees or keeps it.",
     )
+    # A blank line before, between and after the statements (D-399): written on a bare terminal
+    # with no frame around it, the lines ran together into the shell's last output and into the
+    # provider's own prompt.
+    return ("", *(line for statement in said for line in (statement, "")))
 
 
 def credential_guidance_to_data(groups: tuple[CredentialGuidance, ...]) -> list[dict[str, object]]:

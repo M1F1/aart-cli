@@ -10135,3 +10135,16 @@ there is the dropped selected count.
 Evidence: `tests/fast_shows_less_test.py` and the rewritten Ready property and examples.
 Mutations: counting ticks everywhere, dropping the material-risk line and a fixed `[v]` label each
 turned their tests red.
+
+## D-399 - the credential briefing on the lent terminal stands its statements apart
+
+The operator: *"moment w ktorym TUI znika i pojawia sie informacja o wpisywaniu credentiali ... te
+informacje sa bardzo zbite, dodalbym pustych linii miedzy zdaniami"*. The briefing written before
+the provider asks (D-263) was one line after another on a bare terminal, run into the shell's
+previous output above and the provider's prompt below.
+
+`credential_prompt_briefing` now returns a blank line before, between and after its statements.
+The statements themselves -- heading, guidance, who asks and that AART never sees the value -- are
+unchanged, and so is `credential_guidance_lines`, which screen 07 also draws inside a frame.
+
+Evidence: `tests/credential_guidance_test.py`, red before the change.

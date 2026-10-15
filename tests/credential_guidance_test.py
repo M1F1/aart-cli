@@ -298,15 +298,22 @@ class TheGuidanceWordsTest(unittest.TestCase):
         stored = credential_prompt_briefing(groups, provider=PROVIDER)
         replaced = credential_prompt_briefing(groups, provider=PROVIDER, replacing=True)
 
-        self.assertEqual(stored[0], "AART needs a credential to continue.")
-        self.assertEqual(stored[1:-1], credential_guidance_lines(groups))
+        # D-399: *"te informacje sa bardzo zbite ... dodalbym pustych linii miedzy zdaniami"*.
+        # Every statement stands a blank line apart, and the briefing is set off from what the
+        # terminal held before and from the provider's prompt after it.
+        said = tuple(line for line in stored if line)
+        self.assertEqual(said[0], "AART needs a credential to continue.")
+        self.assertEqual(said[1:-1], credential_guidance_lines(groups))
         self.assertEqual(
-            stored[-1],
+            said[-1],
             "macos-keychain asks for it next. Type it there; AART never sees or keeps it.",
         )
-        self.assertEqual(replaced[0], "AART is replacing a credential.")
+        self.assertEqual(stored, ("", *(line for item in said for line in (item, ""))))
         self.assertEqual(
-            replaced[-1],
+            tuple(line for line in replaced if line)[0], "AART is replacing a credential."
+        )
+        self.assertEqual(
+            tuple(line for line in replaced if line)[-1],
             "macos-keychain asks for the new value next. Type it there; AART never sees or keeps it.",
         )
 
