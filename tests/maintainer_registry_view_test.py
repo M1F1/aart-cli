@@ -43,10 +43,12 @@ from aart_cli.application.maintainer_views import (
 from aart_cli.application.promotion import registry_state_digest
 from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.artifacts import ArtifactKind
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.registry import PromotionMode
-from aart_cli.domain.result import Ok
+from aart_cli.domain.result import Err, Ok
+from aart_cli.io.maintainer_views import unavailable_reasons
 from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.protocol.native_tree import (
     SnapshotEntry,
@@ -270,6 +272,48 @@ class MaintainerRegistryViewTest(unittest.TestCase):
         rendered = repr(view)
         self.assertNotIn("BEGIN", rendered)
         self.assertNotIn("token", rendered.lower().replace("github-token-free", ""))
+
+
+class AnUnreadRegistrySaysWhyTest(unittest.TestCase):
+    """Screen 46 named every failed read "no synchronized approved state yet", whatever failed."""
+
+    def test_the_reason_reading_failed_is_the_diagnostic(self) -> None:
+        reasons = ("target registry company is not configured and enabled",)
+
+        view = project_maintainer_registry(
+            SourceAlias("company"), None, None, None, unavailable=reasons
+        )
+
+        self.assertFalse(view.valid)
+        self.assertEqual(view.diagnostics, reasons)
+
+    def test_without_a_reason_it_has_not_been_synchronized(self) -> None:
+        view = project_maintainer_registry(SourceAlias("company"), None, None, None)
+
+        self.assertEqual(
+            view.diagnostics, ("registry company has no synchronized approved state yet",)
+        )
+
+    def test_a_failed_read_becomes_its_message_and_the_step_inside_the_application(self) -> None:
+        failed = Err(
+            (
+                Diagnostic(
+                    DiagnosticCode("source-store-invalid"),
+                    Severity.ERROR,
+                    "stored snapshot for company does not read",
+                    remediation=("aart-cli source sync company",),
+                    interactive=("open Registries and refresh company",),
+                ),
+            )
+        )
+
+        self.assertEqual(
+            unavailable_reasons(failed),
+            (
+                "stored snapshot for company does not read",
+                "next: open Registries and refresh company",
+            ),
+        )
 
 
 class MaintainerRegistryShellTest(unittest.TestCase):

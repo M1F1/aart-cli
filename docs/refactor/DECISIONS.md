@@ -9802,3 +9802,15 @@ to be distinct. Installed and repair already address an installation as
 and its drawn rows now use that key too, so `r` reaches the installation under the cursor.
 Evidence is `tests/doctor_installation_rows_test.py`. Two targeted mutations each turned one test
 red: issues keyed by coordinate, and the drift lookup keyed by coordinate.
+
+## D-383 — Screen 46 says why a registry's approved state did not read
+
+Implementation choice, 2026-10-15, from an owner report: screen 46 said `registry aart-reg-test has
+no synchronized approved state yet`. The adapter dropped `read_approved_registry_state`'s `Err` and
+passed `None`, so every failure read as "not synchronized yet". That covers a registry that is not
+a configured, enabled Git registry and a stored snapshot that does not read. The diagnostics now
+come from the failed read through `unavailable_reasons`: each message, then its interactive next
+step (falling back to the CLI one), redacted. The generic sentence remains only when no reason was
+given. Evidence is `tests/maintainer_registry_view_test.py` (`AnUnreadRegistrySaysWhyTest`). A
+targeted mutation dropping `unavailable` turned exactly that test red. The adapter wiring has no
+end-to-end test yet.

@@ -63,6 +63,7 @@ __all__ = [
     "MAINTAINER_COMPOSITION_INVALID",
     "read_maintainer_views",
     "read_unbound_candidate_histories",
+    "unavailable_reasons",
 ]
 
 MAINTAINER_COMPOSITION_INVALID = DiagnosticCode("maintainer-composition-invalid")
@@ -78,6 +79,19 @@ def _error(message: str) -> Err:
             ),
         )
     )
+
+
+def unavailable_reasons(failed: Err) -> tuple[str, ...]:
+    """What reading a registry's approved state said, and the next step it named, as view lines.
+
+    Screen 46 is inside the application, so the interactive next step is preferred to the CLI's.
+    """
+
+    lines: list[str] = []
+    for item in failed.diagnostics:
+        lines.append(redact_text(item.message))
+        lines.extend(f"next: {redact_text(step)}" for step in item.interactive or item.remediation)
+    return tuple(lines)
 
 
 def read_maintainer_views(
@@ -292,6 +306,7 @@ def read_maintainer_views(
         # than only those some active Candidate happens to target.
         registries = []
         bulk_promotions = []
+        unavailable: dict[str, tuple[str, ...]] = {}
         for registry in configured_registries:
             alias_value = registry.alias.value
             if alias_value not in approved:
@@ -299,6 +314,9 @@ def read_maintainer_views(
                     effective, registry.alias, data_root=data_root
                 )
                 approved[alias_value] = None if isinstance(published, Err) else published.value
+                unavailable[alias_value] = (
+                    unavailable_reasons(published) if isinstance(published, Err) else ()
+                )
                 registry_paths = source_store_paths(data_root, source_instance_id(registry))
                 current = read_current_source(CurrentSourceRequest(registry_paths, registry.alias))
                 workspaces[alias_value] = (
@@ -317,6 +335,7 @@ def read_maintainer_views(
                     approved[alias_value],
                     workspaces[alias_value],
                     checkout,
+                    unavailable=unavailable.get(alias_value, ()),
                 )
             )
         return Ok(

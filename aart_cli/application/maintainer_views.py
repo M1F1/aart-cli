@@ -3787,8 +3787,14 @@ def project_maintainer_registry(
     approved: ApprovedRegistryState | None,
     registry_snapshot: SourceSnapshot | None,
     checkout: SourceSnapshot | None,
+    *,
+    unavailable: tuple[str, ...] = (),
 ) -> MaintainerRegistryView:
     """Project screen 46 from durable registry evidence and one observed local checkout.
+
+    ``unavailable`` is why reading the approved state failed, when it did. A registry that is not
+    a configured Git registry, or whose stored snapshot does not read, is not one that merely has
+    not been synchronized yet, and saying so would send its Maintainer to the wrong fix.
 
     The checkout is a separate observation on purpose: synchronized source-store content is an
     immutable record of what the registry published, and answering "does my working tree still
@@ -3813,7 +3819,7 @@ def project_maintainer_registry(
             (),
             MaintainerWorkingTreeView(MaintainerWorkingTreeState.UNOBSERVED, None),
             (),
-            (f"registry {alias.value} has no synchronized approved state yet",),
+            unavailable or (f"registry {alias.value} has no synchronized approved state yet",),
         )
     snapshot = str(approved.snapshot_digest)
     # A durable record may hold the kind as its wire string; the view states the typed kind.
