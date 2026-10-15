@@ -36,8 +36,6 @@ from aart_cli.registry_maintenance.promoted import (
 )
 from tests.maintainer_scan_cli_test import _author_checkout, _git
 
-_EVIDENCE = ("--validation-report", "sha256:" + "7" * 64, "--policy-result", "sha256:" + "8" * 64)
-
 #: What `.github/workflows/aart-cli-registry.yml` runs on every pull request, in its order.
 GENERATED_GATE: tuple[tuple[str, ...], ...] = (
     ("format", "--check"),
@@ -176,7 +174,6 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
                 *common,
                 "--candidate",
                 candidate,
-                *_EVIDENCE,
                 "--yes",
                 "--json",
             )

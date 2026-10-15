@@ -30,6 +30,8 @@ import unittest
 from pathlib import Path
 
 from aart_cli import cli
+from aart_cli.application.maintainer_promotion import effective_policy_digest
+from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.protocol.hashing import sha256_bytes
 from tests.maintainer_scan_cli_test import _author_checkout, _git
 from tests.marketplace_lifecycle_e2e_test import _FIXTURE, _Environment
@@ -37,7 +39,27 @@ from tests.source_sync_command_e2e_test import _source_json
 
 #: The coordinate the author checkout offers and the published registry has never heard of.
 _PROMOTED = "reference/mcp/github-mcp"
-_EVIDENCE = ("--validation-report", "sha256:" + "7" * 64, "--policy-result", "sha256:" + "8" * 64)
+#: The digests the old flags took. Nothing on the command line may stand in for the run (D-387).
+_SUPPLIED = ("--validation-report", "sha256:" + "7" * 64, "--policy-result", "sha256:" + "8" * 64)
+
+
+def _add_second_artifact(author: Path) -> None:
+    """A second MCP beside the first, committed, so one promotion carries two Candidates."""
+
+    package = author / "jira"
+    package.mkdir()
+    manifest = {
+        "schema": "aart-cli.dev/mcp/v1",
+        "artifact": {"name": "jira-mcp", "kind": "mcp", "version": "1.0.0"},
+        "payload": {"include": ["server.py"]},
+        "transport": {"type": "stdio"},
+        "runtime": {"type": "python", "version": ">=3.11"},
+        "launch": {"type": "python", "entrypoint": "server.py"},
+    }
+    (package / "aart-cli.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (package / "server.py").write_text("print('jira')\n", encoding="utf-8")
+    _git(author, "add", ".")
+    _git(author, "commit", "-qm", "second artifact")
 
 
 def _cli(*argv: str):
@@ -76,7 +98,7 @@ def _git_text(root: Path, *arguments: str) -> str:
 
 class PromotionPublicationBoundaryE2ETest(unittest.TestCase):
     @contextlib.contextmanager
-    def _workshop(self):
+    def _workshop(self, *, second_artifact: bool = False):
         """An author checkout, a maintainer's empty registry checkout, and a consumer's registry."""
 
         with tempfile.TemporaryDirectory() as raw:
@@ -89,6 +111,8 @@ class PromotionPublicationBoundaryE2ETest(unittest.TestCase):
             checkout.mkdir()
             machine.mkdir()
             _author_checkout(author)
+            if second_artifact:
+                _add_second_artifact(author)
             _git(checkout, "init", "-q")
             _git(checkout, "config", "user.name", "AART Test")
             _git(checkout, "config", "user.email", "aart@example.invalid")
@@ -118,7 +142,6 @@ class PromotionPublicationBoundaryE2ETest(unittest.TestCase):
             *common,
             "--candidate",
             candidate,
-            *_EVIDENCE,
             "--json",
             *extra,
         )
@@ -206,49 +229,84 @@ class PromotionPublicationBoundaryE2ETest(unittest.TestCase):
             self.assertFalse(review["applied"])
             self.assertEqual(_tree_digest(checkout), before)
 
-    def test_promotion_without_its_evidence_is_refused(self) -> None:
-        """INV-238: the evidence a promotion carries comes from the caller's policy run.
+    def test_evidence_cannot_be_supplied_on_the_command_line(self) -> None:
+        """#62: any well-formed digest was accepted and written into provenance unverified.
 
-        AART neither runs the enterprise's validation nor decides what would satisfy it -- it
-        records the digests of what did. Which is why it cannot proceed without them.
+        The evidence is the run AART does itself, exactly as the Maintainer screens do (D-387), so
+        there is no flag left through which a made-up value could reach the audit record.
         """
 
-        # Each digest is asserted on its own, in its own workshop: supplying one and omitting the
-        # other has to be refused too, or "requires its evidence" would still hold with either half
-        # made optional -- and a shared checkout would let the first refusal mask the second.
-        for omitted, kept in ((_EVIDENCE[:2], _EVIDENCE[2:]), (_EVIDENCE[2:], _EVIDENCE[:2])):
-            with (
-                self.subTest(omitted=omitted[0]),
-                self._workshop() as (
-                    _env,
-                    checkout,
-                    _published,
-                    _author,
-                    common,
-                    candidate,
-                ),
-            ):
-                before = _tree_digest(checkout)
+        with self._workshop() as (_env, checkout, _published, _author, common, candidate):
+            before = _tree_digest(checkout)
 
-                code, payload = _cli(
-                    "registry",
-                    "promote",
-                    *common,
-                    "--candidate",
-                    candidate,
-                    *kept,
-                    "--json",
-                    "--yes",
+            code, payload = _cli(
+                "registry",
+                "promote",
+                *common,
+                "--candidate",
+                candidate,
+                *_SUPPLIED,
+                "--json",
+                "--yes",
+            )
+
+            self.assertNotEqual(code, 0)
+            self.assertIsNone(payload)
+            self.assertEqual(_tree_digest(checkout), before)
+
+    def test_the_review_states_the_evidence_it_will_record(self) -> None:
+        """#62: no command emitted the digests, so a CLI-only promotion had to invent them."""
+
+        with self._workshop() as (_env, _checkout, _published, _author, common, candidate):
+            code, review = self._promote(common, candidate)
+
+            self.assertEqual(code, 0, review)
+            (evidence,) = review["evidence"]
+            self.assertEqual(evidence["candidate_id"], candidate)
+            self.assertEqual(evidence["artifact"], "authors/mcp/github-mcp@1.0.0")
+            self.assertEqual(
+                evidence["effective_policy_digest"], str(effective_policy_digest(EffectivePolicy()))
+            )
+            self.assertRegex(evidence["validation_report_digest"], r"^sha256:[0-9a-f]{64}$")
+
+    def test_each_candidate_records_the_run_that_judged_it(self) -> None:
+        """#62: one digest pair was written into every promoted Candidate's provenance."""
+
+        with self._workshop(second_artifact=True) as (
+            _env,
+            checkout,
+            _published,
+            _author,
+            common,
+            _candidate,
+        ):
+            code, scan = _cli("registry", "scan", *common, "--json")
+            self.assertEqual(code, 0, scan)
+            candidates = [item["candidate_id"] for item in scan["candidates"]]
+            self.assertEqual(len(candidates), 2)
+            selected = [argument for item in candidates for argument in ("--candidate", item)]
+
+            code, review = _cli("registry", "promote", *common, *selected, "--json")
+            self.assertEqual(code, 0, review)
+            code, promoted = _cli("registry", "promote", *common, *selected, "--json", "--yes")
+            self.assertEqual(code, 0, promoted)
+
+            reviewed = {
+                item["candidate_id"]: item["validation_report_digest"]
+                for item in review["evidence"]
+            }
+            self.assertEqual(len(set(reviewed.values())), 2, reviewed)
+            for candidate, digest in reviewed.items():
+                record = json.loads(
+                    (checkout / "registry" / "promotions" / f"{candidate}.json").read_text("utf-8")
                 )
-
-                self.assertNotEqual(code, 0)
-                self.assertIsNone(payload)
-                self.assertEqual(_tree_digest(checkout), before)
+                self.assertEqual(record["validation_report_digest"], digest)
 
     def test_the_promotion_record_reconstructs_the_decision(self) -> None:
         """INV-240, against 165.26's list rather than against whatever happens to be written."""
 
         with self._workshop() as (_env, checkout, _published, author, common, candidate):
+            _, review = self._promote(common, candidate)
             self.assertEqual(self._promote(common, candidate, "--yes")[0], 0)
 
             record = json.loads(
@@ -262,8 +320,11 @@ class PromotionPublicationBoundaryE2ETest(unittest.TestCase):
                     "kind": "git-revision",
                 },
             )
-            self.assertEqual(record["validation_report_digest"], _EVIDENCE[1])
-            self.assertEqual(record["effective_policy_result"], _EVIDENCE[3])
+            (evidence,) = review["evidence"]
+            self.assertEqual(
+                record["validation_report_digest"], evidence["validation_report_digest"]
+            )
+            self.assertEqual(record["effective_policy_result"], evidence["effective_policy_digest"])
             self.assertEqual(record["promotion_mode"], "vendored")
             self.assertNotEqual(
                 record["registry_snapshot_before"], record["registry_snapshot_after"]

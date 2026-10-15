@@ -9874,3 +9874,28 @@ line is wider than the terminal and nothing said is lost) and
 `lowercase_first` return its input turned three tests red. Restoring the single-pass wrap in
 `draw` turned the narrow-terminal legend test red. Test expectations across the TUI suites were
 updated to the numbered, lower-case form. Direct renders that are not lists keep their case.
+
+## D-387 — `registry promote` runs the evidence it records; nothing is typed in
+
+GitHub #62 confirmed `QA-056` and two more faults behind it.
+- No command emitted the `--validation-report`/`--policy-result` digests, so a CLI-only promotion
+  had to invent them.
+- One pair was written into every selected Candidate's provenance, although the validation digest
+  is per Candidate.
+- Any well-formed digest was accepted unverified. `maintainer-commands-v1.md` claimed otherwise.
+
+`registry promote` now runs `validate_candidate` and `promotion_evidence` for each selected
+Candidate against `EffectivePolicy()`. That is the same run and the same policy the Maintainer screens compose
+(`read_maintainer_views`), and the run's state decides promotability as in D-101. The review (text
+and `--json` `evidence`) states each Candidate's validation-report and effective-policy digests and
+warnings. `--yes` records exactly those. The two flags and their `Request` fields are removed
+(pre-1.0, no compatibility). This satisfies INV-238 and INV-240: the evidence is policy-driven and
+auditable, and it names the run that actually judged the Candidate. A caller-supplied digest named
+nothing AART could check.
+
+Evidence is `tests/promotion_publication_boundary_e2e_test.py`: supplying either flag is refused by
+the parser and writes nothing; the review states the policy digest; two Candidates record two
+distinct validation digests, each equal to its review. Giving every Candidate the first one's
+evidence turned exactly the two-Candidate test red. #62's clean-checkout and `.venv` point is
+B-181. Its claim that `author check`/`mcp test` exit 0 on `ok: false` does not hold:
+`commands/mcp.py` returns `ERROR` when not ok, and `author check` exits 1.

@@ -58,8 +58,10 @@ aart-cli registry scan --help
 aart-cli registry promote --help
 ```
 
-`scan` compiles only explicit author manifests and never changes the Registry. `promote` rechecks
-the selected Candidate, validation evidence and policy result before writing the canonical package.
+`scan` compiles only explicit author manifests and never changes the Registry. `promote` re-observes
+the selected Candidates, runs validation and the effective policy for each of them, and states each
+one's validation-report and effective-policy digests in its review. `--yes` writes the canonical
+package with that run as its promotion evidence. No evidence is supplied on the command line.
 The Registry stores that compiled package and provenance; it does not author the Source payload.
 
 ## Lock, build, and audit

@@ -8,7 +8,9 @@ import re
 import subprocess
 
 from aart_cli import command_outcome as _common
+from aart_cli.application.candidate_validation import validate_candidate
 from aart_cli.application.maintainer import CandidateBundle, reconcile_source_scan
+from aart_cli.application.maintainer_promotion import promotion_evidence
 from aart_cli.application.promotion import (
     PromotionEvidence,
     finalize_promotion,
@@ -42,6 +44,7 @@ from aart_cli.domain.diagnostics import (
     diagnostic_to_data,
 )
 from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.io.git import GitProcessRequest, run_git_process
@@ -696,8 +699,6 @@ def _run_candidate_promotion(request: Request) -> int:
         or request.candidate_source_alias is None
         or request.candidate_source_url is None
         or request.target_registry_alias is None
-        or request.promotion_validation_report is None
-        or request.promotion_policy_result is None
         or not request.promotion_candidate_ids
     ):
         return _emit_error(
@@ -724,14 +725,6 @@ def _run_candidate_promotion(request: Request) -> int:
             request,
             "promote",
             _error("candidate promotion aliases, URL or IDs are invalid", _READ_THE_ACTIONS),
-        )
-    validation_report = parse_sha256(request.promotion_validation_report)
-    policy_result = parse_sha256(request.promotion_policy_result)
-    if isinstance(validation_report, Err) or isinstance(policy_result, Err):
-        return _emit_error(
-            request,
-            "promote",
-            _error("promotion evidence digests must be canonical SHA-256", _READ_THE_ACTIONS),
         )
     try:
         mode = PromotionMode(request.promotion_mode)
@@ -820,29 +813,50 @@ def _run_candidate_promotion(request: Request) -> int:
                 ),
             ),
         )
+    # The evidence is the run AART does here, against the same policy the Maintainer screens judge
+    # with, so nothing a caller types can stand in for it and each Candidate records its own (D-387).
+    policy = EffectivePolicy()
     selected: list[CandidateBundle] = []
+    evidence_by_candidate: list[tuple[CandidateBundle, PromotionEvidence]] = []
     for candidate_id in sorted(request.promotion_candidate_ids):
         bundle = by_id[candidate_id]
-        candidate = bundle.candidate
-        if candidate.state in {CandidateState.NEW, CandidateState.CHANGED}:
-            candidate = assess_candidate(candidate)
-        if candidate.state not in {CandidateState.READY, CandidateState.WARNING}:
+        validation = validate_candidate(bundle, policy=policy)
+        candidate = assess_candidate(
+            bundle.candidate,
+            findings=validation.findings,
+            manual_approval_required=validation.manual_approval_required,
+        )
+        if validation.state not in {CandidateState.READY, CandidateState.WARNING} or (
+            candidate.state not in {CandidateState.READY, CandidateState.WARNING}
+        ):
             return _emit_error(
                 request,
                 "promote",
                 _error(
-                    f"Candidate {candidate.id} is {candidate.state.value} and cannot be promoted",
-                    ("resolve validation/policy findings and run Source Scan again",),
+                    f"Candidate {candidate.id} is {validation.state.value} and cannot be promoted",
+                    (
+                        "open the Candidate's validation in the Maintainer screens to see each "
+                        "failing check, fix the author manifest, commit it and run Source Scan again",
+                    ),
                 ),
             )
-        selected.append(CandidateBundle(candidate, bundle.artifact))
-    evidence = tuple(
-        (
-            item.candidate.id,
-            PromotionEvidence(validation_report.value, policy_result.value),
-        )
-        for item in selected
-    )
+        recorded = promotion_evidence(validation, policy)
+        if isinstance(recorded, Err):
+            return _emit_error(request, "promote", recorded)
+        reviewed = CandidateBundle(candidate, bundle.artifact)
+        selected.append(reviewed)
+        evidence_by_candidate.append((reviewed, recorded.value))
+    evidence = tuple((item.candidate.id, record) for item, record in evidence_by_candidate)
+    stated_evidence = [
+        {
+            "candidate_id": item.candidate.id.value,
+            "artifact": str(item.candidate.artifact.coordinate),
+            "validation_report_digest": str(record.validation_report_digest),
+            "effective_policy_digest": str(record.effective_policy_digest),
+            "warnings": list(record.warnings),
+        }
+        for item, record in evidence_by_candidate
+    ]
     planned = plan_bulk_promotion(
         registry_snapshot.value,
         tuple(selected),
@@ -871,6 +885,7 @@ def _run_candidate_promotion(request: Request) -> int:
                         "candidate_ids": list(sorted(request.promotion_candidate_ids)),
                         "mode": plan.mode.value,
                         "review_digest": str(plan.review_digest),
+                        "evidence": stated_evidence,
                         "registry_snapshot_before": str(plan.expected_registry_snapshot),
                         "registry_snapshot_after": str(plan.next_registry_snapshot),
                         "changes": changes,
@@ -883,6 +898,12 @@ def _run_candidate_promotion(request: Request) -> int:
         else:
             print(f"Promotion review: {len(selected)} Candidate(s), mode={plan.mode.value}")
             print(f"review digest: {plan.review_digest}")
+            for stated in stated_evidence:
+                print(f"  {stated['artifact']}  {stated['candidate_id']}")
+                print(f"    validation report: {stated['validation_report_digest']}")
+                print(f"    effective policy:  {stated['effective_policy_digest']}")
+                for warning in stated["warnings"]:
+                    print(f"    warning: {warning}")
             for item in changes:
                 print(f"  {item['status']:>7}  {item['path']}")
             print("Reviewed only. Re-run with --yes to promote locally; no commit or push.")

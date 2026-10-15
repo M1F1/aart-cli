@@ -4423,8 +4423,8 @@ real public Registry -- adopt, publish, push, first run on a baked wheel, `marke
 --yes`, files delivered to `.claude/skills/`. So a CLI-only maintainer *can* stand up a Registry
 people install from; what they cannot do is get there by vendoring.
 
-What remains is still worth fixing. `registry promote` is closed to the CLI on purpose (QA-056),
-which leaves `adopt` and `vendor` as the two CLI doors, and one of them produces packages that only
+What remains is still worth fixing. `registry promote` was closed to the CLI (QA-056) until D-387 made it compute its own evidence;
+at the time that left `adopt` and `vendor` as the two CLI doors, and one of them produces packages that only
 look complete. The tutorial `docs/tutorials/company-registry-tabnine-v1.md` vendors an artifact in
 §3 and installs it in §8, so that documented path does not work as written -- and neither does the
 repository's own acceptance walk: `docs/testing/END_TO_END_ACCEPTANCE.md` vendors
@@ -4466,3 +4466,13 @@ now disagree about what the command is called. Nothing in this repository consum
 whether the shim is an orphan or an external contract with generated registry workflows cannot be
 settled from here. Settle that first, then either rename the shim to `aart-cli` or delete the
 action. The same half-applied rename did break the release path and was fixed there (D-370).
+
+## B-181 — scan and promote refuse an author checkout over ignored files and a `.venv`
+
+**Found 2026-10-15 in GitHub #62; noncritical.** `registry scan` and `registry promote` require
+`git status --porcelain=v1 --untracked-files=all` to be empty, so a stray untracked file blocks them.
+They also read the whole checkout, so a git-ignored `.venv` is refused for its symlinks ("local
+source symlinks are forbidden: .venv/bin/python"). An author has to move their virtualenv out of the
+repository to promote. Excluding ignored paths, or paths outside every manifest's
+`payload.include`, from the cleanliness and symlink checks would fix it. That changes what a
+pinned observation covers, so the change needs its own decision against D-103's exact-checkout rule.

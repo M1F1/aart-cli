@@ -116,14 +116,18 @@ same facts as the text form.
 
 ## 3 — Bring an artifact into the Registry
 
-`registry promote` is the Candidate-promotion transaction, and it requires
-`--validation-report` and `--policy-result` digests as evidence. **No CLI command emits those
-digests today** — only the Maintainer screens derive them — so a CLI-only promotion would mean
-inventing evidence, which is exactly what the flag exists to prevent. This is recorded as `QA-056`;
-confirm it here and do not fabricate a digest to get past it.
+`registry promote` is the Candidate-promotion transaction. It takes the same boundaries as
+`registry scan` plus one `--candidate` per Candidate ID the scan reported. It runs validation and
+the effective policy for each Candidate itself, the same run the Maintainer screens show, and the
+review names each Candidate's validation-report and effective-policy digests before `--yes`
+writes them into its promotion record (D-387, closing `QA-056`). No evidence is typed in.
 
-The CLI's own route into the Registry is vendoring, which needs no external evidence because the
-Registry takes ownership of the bytes:
+- [ ] Run `registry promote` review-only for the scanned Candidates and read the evidence it
+      states, then repeat with `--yes`. Expected: one validation-report digest per Candidate,
+      nothing committed and nothing pushed.
+
+Vendoring is the other CLI route into the Registry. It needs no Candidate because the Registry
+takes ownership of the bytes:
 
 ```sh
 python3 -m aart_cli.cli registry vendor --source . \

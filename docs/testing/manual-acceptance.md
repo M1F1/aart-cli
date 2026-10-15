@@ -584,9 +584,10 @@ Each entry records:
       Evidence: `tests/manual_test_lab_test.py`, plus a driven text-TUI run reaching
       `[n] Initialize` on the empty Registry.
 
-- [ ] **QA-056 — A promotion cannot be completed from the CLI without fabricating its evidence.**
-      Surface: `aart-cli registry promote`. Severity: medium. **Unconfirmed — verify during the CLI
-      run.** Observed in code: `registry promote` requires `--validation-report DIGEST` and
+- [x] **QA-056 — A promotion cannot be completed from the CLI without fabricating its evidence.**
+      **Resolved by D-387 (GitHub #62):** `registry promote` now runs validation and policy per
+      Candidate itself, states the digests in its review and has no evidence flags. Original
+      finding follows. Surface: `aart-cli registry promote`. Severity: medium. Observed in code: `registry promote` requires `--validation-report DIGEST` and
       `--policy-result DIGEST`, and no CLI command emits either; `validation_report_digest` is
       derived in the application layer and displayed only by the Maintainer screens. An operator
       following a CLI-only route therefore either reads the digests off the TUI, which makes the
