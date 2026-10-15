@@ -11,6 +11,10 @@
 > through `aart-cli mcp test` and an optional test offered after installation. CP-28 step 3
 > implements the revision; this acceptance is not evidence that it is already implemented.
 >
+> **2026-10-15 accepted addition (D-406):** §171 adds the OpenCode plugin artifact kind: reviewed,
+> vendored code that opencode loads into its own process, registered by path and reviewed as
+> high-risk execution. CP-29 steps 4–5 implement it.
+>
 > **Target repository:** `M1F1/aart-cli`
 >
 > This document is the canonical product specification for the aart-cli refactor. It defines the
@@ -10899,3 +10903,83 @@ permits bounded current-output inspection under §170.5 without application pers
 selects installed MCP installations on Installed or opens one, reviews the declared calls and
 confirms. It covers exactly those installations, refuses a selected non-MCP installation by name,
 and no outcome of it changes an installation, its receipts or its configuration.
+
+# 171. OpenCode plugin artifacts
+
+Status: **ACCEPTED 2026-10-15 (D-406)**. Adds one artifact kind. It preserves §169's ownership,
+naming and layout rules and the security invariants that hold for every kind.
+
+## 171.1 What a plugin is
+
+A plugin is a JavaScript or TypeScript module that a harness loads into its own process and runs
+for every session. OpenCode is the one harness this release measures. Its plugins can add tools,
+change configuration and rewrite the messages a model sees. A plugin is therefore code execution
+with the person's permissions, not content the harness reads. The kind is `plugin`, and its
+manifest schema is `aart-cli.dev/plugin/v1`.
+
+A plugin artifact is the plugin's reviewed tree: the module, and whatever else it reads beside
+itself, such as the skills the superpowers plugin registers from its own directory. The manifest
+names one entry module inside the payload. It must be a selected payload file ending in `.js`,
+`.mjs` or `.ts`.
+
+## 171.2 Vendored bytes, never a fetched spec
+
+The harness never fetches a plugin. OpenCode can load an npm spec or a git URL at startup, and an
+artifact registered that way would run whatever that spec resolves to on the day it resolves,
+which is not what anyone reviewed. A plugin artifact is installed as the immutable, digest-pinned
+payload a Registry approved. It is materialized into the installation's private tree under the
+harness's own directory (§169.3), and the harness is told to load it from there by path.
+
+AART does not install a plugin's dependencies. A payload whose root `package.json` declares
+runtime `dependencies` or `optionalDependencies` is refused at compile time. It would install
+cleanly, then fail inside the harness, or fetch packages the first time it ran. Development-only
+declarations are not runtime dependencies.
+
+## 171.3 Registration
+
+Installing a plugin owns one entry of the harness's plugin list and nothing else in the file:
+- OpenCode 1.x reads that list from the `plugin` key of `opencode.json` at the chosen scope's root:
+  the project root for Project, the opencode config directory for User.
+- The entry is the entry module's path relative to the directory holding that file, so a project's
+  committed configuration names no machine-specific path.
+- The installation's tree and therefore its entry follow the versionless installed-name rules of
+  §169.7. An update keeps the same entry, and two Registries or two scopes never share one.
+
+OpenCode 2.x reads a `plugins` key that accepts only the directory form. It is not measured in
+this release. Supporting it is a new measured target, not a fallback written beside this one.
+
+A harness that measures no plugin target refuses a plugin it was asked for by name and is left
+out when it was not, exactly as for every other kind.
+
+## 171.4 Review and risk
+
+Registering a plugin is `high-risk-execution`. Fast never hides it (INV-151): Ready states in plain
+words that the install runs code inside the harness. Verbose also names the entry module and the
+file and key that register it. A policy whose risk ceiling is below high-risk execution refuses
+the install before any mutation.
+
+## 171.5 Lifecycle
+
+- Uninstall removes exactly this installation's entry from the list, leaves the list and every other
+  entry as found, and removes the installation's tree.
+- Status and verification compare the payload against its recorded digest and the entry against
+  the receipt. A missing or edited entry is drift and is never assumed away.
+- Repair re-materializes the payload from the installation's own copy and re-registers the entry.
+
+A plugin's internal names, such as the skills it registers or the tools it adds, are its own
+content. AART neither rewrites nor namespaces them, and says so on Details.
+
+## 171.6 Acceptance invariants
+
+**INV-255 — A plugin is vendored and digest-pinned.** The harness loads a plugin only from the
+installation's private copy of an approved payload, registered by a relative path. No install,
+update or repair writes an npm spec, a git URL, or a path outside the installation's tree, and AART
+never fetches a plugin's dependencies.
+
+**INV-256 — A plugin is reviewed as high-risk execution.** Every plan that registers a plugin
+carries `high-risk-execution`, and Fast states it in plain words. A policy ceiling below that
+refuses the plan before mutation.
+
+**INV-257 — A plugin owns one list entry and one tree.** Install, update, repair and uninstall
+change only this installation's entry and tree. The rest of the configuration file and every other
+entry in the list are left as they were found.

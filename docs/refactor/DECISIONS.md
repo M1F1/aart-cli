@@ -10257,3 +10257,35 @@ CP-29 step 2, found while packaging an enterprise fork of superpowers as Skills.
 
 Evidence: `tests/skill_payload_tree_test.py`, which includes a Hypothesis property over nested
 trees. Removing the DIRECTORY skip turned both tree tests red, and the symlink test stayed green.
+
+## D-406 - an OpenCode plugin is a vendored tree registered by relative path, reviewed as high-risk
+
+CP-29 step 3. This adds Product Specification §171 and INV-255 to INV-257. It is grounded in
+opencode 1.18.29 as measured on 2026-10-15:
+- **The `plugin` key accepts several forms.** It accepts npm specs, `file://` URLs, absolute
+  paths, relative paths and directories. A relative path resolves against the directory of the
+  `opencode.json` that names it: a project run from a subdirectory still loaded it. This holds at
+  user scope too, under an isolated `XDG_CONFIG_HOME`.
+- **The private tree is not discovered.** A tree under `.opencode/aart-cli/` is not
+  auto-discovered: with no registration, `opencode debug skill` found none of the plugin's skills.
+  So the private installation tree of §169.3 is a safe home, and registration is what turns the
+  plugin on.
+- **Unknown top-level keys are refused.** The `plugin` list is the one place a plugin can be named.
+
+Choices:
+- **Kind name.** The kind is `plugin` (`aart-cli.dev/plugin/v1`), not `opencode-plugin`. The
+  measured target table, not the kind name, decides which harness hosts it, the same way a hook is
+  one kind with per-harness targets.
+- **Entry, not npm.** The manifest names one entry module. An npm or git spec is never written,
+  because what it resolves to is not what was reviewed (INV-255).
+- **Dependencies are refused.** A root `package.json` with runtime `dependencies` or
+  `optionalDependencies` is refused at compile time, because AART fetches nothing and the plugin
+  would fail inside the harness. superpowers declares none.
+- **One list entry.** The registration is an `ArtifactSettingsEntry`, one entry of one list in a
+  settings file, generalized from a hook's object entry to a plugin's path string. The interpreter,
+  receipt, uninstall, repair and verification paths a hook uses therefore hold for a plugin too, and
+  no second mechanism for owning a list member exists.
+- **Risk.** Merging a plugin entry is `HIGH_RISK_EXECUTION`, not `CONFIGURATION_MUTATION`. It is the
+  step that makes the harness run the code (INV-256).
+- **OpenCode 2.x is out.** Its `plugins` key with the directory form is not measured here, so it is
+  not targeted.
