@@ -10028,3 +10028,19 @@ It covers:
 
 Two targeted mutations each turn their tests red: removing Installed from `_SELECTABLE`, and
 passing the unfiltered selection.
+
+## D-394 - a Marketplace row says where that artifact is already installed
+
+The operator: *"i w marketplace chce widziec czy dany artefakt mam juz zainstalowany czy nie"*. Only
+Artifact Details said so, and in the configured TUI not even that: offers are read once per
+connection without lifecycle, so `installed_statuses` stayed empty there.
+
+A Marketplace row now ends with `installed: <harness>, ...` when any version of that artifact is
+installed, with the health beside a harness whose installation is not ready (`codex (update)`). It
+is derived at draw time from `screens.installed`, which is re-read after every action, rather than
+from the offers, which would go stale the moment an install from this screen succeeded. An offer
+nothing installs keeps the bare key (D-385). Artifact Details still reads the offer's own field;
+filling that from the same installations is not needed for this request.
+
+Evidence: `tests/marketplace_installed_note_e2e_test.py`. Mutations: matching the versioned key,
+dropping the health suffix, and dropping the note each turned exactly one of its tests red.

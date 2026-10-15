@@ -991,6 +991,26 @@ def render_transaction_success(
     return tuple(lines)
 
 
+def _installed_note(key: str, installed: tuple[InstalledArtifactView, ...]) -> str:
+    """Where a Marketplace offer is already installed, after its key (D-394).
+
+    The operator: *"w marketplace chce widziec czy dany artefakt mam juz zainstalowany czy nie"*.
+    The row is otherwise the offer alone (D-385), so this is the one fact added to it: the harnesses
+    holding any version of this artifact, and a health beside one that is not ready. It is read from
+    the installations rather than the offers, because the offers are read once per connection and
+    the installations again after every action.
+    """
+
+    artifact = key.partition("@")[0]
+    held = sorted(
+        (item.harness or "unrecorded harness")
+        + ("" if item.health == "ready" else f" ({_human(item.health)})")
+        for item in installed
+        if item.coordinate.partition("@")[0] == artifact
+    )
+    return "  installed: " + ", ".join(held) if held else ""
+
+
 def render_mcp_test(view: McpTestView | None) -> tuple[str, ...]:
     """Screen 11a: the offer before it runs, and both stages per installation after (§170.4).
 
@@ -4313,7 +4333,11 @@ class CanonicalScreenSource:
             offered = {item.key: item for item in self._offers()}
             return self._list(
                 state,
-                tuple(key for key in state.rows if key in offered),
+                tuple(
+                    key + _installed_note(key, screens.installed)
+                    for key in state.rows
+                    if key in offered
+                ),
             )
         if screen is ConsumerScreen.ARTIFACT_DETAILS:
             entry = screens.offered(state.focus)
