@@ -158,12 +158,20 @@ class RemediationStatesTheChangesAartWillMakeTest(unittest.TestCase):
         fast = _drawn(*remediations)
         verbose = _drawn(*remediations, profile=PresentationProfile.VERBOSE)
 
-        for impact in ("credential", "installed on this machine", "network access"):
+        for impact in ("credential", "install the python", "network access to api.github.com"):
             self.assertIn(impact, fast.lower())
         for term in ("credential mutation", "executable install", "network mutation", _OWNER):
             with self.subTest(term=term):
                 self.assertNotIn(term, fast)
                 self.assertIn(term, verbose)
+
+    def test_each_change_is_said_once_with_no_summary_repeating_it(self) -> None:
+        # D-397: *"informacje w Remediation ... sa zduplikowane"* -- a line per kind of impact under
+        # the list said again what the list had just said.
+        drawn = _drawn(*_DECISIONS)
+
+        for repeated in ("installed on this machine", "never shows its value", "will be configured"):
+            self.assertNotIn(repeated, drawn)
 
     def test_no_profile_claims_a_guarantee_the_plan_does_not_establish(self) -> None:
         for profile in PresentationProfile:

@@ -782,24 +782,13 @@ def remediation_change(item: RemediationView) -> str:
     return f"{named}: {subject}" if subject else named
 
 
-#: What a change touches that somebody must not miss, kept in Fast in plain words. Harness
-#: configuration is absent: it is routine and derived (D-258), and the change itself names it.
-_REMEDIATION_IMPACT: dict[str, str] = {
-    "configure-credential": ("A credential will be stored; AART never shows its value."),
-    "select-alternative-provider": "A credential will be kept by a different provider.",
-    "install-runtime": "Software will be installed on this machine.",
-    "install-executable": "Software will be installed on this machine.",
-    "install-python-packages": "Software will be installed on this machine.",
-    "configure-network": "Network access will be configured.",
-}
-
-
 def render_remediation(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
     """Screen 08: the changes AART will make once the final review is confirmed.
 
     CP-23 task 08 (D-258). Outcomes, not chores: the reader is not asked to prepare anything.
-    The effect vocabulary and owners are Verbose; material impact stays in Fast. Nothing here
-    promises what the plan does not establish, and Continue is the screen's row, not a line here.
+    The effect vocabulary and owners are Verbose. Each change names its own impact -- the credential,
+    the runtime, the host -- so nothing under the list says it again (D-397). Nothing here promises
+    what the plan does not establish, and Continue is the screen's row, not a line here.
     """
 
     if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
@@ -821,15 +810,6 @@ def render_remediation(view: ConsumerPlanView, profile: PresentationProfile) -> 
                     f"{item.summary} ({_human(item.risk)}); owners: {', '.join(item.owners)}",
                 )
             )
-    impacts = tuple(
-        dict.fromkeys(
-            _REMEDIATION_IMPACT[item.kind]
-            for item in view.remediations
-            if item.kind in _REMEDIATION_IMPACT
-        )
-    )
-    if impacts:
-        lines.extend(("", *impacts))
     return tuple(lines)
 
 

@@ -10090,3 +10090,16 @@ checkout and maintain that Registry; "Maintainer" alone did not say what is main
   are unchanged: they are not read by anyone, and renaming the stored key would discard a setting
   for nothing. Historical records (DECISIONS, slices, CHANGELOG) keep the names they were written
   with.
+
+## D-397 - Remediation says each change once
+
+The operator: *"informacje w Remediation mam wrazenie sa zduplikowane ... usun te nadmiarowe"*.
+Under the list of changes, screen 08 added one line per kind of impact ("Software will be installed
+on this machine.", "A credential will be stored; AART never shows its value.", "Network access will
+be configured."), each a restatement of an item just above it. The list items already name the
+credential and its provider, the runtime, the program, the installer and the host, so the summary
+lines are removed (`_REMEDIATION_IMPACT` is gone). Material impact stays in Fast through the items
+themselves; Verbose still adds the effect vocabulary and owners.
+
+Evidence: `tests/remediation_changes_test.py`. The new case was red against the summary lines
+before they were removed.
