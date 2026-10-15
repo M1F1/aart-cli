@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.7.0](https://github.com/M1F1/aart-cli/compare/v0.6.0...v0.7.0) (2026-10-15)
+
+
+### Added
+
+* **maintainer:** remove an authoring Source from Maintainer Sources behind its own review, and add it again from Add Source ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** fold Remediation into Ready, the one final review, which lists the material changes AART will make ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** rename Maintainer Mode and Maintainer Dashboard to Registry Maintainer Mode and Registry Maintainer Dashboard, and screen 46 to Registry Workspace ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** show on each Marketplace row which harnesses already have that artifact installed ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** show only what the reader acts on in Fast, and name [v] More info / Less info ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** test one or several installed MCPs from Installed and Installed Artifact Details ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** tick several installations on Installed and uninstall them in one reviewed removal ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+
+
+### Fixed
+
+* **maintainer:** promote a new version into a Registry connected by its local path instead of refusing it as not configured ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **maintainer:** run Source Sync against the only connected Registry when none is the default instead of refusing it ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **maintainer:** say why a registry's approved state did not read instead of calling it not synchronized yet ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **mcp:** say whether an installed MCP declares no smoke_test or one with a key this version no longer accepts ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **registry:** list, read and disconnect a local Registry on Registries and Registry Maintainer like a Git one ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **registry:** make registry promote run and state each Candidate's validation and policy evidence instead of taking digests on the command line ([#62](https://github.com/M1F1/aart-cli/issues/62)) ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** after the configuration form, go on to Ready instead of asking for the harness again ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** give each list item one dash, and leave a heading over its list unmarked ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** name each change AART will make once, without impact lines repeating the list ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** open Doctor when one artifact is installed into two harnesses ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** report a defect in a running screen instead of restarting in the text terminal ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** return to Installed after an uninstall's receipt instead of reopening the same receipt ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** separate each configuration field with a blank line and drop the credential and storage text under the form ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** separate the credential briefing's sentences with blank lines when the TUI hands the terminal to the provider ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** show a Marketplace row as the offer alone, with its description under Verbose instead of cut off on the row ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** show why the text terminal took over, and where in the package a defect was raised ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** start each list item lower-case, separate items with a blank line, and wrap long lines instead of cutting them ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+* **tui:** stop restating the ticked harnesses on the harness choice, and part statements on Installing, the MCP test and the Dashboard with blank lines ([4c970c3](https://github.com/M1F1/aart-cli/commit/4c970c31b149da0f5b6058bcdf06dc85d3ef0e95))
+
 ## [0.6.0](https://github.com/M1F1/aart-cli/compare/v0.5.0...v0.6.0) (2026-10-14)
 
 
