@@ -4502,3 +4502,10 @@ review's identity and invariants (`SourceRemovalRequest`), so it is its own slic
 observed twice". D-393 refuses that in words ("uninstalled one harness at a time"). Update was
 re-keyed by installation for §169.3; removal needs the same re-keying before such a removal can be
 one transaction.
+
+## B-184 — Update and Repair end on a receipt whose Enter reopens the same receipt
+
+D-400 returns a finished uninstall to Installed. Update (16 → 17 → 26) and Repair (13 or Doctor
+→ 20 → 26) still end on Activity Details, where Enter opens Receipt Details with the same content
+and Esc walks back into the run that has finished. The same rule would send them to Updates and to
+the Installed Artifact Details or Doctor they started from.

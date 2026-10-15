@@ -2163,7 +2163,8 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
         ConsumerScreen.CREDENTIALS,
     ),
     ConsumerScreen.ACTIVITY: (ConsumerScreen.ACTIVITY_DETAILS,),
-    ConsumerScreen.ACTIVITY_DETAILS: (ConsumerScreen.RECEIPT_DETAILS,),
+    # A finished uninstall returns to the list it was started from (D-400).
+    ConsumerScreen.ACTIVITY_DETAILS: (ConsumerScreen.RECEIPT_DETAILS, ConsumerScreen.INSTALLED),
     ConsumerScreen.RECEIPT_DETAILS: (),
     ConsumerScreen.SETTINGS: (),
     ConsumerScreen.DOCTOR: (ConsumerScreen.VERIFY_REPAIR,),

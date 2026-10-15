@@ -10148,3 +10148,20 @@ The statements themselves -- heading, guidance, who asks and that AART never see
 unchanged, and so is `credential_guidance_lines`, which screen 07 also draws inside a frame.
 
 Evidence: `tests/credential_guidance_test.py`, red before the change.
+
+## D-400 - a finished uninstall returns to Installed
+
+The operator: *"jak wykonam uninstall w widoku installed to po kliknieciu enter na samym koncu chce
+wrocic do widoku z zainstalowanymi paczkami"*. An uninstall ends on Activity Details (26) with its
+receipt. There Enter opened Receipt Details, the same lines again, and Esc walked back into
+Uninstalling and the review of installations that no longer exist.
+
+When Activity Details is the end of an uninstall started on Installed (Uninstalling and Installed
+both in the session history, no action pending), Enter and Esc navigate to Installed. Navigation
+rewinds to a screen already in the history (`ConsumerSession.navigate`, QA-072), so the finished
+run leaves the stack and the list is reloaded without the removed rows. The legend reads
+`[Enter] Back to Installed`. This holds for an uninstall from the list or from Installed Artifact
+Details. Update and Repair have the same ending and are B-184.
+
+Evidence: two cases in `tests/installed_multi_uninstall_e2e_test.py`, for Enter and Esc and from
+details. Disabling the rule turned all three red.

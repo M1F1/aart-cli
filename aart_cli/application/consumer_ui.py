@@ -2333,6 +2333,18 @@ def installation_is_mcp(installation: str) -> bool:
     return len(parts) >= 3 and parts[1] == "mcp"
 
 
+def _uninstall_finished(state: ConsumerUiState) -> bool:
+    """An uninstall started on Installed has run, and its receipt is on Activity Details."""
+
+    history = state.session.history
+    return (
+        state.session.screen is ConsumerScreen.ACTIVITY_DETAILS
+        and state.action is None
+        and ConsumerScreen.UNINSTALLING in history
+        and ConsumerScreen.INSTALLED in history
+    )
+
+
 def _mcp_test_answered(state: ConsumerUiState) -> bool:
     """The MCP test ran and its stages are on 11a: Enter goes back to the Success it followed."""
 
@@ -2445,6 +2457,8 @@ def key_bindings(
             bindings.append(KeyBinding("Enter", chosen[1]))
         elif _answered_in_place(state) and "enter" not in keys:
             bindings.append(KeyBinding("Enter", "Credential details"))
+        elif _uninstall_finished(state) and "enter" not in keys:
+            bindings.append(KeyBinding("Enter", "Back to Installed"))
         elif _mcp_test_answered(state) and "enter" not in keys:
             bindings.append(KeyBinding("Enter", "Back to " + _mcp_test_origin(state)))
         elif state.failed_action is not None and "enter" not in keys:
@@ -2795,6 +2809,10 @@ def key_event(
 
     if key == "q":
         return ConsumerUiEvent(ConsumerUiEventKind.QUIT)
+    if key in ("enter", "escape") and _uninstall_finished(state):
+        # The installations it was about are gone, so neither their review nor their details is
+        # somewhere to go back to: both keys return to the list, refreshed (D-400).
+        return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=ConsumerScreen.INSTALLED)
     if key == "escape":
         return ConsumerUiEvent(ConsumerUiEventKind.BACK)
     if key == "/":

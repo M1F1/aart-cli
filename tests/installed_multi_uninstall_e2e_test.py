@@ -21,7 +21,7 @@ from tests.configured_install_command_e2e_test import COORDINATE, _environment
 from tests.configured_installation_draft_e2e_test import _published_registries
 from tests.configured_update_command_e2e_test import AUTHORED_FOR_TWO_1_2_0, TWO_HARNESSES
 from tests.consumer_application_e2e_test import _actions, _Terminal
-from tests.consumer_shell_test import DOWN, ENTER, SPACE
+from tests.consumer_shell_test import DOWN, ENTER, ESCAPE, SPACE
 from tests.placed_installation_e2e_test import AUTHORED_SKILL
 
 SECOND = "company/skill/lint-review"
@@ -134,6 +134,33 @@ class InstalledMultiUninstallTest(unittest.TestCase):
             self.assertTrue(terminal.screen_containing("one harness at a time"), terminal.last)
             for harness in TWO_HARNESSES:
                 self.assertTrue(_delivered(env, "code-review", harness).exists(), harness)
+
+    def test_enter_after_the_receipt_returns_to_the_refreshed_installed_list(self) -> None:
+        # D-400: *"jak wykonam uninstall w widoku installed to po kliknieciu enter na samym koncu
+        # chce wrocic do widoku z zainstalowanymi paczkami"*. Enter opened the same receipt again.
+        for key in (ENTER, ESCAPE):
+            with self.subTest(key=key), _two_skills() as env:
+                for coordinate in (COORDINATE, SECOND):
+                    self._install(env, coordinate, "claude")
+
+                finished, terminal, _ = self._walk(env, ord("u"), ENTER, key)
+
+                self.assertIs(finished.session.screen, ConsumerScreen.INSTALLED, terminal.last)
+                self.assertEqual(finished.session.history, (), finished.session.history)
+                self.assertNotIn(COORDINATE, terminal.last)
+                self.assertIn(SECOND, terminal.last)
+
+    def test_an_uninstall_from_details_also_returns_to_installed(self) -> None:
+        with _two_skills() as env:
+            for coordinate in (COORDINATE, SECOND):
+                self._install(env, coordinate, "claude")
+
+            finished, terminal, _ = self._walk(env, ENTER, ord("u"), ENTER, ENTER)
+
+            self.assertIs(finished.session.screen, ConsumerScreen.INSTALLED, terminal.last)
+            self.assertIn(
+                "[Enter] Back to Installed", terminal.screen_containing("/ Activity Details")
+            )
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest entry point
