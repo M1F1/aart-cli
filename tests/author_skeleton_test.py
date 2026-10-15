@@ -47,6 +47,7 @@ _NAMES: dict[str, str] = {
     "hook": "guard-bash",
     "mcp": _NAME,
     "memory": "team-context",
+    "plugin": "superpowers",
     "skill": "code-review",
 }
 
@@ -257,6 +258,12 @@ class AlternativeTest(unittest.TestCase):
                 if not value.startswith("- "):
                     continue
                 value = value[2:].strip()
+                # An item that opens a mapping is held to the same rule through its first value.
+                key, colon, rest = value.partition(": ")
+                if colon and _plain_safe(key):
+                    value = rest.strip()
+                elif value.endswith(":") and _plain_safe(value[:-1]):
+                    continue
                 with self.subTest(kind=kind, value=value):
                     self.assertTrue(value.startswith('"') or _plain_safe(value), value)
 
@@ -386,10 +393,10 @@ class RefusalTest(unittest.TestCase):
         self.assertEqual(GENERATED_KINDS, tuple(sorted(get_args(AuthorKind))))
 
     def test_a_kind_the_parser_does_not_know_is_refused(self) -> None:
-        result = author_skeleton("plugin", _NAME)
+        result = author_skeleton("agent", _NAME)
 
         assert isinstance(result, Err), result
-        self.assertIn("plugin", result.diagnostics[0].message)
+        self.assertIn("agent", result.diagnostics[0].message)
 
     def test_the_refusal_names_the_kinds_this_build_does_generate(self) -> None:
         """Naming the kind that failed without naming the alternatives is half an answer.
@@ -398,7 +405,7 @@ class RefusalTest(unittest.TestCase):
         only assertion on this message was about the rejected kind.
         """
 
-        result = author_skeleton("plugin", _NAME)
+        result = author_skeleton("agent", _NAME)
 
         assert isinstance(result, Err), result
         for kind in GENERATED_KINDS:

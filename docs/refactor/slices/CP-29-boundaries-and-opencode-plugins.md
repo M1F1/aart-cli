@@ -87,7 +87,35 @@ Found on the way:
 - opencode V1 (`plugin`) and V2 (`plugins`) registration;
 - uninstall and verify.
 
+*Done, 2026-10-15: §171, INV-255–257 and D-406.* V2 `plugins` is out of scope, as D-406 records.
+
 **4. Implement the plugin kind end to end.**
+
+*Done, 2026-10-15 (D-407).*
+- **The kind is in every canonical set.** It is `plugin`, `aart-cli.dev/plugin/v1`, payload format
+  `aart-cli-plugin-v1`, effects copy-tree and merge-json. The legacy profile path is untouched.
+- **Authoring.** `plugin.entry` names a `.js`, `.mjs` or `.ts` module the payload carries. The
+  field is refused on other kinds. A root `package.json` with runtime dependencies is refused, and
+  so are `inputs`. `author init --kind plugin` writes a compiling skeleton.
+- **Domain.** `PluginEntry` is a `./` path and nothing else. `SettingsListEntry` is a hook's or a
+  plugin's entry, and the `settings_entry_*` functions own one member of a list. Merging a plugin
+  entry is `high-risk-execution`. `PluginTarget` measures opencode at project and user scope.
+- **Placement.** `_plugin_settings` writes one settings entry and no delivery. The status and
+  uninstall scope view, and the harness projection, read settings entries.
+- **Evidence.**
+  - `tests/plugin_entry_test.py`, `tests/plugin_authoring_test.py`,
+    `tests/plugin_installation_e2e_test.py`, plus the extended `installation_harness_choice_test`.
+  - The plugin e2e covers install, review, status, drift, uninstall and the refusal of an
+    unmeasured harness.
+  - 571 tests across the kind, install and lifecycle suites are green, as are lint, typecheck,
+    format-check, docs-check and tach.
+- **Targeted mutations, each red only in its own tests.**
+  - Risk as a configuration mutation turned the risk and review tests red.
+  - `dependencies` dropped from the refused keys turned the dependency test red.
+  - Removing the scope view's plugin branch turned the status and uninstall e2e tests red.
+  - Removing the inputs refusal turned the inputs test red.
+  - Removing settings from the harness projection turned its projection test red. Before the test
+    was extended, that mutation survived.
 
 **5. superpowers as a plugin.** The fork is installed through aart-cli and checked live.
 

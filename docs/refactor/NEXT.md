@@ -12,6 +12,14 @@
 5. superpowers as a plugin, checked live;
 6. full verification.
 
+Steps 1–4 are done. **Next is step 5**: give the scratchpad fork (`acme-superpowers`) a root
+plugin manifest, with `entry: .opencode/plugins/superpowers.js` and the plugin, skills and package
+files included. Then publish it to a throwaway local Registry and install it into a fresh project
+with `marketplace install --profile opencode company/plugin/superpowers --yes`. Check it live:
+`opencode debug skill` should list the skills from the plugin's tree against a control, and so should
+a live `opencode run`. Then uninstall and check again. Step 6 is the PR, where CI is the full
+verification.
+
 ## Before CP-29 (2026-10-14)
 
 **CP-27 is complete and released as 0.5.0. The active work is CP-28, the consumer

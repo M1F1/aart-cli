@@ -223,18 +223,29 @@ class HarnessEligibilityProjectionTest(unittest.TestCase):
                         targets=(item("claude"), item("opencode")),
                         deliveries=(),
                         merges=(),
+                        settings=(),
                     ),
                     SimpleNamespace(
                         coordinate="company/skill/review@2.0.0",
                         targets=(),
                         deliveries=(item("claude"), item("tabnine")),
                         merges=(),
+                        settings=(),
                     ),
                     SimpleNamespace(
                         coordinate="company/memory/rules@3.0.0",
                         targets=(),
                         deliveries=(),
                         merges=(item("opencode"),),
+                        settings=(),
+                    ),
+                    # A plugin reaches its harness through a settings entry and nothing else.
+                    SimpleNamespace(
+                        coordinate="company/plugin/superpowers@7.0.0",
+                        targets=(),
+                        deliveries=(),
+                        merges=(),
+                        settings=(item("opencode"),),
                     ),
                 )
             )
@@ -253,7 +264,11 @@ class HarnessEligibilityProjectionTest(unittest.TestCase):
                 ),
                 HarnessTargetView(
                     "opencode",
-                    ("company/mcp/github@1.0.0", "company/memory/rules@3.0.0"),
+                    (
+                        "company/mcp/github@1.0.0",
+                        "company/memory/rules@3.0.0",
+                        "company/plugin/superpowers@7.0.0",
+                    ),
                 ),
                 HarnessTargetView("tabnine", ("company/skill/review@2.0.0",)),
             ),

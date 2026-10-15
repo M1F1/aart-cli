@@ -68,7 +68,9 @@ RECEIPT_UNWRITABLE = DiagnosticCode("receipt-unwritable")
 _MAX_RECEIPT_BYTES = 1024 * 1024
 _INSTALLATION = "installation"
 _PLACED = "placed"
-_KINDS: frozenset[str] = frozenset({"skill", "guideline", "mcp", "hook", "memory", "collection"})
+_KINDS: frozenset[str] = frozenset(
+    {"skill", "guideline", "mcp", "hook", "memory", "plugin", "collection"}
+)
 
 
 def _error(code: DiagnosticCode, message: str) -> Err:

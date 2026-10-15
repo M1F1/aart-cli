@@ -17,6 +17,7 @@ class ArtifactKind(str, Enum):
     GUIDELINE = "guideline"
     HOOK = "hook"
     MEMORY = "memory"
+    PLUGIN = "plugin"
 
 
 @dataclass(frozen=True, slots=True, order=True)

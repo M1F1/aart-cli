@@ -30,7 +30,7 @@ from .credentials import CredentialProviderRef, CredentialReference
 from .diagnostics import Diagnostic, DiagnosticCode, Severity
 from .effects import DeliveryKind
 from .harness import McpRegistration, registration_from_data, registration_to_data
-from .hooks import HookEntry, HookEntryShape
+from .hooks import HookEntry, HookEntryShape, PluginEntry, SettingsListEntry
 from .identifiers import ArtifactCoordinate, InputId, ObjectDigest
 from .installation_owner import (
     InstallationOwner,
@@ -338,7 +338,7 @@ class ArtifactSettingsEntry:
     harness: str
     destination: str
     path: str
-    entry: HookEntry
+    entry: SettingsListEntry
 
     def __post_init__(self) -> None:
         if not isinstance(self.harness, str) or not self.harness.strip():
@@ -355,8 +355,8 @@ class ArtifactSettingsEntry:
             or any(not part or part.strip() != part for part in self.path.split("."))
         ):
             raise ValueError("a settings entry path is dotted, non-empty and untrimmed")
-        if not isinstance(self.entry, HookEntry):
-            raise ValueError("a settings entry records the hook it wrote")
+        if not isinstance(self.entry, (HookEntry, PluginEntry)):
+            raise ValueError("a settings entry records the hook or plugin it wrote")
 
 
 @dataclass(frozen=True, slots=True)
@@ -582,17 +582,7 @@ def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str,
         ],
         "payload_digest": str(receipt.payload_digest),
         "root": receipt.root,
-        "settings": [
-            {
-                "command": item.entry.command,
-                "destination": item.destination,
-                "harness": item.harness,
-                "matcher": item.entry.matcher,
-                "path": item.path,
-                "shape": item.entry.shape.value,
-            }
-            for item in receipt.settings
-        ],
+        "settings": [_settings_entry_to_data(item) for item in receipt.settings],
     }
 
 
@@ -651,9 +641,35 @@ def _merge(value: object) -> ArtifactMerge:
     )
 
 
+def _settings_entry_to_data(item: ArtifactSettingsEntry) -> dict[str, object]:
+    common: dict[str, object] = {
+        "destination": item.destination,
+        "harness": item.harness,
+        "path": item.path,
+    }
+    if isinstance(item.entry, PluginEntry):
+        return {**common, "plugin": item.entry.reference}
+    return {
+        **common,
+        "command": item.entry.command,
+        "matcher": item.entry.matcher,
+        "shape": item.entry.shape.value,
+    }
+
+
 def _settings_entry(value: object) -> ArtifactSettingsEntry:
     if not isinstance(value, dict):
         raise ValueError("a settings entry must be a mapping")
+    if "plugin" in value:
+        for key in ("harness", "destination", "path"):
+            if key not in value:
+                raise ValueError(f"a settings entry is missing {key}")
+        return ArtifactSettingsEntry(
+            str(value["harness"]),
+            str(value["destination"]),
+            str(value["path"]),
+            PluginEntry(str(value["plugin"])),
+        )
     for key in ("harness", "destination", "path", "shape", "matcher", "command"):
         if key not in value:
             raise ValueError(f"a settings entry is missing {key}")

@@ -177,7 +177,7 @@ class RefusalTest(unittest.TestCase):
                 Request(
                     command="author",
                     author_action="init",
-                    artifact_kind="plugin",
+                    artifact_kind="agent",
                     author_name=_NAME,
                     author_into=str(root),
                 )
@@ -203,7 +203,7 @@ class RefusalTest(unittest.TestCase):
             redirect_stdout(io.StringIO()),
             self.assertRaises(SystemExit) as raised,
         ):
-            _init(root, kind="plugin")
+            _init(root, kind="agent")
 
         self.assertEqual(raised.exception.code, USAGE)
 

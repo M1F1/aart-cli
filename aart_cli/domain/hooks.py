@@ -14,12 +14,17 @@ Identity is the matcher and the command. Those two are what the harness acts on,
 agreeing on both are the same hook however the rest of the entry is spelled -- which is what lets a
 reinstall converge on the entry that is already there instead of adding a second one beside it.
 
+A plugin is the other measured list member (§171.3). OpenCode loads the plugins named in the
+`plugin` list of `opencode.json`, and an entry there is a bare string -- the path of the module
+relative to that file -- so its identity is the whole string and there is nothing else to spell.
+
 Pure data in, pure data out. Nothing here reads or writes a file.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from enum import Enum
 
@@ -30,11 +35,14 @@ __all__ = [
     "SETTINGS_UNMERGEABLE",
     "HookEntry",
     "HookEntryShape",
-    "hook_entry_at",
-    "hook_entry_fingerprint",
-    "hook_entry_to_json",
-    "merge_hook_entry",
-    "remove_hook_entry",
+    "PluginEntry",
+    "SettingsListEntry",
+    "settings_entry_label",
+    "settings_entry_at",
+    "settings_entry_fingerprint",
+    "settings_entry_to_json",
+    "merge_settings_entry",
+    "remove_settings_entry",
 ]
 
 #: The settings file cannot be merged into without replacing something somebody else put there.
@@ -77,15 +85,51 @@ class HookEntry:
             raise ValueError("a hook command must be one absolute path")
 
 
+#: A plugin path as AART writes it: `./`, then segments of ordinary file-name characters, ending in a
+#: module the harness loads. Narrower than any path opencode accepts on purpose -- no scheme, no
+#: `@`, no absolute root and no parent segment -- because each of those is a spelling that loads
+#: something other than the installation's own reviewed copy (INV-255).
+_PLUGIN_REFERENCE_RE = re.compile(r"^\./(?:[A-Za-z0-9_.+-]+/)*[A-Za-z0-9_.+-]+\.(?:js|mjs|ts)$")
+
+
+@dataclass(frozen=True, slots=True)
+class PluginEntry:
+    """What the harness is told: load the module at this path, relative to the settings file."""
+
+    reference: str
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.reference, str)
+            or _PLUGIN_REFERENCE_RE.fullmatch(self.reference) is None
+            or any(part in (".", "..") for part in self.reference.split("/")[1:])
+        ):
+            raise ValueError(
+                "a plugin entry is a ./ path inside the installation to a .js, .mjs or .ts module"
+            )
+
+
+#: One member of a list in a settings file that an installation owns.
+SettingsListEntry = HookEntry | PluginEntry
+
+
+def settings_entry_label(entry: SettingsListEntry) -> str:
+    """How a person is told which entry this is: the hook's matcher, or the plugin's path."""
+
+    return entry.matcher if isinstance(entry, HookEntry) else entry.reference
+
+
 def _error(message: str) -> Err:
     return Err((Diagnostic(SETTINGS_UNMERGEABLE, Severity.ERROR, message),))
 
 
-def hook_entry_to_json(entry: HookEntry) -> dict[str, object]:
+def settings_entry_to_json(entry: SettingsListEntry) -> object:
     """The entry exactly as the harness expects to read it."""
 
+    if isinstance(entry, PluginEntry):
+        return entry.reference
     if not isinstance(entry, HookEntry):
-        raise ValueError("rendering a hook entry needs a hook entry")
+        raise ValueError("rendering a settings entry needs a hook or a plugin entry")
     if entry.shape is HookEntryShape.FLAT_COMMAND:
         return {"matcher": entry.matcher, "command": entry.command}
     return {
@@ -94,7 +138,7 @@ def hook_entry_to_json(entry: HookEntry) -> dict[str, object]:
     }
 
 
-def hook_entry_fingerprint(entry: object) -> str:
+def settings_entry_fingerprint(entry: object) -> str:
     """One canonical spelling of an entry, so two of them can be compared for having drifted.
 
     Whatever the settings file happens to hold is compared against what was recorded, and a file a
@@ -105,9 +149,11 @@ def hook_entry_fingerprint(entry: object) -> str:
     return json.dumps(entry, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-def _identifies(candidate: object, entry: HookEntry) -> bool:
-    """Whether `candidate` is this hook, however the rest of the entry is spelled."""
+def _identifies(candidate: object, entry: SettingsListEntry) -> bool:
+    """Whether `candidate` is this entry, however the rest of a hook's entry is spelled."""
 
+    if isinstance(entry, PluginEntry):
+        return candidate == entry.reference
     if not isinstance(candidate, dict) or candidate.get("matcher") != entry.matcher:
         return False
     if entry.shape is HookEntryShape.FLAT_COMMAND:
@@ -175,15 +221,17 @@ def _rebuilt(
     return rebuilt
 
 
-def hook_entry_at(document: object, path: str, entry: HookEntry) -> Result[object | None]:
+def settings_entry_at(
+    document: object, path: str, entry: SettingsListEntry
+) -> Result[object | None]:
     """This hook's entry as the settings file currently spells it, or `None` when it is not there.
 
     What the file says now, not what was written: an entry somebody edited reads back as the edit,
     which is what makes drift in it detectable rather than assumed away.
     """
 
-    if not isinstance(entry, HookEntry):
-        return _error("reading a settings entry needs the hook it identifies")
+    if not isinstance(entry, (HookEntry, PluginEntry)):
+        return _error("reading a settings entry needs the entry it identifies")
     walked = _walk(document, path)
     if isinstance(walked, Err):
         return walked
@@ -194,11 +242,13 @@ def hook_entry_at(document: object, path: str, entry: HookEntry) -> Result[objec
     return Ok(next((item for item in found.value if _identifies(item, entry)), None))
 
 
-def merge_hook_entry(document: object, path: str, entry: HookEntry) -> Result[dict[str, object]]:
+def merge_settings_entry(
+    document: object, path: str, entry: SettingsListEntry
+) -> Result[dict[str, object]]:
     """`document` with this hook's entry at `path`, and everything else exactly as it was."""
 
-    if not isinstance(entry, HookEntry):
-        return _error("merging a settings entry needs the hook to write")
+    if not isinstance(entry, (HookEntry, PluginEntry)):
+        return _error("merging a settings entry needs the entry to write")
     walked = _walk(document, path)
     if isinstance(walked, Err):
         return walked
@@ -207,7 +257,7 @@ def merge_hook_entry(document: object, path: str, entry: HookEntry) -> Result[di
     if isinstance(found, Err):
         return found
 
-    written = hook_entry_to_json(entry)
+    written = settings_entry_to_json(entry)
     entries = list(found.value)
     for index, item in enumerate(entries):
         if _identifies(item, entry):
@@ -218,15 +268,17 @@ def merge_hook_entry(document: object, path: str, entry: HookEntry) -> Result[di
     return Ok(_rebuilt(chain, parts, entries))
 
 
-def remove_hook_entry(document: object, path: str, entry: HookEntry) -> Result[dict[str, object]]:
+def remove_settings_entry(
+    document: object, path: str, entry: SettingsListEntry
+) -> Result[dict[str, object]]:
     """`document` without this hook's entry, and with everyone else's left standing.
 
     The list itself stays, empty if it has to. It is the harness's key, not this artifact's, and an
     uninstall that tidied it away would be removing something it never created.
     """
 
-    if not isinstance(entry, HookEntry):
-        return _error("removing a settings entry needs the hook it identifies")
+    if not isinstance(entry, (HookEntry, PluginEntry)):
+        return _error("removing a settings entry needs the entry it identifies")
     walked = _walk(document, path)
     if isinstance(walked, Err):
         return walked

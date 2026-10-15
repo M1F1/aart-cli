@@ -187,7 +187,7 @@ def _under(path: str, root: SafeRelativePath) -> tuple[str, ...] | None:
     return tuple(parsed[len(root_parts) :])
 
 
-# A package directory names its kind, and only these five are packageable — ``collection`` is a
+# A package directory names its kind, and only these six are packageable — ``collection`` is a
 # manifest concept, not a package.  The mapping keeps that closed set in one place and hands the
 # validated literal straight to ``ArtifactIdentity`` instead of re-asserting it downstream.
 _PACKAGE_KINDS: Mapping[str, ArtifactKind] = {
@@ -196,6 +196,7 @@ _PACKAGE_KINDS: Mapping[str, ArtifactKind] = {
     "mcp": "mcp",
     "hook": "hook",
     "memory": "memory",
+    "plugin": "plugin",
 }
 
 
@@ -304,6 +305,14 @@ def _validate_primary_payload(
                     + (" fields" if len(missing) > 1 else " field"),
                     primary_path,
                 )
+        text_files = ()
+    elif artifact_type == "plugin":
+        # Which module is the entry is the authoring extension's to say and `package_plugin`'s to
+        # check; what holds for every plugin is that there is a module to load (§171.1).
+        if not any(path.endswith((".js", ".mjs", ".ts")) for path in files):
+            return _error(
+                ARTIFACT_INVALID, "plugin payload requires a .js, .mjs or .ts module", manifest_path
+            )
         text_files = ()
     else:
         return _error(

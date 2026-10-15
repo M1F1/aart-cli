@@ -34,7 +34,7 @@ from .model import (
     make_finding,
 )
 
-_ARTIFACT_TYPES = ("guideline", "hook", "mcp", "memory", "skill")
+_ARTIFACT_TYPES = ("guideline", "hook", "mcp", "memory", "plugin", "skill")
 _VERSION_RE = re.compile(r"(?<![A-Za-z0-9])([0-9]+(?:\.[0-9]+){0,3}(?:[-+][A-Za-z0-9.-]+)?)")
 _RULE_PART_RE = re.compile(r"[^a-z0-9]+")
 _PINNED_REQUIREMENT_RE = re.compile(

@@ -407,6 +407,7 @@ def _installation_targets(
         harnesses = {item.harness for item in placement.targets}
         harnesses.update(item.harness for item in placement.deliveries)
         harnesses.update(item.harness for item in placement.merges)
+        harnesses.update(item.harness for item in placement.settings)
         for profile in profiles:
             if profile in harnesses and coordinate not in hosted[profile]:
                 hosted[profile].append(coordinate)

@@ -10289,3 +10289,26 @@ Choices:
   step that makes the harness run the code (INV-256).
 - **OpenCode 2.x is out.** Its `plugins` key with the directory form is not measured here, so it is
   not targeted.
+
+## D-407 - a plugin takes no inputs, and its installation is found by its settings entry
+
+CP-29 step 4. Choices made while implementing §171:
+- **Inputs are refused on a plugin.** OpenCode imports the module into its own process, and AART
+  starts nothing it could pass an environment variable, argument or file to. A declared input would
+  be collected at setup and handed to nothing, and setup would then fail for want of an effect to
+  attach it to. `parse_author_manifest` refuses `inputs` on a plugin. The skeleton names the input
+  surface as `#?` alternatives, emitted from the same value the other kinds enable, so the
+  anti-drift oracle still holds.
+- **No delivery.** A plugin placement has settings and nothing else: the payload is copied into the
+  private tree as for every kind, and `_plugin_settings` writes the one `plugin` list member,
+  spelled relative to the settings file. An entry that would climb out of that file's directory is
+  refused by `PluginEntry` rather than written.
+- **Found by its entry.** The installed-in-this-scope view read deliveries and merges only, so a
+  plugin installed and then vanished from `status` and `uninstall`. A plugin is now matched by its
+  settings entry's file against the measured `PluginTarget`. The harness eligibility projection
+  counts settings entries for the same reason.
+- **Settings-only receipts need no new verification.** The hook's settings observation, drift and
+  repair path already handles a list member, so a plugin uses it unchanged.
+- **One test refined, not weakened.** The skeleton's "a sequence item is quoted when it must be"
+  test now reads a `- key: value` item through its value, because a mapping item is not a scalar.
+

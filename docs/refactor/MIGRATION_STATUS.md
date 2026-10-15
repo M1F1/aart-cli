@@ -4,6 +4,15 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-15, CP-29 steps 1–4 (D-404–D-407): tach is a gate, and OpenCode plugins are an artifact kind.**
+- tach checks the import graph (D-404).
+- superpowers' skills and bootstrap were installed into opencode as Skills and Memory, and checked
+  live.
+- §171 specifies plugins, and the `plugin` kind is implemented through authoring, placement,
+  receipt, status and uninstall. Its registration is one `./` path in opencode.json's `plugin` list,
+  reviewed as high-risk.
+- Evidence is in the CP-29 slice, steps 2 and 4, and INV-255–257 in `INVARIANT_TRACEABILITY.md`.
+
 **2026-10-15, D-401–D-403: the install flow is quieter and has one final review.** Review
 Selection (05) in Fast keeps only what is wrong with the harness choice, without the count of
 Marketplace ticks. Statements on Installing, the MCP test and the Dashboard's recent activity are

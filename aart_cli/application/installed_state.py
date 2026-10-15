@@ -41,7 +41,7 @@ from aart_cli.domain.effects import (
     WithdrawArtifact,
     WriteFile,
 )
-from aart_cli.domain.hooks import hook_entry_to_json
+from aart_cli.domain.hooks import settings_entry_to_json
 from aart_cli.domain.identifiers import ArtifactCoordinate
 from aart_cli.domain.python_runtime import ArtifactEnvironment
 from aart_cli.domain.receipts import InstallationReceipt, PlacedArtifactReceipt
@@ -454,7 +454,7 @@ def current_state_from_placement(
             state = ComponentState.DIVERGENT
         components.append(ObservedComponent(ComponentId(Component.MERGE, region.harness), state))
     written = {
-        entry.harness: settings_entry_digest(hook_entry_to_json(entry.entry))
+        entry.harness: settings_entry_digest(settings_entry_to_json(entry.entry))
         for entry in receipt.settings
     }
     for entry_found in observation.settings:

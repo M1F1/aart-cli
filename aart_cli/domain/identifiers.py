@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-ArtifactKind = Literal["skill", "guideline", "mcp", "hook", "memory", "collection"]
+ArtifactKind = Literal["skill", "guideline", "mcp", "hook", "memory", "plugin", "collection"]
 SourceRevisionKind = Literal["git", "local"]
 
 _GIT_REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
