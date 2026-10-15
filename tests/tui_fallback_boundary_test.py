@@ -258,7 +258,6 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         self.assertIs(fallback.call_args.args[0], composed.return_value.value)
 
 
-
 class RunConsumerBoundaryTests(unittest.TestCase):
     """`run_consumer` degrades only when curses itself cannot start.
 
