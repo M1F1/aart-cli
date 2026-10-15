@@ -44,6 +44,7 @@ from .maintainer_views import (
 )
 
 __all__ = [
+    "installation_is_mcp",
     "ConsumerActionKind",
     "ConsumerUiCommand",
     "ConsumerUiCommandKind",
@@ -863,6 +864,8 @@ _SUBJECT_PRESERVING_BACK_EDGES = frozenset(
         (ConsumerScreen.CREDENTIAL_REVIEW, ConsumerScreen.CREDENTIAL_ACTION),
         # Leaving the MCP test returns to the Success it followed, still about that receipt.
         (ConsumerScreen.MCP_TEST, ConsumerScreen.SUCCESS),
+        # ... and to the installation it was asked for from (D-395).
+        (ConsumerScreen.MCP_TEST, ConsumerScreen.INSTALLED_ARTIFACT_DETAILS),
         (ConsumerScreen.CREDENTIAL_ACTION, ConsumerScreen.CREDENTIAL_DETAILS),
     }
 )
@@ -1285,6 +1288,12 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     ): ConsumerScreen.CONFIGURATION_REVIEW,
     # §170.4: the offer is a review of its own, so what will be called is stated before it is.
     (ConsumerActionKind.MCP_TEST, ConsumerScreen.SUCCESS): ConsumerScreen.MCP_TEST,
+    # The same test at any later time, over installations chosen on Installed (§170.4, D-395).
+    (ConsumerActionKind.MCP_TEST, ConsumerScreen.INSTALLED): ConsumerScreen.MCP_TEST,
+    (
+        ConsumerActionKind.MCP_TEST,
+        ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
+    ): ConsumerScreen.MCP_TEST,
 }
 
 #: The screens an action can be asked from, which are also the screens a declined preparation
@@ -1389,7 +1398,7 @@ def _request_action(
         state.current_row or state.focus
         if action in _ROW_IS_THE_REQUEST
         or (
-            action is ConsumerActionKind.UNINSTALL
+            action in (ConsumerActionKind.UNINSTALL, ConsumerActionKind.MCP_TEST)
             and state.session.screen is ConsumerScreen.INSTALLED
         )
         else state.focus or state.current_row
@@ -1440,7 +1449,11 @@ def _request_action(
         ),
     )
     selection = state.selection
-    if action in (ConsumerActionKind.UNINSTALL, ConsumerActionKind.VERIFY_REPAIR):
+    if action in (
+        ConsumerActionKind.UNINSTALL,
+        ConsumerActionKind.VERIFY_REPAIR,
+        ConsumerActionKind.MCP_TEST,
+    ):
         # A lifecycle action is about installations: what is ticked on Installed, and there only.
         # Ticks carried from elsewhere -- Marketplace offers, or Installed rows behind an open
         # details screen -- would otherwise outrank the one artifact the screen is about (D-393).
@@ -1451,6 +1464,9 @@ def _request_action(
         )
     command = ConsumerUiCommand(
         ConsumerUiCommandKind.PREPARE_ACTION,
+        # The MCP test is about the transaction on Success, or about installations chosen on
+        # Installed; the screen it was asked from is what tells the two apart (D-395).
+        screen=state.session.screen if action is ConsumerActionKind.MCP_TEST else None,
         action=action,
         selection=selection,
         targets=(
@@ -2108,10 +2124,14 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _action_binding("i", "Install", ConsumerActionKind.INSTALL),
     ),
     ConsumerScreen.UPDATES: (_action_binding("i", "Update", ConsumerActionKind.UPDATE),),
-    ConsumerScreen.INSTALLED: (_action_binding("u", "Uninstall", ConsumerActionKind.UNINSTALL),),
+    ConsumerScreen.INSTALLED: (
+        _action_binding("u", "Uninstall", ConsumerActionKind.UNINSTALL),
+        _action_binding("t", "Test MCP", ConsumerActionKind.MCP_TEST),
+    ),
     ConsumerScreen.INSTALLED_ARTIFACT_DETAILS: (
         _action_binding("r", "Repair", ConsumerActionKind.VERIFY_REPAIR),
         _action_binding("u", "Uninstall", ConsumerActionKind.UNINSTALL),
+        _action_binding("t", "Test MCP", ConsumerActionKind.MCP_TEST),
     ),
     ConsumerScreen.INSTALLED_COLLECTION_DETAILS: (
         _action_binding("u", "Uninstall", ConsumerActionKind.UNINSTALL),
@@ -2298,6 +2318,13 @@ def _answered_in_place(state: ConsumerUiState) -> bool:
     )
 
 
+def installation_is_mcp(installation: str) -> bool:
+    """Whether an installation key (`alias/kind/name@version#harness`) names an MCP."""
+
+    parts = installation.split("/")
+    return len(parts) >= 3 and parts[1] == "mcp"
+
+
 def _mcp_test_answered(state: ConsumerUiState) -> bool:
     """The MCP test ran and its stages are on 11a: Enter goes back to the Success it followed."""
 
@@ -2308,7 +2335,24 @@ def _mcp_test_answered(state: ConsumerUiState) -> bool:
     )
 
 
+def _mcp_test_origin(state: ConsumerUiState) -> str:
+    """Where Enter leaves a finished MCP test for: the screen it was asked from."""
+
+    origin = state.session.history[-1] if state.session.history else ConsumerScreen.SUCCESS
+    names: dict[ApplicationScreen, str] = {
+        ConsumerScreen.INSTALLED: "Installed",
+        ConsumerScreen.INSTALLED_ARTIFACT_DETAILS: "details",
+    }
+    return names.get(origin, "Success")
+
+
 def _binding_enabled(binding: _ScreenBinding, state: ConsumerUiState) -> bool:
+    if (
+        binding.event.action is ConsumerActionKind.MCP_TEST
+        and state.session.screen is ConsumerScreen.INSTALLED_ARTIFACT_DETAILS
+    ):
+        # A details screen is one installation, so the test is offered only where it is an MCP.
+        return installation_is_mcp(state.focus)
     if binding.event.action in (
         ConsumerActionKind.REGISTRY_SYNC,
         ConsumerActionKind.REGISTRY_REMOVE,
@@ -2394,7 +2438,7 @@ def key_bindings(
         elif _answered_in_place(state) and "enter" not in keys:
             bindings.append(KeyBinding("Enter", "Credential details"))
         elif _mcp_test_answered(state) and "enter" not in keys:
-            bindings.append(KeyBinding("Enter", "Back to Success"))
+            bindings.append(KeyBinding("Enter", "Back to " + _mcp_test_origin(state)))
         elif state.failed_action is not None and "enter" not in keys:
             # The run is over. The only thing Enter can honestly do here is leave.
             bindings.append(KeyBinding("Enter", "Back to list"))

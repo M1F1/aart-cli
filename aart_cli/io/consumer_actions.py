@@ -45,6 +45,7 @@ from aart_cli.application.consumer_ui import (
     RegistryInitDraft,
     RepositoryScanDraft,
     SourceDraft,
+    installation_is_mcp,
 )
 from aart_cli.application.consumer_views import (
     ConsumerPlanView,
@@ -495,6 +496,9 @@ class _AfterInstall:
 class _PendingMcpTest:
     records: tuple[InstalledRecord, ...]
     review_digest: str
+    #: The test as it was asked for from Installed (D-395); `None` for the one after an install,
+    #: which is drawn beside that install's Success instead.
+    installed: McpTestView | None = None
 
 
 #: Member statuses whose installation was made, so the test may be offered for it.
@@ -2826,6 +2830,11 @@ class LocalConsumerActions:
         )
 
     def _prepare_mcp_test(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        if command.screen in (
+            ConsumerScreen.INSTALLED,
+            ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
+        ):
+            return self._prepare_installed_mcp_test(command)
         after = self._after_install
         if after is None or not after.records or after.test is None:
             return ConsumerActionUpdate(
@@ -2863,21 +2872,96 @@ class LocalConsumerActions:
             ),
         )
 
+    def _prepare_installed_mcp_test(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Review the test of installations chosen on Installed, or the one a details screen is.
+
+        Selection is installation-qualified exactly as `aart-cli mcp test` makes it (§170.1,
+        INV-254): each key is one installation in one harness, read back from the receipts now.
+        A chosen row that is not an MCP is refused by name rather than dropped, because a test
+        that quietly covers less than was ticked reads as a pass for what it skipped.
+        """
+
+        targets = self._targets(command)
+        if not targets:
+            return self._declined(command, _lines("select an installed MCP to test"))
+        others = tuple(key for key in targets if not installation_is_mcp(key))
+        if others:
+            return self._declined(
+                command,
+                _lines(
+                    *(f"{key} is not an MCP; only MCP installations are tested" for key in others),
+                    "untick it and test the MCPs alone",
+                ),
+            )
+        host = self._host()
+        views = {item.row: item for item in self.source().screens.installed}
+        try:
+            records = self._mcp_tester(host).installations(
+                scope=host.scope,
+                root=host.harness_root,
+                harnesses=frozenset(
+                    views[key].harness.partition("+")[0] for key in targets if key in views
+                ),
+                coordinates=frozenset(key.partition("#")[0] for key in targets),
+            )
+            chosen = tuple(record for record in records if _installation_of(record) in targets)
+            missing = tuple(
+                key for key in targets if key not in {_installation_of(item) for item in chosen}
+            )
+            if missing:
+                return self._declined(
+                    command,
+                    _lines(*(f"{key} has no recorded MCP installation to test" for key in missing)),
+                )
+            planned = self._mcp_tester(host).plan(chosen)
+        except Exception:  # noqa: BLE001 - a test that cannot be prepared changes nothing
+            return self._declined(
+                command, _lines("the installed MCPs could not be read for a test")
+            )
+        plan = tuple(
+            McpTestEntryView(item.installation, item.tool, item.arguments) for item in planned
+        )
+        digest = hashlib.sha256(
+            json.dumps(
+                [[item.installation, item.tool, item.arguments] for item in plan],
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        test = McpTestView(tuple(_installation_of(item) for item in chosen), plan=plan)
+        self._pending_host = host
+        self._pending = _PendingMcpTest(chosen, digest, installed=test)
+        self._pending_action = command.action
+        return ConsumerActionUpdate(
+            self.source(mcp_test=test),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=digest,
+            ),
+        )
+
     def _execute_mcp_test(
         self, command: ConsumerUiCommand, pending: _PendingMcpTest
     ) -> ConsumerActionUpdate:
         """Run the reviewed test once. Its outcome is an answer, never a change to the install."""
 
         self._pending, self._pending_action = None, None
-        after = self._after_install
-        assert after is not None and after.test is not None
+        test = pending.installed
+        if test is None:
+            after = self._after_install
+            assert after is not None and after.test is not None
+            test = after.test
+
+        def drawn(view: McpTestView, notice: tuple[str, ...] = ()) -> CanonicalScreenSource:
+            if pending.installed is not None:
+                return self.source(mcp_test=view, notice=notice)
+            return self._after_install_source(view, notice)
+
         try:
             ran = self._mcp_tester(self._reviewed_host()).run(pending.records)
         except Exception:  # noqa: BLE001 - a test that cannot run is reported, not escalated
             return ConsumerActionUpdate(
-                self._after_install_source(
-                    after.test, _lines("the MCP test could not be run; the install is unchanged")
-                ),
+                drawn(test, _lines("the MCP test could not be run; the installation is unchanged")),
                 ConsumerUiEvent(ConsumerUiEventKind.ACTION_FAILED, action=command.action),
             )
         results = tuple(
@@ -2892,7 +2976,7 @@ class LocalConsumerActions:
         )
         recorded_at, _ = self._moment()
         return ConsumerActionUpdate(
-            self._after_install_source(replace(after.test, results=results)),
+            drawn(replace(test, results=results)),
             ConsumerUiEvent(
                 ConsumerUiEventKind.ACTION_RECORDED, action=command.action, text=recorded_at
             ),

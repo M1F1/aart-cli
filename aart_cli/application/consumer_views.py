@@ -2123,12 +2123,14 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.INSTALLED: (
         ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
         ConsumerScreen.INSTALLED_COLLECTION_DETAILS,
-        # What is ticked here is uninstalled from here (D-393).
+        # What is ticked here is uninstalled from here (D-393), and tested from here (D-395).
         ConsumerScreen.UNINSTALL_REVIEW,
+        ConsumerScreen.MCP_TEST,
     ),
     ConsumerScreen.INSTALLED_ARTIFACT_DETAILS: (
         ConsumerScreen.VERIFY_REPAIR,
         ConsumerScreen.UNINSTALL_REVIEW,
+        ConsumerScreen.MCP_TEST,
     ),
     ConsumerScreen.INSTALLED_COLLECTION_DETAILS: (ConsumerScreen.UNINSTALL_REVIEW,),
     ConsumerScreen.UPDATES: (ConsumerScreen.UPDATE_INPUTS, ConsumerScreen.UPDATING),
@@ -2178,6 +2180,8 @@ _KEEPS_FOCUS: frozenset[tuple[ConsumerScreen, ConsumerScreen]] = frozenset(
         (ConsumerScreen.SUCCESS, ConsumerScreen.RECEIPT_DETAILS),
         # 11a tests the installations of the transaction Success is about, so it keeps that subject.
         (ConsumerScreen.SUCCESS, ConsumerScreen.MCP_TEST),
+        # ... as it tests the one installation a details screen is about (D-395).
+        (ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, ConsumerScreen.MCP_TEST),
         # CP-23 task 12: 24's rows are verbs, so the review they open is still about the credential
         # rather than about the word "replace" (D-262).
         (ConsumerScreen.CREDENTIAL_ACTION, ConsumerScreen.CREDENTIAL_REVIEW),

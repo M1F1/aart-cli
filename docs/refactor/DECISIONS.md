@@ -10044,3 +10044,30 @@ filling that from the same installations is not needed for this request.
 
 Evidence: `tests/marketplace_installed_note_e2e_test.py`. Mutations: matching the versioned key,
 dropping the health suffix, and dropping the note each turned exactly one of its tests red.
+
+## D-395 - the MCP test is asked for from Installed, for one or several installations
+
+The operator: *"w jaki sposob teraz w TUI moge sobie odpalic testy dla jednego lub wiecej mcp?"*.
+The only TUI route was the offer on Success right after an install, and §170.1 said so; once past
+it, an installed MCP was testable from `aart-cli mcp test` alone.
+
+The Product Specification is amended first: §170.1 names Installed as a third surface, §170.4
+describes it, and INV-254 states that it is selected, reviewed and inert. Then:
+
+- **Installed binds `[t] Test MCP`** over what is ticked there, or the row under the cursor, and
+  Installed Artifact Details binds it for its one installation, where that installation is an MCP.
+- **The same screen 11a and the same `McpTestPort`.** The selected keys are installation keys
+  (`coordinate#harness`), read back from the receipts through `installations(...)` and filtered to
+  exactly those keys, so a test never covers more than was chosen.
+- **A ticked non-MCP is refused by name** (`... is not an MCP`), an empty selection is refused, and
+  a key with no recorded MCP installation is refused; nothing is silently dropped.
+- **Ticks count only on Installed**, as for Uninstall and Repair (D-393): a tick left on the list
+  does not reach an open details screen.
+- **The prepare command carries the screen it was asked from**, which tells the after-install test
+  from this one; the answer returns there (`Enter Back to Installed` / `Back to details`).
+
+Evidence: `tests/installed_mcp_test_e2e_test.py` (six cases on a real machine with one MCP in two
+harnesses and one Skill). Mutations: dropping the non-MCP refusal, the leftover-tick filter, and
+the origin screen each turned their tests red. Dropping the per-installation filter survives,
+because the harness filter of `installations(...)` already excludes the other installation in
+that fixture; the filter stays for two different MCPs ticked in different harnesses.

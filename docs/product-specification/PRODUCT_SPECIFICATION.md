@@ -10725,9 +10725,9 @@ installation's configured remote service. Internal enterprise
 endpoints, proxy/CA settings and approved providers must work without assuming public egress.
 
 There is no background monitor, scheduled CI job or production-wide scan. Besides the command, the
-only other surface is the optional test offered right after an installation (§170.4). Both give
-human-readable output, and the command also gives a structured JSON report, for the same
-operation. Exact selector syntax follows the repository's existing origin/installation selection
+other surfaces are the optional test offered right after an installation (§170.4) and the test the
+person asks for from Installed (§170.4). All give human-readable output, and the command also gives
+a structured JSON report, for the same operation. Exact selector syntax follows the repository's existing origin/installation selection
 conventions; the command must expose explicit all-versus-selected MCP and harness selection rather than infer them.
 
 Author and maintainer documentation should recommend installing a new MCP locally, running this
@@ -10837,6 +10837,15 @@ installation, never part of it:
 A failed test explains which stage failed and why, and leaves repair or reconfiguration to the
 person's own choice.
 
+The same test can be asked for at any later time from Installed. On the Installed list the person
+ticks one or more installations, or leaves the cursor on one, and asks for the test; Installed
+Artifact Details asks for it for that one installation. The same review is drawn before anything
+runs, naming each installation, its declared tool and arguments and that the call reaches the
+configured service. The selection is installation-qualified exactly as on the command: each
+selected row is one installation in one harness, a selected installation that is not an MCP is
+refused by name rather than dropped, and an empty selection is refused. The test changes nothing,
+and its answer returns to the screen it was asked from.
+
 ## 170.5 Results and evidence ownership
 
 Reports name the installation owner, local origin/content identity, harness, stage, timestamp,
@@ -10882,3 +10891,8 @@ made, and no outcome of it changes the installation, its receipts or its reporte
 boundaries preserve trust, secret isolation, zero runtime dependencies and bounded execution;
 persistent reports retain only safe, installation-qualified evidence. Explicit `--show-response`
 permits bounded current-output inspection under §170.5 without application persistence.
+
+**INV-254 — The test from Installed is selected, reviewed and inert.** It runs only after the person
+selects installed MCP installations on Installed or opens one, reviews the declared calls and
+confirms. It covers exactly those installations, refuses a selected non-MCP installation by name,
+and no outcome of it changes an installation, its receipts or its configuration.
