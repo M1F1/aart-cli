@@ -9835,3 +9835,13 @@ Evidence is `tests/local_registry_screens_test.py`, which uses a real local Regi
 is listed, its approved state reads, screen 46 names its revision, and Disconnect removes it. Four
 targeted mutations, one per fix, each turned red only the tests for that fix. Other
 `registry-git`-only checks are recorded as B-180.
+
+## D-385 — A Marketplace row is the offer alone; its description is Verbose's Description
+
+Implementation choice, 2026-10-15, from an owner report: a Marketplace row carried the offer's
+summary after its key, so it ran past the width and was cut off mid-sentence. A row is now the key
+alone, as D-250 and QA-089 already ask of other lists. The summary stays whole in the cursor
+description's `Description` field, which the frame draws in Verbose. Search still matches the
+summary. Evidence is `tests/consumer_marketplace_shell_test.py`
+(`test_a_row_is_the_offer_alone_and_its_description_is_verbose`). Restoring the summary on the row
+turned exactly that test red.

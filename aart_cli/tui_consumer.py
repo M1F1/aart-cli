@@ -4267,9 +4267,7 @@ class CanonicalScreenSource:
             offered = {item.key: item for item in self._offers()}
             return self._list(
                 state,
-                tuple(
-                    f"{key}  {self._summary(offered[key])}" for key in state.rows if key in offered
-                ),
+                tuple(key for key in state.rows if key in offered),
             )
         if screen is ConsumerScreen.ARTIFACT_DETAILS:
             entry = screens.offered(state.focus)

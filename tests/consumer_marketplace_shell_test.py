@@ -8,9 +8,11 @@ a Collection preview are its members, and Space on them is what makes a selectio
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from aart_cli.application.consumer_views import (
     ConsumerScreen,
+    PresentationProfile,
     project_dashboard,
 )
 from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
@@ -79,7 +81,18 @@ class MarketplaceShellTest(unittest.TestCase):
 
         self.assertEqual(state.rows, (*self.keys(), str(COLLECTION)))
         self.assertIn(self.keys()[0], terminal.last)
-        self.assertIn("Everything a developer needs", terminal.last)
+
+    def test_a_row_is_the_offer_alone_and_its_description_is_verbose(self):
+        """A summary on the row ran past the width and was cut off; Description holds it whole."""
+
+        _, fast = drive(UP, state=_at(ConsumerScreen.MARKETPLACE))
+        at = _at(ConsumerScreen.MARKETPLACE)
+        verbose_at = replace(at, session=replace(at.session, profile=PresentationProfile.VERBOSE))
+        _, verbose = drive(UP, state=verbose_at)
+
+        self.assertNotIn("Everything a developer needs", fast.last)
+        self.assertIn(f"> [ ] {COLLECTION}\n", fast.last)
+        self.assertRegex(verbose.last, r"Description\s+Everything a developer needs")
 
     def test_enter_on_an_artifact_opens_its_details_rather_than_a_collection(self):
         state, terminal = drive(ENTER, state=_at(ConsumerScreen.MARKETPLACE))
