@@ -4528,3 +4528,13 @@ With `forbid_circular_dependencies = true`, `tach check` reports cycles through 
 flag is off. Breaking the cycles, mostly legacy `setup_*` and the TUI front ends reaching back into
 `cli`/`commands`, and then turning the flag on, is noncritical refactoring. `tach show` draws the
 graph.
+
+## B-187 — the opencode hook placement writes a key opencode rejects
+
+`aart_cli/profiles/builtin.py` merges an opencode Hook artifact into `opencode.json` under `hooks`,
+mapping events to `hooks.PreToolUse` etc. The comment there already calls it unverified. opencode
+1.18 rejects unknown top-level config keys (`ConfigInvalidError`), and its hook model is plugin
+functions (`tool.execute.before`, ...), not a JSON `hooks` table. So a hook installed into opencode
+would stop opencode from starting. Found while specifying the plugin kind (CP-29). It is not on the
+critical path unless the plugin kind replaces hook delivery for opencode. If it does not, the
+conservative fix is to mark project-scope `hook` unsupported for opencode, as user scope already is.

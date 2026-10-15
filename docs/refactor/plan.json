@@ -980,12 +980,12 @@
         {
           "id": "2",
           "title": "superpowers delivered with what exists: its skills as Skill artifacts and its bootstrap as Memory, installed into opencode and checked live",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "3",
           "title": "Specify the OpenCode plugin artifact kind: vendored, digest-pinned, local-path registration, high-risk execution",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "4",

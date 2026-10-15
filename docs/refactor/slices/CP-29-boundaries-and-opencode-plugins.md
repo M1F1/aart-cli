@@ -1,6 +1,6 @@
 # CP-29 — module boundaries as data, and OpenCode plugins as an artifact kind
 
-Status: **in flight**. Step 1 is on `feat/cp-29-tach-and-opencode-plugins`.
+Status: **in flight**. Steps 1–2 are done on `feat/cp-29-tach-and-opencode-plugins`.
 
 Date opened: 2026-10-15. Authority: the product owner, after the 0.7.0 release: *"zajmij sie teraz
 kolejnym CP w ktorym wdrozysz Tach i ogarniesz pluginy do opencode jako nowy rodzaj artefaktu
@@ -41,6 +41,43 @@ import cycles tach found (B-186); plugins for harnesses other than opencode.
 **2. superpowers with Skills and Memory.** An enterprise fork's skills become Skill artifacts, and
 the `using-superpowers` bootstrap becomes Memory (AGENTS.md). Both are installed into opencode from
 a local Registry and checked live in the owner's opencode.
+
+*Done, 2026-10-15.*
+
+The fork:
+- is superpowers 7.0.0 (`bb92a77`), with fifteen `skills/<name>/` trees;
+- each tree carries an `aart-cli.yaml` (`skill/v1`, `include: ["**"]`, `exclude: [aart-cli.yaml]`);
+- `memory/superpowers-bootstrap/` carries an OpenCode adaptation of what the upstream plugin
+  injects: check skills first, the tool mapping, and how a `superpowers:<name>` reference meets an
+  installed name.
+
+The run, all in a throwaway `AART_CLI_HOME`, with an invented author:
+- `author check` reported 16 manifests promotable;
+- `registry init`, `scan`, `promote` ×16, `publish`, then `source add --kind registry-local`;
+- `marketplace install --profile opencode <16 coordinates> --yes` succeeded.
+
+Placement:
+- skills went to `.opencode/skills/<name>-company-project/`, with every subfile (`scripts/`,
+  `references/`, examples);
+- `name:` in each frontmatter was rewritten to match the directory;
+- the bootstrap went into `AGENTS.md` between the aart-cli memory markers.
+
+Live evidence, opencode 1.18.29 with `opencode/big-pickle`:
+- `opencode debug skill` lists all fifteen in the project and none in a control project with no
+  install;
+- asked to add a feature, the session in the project quoted the AGENTS.md instructions and called
+  the native `skill` tool on `using-superpowers-company-project`. The control found no skill to
+  load.
+
+Found on the way:
+- D-405: `**` reaching a directory was refused, so a skill tree could not be declared by a glob.
+  Fixed, with tests.
+- Installed skill names carry the installation suffix, so upstream cross-references
+  (`superpowers:writing-plans`) no longer match a name exactly. The fork's bootstrap says how to
+  read them. An upstream-faithful name is a plugin concern (step 3). A live run asking the session to follow
+  `superpowers:writing-plans` hung without output (killed after ten minutes), so that reading is
+  unverified.
+- B-187: opencode `hooks` merge into a key opencode does not accept.
 
 **3. Specify the plugin kind.** A specification amendment covering:
 - what an OpenCode plugin is to aart-cli;
