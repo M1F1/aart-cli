@@ -9,11 +9,11 @@
 exclude = ["**/__pycache__", "tests", "scripts", "build", "dist", ".venv"]
 source_roots = ["."]
 exact = true
-forbid_circular_dependencies = false
+forbid_circular_dependencies = true
 
 [[modules]]
 path = "aart_cli"
-depends_on = ["aart_cli.tui_consumer", "aart_cli.registry_commands", "aart_cli.store", "aart_cli.application", "aart_cli.protocol", "aart_cli.domain", "aart_cli.io", "aart_cli.configuration"]
+depends_on = []
 
 [[modules]]
 path = "aart_cli.__main__"
@@ -66,6 +66,10 @@ depends_on = ["aart_cli.redaction", "aart_cli.domain", "aart_cli._default_regist
 [[modules]]
 path = "aart_cli.consumer"
 depends_on = ["aart_cli.application", "aart_cli.install_state", "aart_cli.registry_maintenance", "aart_cli.io", "aart_cli.tui_marketplace", "aart_cli.sources", "aart_cli.compiler", "aart_cli.store", "aart_cli.marketplace", "aart_cli.lifecycle", "aart_cli.protocol", "aart_cli.configuration", "aart_cli.security", "aart_cli.runtime_contract", "aart_cli.installation", "aart_cli.setup_engine", "aart_cli.setup_runtime", "aart_cli.model", "aart_cli.domain", "aart_cli.profiles", "aart_cli.setup"]
+
+[[modules]]
+path = "aart_cli.consumer_actions"
+depends_on = ["aart_cli.domain", "aart_cli.protocol", "aart_cli.io", "aart_cli.configuration", "aart_cli.registry_commands", "aart_cli.application", "aart_cli.tui_consumer", "aart_cli.store"]
 
 [[modules]]
 path = "aart_cli.curation"
@@ -177,7 +181,7 @@ depends_on = ["aart_cli.domain", "aart_cli.protocol"]
 
 [[modules]]
 path = "aart_cli.tui"
-depends_on = ["aart_cli.application", "aart_cli.tui_marketplace", "aart_cli.tui_consumer", "aart_cli.redaction", "aart_cli.commands", "aart_cli.wizard", "aart_cli.configuration", "aart_cli.io", "aart_cli.setup", "aart_cli.tui_failures", "aart_cli.model", "aart_cli.tui_layout", "aart_cli.consumer", "aart_cli.domain", "aart_cli"]
+depends_on = ["aart_cli.application", "aart_cli.tui_marketplace", "aart_cli.tui_consumer", "aart_cli.redaction", "aart_cli.commands", "aart_cli.wizard", "aart_cli.configuration", "aart_cli.io", "aart_cli.setup", "aart_cli.tui_failures", "aart_cli.model", "aart_cli.tui_layout", "aart_cli.consumer", "aart_cli.domain", "aart_cli.consumer_actions"]
 
 [[modules]]
 path = "aart_cli.tui_consumer"

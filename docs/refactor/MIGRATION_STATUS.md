@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-15, CP-29 step 6 (D-409): the import graph is acyclic and tach forbids cycles.**
+- B-186's 21 modules in two cycles are untangled by moving each misplaced module to the layer it
+  acts in. Behaviour is unchanged.
+- `forbid_circular_dependencies = true`, and the unit gate checks the declared graph for cycles.
+- Evidence is in the CP-29 slice, step 6.
+
 **2026-10-15, CP-29 step 5 (D-408): superpowers runs as an OpenCode plugin installed by aart-cli.**
 - The upstream 7.0.0 plugin was vendored into a plugin artifact, published to a local Registry and
   installed into opencode.

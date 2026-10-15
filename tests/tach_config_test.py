@@ -42,6 +42,28 @@ class TachDeclaresTheWholePackageTest(unittest.TestCase):
     def test_domain_reaches_only_the_leaves_the_boundary_test_allows(self) -> None:
         self.assertEqual(_declared()["aart_cli.domain"], DOMAIN_ALLOWED_LEAVES)
 
+    def test_the_declared_graph_has_no_cycle_and_tach_forbids_one(self) -> None:
+        """B-186, D-409: the graph was cut acyclic once, and the flag keeps it that way."""
+
+        declared = _declared()
+        done: set[str] = set()
+
+        def cycle(module: str, path: tuple[str, ...]) -> tuple[str, ...]:
+            if module in path:
+                return (*path[path.index(module) :], module)
+            if module in done:
+                return ()
+            for edge in declared.get(module, ()):
+                found = cycle(edge, (*path, module))
+                if found:
+                    return found
+            done.add(module)
+            return ()
+
+        self.assertEqual([found for module in declared if (found := cycle(module, ()))], [])
+        text = (ROOT / "tach.toml").read_text(encoding="utf-8")
+        self.assertRegex(text, r"(?m)^forbid_circular_dependencies = true$")
+
     def test_tach_is_one_of_the_quality_gates(self) -> None:
         sys.path.insert(0, str(ROOT / "scripts"))
         import quality

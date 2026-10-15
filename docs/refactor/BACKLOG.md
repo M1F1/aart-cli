@@ -4520,7 +4520,10 @@ detect one (CI containers), the Registry Commit screen reads "did not run" and d
 sets a repository identity, as the other promotion tests do. The screen should name the refusal and
 the `git config user.name/user.email` remedy.
 
-## B-186 — twenty-one top-level modules sit in two import cycles
+## B-186 — twenty-one top-level modules sit in two import cycles (resolved, D-409)
+
+**Resolved on 2026-10-15 in CP-29 step 6.** The cycles are broken by moving modules (D-409), and
+`forbid_circular_dependencies` is on. The record below is the state that was found.
 
 With `forbid_circular_dependencies = true`, `tach check` reports 21 modules. The first count here
 said 11, which was wrong: re-measured on 2026-10-15, at the tach commit and after the plugin kind,

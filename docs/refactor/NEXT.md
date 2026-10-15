@@ -4,26 +4,21 @@
 
 **CP-28 is released (0.6.0, then 0.7.0). The active work is CP-29:
 `docs/refactor/slices/CP-29-boundaries-and-opencode-plugins.md`, on
-`feat/cp-29-tach-and-opencode-plugins`.** Its six steps are in `plan.json`:
+`feat/cp-29-tach-and-opencode-plugins`.** Its seven steps are in `plan.json`:
 1. tach as a gate (#32, D-404);
 2. superpowers through Skills and Memory;
 3. the OpenCode plugin kind specified;
 4. the plugin kind implemented;
 5. superpowers as a plugin, checked live;
-6. full verification.
+6. break the import cycles (B-186);
+7. full verification and the PR.
 
-Steps 1–5 are done: superpowers runs as a plugin installed by aart-cli, checked live.
+Steps 1–6 are done: superpowers runs as a plugin installed by aart-cli, checked live. The import
+graph is acyclic, and tach forbids cycles (D-409, B-186 resolved).
 
-**Next is step 6, added at the owner's request: break the import cycles tach reports** (B-186: 21
-modules in two components) and turn on `forbid_circular_dependencies`. Start with the edges that
-point the wrong way:
-- `application` → `registry_commands`/`registry_maintenance`/`marketplace`;
-- `io` → `tui_consumer` (in `consumer_actions`) and `consumer` (in `configured_setup`);
-- `sources` → `application`/`io`;
-- `security` → `marketplace`;
-- then the legacy `cli`/`commands`/`receipt_service`/`setup_verify_probes`/`tui` loop.
-
-Make one commit per edge, with focused tests. Step 7 is the PR, where CI is the full verification.
+**Next is step 7: push `feat/cp-29-tach-and-opencode-plugins` and open the PR.** CI runs the full
+suite as the verification (D-317); the full suite is not run locally. The title is a `feat:`
+Conventional Commit, since the plugin kind is new, and the body carries a COMMIT_OVERRIDE block.
 The live plugin environment is rebuilt by the scratchpad `spp-build.sh`, so it is not in the
 repository. The evidence is in the slice.
 

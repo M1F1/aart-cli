@@ -10327,3 +10327,27 @@ CP-29 step 5. These came out of installing the superpowers fork live:
   `merge-json` proof (`merge_mode: list`, digest of the entry). Without it, a plugin's receipt
   proved no effect, and setup completion was unavailable.
 
+
+## D-409 - the import graph is acyclic by moving modules to the layer they act in
+
+CP-29 step 6, B-186. tach reported 21 top-level modules in two cycles. Every cycle came from a
+module living in the package of its subject rather than of its layer, so the fix moves files and
+changes no behaviour:
+- **Legacy loop.** `build_parser` moved to `cli_parser`; `setup_verify_probes` reads it from there,
+  and `tui._dispatch` resolves `commands.<name>.run` itself instead of importing `cli`.
+- **Registry services.** `application.registry_commands` and `application.registry_publication`
+  only composed `registry_commands` planning. They are `registry_commands.workspace` and
+  `registry_commands.publication_state`, and `application` no longer re-exports them.
+- **Adapters into `io`.** `sources.git` → `io.git_acquisition`, `sources.runtime` →
+  `io.source_runtime`, `curation.runtime` → `io.curation_runtime`, `installation.io` →
+  `io.installation_apply`.
+- **Validation into `registry_maintenance`.** `sources.validation` →
+  `registry_maintenance.source_validation`; it compiles candidates through registry maintenance.
+- **Composition out of `io`.** `io.configured_setup` → `consumer.configured_setup`;
+  `io.consumer_actions`, which composes the whole consumer and maintainer surface, becomes the
+  top-level `consumer_actions`, its own tach module. A top-level file tach does not name joins the
+  root module `aart_cli`, which every module depends on, so an unlisted one recreates a cycle.
+
+`forbid_circular_dependencies = true`. `tests/tach_config_test.py` checks the declared graph is
+acyclic and the flag is set, without tach, in the unit gate. No compatibility imports are left for
+the old paths (CP-26).

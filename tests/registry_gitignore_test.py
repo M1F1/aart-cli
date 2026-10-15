@@ -16,9 +16,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-# B-186: `registry_commands` imported first enters the application/registry cycle half-built, so
-# `application` is loaded before it. Breaking that cycle deletes this line.
-import aart_cli.application  # noqa: F401  # isort: skip
 from aart_cli.registry_commands.templates import REGISTRY_GITIGNORE
 
 _PATTERNS = tuple(

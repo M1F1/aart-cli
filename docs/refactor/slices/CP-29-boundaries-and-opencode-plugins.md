@@ -168,4 +168,29 @@ Found on the way:
 - It then turns on `forbid_circular_dependencies`.
 - The import-order line in `tests/registry_gitignore_test.py` goes too.
 
+Done (D-409), in five commits, one per group of edges:
+- `fd321eb`: the parser moves to `cli_parser`, and `tui`/`setup_verify_probes` stop importing `cli`.
+- `d7bfcb3`: the registry workspace and publication services move into `registry_commands`.
+- `4b7c450`: Git acquisition and source sync move to `io`, candidate validation to
+  `registry_maintenance`.
+- `822d538`: the curation runtime and installation apply adapter move to `io`.
+- `7a8f74d`: `configured_setup` moves to `consumer`, and `consumer_actions` to the top level.
+
+Then `forbid_circular_dependencies = true`, and `tach check` validates every module. A scratchpad
+simulator of the package graph chose the moves before they were made. It confirmed zero cycles for
+the whole set.
+
+Evidence:
+- `tests/tui_dispatch_test.py` proves `tui._dispatch` reaches every `cli.DISPATCH` command through
+  `commands.<name>.run`.
+- `tests/tach_config_test.py` asserts the declared graph is acyclic and the flag is set.
+  - Targeted mutation: an added `aart_cli.io` → `aart_cli.tui` edge turns only that test red. The
+    flag set back to `false` turns it red too.
+- Each cut ran its focused tests: 75, 583, 419, 185+ and 711 tests. Static gates passed: lint,
+  typecheck, format, docs and tach.
+- `tests/registry_gitignore_test.py` imports `registry_commands.templates` directly now.
+- `tests/registry_command_boundary_test.py` scans `registry_commands`, which now holds the
+  publication state. Its docstring described the push in prose, so it was reworded. The code was
+  already free of `git push`.
+
 **7. Full verification** (D-317), once steps 1–6 are done.

@@ -1000,7 +1000,7 @@
         {
           "id": "6",
           "title": "Break the import cycles tach reports (B-186: 21 modules in two components) and turn on forbid_circular_dependencies, at the owner's request",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "7",
