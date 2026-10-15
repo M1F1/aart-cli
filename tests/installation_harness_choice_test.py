@@ -176,7 +176,8 @@ class HarnessTargetScreenTest(unittest.TestCase):
         confirmed = _state(targets=("opencode",))
 
         self.assertIsNone(pending.detail(mismatch))
-        self.assertIs(pending.detail(confirmed), ConsumerScreen.REMEDIATION)
+        # D-403: Ready is the one final review, material changes included.
+        self.assertIs(pending.detail(confirmed), ConsumerScreen.READY)
         for state in (mismatch, confirmed):
             state = replace(state, rows=pending.rows(state))
             self.assertEqual(key_violations(pending, state), ())

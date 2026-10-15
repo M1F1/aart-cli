@@ -449,8 +449,8 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
       (D-284): `1 launcher(s) written` and one `configuration file(s) written` per chosen harness --
       never `2 launcher(s) written` for one server. For the Skill, the deliveries are named as
       harness files, never as `other change`.
-- [ ] Where a Python dependency could be installed by either backend, **Remediation** offers it
-      once, naming the backend that will run (D-283), not `pip` and `uv` as two changes.
+- [ ] Where a Python dependency could be installed by either backend, **Ready** lists it once,
+      naming the backend that will run (D-283), not `pip` and `uv` as two changes.
 - [ ] While the installation runs, the screen names the step running (`▸`) and the ones already
       done (`✓`), counting `(n of m done)`, inside the same frame as every other screen (D-285).
       A short install may pass quickly; `dummy-mcp` into two harnesses is the one to watch.
@@ -460,9 +460,10 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
 - [ ] After each MCP install, inspect the project. OpenCode is registered only in `opencode.json`
       under `mcp`; Tabnine is registered only in `.tabnine/agent/settings.json` under `mcpServers`.
       No unchosen MCP settings file gains `dummy-mcp`.
-- [ ] If **Remediation** appears, it says what AART will change after the final review, and each
-      change names its own subject. `Continue` is its row, never `[ Continue ]` text. A Skill that
-      only configures a harness goes straight to **Ready**, which lists that change (D-258).
+- [ ] There is no separate **Remediation** screen (D-403). Where the install makes a material change
+      (a runtime, a stored credential, network access), **Ready** lists it under `AART will make
+      these changes when you confirm:`, each change naming its own subject, apart by blank lines.
+      A Skill that only configures a harness lists nothing there; `[v]` shows that change.
 - [ ] Installing `dummy-mcp`: **Required Inputs** shows, in Fast, `Disposable dummy credential —
       needed by manual-registry/mcp/dummy-mcp@1.0.0`, what it is for, `Get it: Nothing issues it;
       make up disposable text …` and its format (D-263).
@@ -578,7 +579,7 @@ and II in order and check these links of the chain, each at the step that owns i
   - The focused description shows in Verbose.
   - Artifact Details `i` works.
   - Harnesses are chosen explicitly, one or several.
-  - Remediation says what changes.
+  - Ready lists the changes AART will make (Remediation folded into it, D-403).
 - [ ] **Guided credential entry (step 11).** Screen 07 and the lent terminal show the author's help
       in the same words. The value never appears on screen or in AART's data.
 - [ ] **Success and receipt (step 11).** `View installed`, `View receipt` and `Done` are rows that

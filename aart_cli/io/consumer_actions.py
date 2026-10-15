@@ -65,7 +65,6 @@ from aart_cli.application.consumer_views import (
     offer_python_installers,
     project_lifecycle_plan,
     project_running_installation,
-    remediation_needs_decision,
     target_choice_problems,
 )
 from aart_cli.application.credential_guidance import (
@@ -389,8 +388,6 @@ def _after_inputs(plan: ConsumerPlanView) -> ConsumerScreen:
         for choice in (plan.scope_choice, plan.installer_choice)
     ):
         return ConsumerScreen.REVIEW_SELECTION
-    if remediation_needs_decision(plan):
-        return ConsumerScreen.REMEDIATION
     return ConsumerScreen.READY
 
 

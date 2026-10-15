@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-15, D-401–D-403: the install flow is quieter and has one final review.** Review
+Selection (05) in Fast keeps only what is wrong with the harness choice, without the count of
+Marketplace ticks. Statements on Installing, the MCP test and the Dashboard's recent activity are
+parted by blank lines (D-402). Screen 08 Remediation is gone: Ready lists the material changes it
+agrees to (D-403, §161.5 08/09 and INV-197 amended). Evidence: `tests/remediation_changes_test.py`,
+`tests/statements_breathe_test.py`, `tests/fast_shows_less_test.py`; scoped suites and gates green.
+
 **2026-10-15, D-381: a running screen's defect is no longer hidden by the text fallback.** Opening
 Doctor restarted the TUI in the line terminal. `run_consumer` now degrades only when curses fails
 to start. The underlying Doctor defect still needs the owner's `AART_CLI_DEBUG=1` traceback.

@@ -10197,3 +10197,24 @@ so the merge is a specification change, offered to the operator.
 
 Evidence: `tests/statements_breathe_test.py`. Removing the Remediation blank and restoring the
 old activity heading each turned their tests red.
+
+## D-403 - Remediation folds into Ready
+
+The operator: *"czy daloby sie scalic Remediation i Ready widoki w jeden"*. Remediation (08) was a
+stop whose only row, Continue, opened Ready (09), where the same plan was confirmed. Two Enters
+agreed to one plan.
+
+`ConsumerScreen.REMEDIATION` is removed, along with every route to it (05, 06, 07, the prepared
+action's first screen) and its Continue row and description. Ready lists the plan's material
+changes in every mode, under "AART will make this change / these changes when you confirm:". Each
+change is an outcome naming its subject (`remediation_change`), parted by blank lines (D-402).
+`material_remediations` replaces `remediation_needs_decision`. Routine harness configuration stays
+More info's (D-398). The material-risk sentence (INV-151) is no longer said for a credential or
+network risk that a listed change already names. A risk nothing names is still said.
+
+Specification: §161.5's flow, 08 and 09, the screen tree, INV-197 and the Remediation polish bullet
+are amended. No compatibility for the old screen id is kept (no-backward-compat, CP-26 rules).
+
+Evidence: `tests/remediation_changes_test.py`, rewritten with a property over every remediation
+mix. The flow goes to Ready, and Ready lists exactly the non-routine changes. Emptying the list,
+and dropping the network clause, each turned their tests red.

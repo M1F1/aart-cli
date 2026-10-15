@@ -4509,3 +4509,13 @@ D-400 returns a finished uninstall to Installed. Update (16 → 17 → 26) and R
 → 20 → 26) still end on Activity Details, where Enter opens Receipt Details with the same content
 and Esc walks back into the run that has finished. The same rule would send them to Updates and to
 the Installed Artifact Details or Doctor they started from.
+
+## B-185 — a Registry commit that git refuses for want of an identity does not say so
+
+`aart_cli/io/git.py` runs git with a scrubbed environment (`_safe_environment`: HOME, PATH,
+SSH_AUTH_SOCK, XDG_CONFIG_HOME, SYSTEMROOT), so `GIT_AUTHOR_*` and `GIT_COMMITTER_*` never reach
+it. Where neither the repository nor the user's git config names an identity and git cannot
+detect one (CI containers), the Registry Commit screen reads "did not run" and draws no reason.
+`tests/local_registry_promotion_e2e_test.py` failed on CI for this reason since a8d473d and now
+sets a repository identity, as the other promotion tests do. The screen should name the refusal and
+the `git config user.name/user.email` remedy.

@@ -56,7 +56,6 @@ _WIZARD = frozenset(
         ConsumerScreen.REVIEW_SELECTION,
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.REQUIRED_INPUTS,
-        ConsumerScreen.REMEDIATION,
         ConsumerScreen.READY,
         ConsumerScreen.INSTALLING,
     }

@@ -505,7 +505,7 @@ Each entry records:
       advances directly to the first genuinely required input/remediation decision or Ready.
       CP-20 step 2.
       Fix: inspection still contributes to the immutable plan, while Fast mode advances directly
-      to Required Inputs, Remediation or Ready. Evidence: `tests/consumer_install_flow_shell_test.py`.
+      to Required Inputs or Ready (Remediation folded into Ready, D-403). Evidence: `tests/consumer_install_flow_shell_test.py`.
 
 - [ ] **QA-047 — Success requires backing out of a completed installation wizard.**
       Surface: installation Success. Severity: high. Expected: Enter on Done completes the wizard

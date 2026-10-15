@@ -8843,9 +8843,7 @@ automatic resolution / inspection
    ↓
 Required Inputs       [only if needed]
    ↓
-Remediation           [only if a decision is needed]
-   ↓
-Ready to Install
+Ready to Install      [lists the material changes it agrees to]
    ↓
 Installing
    ↓
@@ -8888,22 +8886,28 @@ secrets for that owner are shown only as `Configured securely`. New targets have
 and secure prompts, including four separate input sets when four harnesses are selected. No
 "same for all" control or cross-installation credential picker is provided.
 
-### 08 Remediation
+### 08 Remediation — folded into 09
 
-Only meaningful choices are surfaced. Example:
+There is no separate Remediation screen. The material changes aart-cli will make to satisfy the
+plan's requirements are listed on Ready to Install, the one final review, because confirming it is
+what agrees to them. Routine derived changes, such as configuring the chosen harness, are not
+listed there in Fast. Example of the list on 09:
 
 ```text
-Python environment required
+AART will make these changes when you confirm:
 
-aart-cli will create an isolated Python environment for 2 MCP servers.
-This will not modify your system Python.
+  - install the python >=3.11 runtime it runs on
 
-[ Continue ]
+  - store the credential it needs securely in macos keychain
 ```
 
 ### 09 Ready to Install
 
-Concise final review summarizes outcomes such as configured MCP servers, isolated environments, installed skills/rules and securely stored credentials. `Show details` exposes the same InstallPlan in Verbose mode.
+Concise final review summarizes outcomes such as configured MCP servers, isolated environments,
+installed skills/rules and securely stored credentials. In every mode it lists each material change
+aart-cli will make once confirmed, as an outcome naming its subject (08). A material risk that no
+listed change already names is still said in plain words (INV-151). `[v]` (More info) exposes the
+same InstallPlan in Verbose mode.
 
 ### 10 Installing
 
@@ -9148,7 +9152,6 @@ Dashboard
 │       └── Install Flow
 │           ├── Review Selection
 │           ├── Required Inputs       [conditional]
-│           ├── Remediation           [conditional]
 │           ├── Ready to Install
 │           ├── Installing
 │           └── Success
@@ -9215,7 +9218,7 @@ only; metadata aggregation in the Credentials view does not permit sharing.
 repair may retain compatible values already belonging to the same complete installation identity.
 Every new installation collects its own inputs, including each target in a bulk install.
 
-**INV-197 — Conditional steps stay conditional.** Required Inputs and Remediation screens exist only when the current plan actually requires user input or a meaningful choice.
+**INV-197 — Conditional steps stay conditional.** The Required Inputs screen exists only when the current plan actually requires user input. Remediation is never a stop of its own: its material changes are listed on Ready to Install, which confirms them (§161.5 08).
 
 **INV-198 — Collection UI preserves semantic identity.** Exact Collection installation and custom member selection remain visibly distinct.
 
@@ -10321,9 +10324,9 @@ not a claim that the existing implementation already satisfies it.
   a separate block, shown under Verbose and collapsed in Fast with `v`, following the later
   all-screen clarification. No description is invented or fetched during rendering.
 - **Remediation:** describe proposed aart-cli changes as actions aart-cli will perform after approval,
-  not unexplained chores the user must perform. Continue is a working control outside explanatory
-  prose. Keep required decisions and material risk visible; routine derived changes do not force
-  a redundant remediation stop when no decision is needed.
+  not unexplained chores the user must perform. They are listed on Ready to Install rather than on a
+  screen of their own, so confirming the final review is the one approval. Keep material changes and
+  material risk visible; routine derived changes stay in Verbose.
 - **Harness targets:** Skill installation always offers explicit choice among eligible harnesses,
   even when exactly one is eligible, and permits selecting multiple eligible targets. Eligibility
   follows artifact compatibility, platform, scope and policy; choosing a subset is user intent.

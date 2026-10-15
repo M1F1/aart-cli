@@ -1,7 +1,7 @@
 """D-402: the statements on a screen are parted by blank lines, and a heading reads as one.
 
 The operator asked, screen by screen, for a blank line after the sentence that opens a list and
-between the things a list holds -- Remediation, Installing, the MCP test's offer and its results --
+between the things a list holds -- Remediation (now on Ready, D-403), Installing, the MCP test's offer and its results --
 and for the Dashboard's recent activity to be marked and laid out as the AART block above it.
 """
 
@@ -24,21 +24,13 @@ from aart_cli.tui_consumer import (
     frame,
     render_mcp_test,
     render_progress,
-    render_remediation,
 )
-from tests.consumer_install_flow_shell_test import plan_view, screens
+from tests.consumer_install_flow_shell_test import screens
 
 INSTALLATIONS = ("company/mcp/github@1.0.0#opencode", "company/mcp/jira@2.0.0#opencode")
 
 
 class StatementsBreatheTest(unittest.TestCase):
-    def test_remediation_parts_its_opening_sentence_from_the_changes(self) -> None:
-        lines = render_remediation(plan_view(), PresentationProfile.FAST)
-
-        self.assertTrue(lines[0].endswith("after you confirm the final review:"))
-        self.assertEqual(lines[1], "")
-        self.assertTrue(lines[2].lstrip().startswith("- "))
-
     def test_progress_parts_its_heading_from_the_steps(self) -> None:
         lines = render_progress(screens().outcome, PresentationProfile.FAST)
 

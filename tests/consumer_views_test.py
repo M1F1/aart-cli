@@ -375,11 +375,9 @@ class HarnessTargetChoiceTest(unittest.TestCase):
         routine = install_flow_screens(project_install_plan(routine_plan))
 
         self.assertIn(ConsumerScreen.REQUIRED_INPUTS, complete)
-        self.assertIn(ConsumerScreen.REMEDIATION, complete)
         self.assertNotIn(ConsumerScreen.AUTOMATIC_INSPECTION, complete)
         self.assertNotIn(ConsumerScreen.AUTOMATIC_INSPECTION, routine)
         self.assertNotIn(ConsumerScreen.REQUIRED_INPUTS, routine)
-        self.assertNotIn(ConsumerScreen.REMEDIATION, routine)
         self.assertEqual(len(input_view), 1)
 
     def test_required_inputs_reuse_config_but_never_display_credential_material(self) -> None:

@@ -1,7 +1,7 @@
 """D-380: once the form is submitted, the install goes forward and never asks for the harness again.
 
-§161.5 orders the fast flow Review Selection, Required Inputs, Remediation only when a decision is
-needed, then Ready. The form used to return to 05, which drew the harness rows a second time, and
+§161.5 orders the fast flow Review Selection, Required Inputs, then Ready, which since D-403 also
+lists the material changes Remediation used to stop for. The form used to return to 05, which drew the harness rows a second time, and
 then to 07 again as a summary, before reaching Ready.
 """
 
@@ -92,8 +92,7 @@ class TheFormGoesForwardE2ETest(unittest.TestCase):
                 ENTER,
                 value,
                 ENTER,
-                # Submit the form, continue past Remediation, confirm Ready. Nothing else.
-                ENTER,
+                # Submit the form, confirm Ready. Nothing else.
                 ENTER,
                 ENTER,
                 actions=handler,

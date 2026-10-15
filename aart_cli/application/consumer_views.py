@@ -143,7 +143,7 @@ __all__ = [
     "settings_from_data",
     "settings_to_data",
     "install_flow_screens",
-    "remediation_needs_decision",
+    "material_remediations",
     "keeps_focus",
     "navigation_targets",
     "project_activity",
@@ -171,6 +171,16 @@ class PresentationProfile(str, Enum):
     FAST = "fast"
     VERBOSE = "verbose"
 
+    @property
+    def toggle_label(self) -> str:
+        """What pressing `v` gives from this profile, not the mode it is in (D-398).
+
+        Declared with the type so the reducer that draws the legend never names a profile, which
+        is the reachability half of INV-149/INV-152.
+        """
+
+        return "Less info" if self is PresentationProfile.VERBOSE else "More info"
+
 
 class ConsumerScreen(str, Enum):
     """The accepted consumer screen catalog, including the 04A customization state."""
@@ -183,7 +193,6 @@ class ConsumerScreen(str, Enum):
     REVIEW_SELECTION = "05-review-selection"
     AUTOMATIC_INSPECTION = "06-automatic-inspection"
     REQUIRED_INPUTS = "07-required-inputs"
-    REMEDIATION = "08-remediation"
     READY = "09-ready"
     INSTALLING = "10-installing"
     SUCCESS = "11-success"
@@ -885,16 +894,16 @@ def consumer_plan_to_data(view: ConsumerPlanView) -> dict[str, object]:
 
 
 #: CP-23 task 08 (D-258): harness configuration is derived from where the artifact is delivered,
-#: so it is disclosed on the final review rather than stopping the flow. Every other remediation
-#: installs software, stores or redirects a credential, or opens network access -- a material
-#: change somebody agrees to on screen 08 before the final review.
+#: so the Harnesses line already says it. Every other remediation installs software, stores or
+#: redirects a credential, or opens network access -- a material change that Ready, the one final
+#: review, lists before it is confirmed (D-403, which folded screen 08 into it).
 ROUTINE_REMEDIATION_KINDS = frozenset({"configure-harness"})
 
 
-def remediation_needs_decision(view: ConsumerPlanView) -> bool:
-    """Whether this plan stops at Remediation (§161.5, INV-197): one rule for every route there."""
+def material_remediations(view: ConsumerPlanView) -> tuple[RemediationView, ...]:
+    """The changes Ready lists in every mode, because confirming it agrees to them (§161.5)."""
 
-    return any(item.kind not in ROUTINE_REMEDIATION_KINDS for item in view.remediations)
+    return tuple(item for item in view.remediations if item.kind not in ROUTINE_REMEDIATION_KINDS)
 
 
 def install_flow_screens(view: ConsumerPlanView) -> tuple[ConsumerScreen, ...]:
@@ -905,8 +914,6 @@ def install_flow_screens(view: ConsumerPlanView) -> tuple[ConsumerScreen, ...]:
     screens = [ConsumerScreen.REVIEW_SELECTION]
     if view.inputs:
         screens.append(ConsumerScreen.REQUIRED_INPUTS)
-    if remediation_needs_decision(view):
-        screens.append(ConsumerScreen.REMEDIATION)
     screens.extend((ConsumerScreen.READY, ConsumerScreen.INSTALLING, ConsumerScreen.SUCCESS))
     return tuple(screens)
 
@@ -2101,16 +2108,13 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.REVIEW_SELECTION: (
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.REQUIRED_INPUTS,
-        ConsumerScreen.REMEDIATION,
         ConsumerScreen.READY,
     ),
     ConsumerScreen.AUTOMATIC_INSPECTION: (
         ConsumerScreen.REQUIRED_INPUTS,
-        ConsumerScreen.REMEDIATION,
         ConsumerScreen.READY,
     ),
-    ConsumerScreen.REQUIRED_INPUTS: (ConsumerScreen.REMEDIATION, ConsumerScreen.READY),
-    ConsumerScreen.REMEDIATION: (ConsumerScreen.READY,),
+    ConsumerScreen.REQUIRED_INPUTS: (ConsumerScreen.READY,),
     ConsumerScreen.READY: (ConsumerScreen.INSTALLING,),
     ConsumerScreen.INSTALLING: (ConsumerScreen.SUCCESS,),
     ConsumerScreen.SUCCESS: (

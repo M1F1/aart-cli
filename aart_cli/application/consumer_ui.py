@@ -28,7 +28,6 @@ from .consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
-    PresentationProfile,
     installer_from_row,
     is_screen_identifier,
     keeps_focus,
@@ -1053,10 +1052,7 @@ def _back(state: ConsumerUiState) -> tuple[ConsumerUiState, tuple[ConsumerUiComm
         quit_pending=False,
         failed_action=None,
         # D-380: going back to 05 is asking to choose again, so the harness is a row there again.
-        inputs_submitted=(
-            state.inputs_submitted
-            and session.screen in (ConsumerScreen.REMEDIATION, ConsumerScreen.READY)
-        ),
+        inputs_submitted=(state.inputs_submitted and session.screen is ConsumerScreen.READY),
     )
     return updated, (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, session.screen),)
 
@@ -2485,9 +2481,6 @@ def key_bindings(
             choices: dict[ConsumerScreen | MaintainerScreen, str] = {}
             if state.session.screen is ConsumerScreen.SUCCESS:
                 choices = dict(SUCCESS_CHOICES)
-            elif state.session.screen is ConsumerScreen.REMEDIATION:
-                # CP-23 task 08: its one row goes on to the final review; nothing is opened.
-                choices = {ConsumerScreen.READY: "Continue"}
             label = choices.get(detail, "Open")
             bindings.append(KeyBinding("Enter", label))
         elif (
@@ -2499,15 +2492,7 @@ def key_bindings(
     if state.session.screen in _SEARCHABLE:
         bindings.append(KeyBinding("/", "Search"))
     if not typing:
-        # Named for what pressing it gives, not for the mode it is in (D-398).
-        bindings.append(
-            KeyBinding(
-                "v",
-                "Less info"
-                if state.session.profile is PresentationProfile.VERBOSE
-                else "More info",
-            )
-        )
+        bindings.append(KeyBinding("v", state.session.profile.toggle_label))
     bindings.extend((KeyBinding("↑/↓", "Move"), KeyBinding("Esc", "Back")))
     if not typing:
         bindings.extend((KeyBinding("?", "Help"), KeyBinding("q", "Quit")))

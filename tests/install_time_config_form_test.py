@@ -573,8 +573,8 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 ENTER,
                 value,
                 ENTER,
-                # Submit, then Remediation and Ready: the form goes forward, not back to 05 (D-380).
-                ENTER,
+                # Submit, then Ready (which holds Remediation's changes since D-403): the form goes
+                # forward, not back to 05 (D-380).
                 ENTER,
                 ENTER,
                 actions=handler,

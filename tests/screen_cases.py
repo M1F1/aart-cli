@@ -77,7 +77,6 @@ RECORDED_SCREENS: tuple[ApplicationScreen, ...] = (
     ConsumerScreen.REVIEW_SELECTION,
     ConsumerScreen.AUTOMATIC_INSPECTION,
     ConsumerScreen.REQUIRED_INPUTS,
-    ConsumerScreen.REMEDIATION,
     ConsumerScreen.READY,
     ConsumerScreen.INSTALLING,
     ConsumerScreen.SUCCESS,

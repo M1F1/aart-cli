@@ -105,6 +105,10 @@ class LocalRegistryPromotionTest(unittest.TestCase):
                 _git(author, "commit", "-qm", "v1")
 
                 _git(registry, "init", "-q", "-b", "main")
+                # The commit runs with a scrubbed environment, so the identity is the repository's,
+                # as in every other promotion test; CI containers cannot auto-detect one.
+                _git(registry, "config", "user.name", "AART Test")
+                _git(registry, "config", "user.email", "aart@example.invalid")
                 common = ("--source", str(registry), "--checkout", str(author), *_SOURCE)
                 steps = (
                     (

@@ -66,10 +66,10 @@ from aart_cli.application.consumer_views import (
     harness_choice_problems,
     installer_from_row,
     installer_row,
+    material_remediations,
     navigation_targets,
     project_collection,
     project_registries,
-    remediation_needs_decision,
     scope_from_row,
     scope_row,
     target_choice_problems,
@@ -133,7 +133,6 @@ from aart_cli.tui_layout import (
     render,
     separate,
     stated,
-    under_item,
 )
 from aart_cli.tui_maintainer import (
     adopted_artifact_detail,
@@ -233,7 +232,6 @@ __all__ = [
     "render_registry",
     "registry_purpose",
     "remediation_change",
-    "render_remediation",
     "render_required_inputs",
     "render_installation_config_form",
     "installation_config_purpose",
@@ -786,38 +784,6 @@ def remediation_change(item: RemediationView) -> str:
     return f"{named}: {subject}" if subject else named
 
 
-def render_remediation(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
-    """Screen 08: the changes AART will make once the final review is confirmed.
-
-    CP-23 task 08 (D-258). Outcomes, not chores: the reader is not asked to prepare anything.
-    The effect vocabulary and owners are Verbose. Each change names its own impact -- the credential,
-    the runtime, the host -- so nothing under the list says it again (D-397). Nothing here promises
-    what the plan does not establish, and Continue is the screen's row, not a line here.
-    """
-
-    if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
-        raise ValueError("remediation rendering needs a consumer plan and presentation profile")
-    if not view.remediations:
-        return ("Nothing needs to be prepared.",)
-    lines = [
-        "AART will make this change after you confirm the final review:"
-        if len(view.remediations) == 1
-        else "AART will make these changes after you confirm the final review:",
-        "",
-    ]
-    for number, item in enumerate(view.remediations, start=1):
-        if number > 1:
-            lines.append("")
-        lines.append(list_item(remediation_change(item)))
-        if profile is PresentationProfile.VERBOSE:
-            lines.append(
-                under_item(
-                    f"{item.summary} ({_human(item.risk)}); owners: {', '.join(item.owners)}",
-                )
-            )
-    return tuple(lines)
-
-
 def _planned_harnesses(view: ConsumerPlanView) -> tuple[str, ...]:
     """The harnesses this plan actually touches, read off the effects rather than the request.
 
@@ -871,15 +837,32 @@ def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[
     if harnesses:
         suffix = " (chosen for this installation)." if view.chosen_targets else "."
         lines.append(f"Harnesses: {', '.join(harnesses)}{suffix}")
-    # The outcomes and the harnesses are the summary (§161.5 09). The remediations, the risk
-    # vocabulary and the review identity are the full plan, which `[v]` opens (D-398). What INV-151
-    # keeps in every mode is a material risk, said once in plain words, and not where a count above
-    # has already said it.
-    counted = " ".join(outcomes)
+    # The outcomes and the harnesses are the summary (§161.5 09). Ready is also the one place the
+    # material changes are agreed to, since screen 08 folded into it (D-403): they are listed under
+    # the summary, a blank line after their sentence and between each (D-402). The risk vocabulary
+    # and the review identity are the full plan, which `[v]` opens (D-398).
+    changes = material_remediations(view)
+    if changes:
+        lines.extend(
+            (
+                "",
+                "AART will make this change when you confirm:"
+                if len(changes) == 1
+                else "AART will make these changes when you confirm:",
+            )
+        )
+        for item in changes:
+            lines.extend(("", list_item(remediation_change(item))))
+        lines.append("")
+    # What INV-151 keeps in every mode is a material risk, said once in plain words, and not where
+    # a count or a listed change above has already said it.
+    said = " ".join((*outcomes, *(item.kind for item in changes)))
     attention = tuple(
         words
         for risk, words in _MATERIAL_RISKS
-        if risk in view.risks and not (risk == "credential-mutation" and "credential" in counted)
+        if risk in view.risks
+        and not (risk == "credential-mutation" and "credential" in said)
+        and not (risk == "network-mutation" and "network" in said)
     )
     if attention:
         lines.append("This install " + ", ".join(attention) + ".")
@@ -2991,7 +2974,6 @@ _PLAN_SCREENS = frozenset(
         ConsumerScreen.REVIEW_SELECTION,
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.REQUIRED_INPUTS,
-        ConsumerScreen.REMEDIATION,
         ConsumerScreen.READY,
         ConsumerScreen.UPDATE_INPUTS,
     }
@@ -3043,11 +3025,6 @@ def _candidate_filter(state: ConsumerUiState) -> MaintainerCandidateFilter:
         else state.candidate_filter.with_query(state.search)
     )
 
-
-_REMEDIATION_CONTINUE = (
-    "Opens Ready to install, the final review: nothing has changed yet, and nothing will "
-    "until you confirm there."
-)
 
 _NO_APPROVED_DESCRIPTION = "No description was approved for this offer."
 
@@ -3176,9 +3153,6 @@ class CanonicalScreenSource:
                 # D-380: the answers were given for these harnesses; what is left is the choice.
                 return (*scopes, *installers)
             return (*eligible, *stale, *scopes, *installers)
-        if screen is ConsumerScreen.REMEDIATION:
-            # CP-23 task 08: Continue is a row, so it is a control rather than a printed string.
-            return () if self._screens.plan is None else (ConsumerScreen.READY.value,)
         if screen is ConsumerScreen.CREDENTIAL_ACTION:
             # CP-23 task 12: the actions the record permits are the rows (D-262).
             record = self._screens.credential(state.focus)
@@ -3574,8 +3548,6 @@ class CanonicalScreenSource:
             # Once the form was submitted its answers are in the plan, so 07 is not asked again.
             if plan.inputs and not state.inputs_submitted:
                 return ConsumerScreen.REQUIRED_INPUTS
-            if remediation_needs_decision(plan):
-                return ConsumerScreen.REMEDIATION
             return ConsumerScreen.READY
         if screen is ConsumerScreen.AUTOMATIC_INSPECTION:
             plan = self._screens.plan
@@ -3583,18 +3555,9 @@ class CanonicalScreenSource:
                 return None
             if plan.inputs:
                 return ConsumerScreen.REQUIRED_INPUTS
-            if remediation_needs_decision(plan):
-                return ConsumerScreen.REMEDIATION
             return ConsumerScreen.READY
         if screen is ConsumerScreen.REQUIRED_INPUTS:
-            plan = self._screens.plan
-            if plan is None:
-                return None
-            return (
-                ConsumerScreen.REMEDIATION
-                if remediation_needs_decision(plan)
-                else ConsumerScreen.READY
-            )
+            return None if self._screens.plan is None else ConsumerScreen.READY
         if screen is ConsumerScreen.USER_INPUT_DETAILS:
             return (
                 ConsumerScreen.CONFIGURATION_TARGETS
@@ -3618,8 +3581,6 @@ class CanonicalScreenSource:
                 and set(state.configuration_targets).issubset(eligible)
                 else None
             )
-        if screen is ConsumerScreen.REMEDIATION:
-            return ConsumerScreen.READY if self._screens.plan is not None else None
         if not isinstance(screen, ConsumerScreen):
             return None
         target = {
@@ -3738,10 +3699,6 @@ class CanonicalScreenSource:
                 None,
             )
             return () if registry is None else registry_purpose(registry)
-        if state.session.screen is ConsumerScreen.REMEDIATION:
-            if state.current_row != ConsumerScreen.READY.value or self.detail(state) is None:
-                return ()
-            return (_REMEDIATION_CONTINUE,)
         if state.session.screen is ConsumerScreen.CREDENTIAL_ACTION:
             record = self._screens.credential(state.focus)
             if record is None or state.current_row not in record.actions:
@@ -3983,10 +3940,6 @@ class CanonicalScreenSource:
             record = screens.credential(state.focus)
             assert record is not None
             return render_credential_action(record, state.session.profile)
-        if screen is ConsumerScreen.REMEDIATION and self.rows(state):
-            # CP-23 task 08: the changes are what this view states; Continue is its row.
-            assert screens.plan is not None
-            return render_remediation(screens.plan, state.session.profile)
         if (
             screen is ConsumerScreen.REVIEW_SELECTION
             and screens.plan is None
@@ -4098,8 +4051,6 @@ class CanonicalScreenSource:
                 f"{target_from_row(row)}"
                 for row in state.rows
             )
-        if screen is ConsumerScreen.REMEDIATION and self.rows(state):
-            return (f"{'>' if state.current_row == ConsumerScreen.READY.value else ' '} Continue",)
         if screen is ConsumerScreen.CREDENTIAL_ACTION and self.rows(state):
             return tuple(
                 f"{'>' if row == state.current_row else ' '} {row.capitalize()}"
@@ -4608,8 +4559,6 @@ class CanonicalScreenSource:
             return render_inspection(plan, profile)
         if screen in (ConsumerScreen.REQUIRED_INPUTS, ConsumerScreen.UPDATE_INPUTS):
             return render_required_inputs(plan.inputs, profile)
-        if screen is ConsumerScreen.REMEDIATION:
-            return render_remediation(plan, profile)
         return render_ready(plan, profile)
 
     def _list(self, state: ConsumerUiState, entries: tuple[str, ...]) -> tuple[str, ...]:
