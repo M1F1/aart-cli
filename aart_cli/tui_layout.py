@@ -357,12 +357,12 @@ def separate(*blocks: Sequence[str]) -> Tuple[str, ...]:
 #: AART's own two-word names. An item opening with one keeps it, because "maintainer Mode" and
 #: "source Sync" read as a sentence that broke a name rather than one that names it (D-386).
 _NAMES = (
-    "Maintainer Mode",
-    "Maintainer Dashboard",
+    "Registry Maintainer Mode",
+    "Registry Maintainer Dashboard",
     "Source Sync",
     "Source Scan",
     "Registry Sync",
-    "Registry Maintainer",
+    "Registry Workspace",
     "Registry Diff",
     "Registry Validation",
     "Promotion Review",

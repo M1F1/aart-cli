@@ -2343,7 +2343,7 @@ class LocalConsumerActions:
                 command,
                 _lines(
                     f"{alias} is an authoring Source, not a registry; "
-                    "its Candidates are promoted in Maintainer Mode"
+                    "its Candidates are promoted in Registry Maintainer Mode"
                 ),
             )
         identity = json.dumps(

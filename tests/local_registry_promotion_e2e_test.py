@@ -192,9 +192,9 @@ class LocalRegistryPromotionTest(unittest.TestCase):
     def test_a_bumped_version_is_promoted_and_committed_into_the_local_registry(self) -> None:
         with self._machine() as (home, registry, _author):
             before = _git(registry, "rev-parse", "HEAD")
-            # Settings → Maintainer Mode on.
+            # Settings → Registry Maintainer Mode on.
             self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 4, ENTER, ESCAPE)
-            # Maintainer Dashboard → Sources → the authoring Source → Source Sync, confirmed.
+            # Registry Maintainer Dashboard → Sources → the authoring Source → Source Sync, confirmed.
             synced = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
             self.assertTrue(synced.screen_containing("/ Source Sync Result"), synced.last)
             # Candidates → the bumped Candidate → its review walk, through to the commit.

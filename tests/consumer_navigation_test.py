@@ -161,15 +161,15 @@ class ConsumerOverviewTest(unittest.TestCase):
         self.assertFalse(settings.maintainer_mode)
         rendered = "\n".join(render_settings(settings))
         self.assertIn("Fast", rendered)
-        self.assertIn("Maintainer Mode: off", rendered)
+        self.assertIn("Registry Maintainer Mode: off", rendered)
         self.assertIn("Experience\n  Detail level: Fast\n\nInstallation", rendered)
         self.assertIn("Updates\n  Show available updates: on\n\nAdvanced", rendered)
         # `QA-087`: what the toggle implies is the state of the view, not a fifth row under the
         # four toggles, so it is no longer part of what the rows render to.
-        self.assertNotIn("Maintainer Mode off hides", rendered)
+        self.assertNotIn("Registry Maintainer Mode off hides", rendered)
         self.assertEqual(
             settings_consequence(settings),
-            ("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
+            ("Registry Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
         )
 
 

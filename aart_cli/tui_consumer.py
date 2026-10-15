@@ -1460,7 +1460,7 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
         "default-scope": f"Default scope: {view.default_scope.title()}",
         "python-installer": f"Python installer: {view.python_installer}",
         "show-updates": f"Show available updates: {'on' if view.show_updates else 'off'}",
-        "maintainer-mode": f"Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
+        "maintainer-mode": f"Registry Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
     }
     headings = {
         "detail-level": "Experience",
@@ -1484,7 +1484,7 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
 
 
 def settings_consequence(view: ConsumerSettings) -> tuple[str, ...]:
-    """What the Maintainer Mode toggle currently implies for the rest of the application.
+    """What the Registry Maintainer Mode toggle currently implies for the rest of the application.
 
     It is a consequence of a setting rather than a setting, so it is the state of the view rather
     than a row -- and a sentence standing under four toggles reads like a fifth one (`QA-087`).
@@ -1494,7 +1494,7 @@ def settings_consequence(view: ConsumerSettings) -> tuple[str, ...]:
         raise ValueError("settings rendering needs consumer settings")
     if view.maintainer_mode:
         return ("Maintainer screens are reachable from the Dashboard.",)
-    return ("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",)
+    return ("Registry Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",)
 
 
 def doctor_rows(view: DoctorView, *, leaving_out: tuple[str, ...] = ()) -> tuple[str, ...]:
@@ -2010,12 +2010,12 @@ _DASHBOARD_DESCRIPTIONS: dict[ApplicationScreen, str] = {
     ),
     ConsumerScreen.ACTIVITY: "Review recorded changes, results and their receipts.",
     ConsumerScreen.DOCTOR: "Inspect health and find the smallest safe repair for detected drift.",
-    ConsumerScreen.SETTINGS: "Choose detail, installation scope and optional Maintainer Mode.",
+    ConsumerScreen.SETTINGS: "Choose detail, installation scope and optional Registry Maintainer Mode.",
     MaintainerScreen.DASHBOARD: "Open advanced source, validation and promotion workflows.",
 }
 
 _REGISTRY_EXPLANATION: tuple[str, ...] = (
-    "Connect an approved Git registry by URL. Local authoring Sources belong in Maintainer Mode.",
+    "Connect an approved Git registry by URL. Local authoring Sources belong in Registry Maintainer Mode.",
 )
 """What a registry is, said on the screen that offers to connect one (`QA-043`)."""
 
@@ -2023,7 +2023,7 @@ _REGISTRY_ADD_INTRO: tuple[str, ...] = (
     "Connect an approved registry. AART validates a fresh snapshot before saving it.",
     # D-350: a Registry repository checked out on this machine is still that Registry, read over
     # a shorter path. What a local *folder of authored files* is has not changed: that is an
-    # authoring Source, and it still belongs in Maintainer Mode.
+    # authoring Source, and it still belongs in Registry Maintainer Mode.
     "A local checkout reads one branch's committed content; your worktree is never read.",
     "",
     # `QA-028`: the empty form says a new one is being made; this says the old ones are not being
@@ -2359,8 +2359,8 @@ def _heading(state: ConsumerUiState) -> str:
     Two places are named differently from the rest, for the same reason in both directions. The home
     Dashboard contributes no step, because `AART` is already its name and `AART / Dashboard /
     Marketplace` says "home" twice. A dashboard passed *through* drops the word, because a dashboard
-    in a trail is the place it is the dashboard of -- which is what turns `AART / Maintainer
-    Dashboard / Sources` into `AART / Maintainer / Sources` and says "Maintainer" once.
+    in a trail is the place it is the dashboard of -- which is what turns `AART / Registry Maintainer
+    Dashboard / Sources` into `AART / Registry Maintainer / Sources` and says it once.
     """
 
     trail = (*state.session.history, state.session.screen)

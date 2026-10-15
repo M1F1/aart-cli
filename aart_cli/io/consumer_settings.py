@@ -1,7 +1,7 @@
 """Where one consumer's screen-28 preferences are kept between sessions.
 
 A Settings screen whose choices vanish when the terminal closes is not a settings screen, and
-Maintainer Mode in particular has to survive a restart to be an opt-in at all: it is the boundary
+Registry Maintainer Mode in particular has to survive a restart to be an opt-in at all: it is the boundary
 that decides whether Sources, Candidates, Promotion and Publish are reachable.
 
 These are preferences, not machine state. Nothing here names an artifact, a registry, a credential

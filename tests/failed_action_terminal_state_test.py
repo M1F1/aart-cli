@@ -271,7 +271,7 @@ class FailedActionShellTest(unittest.TestCase):
             self.assertNotIn("Enter Confirm", stopped)
             self.assertNotIn("press Enter to start it", stopped)
             # The fourth Enter is the way out the screen advertises, and it has to work.
-            self.assertIn("AART / Registry Maintainer", terminal.frames[-1][0])
+            self.assertIn("AART / Registry Workspace", terminal.frames[-1][0])
 
 
 if __name__ == "__main__":

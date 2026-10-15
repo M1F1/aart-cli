@@ -41,7 +41,7 @@ class NumberedListsTest(unittest.TestCase):
             "MCP server",
             "AART home",
             "company/mcp/github@1.0.0",
-            "Maintainer Mode off hides Sources",
+            "Registry Maintainer Mode off hides Sources",
             "Source Sync does not promote Candidates",
         ):
             self.assertEqual(lowercase_first(name), name)

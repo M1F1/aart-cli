@@ -2434,7 +2434,7 @@ class ConsumerSettings:
 
     def with_maintainer_mode(self, enabled: bool) -> ConsumerSettings:
         if not isinstance(enabled, bool):
-            raise ValueError("Maintainer Mode setting must be a boolean")
+            raise ValueError("Registry Maintainer Mode setting must be a boolean")
         return replace(self, maintainer_mode=enabled)
 
     def toggled(self, row: str) -> ConsumerSettings:
@@ -2549,7 +2549,7 @@ SETTING_PURPOSE: dict[str, str] = {
     "show-updates": "Whether the Dashboard counts the installed artifacts a registry "
     "offers a newer version of.",
     "maintainer-mode": "Whether this installation authors artifacts as well as installing "
-    "them, which is what puts Sources, Candidates and Registry Maintainer on the Dashboard.",
+    "them, which is what puts Sources, Candidates and Registry Workspace on the Dashboard.",
 }
 """What each setting changes, for the block `[v]` opens (`QA-097`).
 
@@ -2578,7 +2578,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
 
     A stored preference is read strictly rather than repaired: silently falling back to Fast after
     somebody chose Verbose would be the frontend deciding a detail level for them, and silently
-    falling back on Maintainer Mode is a mode boundary answering itself.
+    falling back on Registry Maintainer Mode is a mode boundary answering itself.
     """
 
     if not isinstance(data, dict):
@@ -2610,7 +2610,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
         return Err(
             (
                 _settings_invalid(
-                    "stored update visibility and Maintainer Mode must be true or false"
+                    "stored update visibility and Registry Maintainer Mode must be true or false"
                 ),
             )
         )

@@ -1,4 +1,4 @@
-"""Pure text renderers for canonical Maintainer Mode projections."""
+"""Pure text renderers for canonical Registry Maintainer Mode projections."""
 
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ def render_maintainer_dashboard(
     if not isinstance(view, MaintainerDashboardView) or not isinstance(
         profile, PresentationProfile
     ):
-        raise ValueError("Maintainer Dashboard rendering needs a view and profile")
+        raise ValueError("Registry Maintainer Dashboard rendering needs a view and profile")
     # `QA-092`: no heading. Four counts and a list of activity are an overview already, and a line
     # that says so is the fault `QA-067` removed from `Navigation:` wearing another name.
     # `QA-096`: each count is a separate statement, so each is separated -- the blank line is what

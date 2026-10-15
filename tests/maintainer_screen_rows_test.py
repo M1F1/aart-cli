@@ -3,7 +3,7 @@
 The audit found the Maintainer lists breaking §167's shared frame the way the Consumer lists had:
 Candidates drew its cursor inside a table gutter no reader of rows would recognise, Validation and
 Bulk Promotion drew no cursor at all, Scan Result and Adopted Artifacts explained their keys in
-prose among the rows, and Candidate Filters, Collection Candidates, Registry Maintainer and the scan
+prose among the rows, and Candidate Filters, Collection Candidates, Registry Workspace and the scan
 grew their rows when `v` was pressed instead of describing the row under the cursor.
 """
 

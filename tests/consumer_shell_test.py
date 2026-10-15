@@ -344,7 +344,7 @@ class ConsumerShellTest(unittest.TestCase):
         self.assertEqual(state.current_row, "maintainer-mode")
         self.assertTrue(state.settings.maintainer_mode)
         self.assertEqual([item.maintainer_mode for item in preferences.kept], [True])
-        self.assertIn("> Maintainer Mode: on", terminal.last)
+        self.assertIn("> Registry Maintainer Mode: on", terminal.last)
         # Every other control is untouched: one keystroke moves one preference.
         self.assertIs(state.settings.profile, PresentationProfile.FAST)
         self.assertEqual(state.settings.default_scope, "project")

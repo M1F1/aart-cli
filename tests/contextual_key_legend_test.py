@@ -74,7 +74,7 @@ class ContextualKeyLegendTest(unittest.TestCase):
             # `QA-071`: a nested view names the parent it was reached through, so the heading is
             # the trail rather than the screen alone.
             any(
-                frame_lines[0] == "AART / Registry Maintainer / Rebuild Registry"
+                frame_lines[0] == "AART / Registry Workspace / Rebuild Registry"
                 for frame_lines in terminal.frames
             )
         )

@@ -703,7 +703,7 @@ class ConsumerUiState:
             isinstance(screen, MaintainerScreen)
             for screen in (self.session.screen, *self.session.history)
         ):
-            raise ValueError("a Maintainer screen needs Maintainer Mode enabled")
+            raise ValueError("a Maintainer screen needs Registry Maintainer Mode enabled")
 
     @property
     def current_row(self) -> str:

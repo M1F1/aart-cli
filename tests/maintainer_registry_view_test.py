@@ -1,4 +1,4 @@
-"""CP-14 step 5: screen 46, the Registry Maintainer View.
+"""CP-14 step 5: screen 46, the Registry Workspace View.
 
 A Maintainer looking at a registry is asking four questions at once: is it valid, what is in it,
 does my local checkout still match it, and what was promoted into it recently.  All four are

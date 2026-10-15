@@ -163,9 +163,9 @@ class MaintainerModeBoundaryTest(unittest.TestCase):
         )
 
         self.assertNotIn(MaintainerScreen.DASHBOARD.value, disabled.rows)
-        self.assertNotIn("Maintainer Dashboard", "\n".join(frame(self.source, disabled)))
+        self.assertNotIn("Registry Maintainer Dashboard", "\n".join(frame(self.source, disabled)))
         self.assertEqual(enabled.rows[-1], MaintainerScreen.DASHBOARD.value)
-        self.assertIn("Maintainer Dashboard", "\n".join(frame(self.source, enabled)))
+        self.assertIn("Registry Maintainer Dashboard", "\n".join(frame(self.source, enabled)))
 
         focused = replace(enabled, cursor=len(enabled.rows) - 1)
         event = key_event("enter", focused, detail=self.source.detail(focused))
@@ -191,7 +191,7 @@ class MaintainerModeBoundaryTest(unittest.TestCase):
             *(DOWN for _ in range(7)),
             ENTER,
             # Counted from the row list rather than written as a number, so adding a setting
-            # above Maintainer Mode moves the cursor rather than silently toggling its neighbour.
+            # above Registry Maintainer Mode moves the cursor rather than silently toggling its neighbour.
             *(DOWN for _ in range(SETTING_ROWS.index("maintainer-mode"))),
             ENTER,
             ESCAPE,
@@ -211,7 +211,10 @@ class MaintainerModeBoundaryTest(unittest.TestCase):
         self.assertIs(finished.session.screen, MaintainerScreen.DASHBOARD)
         self.assertEqual([settings.maintainer_mode for settings in kept], [True])
         self.assertTrue(
-            any("AART / Maintainer Dashboard" in "\n".join(lines) for lines in terminal.frames)
+            any(
+                "AART / Registry Maintainer Dashboard" in "\n".join(lines)
+                for lines in terminal.frames
+            )
         )
 
 

@@ -46,11 +46,13 @@ class WrapTests(unittest.TestCase):
 class SectionTests(unittest.TestCase):
     def test_explanatory_text_breathes_between_both_rules(self) -> None:
         self.assertEqual(
-            layout.section(("Choose detail, installation scope and optional Maintainer Mode.",)),
+            layout.section(
+                ("Choose detail, installation scope and optional Registry Maintainer Mode.",)
+            ),
             (
                 layout.SECTION_RULE,
                 "",
-                "Choose detail, installation scope and optional Maintainer Mode.",
+                "Choose detail, installation scope and optional Registry Maintainer Mode.",
                 "",
                 layout.SECTION_RULE,
             ),

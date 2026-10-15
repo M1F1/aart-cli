@@ -267,7 +267,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             )
 
             self.assertIs(finished.session.screen, MaintainerScreen.SOURCE_DETAILS)
-            self.assertTrue(terminal.screen_containing("/ Maintainer Dashboard"))
+            self.assertTrue(terminal.screen_containing("/ Registry Maintainer Dashboard"))
             self.assertIn("candidates: 1", terminal.screen_containing("ready for promotion:"))
             self.assertIn("authors", terminal.screen_containing("/ Sources"))
             detail = terminal.screen_containing("/ Source Details")
@@ -864,10 +864,10 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertNotIn("[p]", committed)
             self.assertFalse(any("Ready to push" in "\n".join(frame) for frame in terminal.frames))
 
-            # Registry Maintainer draws the local Registry the walk just wrote into.  The local
+            # Registry Workspace draws the local Registry the walk just wrote into.  The local
             # commit is deliberately not a sync, so the checkout is ahead of the synchronized
             # approved snapshot here -- and saying so is the point of the working-tree line.
-            registry = terminal.screen_containing("/ Registry Maintainer")
+            registry = terminal.screen_containing("/ Registry Workspace")
             self.assertIn(env.source.alias.value, registry)
             self.assertIn("Approved versions:", registry)
             self.assertIn("Working tree:", registry)

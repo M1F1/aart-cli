@@ -8758,7 +8758,7 @@ Status: **ACCEPTED**. This catalog is the canonical consumer-side product/intera
 
 Persistent application with left navigation and Fast UX by default. Overview emphasizes installed count, updates, attention and recent activity. Global keys include arrows, Enter, Esc, `/`, `?`, `q`. Contextual shortcuts appear only where relevant.
 
-Maintainer Mode is hidden by default and enabled in Settings. With it disabled, maintainer navigation does not appear.
+Registry Maintainer Mode is hidden by default and enabled in Settings. With it disabled, maintainer navigation does not appear.
 
 ## 161.2 02 Marketplace — ACCEPTED
 
@@ -9100,10 +9100,10 @@ Updates
 [✓] Show available updates
 
 Advanced
-[ ] Maintainer Mode
+[ ] Registry Maintainer Mode
 ```
 
-Maintainer Mode OFF hides Sources, Candidates, Promotion, Registry Diff, Validation and Publish from consumer navigation.
+Registry Maintainer Mode OFF hides Sources, Candidates, Promotion, Registry Diff, Validation and Publish from consumer navigation.
 
 ## 161.11 29 Doctor / Check System — ACCEPTED
 
@@ -9182,10 +9182,10 @@ Dashboard
 │   └── Repair Issues
 │
 └── Settings
-    └── Maintainer Mode toggle
+    └── Registry Maintainer Mode toggle
 ```
 
-Maintainer navigation is added as a separate advanced area only when Maintainer Mode is enabled.
+Maintainer navigation is added as a separate advanced area only when Registry Maintainer Mode is enabled.
 
 ---
 
@@ -9205,7 +9205,7 @@ only; metadata aggregation in the Credentials view does not permit sharing.
 
 **INV-192 — Receipt does not promise universal undo.** Undo, rollback and compensation are offered only when supported by actual effect semantics and retained safe state.
 
-**INV-193 — Maintainer navigation is opt-in.** Maintainer-only concepts remain hidden until Maintainer Mode is enabled.
+**INV-193 — Maintainer navigation is opt-in.** Maintainer-only concepts remain hidden until Registry Maintainer Mode is enabled.
 
 **INV-194 — Doctor uses reconciliation, not reinstall-all.** Environment-wide health checking identifies drift and constructs minimal repairs rather than replaying all installation workflows.
 
@@ -9223,10 +9223,10 @@ Every new installation collects its own inputs, including each target in a bulk 
 
 # 164. Accepted Maintainer TUI Screen Catalog
 
-This section records the canonical Maintainer Mode screens accepted during the screen-by-screen
+This section records the canonical Registry Maintainer Mode screens accepted during the screen-by-screen
 review. Status: **ACCEPTED**.
 
-Maintainer Mode is explicitly enabled from Settings and is intentionally more technical than the
+Registry Maintainer Mode is explicitly enabled from Settings and is intentionally more technical than the
 default consumer experience.
 
 The primary workflow is:
@@ -9265,11 +9265,11 @@ The TUI must preserve the distinction:
 Source ≠ Candidate ≠ Registry ≠ Marketplace
 ```
 
-## 164.1 Screen 30 — Maintainer Dashboard — ACCEPTED
+## 164.1 Screen 30 — Registry Maintainer Dashboard — ACCEPTED
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ aart-cli / Maintainer                                              Verbose       │
+│ aart-cli / Registry Maintainer                                     Verbose       │
 ├───────────────────┬──────────────────────────────────────────────────────────┤
 │ Dashboard         │ Maintainer overview                                      │
 │ Marketplace       │                                                          │
@@ -9456,13 +9456,13 @@ policy and snapshot reproducibility.
 
 Commit is explicit. aart-cli creates the local registry commit.
 
-**Accepted revision, 2026-09-18: Registry Maintainer owns explicit Push.** Push is an action on the
+**Accepted revision, 2026-09-18: Registry Workspace owns explicit Push.** Push is an action on the
 local Registry workspace row on screen 46, not the terminal step of initialization, rebuild or
-promotion. Returning to Registry Maintainer after any of those workflows — or reopening aart-cli later
+promotion. Returning to Registry Workspace after any of those workflows — or reopening aart-cli later
 — derives the same answer from the current checkout. A connected Registry snapshot row, Candidate
 or Source never offers Push.
 
-Registry Maintainer presents three distinct facts rather than collapsing them into one status:
+Registry Workspace presents three distinct facts rather than collapsing them into one status:
 
 - the accepted consumer-visible snapshot and revision read from the Registry's default branch;
 - the local workspace snapshot, branch and exact `HEAD` commit;
@@ -9494,7 +9494,7 @@ default. aart-cli does not merge or open a pull request. Before offering or exec
 resolves the one Git worktree containing the launch workspace and proves that its root is the
 Registry whose reviewed commit the result records.
 If that worktree is a Source or any other repository, aart-cli refuses; it does not continue walking to
-a parent checkout in search of a Registry. Registry Maintainer keeps the local workspace row visible
+a parent checkout in search of a Registry. Registry Workspace keeps the local workspace row visible
 but marks Push unavailable with that reason. Escape or leaving the review without confirming Push
 keeps the operation local.
 
@@ -9509,7 +9509,7 @@ A consumer subscription reads the Registry's default branch. Local promotion and
 branches remain distinct from the approved snapshot that consumer synchronization can activate.
 This TUI revision does not implicitly remove an independently supported CLI publication contract.
 
-## 164.8 Screen 46 — Registry Maintainer View — ACCEPTED
+## 164.8 Screen 46 — Registry Workspace View — ACCEPTED
 
 Maintainer Registry view exposes registry validity, artifact counts by kind, accepted and local
 snapshot state, publication readiness with blocking diagnostics, current-branch publication and
@@ -10311,7 +10311,7 @@ not a claim that the existing implementation already satisfies it.
   occupies its own block below the diff; navigation and review identity do not change on toggle.
 - **Validation:** remove the redundant `p` Policy shortcut. Enter continues the existing review
   path through validation details and policy without bypassing either check.
-- **Publication:** §164.7 gives Registry Maintainer an explicit Push for a clean, gate-valid local
+- **Publication:** §164.7 gives Registry Workspace an explicit Push for a clean, gate-valid local
   Registry commit to a non-default review branch, and explains every reason it is unavailable plus
   any required review/merge before Registry Sync can discover the newly approved version.
 - **Success:** View installed, View receipt, Done and any supported Undo are working controls,

@@ -1,4 +1,4 @@
-"""Pure Maintainer Mode screen identities and forward navigation.
+"""Pure Registry Maintainer Mode screen identities and forward navigation.
 
 The catalog is separate from the consumer catalog because the product makes visibility of the
 whole maintainer surface an explicit preference boundary.  Both catalogs still travel through the
@@ -188,9 +188,9 @@ REGISTRY_STAGE_PURPOSE: dict[str, str] = {
 
 
 class MaintainerScreen(str, Enum):
-    """The accepted Maintainer Mode screen catalog, numbered 30 through 53."""
+    """The accepted Registry Maintainer Mode screen catalog, numbered 30 through 53."""
 
-    DASHBOARD = "30-maintainer-dashboard"
+    DASHBOARD = "30-registry-maintainer-dashboard"
     SOURCES = "31-sources"
     # 31a/31b are the Add Source form and its review, numbered the way screen 21's own addition
     # pair is (B-083).  They are Maintainer screens because a Source is an authoring/discovery
@@ -214,7 +214,7 @@ class MaintainerScreen(str, Enum):
     REGISTRY_DIFF = "43-registry-diff"
     REGISTRY_VALIDATION = "44-registry-validation"
     REGISTRY_COMMIT = "45-registry-commit"
-    REGISTRY = "46-registry-maintainer"
+    REGISTRY = "46-registry-workspace"
     # 46a/46b are the Initialize Registry form and its review, lettered the way 21a/21b and 31a/31b
     # are (B-090).  Screen 46 is where a maintainer looks at the registry this project publishes, so
     # it is where the registry that does not exist yet is created, and the run stays local.  AART

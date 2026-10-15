@@ -10071,3 +10071,22 @@ harnesses and one Skill). Mutations: dropping the non-MCP refusal, the leftover-
 the origin screen each turned their tests red. Dropping the per-installation filter survives,
 because the harness filter of `installations(...)` already excludes the other installation in
 that fixture; the filter stays for two different MCPs ticked in different harnesses.
+
+## D-396 - Registry Maintainer Mode and Registry Maintainer Dashboard
+
+The operator: *"zacznij nazywac Maintainer Dashboard i Maintainer Mode jako Registry Maintainer mode i
+Registry Maintainer Dashboard, bo tu caly czas rozmawiamy o odpaleniu aart-cli w folderze registry
+i zarzadzaniu tym registry z poziomu aart-cli"*. The mode exists to run AART inside a Registry
+checkout and maintain that Registry; "Maintainer" alone did not say what is maintained.
+
+- Every user-facing "Maintainer Mode" and "Maintainer Dashboard" is now "Registry Maintainer Mode"
+  and "Registry Maintainer Dashboard": the Settings row and its consequence line, screen 30's title,
+  the trail (`AART / Registry Maintainer / Sources`), refusals, the Product Specification and the
+  manual test documents. Screen 30's id is `30-registry-maintainer-dashboard`.
+- Screen 46 was itself titled "Registry Maintainer", which would have drawn
+  `AART / Registry Maintainer / Registry Maintainer`. It is renamed for what it shows, the Registry
+  checkout this project publishes: "Registry Workspace" (`46-registry-workspace`, §164.8).
+- Code identifiers (`MaintainerScreen`, `maintainer_mode`, the stored `maintainer-mode` setting)
+  are unchanged: they are not read by anyone, and renaming the stored key would discard a setting
+  for nothing. Historical records (DECISIONS, slices, CHANGELOG) keep the names they were written
+  with.

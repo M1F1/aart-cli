@@ -262,7 +262,7 @@ class RegistriesBlockTest(TestCase):
             _statements(blocks[2]),
             (
                 "connect an approved Git registry by URL. Local authoring Sources belong in "
-                "Maintainer Mode.",
+                "Registry Maintainer Mode.",
                 "no sources are configured.",
                 "marketplace needs an approved registry before it can offer tools.",
                 "choose Add Registry above to connect the first one.",
@@ -309,7 +309,7 @@ class RegistriesBlockTest(TestCase):
         self.assertEqual(
             _statements(blocks[2])[0],
             "connect an approved Git registry by URL. Local authoring Sources belong in "
-            "Maintainer Mode.",
+            "Registry Maintainer Mode.",
         )
 
 
@@ -361,7 +361,7 @@ class SettingsBlockTest(TestCase):
                 "Updates",
                 "  Show available updates: on",
                 "Advanced",
-                "  Maintainer Mode: on",
+                "  Registry Maintainer Mode: on",
             ),
         )
 
@@ -374,7 +374,7 @@ class SettingsBlockTest(TestCase):
         )
         self.assertEqual(
             _statements(off[2]),
-            ("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
+            ("Registry Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
         )
 
 
