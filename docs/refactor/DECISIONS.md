@@ -9781,3 +9781,13 @@ propagates as itself. `run` renders it as a `curses`-stage internal failure, wit
 stderr under `AART_CLI_DEBUG=1`. The defect behind the owner's Doctor failure was not reproduced on
 fixtures: an empty Doctor and one with an MCP needing attention, at five terminal sizes, under a
 real pty. It is found from that report.
+
+Neither path stays silent any more. An internal failure names where the package raised it, as
+`at: aart_cli/<module>.py:<line> in <function>`: a package-relative path, never an absolute one,
+and still without the exception message. It also says that `AART_CLI_DEBUG=1` prints the full
+traceback. The real ERR05 fallback prints, before the text terminal starts, that the full-screen
+terminal could not start. It gives the reason (the cause's type and its redacted message, since a
+terminal's own refusal is about the terminal), where it was raised, and `TERM`. Evidence is
+`tests/tui_fallback_boundary_test.py` (`TheReasonIsAlwaysShownTests`). Two targeted mutations each
+turned exactly one test red: dropping the `at:` line, and reporting the wrapper instead of
+`__cause__`.
