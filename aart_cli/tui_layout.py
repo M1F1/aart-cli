@@ -354,6 +354,21 @@ def separate(*blocks: Sequence[str]) -> Tuple[str, ...]:
     return tuple(joined)
 
 
+#: AART's own two-word names. An item opening with one keeps it, because "maintainer Mode" and
+#: "source Sync" read as a sentence that broke a name rather than one that names it (D-386).
+_NAMES = (
+    "Maintainer Mode",
+    "Maintainer Dashboard",
+    "Source Sync",
+    "Source Scan",
+    "Registry Sync",
+    "Registry Maintainer",
+    "Registry Diff",
+    "Registry Validation",
+    "Promotion Review",
+)
+
+
 def lowercase_first(text: str) -> str:
     """One list item opening in lower case, with names and acronyms left as they are.
 
@@ -365,7 +380,7 @@ def lowercase_first(text: str) -> str:
     """
 
     head = text.lstrip()
-    if not head:
+    if not head or head.startswith(_NAMES):
         return text
     word = head.split(" ", 1)[0].rstrip(",;:.").replace("-", "")
     if not word.isalpha() or not word[0].isupper() or (len(word) > 1 and not word[1:].islower()):

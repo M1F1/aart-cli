@@ -46,7 +46,7 @@ from aart_cli.application.promotion import (
     promotion_source_provenance,
     registry_state_digest,
 )
-from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.configuration.model import ConfiguredSource
 from aart_cli.configuration.policy import redact_text
 from aart_cli.domain.artifacts import ArtifactKind
 from aart_cli.domain.candidates import (
@@ -2657,7 +2657,7 @@ def project_maintainer_source(
 
     if (
         not isinstance(configured, ConfiguredSource)
-        or configured.kind is SourceKind.REGISTRY_GIT
+        or configured.is_registry
         or not isinstance(health, SourceHealth)
         or not (scan is None or isinstance(scan, SourceScan))
     ):

@@ -18,7 +18,7 @@ from aart_cli.application.maintainer_promotion import (
     prepare_candidate_promotion_transaction,
     prepare_promotion_transaction,
 )
-from aart_cli.configuration.model import ConfiguredSource, SourceKind, git_origin_key
+from aart_cli.configuration.model import ConfiguredSource, git_origin_key
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.domain.candidates import CandidateId
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -65,7 +65,7 @@ def _configured_registry(
         (
             item
             for item in effective.configuration.sources
-            if item.enabled and item.kind is SourceKind.REGISTRY_GIT and item.alias == alias
+            if item.enabled and item.is_registry and item.alias == alias
         ),
         None,
     )
@@ -237,7 +237,7 @@ def read_configured_candidate(
         return _error("reading a configured Candidate needs configuration, an ID and data root")
     found: list[CandidateBundle] = []
     for source in effective.configuration.sources:
-        if not source.enabled or source.kind is SourceKind.REGISTRY_GIT:
+        if not source.enabled or source.is_registry:
             continue
         paths = source_store_paths(data_root, source_instance_id(source))
         current = read_current_source(CurrentSourceRequest(paths, source.alias))

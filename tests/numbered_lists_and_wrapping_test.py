@@ -33,7 +33,14 @@ class NumberedListsTest(unittest.TestCase):
         self.assertEqual(lowercase_first("Re-run the build"), "re-run the build")
 
     def test_names_and_acronyms_keep_their_case(self) -> None:
-        for name in ("GitHub token", "MCP server", "AART home", "company/mcp/github@1.0.0"):
+        for name in (
+            "GitHub token",
+            "MCP server",
+            "AART home",
+            "company/mcp/github@1.0.0",
+            "Maintainer Mode off hides Sources",
+            "Source Sync does not promote Candidates",
+        ):
             self.assertEqual(lowercase_first(name), name)
 
     def test_a_status_is_a_numbered_list_of_lower_case_statements(self) -> None:

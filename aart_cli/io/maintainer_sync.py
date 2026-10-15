@@ -144,7 +144,7 @@ def prepare_configured_source_sync(
     ):
         return _error("preparing configured Source Sync needs effective configuration and an alias")
     source = _configured(effective, source_alias)
-    if source is None or source.kind is SourceKind.REGISTRY_GIT:
+    if source is None or source.is_registry:
         return _error(f"authoring Source {source_alias} is not configured and enabled")
     target = effective.configuration.default_registry
     if target is None:

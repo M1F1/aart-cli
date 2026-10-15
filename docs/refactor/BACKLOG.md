@@ -4298,6 +4298,14 @@ Some are correct, because a company-reviewed identity really is a remote host. E
 judged against D-350 with a test that uses a local Registry. Promotion into a local Registry is the
 one most likely to matter.
 
+**Update 2026-10-15 (D-388):** the promotion and Source Sync checks are fixed:
+`io/maintainer_promotion.py`, `io/maintainer_sync.py`, `application/maintainer_sync.py` and
+`application/maintainer_views.py:2660` now use `is_registry`. Still to judge:
+- `tui_sources.py` company-reviewed rows, which need a remote host, so are probably right;
+- the direct-source policy in `tui_sources.py` and `configuration/policy.py:62`;
+- `consumer/runtime.py:565`;
+- `marketplace/catalog.py:104`.
+
 ## B-178 — a narrowed install plan drops its scope and backend choices
 
 **Found 2026-10-14 while fixing the repeated harness choice (D-380).** Status: OPEN.

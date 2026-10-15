@@ -374,7 +374,7 @@ class SettingsBlockTest(TestCase):
         )
         self.assertEqual(
             _statements(off[2]),
-            ("maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
+            ("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
         )
 
 

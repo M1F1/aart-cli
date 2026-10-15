@@ -9899,3 +9899,22 @@ distinct validation digests, each equal to its review. Giving every Candidate th
 evidence turned exactly the two-Candidate test red. #62's clean-checkout and `.venv` point is
 B-181. Its claim that `author check`/`mcp test` exit 0 on `ok: false` does not hold:
 `commands/mcp.py` returns `ERROR` when not ok, and `author check` exits 1.
+
+## D-388 — Promotion and Source Sync treat a local Registry as a Registry
+
+The operator could not update a Registry connected as `registry-local`. Source Sync found the bumped
+version and every review screen drew. Registry Diff then refused with "target registry company is
+not configured and enabled", because `io/maintainer_promotion._configured_registry` looked for the
+target among `registry-git` subscriptions only (B-180). The same kind test made the Maintainer side
+treat a local Registry as an authoring Source: Candidate reads, Source Sync preparation and the
+Source projection all asked "is it `registry-git`?" when they meant "is it a Registry?". All of them
+now use `ConfiguredSource.is_registry`, as D-384 did for the consumer side.
+
+Also in D-386's wording rule: an item opening with one of AART's two-word names (`Maintainer Mode`,
+`Source Sync`, `Source Scan`, `Registry Sync`, ...) keeps its case. A heuristic on the second
+word's case would also have kept `Choose Add Registry`, so the names are listed.
+
+Evidence is `tests/local_registry_promotion_e2e_test.py`. It initializes, promotes and publishes a
+Registry with the CLI, connects it by its local path, bumps the authored version, then walks the
+real composition from Settings through Source Sync and the review screens to the commit. Restoring
+the `registry-git` test in `_configured_registry` alone turned it red.

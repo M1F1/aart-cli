@@ -108,7 +108,7 @@ class MaintainerSourceOnboardingTest(unittest.TestCase):
                     "1. source z-authors added.",
                     "2. run Source Sync to discover artifacts and create or refresh Candidates, "
                     "including new upstream versions. Adding a Source only connects it.",
-                    "3. source Sync does not promote Candidates or update installed artifacts.",
+                    "3. Source Sync does not promote Candidates or update installed artifacts.",
                 ),
             )
 
