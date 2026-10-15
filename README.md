@@ -169,8 +169,8 @@ installing it gives you their code, not this one.
 ## What AART is
 
 A package manager for agent artifacts -- the things an agent is configured with, rather than the
-code it edits. It installs **skills**, **guidelines**, **MCP** servers, **hooks** and **memory**
-into a harness, from a catalog somebody in your organization has reviewed.
+code it edits. It installs **skills**, **guidelines**, **MCP** servers, **hooks**, **memory** and
+OpenCode **plugins** into a harness, from a catalog somebody in your organization has reviewed.
 
 An artifact reaches you through four places that are deliberately not one place. A **Source** is a
 repository an author writes in. Scanning one produces **Candidates**: compiled and validated, not
