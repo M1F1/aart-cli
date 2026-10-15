@@ -13,14 +13,13 @@
 6. break the import cycles (B-186);
 7. full verification and the PR.
 
-Steps 1–6 are done: superpowers runs as a plugin installed by aart-cli, checked live. The import
+Steps 1–7 are done: superpowers runs as a plugin installed by aart-cli, checked live. The import
 graph is acyclic, and tach forbids cycles (D-409, B-186 resolved).
 
-**Next is step 7: push `feat/cp-29-tach-and-opencode-plugins` and open the PR.** CI runs the full
-suite as the verification (D-317); the full suite is not run locally. The title is a `feat:`
-Conventional Commit, since the plugin kind is new, and the body carries a COMMIT_OVERRIDE block.
-The live plugin environment is rebuilt by the scratchpad `spp-build.sh`, so it is not in the
-repository. The evidence is in the slice.
+**CP-29 is complete.** The full `pr-check` passed on #64, run 38796746723. Next is the owner
+merging #64; Release Please then cuts a minor release. After that, the next CP comes from the
+backlog. B-187 (the opencode hook key) and B-188 (setup is unavailable for a registry-local
+source) are the nearest to the plugin path.
 
 ## Before CP-29 (2026-10-14)
 

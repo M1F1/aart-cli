@@ -1005,7 +1005,7 @@
         {
           "id": "7",
           "title": "Run the full quality, integration and release-facing verification only after CP-29's implementation tasks are complete",
-          "status": "todo"
+          "status": "done"
         }
       ]
     }

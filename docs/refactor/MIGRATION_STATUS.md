@@ -4,6 +4,9 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-15, CP-29 step 7: CP-29 is complete.** The full `pr-check` passed on #64 (run
+38796746723). What remains is the owner's merge, and the release Release Please makes from it.
+
 **2026-10-15, CP-29 step 6 (D-409): the import graph is acyclic and tach forbids cycles.**
 - B-186's 21 modules in two cycles are untangled by moving each misplaced module to the layer it
   acts in. Behaviour is unchanged.

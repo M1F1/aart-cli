@@ -194,3 +194,11 @@ Evidence:
   already free of `git push`.
 
 **7. Full verification** (D-317), once steps 1–6 are done.
+
+Done. The full `pr-check` passed on #64, run 38796746723, with gates green on Python 3.10, 3.11 and
+3.14. The first run, 38794729194, failed four unit tests:
+- two boundary scans still read the moved files' old paths;
+- the traceability matrix cited `io/consumer_actions.py`;
+- `quality_gates_test` did not list the `tach` gate from step 1.
+
+All four are fixed in `test(boundaries)`. The PR now waits for the owner's merge.
