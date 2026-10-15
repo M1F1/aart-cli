@@ -27,11 +27,11 @@ from aart_cli.application.consumer_views import (
     project_install_plan,
     target_row,
 )
+from aart_cli.consumer_actions import LocalConsumerActions, _installation_targets
 from aart_cli.domain.effects import RiskClass
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.receipts import receipt_profiles
 from aart_cli.domain.result import Ok
-from aart_cli.io.consumer_actions import LocalConsumerActions, _installation_targets
 from aart_cli.io.receipt_store import LocalReceiptStore
 from aart_cli.tui_consumer import CanonicalScreenSource, frame, render_ready, screens_from
 from tests.configured_install_command_e2e_test import _environment

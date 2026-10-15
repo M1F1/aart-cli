@@ -43,6 +43,13 @@ from .consumer import (
     ConsumerOutcome,
     ConsumerReview,
 )
+from .consumer.configured_setup import ConfiguredSetupService, configured_consumer_completion
+from .consumer_actions import (
+    ConsumerActionContext,
+    LocalConsumerActions,
+    RegistryBootstrapCompletion,
+    RegistryConnectionSnapshot,
+)
 from .domain.harness import Scope
 from .domain.identifiers import ArtifactCoordinate
 from .domain.result import Err as DomainErr
@@ -51,13 +58,6 @@ from .domain.result import Result as DomainResult
 from .io.configured_installation_action import (
     CompletedConfiguredInstallation,
     InstallationHost,
-)
-from .io.configured_setup import ConfiguredSetupService, configured_consumer_completion
-from .io.consumer_actions import (
-    ConsumerActionContext,
-    LocalConsumerActions,
-    RegistryBootstrapCompletion,
-    RegistryConnectionSnapshot,
 )
 from .io.consumer_machine import read_consumer_machine
 from .io.consumer_settings import read_consumer_settings

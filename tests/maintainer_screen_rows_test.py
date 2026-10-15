@@ -285,7 +285,7 @@ class BulkPromotionTest(_Contract):
 
 class RepositoryAdoptionTest(_Contract):
     def test_46d_scan_result_rows_are_what_can_be_adopted(self) -> None:
-        from aart_cli.io.consumer_actions import _project_repository_scan
+        from aart_cli.consumer_actions import _project_repository_scan
 
         source = CanonicalScreenSource(
             ConsumerScreens(screens().dashboard, repository_scan=_project_repository_scan(_scan()))
@@ -298,7 +298,7 @@ class RepositoryAdoptionTest(_Contract):
         self.assertIn("skill/unfinished@1.0.0", status)
 
     def test_46f_adopted_artifacts_are_rows_with_no_key_prose(self) -> None:
-        from aart_cli.io.consumer_actions import _project_adopted_artifact
+        from aart_cli.consumer_actions import _project_adopted_artifact
 
         source = CanonicalScreenSource(
             ConsumerScreens(

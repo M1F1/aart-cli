@@ -29,9 +29,9 @@ from aart_cli.application.consumer_views import (
     project_dashboard,
 )
 from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.consumer_actions import _ELSEWHERE, _refusal
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.result import Err
-from aart_cli.io.consumer_actions import _ELSEWHERE, _refusal
 from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
 from aart_cli.tui_sources import plan_source_addition
 from tests.source_remediation_test import _registry, _view

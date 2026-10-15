@@ -36,9 +36,9 @@ from aart_cli.application.consumer_ui import (
 )
 from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
 from aart_cli.configuration.model import SourceKind
+from aart_cli.consumer_actions import RegistryConnectionSnapshot
 from aart_cli.domain.identifiers import SourceId
 from aart_cli.domain.result import Err, Ok
-from aart_cli.io.consumer_actions import RegistryConnectionSnapshot
 from aart_cli.io.source_store import publish_source_snapshot
 from aart_cli.sources.model import (
     SourcePublishCommand,

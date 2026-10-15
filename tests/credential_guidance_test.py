@@ -54,6 +54,7 @@ from aart_cli.application.installation_inputs import (
     InstallationInputUse,
     compose_installation_inputs,
 )
+from aart_cli.consumer_actions import LocalConsumerActions
 from aart_cli.domain.credentials import (
     CredentialProviderRef,
     CredentialReference,
@@ -77,7 +78,6 @@ from aart_cli.domain.inputs import (
 from aart_cli.domain.installation_owner import installation_owner
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.result import Err, Ok
-from aart_cli.io.consumer_actions import LocalConsumerActions
 from aart_cli.io.execution import CredentialEffectInterpreter
 from aart_cli.tui import _CursesHandover
 from aart_cli.tui_consumer import render_required_inputs

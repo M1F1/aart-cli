@@ -23,7 +23,7 @@ The exception list is a claim about each name in it, so each one states its reas
   boundary for a future explicitly configured Activity telemetry adapter (D-292). The disabled
   adapter is tested now; no runtime imports the module, so its presence cannot opt a user in.
   derived from it, written first in CP-26.19 because the identity has to exist before the input
-  composition can be split per owner. What it replaces is live: ``io/consumer_actions.py`` still
+  composition can be split per owner. What it replaces is live: ``consumer_actions.py`` still
   addresses a Keychain item as ``aart.<hash of the user home>`` with the declared input id, which
   is one item for every harness, scope and Registry alias. That call site cannot adopt this until
   the same step stops grouping one input across artifacts, so this is a dated claim for the

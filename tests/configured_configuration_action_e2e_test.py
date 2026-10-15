@@ -21,6 +21,7 @@ from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
 from aart_cli.application.execution import LifecycleExecutionStatus
 from aart_cli.application.installation_inputs import OwnedInputSource
 from aart_cli.configuration.model import SourceKind
+from aart_cli.consumer_actions import ConsumerActionContext, LocalConsumerActions
 from aart_cli.domain.credentials import CredentialProviderRef
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceId
@@ -38,7 +39,6 @@ from aart_cli.io.configured_installation_action import (
     complete_configured_installation,
     prepare_configured_installation,
 )
-from aart_cli.io.consumer_actions import ConsumerActionContext, LocalConsumerActions
 from aart_cli.io.consumer_machine import read_consumer_machine, read_installed_inspections
 from aart_cli.io.source_store import publish_source_snapshot
 from aart_cli.sources.model import (

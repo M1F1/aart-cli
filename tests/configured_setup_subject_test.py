@@ -7,16 +7,16 @@ import unittest
 from dataclasses import replace
 from unittest import mock
 
+from aart_cli.consumer.configured_setup import (
+    LocalConfiguredSetupAdapter,
+    configured_setup_subject,
+)
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
 from aart_cli.domain.result import Err, Ok
 from aart_cli.installation.model import InstallLocation
 from aart_cli.io.configured_installation_action import InstallationHost
-from aart_cli.io.configured_setup import (
-    LocalConfiguredSetupAdapter,
-    configured_setup_subject,
-)
 from aart_cli.io.receipt_store import LocalReceiptStore
 from aart_cli.io.reference_store import read_references
 from aart_cli.marketplace.model import TrustClass
@@ -238,7 +238,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
             )
 
             with mock.patch(
-                "aart_cli.io.configured_setup._replace_setup_reference",
+                "aart_cli.consumer.configured_setup._replace_setup_reference",
                 return_value=unavailable,
             ):
                 completed = finalize_setup(

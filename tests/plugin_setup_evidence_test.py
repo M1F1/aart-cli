@@ -5,10 +5,10 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
+from aart_cli.consumer.configured_setup import _effect_proofs
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.hooks import PluginEntry
 from aart_cli.domain.receipts import ArtifactSettingsEntry, PlacedArtifactReceipt
-from aart_cli.io.configured_setup import _effect_proofs
 from aart_cli.protocol.hashing import sha256_bytes
 
 COORDINATE = "company/plugin/superpowers"

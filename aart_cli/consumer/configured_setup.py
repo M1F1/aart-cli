@@ -42,7 +42,18 @@ from aart_cli.install_state.model import (
     SourceEvidence,
 )
 from aart_cli.installation.model import InstallLocation
+from aart_cli.io.configured_installation_action import (
+    CompletedConfiguredInstallation,
+    InstallationHost,
+)
+from aart_cli.io.configured_selection import load_configured_approved_marketplace
 from aart_cli.io.installation_apply import LocalInstallAdapter, _lock, _restore, _write_atomic
+from aart_cli.io.installed_setup import read_declared_setup
+from aart_cli.io.object_store import read_object
+from aart_cli.io.receipt_store import LocalReceiptStore
+from aart_cli.io.reference_store import read_references, write_references
+from aart_cli.io.source_store import read_current_source
+from aart_cli.io.store_lock import acquire_store_lock, release_store_lock
 from aart_cli.marketplace.model import TrustClass
 from aart_cli.model import Err as LegacyErr
 from aart_cli.model import SetupState, SetupStateRecord
@@ -74,15 +85,6 @@ from aart_cli.store.model import (
     ReferenceReadRequest,
     object_store_paths,
 )
-
-from .configured_installation_action import CompletedConfiguredInstallation, InstallationHost
-from .configured_selection import load_configured_approved_marketplace
-from .installed_setup import read_declared_setup
-from .object_store import read_object
-from .receipt_store import LocalReceiptStore
-from .reference_store import read_references, write_references
-from .source_store import read_current_source
-from .store_lock import acquire_store_lock, release_store_lock
 
 CONFIGURED_SETUP_INVALID = DiagnosticCode("configured-setup-invalid")
 

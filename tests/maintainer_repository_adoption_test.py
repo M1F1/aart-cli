@@ -168,7 +168,7 @@ class RepositoryAdoptionInteractionTest(unittest.TestCase):
         self.assertEqual(commands[0].repository_scan_draft, draft)
 
     def test_scan_result_is_selectable_and_a_requests_adoption(self) -> None:
-        from aart_cli.io.consumer_actions import _project_repository_scan
+        from aart_cli.consumer_actions import _project_repository_scan
         from aart_cli.tui_consumer import ConsumerScreens
 
         projected = _project_repository_scan(_scan())
@@ -218,7 +218,7 @@ class RepositoryAdoptionInteractionTest(unittest.TestCase):
         self.assertIs(completed.session.screen, MaintainerScreen.SCAN_RESULT)
 
     def test_registry_opens_the_adopted_artifact_list_and_enter_requests_one_check(self) -> None:
-        from aart_cli.io.consumer_actions import _project_adopted_artifact
+        from aart_cli.consumer_actions import _project_adopted_artifact
         from aart_cli.tui_consumer import ConsumerScreens
 
         registry = _state(MaintainerScreen.REGISTRY)
