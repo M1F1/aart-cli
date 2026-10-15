@@ -1449,10 +1449,10 @@ def doctor_rows(view: DoctorView, *, leaving_out: tuple[str, ...] = ()) -> tuple
         raise ValueError("Doctor rendering needs a Doctor view")
     lines: list[str] = []
     for item in view.artifacts:
-        if item.coordinate in leaving_out:
+        if item.row in leaving_out:
             continue
         marker = "✓" if item.health in {"ready", "update"} else "⚠"
-        lines.append(f"{marker} {item.coordinate}")
+        lines.append(f"{marker} {item.row}")
         if item.health in {"attention", "broken"}:
             lines.extend(f"  {drift.component}: {_human(drift.kind)}" for drift in item.drift)
     return tuple(lines)
@@ -1467,7 +1467,7 @@ def doctor_issue_rows(view: DoctorView, rows: tuple[str, ...], current: str) -> 
 
     if not isinstance(view, DoctorView):
         raise ValueError("Doctor rendering needs a Doctor view")
-    artifacts = {item.coordinate: item for item in view.artifacts}
+    artifacts = {item.row: item for item in view.artifacts}
     lines: list[str] = []
     for row in rows:
         lines.append(f"{'>' if row == current else ' '} ⚠ {row}")

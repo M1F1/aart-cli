@@ -2730,9 +2730,11 @@ class DoctorView:
 def project_doctor(artifacts: tuple[InstalledArtifactView, ...]) -> DoctorView:
     if any(not isinstance(item, InstalledArtifactView) for item in artifacts):
         raise ValueError("Doctor projection needs installed artifact views")
-    issues = tuple(item.coordinate for item in artifacts if item.health in {"attention", "broken"})
+    # An issue is an installation, as Installed and repair address it: one artifact installed into
+    # two harnesses is two issues, and keyed by coordinate they were one row twice (§169.3).
+    issues = tuple(item.row for item in artifacts if item.health in {"attention", "broken"})
     repairable = tuple(
-        item.coordinate
+        item.row
         for item in artifacts
         if item.drift and all(drift.repairable for drift in item.drift)
     )

@@ -9791,3 +9791,14 @@ terminal's own refusal is about the terminal), where it was raised, and `TERM`. 
 `tests/tui_fallback_boundary_test.py` (`TheReasonIsAlwaysShownTests`). Two targeted mutations each
 turned exactly one test red: dropping the `at:` line, and reporting the wrapper instead of
 `__cause__`.
+
+## D-382 — Doctor addresses an installation, not an artifact
+
+Implementation choice, 2026-10-15, from an owner report: opening Doctor in the TUI raised
+`ValueError: consumer UI event is invalid`. The D-381 location exposed it. One MCP installed into
+two harnesses, both needing attention, gave Doctor the same coordinate twice as rows, and rows have
+to be distinct. Installed and repair already address an installation as
+`InstalledArtifactView.row` (`coordinate#harness`, §169.3). Doctor's issues, its repairable issues
+and its drawn rows now use that key too, so `r` reaches the installation under the cursor.
+Evidence is `tests/doctor_installation_rows_test.py`. Two targeted mutations each turned one test
+red: issues keyed by coordinate, and the drift lookup keyed by coordinate.
