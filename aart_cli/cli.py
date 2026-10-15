@@ -888,20 +888,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="exact Candidate ID selected during registry scan (repeatable)",
     )
     p_candidate_promote.add_argument(
-        "--validation-report",
-        required=True,
-        dest="promotion_validation_report",
-        metavar="DIGEST",
-        help="canonical SHA-256 digest of validation evidence",
-    )
-    p_candidate_promote.add_argument(
-        "--policy-result",
-        required=True,
-        dest="promotion_policy_result",
-        metavar="DIGEST",
-        help="canonical SHA-256 digest of the effective policy result",
-    )
-    p_candidate_promote.add_argument(
         "--mode",
         choices=("vendored", "referenced"),
         default="vendored",
@@ -1498,8 +1484,6 @@ def _to_request(args: argparse.Namespace) -> Request:
         candidate_source_url=getattr(args, "candidate_source_url", None),
         target_registry_alias=getattr(args, "target_registry_alias", None),
         promotion_candidate_ids=tuple(getattr(args, "promotion_candidate_ids", ()) or ()),
-        promotion_validation_report=getattr(args, "promotion_validation_report", None),
-        promotion_policy_result=getattr(args, "promotion_policy_result", None),
         promotion_mode=getattr(args, "promotion_mode", "vendored"),
         check=bool(getattr(args, "check", False)),
         check_upstream=bool(getattr(args, "check_upstream", False)),

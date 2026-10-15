@@ -23,7 +23,7 @@ from aart_cli.application.consumer_ui import (
 from aart_cli.application.consumer_views import PresentationProfile
 from aart_cli.application.maintainer_views import MaintainerScreen
 from aart_cli.tui_consumer import _reload, frame
-from aart_cli.tui_layout import CONTENT_MEASURE, SECTION_RULE, footer_start
+from aart_cli.tui_layout import CONTENT_MEASURE, SECTION_RULE, footer_start, wrap_lines
 from aart_cli.tui_maintainer import (
     maintainer_candidate_detail,
     render_maintainer_candidates,
@@ -139,13 +139,14 @@ class CandidatesScreenSeparatesTableFromDetailTest(unittest.TestCase):
         tui._CursesTerminal(screen).draw(lines)
 
         painted = [value for _, _, value in screen.written]
-        keys = lines[footer_start(lines) :]
-        self.assertEqual(painted[-len(keys) :], [line[:39] for line in keys])
+        # The legend wraps rather than losing its last keys (D-386), and stays on the bottom rows.
+        keys = wrap_lines(lines[footer_start(lines) :], width=40)
+        self.assertEqual(painted[-len(keys) :], list(keys))
         self.assertTrue(all(len(value) <= 39 for value in painted))
-        self.assertLess(
-            next(i for i, value in enumerate(painted) if value.split()[:1] == ["STATUS"]),
-            next(i for i, value in enumerate(painted) if value.startswith("  Artifact")),
-        )
+        table = next(i for i, value in enumerate(painted) if value.split()[:1] == ["STATUS"])
+        detail = [i for i, value in enumerate(painted) if value.startswith("  Artifact")]
+        # What is clipped is the detail under the table, never the table above it.
+        self.assertTrue(all(table < i for i in detail), painted)
         self.assertFalse(any(value.startswith("  Target registry") for value in painted))
 
 

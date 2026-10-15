@@ -29,6 +29,7 @@ from aart_cli.application.consumer_ui import (
     key_bindings,
     key_event,
     reduce_consumer_ui,
+    selects_rows,
     typing_text,
     workflow_progress,
 )
@@ -65,10 +66,10 @@ from aart_cli.application.consumer_views import (
     harness_choice_problems,
     installer_from_row,
     installer_row,
+    material_remediations,
     navigation_targets,
     project_collection,
     project_registries,
-    remediation_needs_decision,
     scope_from_row,
     scope_row,
     target_choice_problems,
@@ -126,6 +127,9 @@ from aart_cli.tui_layout import (
     cards,
     field_block,
     is_action_prompt,
+    list_item,
+    listed,
+    lowercase_first,
     render,
     separate,
     stated,
@@ -184,6 +188,7 @@ from aart_cli.tui_marketplace import (
 )
 
 __all__ = [
+    "DETAIL_LEVEL_NAMES",
     "CanonicalScreenSource",
     "ConsumerActionCompletion",
     "ConsumerActionHandler",
@@ -227,10 +232,8 @@ __all__ = [
     "render_registry",
     "registry_purpose",
     "remediation_change",
-    "render_remediation",
     "render_required_inputs",
     "render_installation_config_form",
-    "installation_config_status",
     "installation_config_purpose",
     "configuration_review_status",
     "configuration_value_status",
@@ -622,26 +625,32 @@ def _verbose_plan(view: ConsumerPlanView) -> tuple[str, ...]:
         view.selection.explanation,
         "Resolved artifacts:",
     ]
-    lines.extend(f"  - {item}" for item in view.selection.resolved)
+    lines.extend(listed(f"{item}" for item in view.selection.resolved))
     lines.append("Requirements:")
     lines.extend(
-        f"  - {item.id} [{item.state}] ({item.kind}): {item.detail}; owners: "
-        f"{', '.join(item.owners)}"
-        for item in view.requirements
+        listed(
+            f"{item.id} [{item.state}] ({item.kind}): {item.detail}; owners: "
+            f"{', '.join(item.owners)}"
+            for item in view.requirements
+        )
     )
     lines.append("Remediations:")
     lines.extend(
-        f"  - {item.summary}; risk: {_human(item.risk)}; owners: {', '.join(item.owners)}"
-        for item in view.remediations
+        listed(
+            f"{item.summary}; risk: {_human(item.risk)}; owners: {', '.join(item.owners)}"
+            for item in view.remediations
+        )
     )
     if not view.remediations:
-        lines.append("  - none")
+        lines.append("  none")
     lines.append("Effects:")
     lines.extend(
-        f"  - {item.summary}; risk: {_human(item.risk)}; inspectable: "
-        f"{'yes' if item.inspectable else 'no'}; reversible: "
-        f"{'yes' if item.reversible else 'no'}; owners: {', '.join(item.owners)}"
-        for item in view.effects
+        listed(
+            f"{item.summary}; risk: {_human(item.risk)}; inspectable: "
+            f"{'yes' if item.inspectable else 'no'}; reversible: "
+            f"{'yes' if item.reversible else 'no'}; owners: {', '.join(item.owners)}"
+            for item in view.effects
+        )
     )
     risks = ", ".join(_human(item) for item in view.risks) or "read only"
     lines.extend(
@@ -701,9 +710,10 @@ def render_review_selection(
                 f"Selection mode: {_human(selection.mode.value)}",
                 f"Selection identity: {selection.semantic_identity}",
                 f"Platform: {view.platform}",
+                # Kept with the other identities for More info, as on Ready (D-398, D-401).
+                f"Review identity: {view.review_digest}",
             )
         )
-    lines.append(f"Review identity: {view.review_digest}")
     return tuple(lines)
 
 
@@ -774,53 +784,6 @@ def remediation_change(item: RemediationView) -> str:
     return f"{named}: {subject}" if subject else named
 
 
-#: What a change touches that somebody must not miss, kept in Fast in plain words. Harness
-#: configuration is absent: it is routine and derived (D-258), and the change itself names it.
-_REMEDIATION_IMPACT: dict[str, str] = {
-    "configure-credential": ("A credential will be stored; AART never shows its value."),
-    "select-alternative-provider": "A credential will be kept by a different provider.",
-    "install-runtime": "Software will be installed on this machine.",
-    "install-executable": "Software will be installed on this machine.",
-    "install-python-packages": "Software will be installed on this machine.",
-    "configure-network": "Network access will be configured.",
-}
-
-
-def render_remediation(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
-    """Screen 08: the changes AART will make once the final review is confirmed.
-
-    CP-23 task 08 (D-258). Outcomes, not chores: the reader is not asked to prepare anything.
-    The effect vocabulary and owners are Verbose; material impact stays in Fast. Nothing here
-    promises what the plan does not establish, and Continue is the screen's row, not a line here.
-    """
-
-    if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
-        raise ValueError("remediation rendering needs a consumer plan and presentation profile")
-    if not view.remediations:
-        return ("Nothing needs to be prepared.",)
-    lines = [
-        "AART will make this change after you confirm the final review:"
-        if len(view.remediations) == 1
-        else "AART will make these changes after you confirm the final review:"
-    ]
-    for item in view.remediations:
-        lines.append(f"  {remediation_change(item)}")
-        if profile is PresentationProfile.VERBOSE:
-            lines.append(
-                f"    {item.summary} ({_human(item.risk)}); owners: {', '.join(item.owners)}"
-            )
-    impacts = tuple(
-        dict.fromkeys(
-            _REMEDIATION_IMPACT[item.kind]
-            for item in view.remediations
-            if item.kind in _REMEDIATION_IMPACT
-        )
-    )
-    if impacts:
-        lines.extend(("", *impacts))
-    return tuple(lines)
-
-
 def _planned_harnesses(view: ConsumerPlanView) -> tuple[str, ...]:
     """The harnesses this plan actually touches, read off the effects rather than the request.
 
@@ -840,6 +803,24 @@ def _planned_harnesses(view: ConsumerPlanView) -> tuple[str, ...]:
     )
 
 
+#: What each detail level is called where a person reads it: by how much it shows, the words `[v]`
+#: uses, rather than Fast / Verbose (D-398). The stored values keep their names.
+DETAIL_LEVEL_NAMES: dict[PresentationProfile, str] = {
+    PresentationProfile.FAST: "Less info",
+    PresentationProfile.VERBOSE: "More info",
+}
+
+
+#: The risks a Fast review never leaves out (§152.4, INV-151), in the words the reader acts on.
+#: The rest -- local, configuration and executable-install mutations -- are what installing is,
+#: and the counts on screen 09 already name them as outcomes.
+_MATERIAL_RISKS: tuple[tuple[str, str], ...] = (
+    ("credential-mutation", "stores a credential"),
+    ("network-mutation", "changes network access"),
+    ("high-risk-execution", "runs high-risk code"),
+)
+
+
 def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
     """Screen 09. Outcomes in Fast; the same InstallPlan, undiminished, in Verbose."""
 
@@ -856,24 +837,36 @@ def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[
     if harnesses:
         suffix = " (chosen for this installation)." if view.chosen_targets else "."
         lines.append(f"Harnesses: {', '.join(harnesses)}{suffix}")
-    # Compressed, never quieter: this is the screen somebody confirms from, so every risk the plan
-    # carries and every remediation it decided is named here as well as in the full plan.
-    # CP-23 task 08: in the outcome wording Remediation uses, because a plan with only routine
-    # harness configuration skips that screen and this is where those changes are disclosed.
-    if view.remediations:
-        lines.append(
-            "AART will also: "
-            + "; ".join(remediation_change(item) for item in view.remediations)
-            + "."
+    # The outcomes and the harnesses are the summary (§161.5 09). Ready is also the one place the
+    # material changes are agreed to, since screen 08 folded into it (D-403): they are listed under
+    # the summary, a blank line after their sentence and between each (D-402). The risk vocabulary
+    # and the review identity are the full plan, which `[v]` opens (D-398).
+    changes = material_remediations(view)
+    if changes:
+        lines.extend(
+            (
+                "",
+                "AART will make this change when you confirm:"
+                if len(changes) == 1
+                else "AART will make these changes when you confirm:",
+            )
         )
-    risks = ", ".join(_human(item) for item in view.risks) or "read only"
-    lines.extend(
-        (
-            f"Risks: {risks}.",
-            f"Review identity: {view.review_digest}",
-            "Show details for the full plan.",
-        )
+        for item in changes:
+            lines.extend(("", list_item(remediation_change(item))))
+        lines.append("")
+    # What INV-151 keeps in every mode is a material risk, said once in plain words, and not where
+    # a count or a listed change above has already said it.
+    said = " ".join((*outcomes, *(item.kind for item in changes)))
+    attention = tuple(
+        words
+        for risk, words in _MATERIAL_RISKS
+        if risk in view.risks
+        and not (risk == "credential-mutation" and "credential" in said)
+        and not (risk == "network-mutation" and "network" in said)
     )
+    if attention:
+        lines.append("This install " + ", ".join(attention) + ".")
+    lines.append("Press [v] for more info: the full plan.")
     return tuple(lines)
 
 
@@ -890,7 +883,7 @@ def render_running(view: RunningInstallationView, profile: PresentationProfile) 
     ):
         raise ValueError("running rendering needs a running view and presentation profile")
     heading = f"Installing {view.artifact}" if view.artifact else "Installing"
-    lines = [f"{heading} ({view.done} of {view.total} done)"]
+    lines = [f"{heading} ({view.done} of {view.total} done)", ""]
     for item in view.steps:
         mark = _STEP_MARKS.get(item.status, "·")
         if profile is PresentationProfile.VERBOSE:
@@ -908,7 +901,7 @@ def render_progress(view: LifecycleOutcomeView, profile: PresentationProfile) ->
 
     if not isinstance(view, LifecycleOutcomeView) or not isinstance(profile, PresentationProfile):
         raise ValueError("progress rendering needs an outcome view and presentation profile")
-    lines = [f"{_human(view.kind).capitalize()} {view.artifact}"]
+    lines = [f"{_human(view.kind).capitalize()} {view.artifact}", ""]
     for item in view.steps:
         mark = _STEP_MARKS.get(item.status, "·")
         if profile is PresentationProfile.VERBOSE:
@@ -979,6 +972,26 @@ def render_transaction_success(
     return tuple(lines)
 
 
+def _installed_note(key: str, installed: tuple[InstalledArtifactView, ...]) -> str:
+    """Where a Marketplace offer is already installed, after its key (D-394).
+
+    The operator: *"w marketplace chce widziec czy dany artefakt mam juz zainstalowany czy nie"*.
+    The row is otherwise the offer alone (D-385), so this is the one fact added to it: the harnesses
+    holding any version of this artifact, and a health beside one that is not ready. It is read from
+    the installations rather than the offers, because the offers are read once per connection and
+    the installations again after every action.
+    """
+
+    artifact = key.partition("@")[0]
+    held = sorted(
+        (item.harness or "unrecorded harness")
+        + ("" if item.health == "ready" else f" ({_human(item.health)})")
+        for item in installed
+        if item.coordinate.partition("@")[0] == artifact
+    )
+    return "  installed: " + ", ".join(held) if held else ""
+
+
 def render_mcp_test(view: McpTestView | None) -> tuple[str, ...]:
     """Screen 11a: the offer before it runs, and both stages per installation after (§170.4).
 
@@ -989,11 +1002,13 @@ def render_mcp_test(view: McpTestView | None) -> tuple[str, ...]:
     if view is None or not view.installations:
         return ("This install made no MCP installation to test.",)
     if view.results is not None:
-        lines = []
+        # Each result below opens unindented, so the heading is a statement of its own (D-402).
+        lines = ["Test results:", ""]
         for result in view.results:
             lines.append(f"{'✓' if result.passed else '✗'} {result.installation}")
             for stage in result.stages:
                 lines.append(f"  {stage.outcome:<14} {stage.stage}: {stage.reason}")
+            lines.append("")
         lines.append(
             "The installation is unchanged whatever these say; a failed stage is yours to repair "
             "or reconfigure when you choose."
@@ -1001,15 +1016,24 @@ def render_mcp_test(view: McpTestView | None) -> tuple[str, ...]:
         return tuple(lines)
     if not view.plan:
         return ("Preparing the test of: " + ", ".join(view.installations),)
-    lines = ["Confirming starts each installed MCP once and makes one declared call:"]
+    # Blank lines part the statements so each reads on its own, and the heading carries its own
+    # marker: over an indented block `bulleted` would leave it bare (D-402).
+    lines = [
+        list_item(
+            "Confirming starts each installed MCP once and makes one declared call:", indent=""
+        ),
+        "",
+    ]
     for entry in view.plan:
         if entry.tool:
             lines.append(f"  {entry.installation}: {entry.tool} {entry.arguments}")
         else:
             lines.append(f"  {entry.installation}: NOT CONFIGURED (declares no smoke operation)")
+    lines.append("")
     lines.append(
         "Each call reaches that installation's configured service with its own credentials."
     )
+    lines.append("")
     lines.append("Nothing here changes the installation, its receipts or its success.")
     return tuple(lines)
 
@@ -1206,22 +1230,26 @@ def render_installed_artifact(
             "Installation" + (f" — {view.scope.title()} scope" if view.scope else "") + ":"
         )
         lines.extend(
-            f"  - {item.role}: {item.path}"
-            + (f" ({item.harness})" if item.harness else "")
-            + f" — {_human(item.state)}"
-            for item in shown
+            listed(
+                f"{item.role}: {item.path}"
+                + (f" ({item.harness})" if item.harness else "")
+                + f" — {_human(item.state)}"
+                for item in shown
+            )
         )
     if profile is PresentationProfile.VERBOSE:
         lines.append("Ownership:")
-        lines.extend(f"  - {item.kind}: {item.owner}" for item in view.ownership)
+        lines.extend(listed(f"{item.kind}: {item.owner}" for item in view.ownership))
         lines.append("Measured drift:")
         lines.extend(
-            f"  - {item.component}: {_human(item.kind)}; "
-            f"independently repairable: {'yes' if item.repairable else 'no'}"
-            for item in view.drift
+            listed(
+                f"{item.component}: {_human(item.kind)}; "
+                f"independently repairable: {'yes' if item.repairable else 'no'}"
+                for item in view.drift
+            )
         )
         if not view.drift:
-            lines.append("  - none")
+            lines.append("  none")
     return tuple(lines)
 
 
@@ -1241,13 +1269,34 @@ def render_installed_collection(
         lines.append("All members are ready or have an update available.")
     if profile is PresentationProfile.VERBOSE:
         lines.append("Members:")
-        lines.extend(f"  - {item.artifact}: {_human(item.health.value)}" for item in view.members)
+        lines.extend(
+            listed(f"{item.artifact}: {_human(item.health.value)}" for item in view.members)
+        )
     return tuple(lines)
 
 
 def render_lifecycle_plan(view: LifecyclePlanView, profile: PresentationProfile) -> tuple[str, ...]:
     if not isinstance(view, LifecyclePlanView) or not isinstance(profile, PresentationProfile):
         raise ValueError("lifecycle plan rendering needs a view and presentation profile")
+    if view.also:
+        # One reviewed action over several artifacts: each one's plan, then the one confirmation.
+        plans = tuple(
+            _lifecycle_plan_lines(item, profile) for item in (replace(view, also=()), *view.also)
+        )
+        return (
+            f"Review {_human(view.kind)} for {len(plans)} artifacts",
+            "",
+            *separate(*plans),
+            "",
+            "Confirm to apply this exact reviewed plan.",
+        )
+    return (
+        *_lifecycle_plan_lines(view, profile),
+        "Confirm to apply this exact reviewed plan.",
+    )
+
+
+def _lifecycle_plan_lines(view: LifecyclePlanView, profile: PresentationProfile) -> tuple[str, ...]:
     lines = [f"Review {_human(view.kind)} for {view.artifact}"]
     if view.retained:
         reasons = ", ".join(
@@ -1267,25 +1316,24 @@ def render_lifecycle_plan(view: LifecyclePlanView, profile: PresentationProfile)
     if profile is PresentationProfile.VERBOSE:
         lines.append("Drift:")
         lines.extend(
-            f"  - {item.component}: {_human(item.kind)}; repairable: "
-            f"{'yes' if item.repairable else 'no'}"
-            for item in view.drift
+            listed(
+                f"{item.component}: {_human(item.kind)}; repairable: "
+                f"{'yes' if item.repairable else 'no'}"
+                for item in view.drift
+            )
         )
         if not view.drift:
-            lines.append("  - none")
+            lines.append("  none")
         lines.append("Steps:")
         lines.extend(
-            f"  - {item.component}: {item.summary}; risk: {_human(item.risk)}"
-            for item in view.steps
+            listed(
+                f"{item.component}: {item.summary}; risk: {_human(item.risk)}"
+                for item in view.steps
+            )
         )
         if not view.steps:
-            lines.append("  - none")
-    lines.extend(
-        (
-            f"Review identity: {view.review_digest}",
-            "Confirm to apply this exact reviewed plan.",
-        )
-    )
+            lines.append("  none")
+    lines.append(f"Review identity: {view.review_digest}")
     return tuple(lines)
 
 
@@ -1311,9 +1359,11 @@ def render_lifecycle_outcome(
     if profile is PresentationProfile.VERBOSE:
         lines.append("Steps:")
         lines.extend(
-            f"  - {item.component}: {_human(item.effect)} — {_human(item.status)}"
-            + ("" if not item.detail else f" ({item.detail})")
-            for item in view.steps
+            listed(
+                f"{item.component}: {_human(item.effect)} — {_human(item.status)}"
+                + ("" if not item.detail else f" ({item.detail})")
+                for item in view.steps
+            )
         )
     lines.append(f"Review identity: {view.review_digest}")
     return tuple(lines)
@@ -1329,11 +1379,10 @@ def render_dashboard(view: DashboardView) -> tuple[str, ...]:
         f"{view.registry_count} registries — "
         f"{view.credential_attention_count} credentials need attention",
         "",
-        "Recent activity:",
+        # One marked statement like AART's above, its entries the lines under it (D-402).
+        "Recent activity",
+        *(lowercase_first(item) for item in view.recent_activity or ("none yet",)),
     ]
-    lines.extend(f"  - {item}" for item in view.recent_activity)
-    if not view.recent_activity:
-        lines.append("  - none yet")
     return tuple(lines)
 
 
@@ -1398,11 +1447,11 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
     if not isinstance(view, ConsumerSettings) or not isinstance(focus, str):
         raise ValueError("settings rendering needs consumer settings")
     values = {
-        "detail-level": f"Detail level: {view.profile.value.title()}",
+        "detail-level": f"Detail level: {DETAIL_LEVEL_NAMES[view.profile]}",
         "default-scope": f"Default scope: {view.default_scope.title()}",
         "python-installer": f"Python installer: {view.python_installer}",
         "show-updates": f"Show available updates: {'on' if view.show_updates else 'off'}",
-        "maintainer-mode": f"Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
+        "maintainer-mode": f"Registry Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
     }
     headings = {
         "detail-level": "Experience",
@@ -1426,7 +1475,7 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
 
 
 def settings_consequence(view: ConsumerSettings) -> tuple[str, ...]:
-    """What the Maintainer Mode toggle currently implies for the rest of the application.
+    """What the Registry Maintainer Mode toggle currently implies for the rest of the application.
 
     It is a consequence of a setting rather than a setting, so it is the state of the view rather
     than a row -- and a sentence standing under four toggles reads like a fifth one (`QA-087`).
@@ -1436,7 +1485,7 @@ def settings_consequence(view: ConsumerSettings) -> tuple[str, ...]:
         raise ValueError("settings rendering needs consumer settings")
     if view.maintainer_mode:
         return ("Maintainer screens are reachable from the Dashboard.",)
-    return ("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",)
+    return ("Registry Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",)
 
 
 def doctor_rows(view: DoctorView, *, leaving_out: tuple[str, ...] = ()) -> tuple[str, ...]:
@@ -1450,10 +1499,10 @@ def doctor_rows(view: DoctorView, *, leaving_out: tuple[str, ...] = ()) -> tuple
         raise ValueError("Doctor rendering needs a Doctor view")
     lines: list[str] = []
     for item in view.artifacts:
-        if item.coordinate in leaving_out:
+        if item.row in leaving_out:
             continue
         marker = "✓" if item.health in {"ready", "update"} else "⚠"
-        lines.append(f"{marker} {item.coordinate}")
+        lines.append(f"{marker} {item.row}")
         if item.health in {"attention", "broken"}:
             lines.extend(f"  {drift.component}: {_human(drift.kind)}" for drift in item.drift)
     return tuple(lines)
@@ -1468,7 +1517,7 @@ def doctor_issue_rows(view: DoctorView, rows: tuple[str, ...], current: str) -> 
 
     if not isinstance(view, DoctorView):
         raise ValueError("Doctor rendering needs a Doctor view")
-    artifacts = {item.coordinate: item for item in view.artifacts}
+    artifacts = {item.row: item for item in view.artifacts}
     lines: list[str] = []
     for row in rows:
         lines.append(f"{'>' if row == current else ' '} ⚠ {row}")
@@ -1491,7 +1540,7 @@ def doctor_status(view: DoctorView, profile: PresentationProfile) -> tuple[str, 
     # `QA-096`: separate statements, separately -- the blank line is what the status block reads
     # to tell one list item from the next, and a count is not a continuation of the count above it.
     repairable = (
-        ("Independently repairable:", *(f"  - {item}" for item in view.repairable_issues))
+        ("Independently repairable:", *listed(f"{item}" for item in view.repairable_issues))
         if profile is PresentationProfile.VERBOSE and view.repairable_issues
         else ()
     )
@@ -1567,9 +1616,10 @@ def render_installation_config_form(
 ) -> tuple[str, ...]:
     """Screen 07's rows: the editable non-secrets and Continue (INV-067).
 
-    What the form explains, and the credentials a provider will ask for, are not rows a cursor can
-    stand on, so they are :func:`installation_config_status`; what a field binds to is Verbose's
-    description of it, :func:`installation_config_purpose`.
+    One blank line separates each field from the next, as §161.5/07 draws them, so the values of
+    several installations do not run together. Nothing else is said under the form (D-380): the
+    credentials are asked for by their provider, with their guidance, at the moment it asks. What a
+    field binds to is Verbose's description of it, :func:`installation_config_purpose`.
     """
 
     if (
@@ -1581,6 +1631,7 @@ def render_installation_config_form(
     projected = {item.row: item for item in inputs if isinstance(item, ConfigInputView)}
     lines = ["Configuration"] if draft.fields else []
     for field in draft.fields:
+        lines.append("")
         view = projected.get(field.row)
         label = field.id if view is None else view.label
         if view is not None and view.owner:
@@ -1601,41 +1652,9 @@ def render_installation_config_form(
         elif view is not None and view.validation_hint:
             lines.append(f"    {view.validation_hint}")
     mark = ">" if current_row == CONFIG_CONTINUE_ROW else " "
-    readiness = "Review selection" if draft.ready else "Accept every configuration value first"
-    lines.append(f"{mark} Continue: {readiness}")
+    readiness = "Continue" if draft.ready else "Continue: Accept every configuration value first"
+    lines.extend(("", f"{mark} {readiness}"))
     return tuple(lines)
-
-
-def installation_config_status(inputs: tuple[InputView, ...]) -> tuple[str, ...]:
-    """Screen 07's state: why it asks, where the values go, and what the provider will ask for.
-
-    The credential guidance is a Fast fact (D-263): a person needs it before the provider asks.
-    """
-
-    statements: list[tuple[str, ...]] = [
-        ("A few things are needed before installation",),
-        ("These ordinary values will be kept beside the installed artifact, per harness.",),
-    ]
-    credentials = tuple(item for item in inputs if isinstance(item, CredentialInputView))
-    if credentials:
-        statements.append(
-            ("Credentials", "Values stay with the credential provider; AART keeps only references.")
-        )
-    for item in credentials:
-        status = (
-            "Configured securely"
-            if item.health == "present"
-            else (
-                "Enter securely during installation"
-                if item.provider_reference is not None
-                else "Required"
-            )
-        )
-        owner = f" — {item.owner}" if item.owner else ""
-        statements.append(
-            (*credential_guidance_lines(item.guidance), f"{item.label}{owner}: {status}")
-        )
-    return separate(*statements)
 
 
 def installation_config_purpose(
@@ -1675,28 +1694,30 @@ def render_marketplace_artifact(
     )
     lines = [row.key, approval, state, "Eligible installation harnesses"]
     if row.eligible_harnesses:
-        lines.extend(f"  - {harness}" for harness in row.eligible_harnesses)
+        lines.extend(listed(f"{harness}" for harness in row.eligible_harnesses))
     else:
-        lines.append("  - No eligible installation harness is available on this machine.")
+        lines.append("  no eligible installation harness is available on this machine.")
     if row.unavailable_harnesses:
         lines.append("Detected but not eligible")
-        lines.extend(f"  - {harness}" for harness in row.unavailable_harnesses)
+        lines.extend(listed(f"{harness}" for harness in row.unavailable_harnesses))
     if not row.compatible:
         lines.append("Why installation is unavailable")
         lines.extend(
-            f"  - {item.profile}: "
-            + (
-                "; ".join(reason.message for reason in item.reasons)
-                if item.reasons
-                else "no compatible placement is available"
+            listed(
+                f"{item.profile}: "
+                + (
+                    "; ".join(reason.message for reason in item.reasons)
+                    if item.reasons
+                    else "no compatible placement is available"
+                )
+                for item in row.compatibility
             )
-            for item in row.compatibility
         )
     lines.append("What it needs")
     if inputs:
-        lines.extend(f"  - {item.label}" for item in inputs)
+        lines.extend(listed(f"{item.label}" for item in inputs))
     else:
-        lines.append("  - Nothing else before choosing an eligible harness")
+        lines.append("  nothing else before choosing an eligible harness")
     return tuple(lines)
 
 
@@ -1723,7 +1744,7 @@ def render_collection(
         ),
     ]
     if view.inputs:
-        statements.append(("What you will need", *(f"  - {item.label}" for item in view.inputs)))
+        statements.append(("What you will need", *listed(f"{item.label}" for item in view.inputs)))
     statements.append((f"{len(view.selected)} / {len(view.members)} selected",))
     if not view.exact:
         statements.append(
@@ -1824,9 +1845,11 @@ def render_receipt_detail(view: ReceiptDetailView, profile: PresentationProfile)
     if profile is PresentationProfile.VERBOSE:
         lines.append("Effects:")
         lines.extend(
-            f"  - {item.component}: {_human(item.effect)} — {_human(item.status)}"
-            + ("" if not item.detail else f" ({item.detail})")
-            for item in view.steps
+            listed(
+                f"{item.component}: {_human(item.effect)} — {_human(item.status)}"
+                + ("" if not item.detail else f" ({item.detail})")
+                for item in view.steps
+            )
         )
         lines.append(f"Policy identity: {view.policy_digest}")
     lines.append(f"Review identity: {view.review_digest}")
@@ -1939,7 +1962,7 @@ _HELP_LINES: tuple[str, ...] = (
     "[s] Sync or scan repository",
     "[a] Add or adopt",
     "[/] Search",
-    "[v] Fast / Verbose",
+    "[v] More info / less info",
     "[?] Help",
     "[q] Quit",
 )
@@ -1953,6 +1976,7 @@ _REVIEW_SCREENS: frozenset[ApplicationScreen] = frozenset(
         ConsumerScreen.REGISTRY_REVIEW,
         ConsumerScreen.REGISTRY_REMOVE,
         MaintainerScreen.SOURCE_ADD_REVIEW,
+        MaintainerScreen.SOURCE_REMOVE,
         MaintainerScreen.REGISTRY_INIT_REVIEW,
         MaintainerScreen.REGISTRY_REBUILD_REVIEW,
         ConsumerScreen.REGISTRY_SYNC,
@@ -1977,12 +2001,12 @@ _DASHBOARD_DESCRIPTIONS: dict[ApplicationScreen, str] = {
     ),
     ConsumerScreen.ACTIVITY: "Review recorded changes, results and their receipts.",
     ConsumerScreen.DOCTOR: "Inspect health and find the smallest safe repair for detected drift.",
-    ConsumerScreen.SETTINGS: "Choose detail, installation scope and optional Maintainer Mode.",
+    ConsumerScreen.SETTINGS: "Choose detail, installation scope and optional Registry Maintainer Mode.",
     MaintainerScreen.DASHBOARD: "Open advanced source, validation and promotion workflows.",
 }
 
 _REGISTRY_EXPLANATION: tuple[str, ...] = (
-    "Connect an approved Git registry by URL. Local authoring Sources belong in Maintainer Mode.",
+    "Connect an approved Git registry by URL. Local authoring Sources belong in Registry Maintainer Mode.",
 )
 """What a registry is, said on the screen that offers to connect one (`QA-043`)."""
 
@@ -1990,7 +2014,7 @@ _REGISTRY_ADD_INTRO: tuple[str, ...] = (
     "Connect an approved registry. AART validates a fresh snapshot before saving it.",
     # D-350: a Registry repository checked out on this machine is still that Registry, read over
     # a shorter path. What a local *folder of authored files* is has not changed: that is an
-    # authoring Source, and it still belongs in Maintainer Mode.
+    # authoring Source, and it still belongs in Registry Maintainer Mode.
     "A local checkout reads one branch's committed content; your worktree is never read.",
     "",
     # `QA-028`: the empty form says a new one is being made; this says the old ones are not being
@@ -2175,6 +2199,8 @@ def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[s
         return () if purpose is None else (f"Run {stage} only: {purpose}.",)
     if screen is ConsumerScreen.REGISTRY_REMOVE:
         return () if not state.focus else (f"Disconnect {state.focus} from this project.",)
+    if screen is MaintainerScreen.SOURCE_REMOVE:
+        return () if not state.focus else (f"Remove Source {state.focus} from this project.",)
     if screen is ConsumerScreen.CREDENTIAL_REVIEW:
         record = screens.credential(state.focus)
         if record is None:
@@ -2291,7 +2317,12 @@ def compose_frame(source: ConsumerScreenSource, state: ConsumerUiState) -> Frame
     spoken = source.status(state)
     # A screen that already states how much of its own list is selected ("1 / 2 selected") has
     # said it more exactly; the session's bare count would be the same statement twice.
-    if state.selection and not any(line.endswith(" selected") for line in spoken):
+    # And only where rows are ticked, unless more is asked for: on the screens an install passes
+    # through afterwards the count says nothing the reader can act on (D-398).
+    counted = selects_rows(state.session.screen) or (
+        state.session.profile is PresentationProfile.VERBOSE
+    )
+    if counted and state.selection and not any(line.endswith(" selected") for line in spoken):
         session.append((f"{len(state.selection)} selected",))
     if state.quit_pending:
         session.append((f"Discard {len(state.selection)} selected item(s) and quit? y/n",))
@@ -2324,8 +2355,8 @@ def _heading(state: ConsumerUiState) -> str:
     Two places are named differently from the rest, for the same reason in both directions. The home
     Dashboard contributes no step, because `AART` is already its name and `AART / Dashboard /
     Marketplace` says "home" twice. A dashboard passed *through* drops the word, because a dashboard
-    in a trail is the place it is the dashboard of -- which is what turns `AART / Maintainer
-    Dashboard / Sources` into `AART / Maintainer / Sources` and says "Maintainer" once.
+    in a trail is the place it is the dashboard of -- which is what turns `AART / Registry Maintainer
+    Dashboard / Sources` into `AART / Registry Maintainer / Sources` and says it once.
     """
 
     trail = (*state.session.history, state.session.screen)
@@ -2943,7 +2974,6 @@ _PLAN_SCREENS = frozenset(
         ConsumerScreen.REVIEW_SELECTION,
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.REQUIRED_INPUTS,
-        ConsumerScreen.REMEDIATION,
         ConsumerScreen.READY,
         ConsumerScreen.UPDATE_INPUTS,
     }
@@ -2995,11 +3025,6 @@ def _candidate_filter(state: ConsumerUiState) -> MaintainerCandidateFilter:
         else state.candidate_filter.with_query(state.search)
     )
 
-
-_REMEDIATION_CONTINUE = (
-    "Opens Ready to install, the final review: nothing has changed yet, and nothing will "
-    "until you confirm there."
-)
 
 _NO_APPROVED_DESCRIPTION = "No description was approved for this offer."
 
@@ -3124,10 +3149,10 @@ class CanonicalScreenSource:
                 if plan.installer_choice is not None and plan.installer_choice.is_a_choice
                 else ()
             )
+            if state.inputs_submitted:
+                # D-380: the answers were given for these harnesses; what is left is the choice.
+                return (*scopes, *installers)
             return (*eligible, *stale, *scopes, *installers)
-        if screen is ConsumerScreen.REMEDIATION:
-            # CP-23 task 08: Continue is a row, so it is a control rather than a printed string.
-            return () if self._screens.plan is None else (ConsumerScreen.READY.value,)
         if screen is ConsumerScreen.CREDENTIAL_ACTION:
             # CP-23 task 12: the actions the record permits are the rows (D-262).
             record = self._screens.credential(state.focus)
@@ -3520,10 +3545,9 @@ class CanonicalScreenSource:
                 return None
             # Inspection has already happened to produce this immutable plan. It remains
             # available as a detailed projection, but is not a mandatory click-through step.
-            if plan.inputs:
+            # Once the form was submitted its answers are in the plan, so 07 is not asked again.
+            if plan.inputs and not state.inputs_submitted:
                 return ConsumerScreen.REQUIRED_INPUTS
-            if remediation_needs_decision(plan):
-                return ConsumerScreen.REMEDIATION
             return ConsumerScreen.READY
         if screen is ConsumerScreen.AUTOMATIC_INSPECTION:
             plan = self._screens.plan
@@ -3531,18 +3555,9 @@ class CanonicalScreenSource:
                 return None
             if plan.inputs:
                 return ConsumerScreen.REQUIRED_INPUTS
-            if remediation_needs_decision(plan):
-                return ConsumerScreen.REMEDIATION
             return ConsumerScreen.READY
         if screen is ConsumerScreen.REQUIRED_INPUTS:
-            plan = self._screens.plan
-            if plan is None:
-                return None
-            return (
-                ConsumerScreen.REMEDIATION
-                if remediation_needs_decision(plan)
-                else ConsumerScreen.READY
-            )
+            return None if self._screens.plan is None else ConsumerScreen.READY
         if screen is ConsumerScreen.USER_INPUT_DETAILS:
             return (
                 ConsumerScreen.CONFIGURATION_TARGETS
@@ -3566,8 +3581,6 @@ class CanonicalScreenSource:
                 and set(state.configuration_targets).issubset(eligible)
                 else None
             )
-        if screen is ConsumerScreen.REMEDIATION:
-            return ConsumerScreen.READY if self._screens.plan is not None else None
         if not isinstance(screen, ConsumerScreen):
             return None
         target = {
@@ -3686,10 +3699,6 @@ class CanonicalScreenSource:
                 None,
             )
             return () if registry is None else registry_purpose(registry)
-        if state.session.screen is ConsumerScreen.REMEDIATION:
-            if state.current_row != ConsumerScreen.READY.value or self.detail(state) is None:
-                return ()
-            return (_REMEDIATION_CONTINUE,)
         if state.session.screen is ConsumerScreen.CREDENTIAL_ACTION:
             record = self._screens.credential(state.focus)
             if record is None or state.current_row not in record.actions:
@@ -3839,8 +3848,6 @@ class CanonicalScreenSource:
         prose = self._form_prose(state)
         if prose:
             return prose
-        if screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
-            return installation_config_status(screens.installation_inputs)
         if screen is MaintainerScreen.REGISTRY_PUSH and self.rows(state):
             # What is being pushed is the state of the view; the branch field and Continue are the
             # only things the cursor acts on. With no rows there is no actions block at all, so
@@ -3933,17 +3940,17 @@ class CanonicalScreenSource:
             record = screens.credential(state.focus)
             assert record is not None
             return render_credential_action(record, state.session.profile)
-        if screen is ConsumerScreen.REMEDIATION and self.rows(state):
-            # CP-23 task 08: the changes are what this view states; Continue is its row.
-            assert screens.plan is not None
-            return render_remediation(screens.plan, state.session.profile)
         if (
             screen is ConsumerScreen.REVIEW_SELECTION
             and screens.plan is None
             and screens.install_targets
         ):
             problems = self._harness_choice_problems(state)
-            return problems or (
+            if problems or state.session.profile is not PresentationProfile.VERBOSE:
+                # The ticked rows are the choice; restating them, and what comes after, is for
+                # More info (D-401). A choice that cannot continue still says why.
+                return problems
+            return (
                 f"Installing into: {', '.join(state.targets)}",
                 "Configuration for these harnesses is asked next.",
             )
@@ -3954,7 +3961,9 @@ class CanonicalScreenSource:
         ):
             problems = target_choice_problems(screens.plan, state.targets)
             target_status = (
-                problems if problems else (f"Installing into: {', '.join(state.targets)}",)
+                problems
+                if problems or state.session.profile is not PresentationProfile.VERBOSE
+                else (f"Installing into: {', '.join(state.targets)}",)
             )
             return separate(
                 render_review_selection(screens.plan, state.session.profile),
@@ -4042,8 +4051,6 @@ class CanonicalScreenSource:
                 f"{target_from_row(row)}"
                 for row in state.rows
             )
-        if screen is ConsumerScreen.REMEDIATION and self.rows(state):
-            return (f"{'>' if state.current_row == ConsumerScreen.READY.value else ' '} Continue",)
         if screen is ConsumerScreen.CREDENTIAL_ACTION and self.rows(state):
             return tuple(
                 f"{'>' if row == state.current_row else ' '} {row.capitalize()}"
@@ -4297,7 +4304,9 @@ class CanonicalScreenSource:
             return self._list(
                 state,
                 tuple(
-                    f"{key}  {self._summary(offered[key])}" for key in state.rows if key in offered
+                    key + _installed_note(key, screens.installed)
+                    for key in state.rows
+                    if key in offered
                 ),
             )
         if screen is ConsumerScreen.ARTIFACT_DETAILS:
@@ -4550,8 +4559,6 @@ class CanonicalScreenSource:
             return render_inspection(plan, profile)
         if screen in (ConsumerScreen.REQUIRED_INPUTS, ConsumerScreen.UPDATE_INPUTS):
             return render_required_inputs(plan.inputs, profile)
-        if screen is ConsumerScreen.REMEDIATION:
-            return render_remediation(plan, profile)
         return render_ready(plan, profile)
 
     def _list(self, state: ConsumerUiState, entries: tuple[str, ...]) -> tuple[str, ...]:

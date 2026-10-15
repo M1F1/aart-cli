@@ -92,7 +92,8 @@ class ConsumerActionShellTest(unittest.TestCase):
         self.assertTrue(finished.exited)
         self.assertEqual(handler.commands[0].kind, ConsumerUiCommandKind.PREPARE_ACTION)
         self.assertTrue(terminal.screen_containing("unique artifact(s) will be installed"))
-        self.assertTrue(terminal.screen_containing(f"Review identity: {REVIEW}"))
+        # The review identity is More info's since D-401; the plan's count above is what proves
+        # the prepared source, not the catalog, was drawn.
 
     def test_execution_draws_progress_then_refreshes_the_source_and_opens_the_result(self) -> None:
         handler = FakeActionHandler()

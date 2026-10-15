@@ -1,6 +1,6 @@
 """B-090/QA-016: a Maintainer can create the registry the rest of the mode needs, in the TUI.
 
-Maintainer Mode could promote into a registry and audit one, but had no way to bring one into
+Registry Maintainer Mode could promote into a registry and audit one, but had no way to bring one into
 existence: the operator left for a terminal, ran five separate `aart-cli registry` commands in the
 right order, and came back.  Screen 46 now owns that: one form, one review, and one run of
 init -> lock -> build -> validate -> audit against the project checkout.

@@ -128,7 +128,11 @@ class InstallFlowScreenTest(unittest.TestCase):
         fast = drawn(ConsumerScreen.REVIEW_SELECTION)
 
         self.assertIn("company/mcp/github@1.0.0", fast)
-        self.assertIn("Review identity:", fast)
+        # D-401: the identity is More info's, as on Ready.
+        self.assertNotIn("Review identity:", fast)
+        self.assertIn(
+            "Review identity:", drawn(ConsumerScreen.REVIEW_SELECTION, PresentationProfile.VERBOSE)
+        )
 
     def test_inspection_reports_what_it_found_without_asking_anything(self):
         fast = drawn(ConsumerScreen.AUTOMATIC_INSPECTION)
@@ -145,11 +149,11 @@ class InstallFlowScreenTest(unittest.TestCase):
         self.assertIn("Configured securely", fast)
         self.assertNotIn("value", fast.lower())
 
-    def test_remediation_surfaces_only_the_choice_and_what_it_will_not_touch(self):
-        fast = drawn(ConsumerScreen.REMEDIATION)
+    def test_ready_lists_the_changes_it_agrees_to_since_remediation_folded_into_it(self):
+        fast = drawn(ConsumerScreen.READY)
 
-        self.assertIn("credential", fast.lower())
-        self.assertIn("Continue", fast)
+        self.assertIn("AART will make this change when you confirm:", fast)
+        self.assertIn("store the credential", fast)
 
     def test_ready_summarises_outcomes_and_verbose_shows_the_same_plan(self):
         fast = drawn(ConsumerScreen.READY)
@@ -157,7 +161,9 @@ class InstallFlowScreenTest(unittest.TestCase):
 
         self.assertIn("securely", fast.lower())
         self.assertNotIn("copy-tree", fast)
-        self.assertIn("Review identity:", fast)
+        # D-398: the review identity is the full plan's, behind `[v]`.
+        self.assertNotIn("Review identity:", fast)
+        self.assertIn("Review identity:", verbose)
         self.assertIn("Effects:", verbose)
 
     def test_progress_is_meaningful_rather_than_a_log_until_verbose(self):

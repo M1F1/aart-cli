@@ -167,7 +167,7 @@ class ConsumerSessionTest(InstalledFixture):
 
         self.assertIn("1 installed", drawn)
         self.assertIn("1 ready", drawn)
-        self.assertIn("Installed public/mcp/github@1.5.0", drawn)
+        self.assertIn("installed public/mcp/github@1.5.0", drawn)
 
     def test_installed_lists_the_collection_that_asked_for_the_artifact_and_the_artifact(self):
         drawn = self.drawn(ConsumerScreen.INSTALLED)

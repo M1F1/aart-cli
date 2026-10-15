@@ -152,7 +152,7 @@ class HarnessTargetScreenTest(unittest.TestCase):
         self.assertIn("[ ] opencode", drawn)
         self.assertIn("[ ] tabnine", drawn)
         self.assertIn("unique artifact(s) will be installed", drawn)
-        self.assertIn("Choose at least one harness to install into.", drawn)
+        self.assertIn("choose at least one harness to install into.", drawn)
         # D-270: Enter is offered once it advances; until then the status says what is missing.
         self.assertNotIn("[Enter]", drawn)
         self.assertEqual(key_violations(source, state), ())
@@ -176,13 +176,19 @@ class HarnessTargetScreenTest(unittest.TestCase):
         confirmed = _state(targets=("opencode",))
 
         self.assertIsNone(pending.detail(mismatch))
-        self.assertIs(pending.detail(confirmed), ConsumerScreen.REMEDIATION)
+        # D-403: Ready is the one final review, material changes included.
+        self.assertIs(pending.detail(confirmed), ConsumerScreen.READY)
         for state in (mismatch, confirmed):
             state = replace(state, rows=pending.rows(state))
             self.assertEqual(key_violations(pending, state), ())
         confirmed = replace(confirmed, rows=pending.rows(confirmed))
         self.assertIn("[Enter] Continue", "\n".join(frame(pending, confirmed)))
-        self.assertIn("Installing into: opencode", "\n".join(pending.status(confirmed)))
+        # D-401: the ticked row is the choice; Fast does not restate it, More info does.
+        self.assertNotIn("Installing into", "\n".join(pending.status(confirmed)))
+        verbose = replace(
+            confirmed, session=confirmed.session.switch_profile(PresentationProfile.VERBOSE)
+        )
+        self.assertIn("Installing into: opencode", "\n".join(pending.status(verbose)))
 
     def test_verbose_cursor_description_names_artifacts_the_harness_can_host(self) -> None:
         source = _source()

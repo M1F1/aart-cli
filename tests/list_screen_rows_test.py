@@ -81,7 +81,7 @@ class SettingsRowsTest(unittest.TestCase):
                 self.assertEqual(toggle_violations(source, drawn), ())
         changed = set(source.actions(_verbose(state))) - set(source.actions(state))
 
-        self.assertEqual(changed, {"> Detail level: Verbose"})
+        self.assertEqual(changed, {"> Detail level: More info"})
 
 
 class CollectionRowsTest(unittest.TestCase):

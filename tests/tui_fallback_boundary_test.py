@@ -258,5 +258,87 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         self.assertIs(fallback.call_args.args[0], composed.return_value.value)
 
 
+class RunConsumerBoundaryTests(unittest.TestCase):
+    """`run_consumer` degrades only when curses itself cannot start.
+
+    A defect raised by a screen after the application is running used to be wrapped as
+    `CursesUnavailable`, because the only test was whether the shell had *finished*. `run` then
+    restarted the whole application in the line terminal, at the Dashboard, and the defect itself
+    was never reported. Opening Doctor did exactly that on an owner's machine.
+    """
+
+    def _actions(self) -> mock.Mock:
+        actions = mock.Mock()
+        actions.terminal_handover = None
+        return actions
+
+    def test_a_defect_in_a_running_screen_propagates_as_itself(self) -> None:
+        def wrapper(function):
+            return function(mock.Mock())
+
+        with (
+            mock.patch("curses.wrapper", side_effect=wrapper),
+            mock.patch("curses.set_escdelay"),
+            mock.patch.object(tui, "opening_state", return_value=None),
+            mock.patch.object(tui, "run_consumer_shell", side_effect=ValueError("broken Doctor")),
+        ):
+            with self.assertRaises(ValueError):
+                tui.run_consumer(self._actions())
+
+    def test_curses_that_cannot_start_is_still_unavailable(self) -> None:
+        with (
+            mock.patch("curses.wrapper", side_effect=RuntimeError("setupterm failed")),
+            mock.patch("curses.set_escdelay"),
+        ):
+            with self.assertRaises(tui.CursesUnavailable):
+                tui.run_consumer(self._actions())
+
+
+class TheReasonIsAlwaysShownTests(unittest.TestCase):
+    """Without a reason on screen, a fallback or a crash cannot be diagnosed by whoever met it."""
+
+    def _raised_here(self) -> BaseException:
+        try:
+            tui._ellipsize(None, 5)  # type: ignore[arg-type]  # noqa: SLF001
+        except BaseException as error:  # noqa: BLE001 - any defect raised inside the package
+            return error
+        raise AssertionError("expected a defect")
+
+    def test_an_internal_failure_names_where_in_the_package_it_was_raised(self) -> None:
+        error = ValueError("/Users/secret/path leaked")
+        try:
+            raise error
+        except ValueError:
+            pass
+        located = self._raised_here()
+
+        lines = "\n".join(tui.internal_failure_lines(located))
+
+        self.assertRegex(lines, r"  at: aart_cli/[a-z_/]+\.py:\d+ in \w+")
+        self.assertNotIn("/Users/", lines)
+        self.assertIn("AART_CLI_DEBUG=1", lines)
+
+    def test_falling_back_to_the_text_terminal_says_why(self) -> None:
+        cause = RuntimeError("setupterm: could not find terminal")
+        unavailable = tui.CursesUnavailable("the curses application could not start")
+        unavailable.__cause__ = cause
+        output = io.StringIO()
+
+        with (
+            mock.patch.object(tui, "_curses_supported", return_value=True),
+            mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(mock.Mock())),
+            mock.patch.object(tui, "run_consumer", side_effect=unavailable),
+            mock.patch.object(tui, "run_consumer_text", return_value=None),
+            mock.patch.dict("os.environ", {"TERM": "dumb"}),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(tui.run(user_home="/tmp/aart-home"), 0)
+
+        shown = output.getvalue()
+        self.assertIn("text terminal", shown)
+        self.assertIn("RuntimeError: setupterm: could not find terminal", shown)
+        self.assertIn("TERM=dumb", shown)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

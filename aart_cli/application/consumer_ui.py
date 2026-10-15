@@ -44,6 +44,8 @@ from .maintainer_views import (
 )
 
 __all__ = [
+    "installation_is_mcp",
+    "selects_rows",
     "ConsumerActionKind",
     "ConsumerUiCommand",
     "ConsumerUiCommandKind",
@@ -83,6 +85,7 @@ class ConsumerActionKind(str, Enum):
     REGISTRY_SYNC = "registry-sync"
     REGISTRY_REMOVE = "registry-remove"
     SOURCE_ADD = "source-add"
+    SOURCE_REMOVE = "source-remove"
     REGISTRY_INIT = "registry-init"
     REGISTRY_REBUILD = "registry-rebuild"
     REGISTRY_PUSH = "registry-push"
@@ -531,6 +534,8 @@ _SELECTABLE = frozenset(
         ConsumerScreen.ARTIFACT_DETAILS,
         ConsumerScreen.COLLECTION_PREVIEW,
         ConsumerScreen.COLLECTION_CUSTOMIZE,
+        # Several installations ticked here are uninstalled together (D-393).
+        ConsumerScreen.INSTALLED,
         ConsumerScreen.UPDATES,
         ConsumerScreen.REVIEW_SELECTION,
         ConsumerScreen.CONFIGURATION_TARGETS,
@@ -539,6 +544,19 @@ _SELECTABLE = frozenset(
         MaintainerScreen.SCAN_RESULT,
     }
 )
+
+
+def selects_rows(screen: ApplicationScreen) -> bool:
+    """Whether the session's ticked rows are ticked on this screen, where a count of them is read.
+
+    05 and 23a are selectable too, but what Space ticks there is a harness, held apart from the
+    selection; a count of the artifacts ticked on Marketplace says nothing on either (D-401).
+    """
+
+    return screen in _SELECTABLE and screen not in (
+        ConsumerScreen.REVIEW_SELECTION,
+        ConsumerScreen.CONFIGURATION_TARGETS,
+    )
 
 
 def _rows_valid(rows: tuple[str, ...]) -> bool:
@@ -629,6 +647,9 @@ class ConsumerUiState:
     #: summary of the immutable plan.
     config_draft: InstallationConfigDraft = InstallationConfigDraft()
     config_form_active: bool = False
+    #: The form was submitted for the harnesses chosen on 05 (D-380). The install then goes
+    #: forward from it and 05 no longer offers the harness, until a Back to 05 makes it a choice.
+    inputs_submitted: bool = False
     #: The artifact whose two input sections screen 22a shows. Credential drill-down changes
     #: ``focus`` to a provider reference, so this parent identity is carried separately.
     user_inputs_artifact: str = ""
@@ -661,6 +682,7 @@ class ConsumerUiState:
             or not _rows_valid(self.targets)
             or not isinstance(self.config_draft, InstallationConfigDraft)
             or not isinstance(self.config_form_active, bool)
+            or not isinstance(self.inputs_submitted, bool)
             or not isinstance(self.user_inputs_artifact, str)
             or any(character in self.user_inputs_artifact for character in "\r\n")
             or not isinstance(self.configuration_input, str)
@@ -695,7 +717,7 @@ class ConsumerUiState:
             isinstance(screen, MaintainerScreen)
             for screen in (self.session.screen, *self.session.history)
         ):
-            raise ValueError("a Maintainer screen needs Maintainer Mode enabled")
+            raise ValueError("a Maintainer screen needs Registry Maintainer Mode enabled")
 
     @property
     def current_row(self) -> str:
@@ -856,6 +878,8 @@ _SUBJECT_PRESERVING_BACK_EDGES = frozenset(
         (ConsumerScreen.CREDENTIAL_REVIEW, ConsumerScreen.CREDENTIAL_ACTION),
         # Leaving the MCP test returns to the Success it followed, still about that receipt.
         (ConsumerScreen.MCP_TEST, ConsumerScreen.SUCCESS),
+        # ... and to the installation it was asked for from (D-395).
+        (ConsumerScreen.MCP_TEST, ConsumerScreen.INSTALLED_ARTIFACT_DETAILS),
         (ConsumerScreen.CREDENTIAL_ACTION, ConsumerScreen.CREDENTIAL_DETAILS),
     }
 )
@@ -1027,6 +1051,8 @@ def _back(state: ConsumerUiState) -> tuple[ConsumerUiState, tuple[ConsumerUiComm
         help_visible=False,
         quit_pending=False,
         failed_action=None,
+        # D-380: going back to 05 is asking to choose again, so the harness is a row there again.
+        inputs_submitted=(state.inputs_submitted and session.screen is ConsumerScreen.READY),
     )
     return updated, (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, session.screen),)
 
@@ -1177,6 +1203,7 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     # cursor; its review is a screen of its own so the fetch is stated before it happens (B-084).
     (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRIES): ConsumerScreen.REGISTRY_SYNC,
     (ConsumerActionKind.REGISTRY_REMOVE, ConsumerScreen.REGISTRIES): ConsumerScreen.REGISTRY_REMOVE,
+    (ConsumerActionKind.SOURCE_REMOVE, MaintainerScreen.SOURCES): MaintainerScreen.SOURCE_REMOVE,
     (
         ConsumerActionKind.SOURCE_ADD,
         MaintainerScreen.SOURCE_ADD,
@@ -1225,6 +1252,7 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
     ): ConsumerScreen.VERIFY_REPAIR,
     (ConsumerActionKind.VERIFY_REPAIR, ConsumerScreen.DOCTOR): ConsumerScreen.VERIFY_REPAIR,
+    (ConsumerActionKind.UNINSTALL, ConsumerScreen.INSTALLED): ConsumerScreen.UNINSTALL_REVIEW,
     (
         ConsumerActionKind.UNINSTALL,
         ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
@@ -1271,6 +1299,12 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     ): ConsumerScreen.CONFIGURATION_REVIEW,
     # §170.4: the offer is a review of its own, so what will be called is stated before it is.
     (ConsumerActionKind.MCP_TEST, ConsumerScreen.SUCCESS): ConsumerScreen.MCP_TEST,
+    # The same test at any later time, over installations chosen on Installed (§170.4, D-395).
+    (ConsumerActionKind.MCP_TEST, ConsumerScreen.INSTALLED): ConsumerScreen.MCP_TEST,
+    (
+        ConsumerActionKind.MCP_TEST,
+        ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
+    ): ConsumerScreen.MCP_TEST,
 }
 
 #: The screens an action can be asked from, which are also the screens a declined preparation
@@ -1295,6 +1329,7 @@ _ROW_IS_THE_REQUEST = frozenset(
         # always about the visible row, never that stale workflow subject (`QA-043`).
         ConsumerActionKind.REGISTRY_SYNC,
         ConsumerActionKind.REGISTRY_REMOVE,
+        ConsumerActionKind.SOURCE_REMOVE,
     }
 )
 
@@ -1347,6 +1382,7 @@ def _request_action(
             session=session,
             action=action,
             config_form_active=False,
+            inputs_submitted=True,
             quit_pending=False,
         )
         command = ConsumerUiCommand(
@@ -1372,6 +1408,10 @@ def _request_action(
     focus = (
         state.current_row or state.focus
         if action in _ROW_IS_THE_REQUEST
+        or (
+            action in (ConsumerActionKind.UNINSTALL, ConsumerActionKind.MCP_TEST)
+            and state.session.screen is ConsumerScreen.INSTALLED
+        )
         else state.focus or state.current_row
     )
     if target is None:
@@ -1419,10 +1459,27 @@ def _request_action(
             else moved.registry_commit_applied
         ),
     )
+    selection = state.selection
+    if action in (
+        ConsumerActionKind.UNINSTALL,
+        ConsumerActionKind.VERIFY_REPAIR,
+        ConsumerActionKind.MCP_TEST,
+    ):
+        # A lifecycle action is about installations: what is ticked on Installed, and there only.
+        # Ticks carried from elsewhere -- Marketplace offers, or Installed rows behind an open
+        # details screen -- would otherwise outrank the one artifact the screen is about (D-393).
+        selection = (
+            tuple(key for key in state.selection if key in state.rows)
+            if state.session.screen is ConsumerScreen.INSTALLED
+            else ()
+        )
     command = ConsumerUiCommand(
         ConsumerUiCommandKind.PREPARE_ACTION,
+        # The MCP test is about the transaction on Success, or about installations chosen on
+        # Installed; the screen it was asked from is what tells the two apart (D-395).
+        screen=state.session.screen if action is ConsumerActionKind.MCP_TEST else None,
         action=action,
-        selection=state.selection,
+        selection=selection,
         targets=(
             state.targets
             if action is ConsumerActionKind.INSTALL
@@ -1516,6 +1573,7 @@ def _action_prepared(
                 session=session,
                 config_draft=event.config_draft,
                 config_form_active=False,
+                inputs_submitted=False,
                 quit_pending=False,
             ),
             (
@@ -1547,6 +1605,17 @@ def _action_prepared(
         selection_identity=event.selection_identity or None,
         review_digest=event.review_digest,
     )
+    if (
+        action is ConsumerActionKind.INSTALL
+        and state.inputs_submitted
+        and state.session.screen is ConsumerScreen.REVIEW_SELECTION
+        and event.screen is not None
+        and event.screen is not ConsumerScreen.REVIEW_SELECTION
+    ):
+        # D-380: the answers are in, so the plan goes on to whatever needs deciding next rather
+        # than back through the harness choice and a second Required Inputs.
+        reviewed = replace(state, session=session, config_form_active=False, quit_pending=False)
+        return _navigate(reviewed, event.screen)
     return replace(
         state,
         session=session,
@@ -1564,6 +1633,7 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
     (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_REVIEW): None,
     (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRY_SYNC): None,
     (ConsumerActionKind.REGISTRY_REMOVE, ConsumerScreen.REGISTRY_REMOVE): None,
+    (ConsumerActionKind.SOURCE_REMOVE, MaintainerScreen.SOURCE_REMOVE): None,
     (ConsumerActionKind.SOURCE_ADD, MaintainerScreen.SOURCE_ADD_REVIEW): None,
     (ConsumerActionKind.REGISTRY_INIT, MaintainerScreen.REGISTRY_INIT_REVIEW): None,
     (ConsumerActionKind.REGISTRY_REBUILD, MaintainerScreen.REGISTRY_REBUILD_REVIEW): None,
@@ -1635,6 +1705,7 @@ _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_REVIEW): ConsumerScreen.REGISTRIES,
     (ConsumerActionKind.REGISTRY_SYNC, ConsumerScreen.REGISTRY_SYNC): ConsumerScreen.REGISTRIES,
     (ConsumerActionKind.REGISTRY_REMOVE, ConsumerScreen.REGISTRY_REMOVE): ConsumerScreen.REGISTRIES,
+    (ConsumerActionKind.SOURCE_REMOVE, MaintainerScreen.SOURCE_REMOVE): MaintainerScreen.SOURCES,
     (
         ConsumerActionKind.SOURCE_ADD,
         MaintainerScreen.SOURCE_ADD_REVIEW,
@@ -1776,6 +1847,7 @@ def _action_recorded(
         targets=(),
         config_draft=InstallationConfigDraft(),
         config_form_active=False,
+        inputs_submitted=False,
         focus=focus,
         quit_pending=False,
         action=None,
@@ -2063,9 +2135,14 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _action_binding("i", "Install", ConsumerActionKind.INSTALL),
     ),
     ConsumerScreen.UPDATES: (_action_binding("i", "Update", ConsumerActionKind.UPDATE),),
+    ConsumerScreen.INSTALLED: (
+        _action_binding("u", "Uninstall", ConsumerActionKind.UNINSTALL),
+        _action_binding("t", "Test MCP", ConsumerActionKind.MCP_TEST),
+    ),
     ConsumerScreen.INSTALLED_ARTIFACT_DETAILS: (
         _action_binding("r", "Repair", ConsumerActionKind.VERIFY_REPAIR),
         _action_binding("u", "Uninstall", ConsumerActionKind.UNINSTALL),
+        _action_binding("t", "Test MCP", ConsumerActionKind.MCP_TEST),
     ),
     ConsumerScreen.INSTALLED_COLLECTION_DETAILS: (
         _action_binding("u", "Uninstall", ConsumerActionKind.UNINSTALL),
@@ -2081,6 +2158,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     MaintainerScreen.SOURCES: (
         _navigate_binding("a", "Add Source", MaintainerScreen.SOURCE_ADD),
         _action_binding("s", "Sync", ConsumerActionKind.SOURCE_SYNC),
+        _action_binding("d", "Remove", ConsumerActionKind.SOURCE_REMOVE),
     ),
     MaintainerScreen.SOURCE_DETAILS: (
         _action_binding("s", "Sync", ConsumerActionKind.SOURCE_SYNC),
@@ -2205,6 +2283,7 @@ _CONFIRM_SCREENS = frozenset(
         ConsumerScreen.REGISTRY_REVIEW,
         ConsumerScreen.REGISTRY_SYNC,
         ConsumerScreen.REGISTRY_REMOVE,
+        MaintainerScreen.SOURCE_REMOVE,
         MaintainerScreen.SOURCE_SYNC,
         MaintainerScreen.REGISTRY_COMMIT,
         MaintainerScreen.ADOPTION_REVIEW,
@@ -2250,6 +2329,25 @@ def _answered_in_place(state: ConsumerUiState) -> bool:
     )
 
 
+def installation_is_mcp(installation: str) -> bool:
+    """Whether an installation key (`alias/kind/name@version#harness`) names an MCP."""
+
+    parts = installation.split("/")
+    return len(parts) >= 3 and parts[1] == "mcp"
+
+
+def _uninstall_finished(state: ConsumerUiState) -> bool:
+    """An uninstall started on Installed has run, and its receipt is on Activity Details."""
+
+    history = state.session.history
+    return (
+        state.session.screen is ConsumerScreen.ACTIVITY_DETAILS
+        and state.action is None
+        and ConsumerScreen.UNINSTALLING in history
+        and ConsumerScreen.INSTALLED in history
+    )
+
+
 def _mcp_test_answered(state: ConsumerUiState) -> bool:
     """The MCP test ran and its stages are on 11a: Enter goes back to the Success it followed."""
 
@@ -2260,10 +2358,28 @@ def _mcp_test_answered(state: ConsumerUiState) -> bool:
     )
 
 
+def _mcp_test_origin(state: ConsumerUiState) -> str:
+    """Where Enter leaves a finished MCP test for: the screen it was asked from."""
+
+    origin = state.session.history[-1] if state.session.history else ConsumerScreen.SUCCESS
+    names: dict[ApplicationScreen, str] = {
+        ConsumerScreen.INSTALLED: "Installed",
+        ConsumerScreen.INSTALLED_ARTIFACT_DETAILS: "details",
+    }
+    return names.get(origin, "Success")
+
+
 def _binding_enabled(binding: _ScreenBinding, state: ConsumerUiState) -> bool:
+    if (
+        binding.event.action is ConsumerActionKind.MCP_TEST
+        and state.session.screen is ConsumerScreen.INSTALLED_ARTIFACT_DETAILS
+    ):
+        # A details screen is one installation, so the test is offered only where it is an MCP.
+        return installation_is_mcp(state.focus)
     if binding.event.action in (
         ConsumerActionKind.REGISTRY_SYNC,
         ConsumerActionKind.REGISTRY_REMOVE,
+        ConsumerActionKind.SOURCE_REMOVE,
     ):
         return state.current_row not in ("", "add-registry")
     if binding.event.action is ConsumerActionKind.REGISTRY_PUSH:
@@ -2344,8 +2460,10 @@ def key_bindings(
             bindings.append(KeyBinding("Enter", chosen[1]))
         elif _answered_in_place(state) and "enter" not in keys:
             bindings.append(KeyBinding("Enter", "Credential details"))
+        elif _uninstall_finished(state) and "enter" not in keys:
+            bindings.append(KeyBinding("Enter", "Back to Installed"))
         elif _mcp_test_answered(state) and "enter" not in keys:
-            bindings.append(KeyBinding("Enter", "Back to Success"))
+            bindings.append(KeyBinding("Enter", "Back to " + _mcp_test_origin(state)))
         elif state.failed_action is not None and "enter" not in keys:
             # The run is over. The only thing Enter can honestly do here is leave.
             bindings.append(KeyBinding("Enter", "Back to list"))
@@ -2363,9 +2481,6 @@ def key_bindings(
             choices: dict[ConsumerScreen | MaintainerScreen, str] = {}
             if state.session.screen is ConsumerScreen.SUCCESS:
                 choices = dict(SUCCESS_CHOICES)
-            elif state.session.screen is ConsumerScreen.REMEDIATION:
-                # CP-23 task 08: its one row goes on to the final review; nothing is opened.
-                choices = {ConsumerScreen.READY: "Continue"}
             label = choices.get(detail, "Open")
             bindings.append(KeyBinding("Enter", label))
         elif (
@@ -2377,7 +2492,7 @@ def key_bindings(
     if state.session.screen in _SEARCHABLE:
         bindings.append(KeyBinding("/", "Search"))
     if not typing:
-        bindings.append(KeyBinding("v", "Fast / Verbose"))
+        bindings.append(KeyBinding("v", state.session.profile.toggle_label))
     bindings.extend((KeyBinding("↑/↓", "Move"), KeyBinding("Esc", "Back")))
     if not typing:
         bindings.extend((KeyBinding("?", "Help"), KeyBinding("q", "Quit")))
@@ -2686,6 +2801,10 @@ def key_event(
 
     if key == "q":
         return ConsumerUiEvent(ConsumerUiEventKind.QUIT)
+    if key in ("enter", "escape") and _uninstall_finished(state):
+        # The installations it was about are gone, so neither their review nor their details is
+        # somewhere to go back to: both keys return to the list, refreshed (D-400).
+        return ConsumerUiEvent(ConsumerUiEventKind.NAVIGATE, screen=ConsumerScreen.INSTALLED)
     if key == "escape":
         return ConsumerUiEvent(ConsumerUiEventKind.BACK)
     if key == "/":

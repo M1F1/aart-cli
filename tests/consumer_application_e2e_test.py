@@ -268,7 +268,7 @@ class ConsumerApplicationSettingsTest(unittest.TestCase):
         with _environment() as env:
             _, _, _ = _drive(
                 env,
-                # Named rather than numbered: the cursor is on Maintainer Mode, not on whatever
+                # Named rather than numbered: the cursor is on Registry Maintainer Mode, not on whatever
                 # row happens to be fourth after a setting is added above it.
                 _at(
                     ConsumerScreen.SETTINGS,
@@ -289,7 +289,9 @@ class ConsumerApplicationSettingsTest(unittest.TestCase):
                 session=ConsumerSession(ConsumerScreen.SETTINGS),
             )
             _, terminal, _ = _drive(env, opened, actions=reopened)
-            self.assertTrue(terminal.screen_containing("Maintainer Mode: on"), terminal.last)
+            self.assertTrue(
+                terminal.screen_containing("Registry Maintainer Mode: on"), terminal.last
+            )
 
     def test_the_chosen_scope_is_the_scope_the_next_install_lands_at(self) -> None:
         """Screen 28 offers `Default scope: Project/User`, so choosing User has to install into
@@ -337,7 +339,7 @@ class ConsumerApplicationRefusalTest(unittest.TestCase):
             # on a review that would go on offering to uninstall something that is not there.
             self.assertEqual(finished.session.screen, ConsumerScreen.INSTALLED_ARTIFACT_DETAILS)
             self.assertTrue(
-                terminal.screen_containing("Nothing canonical is installed here"),
+                terminal.screen_containing("nothing canonical is installed here"),
                 terminal.last,
             )
             self.assertIsNone(finished.session.review_digest)
@@ -362,7 +364,7 @@ class ConsumerApplicationRefusalTest(unittest.TestCase):
             self.assertIsNone(finished.action)
             self.assertFalse(_delivered(env).exists())
             self.assertTrue(
-                terminal.screen_containing("No approved published version of skill/code-review"),
+                terminal.screen_containing("no approved published version of skill/code-review"),
                 terminal.last,
             )
 

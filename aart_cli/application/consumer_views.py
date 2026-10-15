@@ -143,7 +143,7 @@ __all__ = [
     "settings_from_data",
     "settings_to_data",
     "install_flow_screens",
-    "remediation_needs_decision",
+    "material_remediations",
     "keeps_focus",
     "navigation_targets",
     "project_activity",
@@ -171,6 +171,16 @@ class PresentationProfile(str, Enum):
     FAST = "fast"
     VERBOSE = "verbose"
 
+    @property
+    def toggle_label(self) -> str:
+        """What pressing `v` gives from this profile, not the mode it is in (D-398).
+
+        Declared with the type so the reducer that draws the legend never names a profile, which
+        is the reachability half of INV-149/INV-152.
+        """
+
+        return "Less info" if self is PresentationProfile.VERBOSE else "More info"
+
 
 class ConsumerScreen(str, Enum):
     """The accepted consumer screen catalog, including the 04A customization state."""
@@ -183,7 +193,6 @@ class ConsumerScreen(str, Enum):
     REVIEW_SELECTION = "05-review-selection"
     AUTOMATIC_INSPECTION = "06-automatic-inspection"
     REQUIRED_INPUTS = "07-required-inputs"
-    REMEDIATION = "08-remediation"
     READY = "09-ready"
     INSTALLING = "10-installing"
     SUCCESS = "11-success"
@@ -885,16 +894,16 @@ def consumer_plan_to_data(view: ConsumerPlanView) -> dict[str, object]:
 
 
 #: CP-23 task 08 (D-258): harness configuration is derived from where the artifact is delivered,
-#: so it is disclosed on the final review rather than stopping the flow. Every other remediation
-#: installs software, stores or redirects a credential, or opens network access -- a material
-#: change somebody agrees to on screen 08 before the final review.
+#: so the Harnesses line already says it. Every other remediation installs software, stores or
+#: redirects a credential, or opens network access -- a material change that Ready, the one final
+#: review, lists before it is confirmed (D-403, which folded screen 08 into it).
 ROUTINE_REMEDIATION_KINDS = frozenset({"configure-harness"})
 
 
-def remediation_needs_decision(view: ConsumerPlanView) -> bool:
-    """Whether this plan stops at Remediation (§161.5, INV-197): one rule for every route there."""
+def material_remediations(view: ConsumerPlanView) -> tuple[RemediationView, ...]:
+    """The changes Ready lists in every mode, because confirming it agrees to them (§161.5)."""
 
-    return any(item.kind not in ROUTINE_REMEDIATION_KINDS for item in view.remediations)
+    return tuple(item for item in view.remediations if item.kind not in ROUTINE_REMEDIATION_KINDS)
 
 
 def install_flow_screens(view: ConsumerPlanView) -> tuple[ConsumerScreen, ...]:
@@ -905,8 +914,6 @@ def install_flow_screens(view: ConsumerPlanView) -> tuple[ConsumerScreen, ...]:
     screens = [ConsumerScreen.REVIEW_SELECTION]
     if view.inputs:
         screens.append(ConsumerScreen.REQUIRED_INPUTS)
-    if remediation_needs_decision(view):
-        screens.append(ConsumerScreen.REMEDIATION)
     screens.extend((ConsumerScreen.READY, ConsumerScreen.INSTALLING, ConsumerScreen.SUCCESS))
     return tuple(screens)
 
@@ -1362,6 +1369,9 @@ class LifecyclePlanView:
     risks: tuple[str, ...]
     complete: bool
     review_digest: str
+    #: The other artifacts one reviewed action takes with it -- several ticked on Installed and
+    #: uninstalled together (D-393). Empty for an action on one artifact.
+    also: tuple["LifecyclePlanView", ...] = ()
 
 
 def project_lifecycle_plan(plan: LifecyclePlan) -> LifecyclePlanView:
@@ -2098,16 +2108,13 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.REVIEW_SELECTION: (
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.REQUIRED_INPUTS,
-        ConsumerScreen.REMEDIATION,
         ConsumerScreen.READY,
     ),
     ConsumerScreen.AUTOMATIC_INSPECTION: (
         ConsumerScreen.REQUIRED_INPUTS,
-        ConsumerScreen.REMEDIATION,
         ConsumerScreen.READY,
     ),
-    ConsumerScreen.REQUIRED_INPUTS: (ConsumerScreen.REMEDIATION, ConsumerScreen.READY),
-    ConsumerScreen.REMEDIATION: (ConsumerScreen.READY,),
+    ConsumerScreen.REQUIRED_INPUTS: (ConsumerScreen.READY,),
     ConsumerScreen.READY: (ConsumerScreen.INSTALLING,),
     ConsumerScreen.INSTALLING: (ConsumerScreen.SUCCESS,),
     ConsumerScreen.SUCCESS: (
@@ -2120,10 +2127,14 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.INSTALLED: (
         ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
         ConsumerScreen.INSTALLED_COLLECTION_DETAILS,
+        # What is ticked here is uninstalled from here (D-393), and tested from here (D-395).
+        ConsumerScreen.UNINSTALL_REVIEW,
+        ConsumerScreen.MCP_TEST,
     ),
     ConsumerScreen.INSTALLED_ARTIFACT_DETAILS: (
         ConsumerScreen.VERIFY_REPAIR,
         ConsumerScreen.UNINSTALL_REVIEW,
+        ConsumerScreen.MCP_TEST,
     ),
     ConsumerScreen.INSTALLED_COLLECTION_DETAILS: (ConsumerScreen.UNINSTALL_REVIEW,),
     ConsumerScreen.UPDATES: (ConsumerScreen.UPDATE_INPUTS, ConsumerScreen.UPDATING),
@@ -2156,7 +2167,8 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
         ConsumerScreen.CREDENTIALS,
     ),
     ConsumerScreen.ACTIVITY: (ConsumerScreen.ACTIVITY_DETAILS,),
-    ConsumerScreen.ACTIVITY_DETAILS: (ConsumerScreen.RECEIPT_DETAILS,),
+    # A finished uninstall returns to the list it was started from (D-400).
+    ConsumerScreen.ACTIVITY_DETAILS: (ConsumerScreen.RECEIPT_DETAILS, ConsumerScreen.INSTALLED),
     ConsumerScreen.RECEIPT_DETAILS: (),
     ConsumerScreen.SETTINGS: (),
     ConsumerScreen.DOCTOR: (ConsumerScreen.VERIFY_REPAIR,),
@@ -2173,6 +2185,8 @@ _KEEPS_FOCUS: frozenset[tuple[ConsumerScreen, ConsumerScreen]] = frozenset(
         (ConsumerScreen.SUCCESS, ConsumerScreen.RECEIPT_DETAILS),
         # 11a tests the installations of the transaction Success is about, so it keeps that subject.
         (ConsumerScreen.SUCCESS, ConsumerScreen.MCP_TEST),
+        # ... as it tests the one installation a details screen is about (D-395).
+        (ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, ConsumerScreen.MCP_TEST),
         # CP-23 task 12: 24's rows are verbs, so the review they open is still about the credential
         # rather than about the word "replace" (D-262).
         (ConsumerScreen.CREDENTIAL_ACTION, ConsumerScreen.CREDENTIAL_REVIEW),
@@ -2425,7 +2439,7 @@ class ConsumerSettings:
 
     def with_maintainer_mode(self, enabled: bool) -> ConsumerSettings:
         if not isinstance(enabled, bool):
-            raise ValueError("Maintainer Mode setting must be a boolean")
+            raise ValueError("Registry Maintainer Mode setting must be a boolean")
         return replace(self, maintainer_mode=enabled)
 
     def toggled(self, row: str) -> ConsumerSettings:
@@ -2540,7 +2554,7 @@ SETTING_PURPOSE: dict[str, str] = {
     "show-updates": "Whether the Dashboard counts the installed artifacts a registry "
     "offers a newer version of.",
     "maintainer-mode": "Whether this installation authors artifacts as well as installing "
-    "them, which is what puts Sources, Candidates and Registry Maintainer on the Dashboard.",
+    "them, which is what puts Sources, Candidates and Registry Workspace on the Dashboard.",
 }
 """What each setting changes, for the block `[v]` opens (`QA-097`).
 
@@ -2569,7 +2583,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
 
     A stored preference is read strictly rather than repaired: silently falling back to Fast after
     somebody chose Verbose would be the frontend deciding a detail level for them, and silently
-    falling back on Maintainer Mode is a mode boundary answering itself.
+    falling back on Registry Maintainer Mode is a mode boundary answering itself.
     """
 
     if not isinstance(data, dict):
@@ -2601,7 +2615,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
         return Err(
             (
                 _settings_invalid(
-                    "stored update visibility and Maintainer Mode must be true or false"
+                    "stored update visibility and Registry Maintainer Mode must be true or false"
                 ),
             )
         )
@@ -2648,7 +2662,8 @@ def project_registries(catalog: MarketplaceCatalog) -> tuple[RegistryView, ...]:
         raise ValueError("registry projection needs a marketplace catalog")
     rows = []
     for source in catalog.sources:
-        if source.kind is not SourceKind.REGISTRY_GIT:
+        # Either transport (D-350): a local Registry is synced and disconnected from here too.
+        if source.kind not in {SourceKind.REGISTRY_GIT, SourceKind.REGISTRY_LOCAL}:
             continue
         source_items = tuple(item for item in catalog.items if item.source.alias == source.alias)
         availability = (
@@ -2730,9 +2745,11 @@ class DoctorView:
 def project_doctor(artifacts: tuple[InstalledArtifactView, ...]) -> DoctorView:
     if any(not isinstance(item, InstalledArtifactView) for item in artifacts):
         raise ValueError("Doctor projection needs installed artifact views")
-    issues = tuple(item.coordinate for item in artifacts if item.health in {"attention", "broken"})
+    # An issue is an installation, as Installed and repair address it: one artifact installed into
+    # two harnesses is two issues, and keyed by coordinate they were one row twice (§169.3).
+    issues = tuple(item.row for item in artifacts if item.health in {"attention", "broken"})
     repairable = tuple(
-        item.coordinate
+        item.row
         for item in artifacts
         if item.drift and all(drift.repairable for drift in item.drift)
     )

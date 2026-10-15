@@ -418,8 +418,6 @@ class Request:
     candidate_source_url: Optional[str] = None
     target_registry_alias: Optional[str] = None
     promotion_candidate_ids: Tuple[str, ...] = ()
-    promotion_validation_report: Optional[str] = None
-    promotion_policy_result: Optional[str] = None
     promotion_mode: str = "vendored"
     check: bool = False
     # Resolve vendored origins during an audit.  Off by default: an audit that reached the network

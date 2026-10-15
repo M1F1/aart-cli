@@ -10,6 +10,7 @@ screen looks like.
 from __future__ import annotations
 
 import dataclasses
+import re
 from dataclasses import replace
 from unittest import TestCase
 
@@ -553,11 +554,11 @@ class BulletedPropertyTest(TestCase):
 
         spoken = [line for line in drawn if line.strip()]
         for line in spoken:
-            self.assertTrue(line.startswith(("- ", "  ")), line)
+            self.assertRegex(line, r"^(- |  )")
         # The marker comes off first: `bulleted` keeps whatever indent a line arrived with, so
         # stripping before removing it would read that indent as part of the marker.
         self.assertEqual(
-            [line.removeprefix("- ").strip() for line in spoken],
+            [re.sub(r"^- ", "", line).strip() for line in spoken],
             [line.strip() for line in block if line.strip()],
         )
 

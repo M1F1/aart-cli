@@ -4281,6 +4281,53 @@ general notice field, so carrying it onto the dashboard is its own contained pie
 rather than a line in this slice. The consequence today is only that a curses user sees the
 connected Registry on the dashboard without reading the sentence explaining where it came from.
 
+## B-180 — other `registry-git`-only checks may leave out a local Registry
+
+**Found 2026-10-15 while fixing D-384.** Status: OPEN.
+
+D-384 fixed the Registries list, Disconnect and the approved-state read. Other checks still name
+`SourceKind.REGISTRY_GIT` alone:
+- `tui_sources.py` (health rows and the direct-source policy);
+- `configuration/policy.py:62`, where a disallowed direct source may now refuse a local Registry;
+- `io/maintainer_promotion.py` (promotion target lookup and source sync);
+- `application/maintainer_views.py:2660`;
+- `consumer/runtime.py:565`;
+- `marketplace/catalog.py:104`.
+
+Some are correct, because a company-reviewed identity really is a remote host. Each needs to be
+judged against D-350 with a test that uses a local Registry. Promotion into a local Registry is the
+one most likely to matter.
+
+**Update 2026-10-15 (D-388):** the promotion and Source Sync checks are fixed:
+`io/maintainer_promotion.py`, `io/maintainer_sync.py`, `application/maintainer_sync.py` and
+`application/maintainer_views.py:2660` now use `is_registry`. Still to judge:
+- `tui_sources.py` company-reviewed rows, which need a remote host, so are probably right;
+- the direct-source policy in `tui_sources.py` and `configuration/policy.py:62`;
+- `consumer/runtime.py:565`;
+- `marketplace/catalog.py:104`.
+
+## B-178 — a narrowed install plan drops its scope and backend choices
+
+**Found 2026-10-14 while fixing the repeated harness choice (D-380).** Status: OPEN.
+
+When a harness is chosen, `_offer_installation` prepares again for exactly those profiles and
+builds the plan from `replace(narrowed_action.flow.plan, targets=..., chosen_targets=...)`. That
+rebuild does not carry `scope_choice` or `installer_choice`, while the plan for an unchosen request
+does. So after a harness is chosen, 05 offers no scope or backend rows, even when the selection
+supports both scopes or both backends are usable. D-380 already sends a submitted form on to 05
+when the plan offers such a choice; this is why that branch is not reached today. The fix needs a
+test showing a chosen harness keeps the offer, and it overlaps with B-175, since scope belongs
+before the form.
+
+## B-179 — a smoke_test lost to a vendored package reads as "declares no smoke_test"
+
+**Found 2026-10-14 from an owner report.** Status: OPEN, folded into #41/#53.
+
+A package produced by `registry vendor` carries no `aart-cli.authoring` extension (#41), so an
+installed MCP whose upstream declares a `smoke_test` reports the protocol stage as `NOT
+CONFIGURED`. The reason is now specific ("declares no smoke_test"), but it cannot tell a vendored
+package from an author who declared nothing. #53 removes the vendor route, and with it this case.
+
 ## B-177 — `doctor --smoke` and a Doctor-screen test action
 
 **Split from #31 on 2026-10-14 by D-378.** Status: OPEN, not on CP-28.
@@ -4384,8 +4431,8 @@ real public Registry -- adopt, publish, push, first run on a baked wheel, `marke
 --yes`, files delivered to `.claude/skills/`. So a CLI-only maintainer *can* stand up a Registry
 people install from; what they cannot do is get there by vendoring.
 
-What remains is still worth fixing. `registry promote` is closed to the CLI on purpose (QA-056),
-which leaves `adopt` and `vendor` as the two CLI doors, and one of them produces packages that only
+What remains is still worth fixing. `registry promote` was closed to the CLI (QA-056) until D-387 made it compute its own evidence;
+at the time that left `adopt` and `vendor` as the two CLI doors, and one of them produces packages that only
 look complete. The tutorial `docs/tutorials/company-registry-tabnine-v1.md` vendors an artifact in
 §3 and installs it in §8, so that documented path does not work as written -- and neither does the
 repository's own acceptance walk: `docs/testing/END_TO_END_ACCEPTANCE.md` vendors
@@ -4427,3 +4474,48 @@ now disagree about what the command is called. Nothing in this repository consum
 whether the shim is an orphan or an external contract with generated registry workflows cannot be
 settled from here. Settle that first, then either rename the shim to `aart-cli` or delete the
 action. The same half-applied rename did break the release path and was fixed there (D-370).
+
+## B-181 — scan and promote refuse an author checkout over ignored files and a `.venv`
+
+**Found 2026-10-15 in GitHub #62; noncritical.** `registry scan` and `registry promote` require
+`git status --porcelain=v1 --untracked-files=all` to be empty, so a stray untracked file blocks them.
+They also read the whole checkout, so a git-ignored `.venv` is refused for its symlinks ("local
+source symlinks are forbidden: .venv/bin/python"). An author has to move their virtualenv out of the
+repository to promote. Excluding ignored paths, or paths outside every manifest's
+`payload.include`, from the cleanliness and symlink checks would fix it. That changes what a
+pinned observation covers, so the change needs its own decision against D-103's exact-checkout rule.
+
+## B-182 — nothing names the default Registry once it is cleared
+
+Disconnecting the default Registry (TUI Registries, or `aart-cli source remove`) clears
+`default_registry` and names no replacement ("default Registry: cleared; no replacement is
+selected"). `--default` exists only on `source add`, so with two or more Registries still
+connected, the only way back to a default is to remove one and add it again. D-390 covers the
+single-Registry case in Source Sync. The full fix is a "make default" action on a connected Registry,
+plus, on removal, handing the default to the sole remaining Registry. That changes the removal
+review's identity and invariants (`SourceRemovalRequest`), so it is its own slice.
+
+## B-183 — one artifact's installations in two harnesses cannot share one removal
+
+`propose_removal`, `RemovalProposal.plan_for` and `complete_configured_uninstall` key everything by
+`ArtifactCoordinate`, so ticking `X#claude` and `X#opencode` on Installed ends in "an artifact was
+observed twice". D-393 refuses that in words ("uninstalled one harness at a time"). Update was
+re-keyed by installation for §169.3; removal needs the same re-keying before such a removal can be
+one transaction.
+
+## B-184 — Update and Repair end on a receipt whose Enter reopens the same receipt
+
+D-400 returns a finished uninstall to Installed. Update (16 → 17 → 26) and Repair (13 or Doctor
+→ 20 → 26) still end on Activity Details, where Enter opens Receipt Details with the same content
+and Esc walks back into the run that has finished. The same rule would send them to Updates and to
+the Installed Artifact Details or Doctor they started from.
+
+## B-185 — a Registry commit that git refuses for want of an identity does not say so
+
+`aart_cli/io/git.py` runs git with a scrubbed environment (`_safe_environment`: HOME, PATH,
+SSH_AUTH_SOCK, XDG_CONFIG_HOME, SYSTEMROOT), so `GIT_AUTHOR_*` and `GIT_COMMITTER_*` never reach
+it. Where neither the repository nor the user's git config names an identity and git cannot
+detect one (CI containers), the Registry Commit screen reads "did not run" and draws no reason.
+`tests/local_registry_promotion_e2e_test.py` failed on CI for this reason since a8d473d and now
+sets a repository identity, as the other promotion tests do. The screen should name the refusal and
+the `git config user.name/user.email` remedy.

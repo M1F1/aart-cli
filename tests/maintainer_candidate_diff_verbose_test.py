@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import builtins
 import dataclasses
+import re
 import unittest
 
 from hypothesis import given, settings
@@ -40,9 +41,9 @@ from tests.maintainer_candidate_shell_test import (
     _views,
 )
 
-_FILES = "Bounded redacted file diffs:"
-_SHOW = "Press v to view bounded redacted file diffs."
-_HIDE = "Press v to hide the bounded redacted file diffs."
+_FILES = "bounded redacted file diffs:"
+_SHOW = "press v to view bounded redacted file diffs."
+_HIDE = "press v to hide the bounded redacted file diffs."
 _REVIEW_HISTORY = (MaintainerScreen.CANDIDATES, MaintainerScreen.CANDIDATE_DETAILS)
 
 
@@ -52,8 +53,9 @@ def _statements(drawn: tuple[str, ...]) -> list[str]:
     body = drawn[: footer_start(drawn)]
     items: list[list[str]] = []
     for line in body:
-        if line.startswith("- "):
-            items.append([line[2:]])
+        marked = re.match(r"- ", line)
+        if marked:
+            items.append([line[marked.end() :]])
         elif line.startswith("  ") and items:
             items[-1].append(line.strip())
     return [" ".join(item) for item in items]
@@ -79,7 +81,7 @@ class CandidateDiffVerboseTest(unittest.TestCase):
         drawn = frame(self.source, self._diff())
         text = "\n".join(drawn)
 
-        self.assertIn("Semantic changes:", text)
+        self.assertIn("semantic changes:", text)
         self.assertIn("~ payload/server.py — modified", text)
         self.assertNotIn(_FILES, text)
         self.assertNotIn("print('new')", text)
@@ -93,7 +95,7 @@ class CandidateDiffVerboseTest(unittest.TestCase):
         drawn = frame(self.source, self._diff(PresentationProfile.VERBOSE))
         text = "\n".join(drawn)
 
-        self.assertIn("Semantic changes:", text)
+        self.assertIn("semantic changes:", text)
         self.assertIn(_FILES, text)
         self.assertIn("print('new')", text)
         self.assertEqual(_statements(drawn)[-1], _HIDE)
@@ -103,7 +105,7 @@ class CandidateDiffVerboseTest(unittest.TestCase):
         drawn = frame(self.source, self._diff())
         footer = "\n".join(drawn[footer_start(drawn) :])
 
-        self.assertIn("[v] Fast / Verbose", footer)
+        self.assertIn("[v] More info", footer)
         self.assertNotIn("[f]", footer)
         self.assertIsNone(key_event("f", self._diff()))
 
@@ -173,7 +175,7 @@ class CandidateDiffEvidenceIsBoundedAndRedactedTest(unittest.TestCase):
 
         verbose = "\n".join(render_maintainer_candidate_diff(view, PresentationProfile.VERBOSE))
 
-        self.assertIn(_FILES, verbose)
+        self.assertIn("Bounded redacted file diffs:", verbose)
         self.assertNotIn(planted, verbose)
         self.assertIn("[redacted]", verbose)
 

@@ -45,9 +45,11 @@ from aart_cli.application.consumer_ui import (
     RegistryInitDraft,
     RepositoryScanDraft,
     SourceDraft,
+    installation_is_mcp,
 )
 from aart_cli.application.consumer_views import (
     ConsumerPlanView,
+    ConsumerScreen,
     ConsumerSettings,
     HarnessTargetView,
     InstallScopeChoiceView,
@@ -374,6 +376,21 @@ class _PendingInstall:
     chosen_targets: tuple[str, ...] = ()
 
 
+def _after_inputs(plan: ConsumerPlanView) -> ConsumerScreen:
+    """Where a reviewed install goes once its form was submitted (D-380, §161.5).
+
+    05 again only while the plan still offers a real choice of scope or backend; otherwise the
+    next screen that asks anything, which is Remediation only when a decision is needed.
+    """
+
+    if any(
+        choice is not None and choice.is_a_choice
+        for choice in (plan.scope_choice, plan.installer_choice)
+    ):
+        return ConsumerScreen.REVIEW_SELECTION
+    return ConsumerScreen.READY
+
+
 def _installation_targets(
     prepared: PreparedConfiguredInstallation, profiles: tuple[str, ...]
 ) -> tuple[HarnessTargetView, ...]:
@@ -476,6 +493,9 @@ class _AfterInstall:
 class _PendingMcpTest:
     records: tuple[InstalledRecord, ...]
     review_digest: str
+    #: The test as it was asked for from Installed (D-395); `None` for the one after an install,
+    #: which is drawn beside that install's Success instead.
+    installed: McpTestView | None = None
 
 
 #: Member statuses whose installation was made, so the test may be offered for it.
@@ -920,6 +940,8 @@ class LocalConsumerActions:
             return self._prepare_registry_refresh(command)
         if action is ConsumerActionKind.REGISTRY_REMOVE:
             return self._prepare_registry_removal(command)
+        if action is ConsumerActionKind.SOURCE_REMOVE:
+            return self._prepare_source_removal(command)
         if action is ConsumerActionKind.SOURCE_SYNC:
             return self._prepare_source_sync(command)
         if action is ConsumerActionKind.CANDIDATE_PROMOTION:
@@ -1916,6 +1938,7 @@ class LocalConsumerActions:
                 semantic_identity=plan.semantic_identity,
                 selection_identity=plan.selection.semantic_identity,
                 review_digest=plan.review_digest,
+                screen=_after_inputs(plan),
             ),
         )
 
@@ -2026,9 +2049,29 @@ class LocalConsumerActions:
         )
 
     def _prepare_uninstall(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        collections = {item.collection for item in self.source().screens.installed_collections}
+        if len(self._targets(command)) > 1 and collections.intersection(self._targets(command)):
+            return self._declined(
+                command,
+                _lines(
+                    "a Collection is uninstalled from its own details, not ticked with artifacts",
+                    "untick the Collection, or open it and uninstall it there",
+                ),
+            )
         inspected = self._inspections(self._targets(command))
         if isinstance(inspected, Err):
             return self._declined(command, _refusal(inspected.diagnostics))
+        coordinates = [item.record.coordinate for item in inspected.value]
+        if len(set(coordinates)) != len(coordinates):
+            # A removal is keyed by artifact, so one artifact's installations in two harnesses
+            # cannot share one; said here rather than as the domain's "observed twice" (B-183).
+            return self._declined(
+                command,
+                _lines(
+                    "one artifact installed into two harnesses is uninstalled one harness at a time",
+                    "tick one installation of each artifact",
+                ),
+            )
         host = self._host()
         prepared = prepare_configured_uninstall(
             tuple(item.record for item in inspected.value),
@@ -2041,10 +2084,10 @@ class LocalConsumerActions:
         self._pending_host = host
         self._pending = prepared.value
         self._pending_action = command.action
-        # One artifact per removal review, because screen 18 renders one lifecycle plan. A
-        # Collection removal is a transaction and reaches this seam when Collections do (B-031).
+        # Several ticked on Installed are one removal: one review, one confirmation (D-393).
+        first, *rest = (project_lifecycle_plan(item) for item in prepared.value.proposal.lifecycle)
         return ConsumerActionUpdate(
-            self.source(lifecycle=project_lifecycle_plan(prepared.value.proposal.lifecycle[0])),
+            self.source(lifecycle=replace(first, also=tuple(rest))),
             ConsumerUiEvent(
                 ConsumerUiEventKind.ACTION_PREPARED,
                 action=command.action,
@@ -2297,7 +2340,7 @@ class LocalConsumerActions:
                 command,
                 _lines(
                     f"{alias} is an authoring Source, not a registry; "
-                    "its Candidates are promoted in Maintainer Mode"
+                    "its Candidates are promoted in Registry Maintainer Mode"
                 ),
             )
         identity = json.dumps(
@@ -2350,7 +2393,7 @@ class LocalConsumerActions:
             (
                 item
                 for item in self._context.effective.configuration.sources
-                if item.alias.value == command.focus and item.kind is SourceKind.REGISTRY_GIT
+                if item.alias.value == command.focus and item.is_registry
             ),
             None,
         )
@@ -2387,6 +2430,60 @@ class LocalConsumerActions:
                     default_effect,
                     "  keeps: all installed artifacts and receipts",
                     "  Marketplace will be reloaded from the Registries that remain connected.",
+                )
+            ),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=review_digest,
+            ),
+        )
+
+    def _prepare_source_removal(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Review removing one authoring Source: the same unsubscribe as `aart-cli source remove`.
+
+        Removing is how a Source whose origin, branch or kind was entered wrong is corrected:
+        removed here, then added again from Add Source (D-391). The port is the Registry one,
+        because the transaction is one; only the subject it is offered for differs.
+        """
+
+        if self._registry_removal is None:
+            return self._declined(command, _lines("Source removal is unavailable"))
+        source = next(
+            (
+                item
+                for item in self._context.effective.configuration.sources
+                if item.alias.value == command.focus and not item.is_registry
+            ),
+            None,
+        )
+        if source is None:
+            return self._declined(command, _lines(f"no authoring Source here is {command.focus}"))
+        identity = json.dumps(
+            {
+                "alias": source.alias.value,
+                "kind": source.kind.value,
+                "location": source.location,
+                "ref": source.ref,
+                "operation": "source-remove",
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        review_digest = "sha256:" + hashlib.sha256(identity).hexdigest()
+        self._pending = _PendingRegistryRemoval(source, review_digest)
+        self._pending_action = command.action
+        return ConsumerActionUpdate(
+            self.source(
+                notice=(
+                    "Remove Source review:",
+                    f"  Source: {source.alias}",
+                    f"  kind: {source.kind.value}",
+                    f"  origin: {redact_text(source.location)}",
+                    f"  branch or tag: {source.ref or 'repository default'}",
+                    "  removes: this Source, its AART-managed snapshot and its Candidates",
+                    "  keeps: every version already promoted into a Registry",
+                    "  Add it again from Add Source; Source Sync then rebuilds its Candidates.",
                 )
             ),
             ConsumerUiEvent(
@@ -2730,6 +2827,11 @@ class LocalConsumerActions:
         )
 
     def _prepare_mcp_test(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        if command.screen in (
+            ConsumerScreen.INSTALLED,
+            ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
+        ):
+            return self._prepare_installed_mcp_test(command)
         after = self._after_install
         if after is None or not after.records or after.test is None:
             return ConsumerActionUpdate(
@@ -2767,21 +2869,96 @@ class LocalConsumerActions:
             ),
         )
 
+    def _prepare_installed_mcp_test(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Review the test of installations chosen on Installed, or the one a details screen is.
+
+        Selection is installation-qualified exactly as `aart-cli mcp test` makes it (§170.1,
+        INV-254): each key is one installation in one harness, read back from the receipts now.
+        A chosen row that is not an MCP is refused by name rather than dropped, because a test
+        that quietly covers less than was ticked reads as a pass for what it skipped.
+        """
+
+        targets = self._targets(command)
+        if not targets:
+            return self._declined(command, _lines("select an installed MCP to test"))
+        others = tuple(key for key in targets if not installation_is_mcp(key))
+        if others:
+            return self._declined(
+                command,
+                _lines(
+                    *(f"{key} is not an MCP; only MCP installations are tested" for key in others),
+                    "untick it and test the MCPs alone",
+                ),
+            )
+        host = self._host()
+        views = {item.row: item for item in self.source().screens.installed}
+        try:
+            records = self._mcp_tester(host).installations(
+                scope=host.scope,
+                root=host.harness_root,
+                harnesses=frozenset(
+                    views[key].harness.partition("+")[0] for key in targets if key in views
+                ),
+                coordinates=frozenset(key.partition("#")[0] for key in targets),
+            )
+            chosen = tuple(record for record in records if _installation_of(record) in targets)
+            missing = tuple(
+                key for key in targets if key not in {_installation_of(item) for item in chosen}
+            )
+            if missing:
+                return self._declined(
+                    command,
+                    _lines(*(f"{key} has no recorded MCP installation to test" for key in missing)),
+                )
+            planned = self._mcp_tester(host).plan(chosen)
+        except Exception:  # noqa: BLE001 - a test that cannot be prepared changes nothing
+            return self._declined(
+                command, _lines("the installed MCPs could not be read for a test")
+            )
+        plan = tuple(
+            McpTestEntryView(item.installation, item.tool, item.arguments) for item in planned
+        )
+        digest = hashlib.sha256(
+            json.dumps(
+                [[item.installation, item.tool, item.arguments] for item in plan],
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        test = McpTestView(tuple(_installation_of(item) for item in chosen), plan=plan)
+        self._pending_host = host
+        self._pending = _PendingMcpTest(chosen, digest, installed=test)
+        self._pending_action = command.action
+        return ConsumerActionUpdate(
+            self.source(mcp_test=test),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=digest,
+            ),
+        )
+
     def _execute_mcp_test(
         self, command: ConsumerUiCommand, pending: _PendingMcpTest
     ) -> ConsumerActionUpdate:
         """Run the reviewed test once. Its outcome is an answer, never a change to the install."""
 
         self._pending, self._pending_action = None, None
-        after = self._after_install
-        assert after is not None and after.test is not None
+        test = pending.installed
+        if test is None:
+            after = self._after_install
+            assert after is not None and after.test is not None
+            test = after.test
+
+        def drawn(view: McpTestView, notice: tuple[str, ...] = ()) -> CanonicalScreenSource:
+            if pending.installed is not None:
+                return self.source(mcp_test=view, notice=notice)
+            return self._after_install_source(view, notice)
+
         try:
             ran = self._mcp_tester(self._reviewed_host()).run(pending.records)
         except Exception:  # noqa: BLE001 - a test that cannot run is reported, not escalated
             return ConsumerActionUpdate(
-                self._after_install_source(
-                    after.test, _lines("the MCP test could not be run; the install is unchanged")
-                ),
+                drawn(test, _lines("the MCP test could not be run; the installation is unchanged")),
                 ConsumerUiEvent(ConsumerUiEventKind.ACTION_FAILED, action=command.action),
             )
         results = tuple(
@@ -2796,7 +2973,7 @@ class LocalConsumerActions:
         )
         recorded_at, _ = self._moment()
         return ConsumerActionUpdate(
-            self._after_install_source(replace(after.test, results=results)),
+            drawn(replace(test, results=results)),
             ConsumerUiEvent(
                 ConsumerUiEventKind.ACTION_RECORDED, action=command.action, text=recorded_at
             ),

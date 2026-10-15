@@ -21,7 +21,6 @@ from aart_cli.application.sources import (
     publish_source_while_locked,
     resolve_source_while_locked,
 )
-from aart_cli.configuration.model import SourceKind
 from aart_cli.configuration.policy import redact_text
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import (
@@ -251,7 +250,7 @@ class PreparedSourceSync:
     def __post_init__(self) -> None:
         if (
             not isinstance(self.request, SourceSyncRequest)
-            or self.request.source.kind is SourceKind.REGISTRY_GIT
+            or self.request.source.is_registry
             or not isinstance(self.baseline, SourceSyncBaseline)
             or not isinstance(self.approved, ApprovedRegistryState)
         ):
@@ -315,7 +314,7 @@ def prepare_source_sync(
         approved, ApprovedRegistryState
     ):
         return _error("preparing Source Sync needs typed Source and registry observations")
-    if request.source.kind is SourceKind.REGISTRY_GIT:
+    if request.source.is_registry:
         return _error("Source Sync screens act on authoring Sources, not registries")
     if not request.source.enabled:
         return _error("disabled authoring Source cannot be synchronized")

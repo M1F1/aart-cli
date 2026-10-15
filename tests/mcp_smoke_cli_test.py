@@ -171,5 +171,50 @@ class McpSmokeCliTest(unittest.TestCase):
         self.assertIsNotNone(shown.response)
 
 
+class TheReasonNamesWhatIsMissingTest(unittest.TestCase):
+    """A protocol stage that is NOT CONFIGURED says which of two different problems it is."""
+
+    def _intent(self, smoke: JsonObject | None) -> JsonObject:
+        return JsonObject(() if smoke is None else (("smoke_test", smoke),))
+
+    def test_an_artifact_without_a_smoke_test_is_told_to_declare_one(self) -> None:
+        declaration, reason = installed_smoke.declared_smoke(self._intent(None))
+
+        self.assertIsNone(declaration)
+        self.assertIn("declares no smoke_test", reason or "")
+
+    def test_a_smoke_test_with_a_former_key_names_that_key(self) -> None:
+        old = JsonObject(
+            (
+                ("tool", "read_identity"),
+                ("read_only", True),
+                ("arguments", JsonObject(())),
+                ("timeout_seconds", 15),
+                ("expect", JsonObject(())),
+            )
+        )
+
+        declaration, reason = installed_smoke.declared_smoke(self._intent(old))
+
+        self.assertIsNone(declaration)
+        self.assertIn("no longer accepted: expect", reason or "")
+        self.assertNotIn("declares no smoke_test", reason or "")
+
+    def test_a_valid_smoke_test_is_the_declaration(self) -> None:
+        valid = JsonObject(
+            (
+                ("tool", "read_identity"),
+                ("read_only", True),
+                ("arguments", JsonObject(())),
+                ("timeout_seconds", 15),
+            )
+        )
+
+        declaration, reason = installed_smoke.declared_smoke(self._intent(valid))
+
+        self.assertIsNone(reason)
+        self.assertEqual(declaration, SmokeDeclaration("read_identity", JsonObject(()), 15))
+
+
 if __name__ == "__main__":
     unittest.main()

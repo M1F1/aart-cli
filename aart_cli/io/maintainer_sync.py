@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 
 from aart_cli.application.maintainer_sync import (
     ApprovedRegistryState,
@@ -17,7 +18,7 @@ from aart_cli.application.sources import SourceSyncRequest
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.identifiers import ArtifactCoordinate, ObjectDigest, SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.protocol.authoring import compile_author_source
 from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
@@ -84,8 +85,9 @@ def read_approved_registry_state(
 
     if not isinstance(effective, EffectiveConfiguration) or not isinstance(alias, SourceAlias):
         return _error("reading approved registry state needs effective configuration and an alias")
-    registry = _configured(effective, alias, kind=SourceKind.REGISTRY_GIT)
-    if registry is None:
+    registry = _configured(effective, alias)
+    # Either transport (D-350): a local Registry has an approved state exactly like a Git one.
+    if registry is None or not registry.is_registry:
         return _error(f"target registry {alias} is not configured and enabled")
     paths = source_store_paths(data_root, source_instance_id(registry))
     current = read_current_source(CurrentSourceRequest(paths, alias))
@@ -105,11 +107,47 @@ def read_approved_registry_state(
                 alias,
                 current.value.candidate.resolved_revision,
                 current.value.candidate.snapshot_digest,
-                versions.value,
+                # A version record names the registry that approved it; this connection may be
+                # configured under another alias (D-350). The alias wins, as it does where the
+                # same versions are offered, and the publication stage is kept as written.
+                tuple(
+                    version
+                    if version.coordinate.source == alias
+                    else replace(
+                        version,
+                        coordinate=ArtifactCoordinate(
+                            alias, version.coordinate.artifact, version.coordinate.version
+                        ),
+                    )
+                    for version in versions.value
+                ),
             )
         )
     except ValueError as error:
         return _error(str(error))
+
+
+def _enabled_registries(effective: EffectiveConfiguration) -> tuple[SourceAlias, ...]:
+    return tuple(
+        source.alias
+        for source in effective.configuration.sources
+        if source.enabled and source.is_registry
+    )
+
+
+def _target_registry(effective: EffectiveConfiguration) -> SourceAlias | None:
+    """The configured default registry, or the only enabled one when none is the default.
+
+    Disconnecting the default Registry clears the default and names no replacement, and nothing
+    else can name one for a Registry that is already connected, so Source Sync refused for good
+    with one Registry plainly in place (D-390). A single enabled Registry is not a choice.
+    """
+
+    default = effective.configuration.default_registry
+    if default is not None:
+        return default
+    registries = _enabled_registries(effective)
+    return registries[0] if len(registries) == 1 else None
 
 
 def prepare_configured_source_sync(
@@ -129,12 +167,17 @@ def prepare_configured_source_sync(
     ):
         return _error("preparing configured Source Sync needs effective configuration and an alias")
     source = _configured(effective, source_alias)
-    if source is None or source.kind is SourceKind.REGISTRY_GIT:
+    if source is None or source.is_registry:
         return _error(f"authoring Source {source_alias} is not configured and enabled")
-    target = effective.configuration.default_registry
+    target = _target_registry(effective)
     if target is None:
         return _error(
-            "Source Sync needs an explicit default target registry",
+            "Source Sync needs a default target registry: "
+            + (
+                "no Registry is connected"
+                if not _enabled_registries(effective)
+                else "several Registries are connected and none is the default"
+            ),
             # `D-238`: remediation is a sorted set of independent remedies, so an ordered
             # sequence of steps has to be one of them (`QA-060`).
             "publish the Registry to its branch, subscribe to it in this project, then "

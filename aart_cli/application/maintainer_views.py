@@ -1,4 +1,4 @@
-"""Pure Maintainer Mode screen identities and forward navigation.
+"""Pure Registry Maintainer Mode screen identities and forward navigation.
 
 The catalog is separate from the consumer catalog because the product makes visibility of the
 whole maintainer surface an explicit preference boundary.  Both catalogs still travel through the
@@ -46,7 +46,7 @@ from aart_cli.application.promotion import (
     promotion_source_provenance,
     registry_state_digest,
 )
-from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.configuration.model import ConfiguredSource
 from aart_cli.configuration.policy import redact_text
 from aart_cli.domain.artifacts import ArtifactKind
 from aart_cli.domain.candidates import (
@@ -188,9 +188,9 @@ REGISTRY_STAGE_PURPOSE: dict[str, str] = {
 
 
 class MaintainerScreen(str, Enum):
-    """The accepted Maintainer Mode screen catalog, numbered 30 through 53."""
+    """The accepted Registry Maintainer Mode screen catalog, numbered 30 through 53."""
 
-    DASHBOARD = "30-maintainer-dashboard"
+    DASHBOARD = "30-registry-maintainer-dashboard"
     SOURCES = "31-sources"
     # 31a/31b are the Add Source form and its review, numbered the way screen 21's own addition
     # pair is (B-083).  They are Maintainer screens because a Source is an authoring/discovery
@@ -198,6 +198,8 @@ class MaintainerScreen(str, Enum):
     # one.
     SOURCE_ADD = "31a-add-source"
     SOURCE_ADD_REVIEW = "31b-review-source"
+    # 31c is the review a Source is removed from, the way 21d is a Registry's (D-391).
+    SOURCE_REMOVE = "31c-remove-source"
     SOURCE_DETAILS = "32-source-details"
     SOURCE_SYNC = "33-source-sync"
     SOURCE_SYNC_RESULT = "34-source-sync-result"
@@ -212,7 +214,7 @@ class MaintainerScreen(str, Enum):
     REGISTRY_DIFF = "43-registry-diff"
     REGISTRY_VALIDATION = "44-registry-validation"
     REGISTRY_COMMIT = "45-registry-commit"
-    REGISTRY = "46-registry-maintainer"
+    REGISTRY = "46-registry-workspace"
     # 46a/46b are the Initialize Registry form and its review, lettered the way 21a/21b and 31a/31b
     # are (B-090).  Screen 46 is where a maintainer looks at the registry this project publishes, so
     # it is where the registry that does not exist yet is created, and the run stays local.  AART
@@ -2657,7 +2659,7 @@ def project_maintainer_source(
 
     if (
         not isinstance(configured, ConfiguredSource)
-        or configured.kind is SourceKind.REGISTRY_GIT
+        or configured.is_registry
         or not isinstance(health, SourceHealth)
         or not (scan is None or isinstance(scan, SourceScan))
     ):
@@ -2742,9 +2744,11 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
         MaintainerScreen.SOURCE_ADD,
         MaintainerScreen.SOURCE_DETAILS,
         MaintainerScreen.SOURCE_SYNC,
+        MaintainerScreen.SOURCE_REMOVE,
     ),
     MaintainerScreen.SOURCE_ADD: (MaintainerScreen.SOURCE_ADD_REVIEW,),
     MaintainerScreen.SOURCE_ADD_REVIEW: (MaintainerScreen.SOURCES,),
+    MaintainerScreen.SOURCE_REMOVE: (MaintainerScreen.SOURCES,),
     MaintainerScreen.SOURCE_DETAILS: (MaintainerScreen.SOURCE_SYNC,),
     MaintainerScreen.SOURCE_SYNC: (MaintainerScreen.SOURCE_SYNC_RESULT,),
     # A finished sync is the end of a Source journey, so it offers the list that journey
@@ -3787,8 +3791,14 @@ def project_maintainer_registry(
     approved: ApprovedRegistryState | None,
     registry_snapshot: SourceSnapshot | None,
     checkout: SourceSnapshot | None,
+    *,
+    unavailable: tuple[str, ...] = (),
 ) -> MaintainerRegistryView:
     """Project screen 46 from durable registry evidence and one observed local checkout.
+
+    ``unavailable`` is why reading the approved state failed, when it did. A registry that is not
+    a configured Git registry, or whose stored snapshot does not read, is not one that merely has
+    not been synchronized yet, and saying so would send its Maintainer to the wrong fix.
 
     The checkout is a separate observation on purpose: synchronized source-store content is an
     immutable record of what the registry published, and answering "does my working tree still
@@ -3813,7 +3823,7 @@ def project_maintainer_registry(
             (),
             MaintainerWorkingTreeView(MaintainerWorkingTreeState.UNOBSERVED, None),
             (),
-            (f"registry {alias.value} has no synchronized approved state yet",),
+            unavailable or (f"registry {alias.value} has no synchronized approved state yet",),
         )
     snapshot = str(approved.snapshot_digest)
     # A durable record may hold the kind as its wire string; the view states the typed kind.

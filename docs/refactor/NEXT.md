@@ -10,6 +10,10 @@ GitHub as the epic #51 and labelled `critical-path`.** Its six steps are in `pla
 whole stack (run 38571928092). **CP-28 is complete.** What remains is the owner reviewing and merging
 the draft stack #52 → #55 → #56 → #57 → D-378 → #58 in order, and seeing it once in a live terminal.
 
+**After 0.6.0 (D-380).** The owner's first use found that the harness was asked for again after the
+form, that the form ran together, and that a `NOT CONFIGURED` smoke reason was opaque. All three
+are fixed on `fix/required-inputs-go-forward`. B-178 and B-179 are backlog.
+
 The goal is a release somebody in the owner's company installs. That narrows the path to one
 person -- a consumer installing artifacts into opencode who wants to know they work -- and makes
 everything else backlog, however ready it looks. The ordered list lives on #51; its members are

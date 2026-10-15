@@ -4,6 +4,39 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-15, D-401–D-403: the install flow is quieter and has one final review.** Review
+Selection (05) in Fast keeps only what is wrong with the harness choice, without the count of
+Marketplace ticks. Statements on Installing, the MCP test and the Dashboard's recent activity are
+parted by blank lines (D-402). Screen 08 Remediation is gone: Ready lists the material changes it
+agrees to (D-403, §161.5 08/09 and INV-197 amended). Evidence: `tests/remediation_changes_test.py`,
+`tests/statements_breathe_test.py`, `tests/fast_shows_less_test.py`; scoped suites and gates green.
+
+**2026-10-15, D-381: a running screen's defect is no longer hidden by the text fallback.** Opening
+Doctor restarted the TUI in the line terminal. `run_consumer` now degrades only when curses fails
+to start. The underlying Doctor defect still needs the owner's `AART_CLI_DEBUG=1` traceback.
+Evidence: `RunConsumerBoundaryTests`, red before the change; the fallback boundary suites are
+green.
+
+**2026-10-14, D-380: Required Inputs goes forward, and the form is spaced and quiet.** These are
+fixes from the owner's first use of 0.6.0.
+
+- After the 07 form, the install no longer returns to 05 to ask for the harness, or to a 07
+  summary. It goes to Remediation only when a decision is needed, then Ready.
+- Fields are separated by blank lines, and the credential and storage prose under the form is gone.
+- A `NOT CONFIGURED` protocol stage now says whether the artifact declares no `smoke_test` or one
+  with a refused key.
+
+Evidence:
+
+- New `tests/inputs_go_forward_test.py`. Its end-to-end case runs from Marketplace to Success with
+  no 05 frame after the form.
+- Rewritten form tests in `install_time_config_form_test.py`, and `TheReasonNamesWhatIsMissingTest`.
+- Three targeted mutations, each red: following the named screen, hiding the harness rows, and the
+  blank line.
+- 1,025 focused tests and the frame matrix are green. Typecheck, lint and docs-check are clean.
+
+Not yet observed live.
+
 **2026-10-14, CP-28 step 6 — full verification: VERIFIED on CI.** **`pr-check` passed on PR #58 at `fb8a1d6`, which contains every CP-28 step.** Run 38571928092, 2026-10-14.
 
 - Python 3.10, 3.11 and 3.14 all passed.

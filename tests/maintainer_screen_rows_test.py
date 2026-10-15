@@ -3,7 +3,7 @@
 The audit found the Maintainer lists breaking §167's shared frame the way the Consumer lists had:
 Candidates drew its cursor inside a table gutter no reader of rows would recognise, Validation and
 Bulk Promotion drew no cursor at all, Scan Result and Adopted Artifacts explained their keys in
-prose among the rows, and Candidate Filters, Collection Candidates, Registry Maintainer and the scan
+prose among the rows, and Candidate Filters, Collection Candidates, Registry Workspace and the scan
 grew their rows when `v` was pressed instead of describing the row under the cursor.
 """
 
@@ -181,8 +181,8 @@ class RegistryMaintainerTest(_Contract):
         self.assertKeepsTheFrame(source, state)
         fast = compose_frame(source, state)
         verbose = compose_frame(source, _verbose(state))
-        self.assertNotIn("- Connected Registry snapshots", fast.status)
-        self.assertIn("- Connected Registry snapshots", verbose.status)
+        self.assertNotIn("- connected Registry snapshots", fast.status)
+        self.assertIn("- connected Registry snapshots", verbose.status)
         self.assertEqual(verbose.described, ())
 
     def test_46_verbose_spells_out_the_digests_the_row_shortens(self) -> None:
@@ -276,7 +276,8 @@ class BulkPromotionTest(_Contract):
             ("company", "  No Candidate of this registry can be promoted right now."),
         )
         self.assertEqual(
-            maintainer_bulk_promotion_status((refused,)), ("company", "  - the registry is invalid")
+            maintainer_bulk_promotion_status((refused,)),
+            ("company", "  - the registry is invalid"),
         )
         self.assertTrue(offered and all(view.candidates for view in offered))
         self.assertEqual(maintainer_bulk_promotion_status(offered), ())

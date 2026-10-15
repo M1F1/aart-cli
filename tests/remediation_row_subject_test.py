@@ -10,7 +10,7 @@ sees in Fast dropped it.
 `QA-078`'s narrowing removes most of the duplication by not planning setup for harnesses the
 artifact was never installed into. This holds the other half: where several rows legitimately
 remain, they say which is which. CP-23 task 08 reworded each row as the change AART will make
-(D-258); the claim is unchanged.
+(D-258), and D-403 moved the list onto Ready; the claim is unchanged.
 """
 
 from __future__ import annotations
@@ -18,9 +18,10 @@ from __future__ import annotations
 import dataclasses
 import unittest
 
-from aart_cli.application.consumer_views import PresentationProfile, RemediationView
+from aart_cli.application.consumer_views import RemediationView
 from aart_cli.domain.result import Ok
-from aart_cli.tui_consumer import render_remediation
+from aart_cli.tui_consumer import remediation_change
+from aart_cli.tui_layout import list_item
 from tests.consumer_flow_test import _begin
 
 
@@ -31,7 +32,8 @@ class RemediationRowNamesItsSubjectTest(unittest.TestCase):
         begun = _begin()
         assert isinstance(begun, Ok), getattr(begun, "diagnostics", ())
         view = dataclasses.replace(begun.value.plan, remediations=remediations)
-        return render_remediation(view, PresentationProfile.FAST)
+        # A harness's change is More info's on Ready, so the rows are read as Ready would list them.
+        return tuple(list_item(remediation_change(item)) for item in view.remediations)
 
     def _harness(self, name: str) -> RemediationView:
         return RemediationView(
@@ -65,8 +67,8 @@ class RemediationRowNamesItsSubjectTest(unittest.TestCase):
 
         rows = self._rows(plain, unknown)
 
-        self.assertIn("  Store the credential it needs securely", rows)
-        self.assertIn("  Tune cache", rows)
+        self.assertIn("  - store the credential it needs securely", rows)
+        self.assertIn("  - tune cache", rows)
 
 
 if __name__ == "__main__":

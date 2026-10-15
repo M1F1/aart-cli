@@ -190,7 +190,7 @@ class FailedActionFrameTest(unittest.TestCase):
         # `QA-096`: the refusal is a statement in the notice block, so it is marked and its case
         # is settled where the words become a screen rather than where the diagnostic is written.
         self.assertIn(
-            "Registry rebuild stopped at lock: required file is missing.",
+            "registry rebuild stopped at lock: required file is missing",
             " ".join(drawn),
         )
 
@@ -206,7 +206,7 @@ class FailedActionFrameTest(unittest.TestCase):
         )
 
         self.assertIn("[Enter] Confirm", " ".join(drawn))
-        self.assertNotIn("This run stopped", " ".join(drawn))
+        self.assertNotIn("this run stopped", " ".join(drawn))
         self.assertNotIn("did not run", drawn[0])
 
 
@@ -261,7 +261,7 @@ class FailedActionShellTest(unittest.TestCase):
 
             stopped = next("\n".join(item) for item in terminal.frames if "did not run" in item[0])
 
-            self.assertIn("This run stopped", stopped)
+            self.assertIn("this run stopped", stopped)
             # `lock` over the approved representation resolves nothing and reports that, so the
             # broken marker is first read by `validate` (`CP-26.5`). What the screen has to show
             # is which stage refused and that the rest did not run, not which stage that is.
@@ -271,7 +271,7 @@ class FailedActionShellTest(unittest.TestCase):
             self.assertNotIn("Enter Confirm", stopped)
             self.assertNotIn("press Enter to start it", stopped)
             # The fourth Enter is the way out the screen advertises, and it has to work.
-            self.assertIn("AART / Registry Maintainer", terminal.frames[-1][0])
+            self.assertIn("AART / Registry Workspace", terminal.frames[-1][0])
 
 
 if __name__ == "__main__":

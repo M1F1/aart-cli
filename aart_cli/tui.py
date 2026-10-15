@@ -66,6 +66,7 @@ from .io.maintainer_views import read_maintainer_views
 from .model import (
     Request,
 )
+from .redaction import redact_text
 from .setup import (
     SETUP_EFFECT_PROMPT,
     SETUP_QUEUE_PROMPT,
@@ -564,6 +565,23 @@ class InternalFailureContext:
         self.operation = operation
 
 
+def failure_location(error: BaseException) -> str | None:
+    """Where in this package a defect was raised, as ``aart_cli/<module>.py:<line> in <function>``.
+
+    Only the package-relative path is named, never the absolute one: the location tells a reader
+    which code broke without disclosing where this machine keeps it, or anything the message says.
+    """
+
+    package = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(package)
+    located = None
+    for frame in traceback.extract_tb(error.__traceback__):
+        path = os.path.abspath(frame.filename)
+        if path.startswith(package + os.sep):
+            located = f"{os.path.relpath(path, root)}:{frame.lineno} in {frame.name}"
+    return located
+
+
 def internal_failure_lines(
     error: BaseException,
     context: InternalFailureContext | None = None,
@@ -576,12 +594,33 @@ def internal_failure_lines(
     """
 
     failure_context = context or InternalFailureContext()
+    location = failure_location(error)
     return (
         f"internal error: {INTERNAL_FAILURE_CODE}",
         f"  stage: {failure_context.stage}",
         f"  operation: {failure_context.operation}",
         f"  type: {type(error).__name__}",
+        *((f"  at: {location}",) if location else ()),
         "next: rerun the command; if it repeats, report it with the steps that reached this screen.",
+        "  AART_CLI_DEBUG=1 prints the full traceback on stderr.",
+    )
+
+
+def text_fallback_lines(unavailable: BaseException) -> Tuple[str, ...]:
+    """Why the full-screen terminal was given up, said before the text terminal starts (D-381).
+
+    A terminal's own refusal is about the terminal -- ``setupterm`` and ``cbreak`` say what they
+    could not do -- so its message is shown, redacted like any free text.
+    """
+
+    cause = unavailable.__cause__ or unavailable
+    location = failure_location(cause)
+    message = redact_text(str(cause)).replace("\n", " ").strip()
+    return (
+        "The full-screen terminal could not start, so AART continues in the text terminal.",
+        f"  reason: {type(cause).__name__}" + (f": {message}" if message else ""),
+        *((f"  at: {location}",) if location else ()),
+        f"  TERM={os.environ.get('TERM', '')}",
     )
 
 
@@ -733,12 +772,17 @@ class _CursesTerminal:
         # a long report that pushed the keys off screen would recreate the first-run trap the footer
         # exists to remove. The terminal only places and clips the already-composed frame; what a key
         # means, and what a screen says, remain in the pure shell.
-        from .tui_layout import anchor, footer_start
+        from .tui_layout import footer_start, wrap_lines
 
-        placed = anchor(lines, height=drawable)
-        start = footer_start(placed)
-        footer = placed[start:][:drawable]
-        body = placed[:start][: max(drawable - len(footer), 0)]
+        # Wrapped before it is placed (D-386): a line cut at the edge lost the end of what it said.
+        # The footer is found on the composed frame and each part wrapped on its own, because a
+        # wrapped frame no longer carries the full-width rule that says where the footer begins,
+        # and the padding has to count the rows the wrapped body and legend really take.
+        start = footer_start(lines)
+        footer = wrap_lines(lines[start:], width=width)[:drawable]
+        body = wrap_lines(lines[:start], width=width)
+        body = (*body, *("",) * max(drawable - len(body) - len(footer), 0))
+        body = body[: max(drawable - len(footer), 0)]
         for row, line in enumerate((*body, *footer)):
             self._stdscr.addstr(row, 0, line[: max(width - 1, 0)])
         self._stdscr.refresh()
@@ -862,6 +906,10 @@ def run_consumer(actions: LocalConsumerActions, *, workspace: str = "") -> Consu
     captured: dict = {}
 
     def _ui(stdscr) -> None:
+        # From here curses has started, so whatever fails is the application's and not the
+        # terminal's: it must surface as itself rather than restart everything in the line
+        # terminal with the defect unreported.
+        captured["started"] = True
         # The screen exists only from here.  Binding it is what turns the composed handover from
         # an inert one into the real loan a credential prompt needs (`QA-081`).
         loan = actions.terminal_handover
@@ -880,7 +928,7 @@ def run_consumer(actions: LocalConsumerActions, *, workspace: str = "") -> Consu
     except CursesUnavailable:
         raise
     except Exception as error:  # pragma: no cover - terminal capability failure
-        if "state" in captured:
+        if "started" in captured:
             raise
         raise CursesUnavailable("the curses application could not start") from error
     state = captured.get("state")
@@ -1413,11 +1461,13 @@ def run(
         canonical_failures.stage = "curses"
         try:
             run_consumer(composed.value, workspace=workspace)
-        except CursesUnavailable:
+        except CursesUnavailable as unavailable:
             # The terminal claimed it could and could not. That is ERR05's one legitimate
             # degradation, and it lands on the same application in a line-oriented terminal
-            # rather than on a second curses attempt or a different product.
-            pass
+            # rather than on a second curses attempt or a different product. It says why first,
+            # because a fallback nobody can explain cannot be fixed (D-381).
+            for line in text_fallback_lines(unavailable):
+                print(line)
         except Exception as error:
             # The outermost crash boundary for the canonical application. ``curses.wrapper`` has
             # already restored the terminal; broad catching is for rendering, never for starting

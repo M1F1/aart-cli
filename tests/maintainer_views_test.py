@@ -252,7 +252,7 @@ class MaintainerRenderingTest(unittest.TestCase):
             entering=True,
         )
 
-        self.assertIn("Sources: 1", "\n".join(frame(source, dashboard)))
+        self.assertIn("sources: 1", "\n".join(frame(source, dashboard)))
         self.assertNotIn("not available yet", "\n".join(frame(source, dashboard)))
 
         sources = _reload(

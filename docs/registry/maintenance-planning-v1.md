@@ -28,7 +28,7 @@ version records already carry the required pins. `publish` uses the shared publi
 to plan derived changes, validate and audit the projected snapshot, list every Git change and,
 when finalized, create one local commit. It does not push.
 
-Registry Maintainer exposes Push separately on its local workspace row. Readiness is derived from
+Registry Workspace exposes Push separately on its local workspace row. Readiness is derived from
 the exact committed canonical content and all mandatory gates, not a previous wizard result.
 The review shows the target branch; execution rechecks the commit and refuses main/default-branch
 publication and force updates. Review/merge and consumer Registry Sync remain separate actions.

@@ -248,7 +248,7 @@ Each entry records:
 
 - [ ] **QA-025 — Re-running a registry's generated files exists in the TUI but rejects its output.**
       Stage: after promoting, adopting or editing anything in the registry checkout
-      Surface: Registry Maintainer → Rebuild (46h/46i)
+      Surface: Registry Workspace → Rebuild (46h/46i)
       Severity: blocking
       Blocks current stage: yes; skip Rebuild during discovery
       Reproduction: promote a Candidate through the TUI, then choose `b`, `Everything, in order`,
@@ -270,7 +270,7 @@ Each entry records:
       Enter, and confirm the run completes.
 
 - [ ] **QA-026 — The footer does not name the keys the current screen actually has.**
-      Stage: every screen; found while walking Maintainer Mode
+      Stage: every screen; found while walking Registry Maintainer Mode
       Surface: shell chrome, every screen
       Severity: high
       Blocks current stage: no, but it makes every other finding harder to report
@@ -307,7 +307,7 @@ Each entry records:
       return must cover completed Candidate workflows, not only Source Sync.
       Fix: Source Sync Result binds Enter to Sources — the list that journey started from — and
       the route is declared in the navigation map, because a key that navigates somewhere the map
-      does not allow is a key that does nothing. Registry Maintainer gains `c Candidates`, so the
+      does not allow is a key that does nothing. Registry Workspace gains `c Candidates`, so the
       screen a finished promotion lands on is one key from the next promotion instead of an Esc
       for every screen just walked. Screen 45's own Enter still goes on to Registry, which is the
       precedent this generalizes rather than replaces (`D-210`).
@@ -315,7 +315,7 @@ Each entry records:
       footer label, the move it really makes, both halves of the finding, and that a review still
       waiting for its confirmation is not treated as a result.
       Retest: Sources → `s` → review → Enter → Source Sync Result → Enter should land on Sources;
-      after a promotion, `c` from Registry Maintainer should reach Candidates.
+      after a promotion, `c` from Registry Workspace should reach Candidates.
 
 - [ ] **QA-028 — Add Source opens holding the previous Source's answers.**
       Stage: adding a second authoring Source
@@ -388,12 +388,12 @@ Each entry records:
       Stage: Registry maintenance after a canonical promotion
       Surface: Review Rebuild (46i) after execution has already stopped
       Severity: high
-      Blocks current stage: no; pressing Esc twice still reaches Registry Maintainer
-      Reproduction: Registry Maintainer → `b` → choose the whole rebuild → Enter to review → Enter
+      Blocks current stage: no; pressing Esc twice still reaches Registry Workspace
+      Reproduction: Registry Workspace → `b` → choose the whole rebuild → Enter to review → Enter
       to run; let `lock` refuse because the canonical promoted Registry has no legacy
       `artifact.json`
       Expected: the screen clearly becomes a finished/refused result, removes the confirmation
-      prompt and offers one honest route back to Registry Maintainer or to prepare a fresh retry
+      prompt and offers one honest route back to Registry Workspace or to prepare a fresh retry
       Observed: the body says the run stopped, but the title remains `Review Rebuild`, the header
       still says `press Enter to start it`, and the footer still advertises `Enter Confirm`. The
       action adapter has already cleared its pending run, so another Enter can only answer
@@ -480,8 +480,8 @@ Each entry records:
       Retest: configure Registry and authoring Source entries, open Registries, and confirm only the
       Registry connection appears and `s` refreshes the visibly focused Registry.
 
-- [ ] **QA-044 — Registry Maintainer contradicts the connected Registry with local-project state.**
-      Surface: Registry Maintainer. Severity: high. The frame can show a valid connected Registry
+- [ ] **QA-044 — Registry Workspace contradicts the connected Registry with local-project state.**
+      Surface: Registry Workspace. Severity: high. The frame can show a valid connected Registry
       and then say there is no Registry to rebuild because it silently switches subjects to the
       current project; its remediation also leaks the internal name `Screen 46`. Expected: label
       connected Registry snapshots and the local Registry workspace separately, name the current
@@ -505,7 +505,7 @@ Each entry records:
       advances directly to the first genuinely required input/remediation decision or Ready.
       CP-20 step 2.
       Fix: inspection still contributes to the immutable plan, while Fast mode advances directly
-      to Required Inputs, Remediation or Ready. Evidence: `tests/consumer_install_flow_shell_test.py`.
+      to Required Inputs or Ready (Remediation folded into Ready, D-403). Evidence: `tests/consumer_install_flow_shell_test.py`.
 
 - [ ] **QA-047 — Success requires backing out of a completed installation wizard.**
       Surface: installation Success. Severity: high. Expected: Enter on Done completes the wizard
@@ -517,7 +517,7 @@ Each entry records:
 - [ ] **QA-048 — Section rules and Settings groups run together vertically.**
       Surface: shared section layout and Settings. Severity: medium. Expected: one blank line on
       both sides of section text, one blank between Settings groups, and one blank before the
-      Maintainer Mode explanatory sentence. CP-20 step 2.
+      Registry Maintainer Mode explanatory sentence. CP-20 step 2.
       Fix: the shared section primitive owns blank lines on both sides, and Settings renders its
       groups as separate blocks. Evidence: `tests/tui_layout_test.py`, `tests/consumer_views_test.py`.
 
@@ -584,9 +584,10 @@ Each entry records:
       Evidence: `tests/manual_test_lab_test.py`, plus a driven text-TUI run reaching
       `[n] Initialize` on the empty Registry.
 
-- [ ] **QA-056 — A promotion cannot be completed from the CLI without fabricating its evidence.**
-      Surface: `aart-cli registry promote`. Severity: medium. **Unconfirmed — verify during the CLI
-      run.** Observed in code: `registry promote` requires `--validation-report DIGEST` and
+- [x] **QA-056 — A promotion cannot be completed from the CLI without fabricating its evidence.**
+      **Resolved by D-387 (GitHub #62):** `registry promote` now runs validation and policy per
+      Candidate itself, states the digests in its review and has no evidence flags. Original
+      finding follows. Surface: `aart-cli registry promote`. Severity: medium. Observed in code: `registry promote` requires `--validation-report DIGEST` and
       `--policy-result DIGEST`, and no CLI command emits either; `validation_report_digest` is
       derived in the application layer and displayed only by the Maintainer screens. An operator
       following a CLI-only route therefore either reads the digests off the TUI, which makes the

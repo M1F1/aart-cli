@@ -173,10 +173,6 @@ class MaintainerScanCliTest(unittest.TestCase):
                 *common,
                 "--candidate",
                 candidate_id,
-                "--validation-report",
-                "sha256:" + "7" * 64,
-                "--policy-result",
-                "sha256:" + "8" * 64,
                 "--json",
             ]
             review_output = io.StringIO()

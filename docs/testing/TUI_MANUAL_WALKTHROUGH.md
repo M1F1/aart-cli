@@ -76,7 +76,7 @@ place named once (`D-236`); the launch directory is the footer's caption, flush 
 the keys rather than a second line under the title (`D-242`, revising `D-235`):
 
 ```
-AART / Maintainer / Sources
+AART / Registry Maintainer / Sources
 
   …the screen…
 
@@ -108,17 +108,17 @@ deliberate press:
 
 Open `make manual-test-maintainer`. You start on the consumer Dashboard, first run.
 
-## 1 — Turn on Maintainer Mode
+## 1 — Turn on Registry Maintainer Mode
 
-- [ ] Dashboard → **Settings** → move to **Maintainer Mode** → `Space`.
+- [ ] Dashboard → **Settings** → move to **Registry Maintainer Mode** → `Space`.
 - [ ] Return with `Esc`.
 
-Expected: the Dashboard now lists **Maintainer Dashboard** as a destination. Settings explains what
+Expected: the Dashboard now lists **Registry Maintainer Dashboard** as a destination. Settings explains what
 the mode hides when it is off.
 
 ## 2 — Create the Registry
 
-- [ ] **Maintainer Dashboard** → **Registry Maintainer**.
+- [ ] **Registry Maintainer Dashboard** → **Registry Workspace**.
 
 Expected: two clearly separate blocks — *Connected Registry snapshots* (none) and *Local Registry
 workspace*, which says the current project is not a Registry and that Initialize creates one here.
@@ -167,7 +167,7 @@ a subscription reads a remote — so publishing it comes before syncing, not onl
 git -C /tmp/aart-cli-manual-lab/repositories/registry push origin HEAD
 ```
 
-- [ ] Back in the TUI: **Maintainer Dashboard** → `Esc` → **Registries** → `a` (**Add Registry**).
+- [ ] Back in the TUI: **Registry Maintainer Dashboard** → `Esc` → **Registries** → `a` (**Add Registry**).
 
 | row | what to enter |
 |---|---|
@@ -181,7 +181,7 @@ This is the same Add Registry form a consumer uses; here you are subscribing to 
 so that Sync has a baseline. The Registry is empty at this point, which is correct — every
 Candidate will therefore be *new*.
 
-Expected: Registries lists `manual-registry` as the default, and Registry Maintainer's *Connected
+Expected: Registries lists `manual-registry` as the default, and Registry Workspace's *Connected
 Registry snapshots* block is no longer empty. Each subscribed registry is a `> ` cursor row with its revision,
 snapshot and promotions shortened under it. Press `v`: the rows stay exactly as they were, and the
 description below them spells out the digests of the registry under the cursor (D-271).
@@ -191,7 +191,7 @@ every Source stays at `0 manifests`, and Candidates is empty (`QA-059`).
 
 ## 4 — Add the author Sources
 
-- [ ] **Maintainer Dashboard** → **Sources** → `a` (**Add Source**).
+- [ ] **Registry Maintainer Dashboard** → **Sources** → `a` (**Add Source**).
 
 Five rows again. `Space` switches **Kind** between `source-git` and `source-local`; leave it on
 `source-git`.
@@ -228,7 +228,7 @@ success notice. Adding the connection alone leaves Candidate discovery for the n
 Expected: each Source reports a real commit, not a placeholder. Sync changes no installed artifact
 and no Registry content.
 
-- [ ] **Maintainer Dashboard** → **Candidates**.
+- [ ] **Registry Maintainer Dashboard** → **Candidates**.
 
 Expected: the Skill and the MCP appear exactly once each. Columns keep their positions between
 rows, and the focused value is readable in full (`QA-030`). The column heading is flush left and each
@@ -309,7 +309,7 @@ screen saying the run did not happen, offering `Enter` back to the list — neve
 confirmation (`QA-033`).
 
 - [ ] After the commit, **Registry commit** stays on screen with its receipt; `Enter` goes on to
-      **Registry Maintainer**, one key from the next promotion.
+      **Registry Workspace**, one key from the next promotion.
 - [ ] Go back to **Candidates**. The Candidate you just committed reads **Promoted locally**, not
       New, Ready or Published (CP-23 task 09, `D-259`).
 - [ ] Open its promotion review. It refuses: already promoted in the local checkout, so publish
@@ -449,8 +449,8 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
       (D-284): `1 launcher(s) written` and one `configuration file(s) written` per chosen harness --
       never `2 launcher(s) written` for one server. For the Skill, the deliveries are named as
       harness files, never as `other change`.
-- [ ] Where a Python dependency could be installed by either backend, **Remediation** offers it
-      once, naming the backend that will run (D-283), not `pip` and `uv` as two changes.
+- [ ] Where a Python dependency could be installed by either backend, **Ready** lists it once,
+      naming the backend that will run (D-283), not `pip` and `uv` as two changes.
 - [ ] While the installation runs, the screen names the step running (`▸`) and the ones already
       done (`✓`), counting `(n of m done)`, inside the same frame as every other screen (D-285).
       A short install may pass quickly; `dummy-mcp` into two harnesses is the one to watch.
@@ -460,9 +460,10 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
 - [ ] After each MCP install, inspect the project. OpenCode is registered only in `opencode.json`
       under `mcp`; Tabnine is registered only in `.tabnine/agent/settings.json` under `mcpServers`.
       No unchosen MCP settings file gains `dummy-mcp`.
-- [ ] If **Remediation** appears, it says what AART will change after the final review, and each
-      change names its own subject. `Continue` is its row, never `[ Continue ]` text. A Skill that
-      only configures a harness goes straight to **Ready**, which lists that change (D-258).
+- [ ] There is no separate **Remediation** screen (D-403). Where the install makes a material change
+      (a runtime, a stored credential, network access), **Ready** lists it under `AART will make
+      these changes when you confirm:`, each change naming its own subject, apart by blank lines.
+      A Skill that only configures a harness lists nothing there; `[v]` shows that change.
 - [ ] Installing `dummy-mcp`: **Required Inputs** shows, in Fast, `Disposable dummy credential —
       needed by manual-registry/mcp/dummy-mcp@1.0.0`, what it is for, `Get it: Nothing issues it;
       make up disposable text …` and its format (D-263).
@@ -578,7 +579,7 @@ and II in order and check these links of the chain, each at the step that owns i
   - The focused description shows in Verbose.
   - Artifact Details `i` works.
   - Harnesses are chosen explicitly, one or several.
-  - Remediation says what changes.
+  - Ready lists the changes AART will make (Remediation folded into it, D-403).
 - [ ] **Guided credential entry (step 11).** Screen 07 and the lent terminal show the author's help
       in the same words. The value never appears on screen or in AART's data.
 - [ ] **Success and receipt (step 11).** `View installed`, `View receipt` and `Done` are rows that

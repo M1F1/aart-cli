@@ -158,7 +158,7 @@ class ConsumerShellTest(unittest.TestCase):
         run_consumer_shell(source, terminal, settings_writer=_Preferences())
 
         first = "\n".join(terminal.frames[0])
-        self.assertIn("Welcome to AART", first)
+        self.assertIn("welcome to AART", first)
         self.assertIn("first run", first)
         self.assertIn("skills", first)
         self.assertIn("MCP servers", first)
@@ -170,7 +170,7 @@ class ConsumerShellTest(unittest.TestCase):
         # `QA-087`: the guidance is the state of the view, so it stands in its own block below the
         # rows rather than above them inside theirs, and the block needs no `Navigation:` label.
         self.assertNotIn("Navigation:", first)
-        self.assertLess(first.index("> Marketplace"), first.index("Welcome to AART"))
+        self.assertLess(first.index("> Marketplace"), first.index("welcome to AART"))
 
     def test_a_machine_with_something_installed_is_not_offered_first_run_guidance(self):
         """No source and one installation is not a first run, and must still count what is there.
@@ -192,7 +192,7 @@ class ConsumerShellTest(unittest.TestCase):
         run_consumer_shell(source, terminal, settings_writer=_Preferences())
 
         first = "\n".join(terminal.frames[0])
-        self.assertNotIn("Welcome to AART", first)
+        self.assertNotIn("welcome to AART", first)
         self.assertNotIn("SETUP REQUIRED", first)
         self.assertIn("1 installed", first)
 
@@ -202,7 +202,7 @@ class ConsumerShellTest(unittest.TestCase):
         lines = frame(source, _at(ConsumerScreen.REGISTRIES))
 
         rendered = "\n".join(lines)
-        self.assertIn("No sources are configured", rendered)
+        self.assertIn("no sources are configured", rendered)
         self.assertIn("Add Registry", rendered)
         self.assertIn("connect the first one", rendered)
 
@@ -220,7 +220,7 @@ class ConsumerShellTest(unittest.TestCase):
 
         self.assertEqual(state.rows, ("public/mcp/jira@2.2.0",))
         self.assertEqual(state.search, "jira")
-        self.assertIn("Filter: jira", terminal.last)
+        self.assertIn("filter: jira", terminal.last)
 
     def test_the_help_screen_advertises_the_filter_key(self):
         """Carried from the removed wizard's `tui_search_test.py`.
@@ -258,7 +258,7 @@ class ConsumerShellTest(unittest.TestCase):
         self.assertEqual(state.rows, ())
         self.assertEqual(state.current_row, "")
         self.assertEqual(state.session.screen, ConsumerScreen.INSTALLED)
-        self.assertIn("Filter: nothing-here", terminal.last)
+        self.assertIn("filter: nothing-here", terminal.last)
 
     def test_the_artifact_type_is_searchable_so_one_kind_can_be_listed_alone(self):
         """Carried: the wizard proved a query matches the type, not only the name.
@@ -309,7 +309,7 @@ class ConsumerShellTest(unittest.TestCase):
         state, terminal = drive(ENTER, state=_at(ConsumerScreen.ACTIVITY))
 
         self.assertEqual(state.session.screen, ConsumerScreen.ACTIVITY_DETAILS)
-        self.assertIn("Receipt:", terminal.last)
+        self.assertIn("receipt:", terminal.last)
         self.assertIn("Undo", terminal.last)
 
     def test_v_redraws_the_same_screen_with_more_disclosed(self):
@@ -344,7 +344,7 @@ class ConsumerShellTest(unittest.TestCase):
         self.assertEqual(state.current_row, "maintainer-mode")
         self.assertTrue(state.settings.maintainer_mode)
         self.assertEqual([item.maintainer_mode for item in preferences.kept], [True])
-        self.assertIn("> Maintainer Mode: on", terminal.last)
+        self.assertIn("> Registry Maintainer Mode: on", terminal.last)
         # Every other control is untouched: one keystroke moves one preference.
         self.assertIs(state.settings.profile, PresentationProfile.FAST)
         self.assertEqual(state.settings.default_scope, "project")
@@ -359,13 +359,13 @@ class ConsumerShellTest(unittest.TestCase):
     def test_help_is_drawn_over_the_screen_it_was_asked_for(self):
         state, terminal = drive(ord("?"), state=_at(ConsumerScreen.INSTALLED))
 
-        helped = terminal.screen_containing("Fast / Verbose")
+        helped = terminal.screen_containing("More info / less info")
         self.assertIn("AART / Installed", helped)
         self.assertIn("public/mcp/github@1.6.0", helped)
         self.assertTrue(state.exited)
 
     def test_quitting_with_a_selection_draws_the_question_before_leaving(self):
-        state, terminal = drive(SPACE, ord("q"), ord("n"), state=_at(ConsumerScreen.INSTALLED))
+        state, terminal = drive(SPACE, ord("q"), ord("n"), state=_at(ConsumerScreen.ACTIVITY))
 
         self.assertTrue(state.exited)
         self.assertEqual(terminal.screen_containing("Discard 1 selected"), "")
@@ -389,7 +389,7 @@ class ConsumerShellTest(unittest.TestCase):
         lines = frame(source, _at(ConsumerScreen.UPDATES))
 
         self.assertIn("AART / Updates", lines[0])
-        self.assertIn("Nothing here yet.", "\n".join(lines))
+        self.assertIn("nothing here yet.", "\n".join(lines))
 
 
 def _at(screen: ConsumerScreen) -> ConsumerUiState:

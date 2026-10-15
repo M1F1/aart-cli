@@ -8758,7 +8758,7 @@ Status: **ACCEPTED**. This catalog is the canonical consumer-side product/intera
 
 Persistent application with left navigation and Fast UX by default. Overview emphasizes installed count, updates, attention and recent activity. Global keys include arrows, Enter, Esc, `/`, `?`, `q`. Contextual shortcuts appear only where relevant.
 
-Maintainer Mode is hidden by default and enabled in Settings. With it disabled, maintainer navigation does not appear.
+Registry Maintainer Mode is hidden by default and enabled in Settings. With it disabled, maintainer navigation does not appear.
 
 ## 161.2 02 Marketplace — ACCEPTED
 
@@ -8843,9 +8843,7 @@ automatic resolution / inspection
    ↓
 Required Inputs       [only if needed]
    ↓
-Remediation           [only if a decision is needed]
-   ↓
-Ready to Install
+Ready to Install      [lists the material changes it agrees to]
    ↓
 Installing
    ↓
@@ -8888,22 +8886,28 @@ secrets for that owner are shown only as `Configured securely`. New targets have
 and secure prompts, including four separate input sets when four harnesses are selected. No
 "same for all" control or cross-installation credential picker is provided.
 
-### 08 Remediation
+### 08 Remediation — folded into 09
 
-Only meaningful choices are surfaced. Example:
+There is no separate Remediation screen. The material changes aart-cli will make to satisfy the
+plan's requirements are listed on Ready to Install, the one final review, because confirming it is
+what agrees to them. Routine derived changes, such as configuring the chosen harness, are not
+listed there in Fast. Example of the list on 09:
 
 ```text
-Python environment required
+AART will make these changes when you confirm:
 
-aart-cli will create an isolated Python environment for 2 MCP servers.
-This will not modify your system Python.
+  - install the python >=3.11 runtime it runs on
 
-[ Continue ]
+  - store the credential it needs securely in macos keychain
 ```
 
 ### 09 Ready to Install
 
-Concise final review summarizes outcomes such as configured MCP servers, isolated environments, installed skills/rules and securely stored credentials. `Show details` exposes the same InstallPlan in Verbose mode.
+Concise final review summarizes outcomes such as configured MCP servers, isolated environments,
+installed skills/rules and securely stored credentials. In every mode it lists each material change
+aart-cli will make once confirmed, as an outcome naming its subject (08). A material risk that no
+listed change already names is still said in plain words (INV-151). `[v]` (More info) exposes the
+same InstallPlan in Verbose mode.
 
 ### 10 Installing
 
@@ -9100,10 +9104,10 @@ Updates
 [✓] Show available updates
 
 Advanced
-[ ] Maintainer Mode
+[ ] Registry Maintainer Mode
 ```
 
-Maintainer Mode OFF hides Sources, Candidates, Promotion, Registry Diff, Validation and Publish from consumer navigation.
+Registry Maintainer Mode OFF hides Sources, Candidates, Promotion, Registry Diff, Validation and Publish from consumer navigation.
 
 ## 161.11 29 Doctor / Check System — ACCEPTED
 
@@ -9148,7 +9152,6 @@ Dashboard
 │       └── Install Flow
 │           ├── Review Selection
 │           ├── Required Inputs       [conditional]
-│           ├── Remediation           [conditional]
 │           ├── Ready to Install
 │           ├── Installing
 │           └── Success
@@ -9182,10 +9185,10 @@ Dashboard
 │   └── Repair Issues
 │
 └── Settings
-    └── Maintainer Mode toggle
+    └── Registry Maintainer Mode toggle
 ```
 
-Maintainer navigation is added as a separate advanced area only when Maintainer Mode is enabled.
+Maintainer navigation is added as a separate advanced area only when Registry Maintainer Mode is enabled.
 
 ---
 
@@ -9205,7 +9208,7 @@ only; metadata aggregation in the Credentials view does not permit sharing.
 
 **INV-192 — Receipt does not promise universal undo.** Undo, rollback and compensation are offered only when supported by actual effect semantics and retained safe state.
 
-**INV-193 — Maintainer navigation is opt-in.** Maintainer-only concepts remain hidden until Maintainer Mode is enabled.
+**INV-193 — Maintainer navigation is opt-in.** Maintainer-only concepts remain hidden until Registry Maintainer Mode is enabled.
 
 **INV-194 — Doctor uses reconciliation, not reinstall-all.** Environment-wide health checking identifies drift and constructs minimal repairs rather than replaying all installation workflows.
 
@@ -9215,7 +9218,7 @@ only; metadata aggregation in the Credentials view does not permit sharing.
 repair may retain compatible values already belonging to the same complete installation identity.
 Every new installation collects its own inputs, including each target in a bulk install.
 
-**INV-197 — Conditional steps stay conditional.** Required Inputs and Remediation screens exist only when the current plan actually requires user input or a meaningful choice.
+**INV-197 — Conditional steps stay conditional.** The Required Inputs screen exists only when the current plan actually requires user input. Remediation is never a stop of its own: its material changes are listed on Ready to Install, which confirms them (§161.5 08).
 
 **INV-198 — Collection UI preserves semantic identity.** Exact Collection installation and custom member selection remain visibly distinct.
 
@@ -9223,10 +9226,10 @@ Every new installation collects its own inputs, including each target in a bulk 
 
 # 164. Accepted Maintainer TUI Screen Catalog
 
-This section records the canonical Maintainer Mode screens accepted during the screen-by-screen
+This section records the canonical Registry Maintainer Mode screens accepted during the screen-by-screen
 review. Status: **ACCEPTED**.
 
-Maintainer Mode is explicitly enabled from Settings and is intentionally more technical than the
+Registry Maintainer Mode is explicitly enabled from Settings and is intentionally more technical than the
 default consumer experience.
 
 The primary workflow is:
@@ -9265,11 +9268,11 @@ The TUI must preserve the distinction:
 Source ≠ Candidate ≠ Registry ≠ Marketplace
 ```
 
-## 164.1 Screen 30 — Maintainer Dashboard — ACCEPTED
+## 164.1 Screen 30 — Registry Maintainer Dashboard — ACCEPTED
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ aart-cli / Maintainer                                              Verbose       │
+│ aart-cli / Registry Maintainer                                     Verbose       │
 ├───────────────────┬──────────────────────────────────────────────────────────┤
 │ Dashboard         │ Maintainer overview                                      │
 │ Marketplace       │                                                          │
@@ -9456,13 +9459,13 @@ policy and snapshot reproducibility.
 
 Commit is explicit. aart-cli creates the local registry commit.
 
-**Accepted revision, 2026-09-18: Registry Maintainer owns explicit Push.** Push is an action on the
+**Accepted revision, 2026-09-18: Registry Workspace owns explicit Push.** Push is an action on the
 local Registry workspace row on screen 46, not the terminal step of initialization, rebuild or
-promotion. Returning to Registry Maintainer after any of those workflows — or reopening aart-cli later
+promotion. Returning to Registry Workspace after any of those workflows — or reopening aart-cli later
 — derives the same answer from the current checkout. A connected Registry snapshot row, Candidate
 or Source never offers Push.
 
-Registry Maintainer presents three distinct facts rather than collapsing them into one status:
+Registry Workspace presents three distinct facts rather than collapsing them into one status:
 
 - the accepted consumer-visible snapshot and revision read from the Registry's default branch;
 - the local workspace snapshot, branch and exact `HEAD` commit;
@@ -9494,7 +9497,7 @@ default. aart-cli does not merge or open a pull request. Before offering or exec
 resolves the one Git worktree containing the launch workspace and proves that its root is the
 Registry whose reviewed commit the result records.
 If that worktree is a Source or any other repository, aart-cli refuses; it does not continue walking to
-a parent checkout in search of a Registry. Registry Maintainer keeps the local workspace row visible
+a parent checkout in search of a Registry. Registry Workspace keeps the local workspace row visible
 but marks Push unavailable with that reason. Escape or leaving the review without confirming Push
 keeps the operation local.
 
@@ -9509,7 +9512,7 @@ A consumer subscription reads the Registry's default branch. Local promotion and
 branches remain distinct from the approved snapshot that consumer synchronization can activate.
 This TUI revision does not implicitly remove an independently supported CLI publication contract.
 
-## 164.8 Screen 46 — Registry Maintainer View — ACCEPTED
+## 164.8 Screen 46 — Registry Workspace View — ACCEPTED
 
 Maintainer Registry view exposes registry validity, artifact counts by kind, accepted and local
 snapshot state, publication readiness with blocking diagnostics, current-branch publication and
@@ -10311,7 +10314,7 @@ not a claim that the existing implementation already satisfies it.
   occupies its own block below the diff; navigation and review identity do not change on toggle.
 - **Validation:** remove the redundant `p` Policy shortcut. Enter continues the existing review
   path through validation details and policy without bypassing either check.
-- **Publication:** §164.7 gives Registry Maintainer an explicit Push for a clean, gate-valid local
+- **Publication:** §164.7 gives Registry Workspace an explicit Push for a clean, gate-valid local
   Registry commit to a non-default review branch, and explains every reason it is unavailable plus
   any required review/merge before Registry Sync can discover the newly approved version.
 - **Success:** View installed, View receipt, Done and any supported Undo are working controls,
@@ -10321,9 +10324,9 @@ not a claim that the existing implementation already satisfies it.
   a separate block, shown under Verbose and collapsed in Fast with `v`, following the later
   all-screen clarification. No description is invented or fetched during rendering.
 - **Remediation:** describe proposed aart-cli changes as actions aart-cli will perform after approval,
-  not unexplained chores the user must perform. Continue is a working control outside explanatory
-  prose. Keep required decisions and material risk visible; routine derived changes do not force
-  a redundant remediation stop when no decision is needed.
+  not unexplained chores the user must perform. They are listed on Ready to Install rather than on a
+  screen of their own, so confirming the final review is the one approval. Keep material changes and
+  material risk visible; routine derived changes stay in Verbose.
 - **Harness targets:** Skill installation always offers explicit choice among eligible harnesses,
   even when exactly one is eligible, and permits selecting multiple eligible targets. Eligibility
   follows artifact compatibility, platform, scope and policy; choosing a subset is user intent.
@@ -10725,9 +10728,9 @@ installation's configured remote service. Internal enterprise
 endpoints, proxy/CA settings and approved providers must work without assuming public egress.
 
 There is no background monitor, scheduled CI job or production-wide scan. Besides the command, the
-only other surface is the optional test offered right after an installation (§170.4). Both give
-human-readable output, and the command also gives a structured JSON report, for the same
-operation. Exact selector syntax follows the repository's existing origin/installation selection
+other surfaces are the optional test offered right after an installation (§170.4) and the test the
+person asks for from Installed (§170.4). All give human-readable output, and the command also gives
+a structured JSON report, for the same operation. Exact selector syntax follows the repository's existing origin/installation selection
 conventions; the command must expose explicit all-versus-selected MCP and harness selection rather than infer them.
 
 Author and maintainer documentation should recommend installing a new MCP locally, running this
@@ -10837,6 +10840,15 @@ installation, never part of it:
 A failed test explains which stage failed and why, and leaves repair or reconfiguration to the
 person's own choice.
 
+The same test can be asked for at any later time from Installed. On the Installed list the person
+ticks one or more installations, or leaves the cursor on one, and asks for the test; Installed
+Artifact Details asks for it for that one installation. The same review is drawn before anything
+runs, naming each installation, its declared tool and arguments and that the call reaches the
+configured service. The selection is installation-qualified exactly as on the command: each
+selected row is one installation in one harness, a selected installation that is not an MCP is
+refused by name rather than dropped, and an empty selection is refused. The test changes nothing,
+and its answer returns to the screen it was asked from.
+
 ## 170.5 Results and evidence ownership
 
 Reports name the installation owner, local origin/content identity, harness, stage, timestamp,
@@ -10882,3 +10894,8 @@ made, and no outcome of it changes the installation, its receipts or its reporte
 boundaries preserve trust, secret isolation, zero runtime dependencies and bounded execution;
 persistent reports retain only safe, installation-qualified evidence. Explicit `--show-response`
 permits bounded current-output inspection under §170.5 without application persistence.
+
+**INV-254 — The test from Installed is selected, reviewed and inert.** It runs only after the person
+selects installed MCP installations on Installed or opens one, reviews the declared calls and
+confirms. It covers exactly those installations, refuses a selected non-MCP installation by name,
+and no outcome of it changes an installation, its receipts or its configuration.

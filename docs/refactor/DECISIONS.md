@@ -9734,3 +9734,487 @@ Implementation choice, 2026-10-14, under D-378 and §170.4.
   action, and `Enter` goes back to the same Success, whose focus is still the receipt.
 - **The test seam is a port.** `McpTestPort` lets the end-to-end tests observe the records at the
   moment the test starts, and `LocalMcpTest` is the production implementation.
+
+## D-380 — Required Inputs goes forward, and the form says nothing under it
+
+Implementation choices, 2026-10-14, from an owner report. No Product Specification change: this
+brings the TUI into line with §161.5.
+
+- **The harness is not asked again.** Submitting the 07 form used to rewind to 05, which drew the
+  harness rows a second time, and 05's Continue then reopened 07 as a summary, before Remediation
+  and Ready. The canonical flow is Review Selection, Required Inputs, Remediation only when a
+  decision is needed, then Ready.
+  - Submitting sets `inputs_submitted` on the state.
+  - The adapter's ready answer names the next screen (`_after_inputs`). That screen is 05 only
+    while the plan still offers a real scope or backend choice; otherwise it is Remediation when a
+    decision is needed, and Ready when not.
+  - The reducer follows the named screen only when the form was just submitted, so re-preparing
+    after a scope toggle stays on 05.
+  - On 05 after the form, only the scope and backend rows are drawn, and Continue skips the 07
+    summary.
+  - Back to 05 clears the flag, so the harness is a choice there again.
+- **The form is spaced and carries nothing else.** A blank line separates each field and Continue,
+  as §161.5/07 draws them. The status under the form is deleted with `installation_config_status`:
+  "kept beside the installed artifact", the credentials heading, every token's "Enter securely
+  during installation" line and its guidance. That guidance still reaches the person on the lent
+  terminal just before the provider's prompt (CP-23 task 13), which is the moment it is needed. The
+  07 summary for a credential-only install is unchanged.
+- **A NOT CONFIGURED protocol stage says why.** `declared_smoke` tells an artifact that declares no
+  `smoke_test` apart from one whose declaration this version refuses, and names the refused keys,
+  such as the `expect` that D-378 removed.
+
+B-178 (the narrowed plan drops its choices) and B-179 (vendored packages lose `smoke_test`) are
+backlog.
+
+
+## D-381 — A defect in a running screen is reported, never mistaken for a missing terminal
+
+Implementation choice, 2026-10-15, from an owner report: opening Doctor in the TUI dropped the
+whole application into the line terminal (`Keys: one character, or up / down / enter / esc /
+back`). ERR05 permits that fallback only when curses cannot start. `run_consumer` judged that by
+whether the shell had *finished*, so any exception raised by a screen while it was running became
+`CursesUnavailable`. `run` then restarted the application at the Dashboard, and the defect was
+never reported.
+
+Now `_ui` records that curses has started before the shell runs, and any failure after that
+propagates as itself. `run` renders it as a `curses`-stage internal failure, with a traceback on
+stderr under `AART_CLI_DEBUG=1`. The defect behind the owner's Doctor failure was not reproduced on
+fixtures: an empty Doctor and one with an MCP needing attention, at five terminal sizes, under a
+real pty. It is found from that report.
+
+Neither path stays silent any more. An internal failure names where the package raised it, as
+`at: aart_cli/<module>.py:<line> in <function>`: a package-relative path, never an absolute one,
+and still without the exception message. It also says that `AART_CLI_DEBUG=1` prints the full
+traceback. The real ERR05 fallback prints, before the text terminal starts, that the full-screen
+terminal could not start. It gives the reason (the cause's type and its redacted message, since a
+terminal's own refusal is about the terminal), where it was raised, and `TERM`. Evidence is
+`tests/tui_fallback_boundary_test.py` (`TheReasonIsAlwaysShownTests`). Two targeted mutations each
+turned exactly one test red: dropping the `at:` line, and reporting the wrapper instead of
+`__cause__`.
+
+## D-382 — Doctor addresses an installation, not an artifact
+
+Implementation choice, 2026-10-15, from an owner report: opening Doctor in the TUI raised
+`ValueError: consumer UI event is invalid`. The D-381 location exposed it. One MCP installed into
+two harnesses, both needing attention, gave Doctor the same coordinate twice as rows, and rows have
+to be distinct. Installed and repair already address an installation as
+`InstalledArtifactView.row` (`coordinate#harness`, §169.3). Doctor's issues, its repairable issues
+and its drawn rows now use that key too, so `r` reaches the installation under the cursor.
+Evidence is `tests/doctor_installation_rows_test.py`. Two targeted mutations each turned one test
+red: issues keyed by coordinate, and the drift lookup keyed by coordinate.
+
+## D-383 — Screen 46 says why a registry's approved state did not read
+
+Implementation choice, 2026-10-15, from an owner report: screen 46 said `registry aart-reg-test has
+no synchronized approved state yet`. The adapter dropped `read_approved_registry_state`'s `Err` and
+passed `None`, so every failure read as "not synchronized yet". That covers a registry that is not
+a configured, enabled Git registry and a stored snapshot that does not read. The diagnostics now
+come from the failed read through `unavailable_reasons`: each message, then its interactive next
+step (falling back to the CLI one), redacted. The generic sentence remains only when no reason was
+given. Evidence is `tests/maintainer_registry_view_test.py` (`AnUnreadRegistrySaysWhyTest`). A
+targeted mutation dropping `unavailable` turned exactly that test red. The adapter wiring has no
+end-to-end test yet.
+
+## D-384 — A local Registry is a Registry on Registries and screen 46 too
+
+Implementation choice, 2026-10-15, from an owner report. A Registry showed on screen 46 as having
+"no synchronized approved state yet", and the owner could not remove it because Registries listed
+nothing. D-350 added `registry-local`, and screen 46 lists every source that `is_registry`, but
+three paths still accepted only `registry-git`:
+- `project_registries`, which builds the Registries rows;
+- `_prepare_registry_removal`, which handles Disconnect;
+- `read_approved_registry_state`.
+
+All three now accept either transport. The approved-state read also failed for any Registry
+configured under an alias other than the name its version records carry. It now addresses those
+versions by the configured alias, as `load_configured_registry_versions` does for the Marketplace.
+It keeps the publication stage as written, because Source Sync and promotion read the durable
+record (INV-242).
+
+Evidence is `tests/local_registry_screens_test.py`, which uses a real local Registry checkout: it
+is listed, its approved state reads, screen 46 names its revision, and Disconnect removes it. Four
+targeted mutations, one per fix, each turned red only the tests for that fix. Other
+`registry-git`-only checks are recorded as B-180.
+
+## D-385 — A Marketplace row is the offer alone; its description is Verbose's Description
+
+Implementation choice, 2026-10-15, from an owner report: a Marketplace row carried the offer's
+summary after its key, so it ran past the width and was cut off mid-sentence. A row is now the key
+alone, as D-250 and QA-089 already ask of other lists. The summary stays whole in the cursor
+description's `Description` field, which the frame draws in Verbose. Search still matches the
+summary. Evidence is `tests/consumer_marketplace_shell_test.py`
+(`test_a_row_is_the_offer_alone_and_its_description_is_verbose`). Restoring the summary on the row
+turned exactly that test red.
+
+## D-386 — Every list is numbered, opens lower-case, keeps a blank line between items, and wraps
+
+The operator asked for it in two messages: *"wypisuj te rzeczy jako lista z numerkami i zaczynaj
+od malej litery podpunkt ... mozesz to zmienic wszedzie"*, then *"gdy tekst nie miesci sie w
+linijce mozesz go zawijac? ... przy kazdym bullet albo podpunkcie mozesz je oddzielac pusta
+linia"*. This reverses the capitalised sentences and `- ` bullets `QA-096` settled on.
+
+- `tui_layout.bulleted` numbers each blank-separated statement (`1. `, `2. `, ...), and
+  `numbered`/`numbered_item`/`under_item` do the same for the nested lists screens build (eligible
+  harnesses, remediation changes, recent activity, diagnostics, validation details). Items stand a
+  blank line apart. A placeholder such as `none` is no longer a one-item list.
+- `lowercase_first` lowers only a plain capitalised first word (hyphens allowed, so `Re-run`
+  becomes `re-run`). Names and acronyms such as `GitHub`, `MCP`, `AART` and identifiers keep their
+  case, because lowering a name changes what it names. `stated` applies it to the first line of
+  each statement and no longer adds a period. Rows, section headings and prose paragraphs that are
+  not list items are left alone.
+- `wrap_lines` wraps a line wider than the terminal with a hanging indent under the item text, a
+  cursor row's label or the line's own indent. A rule made only of `─` is clipped, never split.
+  `_CursesTerminal.draw` finds the footer on the composed frame and wraps body and footer
+  separately: a wrapped frame no longer carries the full-width rule `footer_start` looks for, and
+  wrapping first would have lost the keys on a narrow terminal.
+
+Evidence is `tests/numbered_lists_and_wrapping_test.py` (including a Hypothesis property that no
+line is wider than the terminal and nothing said is lost) and
+`tests/maintainer_candidate_detail_test.py` for the legend on a narrow terminal. Making
+`lowercase_first` return its input turned three tests red. Restoring the single-pass wrap in
+`draw` turned the narrow-terminal legend test red. Test expectations across the TUI suites were
+updated to the numbered, lower-case form. Direct renders that are not lists keep their case.
+
+## D-387 — `registry promote` runs the evidence it records; nothing is typed in
+
+GitHub #62 confirmed `QA-056` and two more faults behind it.
+- No command emitted the `--validation-report`/`--policy-result` digests, so a CLI-only promotion
+  had to invent them.
+- One pair was written into every selected Candidate's provenance, although the validation digest
+  is per Candidate.
+- Any well-formed digest was accepted unverified. `maintainer-commands-v1.md` claimed otherwise.
+
+`registry promote` now runs `validate_candidate` and `promotion_evidence` for each selected
+Candidate against `EffectivePolicy()`. That is the same run and the same policy the Maintainer screens compose
+(`read_maintainer_views`), and the run's state decides promotability as in D-101. The review (text
+and `--json` `evidence`) states each Candidate's validation-report and effective-policy digests and
+warnings. `--yes` records exactly those. The two flags and their `Request` fields are removed
+(pre-1.0, no compatibility). This satisfies INV-238 and INV-240: the evidence is policy-driven and
+auditable, and it names the run that actually judged the Candidate. A caller-supplied digest named
+nothing AART could check.
+
+Evidence is `tests/promotion_publication_boundary_e2e_test.py`: supplying either flag is refused by
+the parser and writes nothing; the review states the policy digest; two Candidates record two
+distinct validation digests, each equal to its review. Giving every Candidate the first one's
+evidence turned exactly the two-Candidate test red. #62's clean-checkout and `.venv` point is
+B-181. Its claim that `author check`/`mcp test` exit 0 on `ok: false` does not hold:
+`commands/mcp.py` returns `ERROR` when not ok, and `author check` exits 1.
+
+## D-388 — Promotion and Source Sync treat a local Registry as a Registry
+
+The operator could not update a Registry connected as `registry-local`. Source Sync found the bumped
+version and every review screen drew. Registry Diff then refused with "target registry company is
+not configured and enabled", because `io/maintainer_promotion._configured_registry` looked for the
+target among `registry-git` subscriptions only (B-180). The same kind test made the Maintainer side
+treat a local Registry as an authoring Source: Candidate reads, Source Sync preparation and the
+Source projection all asked "is it `registry-git`?" when they meant "is it a Registry?". All of them
+now use `ConfiguredSource.is_registry`, as D-384 did for the consumer side.
+
+Also in D-386's wording rule: an item opening with one of AART's two-word names (`Maintainer Mode`,
+`Source Sync`, `Source Scan`, `Registry Sync`, ...) keeps its case. A heuristic on the second
+word's case would also have kept `Choose Add Registry`, so the names are listed.
+
+Evidence is `tests/local_registry_promotion_e2e_test.py`. It initializes, promotes and publishes a
+Registry with the CLI, connects it by its local path, bumps the authored version, then walks the
+real composition from Settings through Source Sync and the review screens to the commit. Restoring
+the `registry-git` test in `_configured_registry` alone turned it red.
+
+## D-389 — List items take a dash again; D-386's numbers are withdrawn
+
+The operator, after living with D-386: *"jednak wrzucanie wszedzie tych cyferek bylo bledem teraz
+to glupio wyglada zwaszlacza glwony dashboard gdzie te cyfy sa podwojne"*. On the Dashboard the
+item number stood beside a count (`1. AART` / `2 installed …`), and a list nested in a numbered
+statement numbered again, so the numbers read as data.
+
+`tui_layout.MARKER` is `- ` (the `QA-096` marker), continuation lines hang two columns in, and the
+helpers are `listed` / `list_item` / `under_item`. Everything else D-386 settled stays: items open
+lower-case, a blank line separates items, and long lines wrap with a hanging indent. Targeted
+mutation: `MARKER = "1. "` turns `tests/list_items_and_wrapping_test.py` red.
+
+## D-390 — Source Sync targets the only enabled Registry when none is the default
+
+The operator changed manifests in their authoring repository, pushed, and could not sync it from
+Maintainer Sources: "Source Sync needs an explicit default target registry". Disconnecting the
+default Registry clears the default and selects no replacement, and no command can make an
+already-connected Registry the default (B-182), so the refusal could not be cleared from either
+surface.
+
+`io/maintainer_sync._target_registry` returns the configured default, or else the only enabled
+Registry. With none, or several and no default, it still refuses, and the headline now says which.
+A single enabled Registry is not a choice, so nothing is chosen on the operator's behalf. Evidence:
+`tests/local_registry_promotion_e2e_test.py` connects the Registry with `--no-default`, then walks
+Source Sync and the review screens to the commit. The mutation `len(registries) == 2` turns only
+that test red.
+
+## D-391 — Maintainer Sources removes an authoring Source, behind its own review (screen 31c)
+
+The operator: *"i think deleting source also should be an option from tui and adding it one more
+time"*. Registries could be disconnected from the TUI (21d). An authoring Source could only be
+removed with `aart-cli source remove`, so a Source entered with the wrong origin, branch or kind
+could not be corrected without leaving the TUI. The specification already lists `Source Removed`
+among Candidate states (§164.3), so removal is part of the product, not a new surface.
+
+`[d] Remove` on screen 31 opens `31c-remove-source`. That review states the Source's kind,
+origin and ref. It says what goes (the Source, its AART-managed snapshot and its Candidates) and
+what stays (every version already promoted into a Registry). Confirming runs the same port and
+transaction as Disconnect and `aart-cli source remove`, bound to the reviewed identity. The
+review digest names the operation, so a Registry review cannot confirm a Source removal or the
+reverse. Adding it again is the existing Add Source form; nothing new was needed. The refusal
+for a source repointed after Review now says "source", not "registry", because both paths share
+it.
+
+Evidence: `tests/local_registry_promotion_e2e_test.py` syncs a Source, removes it from screen 31,
+checks with `aart-cli source list` that only the Registry remains, adds it again through the Add
+Source form, then syncs and promotes into the Registry. The mutation that offers removal only for
+Registries turns that test red.
+
+## D-392 — One dash per item: a heading over a list is not itself an item
+
+After D-389 the operator found too many dashes: *"w market place w artifact details jest za duzo
+myslinkow"*, then *"w Remediation tak samo podwojne myslinki"*. `bulleted` marked every
+blank-separated group, and lists nested in a group kept their own marker, which caused three
+problems:
+
+- a heading over its list was dashed beside its items;
+- a nested item was dashed twice;
+- the second item of a nested list split off as a new statement (`-   - tune cache`).
+
+`bulleted` now applies three rules:
+
+- **A heading over its own indented block is drawn unmarked**, and the block carries the dashes.
+  A heading is a first line that does not end like a sentence (`.`, `!`, `?`). Examples are the
+  changes a review will make, one section of a record, and `recent activity:`.
+- **A list nested inside a marked statement loses its own marker** and no blank line separates
+  its items.
+- **An indented line after a blank line continues the statement above it.**
+
+A sentence that runs on keeps its marker. This narrows `QA-096` ("every status line is a list
+item"): the invariant test now accepts a heading as the one unmarked line above its block.
+
+Evidence: `tests/list_items_and_wrapping_test.py::OneDashPerItemTest`, including a Hypothesis
+property that no drawn line is ever dashed twice. Disabling the continuation rule, or the nested
+unmarking, each turns those tests red.
+
+## D-393 — Installed ticks several installations and uninstalls them in one reviewed removal
+
+The operator: *"w installed daj mozliwosc zaznaczania wielu artefaktow np do uninstall"*. An
+artifact could only be uninstalled from its own details, one at a time.
+
+What changed:
+
+- **Installed (12) is selectable and binds `[u] Uninstall`.** With ticks it reviews them all.
+  Without ticks it reviews the row under the cursor.
+- **The removal path already handled several records.** `prepare_configured_uninstall` and the
+  executor take a tuple of records and run one transaction. What was missing was the binding, the
+  navigation edge 12 → 18, and a review that drew more than `lifecycle[0]`.
+- **`LifecyclePlanView.also` carries the other plans.** Screen 18 draws one block per artifact
+  and a single confirmation.
+- **Uninstall and Repair now count ticks only from Installed, and only its current rows.**
+  Selection is global and survives navigation until an action records. Before, ticks left on
+  Installed (or Marketplace offers) outranked the one artifact an open details screen was about.
+  Repair on Doctor had the same leak.
+- **Two refusals are stated in words.** A Collection ticked together with artifacts is refused:
+  a Collection is uninstalled from its own details. One artifact ticked in two harnesses is also
+  refused (B-183).
+
+Evidence: `tests/installed_multi_uninstall_e2e_test.py`, run on a real machine with two Skills.
+It covers:
+
+- both Skills ticked and removed by one confirmation;
+- `u` without ticks removing only the cursor row;
+- a leftover tick not reaching an open details screen;
+- the review writing nothing;
+- the two-harness refusal.
+
+Two targeted mutations each turn their tests red: removing Installed from `_SELECTABLE`, and
+passing the unfiltered selection.
+
+## D-394 - a Marketplace row says where that artifact is already installed
+
+The operator: *"i w marketplace chce widziec czy dany artefakt mam juz zainstalowany czy nie"*. Only
+Artifact Details said so, and in the configured TUI not even that: offers are read once per
+connection without lifecycle, so `installed_statuses` stayed empty there.
+
+A Marketplace row now ends with `installed: <harness>, ...` when any version of that artifact is
+installed, with the health beside a harness whose installation is not ready (`codex (update)`). It
+is derived at draw time from `screens.installed`, which is re-read after every action, rather than
+from the offers, which would go stale the moment an install from this screen succeeded. An offer
+nothing installs keeps the bare key (D-385). Artifact Details still reads the offer's own field;
+filling that from the same installations is not needed for this request.
+
+Evidence: `tests/marketplace_installed_note_e2e_test.py`. Mutations: matching the versioned key,
+dropping the health suffix, and dropping the note each turned exactly one of its tests red.
+
+## D-395 - the MCP test is asked for from Installed, for one or several installations
+
+The operator: *"w jaki sposob teraz w TUI moge sobie odpalic testy dla jednego lub wiecej mcp?"*.
+The only TUI route was the offer on Success right after an install, and §170.1 said so; once past
+it, an installed MCP was testable from `aart-cli mcp test` alone.
+
+The Product Specification is amended first: §170.1 names Installed as a third surface, §170.4
+describes it, and INV-254 states that it is selected, reviewed and inert. Then:
+
+- **Installed binds `[t] Test MCP`** over what is ticked there, or the row under the cursor, and
+  Installed Artifact Details binds it for its one installation, where that installation is an MCP.
+- **The same screen 11a and the same `McpTestPort`.** The selected keys are installation keys
+  (`coordinate#harness`), read back from the receipts through `installations(...)` and filtered to
+  exactly those keys, so a test never covers more than was chosen.
+- **A ticked non-MCP is refused by name** (`... is not an MCP`), an empty selection is refused, and
+  a key with no recorded MCP installation is refused; nothing is silently dropped.
+- **Ticks count only on Installed**, as for Uninstall and Repair (D-393): a tick left on the list
+  does not reach an open details screen.
+- **The prepare command carries the screen it was asked from**, which tells the after-install test
+  from this one; the answer returns there (`Enter Back to Installed` / `Back to details`).
+
+Evidence: `tests/installed_mcp_test_e2e_test.py` (six cases on a real machine with one MCP in two
+harnesses and one Skill). Mutations: dropping the non-MCP refusal, the leftover-tick filter, and
+the origin screen each turned their tests red. Dropping the per-installation filter survives,
+because the harness filter of `installations(...)` already excludes the other installation in
+that fixture; the filter stays for two different MCPs ticked in different harnesses.
+
+## D-396 - Registry Maintainer Mode and Registry Maintainer Dashboard
+
+The operator: *"zacznij nazywac Maintainer Dashboard i Maintainer Mode jako Registry Maintainer mode i
+Registry Maintainer Dashboard, bo tu caly czas rozmawiamy o odpaleniu aart-cli w folderze registry
+i zarzadzaniu tym registry z poziomu aart-cli"*. The mode exists to run AART inside a Registry
+checkout and maintain that Registry; "Maintainer" alone did not say what is maintained.
+
+- Every user-facing "Maintainer Mode" and "Maintainer Dashboard" is now "Registry Maintainer Mode"
+  and "Registry Maintainer Dashboard": the Settings row and its consequence line, screen 30's title,
+  the trail (`AART / Registry Maintainer / Sources`), refusals, the Product Specification and the
+  manual test documents. Screen 30's id is `30-registry-maintainer-dashboard`.
+- Screen 46 was itself titled "Registry Maintainer", which would have drawn
+  `AART / Registry Maintainer / Registry Maintainer`. It is renamed for what it shows, the Registry
+  checkout this project publishes: "Registry Workspace" (`46-registry-workspace`, §164.8).
+- Code identifiers (`MaintainerScreen`, `maintainer_mode`, the stored `maintainer-mode` setting)
+  are unchanged: they are not read by anyone, and renaming the stored key would discard a setting
+  for nothing. Historical records (DECISIONS, slices, CHANGELOG) keep the names they were written
+  with.
+
+## D-397 - Remediation says each change once
+
+The operator: *"informacje w Remediation mam wrazenie sa zduplikowane ... usun te nadmiarowe"*.
+Under the list of changes, screen 08 added one line per kind of impact ("Software will be installed
+on this machine.", "A credential will be stored; AART never shows its value.", "Network access will
+be configured."), each a restatement of an item just above it. The list items already name the
+credential and its provider, the runtime, the program, the installer and the host, so the summary
+lines are removed (`_REMEDIATION_IMPACT` is gone). Material impact stays in Fast through the items
+themselves; Verbose still adds the effect vocabulary and owners.
+
+Evidence: `tests/remediation_changes_test.py`. The new case was red against the summary lines
+before they were removed.
+
+## D-398 - Fast shows less, and `[v]` is named More info / Less info
+
+The operator, on Ready and the install flow: *"AART will also: configure the opencode integration i
+Risks i Review [identity] sa zbedne dla widoku non verbose ... moze zostac show details for the full
+plan, i zeby bylo ze klikajac [v] ... lepiej jakby bylo less/more info a nie fast/verbose"*, then
+*"1 selected niemalze na kazdym widoku w trakcie instalacji tez wydaje mi sie zbedne ... minimalistyczne
+intuicyjne TUI ktore nie przytloczy informacjami jesli nie wlaczy more info klikajac [v]"*, and
+*"verbose widok jest spoko, tam nic nie zmieniaj"*.
+
+- **Ready (09) in Fast** keeps the outcome counts and the Harnesses line and ends with
+  "Press [v] for more info: the full plan." The `AART will also:` remediation line, the
+  `Risks:` vocabulary and the review identity are left to Verbose, which is unchanged.
+- **INV-151 still holds.** A material risk (§152.4) is said in Fast in plain words, once:
+  "This install stores a credential / changes network access / runs high-risk code", leaving out
+  the credential when a count has already said "credential(s) stored securely". Local,
+  configuration and executable-install mutations are what installing is, and the counts already
+  name them as outcomes. The property test that asserted every risk name and the digest on screen
+  09 now asserts every material risk instead.
+- **"N selected" in Fast is drawn only on screens where rows are ticked** (`selects_rows`, the
+  existing `_SELECTABLE`). Ready, Installing, Success and the rest no longer repeat it. Verbose
+  still draws it everywhere.
+- **`[v]` is named for what pressing it gives**: `More info` in Fast, `Less info` in Verbose. Help
+  reads `[v] More info / less info`, and Settings' detail level reads `Less info` / `More info`
+  (`DETAIL_LEVEL_NAMES`). Stored values stay `fast` / `verbose`.
+
+Installing (10) was checked on a real install: in Fast it draws only the steps, so the one change
+there is the dropped selected count.
+
+Evidence: `tests/fast_shows_less_test.py` and the rewritten Ready property and examples.
+Mutations: counting ticks everywhere, dropping the material-risk line and a fixed `[v]` label each
+turned their tests red.
+
+## D-399 - the credential briefing on the lent terminal stands its statements apart
+
+The operator: *"moment w ktorym TUI znika i pojawia sie informacja o wpisywaniu credentiali ... te
+informacje sa bardzo zbite, dodalbym pustych linii miedzy zdaniami"*. The briefing written before
+the provider asks (D-263) was one line after another on a bare terminal, run into the shell's
+previous output above and the provider's prompt below.
+
+`credential_prompt_briefing` now returns a blank line before, between and after its statements.
+The statements themselves -- heading, guidance, who asks and that AART never sees the value -- are
+unchanged, and so is `credential_guidance_lines`, which screen 07 also draws inside a frame.
+
+Evidence: `tests/credential_guidance_test.py`, red before the change.
+
+## D-400 - a finished uninstall returns to Installed
+
+The operator: *"jak wykonam uninstall w widoku installed to po kliknieciu enter na samym koncu chce
+wrocic do widoku z zainstalowanymi paczkami"*. An uninstall ends on Activity Details (26) with its
+receipt. There Enter opened Receipt Details, the same lines again, and Esc walked back into
+Uninstalling and the review of installations that no longer exist.
+
+When Activity Details is the end of an uninstall started on Installed (Uninstalling and Installed
+both in the session history, no action pending), Enter and Esc navigate to Installed. Navigation
+rewinds to a screen already in the history (`ConsumerSession.navigate`, QA-072), so the finished
+run leaves the stack and the list is reloaded without the removed rows. The legend reads
+`[Enter] Back to Installed`. This holds for an uninstall from the list or from Installed Artifact
+Details. Update and Repair have the same ending and are B-184.
+
+Evidence: two cases in `tests/installed_multi_uninstall_e2e_test.py`, for Enter and Esc and from
+details. Disabling the rule turned all three red.
+
+## D-401 - the harness choice says only what is still wrong
+
+The operator, on Review Selection (05): *"nie potrzebna jest informacja installing into: <harness>
+/ Configuration for these harnesses is asked next. / - 1 selected / to wszystko mozna wywalic"*.
+The ticked boxes already are the choice, so in Fast the screen's status now keeps only the
+problems (no harness chosen, a harness the artifact does not support). "Installing into" and
+"Configuration ... asked next" stay in Verbose. `selects_rows` no longer counts 05 or 23a: Space
+ticks harnesses there, so "N selected" was counting the Marketplace ticks behind the screen.
+The review identity on 05 moves into Verbose with the other identities, as on Ready (D-398).
+
+Evidence: `tests/installation_harness_choice_test.py`, `tests/fast_shows_less_test.py` and
+`tests/consumer_install_flow_shell_test.py`. Restoring 05 to `selects_rows` turned the count test
+red.
+
+## D-402 - blank lines part statements; recent activity is marked like AART
+
+The operator asked for blank lines in several places. On Remediation, after the opening sentence
+and before the first change. On Installing (and Updating or Repairing), after the heading. On the
+MCP test, between the offer's heading, its calls and each closing statement, and between the
+results heading, each installation's result and the last sentence. The offer's heading carries its
+own marker. Over an indented block `bulleted` would leave it bare, and the operator reads it as the
+first statement.
+
+On the Dashboard, "recent activity" is now a marked statement like "AART" above it, with its
+entries as unmarked lines under it rather than a nested list.
+
+Merging Remediation into Ready is not done here. Both are numbered screens of the catalog (08, 09),
+so the merge is a specification change, offered to the operator.
+
+Evidence: `tests/statements_breathe_test.py`. Removing the Remediation blank and restoring the
+old activity heading each turned their tests red.
+
+## D-403 - Remediation folds into Ready
+
+The operator: *"czy daloby sie scalic Remediation i Ready widoki w jeden"*. Remediation (08) was a
+stop whose only row, Continue, opened Ready (09), where the same plan was confirmed. Two Enters
+agreed to one plan.
+
+`ConsumerScreen.REMEDIATION` is removed, along with every route to it (05, 06, 07, the prepared
+action's first screen) and its Continue row and description. Ready lists the plan's material
+changes in every mode, under "AART will make this change / these changes when you confirm:". Each
+change is an outcome naming its subject (`remediation_change`), parted by blank lines (D-402).
+`material_remediations` replaces `remediation_needs_decision`. Routine harness configuration stays
+More info's (D-398). The material-risk sentence (INV-151) is no longer said for a credential or
+network risk that a listed change already names. A risk nothing names is still said.
+
+Specification: §161.5's flow, 08 and 09, the screen tree, INV-197 and the Remediation polish bullet
+are amended. No compatibility for the old screen id is kept (no-backward-compat, CP-26 rules).
+
+Evidence: `tests/remediation_changes_test.py`, rewritten with a property over every remediation
+mix. The flow goes to Ready, and Ready lists exactly the non-routine changes. Emptying the list,
+and dropping the network clause, each turned their tests red.

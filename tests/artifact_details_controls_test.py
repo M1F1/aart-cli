@@ -106,7 +106,7 @@ class ArtifactDetailsCompatibilityTest(unittest.TestCase):
         self.assertEqual(row.eligible_harnesses, ("claude",))
         self.assertEqual(row.unavailable_harnesses, ("opencode", "tabnine"))
         self.assertIn("Eligible installation harnesses\n  - claude", rendered)
-        self.assertIn("Detected but not eligible\n  - opencode\n  - tabnine", rendered)
+        self.assertIn("Detected but not eligible\n  - opencode\n\n  - tabnine", rendered)
         self.assertNotIn("Actions: select, install, verbose.", rendered)
         needs = rendered.split("What it needs", 1)[1]
         self.assertNotIn("opencode", needs)
@@ -119,7 +119,7 @@ class ArtifactDetailsCompatibilityTest(unittest.TestCase):
 
         self.assertFalse(row.compatible)
         self.assertEqual(row.eligible_harnesses, ())
-        self.assertIn("No eligible installation harness is available on this machine.", rendered)
+        self.assertIn("no eligible installation harness is available on this machine.", rendered)
         self.assertIn("Why installation is unavailable", rendered)
         self.assertIn("opencode:", rendered)
         self.assertIn("tabnine:", rendered)
@@ -187,7 +187,7 @@ class ArtifactDetailsControlTest(unittest.TestCase):
 
         self.assertIn("[i] Install", rendered)
         self.assertIn("[Space] Select", rendered)
-        self.assertIn("[v] Fast / Verbose", rendered)
+        self.assertIn("[v] More info", rendered)
         self.assertNotIn("Actions: select, install, verbose.", rendered)
 
     def test_install_from_details_needs_no_marketplace_tick(self) -> None:
@@ -239,7 +239,7 @@ class ArtifactDetailsControlTest(unittest.TestCase):
         self.assertIs(finished.session.screen, ConsumerScreen.ARTIFACT_DETAILS)
         self.assertIsNone(finished.action)
         self.assertTrue(
-            terminal.screen_containing("No eligible installation harness is available.")
+            terminal.screen_containing("no eligible installation harness is available.")
         )
 
 

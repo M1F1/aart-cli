@@ -386,7 +386,7 @@ class RegistryPushReviewFrameTest(unittest.TestCase):
         said = " ".join(line.strip() for line in compose_frame(case.source, case.state).status)
 
         for fact in (
-            "Registry: manual-registry",
+            "registry: manual-registry",
             "Workspace: /lab/registry",
             f"Exact commit: {'a' * 40}",
             f"Canonical content: sha256:{'b' * 64}",
@@ -395,7 +395,7 @@ class RegistryPushReviewFrameTest(unittest.TestCase):
         ):
             with self.subTest(fact=fact):
                 self.assertIn(fact, said)
-        self.assertIn("The current branch is the one subscribers read", said)
+        self.assertIn("the current branch is the one subscribers read", said)
 
     def test_editing_the_field_moves_the_target_the_status_names(self) -> None:
         case = self._case()

@@ -1,15 +1,15 @@
-"""CP-23 task 08: Remediation says what AART will change, and Continue is a control, not a string.
+"""CP-23 task 08, folded into Ready by D-403: the final review says what AART will change.
 
 Screen 08 opened with ``2 thing(s) need preparing first``, which reads as chores the reader must do,
 over rows in effect vocabulary (``configure credential (credential mutation)``). It then promised
 ``Nothing outside this installation will be modified.``, a guarantee no plan establishes, and ended
 with ``[ Continue ]`` printed among the facts while Enter did the continuing.
 
-Now the screen states the changes AART will make once the final review is confirmed, each as an
-outcome that names its subject. Material impact stays in plain words in Fast; the effect vocabulary
-and owners are Verbose. Continue is the screen's one row. The stop itself is conditional
-(§161.5, INV-197): a plan whose only remediations are routine derived harness configuration
-goes straight to Ready, which still discloses those changes (D-258).
+The changes AART will make are stated as outcomes that name their subject. Material impact stays in
+plain words in Fast; the effect vocabulary and owners are Verbose. Since D-403 they are no longer
+a screen of their own with a Continue row: the operator asked *"czy daloby sie scalic Remediation
+i Ready widoki w jeden"*, and confirming Ready is what agrees to them. Routine derived harness
+configuration stays More info's (D-258, D-398).
 """
 
 from __future__ import annotations
@@ -20,20 +20,21 @@ import unittest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from aart_cli.application.consumer_ui import (
-    ConsumerUiCommandKind,
-    ConsumerUiState,
-    key_bindings,
-    key_event,
-    reduce_consumer_ui,
-)
+from aart_cli.application.consumer_ui import ConsumerUiState
 from aart_cli.application.consumer_views import (
     ConsumerScreen,
     PresentationProfile,
     RemediationView,
     install_flow_screens,
 )
-from aart_cli.tui_consumer import CanonicalScreenSource, _reload, frame, render_ready
+from aart_cli.tui_consumer import (
+    CanonicalScreenSource,
+    _reload,
+    frame,
+    remediation_change,
+    render_ready,
+)
+from aart_cli.tui_layout import list_item
 from tests.consumer_install_flow_shell_test import at, plan_view
 from tests.consumer_install_flow_shell_test import screens as flow_screens
 
@@ -102,28 +103,27 @@ def _on(
 
 
 def _drawn(*remediations: RemediationView, profile=PresentationProfile.FAST) -> str:
-    source, state = _on(ConsumerScreen.REMEDIATION, *remediations, profile=profile)
+    source, state = _on(ConsumerScreen.READY, *remediations, profile=profile)
     return "\n".join(frame(source, state))
 
 
-class RemediationStatesTheChangesAartWillMakeTest(unittest.TestCase):
-    def test_the_screen_announces_changes_aart_makes_rather_than_chores(self) -> None:
-        many = _drawn(CREDENTIAL, _harness("claude"))
+class ReadyStatesTheChangesAartWillMakeTest(unittest.TestCase):
+    def test_the_review_announces_changes_aart_makes_rather_than_chores(self) -> None:
+        many = _drawn(CREDENTIAL, RUNTIME)
         one = _drawn(CREDENTIAL)
 
-        self.assertIn("AART will make these changes", many)
-        self.assertIn("AART will make this change", one)
+        self.assertIn("AART will make these changes when you confirm:", many)
+        self.assertIn("AART will make this change when you confirm:", one)
         for drawn in (many, one):
             self.assertNotIn("need preparing", drawn)
             self.assertNotIn("thing(s)", drawn)
 
     def test_each_change_is_an_outcome_that_names_its_subject(self) -> None:
         for remediation, words in (
-            (_harness("claude"), ("Configure", "claude")),
-            (CREDENTIAL, ("Store", "credential", "securely", "macos keychain")),
-            (RUNTIME, ("Install", "python", ">=3.11")),
-            (EXECUTABLE, ("Install", "node")),
-            (PACKAGES, ("Install", "Python dependencies", "uv")),
+            (CREDENTIAL, ("store", "credential", "securely", "macos keychain")),
+            (RUNTIME, ("install", "python", ">=3.11")),
+            (EXECUTABLE, ("install", "node")),
+            (PACKAGES, ("install", "Python dependencies", "uv")),
             (NETWORK, ("network access", "api.github.com")),
             (PROVIDER, ("onepassword",)),
         ):
@@ -131,22 +131,20 @@ class RemediationStatesTheChangesAartWillMakeTest(unittest.TestCase):
                 drawn = _drawn(remediation)
                 for word in words:
                     self.assertIn(word, drawn)
-                self.assertNotIn(remediation.kind.replace("-", " "), drawn)
+                # The bare kind label as an item, not a sentence that happens to open with it.
+                self.assertNotRegex(
+                    drawn, rf"(?m)^\s*(- )?{remediation.kind.replace('-', ' ')}\s*$"
+                )
 
-    def test_rows_that_differ_only_by_harness_are_still_told_apart(self) -> None:
-        source, state = _on(
-            ConsumerScreen.REMEDIATION,
-            CREDENTIAL,
-            _harness("claude"),
-            _harness("codex"),
-            _harness("opencode"),
-        )
+    def test_the_changes_are_parted_from_their_sentence_and_from_each_other(self) -> None:
+        lines = render_ready(_plan(CREDENTIAL, RUNTIME), PresentationProfile.FAST)
+        opening = lines.index("AART will make these changes when you confirm:")
 
-        status = source.status(state)
-        named = [line for line in status if "integration" in line]
-
-        self.assertEqual(len(named), 3)
-        self.assertEqual(len(set(named)), 3, named)
+        self.assertEqual(lines[opening - 1], "")
+        self.assertEqual(lines[opening + 1], "")
+        self.assertTrue(lines[opening + 2].startswith("  - store the credential"))
+        self.assertEqual(lines[opening + 3], "")
+        self.assertTrue(lines[opening + 4].startswith("  - install the python"))
 
     def test_fast_keeps_material_impact_in_plain_words_and_verbose_adds_the_effect_terms(
         self,
@@ -155,12 +153,37 @@ class RemediationStatesTheChangesAartWillMakeTest(unittest.TestCase):
         fast = _drawn(*remediations)
         verbose = _drawn(*remediations, profile=PresentationProfile.VERBOSE)
 
-        for impact in ("credential", "installed on this machine", "network access"):
+        for impact in ("credential", "install the python", "network access to api.github.com"):
             self.assertIn(impact, fast.lower())
         for term in ("credential mutation", "executable install", "network mutation", _OWNER):
             with self.subTest(term=term):
                 self.assertNotIn(term, fast)
                 self.assertIn(term, verbose)
+
+    def test_each_change_is_said_once_with_no_summary_repeating_it(self) -> None:
+        # D-397: *"informacje w Remediation ... sa zduplikowane"* -- a line per kind of impact under
+        # the list said again what the list had just said. On Ready that is the risk sentence too.
+        view = dataclasses.replace(
+            _plan(*_DECISIONS), risks=("credential-mutation", "network-mutation")
+        )
+        drawn = "\n".join(render_ready(view, PresentationProfile.FAST))
+
+        for repeated in (
+            "installed on this machine",
+            "never shows its value",
+            "will be configured",
+            "stores a credential",
+            "changes network access",
+        ):
+            self.assertNotIn(repeated, drawn)
+
+    def test_a_material_risk_no_change_names_is_still_said(self) -> None:
+        # INV-151: Fast cannot hide it, so only a listed change may stand in for the sentence.
+        view = dataclasses.replace(_plan(RUNTIME), risks=("network-mutation",))
+
+        self.assertIn(
+            "This install changes network access.", render_ready(view, PresentationProfile.FAST)
+        )
 
     def test_no_profile_claims_a_guarantee_the_plan_does_not_establish(self) -> None:
         for profile in PresentationProfile:
@@ -171,95 +194,42 @@ class RemediationStatesTheChangesAartWillMakeTest(unittest.TestCase):
                 self.assertNotIn("will not modify", drawn)
 
 
-class ContinueIsAControlTest(unittest.TestCase):
-    def test_continue_is_the_only_row_and_not_a_string_among_the_facts(self) -> None:
-        for profile in PresentationProfile:
-            with self.subTest(profile=profile):
-                source, state = _on(ConsumerScreen.REMEDIATION, CREDENTIAL, profile=profile)
+class ThereIsNoSeparateStopTest(unittest.TestCase):
+    def test_ready_leaves_the_routine_changes_to_more_info(self) -> None:
+        # D-398: *"AART will also: configure the opencode integration ... zbedne dla widoku non
+        # verbose"*. The harness counts and Harnesses line already say it; `[v]` keeps the rest.
+        plan = _plan(_harness("claude"), _harness("codex"))
+        fast = "\n".join(render_ready(plan, PresentationProfile.FAST))
+        verbose = "\n".join(render_ready(plan, PresentationProfile.VERBOSE))
 
-                self.assertEqual(state.rows, (ConsumerScreen.READY.value,))
-                self.assertEqual(source.actions(state), ("> Continue",))
-                self.assertNotIn("Continue", "\n".join(source.status(state)))
-                self.assertNotIn("[ Continue ]", "\n".join(frame(source, state)))
-
-    def test_the_legend_names_enter_continue(self) -> None:
-        source, state = _on(ConsumerScreen.REMEDIATION, CREDENTIAL)
-
-        legend = key_bindings(state, detail=source.detail(state))
-
-        self.assertIn(("Enter", "Continue"), {(item.key, item.label) for item in legend})
-
-    def test_continue_reaches_the_final_review_and_changes_nothing(self) -> None:
-        source, state = _on(ConsumerScreen.REMEDIATION, CREDENTIAL, RUNTIME)
-
-        event = key_event("enter", state, detail=source.detail(state))
-        assert event is not None
-        moved, commands = reduce_consumer_ui(state, event)
-
-        self.assertIs(moved.session.screen, ConsumerScreen.READY)
-        self.assertIsNone(moved.action)
-        self.assertEqual(
-            {command.kind for command in commands}, {ConsumerUiCommandKind.LOAD_SCREEN}
-        )
-
-    def test_verbose_describes_where_continue_goes_and_fast_does_not(self) -> None:
-        source, verbose = _on(
-            ConsumerScreen.REMEDIATION, CREDENTIAL, profile=PresentationProfile.VERBOSE
-        )
-        _, fast = _on(ConsumerScreen.REMEDIATION, CREDENTIAL)
-
-        described = source.description(verbose)
-
-        self.assertTrue(described)
-        self.assertIn("nothing has changed yet", " ".join(described))
-        fast_drawn = "\n".join(frame(source, fast))
-        self.assertFalse(any(line in fast_drawn for line in described))
-
-
-class TheStopIsConditionalTest(unittest.TestCase):
-    def test_routine_harness_configuration_alone_goes_straight_to_ready(self) -> None:
-        routine = (_harness("claude"), _harness("codex"))
-
-        for screen, inputs in (
-            (ConsumerScreen.REQUIRED_INPUTS, True),
-            (ConsumerScreen.REVIEW_SELECTION, False),
-        ):
-            with self.subTest(screen=screen.value):
-                source, state = _on(screen, *routine, inputs=inputs)
-
-                self.assertIs(source.detail(state), ConsumerScreen.READY)
-        self.assertNotIn(
-            ConsumerScreen.REMEDIATION, install_flow_screens(_plan(*routine, inputs=False))
-        )
-
-    def test_ready_still_discloses_the_routine_changes_it_skipped_to(self) -> None:
-        drawn = "\n".join(
-            render_ready(_plan(_harness("claude"), _harness("codex")), PresentationProfile.FAST)
-        )
-
-        self.assertIn("claude", drawn)
-        self.assertIn("codex", drawn)
-        self.assertIn("integration", drawn)
-
-    def test_every_non_routine_change_is_a_stop(self) -> None:
-        for remediation in _DECISIONS:
-            with self.subTest(kind=remediation.kind):
-                source, state = _on(ConsumerScreen.REQUIRED_INPUTS, _harness("claude"), remediation)
-
-                self.assertIs(source.detail(state), ConsumerScreen.REMEDIATION)
+        self.assertNotIn("AART will make", fast)
+        self.assertNotIn("integration", fast)
+        self.assertIn("[v] for more info", fast)
+        for harness in ("claude", "codex"):
+            self.assertIn(harness, verbose)
 
     @given(chosen=st.lists(st.sampled_from(_EVERY), max_size=5, unique=True))
-    def test_the_flow_and_the_screen_route_agree_on_one_rule(
+    def test_every_plan_goes_to_ready_which_lists_exactly_its_material_changes(
         self, chosen: list[RemediationView]
     ) -> None:
-        needed = any(item.kind != "configure-harness" for item in chosen)
-        flow = install_flow_screens(_plan(*chosen, inputs=False))
+        plan = _plan(*chosen, inputs=False)
         source, state = _on(ConsumerScreen.REVIEW_SELECTION, *chosen, inputs=False)
+        fast = render_ready(plan, PresentationProfile.FAST)
 
-        self.assertIs(ConsumerScreen.REMEDIATION in flow, needed)
-        self.assertIs(
-            source.detail(state),
-            ConsumerScreen.REMEDIATION if needed else ConsumerScreen.READY,
+        self.assertEqual(
+            install_flow_screens(plan)[-3:],
+            (ConsumerScreen.READY, ConsumerScreen.INSTALLING, ConsumerScreen.SUCCESS),
+        )
+        self.assertEqual(install_flow_screens(plan)[:-3], (ConsumerScreen.REVIEW_SELECTION,))
+        self.assertIs(source.detail(state), ConsumerScreen.READY)
+        listed = tuple(line for line in fast if line.startswith("  - "))
+        self.assertEqual(
+            listed,
+            tuple(
+                list_item(remediation_change(item))
+                for item in chosen
+                if item.kind != "configure-harness"
+            ),
         )
 
 

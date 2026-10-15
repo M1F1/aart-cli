@@ -67,7 +67,7 @@ class MaintainerScreenCatalogTest(unittest.TestCase):
     def test_catalog_names_every_accepted_screen_30_through_53_once(self) -> None:
         """The 24 accepted screens, plus sub-screens that are numbered inside one of them.
 
-        `31a`/`31b` are the Add Source form and its review (B-083). `46a` through `46j` hold
+        `31a`/`31b` are the Add Source form and its review (B-083), `31c` the Remove Source review (D-391). `46a` through `46j` hold
         initialization, one-off repository adoption, the rebuild of the registry's generated files
         (B-090/B-095/B-099) and the Push review that CP-26.18 moved off screen 45 and onto the
         local workspace row it acts on (D-312), spelled the way screen 21's
@@ -91,6 +91,7 @@ class MaintainerScreenCatalogTest(unittest.TestCase):
             [
                 "31a-add-source",
                 "31b-review-source",
+                "31c-remove-source",
                 "46a-init-registry",
                 "46b-review-init",
                 "46c-scan-repository",
@@ -162,9 +163,9 @@ class MaintainerModeBoundaryTest(unittest.TestCase):
         )
 
         self.assertNotIn(MaintainerScreen.DASHBOARD.value, disabled.rows)
-        self.assertNotIn("Maintainer Dashboard", "\n".join(frame(self.source, disabled)))
+        self.assertNotIn("Registry Maintainer Dashboard", "\n".join(frame(self.source, disabled)))
         self.assertEqual(enabled.rows[-1], MaintainerScreen.DASHBOARD.value)
-        self.assertIn("Maintainer Dashboard", "\n".join(frame(self.source, enabled)))
+        self.assertIn("Registry Maintainer Dashboard", "\n".join(frame(self.source, enabled)))
 
         focused = replace(enabled, cursor=len(enabled.rows) - 1)
         event = key_event("enter", focused, detail=self.source.detail(focused))
@@ -190,7 +191,7 @@ class MaintainerModeBoundaryTest(unittest.TestCase):
             *(DOWN for _ in range(7)),
             ENTER,
             # Counted from the row list rather than written as a number, so adding a setting
-            # above Maintainer Mode moves the cursor rather than silently toggling its neighbour.
+            # above Registry Maintainer Mode moves the cursor rather than silently toggling its neighbour.
             *(DOWN for _ in range(SETTING_ROWS.index("maintainer-mode"))),
             ENTER,
             ESCAPE,
@@ -210,7 +211,10 @@ class MaintainerModeBoundaryTest(unittest.TestCase):
         self.assertIs(finished.session.screen, MaintainerScreen.DASHBOARD)
         self.assertEqual([settings.maintainer_mode for settings in kept], [True])
         self.assertTrue(
-            any("AART / Maintainer Dashboard" in "\n".join(lines) for lines in terminal.frames)
+            any(
+                "AART / Registry Maintainer Dashboard" in "\n".join(lines)
+                for lines in terminal.frames
+            )
         )
 
 

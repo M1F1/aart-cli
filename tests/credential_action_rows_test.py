@@ -599,7 +599,7 @@ class CredentialActionShellE2ETest(unittest.TestCase):
             present=CredentialState.ABSENT,
         )
 
-        review = terminal.screen_containing("Set github-token")
+        review = terminal.screen_containing("set github-token")
         self.assertIn("asks for the new value", review)
         self.assertEqual(provider.stored, [(None, False)])
         self.assertLess(journal.entries.index("released"), journal.entries.index("prompted"))
@@ -616,7 +616,7 @@ class CredentialActionShellE2ETest(unittest.TestCase):
         self.assertIn("[Enter] Confirm", review)
         self.assertEqual(provider.stored, [(None, True)])
         self.assertIn("released", journal.entries)
-        landed = terminal.screen_containing("Replaced github-token")
+        landed = terminal.screen_containing("replaced github-token")
         self.assertIn("Credential Details", landed)
 
     def test_escape_from_the_review_leaves_the_credential_untouched(self) -> None:

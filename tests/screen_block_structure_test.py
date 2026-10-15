@@ -13,6 +13,7 @@ a time -- *"zeby nie bylo zbyt wielu wyjatkow od reguly"*.
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 from unittest import TestCase
 
@@ -49,7 +50,7 @@ from aart_cli.tui_consumer import (
     frame,
     render_doctor,
 )
-from aart_cli.tui_layout import BULLET, SECTION_RULE
+from aart_cli.tui_layout import SECTION_RULE, stated
 from aart_cli.tui_maintainer import (
     maintainer_registry_descriptor,
     maintainer_registry_rows,
@@ -105,9 +106,12 @@ def _statements(block: tuple[str, ...]) -> tuple[str, ...]:
     list of them is drawn does. That claim is held once, by `BulletedStatusTest`.
     """
 
-    return tuple(
-        line.removeprefix(BULLET).removeprefix(" " * len(BULLET)) for line in _spoken(block)
-    )
+    return tuple(_ITEM.sub("", line) for line in _spoken(block))
+
+
+#: One statement's marker, or the indent its continuation hangs at (D-386).
+_ITEM = re.compile(r"^(- | {2})")
+_MARKED = re.compile(r"^- ")
 
 
 class DashboardBlockTest(TestCase):
@@ -148,7 +152,7 @@ class DashboardBlockTest(TestCase):
 
         blocks = _blocks(self._frame(first_run=True))
         guidance = next(
-            block for block in blocks if any("Welcome to AART" in line for line in block)
+            block for block in blocks if any("welcome to AART" in line for line in block)
         )
 
         self.assertNotIn(guidance, blocks[:2])
@@ -169,7 +173,7 @@ class DashboardBlockTest(TestCase):
             _spoken(blocks[2]),
             ("Browse and install approved tools from configured registries.",),
         )
-        self.assertIn("Welcome to AART — this looks like your first run.", _statements(blocks[3]))
+        self.assertIn("welcome to AART — this looks like your first run.", _statements(blocks[3]))
 
     def test_no_block_announces_itself_now_that_it_holds_only_actions(self) -> None:
         """`Navigation:` labelled a block whose contents are the navigation."""
@@ -206,7 +210,7 @@ class MaintainerDashboardBlockTest(TestCase):
         blocks = _blocks(self._frame())
         overview = _statements(blocks[2])
 
-        self.assertEqual(overview[0], "Sources: 0")
+        self.assertEqual(overview[0], "sources: 0")
         self.assertNotIn("Maintainer overview", overview)
         self.assertFalse([line for line in overview if line.startswith("> ")])
 
@@ -257,11 +261,11 @@ class RegistriesBlockTest(TestCase):
         self.assertEqual(
             _statements(blocks[2]),
             (
-                "Connect an approved Git registry by URL. Local authoring Sources belong in "
-                "Maintainer Mode.",
-                "No sources are configured.",
-                "Marketplace needs an approved registry before it can offer tools.",
-                "Choose Add Registry above to connect the first one.",
+                "connect an approved Git registry by URL. Local authoring Sources belong in "
+                "Registry Maintainer Mode.",
+                "no sources are configured.",
+                "marketplace needs an approved registry before it can offer tools.",
+                "choose Add Registry above to connect the first one.",
             ),
         )
 
@@ -304,8 +308,8 @@ class RegistriesBlockTest(TestCase):
         self.assertNotIn("No sources are configured.", _statements(blocks[2]))
         self.assertEqual(
             _statements(blocks[2])[0],
-            "Connect an approved Git registry by URL. Local authoring Sources belong in "
-            "Maintainer Mode.",
+            "connect an approved Git registry by URL. Local authoring Sources belong in "
+            "Registry Maintainer Mode.",
         )
 
 
@@ -350,14 +354,14 @@ class SettingsBlockTest(TestCase):
             _spoken(blocks[1]),
             (
                 "Experience",
-                "> Detail level: Fast",
+                "> Detail level: Less info",
                 "Installation",
                 "  Default scope: Project",
                 "  Python installer: pip",
                 "Updates",
                 "  Show available updates: on",
                 "Advanced",
-                "  Maintainer Mode: on",
+                "  Registry Maintainer Mode: on",
             ),
         )
 
@@ -366,11 +370,11 @@ class SettingsBlockTest(TestCase):
         off = _blocks(self._frame(maintainer=False))
 
         self.assertEqual(
-            _statements(on[2]), ("Maintainer screens are reachable from the Dashboard.",)
+            _statements(on[2]), ("maintainer screens are reachable from the Dashboard.",)
         )
         self.assertEqual(
             _statements(off[2]),
-            ("Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
+            ("Registry Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
         )
 
 
@@ -407,7 +411,7 @@ class DoctorBlockTest(TestCase):
                 "✓ public/mcp/github@1.6.0",
                 "1 ready",
                 "1 needs attention",
-                "Actions: repair issues using minimal reconciliation plans.",
+                "actions: repair issues using minimal reconciliation plans.",
             ),
         )
 
@@ -416,7 +420,7 @@ class DoctorBlockTest(TestCase):
 
         self.assertEqual(_spoken(blocks[1])[-1], "    launcher: missing")
         self.assertEqual(
-            _statements(blocks[2])[-2:], ("Independently repairable:", "  - public/mcp/jira@2.2.0")
+            _statements(blocks[2])[-2:], ("independently repairable:", "- public/mcp/jira@2.2.0")
         )
 
     def test_the_screen_does_not_name_itself_again_under_the_trail(self) -> None:
@@ -460,8 +464,8 @@ class RegistryMaintainerBlockTest(TestCase):
         self.assertEqual(
             _spoken(blocks[1]),
             (
-                "- Current project contains a Registry. Rebuild updates its generated files.",
-                "- No Registry is subscribed in this project yet.",
+                "- current project contains a Registry. Rebuild updates its generated files.",
+                "- no Registry is subscribed in this project yet.",
             ),
         )
 
@@ -545,10 +549,10 @@ class AddRegistryFormBlockTest(TestCase):
         self.assertEqual(
             _statements(blocks[2]),
             (
-                "Connect an approved registry. AART validates a fresh snapshot before saving it.",
+                "connect an approved registry. AART validates a fresh snapshot before saving it.",
                 "A local checkout reads one branch's committed content; your worktree is never "
                 "read.",
-                "This adds another registry. Nothing already connected is changed.",
+                "this adds another registry. Nothing already connected is changed.",
             ),
         )
 
@@ -602,10 +606,10 @@ class MaintainerFormBlockTest(TestCase):
 
     def test_each_form_says_what_it_does_below_the_rule(self) -> None:
         opening = {
-            MaintainerScreen.SOURCE_ADD: "Subscribe to an authoring repository.",
-            MaintainerScreen.REGISTRY_INIT: "Create the registry this project publishes.",
-            MaintainerScreen.REPOSITORY_SCAN: "Look at one repository for explicit",
-            MaintainerScreen.REGISTRY_REBUILD: "Re-run this registry's generated files.",
+            MaintainerScreen.SOURCE_ADD: "subscribe to an authoring repository.",
+            MaintainerScreen.REGISTRY_INIT: "create the registry this project publishes.",
+            MaintainerScreen.REPOSITORY_SCAN: "look at one repository for explicit",
+            MaintainerScreen.REGISTRY_REBUILD: "re-run this registry's generated files.",
         }
         for screen, starts in opening.items():
             with self.subTest(screen=screen):
@@ -643,7 +647,7 @@ class MaintainerFormBlockTest(TestCase):
                 status = _spoken(_blocks(self._frame(screen))[2])
 
                 self.assertTrue(
-                    any("Nothing is pushed and nothing is merged" in line for line in status),
+                    any("nothing is pushed and nothing is merged" in line for line in status),
                     status,
                 )
 
@@ -713,7 +717,7 @@ class RebuildRegistryRowsTest(TestCase):
         stage = _blocks(self._frame(verbose=True, cursor=1))
 
         self.assertEqual(len(everything), len(stage) - 1)
-        self.assertTrue(_statements(everything[2])[0].startswith("Re-run this registry's"))
+        self.assertTrue(_statements(everything[2])[0].startswith("re-run this registry's"))
 
 
 class ReviewScreenBlockTest(TestCase):
@@ -747,10 +751,10 @@ class ReviewScreenBlockTest(TestCase):
         )
 
         self.assertIn(
-            "Connect company from https://git.example.test/company/registry.git", rendered
+            "connect company from https://git.example.test/company/registry.git", rendered
         )
         self.assertIn("Branch or tag: stable", rendered)
-        self.assertIn("It becomes the default registry.", rendered)
+        self.assertIn("it becomes the default registry.", rendered)
 
     def test_a_registry_that_is_not_made_default_says_so_rather_than_staying_silent(self) -> None:
         """Silence would read as "no opinion", and the form has a yes/no the reader chose."""
@@ -763,7 +767,7 @@ class ReviewScreenBlockTest(TestCase):
         )
 
         self.assertIn("Branch or tag: repository default", rendered)
-        self.assertIn("The default registry does not change.", rendered)
+        self.assertIn("the default registry does not change.", rendered)
 
     def test_connecting_a_source_says_its_kind_and_location(self) -> None:
         rendered = self._frame(
@@ -773,7 +777,7 @@ class ReviewScreenBlockTest(TestCase):
             ),
         )
 
-        self.assertIn("Subscribe to kit at https://git.example.test/kit.git", rendered)
+        self.assertIn("subscribe to kit at https://git.example.test/kit.git", rendered)
         self.assertIn("Branch or tag: main", rendered)
 
     def test_creating_a_registry_names_it_and_says_whether_a_commit_is_made(self) -> None:
@@ -782,8 +786,8 @@ class ReviewScreenBlockTest(TestCase):
             registry_init_draft=RegistryInitDraft("acme-registry", "Acme", True),
         )
 
-        self.assertIn("Create acme-registry, called Acme, in this project.", rendered)
-        self.assertIn("The files are written and committed locally.", rendered)
+        self.assertIn("create acme-registry, called Acme, in this project.", rendered)
+        self.assertIn("the files are written and committed locally.", rendered)
 
     def test_a_review_offers_its_decision_in_the_legend_and_not_in_a_sentence(self) -> None:
         """`QA-088` again: the key is advertised, so describing it is saying the same thing twice."""
@@ -866,6 +870,8 @@ class NoticeBlockTest(TestCase):
         "",
         "Choose Initialize Registry to create one in this project first.",
     )
+    # What the screen draws of it: each statement opening lower-case (D-386).
+    _SAID = stated(_NOTICE)
 
     def _frame(self, screen: MaintainerScreen) -> tuple[str, ...]:
         views = MaintainerViews(
@@ -894,11 +900,11 @@ class NoticeBlockTest(TestCase):
 
     def test_the_notice_is_a_block_of_its_own(self) -> None:
         blocks = _blocks(self._frame(MaintainerScreen.REGISTRY_REBUILD))
-        carrying = [block for block in blocks if self._NOTICE[0] in _statements(block)]
+        carrying = [block for block in blocks if self._SAID[0] in _statements(block)]
 
         self.assertEqual(len(carrying), 1)
-        self.assertEqual(_statements(carrying[0]), _spoken(self._NOTICE))
-        self.assertTrue(all(line.startswith(BULLET) for line in _spoken(carrying[0])))
+        self.assertEqual(_statements(carrying[0]), _spoken(self._SAID))
+        self.assertTrue(all(_ITEM.match(line) for line in _spoken(carrying[0])))
 
     def test_the_notice_follows_the_view_status_and_precedes_the_caption(self) -> None:
         """§167 orders them: description, view status, notices, caption, keys (D-268)."""
@@ -906,12 +912,12 @@ class NoticeBlockTest(TestCase):
         drawn = self._frame(MaintainerScreen.REGISTRY)
         blocks = _blocks(drawn)
         notice = next(
-            index for index, block in enumerate(blocks) if self._NOTICE[0] in _statements(block)
+            index for index, block in enumerate(blocks) if self._SAID[0] in _statements(block)
         )
         status = next(
             index
             for index, block in enumerate(blocks)
-            if index != notice and any(line.startswith(BULLET) for line in _spoken(block))
+            if index != notice and any(_MARKED.match(line) for line in _spoken(block))
         )
 
         self.assertLess(status, notice)
@@ -921,10 +927,10 @@ class NoticeBlockTest(TestCase):
         """`QA-091` had folded it into view status, which is a different question again."""
 
         blocks = _blocks(self._frame(MaintainerScreen.REGISTRY))
-        carrying = [block for block in blocks if self._NOTICE[0] in _statements(block)]
+        carrying = [block for block in blocks if self._SAID[0] in _statements(block)]
 
         self.assertEqual(len(carrying), 1)
-        self.assertEqual(_statements(carrying[0]), _spoken(self._NOTICE))
+        self.assertEqual(_statements(carrying[0]), _spoken(self._SAID))
 
 
 class BulletedStatusTest(TestCase):
@@ -952,7 +958,7 @@ class BulletedStatusTest(TestCase):
 
         self.assertEqual(
             self._status(frame(source, state)),
-            ("- Maintainer screens are reachable from the Dashboard.",),
+            ("- maintainer screens are reachable from the Dashboard.",),
         )
 
     def test_separate_facts_are_separate_items_with_a_blank_line_between_them(self) -> None:
@@ -974,16 +980,16 @@ class BulletedStatusTest(TestCase):
             blocks[2],
             (
                 "",
-                "- Sources: 0",
+                "- sources: 0",
                 "",
-                "- Candidates: 0",
+                "- candidates: 0",
                 "",
-                "- Validation failures: 0",
+                "- validation failures: 0",
                 "",
-                "- Ready for promotion: 0",
+                "- ready for promotion: 0",
                 "",
-                "- Recent maintainer activity:",
-                "    - none yet",
+                "recent maintainer activity:",
+                "  none yet",
                 "",
             ),
         )
@@ -1005,5 +1011,13 @@ class BulletedStatusTest(TestCase):
             with self.subTest(screen=screen):
                 drawn = self._status(frame(source, state))
                 self.assertTrue(drawn)
-                for line in drawn:
-                    self.assertTrue(line.startswith((BULLET, "  ")), (screen, line))
+                for index, line in enumerate(drawn):
+                    # D-392: a heading over its own indented block is the one unmarked line; what
+                    # stands under it is the list.
+                    under = drawn[index + 1] if index + 1 < len(drawn) else ""
+                    heading = (
+                        not line[:1].isspace()
+                        and not line.rstrip().endswith((".", "!", "?"))
+                        and under[:1].isspace()
+                    )
+                    self.assertTrue(_ITEM.match(line) or heading, (screen, line))
