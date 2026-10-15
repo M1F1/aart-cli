@@ -4494,3 +4494,11 @@ connected, the only way back to a default is to remove one and add it again. D-3
 single-Registry case in Source Sync. The full fix is a "make default" action on a connected Registry,
 plus, on removal, handing the default to the sole remaining Registry. That changes the removal
 review's identity and invariants (`SourceRemovalRequest`), so it is its own slice.
+
+## B-183 — one artifact's installations in two harnesses cannot share one removal
+
+`propose_removal`, `RemovalProposal.plan_for` and `complete_configured_uninstall` key everything by
+`ArtifactCoordinate`, so ticking `X#claude` and `X#opencode` on Installed ends in "an artifact was
+observed twice". D-393 refuses that in words ("uninstalled one harness at a time"). Update was
+re-keyed by installation for §169.3; removal needs the same re-keying before such a removal can be
+one transaction.

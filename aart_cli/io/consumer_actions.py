@@ -2048,9 +2048,29 @@ class LocalConsumerActions:
         )
 
     def _prepare_uninstall(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        collections = {item.collection for item in self.source().screens.installed_collections}
+        if len(self._targets(command)) > 1 and collections.intersection(self._targets(command)):
+            return self._declined(
+                command,
+                _lines(
+                    "a Collection is uninstalled from its own details, not ticked with artifacts",
+                    "untick the Collection, or open it and uninstall it there",
+                ),
+            )
         inspected = self._inspections(self._targets(command))
         if isinstance(inspected, Err):
             return self._declined(command, _refusal(inspected.diagnostics))
+        coordinates = [item.record.coordinate for item in inspected.value]
+        if len(set(coordinates)) != len(coordinates):
+            # A removal is keyed by artifact, so one artifact's installations in two harnesses
+            # cannot share one; said here rather than as the domain's "observed twice" (B-183).
+            return self._declined(
+                command,
+                _lines(
+                    "one artifact installed into two harnesses is uninstalled one harness at a time",
+                    "tick one installation of each artifact",
+                ),
+            )
         host = self._host()
         prepared = prepare_configured_uninstall(
             tuple(item.record for item in inspected.value),
@@ -2063,10 +2083,10 @@ class LocalConsumerActions:
         self._pending_host = host
         self._pending = prepared.value
         self._pending_action = command.action
-        # One artifact per removal review, because screen 18 renders one lifecycle plan. A
-        # Collection removal is a transaction and reaches this seam when Collections do (B-031).
+        # Several ticked on Installed are one removal: one review, one confirmation (D-393).
+        first, *rest = (project_lifecycle_plan(item) for item in prepared.value.proposal.lifecycle)
         return ConsumerActionUpdate(
-            self.source(lifecycle=project_lifecycle_plan(prepared.value.proposal.lifecycle[0])),
+            self.source(lifecycle=replace(first, also=tuple(rest))),
             ConsumerUiEvent(
                 ConsumerUiEventKind.ACTION_PREPARED,
                 action=command.action,

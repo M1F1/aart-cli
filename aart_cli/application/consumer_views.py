@@ -1362,6 +1362,9 @@ class LifecyclePlanView:
     risks: tuple[str, ...]
     complete: bool
     review_digest: str
+    #: The other artifacts one reviewed action takes with it -- several ticked on Installed and
+    #: uninstalled together (D-393). Empty for an action on one artifact.
+    also: tuple["LifecyclePlanView", ...] = ()
 
 
 def project_lifecycle_plan(plan: LifecyclePlan) -> LifecyclePlanView:
@@ -2120,6 +2123,8 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.INSTALLED: (
         ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
         ConsumerScreen.INSTALLED_COLLECTION_DETAILS,
+        # What is ticked here is uninstalled from here (D-393).
+        ConsumerScreen.UNINSTALL_REVIEW,
     ),
     ConsumerScreen.INSTALLED_ARTIFACT_DETAILS: (
         ConsumerScreen.VERIFY_REPAIR,

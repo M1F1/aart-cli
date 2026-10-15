@@ -365,7 +365,7 @@ class ConsumerShellTest(unittest.TestCase):
         self.assertTrue(state.exited)
 
     def test_quitting_with_a_selection_draws_the_question_before_leaving(self):
-        state, terminal = drive(SPACE, ord("q"), ord("n"), state=_at(ConsumerScreen.INSTALLED))
+        state, terminal = drive(SPACE, ord("q"), ord("n"), state=_at(ConsumerScreen.ACTIVITY))
 
         self.assertTrue(state.exited)
         self.assertEqual(terminal.screen_containing("Discard 1 selected"), "")

@@ -1266,6 +1266,25 @@ def render_installed_collection(
 def render_lifecycle_plan(view: LifecyclePlanView, profile: PresentationProfile) -> tuple[str, ...]:
     if not isinstance(view, LifecyclePlanView) or not isinstance(profile, PresentationProfile):
         raise ValueError("lifecycle plan rendering needs a view and presentation profile")
+    if view.also:
+        # One reviewed action over several artifacts: each one's plan, then the one confirmation.
+        plans = tuple(
+            _lifecycle_plan_lines(item, profile) for item in (replace(view, also=()), *view.also)
+        )
+        return (
+            f"Review {_human(view.kind)} for {len(plans)} artifacts",
+            "",
+            *separate(*plans),
+            "",
+            "Confirm to apply this exact reviewed plan.",
+        )
+    return (
+        *_lifecycle_plan_lines(view, profile),
+        "Confirm to apply this exact reviewed plan.",
+    )
+
+
+def _lifecycle_plan_lines(view: LifecyclePlanView, profile: PresentationProfile) -> tuple[str, ...]:
     lines = [f"Review {_human(view.kind)} for {view.artifact}"]
     if view.retained:
         reasons = ", ".join(
@@ -1302,12 +1321,7 @@ def render_lifecycle_plan(view: LifecyclePlanView, profile: PresentationProfile)
         )
         if not view.steps:
             lines.append("  none")
-    lines.extend(
-        (
-            f"Review identity: {view.review_digest}",
-            "Confirm to apply this exact reviewed plan.",
-        )
-    )
+    lines.append(f"Review identity: {view.review_digest}")
     return tuple(lines)
 
 

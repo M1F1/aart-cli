@@ -9994,3 +9994,37 @@ item"): the invariant test now accepts a heading as the one unmarked line above 
 Evidence: `tests/list_items_and_wrapping_test.py::OneDashPerItemTest`, including a Hypothesis
 property that no drawn line is ever dashed twice. Disabling the continuation rule, or the nested
 unmarking, each turns those tests red.
+
+## D-393 — Installed ticks several installations and uninstalls them in one reviewed removal
+
+The operator: *"w installed daj mozliwosc zaznaczania wielu artefaktow np do uninstall"*. An
+artifact could only be uninstalled from its own details, one at a time.
+
+What changed:
+
+- **Installed (12) is selectable and binds `[u] Uninstall`.** With ticks it reviews them all.
+  Without ticks it reviews the row under the cursor.
+- **The removal path already handled several records.** `prepare_configured_uninstall` and the
+  executor take a tuple of records and run one transaction. What was missing was the binding, the
+  navigation edge 12 → 18, and a review that drew more than `lifecycle[0]`.
+- **`LifecyclePlanView.also` carries the other plans.** Screen 18 draws one block per artifact
+  and a single confirmation.
+- **Uninstall and Repair now count ticks only from Installed, and only its current rows.**
+  Selection is global and survives navigation until an action records. Before, ticks left on
+  Installed (or Marketplace offers) outranked the one artifact an open details screen was about.
+  Repair on Doctor had the same leak.
+- **Two refusals are stated in words.** A Collection ticked together with artifacts is refused:
+  a Collection is uninstalled from its own details. One artifact ticked in two harnesses is also
+  refused (B-183).
+
+Evidence: `tests/installed_multi_uninstall_e2e_test.py`, run on a real machine with two Skills.
+It covers:
+
+- both Skills ticked and removed by one confirmation;
+- `u` without ticks removing only the cursor row;
+- a leftover tick not reaching an open details screen;
+- the review writing nothing;
+- the two-harness refusal.
+
+Two targeted mutations each turn their tests red: removing Installed from `_SELECTABLE`, and
+passing the unfiltered selection.

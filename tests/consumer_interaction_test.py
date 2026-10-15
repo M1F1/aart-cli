@@ -95,7 +95,7 @@ class KeyboardNavigationTest(unittest.TestCase):
         self.assertEqual(state.selection, ())
 
     def test_space_does_nothing_where_there_is_nothing_to_select(self):
-        state = press(at(ConsumerScreen.INSTALLED), SPACE)
+        state = press(at(ConsumerScreen.ACTIVITY), SPACE)
         self.assertEqual(state.selection, ())
 
     def test_escape_goes_back_and_q_leaves(self):

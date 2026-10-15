@@ -532,6 +532,8 @@ _SELECTABLE = frozenset(
         ConsumerScreen.ARTIFACT_DETAILS,
         ConsumerScreen.COLLECTION_PREVIEW,
         ConsumerScreen.COLLECTION_CUSTOMIZE,
+        # Several installations ticked here are uninstalled together (D-393).
+        ConsumerScreen.INSTALLED,
         ConsumerScreen.UPDATES,
         ConsumerScreen.REVIEW_SELECTION,
         ConsumerScreen.CONFIGURATION_TARGETS,
@@ -1236,6 +1238,7 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
     ): ConsumerScreen.VERIFY_REPAIR,
     (ConsumerActionKind.VERIFY_REPAIR, ConsumerScreen.DOCTOR): ConsumerScreen.VERIFY_REPAIR,
+    (ConsumerActionKind.UNINSTALL, ConsumerScreen.INSTALLED): ConsumerScreen.UNINSTALL_REVIEW,
     (
         ConsumerActionKind.UNINSTALL,
         ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
@@ -1385,6 +1388,10 @@ def _request_action(
     focus = (
         state.current_row or state.focus
         if action in _ROW_IS_THE_REQUEST
+        or (
+            action is ConsumerActionKind.UNINSTALL
+            and state.session.screen is ConsumerScreen.INSTALLED
+        )
         else state.focus or state.current_row
     )
     if target is None:
@@ -1432,10 +1439,20 @@ def _request_action(
             else moved.registry_commit_applied
         ),
     )
+    selection = state.selection
+    if action in (ConsumerActionKind.UNINSTALL, ConsumerActionKind.VERIFY_REPAIR):
+        # A lifecycle action is about installations: what is ticked on Installed, and there only.
+        # Ticks carried from elsewhere -- Marketplace offers, or Installed rows behind an open
+        # details screen -- would otherwise outrank the one artifact the screen is about (D-393).
+        selection = (
+            tuple(key for key in state.selection if key in state.rows)
+            if state.session.screen is ConsumerScreen.INSTALLED
+            else ()
+        )
     command = ConsumerUiCommand(
         ConsumerUiCommandKind.PREPARE_ACTION,
         action=action,
-        selection=state.selection,
+        selection=selection,
         targets=(
             state.targets
             if action is ConsumerActionKind.INSTALL
@@ -2091,6 +2108,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _action_binding("i", "Install", ConsumerActionKind.INSTALL),
     ),
     ConsumerScreen.UPDATES: (_action_binding("i", "Update", ConsumerActionKind.UPDATE),),
+    ConsumerScreen.INSTALLED: (_action_binding("u", "Uninstall", ConsumerActionKind.UNINSTALL),),
     ConsumerScreen.INSTALLED_ARTIFACT_DETAILS: (
         _action_binding("r", "Repair", ConsumerActionKind.VERIFY_REPAIR),
         _action_binding("u", "Uninstall", ConsumerActionKind.UNINSTALL),
