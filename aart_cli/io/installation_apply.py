@@ -22,15 +22,8 @@ from aart_cli.domain.identifiers import ObjectDigest
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.install_state.model import InstallState
 from aart_cli.install_state.schema import install_state_bytes, parse_install_state
-from aart_cli.io.object_store import read_object
-from aart_cli.io.reference_store import read_references, write_references
-from aart_cli.io.store_lock import acquire_store_lock, release_store_lock
-from aart_cli.protocol.hashing import sha256_bytes
-from aart_cli.protocol.paths import parse_relative_path
-from aart_cli.store.model import ObjectReadRequest, ReferenceIndex, ReferenceKind
-
-from .application import InstallApplyPorts
-from .model import (
+from aart_cli.installation.application import InstallApplyPorts
+from aart_cli.installation.model import (
     CopyTreeOperation,
     EffectOutcome,
     InstallOperation,
@@ -44,6 +37,12 @@ from .model import (
     WriteFileOperation,
     operation_is_current,
 )
+from aart_cli.io.object_store import read_object
+from aart_cli.io.reference_store import read_references, write_references
+from aart_cli.io.store_lock import acquire_store_lock, release_store_lock
+from aart_cli.protocol.hashing import sha256_bytes
+from aart_cli.protocol.paths import parse_relative_path
+from aart_cli.store.model import ObjectReadRequest, ReferenceIndex, ReferenceKind
 
 INSTALL_IO_FAILED = DiagnosticCode("install-io-failed")
 INSTALL_PRECONDITION_CHANGED = DiagnosticCode("install-precondition-changed")

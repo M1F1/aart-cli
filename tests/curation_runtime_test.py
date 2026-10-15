@@ -7,15 +7,15 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from aart_cli.curation import runtime as curation_runtime
 from aart_cli.curation.model import (
     CurationAction,
     CurationRequest,
 )
-from aart_cli.curation.runtime import LocalCurationService
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
 from aart_cli.domain.result import Err, Ok
+from aart_cli.io import curation_runtime
+from aart_cli.io.curation_runtime import LocalCurationService
 from aart_cli.sources.model import SourceInstanceId, make_source_candidate
 from tests.registry_maintenance_fixtures import (
     native_snapshot,

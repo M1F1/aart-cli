@@ -14,7 +14,7 @@ from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.install_state.model import InstallationRecord, InstallState
 from aart_cli.install_state.schema import install_state_bytes
-from aart_cli.installation.io import LocalInstallAdapter, _lock, _restore, _write_atomic
+from aart_cli.io.installation_apply import LocalInstallAdapter, _lock, _restore, _write_atomic
 from aart_cli.io.reference_store import read_references, write_references
 from aart_cli.io.store_lock import acquire_store_lock, release_store_lock
 from aart_cli.model import Err as LegacyErr

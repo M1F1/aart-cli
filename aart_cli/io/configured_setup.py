@@ -41,8 +41,8 @@ from aart_cli.install_state.model import (
     InstallationRecord,
     SourceEvidence,
 )
-from aart_cli.installation.io import LocalInstallAdapter, _lock, _restore, _write_atomic
 from aart_cli.installation.model import InstallLocation
+from aart_cli.io.installation_apply import LocalInstallAdapter, _lock, _restore, _write_atomic
 from aart_cli.marketplace.model import TrustClass
 from aart_cli.model import Err as LegacyErr
 from aart_cli.model import SetupState, SetupStateRecord

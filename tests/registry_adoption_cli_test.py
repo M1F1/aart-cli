@@ -38,7 +38,7 @@ class RegistryAdoptionCliTest(_Lab):
 
         with (
             mock.patch(
-                "aart_cli.curation.runtime.acquire_git_snapshot",
+                "aart_cli.io.curation_runtime.acquire_git_snapshot",
                 side_effect=local_transport,
             ),
             contextlib.redirect_stdout(output),

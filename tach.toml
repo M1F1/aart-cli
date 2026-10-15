@@ -69,7 +69,7 @@ depends_on = ["aart_cli.application", "aart_cli.install_state", "aart_cli.regist
 
 [[modules]]
 path = "aart_cli.curation"
-depends_on = ["aart_cli.protocol", "aart_cli.io", "aart_cli.configuration", "aart_cli.domain", "aart_cli.security", "aart_cli.sources", "aart_cli.registry_commands", "aart_cli.registry_maintenance", "aart_cli.runtime_contract"]
+depends_on = ["aart_cli.protocol", "aart_cli.domain", "aart_cli.runtime_contract"]
 
 [[modules]]
 path = "aart_cli.domain"
@@ -81,7 +81,7 @@ depends_on = ["aart_cli.model", "aart_cli.domain", "aart_cli.configuration", "aa
 
 [[modules]]
 path = "aart_cli.installation"
-depends_on = ["aart_cli.protocol", "aart_cli.io", "aart_cli.compiler", "aart_cli.runtime_contract", "aart_cli.marketplace", "aart_cli.profiles", "aart_cli.configuration", "aart_cli.install_state", "aart_cli.application", "aart_cli.store", "aart_cli.domain"]
+depends_on = ["aart_cli.protocol", "aart_cli.compiler", "aart_cli.runtime_contract", "aart_cli.marketplace", "aart_cli.profiles", "aart_cli.configuration", "aart_cli.install_state", "aart_cli.store", "aart_cli.domain"]
 
 [[modules]]
 path = "aart_cli.io"

@@ -105,7 +105,7 @@ class GeneratedRegistryTest(unittest.TestCase):
 
 class OperationalDefaultTest(unittest.TestCase):
     def test_the_registry_init_remediation_names_variables_rather_than_a_repository(self) -> None:
-        from aart_cli.curation import runtime
+        from aart_cli.io import curation_runtime as runtime
 
         source = Path(runtime.__file__).read_bytes()
 

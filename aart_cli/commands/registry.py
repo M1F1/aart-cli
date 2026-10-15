@@ -28,10 +28,6 @@ from aart_cli.curation.model import (
     render_curation_outcome,
     render_curation_review,
 )
-from aart_cli.curation.runtime import (
-    default_native_acquirer,
-    load_local_curation_service,
-)
 from aart_cli.domain.candidates import CandidateState, assess_candidate
 from aart_cli.domain.diagnostics import (
     Diagnostic,
@@ -43,6 +39,10 @@ from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.io.curation_runtime import (
+    default_native_acquirer,
+    load_local_curation_service,
+)
 from aart_cli.io.git import GitProcessRequest, run_git_process
 from aart_cli.io.registry_adoption import (
     AdoptionUpstreamCheck,

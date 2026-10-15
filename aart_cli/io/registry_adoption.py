@@ -48,13 +48,13 @@ from aart_cli.application.promotion import (
     plan_bulk_promotion,
     validate_promoted_registry,
 )
-from aart_cli.curation.runtime import default_native_acquirer
 from aart_cli.domain.candidates import CandidateState
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.io.curation_runtime import default_native_acquirer
 from aart_cli.io.registry_promotion import FilesystemPromotionOutput
 from aart_cli.io.registry_workspace import FilesystemRegistryWorkspace
 from aart_cli.protocol.authoring import compile_author_snapshot

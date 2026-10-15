@@ -137,7 +137,7 @@ class _Lab(unittest.TestCase):
         under test ever weakens the transport request it makes.
         """
 
-        from aart_cli.curation.runtime import default_native_acquirer
+        from aart_cli.io.curation_runtime import default_native_acquirer
 
         def local(request: GitSnapshotRequest):
             self.assertFalse(
@@ -153,7 +153,7 @@ class _Lab(unittest.TestCase):
                 replace(request, location=local_url, allow_local_transport=True)
             )
 
-        with mock.patch("aart_cli.curation.runtime.acquire_git_snapshot", side_effect=local):
+        with mock.patch("aart_cli.io.curation_runtime.acquire_git_snapshot", side_effect=local):
             return default_native_acquirer(url, ref)
 
     def _scan(self):

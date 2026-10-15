@@ -20,9 +20,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from aart_cli import cli
-from aart_cli.curation.runtime import LocalCurationService
 from aart_cli.domain.identifiers import ArtifactIdentity
 from aart_cli.domain.result import Err, Ok
+from aart_cli.io.curation_runtime import LocalCurationService
 from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,

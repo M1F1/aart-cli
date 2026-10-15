@@ -10,6 +10,16 @@ from dataclasses import dataclass
 from typing import Protocol, cast
 
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.curation.model import (
+    CurationAction,
+    CurationChange,
+    CurationCheck,
+    CurationOutcome,
+    CurationOutcomeStatus,
+    CurationRequest,
+    CurationReview,
+    curation_review_digest,
+)
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
@@ -72,17 +82,6 @@ from aart_cli.sources.model import (
     SourceCandidate,
     source_instance_id,
     source_snapshot_digest,
-)
-
-from .model import (
-    CurationAction,
-    CurationChange,
-    CurationCheck,
-    CurationOutcome,
-    CurationOutcomeStatus,
-    CurationRequest,
-    CurationReview,
-    curation_review_digest,
 )
 
 _VERSION = EXECUTABLE_VERSION

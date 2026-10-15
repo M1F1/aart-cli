@@ -487,7 +487,7 @@ class RepositoryAdoptionCompositionTest(_Lab):
         with (
             mock.patch.dict("os.environ", xdg, clear=False),
             mock.patch(
-                "aart_cli.curation.runtime.acquire_git_snapshot",
+                "aart_cli.io.curation_runtime.acquire_git_snapshot",
                 side_effect=local_transport,
             ),
         ):
