@@ -320,7 +320,7 @@ class ValidationShellTest(unittest.TestCase):
                 ),
             )
         )
-        self.assertIn("Secret metadata", drawn)
+        self.assertIn("secret metadata", drawn)
 
     def test_enter_on_validation_details_continues_to_policy(self) -> None:
         listed = _reload(
@@ -418,7 +418,7 @@ class ValidationShellTest(unittest.TestCase):
         self.assertIs(diff_again.session.screen, MaintainerScreen.CANDIDATE_DIFF)
         self.assertEqual(diff_again.focus, self.candidate)
         self.assertNotIn("That Candidate is not available.", frame(self.source, diff_again))
-        self.assertIn("- Semantic changes:", frame(self.source, diff_again))
+        self.assertIn("2. semantic changes:", frame(self.source, diff_again))
 
     def test_back_from_any_validation_check_restores_the_bare_candidate_identity(self) -> None:
         # ValidationCheck is a finite closed enum, so exhaust every member instead of sampling it.
@@ -477,7 +477,7 @@ class ValidationShellTest(unittest.TestCase):
         )
         row = f"{self.candidate}:live-acceptance"
         state = dataclasses.replace(state, cursor=state.rows.index(row))
-        self.assertIn("Unmet requirements: live-acceptance", "\n".join(frame(self.source, state)))
+        self.assertIn("unmet requirements: live-acceptance", "\n".join(frame(self.source, state)))
 
         visited = []
         for _ in range(2):

@@ -128,7 +128,7 @@ class MarketplaceShellTest(unittest.TestCase):
 
         self.assertEqual(custom.session.screen, ConsumerScreen.COLLECTION_CUSTOMIZE)
         self.assertIn("1 / 2 selected", terminal.last)
-        self.assertIn("Warning: Custom selection", terminal.last)
+        self.assertIn("warning: Custom selection", terminal.last)
         source = CanonicalScreenSource(screens())
         self.assertNotEqual(
             source.collection(str(COLLECTION), custom.selection).semantic_identity,

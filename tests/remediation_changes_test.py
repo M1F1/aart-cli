@@ -119,11 +119,11 @@ class RemediationStatesTheChangesAartWillMakeTest(unittest.TestCase):
 
     def test_each_change_is_an_outcome_that_names_its_subject(self) -> None:
         for remediation, words in (
-            (_harness("claude"), ("Configure", "claude")),
-            (CREDENTIAL, ("Store", "credential", "securely", "macos keychain")),
-            (RUNTIME, ("Install", "python", ">=3.11")),
-            (EXECUTABLE, ("Install", "node")),
-            (PACKAGES, ("Install", "Python dependencies", "uv")),
+            (_harness("claude"), ("configure", "claude")),
+            (CREDENTIAL, ("store", "credential", "securely", "macos keychain")),
+            (RUNTIME, ("install", "python", ">=3.11")),
+            (EXECUTABLE, ("install", "node")),
+            (PACKAGES, ("install", "Python dependencies", "uv")),
             (NETWORK, ("network access", "api.github.com")),
             (PROVIDER, ("onepassword",)),
         ):
@@ -131,7 +131,10 @@ class RemediationStatesTheChangesAartWillMakeTest(unittest.TestCase):
                 drawn = _drawn(remediation)
                 for word in words:
                     self.assertIn(word, drawn)
-                self.assertNotIn(remediation.kind.replace("-", " "), drawn)
+                # The bare kind label as an item, not a sentence that happens to open with it.
+                self.assertNotRegex(
+                    drawn, rf"(?m)^\s*(\d+\. )?{remediation.kind.replace('-', ' ')}\s*$"
+                )
 
     def test_rows_that_differ_only_by_harness_are_still_told_apart(self) -> None:
         source, state = _on(

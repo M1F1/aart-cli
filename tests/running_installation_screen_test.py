@@ -124,7 +124,7 @@ class RunningInstallationScreenTest(unittest.TestCase):
             line.split("(")[-1]
             for item in drawn
             for line in item.splitlines()
-            if "Installing" in line and " done)" in line
+            if "installing" in line.lower() and " done)" in line
         ]
         self.assertEqual(counts, ["0 of 2 done)", "1 of 2 done)", "1 of 2 done)", "2 of 2 done)"])
 

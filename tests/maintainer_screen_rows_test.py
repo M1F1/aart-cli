@@ -181,8 +181,8 @@ class RegistryMaintainerTest(_Contract):
         self.assertKeepsTheFrame(source, state)
         fast = compose_frame(source, state)
         verbose = compose_frame(source, _verbose(state))
-        self.assertNotIn("- Connected Registry snapshots", fast.status)
-        self.assertIn("- Connected Registry snapshots", verbose.status)
+        self.assertNotIn("1. connected Registry snapshots", fast.status)
+        self.assertIn("1. connected Registry snapshots", verbose.status)
         self.assertEqual(verbose.described, ())
 
     def test_46_verbose_spells_out_the_digests_the_row_shortens(self) -> None:
@@ -276,7 +276,8 @@ class BulkPromotionTest(_Contract):
             ("company", "  No Candidate of this registry can be promoted right now."),
         )
         self.assertEqual(
-            maintainer_bulk_promotion_status((refused,)), ("company", "  - the registry is invalid")
+            maintainer_bulk_promotion_status((refused,)),
+            ("company", "  1. the registry is invalid"),
         )
         self.assertTrue(offered and all(view.candidates for view in offered))
         self.assertEqual(maintainer_bulk_promotion_status(offered), ())

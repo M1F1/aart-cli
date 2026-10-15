@@ -229,7 +229,7 @@ class ConsumerFlowTest(InstalledFixture):
 
         self.assertEqual((before.attention_count, before.ready_count), (1, 0))
         self.assertEqual((after.attention_count, after.ready_count), (0, 1))
-        self.assertIn(f"Repaired {COORDINATE}", "\n".join(render_dashboard(after)))
+        self.assertIn(f"repaired {COORDINATE}", "\n".join(render_dashboard(after)))
 
     def test_no_consumer_surface_ever_shows_the_secret(self):
         self.break_the_launcher()

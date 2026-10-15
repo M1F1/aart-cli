@@ -346,13 +346,13 @@ class ConfigurationReviewNamesTheChangeTest(unittest.TestCase):
 
         status = "\n".join(compose_frame(source, state).status)
 
-        self.assertIn(f"Change {INPUT.value} for {inspection().record.coordinate}", status)
+        self.assertIn(f"change {INPUT.value} for {inspection().record.coordinate}", status)
         self.assertIn("claude: old-team → new-team", status)
         self.assertIn("tabnine: other-team → new-team", status)
         self.assertNotIn("opencode", status)
         self.assertNotIn("Review configure", status)
         self.assertNotIn(_DIGEST, status)
-        self.assertIn("Risks: local mutation.", status)
+        self.assertIn("risks: local mutation.", status)
         self.assertEqual(frame_violations(source, state), ())
 
     def test_verbose_adds_the_review_identity(self) -> None:
@@ -360,7 +360,7 @@ class ConfigurationReviewNamesTheChangeTest(unittest.TestCase):
 
         status = "\n".join(compose_frame(source, state).status)
 
-        self.assertIn(f"Review identity: {_DIGEST}", status)
+        self.assertIn(f"review identity: {_DIGEST}", status)
         self.assertIn("claude: old-team → new-team", status)
 
 

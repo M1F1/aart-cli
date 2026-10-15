@@ -658,7 +658,7 @@ def _screen_07(terminal) -> str:
     return next(
         "\n".join(frame)
         for frame in terminal.frames
-        if any("A few things are needed before installation" in line for line in frame)
+        if any("a few things are needed before installation" in line for line in frame)
     )
 
 

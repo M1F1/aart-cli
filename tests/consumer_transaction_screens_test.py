@@ -99,14 +99,14 @@ class TransactionScreenTest(unittest.TestCase):
     def test_nothing_has_run_until_something_has(self) -> None:
         drawn = _drawn(ConsumerScreen.SUCCESS, _flow())
 
-        self.assertIn("Nothing has run yet", drawn)
+        self.assertIn("nothing has run yet", drawn)
 
     def test_success_reports_the_selection_rather_than_one_of_its_artifacts(self) -> None:
         flow = _ran(_bulk_flow())
 
         drawn = _drawn(ConsumerScreen.SUCCESS, flow)
 
-        self.assertIn("Installed 2 artifacts", drawn)
+        self.assertIn("installed 2 artifacts", drawn)
         for member in flow.outcome.artifacts:
             self.assertIn(member.coordinate, drawn)
 

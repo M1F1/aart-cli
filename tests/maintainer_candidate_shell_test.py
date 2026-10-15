@@ -267,7 +267,7 @@ class MaintainerCandidateShellTest(unittest.TestCase):
             )
         )
 
-        self.assertIn("Maintainer state is not available yet.", drawn)
+        self.assertIn("maintainer state is not available yet.", drawn)
         self.assertNotIn("No active Candidates have been discovered.", drawn)
 
     def test_an_unknown_candidate_focus_refuses_instead_of_raising(self) -> None:

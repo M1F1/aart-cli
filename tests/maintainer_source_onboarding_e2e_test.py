@@ -89,7 +89,7 @@ class MaintainerSourceOnboardingTest(unittest.TestCase):
             )
             self.assertIs(added.session.screen, MaintainerScreen.SOURCES, terminal.frames)
             self.assertEqual(added.current_row, draft.alias)
-            success = terminal.screen_containing("Source z-authors added")
+            success = terminal.screen_containing("source z-authors added")
             self.assertIn("[s] Sync", success)
             self.assertIn("discover artifacts", success)
             self.assertIn("new upstream versions", success)
@@ -98,17 +98,17 @@ class MaintainerSourceOnboardingTest(unittest.TestCase):
             blocks = _blocks(tuple(success.splitlines()))
             rows = next(block for block in blocks if any("> z-authors" in line for line in block))
             notice = next(
-                block for block in blocks if any("Source z-authors added" in line for line in block)
+                block for block in blocks if any("source z-authors added" in line for line in block)
             )
             self.assertIsNot(rows, notice)
             self.assertFalse(any("Run Source Sync" in line for line in rows))
             self.assertEqual(
                 _spoken(notice),
                 (
-                    "- Source z-authors added.",
-                    "- Run Source Sync to discover artifacts and create or refresh Candidates, "
+                    "1. source z-authors added.",
+                    "2. run Source Sync to discover artifacts and create or refresh Candidates, "
                     "including new upstream versions. Adding a Source only connects it.",
-                    "- Source Sync does not promote Candidates or update installed artifacts.",
+                    "3. source Sync does not promote Candidates or update installed artifacts.",
                 ),
             )
 
@@ -141,7 +141,7 @@ class MaintainerSourceOnboardingTest(unittest.TestCase):
             self.assertEqual(synced.focus, draft.alias)
             self.assertIn(
                 "Current Candidates: 0",
-                returning.screen_containing("Sync authoring Source z-authors"),
+                returning.screen_containing("sync authoring Source z-authors"),
             )
             self.assertIn("Candidates: 1", returning.screen_containing("/ Source Sync Result"))
             history = read_candidate_history(history_paths)

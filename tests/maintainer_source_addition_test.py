@@ -192,7 +192,7 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
             )
             self.assertEqual(completed.event.text, draft.alias)
             drawn = "\n".join(frame(completed.source, _state(MaintainerScreen.SOURCES)))
-            self.assertIn("Source local-authors added", drawn)
+            self.assertIn("source local-authors added", drawn)
             self.assertIn("Source Sync", drawn)
             self.assertIn("discover artifacts", drawn)
             self.assertIn("Candidates", drawn)
@@ -204,7 +204,7 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
 
         with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
             actions = self._composed(env)
-            connector = mock.Mock(return_value=_failure("Source connection refused"))
+            connector = mock.Mock(return_value=_failure("source connection refused"))
             actions._source_connection = connector
             draft = SourceDraft("refused-authors", "source-local", str(env.project), "")
             prepared = actions.handle(
@@ -230,7 +230,7 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
             self.assertIs(failed.session.screen, MaintainerScreen.SOURCE_ADD_REVIEW)
             self.assertEqual(commands, ())
             drawn = "\n".join(frame(completed.source, failed))
-            self.assertIn("Source connection refused", drawn)
+            self.assertIn("source connection refused", drawn)
             self.assertNotIn("Source refused-authors added", drawn)
             self.assertNotIn("Run Source Sync", drawn)
 

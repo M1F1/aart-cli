@@ -153,7 +153,7 @@ class NewSubscriptionIsStatedTest(unittest.TestCase):
         ):
             with self.subTest(screen=screen):
                 self.assertIn(
-                    f"This adds another {noun}. Nothing already connected is changed.",
+                    f"this adds another {noun}. Nothing already connected is changed.",
                     self._body(screen),
                 )
 

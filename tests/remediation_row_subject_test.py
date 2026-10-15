@@ -65,8 +65,8 @@ class RemediationRowNamesItsSubjectTest(unittest.TestCase):
 
         rows = self._rows(plain, unknown)
 
-        self.assertIn("  Store the credential it needs securely", rows)
-        self.assertIn("  Tune cache", rows)
+        self.assertIn("  1. store the credential it needs securely", rows)
+        self.assertIn("  2. tune cache", rows)
 
 
 if __name__ == "__main__":

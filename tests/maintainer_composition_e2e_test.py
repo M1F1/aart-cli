@@ -268,7 +268,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
 
             self.assertIs(finished.session.screen, MaintainerScreen.SOURCE_DETAILS)
             self.assertTrue(terminal.screen_containing("/ Maintainer Dashboard"))
-            self.assertIn("Candidates: 1", terminal.screen_containing("Ready for promotion:"))
+            self.assertIn("candidates: 1", terminal.screen_containing("ready for promotion:"))
             self.assertIn("authors", terminal.screen_containing("/ Sources"))
             detail = terminal.screen_containing("/ Source Details")
             self.assertIn("branch: main", detail)
@@ -401,9 +401,9 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertIs(finished.session.screen, MaintainerScreen.SOURCE_SYNC_RESULT)
             review = terminal.screen_containing("/ Source Sync")
             self.assertIn("Registry mutations: none", review)
-            self.assertIn("Review identity: sha256:", review)
+            self.assertIn("review identity: sha256:", review)
             result = terminal.screen_containing("/ Source Sync Result")
-            self.assertIn("Discovered manifests: 1", result)
+            self.assertIn("discovered manifests: 1", result)
             self.assertIn("Candidates: 1", result)
             self.assertIn("Registry mutations: none", result)
 
@@ -555,14 +555,14 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertIn("Target registry: company", detail)
             self.assertIn("Press d for semantic diff.", detail)
 
-            summary = terminal.screen_containing("Semantic changes:")
-            self.assertIn("File changes (secondary):", summary)
-            self.assertNotIn("Bounded redacted file diffs:", summary)
-            self.assertIn("Press v to view bounded redacted file diffs.", summary)
+            summary = terminal.screen_containing("semantic changes:")
+            self.assertIn("file changes (secondary):", summary)
+            self.assertNotIn("bounded redacted file diffs:", summary)
+            self.assertIn("press v to view bounded redacted file diffs.", summary)
             # CP-23 task 03: `v` is the one presentation toggle, so it reveals the file diffs.
             self.assertIn(
-                "Bounded redacted file diffs:",
-                terminal.screen_containing("Bounded redacted file diffs:"),
+                "bounded redacted file diffs:",
+                terminal.screen_containing("bounded redacted file diffs:"),
             )
 
     def test_the_review_walk_runs_from_the_diff_through_to_the_promotion_review(self) -> None:
@@ -1127,7 +1127,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertIn("Promote 2 candidates", committed)
             # This walk commits and stops. Publication is manual Git (D-255), so what the screen
             # owes the reader here is the steps that make the commit visible.
-            self.assertIn("Subscribers cannot see this commit yet", committed)
+            self.assertIn("subscribers cannot see this commit yet", committed)
 
             # One transaction, not two: a loop over single promotions would have made two commits
             # and two registry snapshots.

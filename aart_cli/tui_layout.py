@@ -14,9 +14,10 @@ Two rules from the design are enforced structurally rather than by convention:
 from __future__ import annotations
 
 import dataclasses
+import re
 import textwrap
 from dataclasses import dataclass
-from typing import Mapping, Sequence, Tuple
+from typing import Iterable, Mapping, Sequence, Tuple
 
 # --------------------------------------------------------------------------- #
 # Frozen vocabulary.                                                            #
@@ -283,6 +284,48 @@ def is_action_prompt(line: str) -> bool:
     return any(word.strip(",;:.") in KEY_NAMES for word in stripped.split())
 
 
+#: What a wrapped line's continuation hangs under: a number, a dash, a cursor, a check box.
+_HANGING = re.compile(r"^( *)((?:\d+\. )|(?:- )|(?:> |  (?=\[)))?((?:\[[^\]]\] )?)")
+
+
+def wrap_lines(lines: Sequence[str], *, width: int) -> Tuple[str, ...]:
+    """Every line no wider than the terminal, wrapped rather than cut (D-386).
+
+    A line is drawn in ``width - 1`` columns, because curses refuses the bottom-right cell. A
+    continuation hangs under the item's own text, past its number, dash, cursor or check box, so a
+    wrapped item never reads as a second one. A section rule is clipped rather than wrapped: the
+    terminal finds the footer by finding the last rule, and a rule split in two is two lines.
+    """
+
+    usable = max(width - 1, 1)
+    drawn: list[str] = []
+    for line in lines:
+        if len(line) <= usable:
+            drawn.append(line)
+            continue
+        if set(line) <= {"─"}:
+            drawn.append(line[:usable])
+            continue
+        found = _HANGING.match(line)
+        hang = 0 if found is None else len(found.group(0))
+        if hang >= usable // 2:
+            hang = len(line) - len(line.lstrip(" "))
+        if hang >= usable // 2:
+            hang = 0
+        drawn.extend(
+            textwrap.wrap(
+                line[hang:],
+                width=usable,
+                initial_indent=line[:hang],
+                subsequent_indent=" " * hang,
+                break_long_words=True,
+                break_on_hyphens=False,
+            )
+            or [line[:usable]]
+        )
+    return tuple(drawn)
+
+
 def separate(*blocks: Sequence[str]) -> Tuple[str, ...]:
     """Blocks of lines joined by exactly one blank line, with empty blocks dropped.
 
@@ -311,66 +354,63 @@ def separate(*blocks: Sequence[str]) -> Tuple[str, ...]:
     return tuple(joined)
 
 
+def lowercase_first(text: str) -> str:
+    """One list item opening in lower case, with names and acronyms left as they are.
+
+    The operator asked for every list to be numbered and every item to start lower-case
+    (*"wypisuj te rzeczy jako lista z numerkami i zaczynaj od malej litery podpunkt"*, D-386),
+    reversing the capitalised sentences `QA-096` settled on. Only a plain capitalised word is
+    lowered: `GitHub`, `MCP`, `AART` and identifiers such as coordinates or paths keep their case,
+    because lowering a name changes what it names.
+    """
+
+    head = text.lstrip()
+    if not head:
+        return text
+    word = head.split(" ", 1)[0].rstrip(",;:.").replace("-", "")
+    if not word.isalpha() or not word[0].isupper() or (len(word) > 1 and not word[1:].islower()):
+        return text
+    return text.replace(head, head[0].lower() + head[1:], 1)
+
+
 def stated(lines: Sequence[str]) -> Tuple[str, ...]:
-    """Each statement as a sentence, so a screen does not start two of them two ways.
+    """Each statement opening the same way, so a screen does not start two of them two ways.
 
-    The operator found the same block starting some statements with a capital and others without
-    -- *"zdecyduj sie czy zaczynamy to z duzej litery czy z malej bo tu sa rozne"* (`QA-096`) -- and
-    the split runs along where the text came from: a view writes prose, a refused run carries a
-    diagnostic, and diagnostics are written lower-case everywhere else in this codebase for good
-    reasons of their own. Settling it in the diagnostics would be settling it in the wrong place,
-    so it is settled here, where the words become a screen.
-
-    Only the first line of a statement is touched, and only when it opens with a plain lower-case
-    word: a continuation is not a sentence start, and a line opening on an identifier -- a
-    coordinate, a file name, an alias -- is a name rather than a word, and names keep their case.
+    `QA-096` found statements starting some with a capital and others without, along where the
+    text came from: a view writes prose, a refused run carries a lower-case diagnostic. It is
+    settled here, where the words become a screen, and since D-386 it is settled lower-case: only
+    the first line of a statement is touched, through `lowercase_first`.
     """
 
     if any(not isinstance(line, str) for line in lines):
         raise ValueError("a block is lines of text")
     said = list(lines)
-    opening: int | None = None
-    for index, line in enumerate(said + [""]):
-        if line.strip():
-            if opening is None:
-                opening = index
+    opening = True
+    for index, line in enumerate(said):
+        if not line.strip():
+            opening = True
             continue
-        if opening is not None:
-            _speak(said, opening, index - 1)
-        opening = None
+        if opening:
+            said[index] = lowercase_first(line)
+        opening = False
     return tuple(said)
 
 
-def _speak(said: list[str], first: int, last: int) -> None:
-    """One statement as a sentence, in place, or left exactly as it is."""
-
-    head = said[first].lstrip()
-    word = head.split(" ", 1)[0].rstrip(",;:.")
-    if not word.isalpha() or not word.islower():
-        return
-    said[first] = said[first].replace(head, head[0].upper() + head[1:], 1)
-    tail = said[last].rstrip()
-    if tail and tail[-1].isalnum():
-        said[last] = tail + "."
-
-
-BULLET = "- "
-"""What marks one statement in a block of them."""
-
-_BULLET_INDENT = " " * len(BULLET)
+def _marker(number: int) -> str:
+    return f"{number}. "
 
 
 def bulleted(lines: Sequence[str]) -> Tuple[str, ...]:
-    """Statements as a list: one ``-`` each, one blank line between them.
+    """Statements as a numbered list: one number each, one blank line between them.
 
     The operator read a view's status as a paragraph, because three unrelated facts were three
     consecutive lines -- *"kazda linia statusu/informacji powinna byc oznaczona jako element
     listy"* (`QA-096`), and *"zawsze, nawet pojedyncze"*: a lone statement is a list of one rather
-    than an exception, so nothing has to decide which it is.
+    than an exception. Since D-386 the marker is a number.
 
     What counts as one statement is the blank line, which is already how every composed block in
     this module says "different thing" (`separate`). A statement that runs to several lines keeps
-    them, indented under its own marker, so a wrapped sentence never reads as a second item.
+    them, indented under its own text, so a wrapped sentence never reads as a second item.
     """
 
     if any(not isinstance(line, str) for line in lines):
@@ -384,12 +424,38 @@ def bulleted(lines: Sequence[str]) -> Tuple[str, ...]:
         if not groups:
             groups.append([])
         groups[-1].append(line)
-    items = [
-        (BULLET + group[0], *(_BULLET_INDENT + line for line in group[1:]))
-        for group in groups
-        if group
-    ]
+    items = []
+    for number, group in enumerate((group for group in groups if group), start=1):
+        marker = _marker(number)
+        items.append((marker + group[0], *(" " * len(marker) + line for line in group[1:])))
     return separate(*items)
+
+
+def numbered(items: Iterable[str], *, indent: str = "  ") -> Tuple[str, ...]:
+    """Items of one list, numbered from 1, opening lower-case, a blank line apart (D-386).
+
+    The blank line is the operator's: items one under another ran together
+    (*"przy kazdym bullet albo podpunkcie mozesz je oddzielac pusta linia"*).
+    """
+
+    lines: list[str] = []
+    for number, item in enumerate(items, start=1):
+        if lines:
+            lines.append("")
+        lines.append(numbered_item(number, item, indent=indent))
+    return tuple(lines)
+
+
+def numbered_item(number: int, text: str, *, indent: str = "  ") -> str:
+    """One numbered item, for a list whose items carry lines of their own underneath."""
+
+    return f"{indent}{_marker(number)}{lowercase_first(text)}"
+
+
+def under_item(number: int, text: str, *, indent: str = "  ") -> str:
+    """A line belonging to item ``number``, aligned with that item's text."""
+
+    return f"{indent}{' ' * len(_marker(number))}{text}"
 
 
 def section(lines: Sequence[str]) -> Tuple[str, ...]:
@@ -570,7 +636,11 @@ BOX_MARKERS: Mapping[str, str] = {
 }
 
 __all__ = [
-    "BULLET",
+    "wrap_lines",
+    "lowercase_first",
+    "numbered",
+    "numbered_item",
+    "under_item",
     "BOX_CHECKED",
     "BOX_DISABLED",
     "BOX_EMPTY",

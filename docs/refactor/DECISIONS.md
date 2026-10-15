@@ -9845,3 +9845,32 @@ description's `Description` field, which the frame draws in Verbose. Search stil
 summary. Evidence is `tests/consumer_marketplace_shell_test.py`
 (`test_a_row_is_the_offer_alone_and_its_description_is_verbose`). Restoring the summary on the row
 turned exactly that test red.
+
+## D-386 — Every list is numbered, opens lower-case, keeps a blank line between items, and wraps
+
+The operator asked for it in two messages: *"wypisuj te rzeczy jako lista z numerkami i zaczynaj
+od malej litery podpunkt ... mozesz to zmienic wszedzie"*, then *"gdy tekst nie miesci sie w
+linijce mozesz go zawijac? ... przy kazdym bullet albo podpunkcie mozesz je oddzielac pusta
+linia"*. This reverses the capitalised sentences and `- ` bullets `QA-096` settled on.
+
+- `tui_layout.bulleted` numbers each blank-separated statement (`1. `, `2. `, ...), and
+  `numbered`/`numbered_item`/`under_item` do the same for the nested lists screens build (eligible
+  harnesses, remediation changes, recent activity, diagnostics, validation details). Items stand a
+  blank line apart. A placeholder such as `none` is no longer a one-item list.
+- `lowercase_first` lowers only a plain capitalised first word (hyphens allowed, so `Re-run`
+  becomes `re-run`). Names and acronyms such as `GitHub`, `MCP`, `AART` and identifiers keep their
+  case, because lowering a name changes what it names. `stated` applies it to the first line of
+  each statement and no longer adds a period. Rows, section headings and prose paragraphs that are
+  not list items are left alone.
+- `wrap_lines` wraps a line wider than the terminal with a hanging indent under the item text, a
+  cursor row's label or the line's own indent. A rule made only of `─` is clipped, never split.
+  `_CursesTerminal.draw` finds the footer on the composed frame and wraps body and footer
+  separately: a wrapped frame no longer carries the full-width rule `footer_start` looks for, and
+  wrapping first would have lost the keys on a narrow terminal.
+
+Evidence is `tests/numbered_lists_and_wrapping_test.py` (including a Hypothesis property that no
+line is wider than the terminal and nothing said is lost) and
+`tests/maintainer_candidate_detail_test.py` for the legend on a narrow terminal. Making
+`lowercase_first` return its input turned three tests red. Restoring the single-pass wrap in
+`draw` turned the narrow-terminal legend test red. Test expectations across the TUI suites were
+updated to the numbered, lower-case form. Direct renders that are not lists keep their case.

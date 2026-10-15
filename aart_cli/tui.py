@@ -772,12 +772,17 @@ class _CursesTerminal:
         # a long report that pushed the keys off screen would recreate the first-run trap the footer
         # exists to remove. The terminal only places and clips the already-composed frame; what a key
         # means, and what a screen says, remain in the pure shell.
-        from .tui_layout import anchor, footer_start
+        from .tui_layout import footer_start, wrap_lines
 
-        placed = anchor(lines, height=drawable)
-        start = footer_start(placed)
-        footer = placed[start:][:drawable]
-        body = placed[:start][: max(drawable - len(footer), 0)]
+        # Wrapped before it is placed (D-386): a line cut at the edge lost the end of what it said.
+        # The footer is found on the composed frame and each part wrapped on its own, because a
+        # wrapped frame no longer carries the full-width rule that says where the footer begins,
+        # and the padding has to count the rows the wrapped body and legend really take.
+        start = footer_start(lines)
+        footer = wrap_lines(lines[start:], width=width)[:drawable]
+        body = wrap_lines(lines[:start], width=width)
+        body = (*body, *("",) * max(drawable - len(body) - len(footer), 0))
+        body = body[: max(drawable - len(footer), 0)]
         for row, line in enumerate((*body, *footer)):
             self._stdscr.addstr(row, 0, line[: max(width - 1, 0)])
         self._stdscr.refresh()

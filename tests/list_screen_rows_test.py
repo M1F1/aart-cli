@@ -112,8 +112,8 @@ class CollectionRowsTest(unittest.TestCase):
             self.assertEqual(frame_violations(self.source, drawn), ())
         fast = compose_frame(self.source, self.preview)
         verbose = compose_frame(self.source, _verbose(self.preview))
-        self.assertIn("- 2 / 2 selected", fast.status)
-        self.assertNotIn("- 2 selected", fast.status)
+        self.assertIn("3. 2 / 2 selected", fast.status)
+        self.assertNotIn("4. 2 selected", fast.status)
         self.assertNotIn("company/mcp/database@1.0.0", "\n".join(fast.status))
         self.assertIn("company/mcp/database@1.0.0", "\n".join(verbose.status))
 
@@ -167,7 +167,7 @@ class UserInputRowsTest(unittest.TestCase):
         self.assertIn("claude: /opt/agents/mcp/github/config/claude.conf", blocks.described)
         self.assertEqual(self.source.actions(verbose), self.source.actions(state))
         self.assertNotIn("/opt/agents", "\n".join(self.source.actions(verbose)))
-        self.assertEqual(blocks.status[0], f"- {self.coordinate}")
+        self.assertEqual(blocks.status[0], f"1. {self.coordinate}")
 
 
 if __name__ == "__main__":

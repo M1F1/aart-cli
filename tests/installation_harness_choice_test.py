@@ -152,7 +152,7 @@ class HarnessTargetScreenTest(unittest.TestCase):
         self.assertIn("[ ] opencode", drawn)
         self.assertIn("[ ] tabnine", drawn)
         self.assertIn("unique artifact(s) will be installed", drawn)
-        self.assertIn("Choose at least one harness to install into.", drawn)
+        self.assertIn("choose at least one harness to install into.", drawn)
         # D-270: Enter is offered once it advances; until then the status says what is missing.
         self.assertNotIn("[Enter]", drawn)
         self.assertEqual(key_violations(source, state), ())

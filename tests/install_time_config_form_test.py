@@ -277,11 +277,11 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
 
         self.assertEqual(source.rows(state), (target_row("opencode"), target_row("tabnine")))
         self.assertIn("[ ] opencode", unchosen)
-        self.assertIn("Choose at least one harness", unchosen)
+        self.assertIn("choose at least one harness", unchosen)
         self.assertNotIn("GitHub organization", unchosen)
         self.assertIsNone(source.detail(state))
         self.assertIs(source.detail(chosen), ConsumerScreen.REQUIRED_INPUTS)
-        self.assertIn("Installing into: tabnine", "\n".join(frame(source, chosen)))
+        self.assertIn("installing into: tabnine", "\n".join(frame(source, chosen)))
         # A choice whose preparation has not yet answered with its fields has nothing to open.
         self.assertIsNone(source.detail(empty))
 
