@@ -6,5 +6,5 @@ is used for editable/dev installs and is only consulted by ``check`` / ``upgrade
 wheel so the archive reproduces from the tag rather than from the clock.
 """
 
-COMMIT = "a8d473dd55b4d1fe22210d6d50046c92538643f2"
-COMMIT_EPOCH = 1792063085
+COMMIT = "unknown"
+COMMIT_EPOCH = 0
