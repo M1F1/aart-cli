@@ -12,13 +12,20 @@
 5. superpowers as a plugin, checked live;
 6. full verification.
 
-Steps 1–4 are done. **Next is step 5**: give the scratchpad fork (`acme-superpowers`) a root
-plugin manifest, with `entry: .opencode/plugins/superpowers.js` and the plugin, skills and package
-files included. Then publish it to a throwaway local Registry and install it into a fresh project
-with `marketplace install --profile opencode company/plugin/superpowers --yes`. Check it live:
-`opencode debug skill` should list the skills from the plugin's tree against a control, and so should
-a live `opencode run`. Then uninstall and check again. Step 6 is the PR, where CI is the full
-verification.
+Steps 1–5 are done: superpowers runs as a plugin installed by aart-cli, checked live.
+
+**Next is step 6, added at the owner's request: break the import cycles tach reports** (B-186: 21
+modules in two components) and turn on `forbid_circular_dependencies`. Start with the edges that
+point the wrong way:
+- `application` → `registry_commands`/`registry_maintenance`/`marketplace`;
+- `io` → `tui_consumer` (in `consumer_actions`) and `consumer` (in `configured_setup`);
+- `sources` → `application`/`io`;
+- `security` → `marketplace`;
+- then the legacy `cli`/`commands`/`receipt_service`/`setup_verify_probes`/`tui` loop.
+
+Make one commit per edge, with focused tests. Step 7 is the PR, where CI is the full verification.
+The live plugin environment is rebuilt by the scratchpad `spp-build.sh`, so it is not in the
+repository. The evidence is in the slice.
 
 ## Before CP-29 (2026-10-14)
 

@@ -4,6 +4,15 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-15, CP-29 step 5 (D-408): superpowers runs as an OpenCode plugin installed by aart-cli.**
+- The upstream 7.0.0 plugin was vendored into a plugin artifact, published to a local Registry and
+  installed into opencode.
+- opencode loaded its 15 skills from the private tree, under their upstream names.
+- A live session used `brainstorming` before feature work. The control did not.
+- Uninstall left no superpowers skill.
+- Two defects fixed on the way: root-anchored Registry ignores, and settings entries as setup
+  evidence.
+
 **2026-10-15, CP-29 steps 1–4 (D-404–D-407): tach is a gate, and OpenCode plugins are an artifact kind.**
 - tach checks the import graph (D-404).
 - superpowers' skills and bootstrap were installed into opencode as Skills and Memory, and checked

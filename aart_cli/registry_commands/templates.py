@@ -4,21 +4,24 @@ from __future__ import annotations
 
 from .publication import REGISTRY_PUBLICATION_GATES
 
-REGISTRY_GITIGNORE = b""".aart-cli/
-.aart-cli-bak/
-.claude/
-.coverage
-.mcp.json
-.mypy_cache/
-.opencode/
-.pytest_cache/
-.ruff_cache/
-.tabnine/
-.vibe/
-__pycache__/
-build/
-dist/
-htmlcov/
+#: Anchored to the root, every one: a vendored payload may carry the same names -- an OpenCode
+#: plugin ships `.opencode/plugins/` -- and an unanchored entry makes git drop them from
+#: `artifacts/`, which the published content digest then refuses.
+REGISTRY_GITIGNORE = b"""/.aart-cli/
+/.aart-cli-bak/
+/.claude/
+/.coverage
+/.mcp.json
+/.mypy_cache/
+/.opencode/
+/.pytest_cache/
+/.ruff_cache/
+/.tabnine/
+/.vibe/
+/__pycache__/
+/build/
+/dist/
+/htmlcov/
 """
 
 # Every knob below is a repository variable, and every default reproduces the public github.com

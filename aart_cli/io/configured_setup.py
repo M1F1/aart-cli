@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Literal
 
+from aart_cli.application.installation_verification import settings_entry_digest
 from aart_cli.application.marketplace_resolution import RegistryTrust
 from aart_cli.application.store import (
     ReferenceUpdatePorts,
@@ -26,6 +27,7 @@ from aart_cli.consumer.model import (
 )
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.effects import DeliveryKind
+from aart_cli.domain.hooks import settings_entry_to_json
 from aart_cli.domain.identifiers import ArtifactCoordinate, ObjectDigest
 from aart_cli.domain.receipts import (
     InstallationReceipt,
@@ -154,7 +156,22 @@ def _effect_proofs(
         for item in receipt.merges
         if item.harness == profile
     )
-    return (*deliveries, *merges)
+    # One member of a list in a file somebody else owns: a hook's entry and a plugin's alike. A
+    # plugin has nothing else, so without these its receipt would prove no effect at all.
+    settings = tuple(
+        EffectProof(
+            "merge-json",
+            _relative_destination(item.destination, host),
+            "copy",
+            settings_entry_digest(settings_entry_to_json(item.entry)),
+            json_path=item.path,
+            merge_mode="list",
+            identity_digest=settings_entry_digest(settings_entry_to_json(item.entry)),
+        )
+        for item in receipt.settings
+        if item.harness == profile
+    )
+    return (*deliveries, *merges, *settings)
 
 
 def configured_setup_subject(

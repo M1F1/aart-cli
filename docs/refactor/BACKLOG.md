@@ -4520,14 +4520,26 @@ detect one (CI containers), the Registry Commit screen reads "did not run" and d
 sets a repository identity, as the other promotion tests do. The screen should name the refusal and
 the `git config user.name/user.email` remedy.
 
-## B-186 — eleven top-level modules sit in import cycles
+## B-186 — twenty-one top-level modules sit in two import cycles
 
-With `forbid_circular_dependencies = true`, `tach check` reports cycles through `setup_engine`,
-`setup_runtime`, `consumer`, `lifecycle`, `tui_consumer`, `tui_maintainer`, `tui`, `cli`,
-`commands`, `receipt_service` and `setup_verify_probes`. D-404 records the graph as it is, so the
-flag is off. Breaking the cycles, mostly legacy `setup_*` and the TUI front ends reaching back into
-`cli`/`commands`, and then turning the flag on, is noncritical refactoring. `tach show` draws the
+With `forbid_circular_dependencies = true`, `tach check` reports 21 modules. The first count here
+said 11, which was wrong: re-measured on 2026-10-15, at the tach commit and after the plugin kind,
+the number is 21 both times. The modules form two strongly connected components of `tach.toml`'s
 graph.
+
+- **Canonical, 16 modules.** The modules are `application`, `io`, `sources`, `marketplace`,
+  `security`, `curation`, `installation`, `lifecycle`, `registry_commands`,
+  `registry_maintenance`, `setup_engine`, `setup_runtime`, `consumer`, `tui_consumer`,
+  `tui_maintainer` and `tui_marketplace`. Most of it comes from a few edges that point the wrong
+  way:
+  - `application` imports `registry_commands`, `registry_maintenance` and `marketplace` models;
+  - `io` imports `tui_consumer` (`consumer_actions`) and `consumer` (`configured_setup`);
+  - `sources` imports `application` and `io`;
+  - `security` imports `marketplace`.
+- **Legacy, 5 modules.** `cli` → `commands` → `receipt_service` → `setup_verify_probes` → `cli`
+  (a function-local import), and `tui` → `cli`.
+
+Breaking them, then turning the flag on, is refactoring. The owner asked for it inside CP-29.
 
 ## B-187 — the opencode hook placement writes a key opencode rejects
 
@@ -4538,3 +4550,26 @@ functions (`tool.execute.before`, ...), not a JSON `hooks` table. So a hook inst
 would stop opencode from starting. Found while specifying the plugin kind (CP-29). It is not on the
 critical path unless the plugin kind replaces hook delivery for opencode. If it does not, the
 conservative fix is to mark project-scope `hook` unsupported for opencode, as user scope already is.
+
+## B-188 — setup completion is unavailable for a registry-local source
+
+After any canonical install from a `registry-local` source, the command prints `setup completion
+is unavailable`. The setup subject builds `SourceEvidence` from the configured location, a plain
+path, and the evidence requires "a credential-free Git location". Seen live on 2026-10-15 with
+the superpowers plugin. It is not plugin-specific: the payload installs and works, but setup is
+skipped. It is noncritical, because nothing on the plugin path needs setup, and plugins take no
+inputs (D-407).
+
+## B-189 — uninstall leaves the private tree's empty ancestors
+
+Uninstall removes `<harness>/aart-cli/<kind>/<registry>/<name>` and leaves the empty
+`aart-cli/<kind>/<registry>` directories behind. Seen for a plugin on 2026-10-15. The same holds
+for every kind's private tree. It is harmless, and untidy.
+
+## B-190 — opencode fetches its own plugin SDK once a plugin is configured
+
+With a project `plugin` entry, opencode 1.18.29 itself writes `.opencode/package.json`
+(`@opencode-ai/plugin`) and installs into `.opencode/node_modules`. AART fetches nothing, so
+INV-255 holds. An offline company machine will still see opencode try the network. The decision is
+whether to document this, or measure whether a vendored SDK satisfies it.
+

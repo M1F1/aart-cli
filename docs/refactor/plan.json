@@ -995,10 +995,15 @@
         {
           "id": "5",
           "title": "superpowers as a plugin: an enterprise fork installed into opencode through aart-cli and checked live",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "6",
+          "title": "Break the import cycles tach reports (B-186: 21 modules in two components) and turn on forbid_circular_dependencies, at the owner's request",
+          "status": "todo"
+        },
+        {
+          "id": "7",
           "title": "Run the full quality, integration and release-facing verification only after CP-29's implementation tasks are complete",
           "status": "todo"
         }

@@ -119,4 +119,53 @@ Found on the way:
 
 **5. superpowers as a plugin.** The fork is installed through aart-cli and checked live.
 
-**6. Full verification** (D-317), once steps 1–5 are done.
+*Done, 2026-10-15 (D-408).*
+
+The plugin author tree:
+- It is upstream superpowers 7.0.0 (`bb92a77`): `.opencode/plugins/superpowers.js`, `index.js`,
+  `package.json`, `LICENSE` and `skills/`.
+- It has one root `aart-cli.yaml` (`plugin/v1`, `entry: .opencode/plugins/superpowers.js`) and no
+  nested skill manifests. It is a tree of its own, because in the skills fork each skill tree
+  belongs to its own manifest, so `skills/**` from a root manifest selects nothing.
+- The upstream module imports only `path`, `fs` and `url`, and `package.json` declares no
+  dependencies.
+
+The run, in a throwaway `AART_CLI_HOME` with an invented author:
+- `author check`, then `registry init`, `scan`, `promote`, `publish` and `source add`.
+- Review without `--yes`: `Changes: 1 copy tree, 1 merge settings entry. Risks: local mutation,
+  configuration mutation, high risk execution.`
+- Install: `opencode.json` gained exactly
+  `"./.opencode/aart-cli/plugin/company/superpowers/payload/.opencode/plugins/superpowers.js"`.
+  The tree stayed private, and nothing was written to `.opencode/skills` or `.opencode/plugins`.
+- `marketplace status` reported the settings entry `matched`.
+
+Live evidence, opencode 1.18.29 with `opencode/big-pickle`:
+- In the project, `opencode debug skill` listed the 15 global skills plus 15 superpowers skills.
+  They are read from the private tree under their upstream names, with no installation suffix, so
+  `superpowers:<name>` references match. The control listed only the 15 global skills.
+- Asked to start a CSV export feature, the project session called `skill` with `brainstorming` and
+  followed it: it asked what the user wants before building. The control loaded `xlsx`.
+- After uninstall, the list member was gone, `debug skill` listed no superpowers skill, and the
+  tree was gone.
+
+Found on the way:
+- **The Registry ignore file dropped vendored dot-directories.** `registry init` wrote unanchored
+  ignore patterns, so `.opencode/` inside a payload never reached git. `source add` then refused
+  the Registry's content digest. Fixed: every entry is root-anchored, and
+  `tests/registry_gitignore_test.py` asks git itself.
+- **A plugin receipt proved no setup effect.** Setup now reads settings entries as `merge-json`
+  proofs, for a hook's and a plugin's alike.
+- B-188: setup completion is unavailable for any `registry-local` source.
+- B-189: uninstall leaves the private tree's empty ancestors.
+- B-190: opencode fetches its own plugin SDK into `.opencode/node_modules`.
+- `tests/registry_gitignore_test.py` has to import `application` first: an import-order failure
+  caused by the B-186 cycle.
+
+**6. Break the import cycles (B-186).** This was added at the owner's request.
+- tach reports 21 modules in two strongly connected components.
+- The step breaks the edges that point the wrong way, starting with `application` →
+  `registry_commands`/`registry_maintenance`/`marketplace` and `io` → `tui_consumer`/`consumer`.
+- It then turns on `forbid_circular_dependencies`.
+- The import-order line in `tests/registry_gitignore_test.py` goes too.
+
+**7. Full verification** (D-317), once steps 1–6 are done.

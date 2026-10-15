@@ -10312,3 +10312,18 @@ CP-29 step 4. Choices made while implementing §171:
 - **One test refined, not weakened.** The skeleton's "a sequence item is quoted when it must be"
   test now reads a `- key: value` item through its value, because a mapping item is not a scalar.
 
+## D-408 - a plugin is its own author tree; Registry ignores are root-anchored; settings entries are setup evidence
+
+CP-29 step 5. These came out of installing the superpowers fork live:
+- **A plugin is its own author tree.** A file belongs to the manifest nearest it, so a root plugin
+  manifest above per-skill manifests selects none of the skills. The plugin fork is therefore a
+  separate tree in the upstream layout. That is also the right shape: the skills are installed
+  either as Skills or through the plugin, not both.
+- **Registry ignore entries are root-anchored.** Every `REGISTRY_GITIGNORE` entry begins with `/`.
+  A payload is vendored as reviewed and can carry `.opencode/`, `.claude/`, `build/` and the like,
+  so an unanchored entry silently removed reviewed bytes from `artifacts/`. Registries made with
+  the old file are not migrated (CP-26: no compatibility).
+- **Settings entries are setup evidence.** `_effect_proofs` emits a settings entry as a
+  `merge-json` proof (`merge_mode: list`, digest of the entry). Without it, a plugin's receipt
+  proved no effect, and setup completion was unavailable.
+
