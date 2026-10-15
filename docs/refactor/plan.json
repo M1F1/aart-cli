@@ -975,12 +975,12 @@
         {
           "id": "1",
           "title": "tach in the dev group, tach.toml as the current import graph, and a `tach` quality gate (#32 steps 1, 2 and 4)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "2",
           "title": "superpowers delivered with what exists: its skills as Skill artifacts and its bootstrap as Memory, installed into opencode and checked live",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "3",

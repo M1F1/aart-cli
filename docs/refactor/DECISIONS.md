@@ -10241,3 +10241,19 @@ commit shows the rule that replaces it.
 Evidence: a planted `aart_cli.io` import in `domain` made `tach check` fail on exactly that line.
 `tests/tach_config_test.py` ties `tach.toml` to the package and to the domain rule. Removing a
 module entry turned it red.
+
+## D-405 - a payload glob that reaches a directory selects the files under it
+
+CP-29 step 2, found while packaging an enterprise fork of superpowers as Skills.
+- `payload.include: ["**"]` was refused with "declared payload selects forbidden directory entry
+  'scripts'". The cause: `**` matched the directory's own snapshot entry, and the selector treated
+  every non-file entry as forbidden content. So a skill with `scripts/` or `references/` could only
+  be declared by naming every file.
+- `_selected_payload` now passes over a matched DIRECTORY entry. Its files are still matched one by
+  one against `include`/`exclude`, so the selection is the same set of files, just reachable by a
+  recursive glob.
+- Symbolic links and special files stay refused. The local snapshot reader refuses them before the
+  compiler sees the tree, and the compiler's own refusal remains behind that.
+
+Evidence: `tests/skill_payload_tree_test.py`, which includes a Hypothesis property over nested
+trees. Removing the DIRECTORY skip turned both tree tests red, and the symlink test stayed green.

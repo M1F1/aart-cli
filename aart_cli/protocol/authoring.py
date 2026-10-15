@@ -1957,6 +1957,10 @@ def _selected_payload(
             continue
         if not _matches(relative, manifest.includes) or _matches(relative, manifest.excludes):
             continue
+        if entry.kind is SnapshotEntryKind.DIRECTORY:
+            # Structure, not content: a glob such as `**` reaches a skill's `scripts/` itself, and
+            # the files under it are matched one by one (D-405).
+            continue
         if entry.kind is not SnapshotEntryKind.FILE:
             return _error(
                 AUTHOR_PAYLOAD_INVALID,
