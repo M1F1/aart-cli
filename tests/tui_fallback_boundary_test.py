@@ -258,5 +258,42 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
         self.assertIs(fallback.call_args.args[0], composed.return_value.value)
 
 
+
+class RunConsumerBoundaryTests(unittest.TestCase):
+    """`run_consumer` degrades only when curses itself cannot start.
+
+    A defect raised by a screen after the application is running used to be wrapped as
+    `CursesUnavailable`, because the only test was whether the shell had *finished*. `run` then
+    restarted the whole application in the line terminal, at the Dashboard, and the defect itself
+    was never reported. Opening Doctor did exactly that on an owner's machine.
+    """
+
+    def _actions(self) -> mock.Mock:
+        actions = mock.Mock()
+        actions.terminal_handover = None
+        return actions
+
+    def test_a_defect_in_a_running_screen_propagates_as_itself(self) -> None:
+        def wrapper(function):
+            return function(mock.Mock())
+
+        with (
+            mock.patch("curses.wrapper", side_effect=wrapper),
+            mock.patch("curses.set_escdelay"),
+            mock.patch.object(tui, "opening_state", return_value=None),
+            mock.patch.object(tui, "run_consumer_shell", side_effect=ValueError("broken Doctor")),
+        ):
+            with self.assertRaises(ValueError):
+                tui.run_consumer(self._actions())
+
+    def test_curses_that_cannot_start_is_still_unavailable(self) -> None:
+        with (
+            mock.patch("curses.wrapper", side_effect=RuntimeError("setupterm failed")),
+            mock.patch("curses.set_escdelay"),
+        ):
+            with self.assertRaises(tui.CursesUnavailable):
+                tui.run_consumer(self._actions())
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

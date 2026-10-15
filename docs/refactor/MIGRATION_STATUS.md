@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-15, D-381: a running screen's defect is no longer hidden by the text fallback.** Opening
+Doctor restarted the TUI in the line terminal. `run_consumer` now degrades only when curses fails
+to start. The underlying Doctor defect still needs the owner's `AART_CLI_DEBUG=1` traceback.
+Evidence: `RunConsumerBoundaryTests`, red before the change; the fallback boundary suites are
+green.
+
 **2026-10-14, D-380: Required Inputs goes forward, and the form is spaced and quiet.** These are
 fixes from the owner's first use of 0.6.0.
 

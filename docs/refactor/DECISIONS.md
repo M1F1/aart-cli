@@ -9766,3 +9766,18 @@ brings the TUI into line with §161.5.
 B-178 (the narrowed plan drops its choices) and B-179 (vendored packages lose `smoke_test`) are
 backlog.
 
+
+## D-381 — A defect in a running screen is reported, never mistaken for a missing terminal
+
+Implementation choice, 2026-10-15, from an owner report: opening Doctor in the TUI dropped the
+whole application into the line terminal (`Keys: one character, or up / down / enter / esc /
+back`). ERR05 permits that fallback only when curses cannot start. `run_consumer` judged that by
+whether the shell had *finished*, so any exception raised by a screen while it was running became
+`CursesUnavailable`. `run` then restarted the application at the Dashboard, and the defect was
+never reported.
+
+Now `_ui` records that curses has started before the shell runs, and any failure after that
+propagates as itself. `run` renders it as a `curses`-stage internal failure, with a traceback on
+stderr under `AART_CLI_DEBUG=1`. The defect behind the owner's Doctor failure was not reproduced on
+fixtures: an empty Doctor and one with an MCP needing attention, at five terminal sizes, under a
+real pty. It is found from that report.

@@ -862,6 +862,10 @@ def run_consumer(actions: LocalConsumerActions, *, workspace: str = "") -> Consu
     captured: dict = {}
 
     def _ui(stdscr) -> None:
+        # From here curses has started, so whatever fails is the application's and not the
+        # terminal's: it must surface as itself rather than restart everything in the line
+        # terminal with the defect unreported.
+        captured["started"] = True
         # The screen exists only from here.  Binding it is what turns the composed handover from
         # an inert one into the real loan a credential prompt needs (`QA-081`).
         loan = actions.terminal_handover
@@ -880,7 +884,7 @@ def run_consumer(actions: LocalConsumerActions, *, workspace: str = "") -> Consu
     except CursesUnavailable:
         raise
     except Exception as error:  # pragma: no cover - terminal capability failure
-        if "state" in captured:
+        if "started" in captured:
             raise
         raise CursesUnavailable("the curses application could not start") from error
     state = captured.get("state")
