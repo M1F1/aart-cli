@@ -10659,3 +10659,16 @@ the selected payload and the exact resolved versions of the artifact's artifact 
   Tests about something else that were written around particular numbers keep them through a
   test-only manifest key, `x-fixture-version`, read by `tests/fixture_versions.py`
   (`with_fixture_versions`). The parser ignores unknown keys, so the key never reaches the product.
+
+## D-426 — `author init --kind collection` (CP-31 step 3)
+
+- **The vocabulary is the protocol's.** `protocol/authoring.py` names `COLLECTION_KIND` and
+  `AUTHORED_KINDS` (every `AuthorKind` plus `collection`); the CLI offers `AUTHORED_KINDS`, and
+  the generator's `INIT_KINDS` is tested equal to it. A Collection is not an `AuthorKind`, because
+  it names artifacts rather than carrying one, so `GENERATED_KINDS` stays the artifact kinds.
+- **Its own generator, verified by the Collection parser.** That parser compiles as it parses, so
+  the check gives it a well-formed placeholder provenance; nothing is published from it.
+- **The example member names an artifact no Registry has** (`skill/example-skill@^1`), so a Sync
+  shows the Collection unsatisfied until the author replaces it, instead of installing an artifact
+  the author never chose. The `#?` lines show a Source-qualified member and one with no constraint.
+- No version and no payload, as §173.1 and §173.3 require.

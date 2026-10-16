@@ -1084,7 +1084,7 @@
         {
           "id": "3",
           "title": "author init --kind collection writes aart-cli.yaml with every accepted field and one line of explanation each",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "4",

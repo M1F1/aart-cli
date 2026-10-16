@@ -10,7 +10,7 @@ import posixpath
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Iterable, Literal, cast
+from typing import Callable, Iterable, Literal, cast, get_args
 
 from aart_cli.domain.artifacts import (
     ArtifactFormat,
@@ -95,6 +95,13 @@ from .semver import SemVer
 from .yaml import parse_yaml
 
 AuthorKind = Literal["skill", "guideline", "mcp", "hook", "memory", "plugin"]
+
+#: A Collection manifest names artifacts rather than carrying one, so it is not an `AuthorKind`;
+#: it is still something an author writes (§173.3).
+COLLECTION_KIND = "collection"
+
+#: Every kind of manifest an author writes: each artifact kind, and a Collection.
+AUTHORED_KINDS: tuple[str, ...] = tuple(sorted((*get_args(AuthorKind), COLLECTION_KIND)))
 
 _MANIFEST_NAMES = frozenset({"aart-cli.json", "aart-cli.yaml"})
 _COLLECTION_SCHEMA = "aart-cli.dev/collection/v1"

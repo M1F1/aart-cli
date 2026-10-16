@@ -24,8 +24,9 @@ order, with fifteen steps in `plan.json`:
   command family (#53, closes #41).
 
 **Step 2 is done** (D-424, D-425): manifests are versionless and the Registry numbers each
-approved change; a Collection's members count as its dependencies. **Next is step 3**,
-`author init --kind collection`, writing a versionless Collection manifest.
+approved change; a Collection's members count as its dependencies. **Step 3 is done** (D-426):
+`author init --kind collection`. **Next is step 4**, `author check` for Collections: today it
+reports a Collection manifest as `skip`.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).

@@ -4,6 +4,9 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-31 step 3 (D-426): `author init --kind collection`.**
+- Writes a versionless Collection manifest the Collection parser accepts. Evidence in the slice.
+
 **2026-10-16, CP-31 step 2 (D-424, D-425): the Registry owns versions.**
 - Source manifests carry no version; a written one is refused. Sync, `registry scan`/`adopt`/
   `check-upstream` and `registry promote` number each change from approved state (patch to 5,

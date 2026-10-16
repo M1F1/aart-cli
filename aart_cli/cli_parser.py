@@ -8,11 +8,10 @@ probes, so a probe that imported `cli` closed an import cycle (B-186).
 from __future__ import annotations
 
 import argparse
-from typing import get_args
 
 from . import __version__
 from .curation.model import DEFAULT_MAXIMUM_AART, DEFAULT_MINIMUM_AART
-from .protocol.authoring import AuthorKind
+from .protocol.authoring import AUTHORED_KINDS
 
 _ARTIFACT_TYPES = ("skill", "guideline", "mcp", "hook", "memory")
 _INSTALL_SCOPES = ("project", "user")
@@ -1318,9 +1317,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--kind",
         dest="artifact_kind",
         required=True,
-        # The vocabulary is the parser's own, so a kind it gains appears here without an edit.
-        choices=sorted(get_args(AuthorKind)),
-        help="what kind of artifact to start",
+        # The parser's own vocabulary: every artifact kind it accepts, and a Collection.
+        choices=AUTHORED_KINDS,
+        help="what kind of artifact, or a collection, to start",
     )
     p_author_init.add_argument(
         "--name",

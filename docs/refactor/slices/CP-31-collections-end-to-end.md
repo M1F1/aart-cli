@@ -61,3 +61,20 @@ Targeted mutations:
   tests, both upstream-change tests and three promotion e2e tests turned red.
 - `make mutants ONLY=aart_cli/protocol/registry_versions.py TESTS=tests/registry_versions_test.py`:
   40/40 killed.
+
+## Step 3 — `author init --kind collection`
+
+Done (D-426). `aart-cli author init --kind collection --name data-engineer` writes one
+`aart-cli.yaml`: `schema`, `name`, `artifacts` with an example member, and `summary` disabled. No
+version and no payload. `author check` still skips it; that is step 4.
+
+Evidence: `tests/author_collection_skeleton_test.py` -- what is written parses with
+`parse_author_collection_manifest`; every field that parser accepts is named (the Collection half
+of the CP-26.6 oracle); the fully enabled text parses; no version; no payload; a non-slug name is
+the parser's own refusal; the CLI accepts `--kind collection`; `INIT_KINDS == AUTHORED_KINDS`.
+Neighbours: `author_skeleton_test`, `author_command_test`, `author_check_test` (76 tests) green;
+ruff, mypy, tach clean.
+
+Targeted mutation: deleting the disabled `summary` line turned exactly
+`test_every_field_the_collection_parser_accepts_is_named` and
+`test_the_same_text_with_every_disabled_line_enabled_parses_too` red.
