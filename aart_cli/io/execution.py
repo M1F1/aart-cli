@@ -58,6 +58,7 @@ from aart_cli.domain.hooks import (
     remove_settings_entry,
     settings_entry_label,
 )
+from aart_cli.domain.inputs import SKIPPED_INPUT
 from aart_cli.domain.managed_blocks import (
     merge_managed_block,
     remove_managed_block,
@@ -69,7 +70,7 @@ from aart_cli.domain.receipts import (
     ArtifactSettingsEntry,
 )
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.io.credentials import CredentialProviderPort
+from aart_cli.io.credentials import CredentialProviderPort, TransientSecret
 from aart_cli.io.fs import write_atomic
 from aart_cli.io.harness import HarnessRegistryPort, LocalHarnessRegistry, ScopedHarnessRegistry
 from aart_cli.io.python_runtime import LocalPythonRuntime
@@ -949,6 +950,12 @@ class CredentialEffectInterpreter:
     provider's own prompt says only that it wants a password, so before it asks, the lent terminal
     is given what the credential is, who needs it and how to get it (D-263). A reference nobody
     described is still briefed, with the honest fallback.
+
+    An install captures its secrets before Ready instead (§172.4). `secrets` holds what was entered,
+    one single-use carrier per reference, and it is written with no prompt and no terminal. With
+    `skipped_as_placeholder`, a reference stored with nothing entered gets the `SKIP` placeholder,
+    so nothing blocks. A replacement is never filled that way: a placeholder stands in for a value
+    nobody gave, never for one somebody did, so such an item is left as it is and the run goes on.
     """
 
     def __init__(
@@ -959,12 +966,16 @@ class CredentialEffectInterpreter:
         interactive_store: bool = False,
         terminal_handover: TerminalHandover | None = None,
         guidance: Mapping[str, tuple[CredentialGuidance, ...]] | None = None,
+        secrets: Mapping[str, TransientSecret] | None = None,
+        skipped_as_placeholder: bool = False,
     ) -> None:
         self.provider = provider
         self.references = tuple(references)
         self.interactive_store = interactive_store
         self.terminal_handover = terminal_handover
         self.guidance = dict(guidance or {})
+        self.secrets = dict(secrets or {})
+        self.skipped_as_placeholder = skipped_as_placeholder
 
     def supports(self, effect: Effect) -> bool:
         """Whether this interpreter was given the reference `effect` names (see the harness one)."""
@@ -987,6 +998,25 @@ class CredentialEffectInterpreter:
             )
             else None
         )
+        if isinstance(effect, (StoreCredential, ReplaceCredential)) and reference is not None:
+            carrier = self.secrets.pop(effect.reference, None)
+            if (
+                carrier is None
+                and self.skipped_as_placeholder
+                and isinstance(effect, StoreCredential)
+            ):
+                carrier = TransientSecret(SKIPPED_INPUT)
+            if carrier is not None:
+                written = self.provider.store(
+                    reference, carrier, replace=isinstance(effect, ReplaceCredential)
+                )
+                if isinstance(written, Err):
+                    return written
+                return Ok(f"{effect.reference} is {written.value.state.value}")
+            if self.skipped_as_placeholder:
+                return Ok(
+                    f"{effect.reference} was left as it is; set it in Credentials and variables"
+                )
         if isinstance(effect, (StoreCredential, ReplaceCredential)) and not self.interactive_store:
             return _error(
                 EXECUTION_NEEDS_A_PERSON,

@@ -121,6 +121,7 @@ class ProcessRunner(Protocol):
         *,
         capture: bool,
         timeout: float,
+        stdin: str | None = None,
     ) -> ProcessOutcome: ...
 
 
@@ -141,18 +142,23 @@ def run_provider_process(
     *,
     capture: bool,
     timeout: float,
+    stdin: str | None = None,
 ) -> ProcessOutcome:
     """Run a provider tool with no shell and a reduced environment.
 
     `capture=False` leaves the standard streams attached to the terminal, which is what lets the
-    provider run its own prompt. Nothing is read back in that case, by construction.
+    provider run its own prompt. Nothing is read back in that case, by construction. `stdin` is
+    written to a captured run's standard input through a pipe, which no other process can read.
     """
 
+    if stdin is not None and not capture:
+        raise ValueError("stdin is given only to a captured run")
     completed = subprocess.run(
         argv,
         shell=False,
         env=_environment(os.environ),
-        stdin=subprocess.DEVNULL if capture else None,
+        input=stdin,
+        stdin=None if stdin is not None else subprocess.DEVNULL if capture else None,
         stdout=subprocess.PIPE if capture else None,
         stderr=subprocess.PIPE if capture else None,
         timeout=timeout,
@@ -251,6 +257,12 @@ def _macos_keychain_available() -> bool:
     )
 
 
+def _interactive_quoted(text: str) -> str:
+    """One `security -i` word: double-quoted, with its backslashes and quotes escaped."""
+
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 @dataclass(frozen=True, slots=True)
 class MacOsKeychainProvider:
     """Hold credentials in the macOS Keychain through `security`.
@@ -270,11 +282,11 @@ class MacOsKeychainProvider:
     def store_exposure(*, interactive: bool) -> BindingExposure:
         """Where the value is readable while it is being written.
 
-        The prompt keeps it inside the provider. Passing it on argv publishes it to the process
-        table for the length of the call, which is why that path is never the default.
+        The prompt keeps it inside the provider. A carried value is written to `security -i` through
+        a pipe, so it is not on the process table either (§172.4).
         """
 
-        return BindingExposure.PRIVATE if interactive else BindingExposure.PROCESS_TABLE
+        return BindingExposure.PRIVATE
 
     def _suffix(self) -> tuple[str, ...]:
         return () if self.keychain is None else (self.keychain,)
@@ -422,10 +434,11 @@ class MacOsKeychainProvider:
     ) -> Result[CredentialObservation]:
         """Write a value.
 
-        Passing no carrier at all -- the default -- makes the provider run its own prompt, and this
-        process never sees the value; that is the only path production should take. A `TransientSecret`
-        is the non-interactive path: it puts the value on argv for the duration of one call, and
-        `store_exposure` names that so a caller can refuse it under policy.
+        Passing no carrier at all makes the provider run its own prompt, and this process never
+        sees the value. A `TransientSecret` is what an install captured before Ready (§172.4): it
+        is written as hex in one `add-generic-password` command on `security -i`'s stdin, so it is
+        on no argv, and hex leaves nothing in it to quote. `security -i` answers 0 for some failed
+        commands, so a carried write counts only when the item is found afterwards.
 
         `replace=True` removes the item and adds it again rather than updating in place, because
         `security add-generic-password -U` raises an authorization dialog and blocks until someone
@@ -444,40 +457,73 @@ class MacOsKeychainProvider:
             if isinstance(removal, Err):
                 return removal
             removed = True
-        argv = [
-            SECURITY_TOOL,
-            "add-generic-password",
-            "-a",
-            reference.provider.account,
-            "-s",
-            reference.provider.service,
-            "-w",
-        ]
-        interactive = secret is None
-        if secret is not None:
-            argv.append(secret.consume())
-        argv.extend(self._suffix())
+        aftermath = (
+            " the previous value was already removed, so the credential is now absent and has"
+            " to be stored again"
+            if removed
+            else ""
+        )
+        encoded = ""
+        command: str | None = None
+        if secret is None:
+            argv: tuple[str, ...] = (
+                SECURITY_TOOL,
+                "add-generic-password",
+                "-a",
+                reference.provider.account,
+                "-s",
+                reference.provider.service,
+                "-w",
+                *self._suffix(),
+            )
+        else:
+            argv = (SECURITY_TOOL, "-i")
+            encoded = secret.consume().encode("utf-8").hex()
+            command = (
+                " ".join(
+                    (
+                        "add-generic-password",
+                        "-a",
+                        _interactive_quoted(reference.provider.account),
+                        "-s",
+                        _interactive_quoted(reference.provider.service),
+                        "-X",
+                        encoded,
+                        *(_interactive_quoted(part) for part in self._suffix()),
+                    )
+                )
+                + "\n"
+            )
         try:
-            outcome = self.run(tuple(argv), capture=not interactive, timeout=self.timeout_seconds)
+            outcome = self.run(
+                argv, capture=secret is not None, timeout=self.timeout_seconds, stdin=command
+            )
         except OSError as error:
             return _failure(CREDENTIAL_PROVIDER_FAILED, f"Keychain write failed: {error}")
         except subprocess.TimeoutExpired:
             return _failure(CREDENTIAL_PROVIDER_FAILED, "Keychain write timed out")
         finally:
-            argv.clear()
+            command = None
         if outcome.returncode != 0:
-            aftermath = (
-                " the previous value was already removed, so the credential is now absent and has"
-                " to be stored again"
-                if removed
-                else ""
-            )
+            refusal = outcome.stderr.strip()
+            if encoded:
+                refusal = refusal.replace(encoded, "[redacted]")
             return _failure(
                 CREDENTIAL_PROVIDER_FAILED,
-                f"Keychain write failed with status {outcome.returncode}: "
-                f"{outcome.stderr.strip()}{aftermath}",
+                f"Keychain write failed with status {outcome.returncode}: {refusal}{aftermath}",
             )
-        return self.inspect(reference)
+        observed = self.inspect(reference)
+        if (
+            secret is not None
+            and isinstance(observed, Ok)
+            and observed.value.state is not CredentialState.PRESENT
+        ):
+            return _failure(
+                CREDENTIAL_PROVIDER_FAILED,
+                f"the Keychain write did not take: the item is {observed.value.state.value}"
+                f"{aftermath}",
+            )
+        return observed
 
     def delete(self, reference: CredentialReference) -> Result[CredentialObservation]:
         if self.available() is not ProviderState.AVAILABLE:

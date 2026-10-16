@@ -77,6 +77,39 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
   - Mutation: dropping `-x` from the comparison turns the `SKIPPED` case red.
   - Focused: 418 tests in the credential, inputs, doctor, installed and runtime modules.
 
+## Step 4: secrets written by the transaction, never asked for (done)
+
+- `MacOsKeychainProvider.store` with a `TransientSecret` runs `security -i`. It writes one
+  `add-generic-password … -X <hex>` command on stdin, with the account, service and keychain
+  double-quoted and their `\` and `"` escaped. No value is on argv, so `store_exposure` is
+  PRIVATE on both paths.
+- `security -i` answered 0 for a failed command (a missing keychain), so a carried write counts
+  only when `inspect` finds the item afterwards: "the Keychain write did not take". A refusal's
+  stderr has the hex redacted.
+- `CredentialEffectInterpreter(secrets=…, skipped_as_placeholder=…)`:
+  - a Store or Replace with a carrier writes it without a prompt or the terminal;
+  - a Store with nothing entered writes `SKIP`;
+  - a Replace with nothing entered leaves the item as it is and the run continues.
+- Plumbed through `interpreters_for` and `complete_configured_installation`
+  (`credential_secrets`, `skipped_secrets_as_placeholders`). `LocalConsumerActions` no longer
+  runs the interactive prompt on install. It passes `_entered_secrets`, which step 8 fills from
+  07b and which is cleared after each run, and it turns placeholders on.
+- Evidence:
+  - `tests/secrets_before_ready_test.py`: the value is not on argv and is hex on stdin; a write
+    that did not take is a failure; a refusal does not echo the hex; the interpreter writes
+    carried values, placeholders and keeps-on-replace with no handover. Against a real keychain,
+    quotes, backslashes, spaces and non-ASCII survive in the value and the address, and a
+    replacement through stdin holds `SKIP`.
+  - The `credential_lifecycle_integration_test` fake learned `security -i`, and its non-interactive
+    test now pins the value off argv.
+  - Mutations, each turning only its own test red: dropping the placeholder carrier, and dropping
+    the quoting.
+  - D-414 moves four tests from the install-time prompt to the new contract.
+    `credential_guidance_test` keeps the guidance on screen 07 and now asserts no terminal loan
+    and one `SKIP` per installation. `credential_terminal_handover_test` asserts the install gets
+    the carriers and not the loan, and that the carriers are not kept for the next install.
+    `install_time_config_form_test`'s fake still refuses any material except the placeholder.
+
 ## Superseded work
 
 - `stash@{0}`, "scope rows before the form (D-412 draft)", was the narrow fix for the missing scope

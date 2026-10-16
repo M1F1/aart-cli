@@ -32,7 +32,7 @@ from aart_cli.domain.credentials import (
     CredentialState,
     ProviderState,
 )
-from aart_cli.domain.inputs import InputValidation, PromptedConfigValue
+from aart_cli.domain.inputs import SKIPPED_INPUT, InputValidation, PromptedConfigValue
 from aart_cli.domain.result import Ok
 from aart_cli.tui_consumer import CanonicalScreenSource, compose_frame, frame
 from tests.artifact_installation_e2e_test import ORG
@@ -445,7 +445,8 @@ class _MemoryCredentialProvider:
         return ("/usr/bin/false", "--service", reference.provider.service)
 
     def store(self, reference, secret=None, *, replace: bool = False) -> Ok:
-        if secret is not None:
+        # §172.4: with nothing entered before Ready, only the placeholder may arrive here.
+        if secret is not None and secret.consume() != SKIPPED_INPUT:
             raise AssertionError("the application handed credential material to the provider fake")
         self.stored.add(self._address(reference))
         return self.inspect(reference)

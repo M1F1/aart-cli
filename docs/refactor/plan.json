@@ -1032,7 +1032,7 @@
         {
           "id": "4",
           "title": "Secrets captured before Ready into single-use carriers and stored by the transaction through stdin, never prompting",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "5",

@@ -10391,3 +10391,18 @@ it instead of abandoning the install.
 registry that resolves each target against its own scope's root and a lock that holds both scope
 leases in sorted order keep this one transaction with one review digest. It is not split into two
 transactions that could half-commit.
+
+## D-414 — The install transaction lends no terminal; repair keeps the briefed prompt (CP-30 step 4)
+
+Under D-413 an install prompts for nothing. `LocalConsumerActions` therefore stops passing
+`interactive_credentials`/`credential_handover` to `complete_configured_installation`. It passes
+the carriers entered before Ready and turns on `skipped_secrets_as_placeholders`. This supersedes
+the install-time half of D-263 (the briefing on the lent terminal before the provider's prompt).
+Install guidance is shown on screen 07, and on 07b once step 8 lands. The briefed prompt and the
+terminal loan remain for repairs from Credentials and variables, which still run the provider's
+own prompt. With nothing entered, a `ReplaceCredential` leaves the item as it is and the run
+continues; a placeholder never displaces a value somebody gave.
+
+`security -i` answered 0 for a failed command in a probe (a missing keychain). A carried write
+therefore counts only when `inspect` finds the item afterwards, and any echo of the hex in a
+refusal is redacted.

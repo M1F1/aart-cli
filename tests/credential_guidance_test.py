@@ -69,6 +69,7 @@ from aart_cli.domain.identifiers import (
     SourceAlias,
 )
 from aart_cli.domain.inputs import (
+    SKIPPED_INPUT,
     BindingExposure,
     EnvironmentBinding,
     InputGuidance,
@@ -669,12 +670,20 @@ def _screen_07(terminal) -> str:
     )
 
 
+def _held(provider) -> list[tuple[str, bool]]:
+    """What each store was given; a placeholder is the only thing this test may see."""
+
+    return [(secret.consume(), replace) for secret, replace in provider.stored]
+
+
 class SourceToPromptE2ETest(unittest.TestCase):
     """Real compile, scan, assess, promote and publish; the installation reads what was approved."""
 
-    def test_authored_guidance_is_on_screen_07_and_on_the_terminal_before_the_prompt(
+    def test_authored_guidance_is_on_screen_07_and_the_install_prompts_for_nothing(
         self,
     ) -> None:
+        """§172.4: the secret is not asked for mid-install; with nothing entered it is `SKIP`."""
+
         terminal, journal, provider = _install(_authored("github", TOKEN_HELP))
 
         drawn = _screen_07(terminal)
@@ -683,21 +692,18 @@ class SourceToPromptE2ETest(unittest.TestCase):
         )
         for line in credential_guidance_lines(expected):
             self.assertIn(line, drawn)
-        briefed = next(i for i, item in enumerate(journal.entries) if isinstance(item, tuple))
-        self.assertEqual(journal.entries[briefed + 1 : briefed + 3], ["prompted", "restored"])
-        self.assertEqual(
-            journal.briefings, [credential_prompt_briefing(expected, provider=PROVIDER)]
-        )
-        self.assertEqual(provider.stored, [(None, False)])
+        # The terminal is never lent, so nothing could have been asked on it.
+        self.assertNotIn("restored", journal.entries)
+        self.assertEqual(journal.briefings, [])
+        self.assertEqual(_held(provider), [(SKIPPED_INPUT, False)])
         self.assertTrue(terminal.screen_containing("✓ credential:github-token"))
 
-    def test_an_unguided_artifact_falls_back_honestly_on_both(self) -> None:
+    def test_an_unguided_artifact_falls_back_honestly(self) -> None:
         terminal, journal, _ = _install(_authored("github", None))
 
         fallback = "Where to get it is not stated; ask the maintainer of company/mcp/github@1.5.0."
         self.assertIn(fallback, _screen_07(terminal))
-        self.assertIn("  " + fallback, journal.briefings[0])
-        self.assertNotIn("http", "\n".join(journal.briefings[0]))
+        self.assertEqual(journal.briefings, [])
 
     def test_a_credential_already_stored_is_not_asked_for_again(self) -> None:
         terminal, journal, provider = _install(
@@ -707,13 +713,13 @@ class SourceToPromptE2ETest(unittest.TestCase):
         self.assertEqual(journal.briefings, [])
         self.assertEqual(provider.stored, [])
 
-    def test_two_artifacts_declaring_one_input_are_asked_for_separately(self) -> None:
+    def test_two_artifacts_declaring_one_input_are_held_separately(self) -> None:
         """§169.4-6: two artifacts are two installations, so one declared id is two credentials.
 
         They were once asked for once, with both owners named in a single briefing, because one
-        item served both. Each installation holding its own means each is entered on its own, in
-        front of the guidance its own author wrote -- the value for one artifact is never quietly
-        the value for another.
+        item served both. Each installation holds its own, under the guidance its own author wrote
+        -- the value for one artifact is never quietly the value for another. Nothing entered,
+        each is its own `SKIP` placeholder (§172.4).
         """
 
         terminal, journal, provider = _install(
@@ -725,12 +731,9 @@ class SourceToPromptE2ETest(unittest.TestCase):
         drawn = _screen_07(terminal)
         self.assertIn("GitHub token — needed by company/mcp/alpha@1.5.0", drawn)
         self.assertIn("Service token — needed by company/mcp/beta@1.5.0", drawn)
-        self.assertEqual(provider.stored, [(None, False), (None, False)])
-        first, second = journal.briefings
-        self.assertIn("GitHub token — needed by company/mcp/alpha@1.5.0", first)
-        self.assertNotIn("Service token — needed by company/mcp/beta@1.5.0", first)
-        self.assertIn("Service token — needed by company/mcp/beta@1.5.0", second)
-        self.assertNotIn("GitHub token — needed by company/mcp/alpha@1.5.0", second)
+        self.assertEqual(_held(provider), [(SKIPPED_INPUT, False), (SKIPPED_INPUT, False)])
+        self.assertEqual(len(provider._held), 2)
+        self.assertEqual(journal.briefings, [])
 
     def test_no_frame_or_briefing_holds_anything_credential_shaped(self) -> None:
         from aart_cli.redaction import contains_credential_shape

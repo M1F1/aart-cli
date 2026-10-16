@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import date
 
@@ -61,7 +62,7 @@ from .configured_installation import (
     prepare_configured_installation_draft,
 )
 from .consumer_machine import read_consumer_machine
-from .credentials import CredentialProviderPort
+from .credentials import CredentialProviderPort, TransientSecret
 from .environment_inspection import LocalEnvironmentInspector, platform_name
 from .execution import CompositeMutationLock, LocalMutationLock, TerminalHandover
 from .harness import ScopedHarnessRegistry
@@ -375,6 +376,8 @@ def complete_configured_installation(
     offline: bool = False,
     interactive_credentials: bool = False,
     credential_handover: TerminalHandover | None = None,
+    credential_secrets: Mapping[str, TransientSecret] | None = None,
+    skipped_secrets_as_placeholders: bool = False,
     observe: ProgressObserver | None = None,
 ) -> Result[CompletedConfiguredInstallation]:
     """Execute the confirmed review, record it, and re-read the machine it left behind.
@@ -383,6 +386,9 @@ def complete_configured_installation(
     when it has to put a failed update back, and that state can only be measured against the
     receipt the version being replaced wrote -- so a caller that supplies `previous` states to
     preparation supplies the matching receipts here.
+
+    `credential_secrets` are the values entered before Ready, one carrier per credential reference;
+    with `skipped_secrets_as_placeholders` every other secret is stored as `SKIP` (§172.4).
     """
 
     if not isinstance(prepared, PreparedConfiguredInstallation) or not isinstance(
@@ -405,6 +411,8 @@ def complete_configured_installation(
         offline=offline,
         interactive_credentials=interactive_credentials,
         credential_handover=credential_handover,
+        credential_secrets=credential_secrets,
+        skipped_secrets_as_placeholders=skipped_secrets_as_placeholders,
     )
     if isinstance(interpreters, Err):
         return interpreters

@@ -156,7 +156,7 @@ from aart_cli.io.configured_uninstall_action import (
 )
 from aart_cli.io.consumer_machine import read_consumer_machine, read_installed_inspections
 from aart_cli.io.consumer_settings import write_consumer_settings
-from aart_cli.io.credentials import CredentialProviderPort
+from aart_cli.io.credentials import CredentialProviderPort, TransientSecret
 from aart_cli.io.execution import CredentialEffectInterpreter, TerminalHandover
 from aart_cli.io.installed_smoke import LocalMcpTest, SmokePlanEntry, SmokeTargetResult
 from aart_cli.io.maintainer_promotion import (
@@ -696,6 +696,9 @@ class LocalConsumerActions:
         #: keyboard.  A credential prompt belongs to the provider, not to AART (161.8/161.9), and
         #: under the TUI it would otherwise be spoken over a drawn frame (`QA-081`).
         self._terminal_handover = terminal_handover
+        #: Secrets entered before Ready, one single-use carrier per credential reference (§172.4).
+        #: They live here and never in a view or a plan; the install that follows consumes them.
+        self._entered_secrets: dict[str, TransientSecret] = {}
         self._scanned_repository: RepositoryScan | None = None
         self._adoption_review: MaintainerAdoptionReviewView | None = None
         self._adoption_upstream: AdoptionUpstreamCheck | None = None
@@ -2729,10 +2732,13 @@ class LocalConsumerActions:
             recorded_at=recorded_at,
             today=today,  # type: ignore[arg-type]
             offline=self._context.offline,
-            interactive_credentials=True,
-            credential_handover=self._terminal_handover,
+            # Nothing is asked for mid-transaction and nothing blocks: what was entered before
+            # Ready is written, and every other secret is stored as the SKIP placeholder.
+            credential_secrets=self._entered_secrets,
+            skipped_secrets_as_placeholders=True,
             observe=None if self._progress is None else observe,
         )
+        self._entered_secrets = {}
         if isinstance(completed, Err):
             return self._failed(command, _refusal(completed.diagnostics))
         self._machine = completed.value.machine
