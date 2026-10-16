@@ -3,7 +3,7 @@
 ## Where the work is (2026-10-16, after 0.9.0)
 
 **CP-30 is released as 0.9.0** (#69, which also carried #66–#68). Next is **CP-31**, the owner's
-order, with twelve steps in `plan.json`:
+order, with fifteen steps in `plan.json`:
 - **Collections end to end.** Today a Collection cannot reach a consumer on the configured path.
   `author init` has no `collection` kind, and `author check` skips a Collection manifest, although
   Sync compiles it (`parse_author_collection_manifest`). An approved Collection Candidate is never
@@ -14,8 +14,17 @@ order, with twelve steps in `plan.json`:
 - **The install flow, as the owner asked.** A Collection is one artifact for 05's harness choice
   and 07a's scope, applied to every member. Configuration and credentials are asked once per member
   artifact, and may be skipped with Set later, as for any artifact (§172.3).
-- **Then, at the end of CP-31**, rename the content mode (#54) and remove the vendor command family
-  (#53, closes #41).
+- **Registry-owned versions (#74).** A source manifest carries no version. Sync detects what
+  changed (manifest, payload, dependencies such as requirements), the Maintainer sees those
+  artifacts, and the Registry assigns the next version on approval. This precedes the Collection
+  template, so Collections are authored without a version too.
+- **Default or custom install path (#75)**, and **Marketplace and Installed columns (#72)**:
+  status, scope with a project count, harnesses, eligible harnesses, inputs still `AART_NOT_SET`.
+- **At the end of CP-31**: rename the content mode (#54), then prune (#73), including the vendor
+  command family (#53, closes #41).
+
+Step 1 must settle how the Registry picks the next version for #74 (patch by default, or the
+Maintainer chooses major/minor/patch per change); the issue does not say.
 
 ## Where the work is (2026-10-16)
 

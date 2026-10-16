@@ -1068,66 +1068,81 @@
     },
     {
       "id": "CP-31",
-      "title": "Collections end to end: authored, checked, approved, offered and installed as one artifact; then one word per content mode and no vendor family",
+      "title": "Collections end to end, Registry-owned versions, default/custom install paths, richer Marketplace and Installed views, and pruning",
       "status": "todo",
       "steps": [
         {
           "id": "1",
-          "title": "Specify Collections end to end: authoring, promotion, the published version, the Marketplace offer, and installing a Collection as one artifact (B-067, INV-186, INV-213)",
+          "title": "Specify CP-31: Collections end to end (B-067, D-422), Registry-owned versions (#74), the default and custom install paths (#75), the Marketplace and Installed columns (#72), and pruning (#73)",
           "status": "todo"
         },
         {
           "id": "2",
-          "title": "author init --kind collection writes aart-cli.yaml with every accepted field and one line of explanation each",
+          "title": "Registry-owned versions (#74): source manifests carry no version; Sync detects changes in manifest, payload and dependencies; the Maintainer sees the changed artifacts and the Registry assigns the next version on approval",
           "status": "todo"
         },
         {
           "id": "3",
-          "title": "author check parses Collection manifests with the Sync parser and reports ok/error instead of skip; correct the 'registry scan compiles artifacts only' message",
+          "title": "author init --kind collection writes aart-cli.yaml with every accepted field and one line of explanation each",
           "status": "todo"
         },
         {
           "id": "4",
-          "title": "Promotion publishes an approved Collection Candidate as a Registry version of kind collection, and the Registry reads it back as a Collection (B-067 layers 1-2)",
+          "title": "author check parses Collection manifests with the Sync parser and reports ok/error instead of skip; correct the 'registry scan compiles artifacts only' message",
           "status": "todo"
         },
         {
           "id": "5",
-          "title": "The configured Marketplace offers approved Collections instead of skipping them (B-067 layer 3)",
+          "title": "Promotion publishes an approved Collection Candidate as a Registry version of kind collection, and the Registry reads it back as a Collection (B-067 layers 1-2)",
           "status": "todo"
         },
         {
           "id": "6",
-          "title": "05 and 07a treat a Collection as one artifact: a harness is offered only when it takes every member, and a scope only where every member has a target (D-422); one choice per Collection×harness pair, applied to every member",
+          "title": "The configured Marketplace offers approved Collections instead of skipping them (B-067 layer 3)",
           "status": "todo"
         },
         {
           "id": "7",
-          "title": "07 and 07b ask each member's configuration and credentials once per member artifact, with Set later; nothing blocks (§172.3)",
+          "title": "05 and 07a treat a Collection as one artifact: a harness is offered only when it takes every member, and a scope only where every member has a target (D-422); one choice per Collection×harness pair, applied to every member",
           "status": "todo"
         },
         {
           "id": "8",
-          "title": "Installed, Doctor and uninstall show a Collection with health from its members and keep the ownership graph (INV-186)",
+          "title": "07 and 07b ask each member's configuration and credentials once per member artifact, with Set later; nothing blocks (§172.3)",
           "status": "todo"
         },
         {
           "id": "9",
-          "title": "Document authoring a Collection in a source repo and how a Registry adopts and offers it",
+          "title": "Installed, Doctor and uninstall show a Collection with health from its members and keep the ownership graph (INV-186)",
           "status": "todo"
         },
         {
           "id": "10",
-          "title": "Rename the content mode: RegistryContentMode = SelfContained | PinnedReference (#54, D-376)",
+          "title": "Default or custom install path (#75): the default takes harnesses, scope and Python installer from Settings and goes straight to the inputs or Ready; custom is the 05/07a matrix flow",
           "status": "todo"
         },
         {
           "id": "11",
-          "title": "Remove the vendor command family: canonical Registry content comes only from an external manifest (#53, D-375, closes #41)",
+          "title": "Marketplace and Installed columns (#72, #75): installation status, scope with a project count, harnesses, eligible harnesses, inputs still AART_NOT_SET; each installation its own row with its own configuration; detail under More info",
           "status": "todo"
         },
         {
           "id": "12",
+          "title": "Document authoring a Collection in a source repo, Registry-owned versions, and how a Registry adopts and offers content",
+          "status": "todo"
+        },
+        {
+          "id": "13",
+          "title": "Rename the content mode: RegistryContentMode = SelfContained | PinnedReference (#54, D-376)",
+          "status": "todo"
+        },
+        {
+          "id": "14",
+          "title": "Prune (#73, #53): remove the vendor command family and every other unused legacy feature; adoption by manifest is the only way content enters a Registry (D-375, closes #41)",
+          "status": "todo"
+        },
+        {
+          "id": "15",
           "title": "Full verification and the PR",
           "status": "todo"
         }
