@@ -21,7 +21,7 @@ decisions:
 4. "Set later" at the top;
 5. the literal `SKIP`.
 
-Step 8 fills `LocalConsumerActions._entered_secrets` from 07b. Until then an install stores every
+Step 6's core is done too (`copy_artifact_answers`); steps 5–9 are `blocked` in `plan.json` on those decisions. Step 8 fills `LocalConsumerActions._entered_secrets` from 07b. Until then an install stores every
 secret as `SKIP`.
 
 Open PRs waiting for the owner: #66 (Undo line under More info), #67 (Artifact Details blocks),
