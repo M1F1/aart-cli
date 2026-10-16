@@ -74,6 +74,7 @@ from aart_cli.application.consumer_views import (
     pair_from_key,
     pair_key,
     pair_scope_from_key,
+    pair_scope_key,
     pairs_harnesses,
     project_lifecycle_plan,
     project_running_installation,
@@ -499,6 +500,73 @@ def _installation_targets(
     )
 
 
+def _grouped_targets(
+    targets: tuple[HarnessTargetView, ...],
+    groups: dict[str, tuple[str, ...]],
+    profiles: tuple[str, ...],
+) -> tuple[tuple[HarnessTargetView, ...], tuple[str, ...]]:
+    """05's harnesses with each Collection standing as one artifact (§173.5, D-422).
+
+    A harness is offered a Collection only when it hosts every member, and then the Collection
+    replaces its members on that row; the members are never offered one by one. Each harness that
+    cannot host a Collection is said to, naming the first member it cannot host.
+    """
+
+    if not groups:
+        return targets, ()
+    member_of = {member: key for key, members in groups.items() for member in members}
+    hosted = {item.harness: item.artifacts for item in targets}
+    grouped: list[HarnessTargetView] = []
+    unhosted: list[str] = []
+    for profile in profiles:
+        artifacts = hosted.get(profile, ())
+        row: list[str] = []
+        for artifact in artifacts:
+            key = member_of.get(artifact)
+            if key is None:
+                row.append(artifact)
+            elif key not in row and all(member in artifacts for member in groups[key]):
+                row.append(key)
+        for key, members in groups.items():
+            missing = next((member for member in members if member not in artifacts), None)
+            if missing is not None:
+                unhosted.append(f"{profile} is not offered for {key}: it cannot host {missing}.")
+        if row:
+            grouped.append(HarnessTargetView(profile, tuple(row)))
+    return tuple(grouped), tuple(unhosted)
+
+
+def _member_pairs(pairs: tuple[str, ...], groups: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
+    """A Collection×harness choice as the member installations it applies to (§173.5)."""
+
+    expanded: list[str] = []
+    for pair in pairs:
+        parsed = pair_from_key(pair)
+        if parsed is None or parsed[0] not in groups:
+            expanded.append(pair)
+            continue
+        expanded.extend(pair_key(member, parsed[1]) for member in groups[parsed[0]])
+    return tuple(dict.fromkeys(expanded))
+
+
+def _member_pair_scopes(
+    pair_scopes: tuple[str, ...], groups: dict[str, tuple[str, ...]]
+) -> tuple[str, ...]:
+    """The scope chosen for a Collection and harness, given to every member there (§173.5)."""
+
+    expanded: list[str] = []
+    for chosen in pair_scopes:
+        parsed = pair_scope_from_key(chosen)
+        pair = None if parsed is None else pair_from_key(parsed[0])
+        if parsed is None or pair is None or pair[0] not in groups:
+            expanded.append(chosen)
+            continue
+        expanded.extend(
+            pair_scope_key(pair_key(member, pair[1]), parsed[1]) for member in groups[pair[0]]
+        )
+    return tuple(expanded)
+
+
 @dataclass(frozen=True, slots=True)
 class _PendingRegistryAddition:
     draft: RegistryDraft
@@ -757,6 +825,8 @@ class LocalConsumerActions:
         self._machine = context.machine
         self._now = now if now is not None else (lambda: datetime.now(timezone.utc))
         self._pending: _Pending | None = None
+        #: Why 05 offers a harness no Collection of the prepared install (§173.5).
+        self._unhosted: tuple[str, ...] = ()
         self._pending_action: ConsumerActionKind | None = None
         #: The machine the held action was prepared against, so a preference changed between the
         #: review and its confirmation cannot execute a project plan as a user install.
@@ -885,17 +955,27 @@ class LocalConsumerActions:
         )
         return offered.value if isinstance(offered, Ok) else None
 
-    def _pair_scope_offers(self, pairs: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    def _pair_scope_offers(
+        self, pairs: tuple[str, ...], groups: dict[str, tuple[str, ...]] | None = None
+    ) -> tuple[tuple[str, tuple[str, ...]], ...]:
         """Which scopes each ticked pair may go to on this machine (§172.5).
 
         A pair is offered what its artifact declares, less project when this session has no
         project to install into. An artifact this composition holds no row for is offered nothing,
-        so 07a never claims a scope it cannot stand behind.
+        so 07a never claims a scope it cannot stand behind. A Collection is offered only the scopes
+        every member declares (§173.5).
         """
 
         declared = {
             entry.row.key: entry.row.declared_scopes for entry in self._context.offers.artifacts
         }
+        for key, members in (groups or {}).items():
+            if all(member in declared for member in members):
+                declared[key] = tuple(
+                    scope
+                    for scope in ("project", "user")
+                    if all(scope in declared[member] for member in members)
+                )
         project = bool(self._context.host.project_root)
         offers: list[tuple[str, tuple[str, ...]]] = []
         # Sorted, so 07a lists the installations in one order however 05 ticked them.
@@ -996,6 +1076,7 @@ class LocalConsumerActions:
                 ),
                 installation_inputs=installation_inputs,
                 install_targets=install_targets,
+                install_unhosted=self._unhosted,
                 mcp_test=mcp_test,
             )
         )
@@ -1853,7 +1934,19 @@ class LocalConsumerActions:
         keys = self._targets(command)
         if not keys:
             return self._declined(command, _lines("nothing is selected to install"))
-        offered = self._offered(keys)
+        # A Collection with every member ticked is installed as the Collection (D-422); untick one
+        # and what remains is a custom selection of artifacts (§161.4).
+        collections = {item.key: item for item in self._context.offers.collections}
+        # The focus is the Collection while its preview is open; a later screen re-prepares with
+        # its own row focused, and then the pairs 05 chose for the Collection still name it.
+        named = (parsed[0] for parsed in map(pair_from_key, command.pairs) if parsed is not None)
+        focused = collections.get(command.focus) or next(
+            (collections[key] for key in named if key in collections), None
+        )
+        if focused is not None and set(keys) == set(focused.members):
+            keys = (focused.key,)
+        chosen = tuple(collections[key] for key in keys if key in collections)
+        offered = self._offered(tuple(key for key in keys if key not in collections))
         if isinstance(offered, Err):
             return self._declined(command, _refusal(offered.diagnostics))
         try:
@@ -1865,11 +1958,14 @@ class LocalConsumerActions:
                         entry.row.source_alias,
                     )
                     for entry in offered.value
-                )
+                ),
+                tuple(item.collection.coordinate for item in chosen),
             )
         except ValueError as error:
             return self._declined(command, _lines(f"this selection cannot be installed: {error}"))
-        return self._offer_installation(command, selection)
+        return self._offer_installation(
+            command, selection, groups={item.key: item.members for item in chosen}
+        )
 
     def _prepare_update(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         coordinates = self._targets(command)
@@ -1914,8 +2010,10 @@ class LocalConsumerActions:
         *,
         previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
         previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
+        groups: dict[str, tuple[str, ...]] | None = None,
     ) -> ConsumerActionUpdate:
         context = self._context
+        groups = groups or {}
         if command.action is ConsumerActionKind.INSTALL:
             # A new review is a new set of questions; nothing entered for the last one carries over.
             self._entered_secrets, self._secret_rows = {}, {}
@@ -1949,12 +2047,13 @@ class LocalConsumerActions:
             if command.action is ConsumerActionKind.INSTALL
             else ()
         )
+        targets, self._unhosted = _grouped_targets(targets, groups, host.profiles)
         # §172.2: until 05 is answered, an artifact only one harness can host has it ticked.
         pairs = command.pairs or (default_pairs(targets) if not command.targets else ())
         chosen_targets = command.targets or pairs_harnesses(pairs)
         # §172.5: each pair starts on the Settings scope when it may go there and keeps what 07a
         # chose for it; a pair no longer ticked has no scope to keep.
-        scope_offers = self._pair_scope_offers(pairs)
+        scope_offers = self._pair_scope_offers(pairs, groups)
         pair_scopes = default_pair_scopes(
             scope_offers,
             command.install_scope or context.settings.default_scope,
@@ -1982,7 +2081,9 @@ class LocalConsumerActions:
                     ),
                 )
             host = replace(host, profiles=chosen_targets)
-            assignments = _assignments(pairs, pair_scopes, host.scope)
+            assignments = _assignments(
+                _member_pairs(pairs, groups), _member_pair_scopes(pair_scopes, groups), host.scope
+            )
             prepared = prepare_configured_installation(
                 context.effective,
                 selection,
@@ -2164,7 +2265,11 @@ class LocalConsumerActions:
                 chosen = chosen_targets
             if chosen:
                 reviewed_host = replace(host, profiles=chosen)
-                assignments = _assignments(pairs, pair_scopes, host.scope)
+                assignments = _assignments(
+                    _member_pairs(pairs, groups),
+                    _member_pair_scopes(pair_scopes, groups),
+                    host.scope,
+                )
                 narrowed = prepare_configured_installation(
                     context.effective,
                     selection,

@@ -200,6 +200,79 @@ class CollectionsAreReachableTest(_Chain):
                 [item["coordinate"] for item in listed["artifacts"]],
             )
 
+    def test_installing_the_collection_installs_every_member_in_one_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            env = self._synchronized_with_collection(raw)
+
+            code, installed = env.run(
+                "marketplace",
+                "install",
+                "company/collection/starter",
+                "--profile",
+                "claude",
+                "--yes",
+            )
+
+            self.assertEqual(0, code, installed)
+            self.assertEqual(
+                sorted(item["coordinate"] for item in installed["receipt"]["artifacts"]),
+                ["company/mcp/notes@1.0.0", "company/skill/code-review@1.2.0"],
+            )
+
+    def test_an_exact_collection_version_selects_that_version(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            env = self._synchronized_with_collection(raw)
+
+            code, installed = env.run(
+                "marketplace",
+                "install",
+                "company/collection/starter@1.0.0",
+                "--profile",
+                "claude",
+                "--yes",
+            )
+
+            self.assertEqual(0, code, installed)
+            self.assertEqual(2, len(installed["receipt"]["artifacts"]))
+
+    def test_an_unapproved_collection_version_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            env = self._synchronized_with_collection(raw)
+
+            code, refused = env.run(
+                "marketplace",
+                "install",
+                "company/collection/starter@9.0.0",
+                "--profile",
+                "claude",
+                "--yes",
+            )
+
+            self.assertNotEqual(0, code, refused)
+            code, listed = env.run("doctor")
+            self.assertEqual(0, code, listed)
+            self.assertEqual([], listed["items"])
+
+    def test_a_harness_that_cannot_host_every_member_installs_none_of_them(self) -> None:
+        """A Collection is one artifact on 05 (D-422): no member is installed without the rest."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            env = self._synchronized_with_collection(raw)
+
+            code, refused = env.run(
+                "marketplace",
+                "install",
+                "company/collection/starter",
+                "--profile",
+                "codex",
+                "--yes",
+            )
+
+            self.assertNotEqual(0, code, refused)
+            code, listed = env.run("doctor")
+            self.assertEqual(0, code, listed)
+            self.assertEqual([], listed["items"])
+
     def test_a_registry_that_approved_no_collection_offers_none(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             env, _ = self._synchronized(raw)

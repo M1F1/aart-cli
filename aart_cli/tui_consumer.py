@@ -128,7 +128,12 @@ from aart_cli.application.maintainer_views import (
 from aart_cli.domain.inputs import SKIPPED_INPUT, is_skipped_value
 from aart_cli.domain.registry import PromotionMode
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.domain.selection import Collection
+from aart_cli.domain.selection import (
+    ArtifactRequest,
+    Collection,
+    CollectionMember,
+    VersionConstraint,
+)
 from aart_cli.tui_layout import (
     CONTENT_MEASURE,
     STAGE_CONFIRMED,
@@ -2844,6 +2849,9 @@ class ConsumerScreens:
     #: has no plan until they are answered, and they are answered per harness, so the harness is
     #: chosen from this first (#50).
     install_targets: tuple[HarnessTargetView, ...] = ()
+    #: Why 05 does not offer a harness for a Collection: each line names the first member that
+    #: harness cannot host (§173.5).
+    install_unhosted: tuple[str, ...] = ()
     #: The optional test after an install (§170.4): present only when the committed transaction
     #: made at least one MCP installation, and drawn beside Success rather than in it.
     mcp_test: McpTestView | None = None
@@ -3036,9 +3044,9 @@ def read_consumer_offers(
     therefore installable from here; a shell that offered anything wider would be advertising an
     action it has to refuse afterwards.
 
-    Collections do not cross this seam. A canonical Collection is versioned and bound to the
-    registry snapshot it was read from, and nothing downstream carries that version yet, so each is
-    declined by name rather than offered without the version that tells two of them apart (B-031).
+    A Collection is offered when its row is: each member is shown as the exact version its own
+    row offers, which is what installing the Collection resolves it to (D-428), and the install
+    names the Collection itself rather than those members (D-422).
     """
 
     from aart_cli.io.configured_offers import read_configured_marketplace
@@ -3047,10 +3055,24 @@ def read_consumer_offers(
     if isinstance(read, Err):
         return read
     rows = project_marketplace_rows(read.value.catalog, target)
+    approved = {str(item.coordinate): item for item in read.value.collections}
+    collections = []
+    for offered in read.value.catalog.collections:
+        found = approved.get(str(offered.coordinate))
+        if found is None:
+            continue
+        exact = tuple(
+            CollectionMember(
+                ArtifactRequest(member.artifact, VersionConstraint(member.version), member.source)
+            )
+            for member in offered.members
+            if member.version is not None
+        )
+        collections.append(MarketplaceCollectionEntry(replace(found, members=exact)))
     return Ok(
         ConsumerOffers(
             tuple(MarketplaceEntry(row) for row in rows),
-            (),
+            tuple(collections),
             read.value.declined,
             project_registries(read.value.catalog),
         )
@@ -3082,6 +3104,7 @@ def screens_from(
     adoption_upstream: MaintainerAdoptionUpstreamView | None = None,
     installation_inputs: tuple[InputView, ...] = (),
     install_targets: tuple[HarnessTargetView, ...] = (),
+    install_unhosted: tuple[str, ...] = (),
     mcp_test: McpTestView | None = None,
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
@@ -3135,6 +3158,7 @@ def screens_from(
         machine.configurations,
         running,
         install_targets,
+        install_unhosted,
         mcp_test,
     )
 
@@ -4145,10 +4169,11 @@ class CanonicalScreenSource:
             and screens.plan is None
             and screens.install_targets
         ):
-            problems = self._harness_choice_problems(state)
+            problems = (*screens.install_unhosted, *self._harness_choice_problems(state))
             if problems or state.session.profile is not PresentationProfile.MORE_INFO:
                 # The ticked cells are the choice; restating them, and what comes after, is for
-                # More info (D-401). A choice that cannot continue still says why.
+                # More info (D-401). A choice that cannot continue still says why, and so does a
+                # harness a Collection is not offered (§173.5).
                 return problems
             return (
                 *_pairs_summary(state.pairs),
@@ -4161,9 +4186,12 @@ class CanonicalScreenSource:
         ):
             problems = pair_choice_problems(screens.plan.targets, state.pairs)
             target_status = (
-                problems
-                if problems or state.session.profile is not PresentationProfile.MORE_INFO
-                else _pairs_summary(state.pairs)
+                *screens.install_unhosted,
+                *(
+                    problems
+                    if problems or state.session.profile is not PresentationProfile.MORE_INFO
+                    else _pairs_summary(state.pairs)
+                ),
             )
             return separate(
                 render_review_selection(screens.plan, state.session.profile),

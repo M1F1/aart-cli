@@ -30,8 +30,14 @@ Collection parser and never skips one. **Step 5 is done** (D-427): promotion pub
 the TUI (screens 51 → 52 → 43–45) and from `registry promote`, and the Registry reads them back.
 **Step 6 is done** (D-428): the configured
 Marketplace offers each approved Collection at its highest version, members exact.
-**Next is step 7**: screens 05/07a treat a Collection as one artifact (D-422), and installing one
-installs its members.
+**Step 7 is done** (D-429): the CLI and TUI install a Collection as one artifact on 05/07a.
+
+**Owner decision (2026-10-16): the Registry owns Collections.** A Collection is no longer authored
+in a Source. The Registry maintainer creates and maintains it in a new TUI view and a new CLI
+command, from artifacts the Registry already approved. Its version bumps automatically when a
+promotion bumps one of its members, which happens after a Source change is synchronized. **Next**:
+amend the Product Specification (§173.3 and the decisions D-425–D-428 it replaces), then rework
+steps 3–5 to that model before continuing with step 8.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).

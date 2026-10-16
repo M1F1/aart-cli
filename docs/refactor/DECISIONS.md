@@ -10712,3 +10712,25 @@ the selected payload and the exact resolved versions of the artifact's artifact 
 - **Both consumer readers load Collections.** `io/configured_offers.py` (the graph behind
   `marketplace list` and the TUI) and `io/configured_selection.py` (the approved resolver) both read
   them with `read_registry_collection`, so each one refuses the same tampered package.
+
+## D-429 — How 05 and 07a carry a Collection as one artifact (CP-31 step 7)
+
+- **The install names the Collection.** `marketplace install <src>/collection/<name>[@x.y.z]`
+  builds `ArtifactSelection(collections=(coordinate,))` on the configured seam. A stated version
+  must be exact; without one, the highest approved version is used, the one its Marketplace row
+  offers (D-428). An unapproved version answers `collection-not-found`. In the TUI, a preview with
+  every member ticked installs the Collection; unticking one makes it a custom selection of
+  artifacts (§161.4). A re-preparation from a later screen recognizes the Collection by the 05
+  pairs that name it, because the focus has moved to that screen's row.
+- **05 groups members after placement measures them.** `_grouped_targets` replaces a
+  Collection's members with the Collection on each harness that hosts every member. Every other
+  harness is listed as "not offered", and the line names the first member it cannot host. The
+  pairs, defaults, problems and plan all stay at the Collection level, and `_member_pairs`
+  expands them only into the transaction's assignments. All or nothing therefore follows from
+  the transaction (INV-213).
+- **07a offers a Collection and harness the scopes every member declares.** The chosen scope is
+  given to every member there (`_member_pair_scopes`). As for single artifacts, this uses the
+  declaration rather than measured targets (B-192).
+- **The Collection rows the TUI offers come from the graph path.** `ConfiguredMarketplace`
+  carries the approved Collections behind its rows. Each member is shown as the exact version its
+  row offers.

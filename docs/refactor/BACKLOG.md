@@ -4618,3 +4618,11 @@ Found: CP-31 step 6 (2026-10-16), with `tui_layout.py` unchanged since #69. Two 
 fails on `block=('0', ' 0')` (`tui_layout.py:456`, `:461`). No real screen has two identical key
 labels, so this is not on the critical path. Either the layout keeps repeated rows or the strategy
 excludes them, stating why. CI can draw the same examples, so it may flake there.
+
+## B-195 — 07a opens on the column 05 left the cursor on
+
+Found: CP-31 step 7 (2026-10-16). `harness_column` is one field of the UI state. After moving to
+the second harness on 05, 07a opens with its cursor on the second scope column (User), so a Space
+there picks User without a Right. This is harmless (the cursor is drawn), but 07a should open on
+its first column. `tests/collection_install_tui_e2e_test.py` relies on the current behaviour, and
+says so.

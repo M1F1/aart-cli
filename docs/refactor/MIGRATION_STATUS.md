@@ -4,6 +4,11 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-31 step 7 (D-429): a Collection installs as one artifact.**
+- CLI and TUI install the Collection itself. 05 offers a harness only when it hosts every member
+  and names the first member it cannot host; 07a's scope applies to every member. Evidence in the
+  slice, Step 7.
+
 **2026-10-16, CP-31 step 6 (D-428): the Marketplace offers approved Collections.**
 - One row per approved Collection at its highest version, with members at the exact versions their
   rows offer. Declined when a member moved past its constraint. Evidence in the slice, Step 6.

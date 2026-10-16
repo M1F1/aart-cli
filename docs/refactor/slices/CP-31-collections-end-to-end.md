@@ -164,3 +164,28 @@ real Git-backed Registry and a real `source sync`:
 from two Hypothesis findings in untouched `tui_layout.py` (B-194). mypy and tach are clean.
 
 Targeted mutation: dropping the member-constraint check turned only the moved-member test red.
+
+## Step 7 — 05/07a treat a Collection as one artifact (D-429)
+
+The CLI installs `company/collection/starter` (or `@1.0.0`) on the configured seam as the
+Collection. A harness that cannot host every member installs nothing. In the TUI, 05 shows the
+Collection as one row, and each harness it is not offered on carries a line naming the first member
+that harness cannot host. One tick per harness installs every member there, and 07a gives the
+Collection on a harness one scope, applied to every member.
+
+Evidence:
+- `tests/git_backed_bulk_install_e2e_test.py::CollectionsAreReachableTest` (+4): one receipt with
+  both members, the exact version, an unapproved version refused, and `codex` installing nothing.
+- `tests/collection_install_tui_e2e_test.py` (3, through the real composed shell): the one-row 05
+  and its `codex` reason; claude and opencode with both members on each; the Collection on claude
+  put on User while opencode stays on Project.
+- `tests/marketplace_coordinates_test.py` and `tests/marketplace_install_routing_test.py`: an exact
+  version, a refused range, and the highest approved version.
+- Fixed on the way: the Maintainer Registry screen counted a Collection as an artifact kind and
+  failed to compose once a Registry held one.
+
+87 modules touching actions, offers, Maintainer views, marketplace and screens are green, apart
+from the two B-194 Hypothesis findings. mypy and tach are clean.
+
+Targeted mutation: making `_member_pair_scopes` return its input unchanged turned only the 07a
+test red.

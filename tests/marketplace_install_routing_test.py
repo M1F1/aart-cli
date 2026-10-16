@@ -18,7 +18,8 @@ import unittest
 from aart_cli.commands.marketplace import _configured_registry_selection
 from aart_cli.configuration.model import SourceKind
 from aart_cli.consumer.coordinates import ArtifactSelector
-from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias
+from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
+from aart_cli.domain.selection import Collection, CollectionCoordinate
 from tests.marketplace_fixtures import configured_source, effective_configuration
 
 REGISTRY = configured_source("company", SourceKind.REGISTRY_GIT)
@@ -78,18 +79,29 @@ class ConfiguredRoutingTest(unittest.TestCase):
 
         self.assertIsNotNone(selection)
 
-    def test_a_collection_is_declined_whatever_its_source(self) -> None:
-        """A capability, not a policy: the canonical seam expands no Collection yet.
+    def test_a_collection_routes_as_the_collection_at_its_highest_approved_version(self) -> None:
+        """D-422: the seam installs the Collection itself, not its members picked one by one."""
 
-        `marketplace_lifecycle_e2e_test.py::test_collection_install_materializes_every_expanded_
-        member` is what would stop working if this `None` were removed before that exists.
-        """
-
-        self.assertIsNone(
-            _configured_registry_selection(
-                (_selector("company", kind="collection", name="essentials"),),
-                effective_configuration((REGISTRY,)),
+        approved = tuple(
+            Collection(
+                CollectionCoordinate(SourceAlias("company"), "essentials", version),
+                "Essentials.",
+                (),
+                ObjectDigest("sha256", "e" * 64),
             )
+            for version in ("1.2.0", "1.10.0", "1.9.3")
+        )
+
+        selection = _configured_registry_selection(
+            (_selector("company", kind="collection", name="essentials"),),
+            effective_configuration((REGISTRY,)),
+            approved,
+        )
+
+        assert selection is not None
+        self.assertEqual(selection.artifacts, ())
+        self.assertEqual(
+            [str(item) for item in selection.collections], ["company/collection/essentials@1.10.0"]
         )
 
     def test_a_disabled_registry_is_not_a_registry_for_routing(self) -> None:

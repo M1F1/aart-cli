@@ -78,6 +78,9 @@ class ConfiguredMarketplace:
 
     catalog: MarketplaceCatalog
     declined: tuple[str, ...] = ()
+    #: The approved Collections behind the catalog's Collection rows, as the Registry published
+    #: them, so an install names the Collection itself rather than its members (D-422).
+    collections: tuple[Collection, ...] = ()
 
 
 def _error(message: str) -> Err:
@@ -153,8 +156,11 @@ def _package_entries(snapshot: SourceSnapshot, prefix: tuple[str, ...]):
 def project_configured_registry(
     configured: ConfiguredSource,
     current: CurrentSource,
-) -> Result[tuple[GraphSource, tuple[str, ...]]]:
-    """Every artifact this registry currently offers, compiled from what it published."""
+) -> Result[tuple[GraphSource, tuple[str, ...], tuple[Collection, ...]]]:
+    """Every artifact this registry currently offers, compiled from what it published.
+
+    The approved Collections a row is offered for come third, as the Registry published them.
+    """
 
     snapshot = current.candidate.snapshot
     loaded = load_configured_registry_versions(snapshot, configured.alias)
@@ -218,12 +224,14 @@ def project_configured_registry(
             )
         )
     manifests: list[CollectionManifest] = []
+    rows: list[Collection] = []
     for collection in collections:
         manifest = _offered_collection(configured.alias, collection, offered)
         if isinstance(manifest, str):
             declined.append(manifest)
         else:
             manifests.append(manifest)
+            rows.append(collection)
     return Ok(
         (
             GraphSource(
@@ -234,6 +242,7 @@ def project_configured_registry(
                 tuple(manifests),
             ),
             tuple(sorted(set(declined))),
+            tuple(rows),
         )
     )
 
@@ -304,6 +313,7 @@ def read_configured_marketplace(
     states: list[MarketplaceSourceState] = []
     graph_sources: list[GraphSource] = []
     declined: list[str] = []
+    approved: list[Collection] = []
     for order, configured in enumerate(
         source for source in effective.configuration.sources if source.enabled
     ):
@@ -324,6 +334,7 @@ def read_configured_marketplace(
             return projected
         graph_sources.append(projected.value[0])
         declined.extend(projected.value[1])
+        approved.extend(projected.value[2])
     graph = compile_marketplace_graph(
         tuple(graph_sources), available_capabilities=EXECUTABLE_CAPABILITIES
     )
@@ -332,4 +343,4 @@ def read_configured_marketplace(
     catalog = build_marketplace(graph.value, effective, tuple(states))
     if isinstance(catalog, Err):
         return catalog
-    return Ok(ConfiguredMarketplace(catalog.value, tuple(sorted(set(declined)))))
+    return Ok(ConfiguredMarketplace(catalog.value, tuple(sorted(set(declined))), tuple(approved)))

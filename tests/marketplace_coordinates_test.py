@@ -56,12 +56,17 @@ class ArtifactSelectorParsingTests(unittest.TestCase):
         self.assertEqual(parsed.value.identity, ArtifactIdentity("collection", "residuality"))
         self.assertEqual(parsed.value.source, SourceAlias("team"))
 
-    def test_collection_selector_rejects_an_artifact_version_suffix(self) -> None:
+    def test_collection_selector_names_an_exact_approved_version(self) -> None:
         parsed = parse_artifact_selector("team/collection/residuality@1.0.0")
 
-        self.assertIsInstance(parsed, Err)
-        assert isinstance(parsed, Err)
-        self.assertIn("collections are not versioned", parsed.diagnostics[0].message)
+        assert isinstance(parsed, Ok), parsed
+        self.assertEqual(parsed.value.version, "1.0.0")
+
+    def test_collection_selector_refuses_a_version_range(self) -> None:
+        parsed = parse_artifact_selector("team/collection/residuality@^1")
+
+        assert isinstance(parsed, Err), parsed
+        self.assertIn("a Collection version must be exact", parsed.diagnostics[0].message)
 
     def test_unknown_artifact_kind_is_rejected_instead_of_guessed(self) -> None:
         parsed = parse_artifact_selector("team/binary/code-review")

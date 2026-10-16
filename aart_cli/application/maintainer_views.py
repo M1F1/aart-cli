@@ -3911,8 +3911,13 @@ def project_maintainer_registry(
             unavailable or (f"registry {alias.value} has no synchronized approved state yet",),
         )
     snapshot = str(approved.snapshot_digest)
-    # A durable record may hold the kind as its wire string; the view states the typed kind.
-    counts = Counter(ArtifactKind(str(item.coordinate.artifact.kind)) for item in approved.versions)
+    # A durable record may hold the kind as its wire string; the view states the typed kind. A
+    # Collection is approved beside artifacts but is not one, so it is not counted as an artifact.
+    counts = Counter(
+        ArtifactKind(str(item.coordinate.artifact.kind))
+        for item in approved.versions
+        if str(item.coordinate.artifact.kind) != "collection"
+    )
     artifact_counts = tuple(sorted(counts.items(), key=lambda item: item[0].value))
     audits: tuple[PromotionAudit, ...] = ()
     # A promotion audit names the *registry state* digest its transaction produced, which covers
