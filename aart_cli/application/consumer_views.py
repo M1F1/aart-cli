@@ -85,6 +85,17 @@ from .removal_proposal import RemovalProposal
 
 __all__ = [
     "ALL_ARTIFACTS",
+    "ALL_INSTALLATIONS",
+    "InstallSecretView",
+    "choose_pair_scope",
+    "default_pair_scopes",
+    "pair_scope_from_key",
+    "pair_scope_key",
+    "scope_choice_offered",
+    "scope_matrix_columns",
+    "scope_matrix_from_row",
+    "scope_matrix_rows",
+    "secrets_to_ask",
     "MATRIX_ROW_PREFIX",
     "matrix_columns",
     "matrix_from_row",
@@ -207,6 +218,9 @@ class ConsumerScreen(str, Enum):
     # 07a puts each artifact×harness pair on one scope (§172.5). It follows the configuration form
     # and appears only when some pair is offered more than one scope.
     INSTALL_SCOPE = "07a-scope"
+    # 07b asks each secret once per artifact, into a hidden prompt, before Ready (§172.6). It
+    # appears only when some new installation holds no value for a secret it reads.
+    INSTALL_CREDENTIALS = "07b-credentials"
     READY = "09-ready"
     INSTALLING = "10-installing"
     SUCCESS = "11-success"
@@ -951,6 +965,46 @@ def _outcome(data: dict[str, object]) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class InstallSecretView:
+    """One secret input of one artifact on screen 07b, asked once for all its installations.
+
+    There is no value here and no reference: what 07b knows is which question it asks and whether
+    every installation it would answer already holds a stored value (§172.6).
+    """
+
+    #: `<alias>/<kind>/<name>\t<input>`, the same key 07 gives an artifact's ordinary input.
+    row: str
+    label: str
+    #: Every installation of this artifact already holds this secret: "Configured securely".
+    configured: bool = False
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.row, str)
+            or "\t" not in self.row
+            or any(character in self.row for character in "\r\n")
+            or not isinstance(self.label, str)
+            or not self.label
+            or not isinstance(self.configured, bool)
+        ):
+            raise ValueError("an install secret view is invalid")
+
+    @property
+    def artifact(self) -> str:
+        return self.row.split("\t", 1)[0]
+
+    @property
+    def input(self) -> str:
+        return self.row.split("\t", 1)[1]
+
+
+def secrets_to_ask(view: ConsumerPlanView) -> tuple[InstallSecretView, ...]:
+    """The secrets 07b asks for: the ones some new installation does not hold yet."""
+
+    return tuple(item for item in view.secrets if not item.configured)
+
+
+@dataclass(frozen=True, slots=True)
 class ConsumerPlanView:
     canonical: InstallPlan
     selection: SelectionView
@@ -974,6 +1028,8 @@ class ConsumerPlanView:
     scope_offers: tuple[str, ...] = ()
     #: The scope each pair was prepared for, as `pair_scope_key` strings.
     chosen_pair_scopes: tuple[str, ...] = ()
+    #: Screen 07b's secrets, one per artifact and input (§172.6).
+    secrets: tuple[InstallSecretView, ...] = ()
     #: Which install scopes this selection may go to and which one it is going to, or `None` for a
     #: plan whose scope is not the operator's to choose (an update keeps where it already is).
     #: Screen 05 draws it only when there is something to decide (issue #11a, D-295).
@@ -1166,6 +1222,7 @@ def consumer_plan_to_data(view: ConsumerPlanView) -> dict[str, object]:
         "chosen_targets": list(view.chosen_targets),
         "chosen_pairs": list(view.chosen_pairs),
         "chosen_pair_scopes": list(view.chosen_pair_scopes),
+        "secrets": [{"row": item.row, "configured": item.configured} for item in view.secrets],
     }
 
 
@@ -1192,6 +1249,8 @@ def install_flow_screens(view: ConsumerPlanView) -> tuple[ConsumerScreen, ...]:
         screens.append(ConsumerScreen.REQUIRED_INPUTS)
     if scope_choice_offered(view.scope_offers):
         screens.append(ConsumerScreen.INSTALL_SCOPE)
+    if secrets_to_ask(view):
+        screens.append(ConsumerScreen.INSTALL_CREDENTIALS)
     screens.extend((ConsumerScreen.READY, ConsumerScreen.INSTALLING, ConsumerScreen.SUCCESS))
     return tuple(screens)
 
@@ -2387,15 +2446,22 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.REQUIRED_INPUTS,
         ConsumerScreen.INSTALL_SCOPE,
+        ConsumerScreen.INSTALL_CREDENTIALS,
         ConsumerScreen.READY,
     ),
     ConsumerScreen.AUTOMATIC_INSPECTION: (
         ConsumerScreen.REQUIRED_INPUTS,
         ConsumerScreen.INSTALL_SCOPE,
+        ConsumerScreen.INSTALL_CREDENTIALS,
         ConsumerScreen.READY,
     ),
-    ConsumerScreen.REQUIRED_INPUTS: (ConsumerScreen.INSTALL_SCOPE, ConsumerScreen.READY),
-    ConsumerScreen.INSTALL_SCOPE: (ConsumerScreen.READY,),
+    ConsumerScreen.REQUIRED_INPUTS: (
+        ConsumerScreen.INSTALL_SCOPE,
+        ConsumerScreen.INSTALL_CREDENTIALS,
+        ConsumerScreen.READY,
+    ),
+    ConsumerScreen.INSTALL_SCOPE: (ConsumerScreen.INSTALL_CREDENTIALS, ConsumerScreen.READY),
+    ConsumerScreen.INSTALL_CREDENTIALS: (ConsumerScreen.READY,),
     ConsumerScreen.READY: (ConsumerScreen.INSTALLING,),
     ConsumerScreen.INSTALLING: (ConsumerScreen.SUCCESS,),
     ConsumerScreen.SUCCESS: (

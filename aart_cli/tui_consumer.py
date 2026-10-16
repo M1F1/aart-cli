@@ -56,6 +56,7 @@ from aart_cli.application.consumer_views import (
     InputView,
     InstalledArtifactView,
     InstalledCollectionView,
+    InstallSecretView,
     LifecycleOutcomeView,
     LifecyclePlanView,
     MarketplaceCollectionView,
@@ -83,6 +84,7 @@ from aart_cli.application.consumer_views import (
     scope_choice_offered,
     scope_matrix_columns,
     scope_matrix_from_row,
+    secrets_to_ask,
     target_from_row,
     target_row,
 )
@@ -1945,8 +1947,12 @@ class ConsumerActionUpdate:
             # An attempt that stopped is a third thing an action establishes, and the one it used
             # to have to disguise as an empty recording (`QA-033`).
             ConsumerUiEventKind.ACTION_FAILED,
+            # 07b's answer: whether a secret was entered for a row, and never the secret (§172.6).
+            ConsumerUiEventKind.SECRET_ENTERED,
         ):
-            raise ValueError("a consumer action update needs a prepared, recorded or failed event")
+            raise ValueError(
+                "a consumer action update needs a prepared, recorded, failed or entered event"
+            )
         if self.completion is not None and not callable(getattr(self.completion, "complete", None)):
             raise ValueError("a consumer action completion needs a terminal boundary")
 
@@ -2111,12 +2117,53 @@ _TITLES: dict[ApplicationScreen, str] = {ConsumerScreen.MCP_TEST: "Test MCP Inst
 
 
 def _after_configuration(plan: ConsumerPlanView) -> ConsumerScreen:
-    """07a once configuration is settled, while some pair may go to two scopes; else Ready."""
+    """07a once configuration is settled, while some pair may go to two scopes; then 07b."""
+
+    if scope_choice_offered(plan.scope_offers):
+        return ConsumerScreen.INSTALL_SCOPE
+    return _after_scope(plan)
+
+
+def _after_scope(plan: ConsumerPlanView) -> ConsumerScreen:
+    """07b while some new installation lacks a secret (§172.6); otherwise Ready."""
+
+    return ConsumerScreen.INSTALL_CREDENTIALS if secrets_to_ask(plan) else ConsumerScreen.READY
+
+
+def render_install_credentials(
+    secrets: tuple[InstallSecretView, ...], entered: tuple[str, ...], current_row: str | None
+) -> tuple[str, ...]:
+    """Screen 07b's rows: each secret once per artifact, and whether a value is waiting for it.
+
+    Nothing typed is ever drawn -- the state knows only which rows have a value (§172.6). A secret
+    every installation already holds is no question, so it is said in the status, not drawn here.
+    """
+
+    asked = tuple(item for item in secrets if not item.configured)
+    lines = [f"{'>' if current_row == CONFIG_SET_LATER_ROW else ' '} Set later"]
+    artifacts = tuple(dict.fromkeys(item.artifact for item in asked))
+    heading = ""
+    for item in asked:
+        if len(artifacts) > 1 and item.artifact != heading:
+            heading = item.artifact
+            lines.extend(("", heading))
+        state = "entered, hidden" if item.row in entered else "not set"
+        mark = ">" if current_row == item.row else " "
+        lines.extend(("", f"{mark} {item.label} ({item.input}): {state}"))
+    lines.extend(("", f"{'>' if current_row == CONFIG_CONTINUE_ROW else ' '} Continue"))
+    return tuple(lines)
+
+
+def install_credentials_status(secrets: tuple[InstallSecretView, ...]) -> tuple[str, ...]:
+    """07b's status: what is stored already, then where anything left goes."""
 
     return (
-        ConsumerScreen.INSTALL_SCOPE
-        if scope_choice_offered(plan.scope_offers)
-        else ConsumerScreen.READY
+        *(
+            f"Configured securely: {item.label} ({item.input}) for {item.artifact}"
+            for item in secrets
+            if item.configured
+        ),
+        "Nothing typed is shown. Anything not entered is stored as AART_NOT_SET.",
     )
 
 
@@ -2568,9 +2615,16 @@ def run_consumer_shell(
                     raise ValueError("changing a setting needs an injected settings writer")
                 settings_writer(current.settings)
                 continue
+            if command.kind is ConsumerUiCommandKind.DISCARD_SECRETS:
+                # Leaving 07b, Ready or Installing drops whatever was typed there (§172.6).
+                discard = getattr(action_handler, "discard_secrets", None)
+                if discard is not None:
+                    discard()
+                continue
             if command.kind not in (
                 ConsumerUiCommandKind.PREPARE_ACTION,
                 ConsumerUiCommandKind.EXECUTE_ACTION,
+                ConsumerUiCommandKind.ENTER_SECRET,
             ):
                 continue
             if action_handler is None:
@@ -2601,6 +2655,8 @@ def run_consumer_shell(
             expected = (
                 (ConsumerUiEventKind.ACTION_PREPARED,)
                 if command.kind is ConsumerUiCommandKind.PREPARE_ACTION
+                else (ConsumerUiEventKind.SECRET_ENTERED,)
+                if command.kind is ConsumerUiCommandKind.ENTER_SECRET
                 else (ConsumerUiEventKind.ACTION_RECORDED, ConsumerUiEventKind.ACTION_FAILED)
             )
             if update.event.kind not in expected or update.event.action is not command.action:
@@ -3039,6 +3095,7 @@ _PLAN_SCREENS = frozenset(
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.REQUIRED_INPUTS,
         ConsumerScreen.INSTALL_SCOPE,
+        ConsumerScreen.INSTALL_CREDENTIALS,
         ConsumerScreen.READY,
         ConsumerScreen.UPDATE_INPUTS,
     }
@@ -3206,6 +3263,10 @@ class CanonicalScreenSource:
         if screen is ConsumerScreen.INSTALL_SCOPE:
             plan = self._screens.plan
             return () if plan is None else plan.scope_offers
+        if screen is ConsumerScreen.INSTALL_CREDENTIALS:
+            plan = self._screens.plan
+            asked = () if plan is None else tuple(item.row for item in secrets_to_ask(plan))
+            return (CONFIG_SET_LATER_ROW, *asked, CONFIG_CONTINUE_ROW) if asked else ()
         if screen is ConsumerScreen.CREDENTIAL_ACTION:
             # CP-23 task 12: the actions the record permits are the rows (D-262).
             record = self._screens.credential(state.focus)
@@ -3617,9 +3678,14 @@ class CanonicalScreenSource:
             # is not that plan yet.
             plan = self._screens.plan
             return (
-                ConsumerScreen.READY
+                _after_scope(plan)
                 if plan is not None and set(state.pair_scopes) == set(plan.chosen_pair_scopes)
                 else None
+            )
+        if screen is ConsumerScreen.INSTALL_CREDENTIALS:
+            # Set later and Continue both go on: whatever was not entered becomes AART_NOT_SET.
+            return (
+                ConsumerScreen.READY if row in (CONFIG_SET_LATER_ROW, CONFIG_CONTINUE_ROW) else None
             )
         if screen is ConsumerScreen.USER_INPUT_DETAILS:
             return (
@@ -4012,6 +4078,10 @@ class CanonicalScreenSource:
         if screen is ConsumerScreen.INSTALL_SCOPE and self.rows(state):
             # §172.5: Project is this checkout, User is the home; (*) is where each one goes.
             return ("Each installation goes into the scope marked (*).",)
+        if screen is ConsumerScreen.INSTALL_CREDENTIALS and self.rows(state):
+            plan = screens.plan
+            assert plan is not None
+            return install_credentials_status(plan.secrets)
         if (
             screen is ConsumerScreen.REVIEW_SELECTION
             and screens.plan is None
@@ -4250,6 +4320,12 @@ class CanonicalScreenSource:
             )
         if screen is ConsumerScreen.INSTALL_SCOPE and self.rows(state):
             return self._scope_matrix_lines(state)
+        if screen is ConsumerScreen.INSTALL_CREDENTIALS and self.rows(state):
+            plan = screens.plan
+            assert plan is not None
+            return render_install_credentials(
+                plan.secrets, state.entered_secrets, state.current_row
+            )
         if screen is ConsumerScreen.CONFIGURATION_TARGETS:
             return tuple(
                 f"{'>' if row == state.current_row else ' '} "

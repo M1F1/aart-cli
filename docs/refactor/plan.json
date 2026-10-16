@@ -1052,12 +1052,12 @@
         {
           "id": "8",
           "title": "07b Credentials once per artifact: enter, or skip as a placeholder; Set later",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "9",
           "title": "Ready lists placeholders; Doctor, Installed and Credentials and variables warn about AART_NOT_SET without reading secrets",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "10",

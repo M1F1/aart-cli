@@ -87,7 +87,7 @@ from tests.candidate_validation_test import _bundle
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import _published_registries
 from tests.consumer_application_e2e_test import _actions, _at, _drive
-from tests.consumer_shell_test import DOWN, ENTER, SPACE
+from tests.consumer_shell_test import DOWN, ENTER, SPACE, UP
 from tests.credential_action_rows_test import _Provider
 from tests.credential_fixtures import credential_url
 
@@ -656,7 +656,7 @@ def _install(*trees, present: CredentialState = CredentialState.ABSENT, keys=Non
         _, terminal, _ = _drive(
             env,
             _at(ConsumerScreen.MARKETPLACE),
-            *(keys or (SPACE, ord("i"), SPACE, ENTER, ENTER, ENTER, ENTER)),
+            *(keys or (SPACE, ord("i"), SPACE, ENTER, ENTER, ENTER, UP, ENTER, ENTER)),
             actions=actions,
         )
     return terminal, journal, provider
@@ -712,6 +712,10 @@ class SourceToPromptE2ETest(unittest.TestCase):
 
         self.assertEqual(journal.briefings, [])
         self.assertEqual(provider.stored, [])
+        # §172.6: every installation holds it, so 07b has nothing to ask and is not drawn.
+        self.assertFalse(
+            [frame for frame in terminal.frames if frame and frame[0].endswith("/ Credentials")]
+        )
 
     def test_two_artifacts_declaring_one_input_are_held_separately(self) -> None:
         """§169.4-6: two artifacts are two installations, so one declared id is two credentials.
@@ -725,7 +729,7 @@ class SourceToPromptE2ETest(unittest.TestCase):
         terminal, journal, provider = _install(
             _authored("alpha", TOKEN_HELP),
             _authored("beta", MANUAL_HELP),
-            keys=(SPACE, DOWN, SPACE, ord("i"), SPACE, ENTER, ENTER, ENTER, ENTER),
+            keys=(SPACE, DOWN, SPACE, ord("i"), SPACE, ENTER, ENTER, ENTER, UP, ENTER, ENTER),
         )
 
         drawn = _screen_07(terminal)

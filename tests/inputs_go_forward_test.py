@@ -33,7 +33,7 @@ from aart_cli.tui_consumer import CanonicalScreenSource, screens_from
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
 from tests.consumer_application_e2e_test import _actions, _drive
-from tests.consumer_shell_test import ENTER, RIGHT, SPACE, _at
+from tests.consumer_shell_test import ENTER, RIGHT, SPACE, UP, _at
 from tests.consumer_views_test import _plan as _view_plan
 from tests.install_time_config_form_test import _MemoryCredentialProvider, _state
 
@@ -94,6 +94,9 @@ class TheFormGoesForwardE2ETest(unittest.TestCase):
                 # 07a the scope; Continue on each, then confirm Ready. Nothing else.
                 ENTER,
                 ENTER,
+                ENTER,
+                # 07b: Set later, above the credential the cursor opens on (§172.6).
+                UP,
                 ENTER,
                 ENTER,
                 actions=handler,

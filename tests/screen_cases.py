@@ -22,6 +22,7 @@ from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
+    InstallSecretView,
     McpTestEntryView,
     McpTestView,
     default_pair_scopes,
@@ -81,6 +82,7 @@ RECORDED_SCREENS: tuple[ApplicationScreen, ...] = (
     ConsumerScreen.AUTOMATIC_INSPECTION,
     ConsumerScreen.REQUIRED_INPUTS,
     ConsumerScreen.INSTALL_SCOPE,
+    ConsumerScreen.INSTALL_CREDENTIALS,
     ConsumerScreen.READY,
     ConsumerScreen.INSTALLING,
     ConsumerScreen.SUCCESS,
@@ -277,6 +279,32 @@ def _consumer_cases() -> dict[ConsumerScreen, ScreenCase]:
     )
     cases[ConsumerScreen.INSTALL_SCOPE] = ScreenCase(
         "07a:two-pairs", scope_source, _reload(scope_source, scope_state, entering=True)
+    )
+
+    # 07b is recorded with two artifacts, one secret already stored and two to ask, one of which
+    # has a value waiting, so every row state is drawn and no value ever is (§172.6).
+    secrets_source = CanonicalScreenSource(
+        replace(
+            base,
+            plan=replace(
+                base.plan,
+                secrets=(
+                    InstallSecretView("company/mcp/github\tgithub-token", "GitHub token"),
+                    InstallSecretView("company/mcp/github\tapi-key", "API key", configured=True),
+                    InstallSecretView("company/mcp/jira\tjira-token", "Jira token"),
+                ),
+            ),
+        )
+    )
+    secrets_state = ConsumerUiState(
+        ConsumerSession(ConsumerScreen.INSTALL_CREDENTIALS, review_digest=base.plan.review_digest),
+        action=ConsumerActionKind.INSTALL,
+        entered_secrets=("company/mcp/jira\tjira-token",),
+    )
+    cases[ConsumerScreen.INSTALL_CREDENTIALS] = ScreenCase(
+        "07b:two-artifacts",
+        secrets_source,
+        _reload(secrets_source, secrets_state, entering=True),
     )
 
     activity_source = CanonicalScreenSource(activity_screens())

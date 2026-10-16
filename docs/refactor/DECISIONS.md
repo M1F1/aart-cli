@@ -10476,3 +10476,28 @@ and replaces every other value with `AART_NOT_SET`. The form then submits as usu
   reads each receipt's owner scope (`_receipt_scope`). A setup request matches only a receipt at
   its own scope, and each review item carries its installation's scope.
 
+
+## D-419 — 07b reads each secret with a hidden prompt, once per artifact, before Ready (CP-30 step 8)
+
+07b, titled "Credentials", asks the secrets that some new installation does not hold yet.
+- **Rows.** Set later first, then one row per artifact×secret input (`<artifact>\t<input>`, the
+  key 07 uses), then Continue. With more than one artifact the rows are grouped under it. The cursor
+  opens on the first secret, as 07 opens on its first field.
+- **Configured securely.** A secret every installation already holds, as its provider reports, is
+  no question. It is not a row: the status says "Configured securely" for it. When nothing is left
+  to ask, 07b is not shown.
+- **Entering.** Enter on a row asks the adapter (`ENTER_SECRET`). The adapter lends the terminal
+  with a briefing (`credential_entry_briefing`: what the credential is, who needs it, where it is
+  stored and for how many installations, and that nothing is echoed). It reads with `getpass`,
+  which is injectable as `secret_reader`. One `TransientSecret` is created per credential
+  reference, so the artifact's value goes into each of its installations and no other (INV-259).
+- **What the UI knows.** The answer is `SECRET_ENTERED` with the row and whether a value was
+  entered. The state keeps only row keys (`entered_secrets`); a row reads "entered, hidden" or
+  "not set". No value reaches a view, a plan, a frame or the state (§172.6).
+- **An empty answer** withdraws an earlier entry for that row; the row stays "not set".
+- **Set later and Continue** both go to Ready. Anything not entered is stored as `AART_NOT_SET`
+  by the transaction (D-414).
+- **Discarding.** Leaving 07b, Ready and Installing for any other screen, or quitting, emits
+  `DISCARD_SECRETS`, and the adapter forgets every carrier. A new review also starts empty.
+- **Order.** 07a, when shown, comes before 07b. Choosing a scope re-prepares the plan, which would
+  otherwise discard what was entered.

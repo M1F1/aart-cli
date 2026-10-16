@@ -24,8 +24,10 @@ reads as "nothing was established", which leaves the session exactly where it wa
 
 from __future__ import annotations
 
+import getpass
 import hashlib
 import json
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Callable, Literal, Protocol
@@ -55,6 +57,7 @@ from aart_cli.application.consumer_views import (
     HarnessTargetView,
     InputView,
     InstallScopeChoiceView,
+    InstallSecretView,
     LifecyclePlanView,
     McpTestEntryView,
     McpTestResultView,
@@ -76,10 +79,12 @@ from aart_cli.application.consumer_views import (
     project_running_installation,
     scope_choice_offered,
     scope_matrix_rows,
+    secrets_to_ask,
     target_choice_problems,
 )
 from aart_cli.application.credential_guidance import (
     CredentialGuidance,
+    credential_entry_briefing,
     gather_credential_guidance,
 )
 from aart_cli.application.credential_lifecycle import (
@@ -122,6 +127,7 @@ from aart_cli.configuration.schema import configured_source_from_input
 from aart_cli.domain.candidates import CandidateId
 from aart_cli.domain.credentials import (
     CredentialIntent,
+    CredentialReference,
     CredentialState,
     ProviderState,
 )
@@ -444,6 +450,8 @@ def _after_inputs(plan: ConsumerPlanView) -> ConsumerScreen:
         return ConsumerScreen.REVIEW_SELECTION
     if scope_choice_offered(plan.scope_offers):
         return ConsumerScreen.INSTALL_SCOPE
+    if secrets_to_ask(plan):
+        return ConsumerScreen.INSTALL_CREDENTIALS
     return ConsumerScreen.READY
 
 
@@ -724,6 +732,7 @@ class LocalConsumerActions:
         repository_adopted_list: RepositoryAdoptedListPort | None = None,
         terminal_handover: TerminalHandover | None = None,
         mcp_test: McpTestPort | None = None,
+        secret_reader: Callable[[str], str] | None = None,
     ) -> None:
         if not isinstance(context, ConsumerActionContext):
             raise ValueError("consumer actions need a composed action context")
@@ -756,6 +765,15 @@ class LocalConsumerActions:
         #: Secrets entered before Ready, one single-use carrier per credential reference (§172.4).
         #: They live here and never in a view or a plan; the install that follows consumes them.
         self._entered_secrets: dict[str, TransientSecret] = {}
+        #: The plan 07b redraws after each entry; it says what is asked, never what was typed.
+        self._pending_plan: ConsumerPlanView | None = None
+        #: What each 07b row answers: the references it fills, what the artifact says about the
+        #: credential, and the provider that will keep it. References and guidance only.
+        self._secret_rows: dict[
+            str, tuple[tuple[CredentialReference, ...], tuple[CredentialGuidance, ...], str]
+        ] = {}
+        #: The hidden prompt 07b reads with; injected so a test never touches the real terminal.
+        self._secret_reader = secret_reader if secret_reader is not None else getpass.getpass
         self._scanned_repository: RepositoryScan | None = None
         self._adoption_review: MaintainerAdoptionReviewView | None = None
         self._adoption_upstream: AdoptionUpstreamCheck | None = None
@@ -974,7 +992,107 @@ class LocalConsumerActions:
             return self._prepare(command)
         if command.kind is ConsumerUiCommandKind.EXECUTE_ACTION:
             return self._execute(command)
+        if command.kind is ConsumerUiCommandKind.ENTER_SECRET:
+            return self._enter_secret(command)
         raise ValueError(f"{command.kind.value} is not a consumer action")
+
+    def discard_secrets(self) -> None:
+        """Forget every value 07b took; the session left the screens that may hold one."""
+
+        self._entered_secrets = {}
+
+    def _enter_secret(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Read one 07b secret with a hidden prompt and keep it for this artifact's installations.
+
+        The value goes into one single-use carrier per credential reference and nowhere else: the
+        answer to the screen says only whether something was entered (§172.6). An empty answer
+        withdraws whatever was entered before, so the install stores the placeholder.
+        """
+
+        row = command.focus
+        held = self._secret_rows.get(row)
+        if held is None or not isinstance(self._pending, _PendingInstall):
+            return ConsumerActionUpdate(
+                self.source(notice=_lines("this credential is not part of the reviewed install")),
+                ConsumerUiEvent(
+                    ConsumerUiEventKind.SECRET_ENTERED,
+                    action=ConsumerActionKind.INSTALL,
+                    key=row,
+                    accepted=False,
+                ),
+            )
+        references, guidance, provider = held
+        briefing = credential_entry_briefing(
+            guidance, provider=provider, installations=len(references)
+        )
+        handover = self._terminal_handover
+        with handover(briefing) if handover is not None else nullcontext():
+            value = self._secret_reader("Value: ")
+        for reference in references:
+            self._entered_secrets.pop(str(reference), None)
+        entered = bool(value)
+        if entered:
+            for reference in references:
+                self._entered_secrets[str(reference)] = TransientSecret(value)
+        del value
+        return ConsumerActionUpdate(
+            self.source(plan=self._pending_plan),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.SECRET_ENTERED,
+                action=ConsumerActionKind.INSTALL,
+                key=row,
+                accepted=entered,
+            ),
+        )
+
+    def _install_secrets(
+        self, prepared: PreparedConfiguredInstallation
+    ) -> tuple[InstallSecretView, ...]:
+        """07b's rows: each secret input once per artifact, over every installation it reaches.
+
+        A row is "Configured securely" when every installation already holds a value -- the
+        provider says so; nothing is read back (§172.6).
+        """
+
+        grouped: dict[str, list[tuple[str, SecretInput, CredentialReference]]] = {}
+        for owner, bound in prepared.draft.inputs.bound:
+            for item in bound.inputs:
+                if isinstance(item.input, SecretInput) and isinstance(
+                    item.source, SecretProviderReference
+                ):
+                    row = f"{artifact_answer_key(owner)}\t{item.input.id.value}"
+                    grouped.setdefault(row, []).append(
+                        (str(owner), item.input, item.source.reference)
+                    )
+        views = []
+        for row in sorted(grouped):
+            members = grouped[row]
+            references = tuple(dict.fromkeys(reference for _, _, reference in members))
+            configured = True
+            for reference in references:
+                keeper = next(
+                    (
+                        item
+                        for item in self._context.credential_providers
+                        if item.provider == reference.provider.provider
+                    ),
+                    None,
+                )
+                observed = None if keeper is None else keeper.inspect(reference)
+                if (
+                    not isinstance(observed, Ok)
+                    or observed.value.state is not CredentialState.PRESENT
+                ):
+                    configured = False
+            first = members[0][1]
+            label = first.guidance.label if first.guidance is not None else first.id.value
+            guidance = gather_credential_guidance(
+                first.id.value,
+                ((name, declared.guidance) for name, declared, _ in members),
+            )
+            self._secret_rows[row] = (references, guidance, references[0].provider.provider)
+            views.append(InstallSecretView(row, label, configured=configured))
+        return tuple(views)
 
     # -- preparation --------------------------------------------------------- #
 
@@ -1781,6 +1899,9 @@ class LocalConsumerActions:
         previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
     ) -> ConsumerActionUpdate:
         context = self._context
+        if command.action is ConsumerActionKind.INSTALL:
+            # A new review is a new set of questions; nothing entered for the last one carries over.
+            self._entered_secrets, self._secret_rows = {}, {}
         host = self._host(command.install_scope)
         preferred = PythonInstaller(command.python_installer or context.settings.python_installer)
         # Until screen 05 has been answered there are no pairs, and placement measures every harness.
@@ -2059,8 +2180,10 @@ class LocalConsumerActions:
                     chosen_pairs=pairs,
                     scope_offers=scope_matrix_rows(scope_offers),
                     chosen_pair_scopes=pair_scopes,
+                    secrets=self._install_secrets(reviewed),
                 )
         self._pending_host = reviewed_host
+        self._pending_plan = plan
         self._pending = _PendingInstall(
             reviewed,
             previous_receipts,

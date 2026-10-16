@@ -4,6 +4,15 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-30 step 8 (D-419): 07b asks each secret once per artifact, before Ready.**
+- Enter on a secret lends the terminal and reads with a hidden prompt. The value goes into one
+  single-use carrier per installation; the screen and the state only know "entered, hidden".
+- A secret every installation already holds is "Configured securely" and asks nothing. Set later
+  and Continue go to Ready; anything not entered is stored as `AART_NOT_SET`.
+- Leaving 07b, Ready or Installing discards every entry.
+- 1540 related tests pass, with ruff, ruff format, mypy and tach.
+- Next: step 9, the placeholder warnings.
+
 **2026-10-16, CP-30 step 7 (D-418): 07a puts each artifact×harness pair on its own scope.**
 - 05 no longer asks the scope. 07a appears when some pair may go to two scopes, with an All
   installations row when there is more than one pair.

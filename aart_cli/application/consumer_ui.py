@@ -141,6 +141,9 @@ class ConsumerUiEventKind(str, Enum):
     EDIT_PUBLICATION_BRANCH = "edit-publication-branch"
     EDIT_INSTALL_CONFIG = "edit-install-config"
     EDIT_CONFIGURATION = "edit-configuration"
+    #: Enter on a 07b secret row, and the adapter's answer: whether a value is now held for it.
+    REQUEST_SECRET = "request-secret"
+    SECRET_ENTERED = "secret-entered"
 
 
 @dataclass(frozen=True, slots=True)
@@ -401,6 +404,11 @@ class ConsumerUiCommandKind(str, Enum):
     PREPARE_ACTION = "prepare-action"
     EXECUTE_ACTION = "execute-action"
     PERSIST_SETTINGS = "persist-settings"
+    #: 07b: lend the terminal to a hidden prompt for one secret row (§172.6). The value never
+    #: comes back; the answer says only whether one was entered.
+    ENTER_SECRET = "enter-secret"
+    #: Leaving the install before Ready was confirmed: forget every secret entered on 07b.
+    DISCARD_SECRETS = "discard-secrets"
 
 
 class WorkflowStepStatus(str, Enum):
@@ -688,6 +696,8 @@ class ConsumerUiState:
     #: (§172.2). `targets` follows the pairs: it is the harnesses some pair goes into.
     pairs: tuple[str, ...] = ()
     pair_scopes: tuple[str, ...] = ()
+    #: The 07b rows a value was entered for. Row keys only: the values stay in the adapter.
+    entered_secrets: tuple[str, ...] = ()
     harness_column: int = 0
     #: Non-secret text lives only in this session until it is reviewed and written beside the
     #: artifact. ``config_form_active`` distinguishes the pre-review form from screen 07's later
@@ -729,6 +739,7 @@ class ConsumerUiState:
             or not _rows_valid(self.targets)
             or not _rows_valid(self.pairs)
             or not _rows_valid(self.pair_scopes)
+            or not _rows_valid(self.entered_secrets)
             or not isinstance(self.harness_column, int)
             or isinstance(self.harness_column, bool)
             or self.harness_column < 0
@@ -1653,6 +1664,10 @@ def _action_prepared(
         # §172.2: what the preparation ticked by default is ticked on screen too, so the plan
         # and the matrix agree and Continue can go on without a keypress that changes nothing.
         state = replace(state, pairs=event.pairs, targets=pairs_harnesses(event.pairs))
+    if action is ConsumerActionKind.INSTALL:
+        # A new plan names new provider items, so whatever 07b held was for another one; the
+        # adapter has already let those values go.
+        state = replace(state, entered_secrets=())
     if action is ConsumerActionKind.INSTALL and event.pair_scopes:
         # §172.5: the adapter merged what 07a chose with each pair's starting scope; that merge is
         # what the plan was prepared for, so it is what 07a shows.
@@ -1985,6 +2000,12 @@ def _apply_setting(
     )
 
 
+#: Where a secret entered on 07b may still be on its way to the transaction (§172.6).
+_SECRET_HOLDING_SCREENS = frozenset(
+    {ConsumerScreen.INSTALL_CREDENTIALS, ConsumerScreen.READY, ConsumerScreen.INSTALLING}
+)
+
+
 def reduce_consumer_ui(
     state: ConsumerUiState,
     event: ConsumerUiEvent,
@@ -1995,6 +2016,21 @@ def reduce_consumer_ui(
         raise ValueError("consumer UI reduction needs typed state and event")
     if state.exited:
         return state, ()
+    reduced, commands = _reduce(state, event)
+    if reduced.entered_secrets and (
+        reduced.session.screen not in _SECRET_HOLDING_SCREENS or reduced.exited
+    ):
+        # §172.6: leaving before Ready was confirmed discards every value entered on 07b.
+        return replace(reduced, entered_secrets=()), (
+            *commands,
+            ConsumerUiCommand(ConsumerUiCommandKind.DISCARD_SECRETS),
+        )
+    return reduced, commands
+
+
+def _reduce(
+    state: ConsumerUiState, event: ConsumerUiEvent
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
     if event.kind is ConsumerUiEventKind.NAVIGATE:
         return _navigate(state, event.screen)
     if event.kind is ConsumerUiEventKind.BACK:
@@ -2028,6 +2064,26 @@ def reduce_consumer_ui(
             session=replace(state.session, review_digest=None),
             quit_pending=False,
         ), ()
+    if event.kind is ConsumerUiEventKind.REQUEST_SECRET:
+        if (
+            state.session.screen is not ConsumerScreen.INSTALL_CREDENTIALS
+            or state.action is not ConsumerActionKind.INSTALL
+            or event.key in (CONFIG_SET_LATER_ROW, CONFIG_CONTINUE_ROW)
+            or event.key not in state.rows
+        ):
+            return state, ()
+        return replace(state, quit_pending=False), (
+            ConsumerUiCommand(
+                ConsumerUiCommandKind.ENTER_SECRET,
+                action=ConsumerActionKind.INSTALL,
+                focus=event.key,
+            ),
+        )
+    if event.kind is ConsumerUiEventKind.SECRET_ENTERED:
+        if state.session.screen is not ConsumerScreen.INSTALL_CREDENTIALS:
+            return state, ()
+        held = tuple(item for item in state.entered_secrets if item != event.key)
+        return replace(state, entered_secrets=(*held, event.key) if event.accepted else held), ()
     if event.kind is ConsumerUiEventKind.EDIT_INSTALL_CONFIG:
         if (
             state.session.screen is ConsumerScreen.REQUIRED_INPUTS
@@ -2585,6 +2641,15 @@ def key_bindings(
         chosen = _row_action(state)
         if chosen is not None and "enter" not in keys:
             bindings.append(KeyBinding("Enter", chosen[1]))
+        elif state.session.screen is ConsumerScreen.INSTALL_CREDENTIALS and "enter" not in keys:
+            row = state.current_row
+            if row == CONFIG_SET_LATER_ROW:
+                bindings.append(KeyBinding("Enter", "Set later"))
+            elif row == CONFIG_CONTINUE_ROW:
+                bindings.append(KeyBinding("Enter", "Continue"))
+            elif row:
+                label = "Enter again" if row in state.entered_secrets else "Enter value"
+                bindings.append(KeyBinding("Enter", label))
         elif _answered_in_place(state) and "enter" not in keys:
             bindings.append(KeyBinding("Enter", "Credential details"))
         elif _uninstall_finished(state) and "enter" not in keys:
@@ -2754,6 +2819,14 @@ def key_event(
                 text=value,
             )
         return None
+
+    if (
+        state.session.screen is ConsumerScreen.INSTALL_CREDENTIALS
+        and key == "enter"
+        and (cursor or state.current_row) not in ("", CONFIG_SET_LATER_ROW, CONFIG_CONTINUE_ROW)
+    ):
+        # §172.6: a secret row is answered in a hidden prompt, never typed into a frame.
+        return ConsumerUiEvent(ConsumerUiEventKind.REQUEST_SECRET, key=cursor or state.current_row)
 
     if state.session.screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
         row = cursor or state.current_row

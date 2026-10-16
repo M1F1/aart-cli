@@ -620,6 +620,9 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 ENTER,
                 ENTER,
                 ENTER,
+                # 07b: Set later, above the credential the cursor opens on (§172.6).
+                UP,
+                ENTER,
                 ENTER,
                 actions=handler,
             )
@@ -692,6 +695,9 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 UP,
                 ENTER,
                 ENTER,
+                ENTER,
+                # 07b: Set later, above the credential the cursor opens on (§172.6).
+                UP,
                 ENTER,
                 ENTER,
                 actions=handler,

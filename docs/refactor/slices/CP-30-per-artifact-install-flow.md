@@ -239,6 +239,44 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
     ruff, ruff format, mypy and tach. `make mutants` was not run over `consumer_views.py`: the
     module is large, and the targeted mutations above cover the slice's claims.
 
+## Step 8: 07b, credentials before Ready (done)
+
+- The design is in D-419. `consumer_views` adds `InstallSecretView`, `ConsumerPlanView.secrets`
+  and `secrets_to_ask`, and puts 07b in the install flow when something is left to ask.
+- `consumer_ui` adds the `ENTER_SECRET` and `DISCARD_SECRETS` commands, the `REQUEST_SECRET` and
+  `SECRET_ENTERED` events, and `ConsumerUiState.entered_secrets`. `reduce_consumer_ui` emits the
+  discard whenever a state with entries leaves 07b, Ready or Installing.
+- In the adapter, `_install_secrets` builds the rows from the reviewed draft's bound inputs, one
+  per artifact×input, with every installation's credential reference and its guidance.
+  `_enter_secret` reads through the handover and keeps one carrier per reference;
+  `discard_secrets` forgets them. `_after_inputs` and the TUI's `_after_scope` route to 07b.
+- The TUI draws the rows with `render_install_credentials` and the status with
+  `install_credentials_status`. `run_consumer_shell` dispatches the two new commands, and
+  `ConsumerActionUpdate` accepts `SECRET_ENTERED`.
+- Evidence:
+  - `install_credentials_test`, 8 tests:
+    - e2e: an entered value reaches the provider once for each of two installations, and appears
+      in no frame and no file under the project or the AART home; the terminal is lent with a
+      briefing and taken back;
+    - e2e: Set later prompts nothing and stores the placeholder twice;
+    - e2e: an empty answer is not an entry;
+    - e2e: leaving 07b forgets the entry and nothing is stored;
+    - unit: Enter on a secret row asks for that row only; Set later, Continue, an unknown row and
+      another screen ask nothing; the answer marks and unmarks the row; Back discards and Ready
+      keeps.
+  - `credential_guidance_test`: a credential every installation holds does not draw 07b.
+  - The frame matrix records 07b with two artifacts, one configured secret and one entry:
+    `screen_cases`, "07b:two-artifacts".
+  - Every secret-bearing install e2e test passes 07b with Set later.
+  - Mutations, each caught by the named test:
+    - A carrier for the first reference only: the two-installation e2e.
+    - `discard_secrets` doing nothing: the leaving e2e.
+    - `_after_scope` always going to Ready: all four e2e tests.
+    - Every secret reported as not configured: the configured-credential test. Before its frame
+      assertion was added, this mutant survived.
+  - 1540 related tests pass (modules touching the consumer UI, views, actions, guidance or the
+    shell drive), with ruff, ruff format, mypy and tach.
+
 ## Superseded work
 
 - `stash@{0}`, "scope rows before the form (D-412 draft)", was the narrow fix for the missing scope
