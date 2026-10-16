@@ -1098,7 +1098,7 @@
         },
         {
           "id": "6",
-          "title": "05 and 07a treat a Collection as one artifact: one harness row and one scope per Collection×harness pair, applied to every member",
+          "title": "05 and 07a treat a Collection as one artifact: a harness is offered only when it takes every member, and a scope only where every member has a target (D-422); one choice per Collection×harness pair, applied to every member",
           "status": "todo"
         },
         {

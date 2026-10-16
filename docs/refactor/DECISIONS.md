@@ -10584,3 +10584,16 @@ and Credentials and variables to warn about every value that still is, without r
   the value and in place of "Configured securely" for the credential.
 - Success does not repeat the list. The specification does not ask for it, Ready has just said it,
   and Installed says it from then on.
+
+## D-422 — A Collection installs whole into a harness, or not into it (CP-31, owner decision)
+
+The owner decided on 2026-10-16, while CP-31 was being planned:
+- A Collection is offered for a harness only when that harness can take **every** member. In 05,
+  a Collection×harness cell is tickable only then. At 07a, the scopes offered are the ones where
+  every member has a target. A harness that cannot take one member is not offered for the
+  Collection, and the reason names that member.
+- There is no partial install of a Collection. Somebody who wants only some members installs those
+  artifacts on their own. A Registry may approve a Collection's members as individual artifacts,
+  and the Marketplace offers them beside it.
+- This keeps a Collection's meaning exact (INV-213): installed means all of it, and its health is
+  its members' health (INV-186).
