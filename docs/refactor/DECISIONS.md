@@ -10597,3 +10597,19 @@ The owner decided on 2026-10-16, while CP-31 was being planned:
   and the Marketplace offers them beside it.
 - This keeps a Collection's meaning exact (INV-213): installed means all of it, and its health is
   its members' health (INV-186).
+
+## D-423 — The Registry assigns versions by counting changes, with fixed rollover limits (CP-31, owner decision)
+
+The owner decided on 2026-10-16 how the Registry picks the next version once versions are its job
+(#74):
+- Every approved change raises the **patch**.
+- Patch runs up to **5**. The change after `x.y.5` raises the **minor** and resets patch:
+  `x.(y+1).0`.
+- Minor runs up to **3**. The change after `x.3.5` raises the **major** and resets both:
+  `(x+1).0.0`.
+- Nobody picks major, minor or patch by hand; the version is a count of approved changes.
+- Example: `1.0.0`, `1.0.1` … `1.0.5`, `1.1.0` … `1.3.5`, `2.0.0`.
+- The first approved version of an artifact is `1.0.0` (an implementation choice, recorded here so
+  step 1 can confirm it). A version therefore says how much an artifact changed, not whether a
+  change is breaking. Specification work in CP-31 step 1 states this in §1 terms, and
+  `requires_aart` and Collection member constraints are read against these numbers.

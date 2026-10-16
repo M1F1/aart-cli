@@ -23,8 +23,8 @@ order, with fifteen steps in `plan.json`:
 - **At the end of CP-31**: rename the content mode (#54), then prune (#73), including the vendor
   command family (#53, closes #41).
 
-Step 1 must settle how the Registry picks the next version for #74 (patch by default, or the
-Maintainer chooses major/minor/patch per change); the issue does not say.
+The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
+(`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).
 
 ## Where the work is (2026-10-16)
 
