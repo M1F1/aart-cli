@@ -11123,3 +11123,130 @@ before Ready, and the transaction stores each installation's values without prom
 input is stored as the placeholder `AART_NOT_SET`. Nothing refuses it: the install completes and the
 launcher starts. Doctor, Installed and Credentials and variables warn about it without reading a
 secret value. No secret value reaches UI state, plan, receipt, log or argv.
+
+# 173. Collections end to end, Registry-owned versions, install paths and views
+
+Status: **ACCEPTED 2026-10-16 (D-422, D-423, D-424)**, on the owner's request (B-067, #72–#75,
+#53, #54). It makes §145.1 reachable from a source repository to an installed harness, moves
+versions from source manifests to the Registry, adds a default install path beside the §172 flow,
+and removes the routes into a Registry that D-375 forbids. §145, §161.4, §165.5, §172 and §169
+still hold where this section does not narrow them.
+
+## 173.1 Source manifests carry no version
+
+A source repository says *what* an artifact or Collection is. It never says which version it is.
+- An artifact manifest (`aart-cli.yaml` / `aart-cli.json`) has no `artifact.version`. A
+  Collection manifest has no `version`. A manifest that still carries one is refused, and the
+  refusal says to delete the field because the Registry assigns versions.
+- Everything a Registry version is built from is the manifest plus the payload it selects. A
+  dependency descriptor (`requirements.txt`, `pyproject.toml`, `uv.lock`) is part of that payload,
+  so changing a pinned package is a change like any other.
+
+## 173.2 The Registry assigns versions by counting approved changes
+
+Sync compares each source manifest with the Registry's approved versions of the same artifact in
+the target Registry. The comparison uses the digest of the manifest and its selected payload.
+- If an approved version has the same digest, nothing changed; the Candidate is that version.
+- Otherwise the Candidate is a change, and the Maintainer sees it in the Sync result and in
+  Candidates as new or changed, with the version it will become.
+- The version is the next one after the highest approved version (D-423). Patch counts up to 5,
+  then minor counts up to 3, then major. `1.0.0`, `1.0.1` … `1.0.5`, `1.1.0` … `1.3.5`, `2.0.0`.
+  The first approved version is `1.0.0`.
+- Approval publishes exactly that version. If another approval took it first, the Candidate is
+  refused as stale and the next Sync offers the following number. A published version is never
+  rewritten (INV-207).
+
+Version constraints keep their SemVer meaning: `^1` is every `1.x.y`, so it covers `1.0.0`–`1.3.5`.
+A version says how much an artifact has changed, not whether a change is breaking.
+
+## 173.3 A Collection is authored, adopted and published like an artifact
+
+- `author init --kind collection` writes an `aart-cli.yaml` with `schema`, `name`, `summary` and
+  `artifacts`, each with one line saying what it means.
+- `author check` parses a Collection manifest with the same parser Sync uses and reports `ok` or
+  the error. It never says the manifest was skipped.
+- Sync turns a Collection manifest into a Collection Candidate. Its members are resolved against
+  the Registry's approved artifacts. A member that is not approved, or whose constraint matches no
+  approved version, is a finding that blocks approval and names the member.
+- Approving a Collection Candidate publishes a Registry version of kind `collection`. The version
+  is assigned as in §173.2, from the digest of the Collection manifest. The Registry reads that
+  version back as a Collection.
+
+## 173.4 The Marketplace offers approved Collections
+
+The configured Marketplace lists each approved Collection as one row. Its members, resolved to
+exact approved versions, are what installing it installs (§145.1). A member may also be approved
+and offered as an artifact of its own; installing it alone is an ordinary artifact install.
+
+## 173.5 Installing a Collection treats it as one artifact
+
+The §172 flow applies, with the Collection taking the place of one artifact (D-422).
+- **05 Harnesses.** A harness is offered for the Collection only when it can host every member.
+  A harness that cannot is shown as not offered, and the reason names the first member it cannot
+  host. There is one choice per Collection and harness, and it applies to every member.
+- **07a Scope.** A scope is offered for a Collection and harness only when every member has a
+  target in it there. The chosen scope applies to every member.
+- **07 Configuration / 07b Credentials.** Each member's inputs are asked once per member
+  artifact, under that member's name, and `Set later` skips them (§172.3). Nothing blocks.
+- Every member is installed into every chosen harness, or the Collection is not installed there.
+  There is no partial Collection install (INV-213).
+
+## 173.6 An installed Collection
+
+Installed, Doctor and uninstall show an installed Collection as one row with its members under it.
+Its health is its members' health and names the member that needs attention (INV-186). Uninstalling
+it removes each member installation it owns, and keeps any member that is also owned directly or by
+another Collection (INV-215).
+
+## 173.7 Default path and custom path
+
+After choosing in the Marketplace and pressing Install, a person chooses the path:
+- **Default** takes the harnesses, scope and Python installer from Settings and goes straight to
+  07/07b if anything needs entering, and to Ready otherwise. The harnesses are the Settings
+  harnesses that are detected and can host the artifact; with none set in Settings, every detected
+  harness that can host it. The scope is the Settings default scope when offered, else the only
+  offered one.
+- **Custom** is the §172 flow: 05, 07, 07a, 07b, Ready.
+
+Settings holds the default harnesses beside the default scope and Python installer.
+
+## 173.8 Marketplace and Installed columns
+
+Marketplace rows show, besides name, kind and version:
+- installation status: not installed, installed, or update available;
+- scope: `user`, `project`, or both, with the number of projects it is installed in;
+- harnesses it is installed into;
+- eligible harnesses: the detected harnesses that can host it;
+- inputs still `AART_NOT_SET`, as a count.
+
+Installed lists each installation as its own row (artifact, Registry alias, harness, scope and
+project), with the same columns where they apply. Each installation keeps its own configuration
+(§169.4). The details, such as which projects and which harnesses, are under More info, not in
+the row.
+
+## 173.9 Adoption by manifest is the only way in
+
+A Registry is never where an artifact is defined (D-375). The `registry vendor`, `vendor-batch`,
+`discover`, `revendor` and `collection` commands and every other route that writes canonical
+Registry content without a source manifest are removed. What a Registry holds for an approved
+version is its **content mode**: `RegistryContentMode = SelfContained | PinnedReference` (D-376),
+and `promote --mode` takes `self-contained` or `pinned-reference`. INV-019, INV-020, INV-025,
+INV-204 and INV-207 keep their meaning with these words.
+
+## 173.10 Acceptance invariants
+
+**INV-262 — Versions belong to the Registry.** No source manifest carries a version. The Registry
+assigns every version by D-423 from the approved history, and an unchanged manifest and payload
+never produce a new version.
+
+**INV-263 — A Collection installs whole.** A Collection is offered for a harness and scope only
+when every member can be installed there, and an install writes every member or none.
+
+**INV-264 — A Collection is one choice in the flow.** One harness and one scope choice applies to
+every member. Inputs are still asked once per member artifact and may be set later.
+
+**INV-265 — The default path asks nothing Settings already answers.** It goes from Install to
+the inputs, or to Ready, using the Settings harnesses, scope and Python installer.
+
+**INV-266 — Only manifests adopt.** Canonical Registry content is written only from a source
+manifest.

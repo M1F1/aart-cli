@@ -1069,17 +1069,17 @@
     {
       "id": "CP-31",
       "title": "Collections end to end, Registry-owned versions, default/custom install paths, richer Marketplace and Installed views, and pruning",
-      "status": "todo",
+      "status": "in_progress",
       "steps": [
         {
           "id": "1",
           "title": "Specify CP-31: Collections end to end (B-067, D-422), Registry-owned versions (#74), the default and custom install paths (#75), the Marketplace and Installed columns (#72), and pruning (#73)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "2",
           "title": "Registry-owned versions (#74): source manifests carry no version; Sync detects changes in manifest, payload and dependencies; the Maintainer sees the changed artifacts and the Registry assigns the next version on approval",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "3",

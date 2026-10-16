@@ -10613,3 +10613,25 @@ The owner decided on 2026-10-16 how the Registry picks the next version once ver
   step 1 can confirm it). A version therefore says how much an artifact changed, not whether a
   change is breaking. Specification work in CP-31 step 1 states this in §1 terms, and
   `requires_aart` and Collection member constraints are read against these numbers.
+
+## D-424 — How CP-31 makes versions the Registry's (CP-31 step 1)
+
+Implementation choices for §173.1–§173.2, recorded so the next agent need not re-derive them:
+- **The first version is `1.0.0`**, confirming D-423's proposal. §173.2 states it.
+- **The compiler is told the version; it never reads one.** `compile_author_*` take a pure
+  `VersionAssigner` (identity and input digest in, SemVer out). Every caller builds it from the
+  approved versions it already loads: Sync, `registry adopt`, `check-upstream`, `registry scan` and
+  `registry promote`. `author check` has no Registry, so it compiles with `1.0.0` and says nothing
+  about versions.
+- **"Unchanged" means the same input digest** (manifest plus selected payload). It was already
+  what provenance records, it excludes acquisition metadata, and it covers dependency descriptors
+  because they must be in the payload. An unchanged artifact compiles to the version it already
+  has, so it reconciles as promoted, exactly as today.
+- **The number is chosen at Sync, and checked at approval.** A Candidate needs a coordinate for
+  review, so Sync gives it the next number. Promotion already refuses a coordinate that holds
+  different content (`registry-version-immutable`), so two Candidates racing for one number cannot
+  both publish; the loser is offered the next number on the next Sync.
+- **Constraints keep SemVer meaning.** `^1` is `>=1.0.0 <2.0.0`. Nothing in the resolver changes.
+- **No compatibility.** A manifest with `artifact.version` (or a Collection `version`) is refused
+  with a message to delete it. Test fixtures drop the field; their expected versions become what
+  the Registry assigns.
