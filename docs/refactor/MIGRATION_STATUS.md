@@ -4,6 +4,15 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-30 step 7 (D-418): 07a puts each artifact×harness pair on its own scope.**
+- 05 no longer asks the scope. 07a appears when some pair may go to two scopes, with an All
+  installations row when there is more than one pair.
+- In the e2e test, one install puts the MCP into the user home and the Skill into the project. The
+  setup report reads each receipt at its own scope.
+- Execution refuses pair scopes that differ from the review's.
+- 2334 related tests pass, with ruff, ruff format, mypy and tach.
+- Next: step 8, 07b credentials.
+
 **2026-10-16, CP-30 step 6 (D-417): 07 asks each input once per artifact, with Set later.**
 - One answer is copied into each new installation of its artifact.
 - Set later stores `AART_NOT_SET` and the install completes (e2e test).

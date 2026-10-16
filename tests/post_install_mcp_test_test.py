@@ -60,7 +60,7 @@ def _manifest(smoke: dict | None) -> tuple[tuple[str, str], ...]:
 _DECLARED = {"tool": "read_identity", "read_only": True}
 
 #: Marketplace to Success for one MCP, delivered to opencode only.
-_INSTALL = (SPACE, ord("i"), RIGHT, SPACE, ENTER, ENTER)
+_INSTALL = (SPACE, ord("i"), RIGHT, SPACE, ENTER, ENTER, ENTER)
 
 #: From Success's first row to the test offer: past Installed and Receipt, then Enter.
 _OPEN_TEST = (DOWN, DOWN, ENTER)

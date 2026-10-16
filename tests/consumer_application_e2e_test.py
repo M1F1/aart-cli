@@ -109,7 +109,7 @@ def _drive(env, state: ConsumerUiState, *codes: int, actions=None):
 #: harness, continue and confirm the exact narrowed plan. Fast mode keeps inspection in the plan
 #: but does not stop at a mandatory inspection screen. Harness configuration is routine, so this
 #: fixture does not stop at Remediation (D-258/D-260).
-_INSTALL = (SPACE, ord("i"), SPACE, ENTER, ENTER)
+_INSTALL = (SPACE, ord("i"), SPACE, ENTER, ENTER, ENTER)
 
 
 class ConsumerApplicationInstallTest(unittest.TestCase):

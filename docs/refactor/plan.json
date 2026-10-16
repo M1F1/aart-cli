@@ -1047,12 +1047,12 @@
         {
           "id": "7",
           "title": "07a Scope per artifact and harness pair, starting on the Settings default",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "8",
           "title": "07b Credentials once per artifact: enter, or skip as a placeholder; Set later",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "9",

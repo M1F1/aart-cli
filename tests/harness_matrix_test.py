@@ -196,7 +196,7 @@ class EachTickedPairIsInstalledTest(unittest.TestCase):
 
         with _environment(authored=LINT_SKILL) as env:
             finished, terminal, _ = _drive(
-                env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"), ENTER, ENTER
+                env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"), ENTER, ENTER, ENTER
             )
 
             self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
@@ -204,13 +204,13 @@ class EachTickedPairIsInstalledTest(unittest.TestCase):
             assert isinstance(stored, Ok), getattr(stored, "diagnostics", ())
             self.assertEqual([item.receipt.owner.harness for item in stored.value], ["claude"])
 
-    def test_a_complete_choice_keeps_the_scope_it_offers(self) -> None:
-        """Re-preparing for the ticked pairs used to drop the scope offer, leaving no radio set."""
+    def test_each_pair_goes_to_the_scope_chosen_for_it_on_07a(self) -> None:
+        """§172.5: one artifact into the user home and the other into the project, in one run."""
 
         from tests.configured_install_command_e2e_test import _environment
         from tests.configured_installation_draft_e2e_test import _published_registries
         from tests.consumer_application_e2e_test import _at, _drive
-        from tests.consumer_shell_test import DOWN, SPACE
+        from tests.consumer_shell_test import DOWN, ENTER, RIGHT, SPACE
         from tests.installation_harness_choice_test import _AUTHORED_MCP, _AUTHORED_SKILL
 
         def both(_authored, **keywords):
@@ -220,12 +220,37 @@ class EachTickedPairIsInstalledTest(unittest.TestCase):
             mock.patch("tests.configured_install_command_e2e_test._published_registry", both),
             _environment() as env,
         ):
-            _, terminal, _ = _drive(
-                env, _at(ConsumerScreen.MARKETPLACE), SPACE, DOWN, SPACE, ord("i"), SPACE
+            finished, terminal, _ = _drive(
+                env,
+                _at(ConsumerScreen.MARKETPLACE),
+                SPACE,
+                DOWN,
+                SPACE,
+                ord("i"),
+                # 05: everything into claude, then on to 07a.
+                SPACE,
+                ENTER,
+                # 07a: past "All installations" to the MCP's pair, and over to User.
+                DOWN,
+                RIGHT,
+                SPACE,
+                ENTER,
+                ENTER,
             )
 
-        self.assertRegex(terminal.last, r"All artifacts +>\[x\]")
-        self.assertIn("(*) Install into: Project", terminal.last)
+            self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
+            self.assertTrue(terminal.screen_containing("All installations"), "07a was never drawn")
+            # The report after the install reads each receipt at its own scope, not the session's.
+            self.assertFalse(terminal.screen_containing("setup completion is unavailable"))
+            stored = LocalReceiptStore(str(env.paths.data_root) + "/state").installations()
+            assert isinstance(stored, Ok), getattr(stored, "diagnostics", ())
+            self.assertEqual(
+                sorted(
+                    (item.receipt.owner.artifact.name, item.receipt.owner.scope.value)
+                    for item in stored.value
+                ),
+                [("code-review", "project"), ("dummy", "user")],
+            )
 
     def test_two_artifacts_each_go_only_into_the_harness_ticked_for_them(self) -> None:
         from tests.configured_install_command_e2e_test import _environment
@@ -254,6 +279,7 @@ class EachTickedPairIsInstalledTest(unittest.TestCase):
                 DOWN,
                 RIGHT,
                 SPACE,
+                ENTER,
                 ENTER,
                 ENTER,
             )

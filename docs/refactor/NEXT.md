@@ -5,7 +5,7 @@
 **CP-29 is merged and released as 0.8.0. The active work is CP-30, the per-artifact install flow:
 `docs/refactor/slices/CP-30-per-artifact-install-flow.md`, on `feat/cp-30-install-flow-per-artifact`.**
 Product Specification §172 and D-413 define it, plus D-414. Its ten steps are in `plan.json`.
-Steps 1–4 are done:
+Steps 1–7 are done; the first four are:
 1. the specification;
 2. one transaction over artifact×harness×scope pairs;
 3. the `AART_NOT_SET` placeholder;
@@ -25,11 +25,15 @@ Step 5 is done (D-416). Screen 05 is the matrix, and its ticked pairs reach the 
 `InstallationAssignment`s, at the plan's single scope until step 7.
 Step 6 is done (D-417). 07 asks each ordinary input once per artifact. Set later is its first row
 and leaves `AART_NOT_SET` in every field without a valid answer.
-Next comes step 7, 07a: one scope per pair, starting on the Settings default, with an "All
-installations" row. Until then `_assignments` uses the plan's single scope, and 05 asks it after
-the form (D-380). Step 8 fills
-`LocalConsumerActions._entered_secrets` from 07b. Until then an install stores every secret as
-`AART_NOT_SET`.
+Step 7 is done (D-418). 07a puts each pair on one scope, starting on the Settings default, with
+an "All installations" row. It appears only when some pair may go to two scopes. 05 no longer asks
+the scope.
+
+Next comes step 8, 07b. It fills `LocalConsumerActions._entered_secrets` from a hidden prompt,
+once per artifact, with Skip/Set later, and shows "Configured securely". Until then an install
+stores every secret as `AART_NOT_SET`.
+Step 9 adds the placeholder warnings on Ready, Success, Doctor, Installed and Credentials and
+variables. Step 10 is full verification and the PR.
 
 Open PRs waiting for the owner: #66 (Undo line under More info), #67 (Artifact Details blocks),
 #68 (profile rename). After CP-30, CP-31 renames the promotion modes (#54) and removes the vendor

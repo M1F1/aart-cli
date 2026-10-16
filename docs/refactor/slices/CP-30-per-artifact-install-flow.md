@@ -175,8 +175,7 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
     every value that is there and valid, a declared default included, and writes `AART_NOT_SET`
     into every other field. It then submits, so the placeholder travels as an ordinary answer and
     needs no flag on any command.
-  - Secret rows stay per installation until 07b (step 8). Until 07a (step 7), 05 still asks the
-    scope after the form when the plan offers one (D-380).
+  - Secret rows stay per installation until 07b (step 8). Step 7 moved the scope to 07a (D-418).
 - Evidence:
   - `install_time_config_form_test`, 18 tests:
     - one row for an artifact going into two harnesses, whose answer reaches both owners;
@@ -194,6 +193,51 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
     - Keying fields by installation instead of artifact turns the two e2e tests and the
       re-preparation test red.
   - 2342 related tests pass, with ruff, ruff format, mypy and tach.
+
+## Step 7: 07a, one scope per pair (done)
+
+- The design is in D-418. The helpers in `consumer_views` are `scope_matrix_rows`,
+  `scope_matrix_from_row`, `scope_matrix_columns`, `choose_pair_scope`, `default_pair_scopes`,
+  `scope_choice_offered` and `pair_scope_key`/`pair_scope_from_key`.
+- `ConsumerPlanView` carries `scope_offers` and `chosen_pair_scopes`. The state, the command and
+  the event carry `pair_scopes`.
+- In the adapter, `_pair_scope_offers` builds the per-pair offers. `_assignments` puts each pair
+  at its own scope, and `_PendingInstall.chosen_pair_scopes` is compared at execution.
+- `_after_inputs` routes 05 for a backend choice, then 07a, then Ready. The TUI does the same
+  through `_after_configuration`.
+- `configured_setup` reads each receipt's owner scope, so a mixed-scope install reports its setup
+  instead of failing.
+- Evidence:
+  - `scope_matrix_test`, 11 tests:
+    - rows and the All row;
+    - the starting scope, kept and dropped;
+    - the radio, with a Hypothesis property that every pair always holds exactly one offered scope;
+    - Enter gated on the re-prepared plan.
+  - `harness_matrix_test.test_each_pair_goes_to_the_scope_chosen_for_it_on_07a` is an e2e test.
+    The MCP goes into the user home and the Skill into the project in one run, and the setup
+    report raises no warning.
+  - `install_scope_choice_test`:
+    - the UI tests are rewritten for 07a;
+    - 05 no longer draws a scope;
+    - a scope chosen on 07a is where the files land;
+    - a confirmation naming other pair scopes than the review is refused and writes nothing.
+  - `inputs_go_forward_test` now also requires that the scope is asked on 07a and never as
+    "Install into".
+  - The frame matrix records 07a with two pairs: `screen_cases`, "07a:two-pairs".
+  - `artifact_details_controls_test` read 05's harness rows as target rows. That has been broken
+    since step 5, and the earlier filter missed it. It now reads the matrix columns.
+  - Every install e2e test gains one Enter for 07a.
+  - Mutations, each caught by the named test:
+    - `_assignments` ignoring the chosen scope: the mixed-scope e2e and the files-land test.
+    - `_receipt_scope` returning the session's scope: the mixed-scope e2e, through the setup
+      warning it now checks. Before that assertion was added, this mutant survived.
+    - The reducer not adopting `event.pair_scopes`: five tests.
+    - Dropping the execution-time pair-scope comparison: the refusal test.
+    - Dropping the 07a Enter gate: the gate test. The synchronous shell cannot observe this gate,
+      so only the unit test holds it.
+  - 2334 related tests pass (modules touching the consumer UI, views, actions or setup), with
+    ruff, ruff format, mypy and tach. `make mutants` was not run over `consumer_views.py`: the
+    module is large, and the targeted mutations above cover the slice's claims.
 
 ## Superseded work
 

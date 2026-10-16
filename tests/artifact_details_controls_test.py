@@ -24,8 +24,8 @@ from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     PresentationProfile,
+    matrix_columns,
     project_dashboard,
-    target_from_row,
 )
 from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.harness import Scope
@@ -198,6 +198,7 @@ class ArtifactDetailsControlTest(unittest.TestCase):
                 ENTER,
                 ord("i"),
                 SPACE,
+                ENTER,
                 ENTER,
                 ENTER,
             )
@@ -400,13 +401,8 @@ class DetailsAgreesWithReviewSelectionE2ETest(unittest.TestCase):
                 row, review, _terminal, _ = self._details_then_review(_skill(harnesses))
 
                 self.assertIs(review.session.screen, ConsumerScreen.REVIEW_SELECTION)
-                # Screen 05 also carries the installation-scope rows (issue #11a), which are a
-                # different question; the harnesses are the target rows.
-                offered = tuple(
-                    harness
-                    for harness in (target_from_row(item) for item in review.rows)
-                    if harness is not None
-                )
+                # §172.2: the harnesses are the columns of 05's matrix.
+                offered = matrix_columns(review.rows)
                 self.assertEqual(row.eligible_harnesses, offered)
                 self.assertTrue(set(expected) >= set(offered))
                 self.assertIn("claude", offered)

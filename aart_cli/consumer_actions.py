@@ -62,15 +62,20 @@ from aart_cli.application.consumer_views import (
     McpTestView,
     PythonInstallerChoiceView,
     RunningInstallationView,
+    default_pair_scopes,
     default_pairs,
     harness_choice_problems,
     offer_install_scopes,
     offer_python_installers,
     pair_choice_problems,
     pair_from_key,
+    pair_key,
+    pair_scope_from_key,
     pairs_harnesses,
     project_lifecycle_plan,
     project_running_installation,
+    scope_choice_offered,
+    scope_matrix_rows,
     target_choice_problems,
 )
 from aart_cli.application.credential_guidance import (
@@ -384,13 +389,25 @@ class _PendingInstall:
     targets: tuple[HarnessTargetView, ...] = ()
     chosen_targets: tuple[str, ...] = ()
     chosen_pairs: tuple[str, ...] = ()
+    chosen_pair_scopes: tuple[str, ...] = ()
 
 
-def _assignments(pairs: tuple[str, ...], scope: Scope) -> tuple[InstallationAssignment, ...]:
-    """Screen 05's ticked pairs as the installations they become, at this scope (§172.2)."""
+def _assignments(
+    pairs: tuple[str, ...], pair_scopes: tuple[str, ...], scope: Scope
+) -> tuple[InstallationAssignment, ...]:
+    """Screen 05's ticked pairs as the installations they become (§172.2).
 
+    Each pair goes to the scope 07a put it on (§172.5); one 07a has not reached yet goes to
+    `scope`, the scope the session prepares for.
+    """
+
+    chosen = dict(parsed for parsed in map(pair_scope_from_key, pair_scopes) if parsed is not None)
     return tuple(
-        InstallationAssignment(artifact, harness, scope)
+        InstallationAssignment(
+            artifact,
+            harness,
+            Scope(chosen.get(pair_key(artifact, harness), scope.value)),
+        )
         for artifact, harness in (
             parsed for parsed in map(pair_from_key, pairs) if parsed is not None
         )
@@ -417,17 +434,16 @@ def _per_artifact(views: tuple[InputView, ...], artifacts: dict[str, str]) -> tu
 
 
 def _after_inputs(plan: ConsumerPlanView) -> ConsumerScreen:
-    """Where a reviewed install goes once its form was submitted (D-380, §161.5).
+    """Where a reviewed install goes once its form was submitted (D-380, §161.5, §172.5).
 
-    05 again only while the plan still offers a real choice of scope or backend; otherwise the
-    next screen that asks anything, which is Remediation only when a decision is needed.
+    05 again only while the plan still offers a real choice of backend, then 07a while some pair
+    may go to more than one scope; otherwise Ready.
     """
 
-    if any(
-        choice is not None and choice.is_a_choice
-        for choice in (plan.scope_choice, plan.installer_choice)
-    ):
+    if plan.installer_choice is not None and plan.installer_choice.is_a_choice:
         return ConsumerScreen.REVIEW_SELECTION
+    if scope_choice_offered(plan.scope_offers):
+        return ConsumerScreen.INSTALL_SCOPE
     return ConsumerScreen.READY
 
 
@@ -833,6 +849,33 @@ class LocalConsumerActions:
             preferred=chosen or self._context.settings.default_scope,
         )
         return offered.value if isinstance(offered, Ok) else None
+
+    def _pair_scope_offers(self, pairs: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        """Which scopes each ticked pair may go to on this machine (§172.5).
+
+        A pair is offered what its artifact declares, less project when this session has no
+        project to install into. An artifact this composition holds no row for is offered nothing,
+        so 07a never claims a scope it cannot stand behind.
+        """
+
+        declared = {
+            entry.row.key: entry.row.declared_scopes for entry in self._context.offers.artifacts
+        }
+        project = bool(self._context.host.project_root)
+        offers: list[tuple[str, tuple[str, ...]]] = []
+        # Sorted, so 07a lists the installations in one order however 05 ticked them.
+        for pair in sorted(pairs):
+            parsed = pair_from_key(pair)
+            if parsed is None or parsed[0] not in declared:
+                continue
+            offered = tuple(
+                scope
+                for scope in ("project", "user")
+                if scope in declared[parsed[0]] and (project or scope != "project")
+            )
+            if offered:
+                offers.append((pair, offered))
+        return tuple(offers)
 
     def _reviewed_host(self) -> InstallationHost:
         """The machine the held review was prepared against, not the one preferences name now.
@@ -1771,6 +1814,14 @@ class LocalConsumerActions:
         # §172.2: until 05 is answered, an artifact only one harness can host has it ticked.
         pairs = command.pairs or (default_pairs(targets) if not command.targets else ())
         chosen_targets = command.targets or pairs_harnesses(pairs)
+        # §172.5: each pair starts on the Settings scope when it may go there and keeps what 07a
+        # chose for it; a pair no longer ticked has no scope to keep.
+        scope_offers = self._pair_scope_offers(pairs)
+        pair_scopes = default_pair_scopes(
+            scope_offers,
+            command.install_scope or context.settings.default_scope,
+            command.pair_scopes,
+        )
         if targets and not prepared.value.ready:
             # #50: configuration is per installation and an installation is a harness, so nothing
             # is asked until the harness is chosen. Before then the answer is the choice itself; a
@@ -1793,7 +1844,7 @@ class LocalConsumerActions:
                     ),
                 )
             host = replace(host, profiles=chosen_targets)
-            assignments = _assignments(pairs, host.scope)
+            assignments = _assignments(pairs, pair_scopes, host.scope)
             prepared = prepare_configured_installation(
                 context.effective,
                 selection,
@@ -1975,7 +2026,7 @@ class LocalConsumerActions:
                 chosen = chosen_targets
             if chosen:
                 reviewed_host = replace(host, profiles=chosen)
-                assignments = _assignments(pairs, host.scope)
+                assignments = _assignments(pairs, pair_scopes, host.scope)
                 narrowed = prepare_configured_installation(
                     context.effective,
                     selection,
@@ -2006,10 +2057,17 @@ class LocalConsumerActions:
                     installer_choice=plan.installer_choice,
                     chosen_targets=chosen,
                     chosen_pairs=pairs,
+                    scope_offers=scope_matrix_rows(scope_offers),
+                    chosen_pair_scopes=pair_scopes,
                 )
         self._pending_host = reviewed_host
         self._pending = _PendingInstall(
-            reviewed, previous_receipts, targets, chosen, pairs if chosen else ()
+            reviewed,
+            previous_receipts,
+            targets,
+            chosen,
+            pairs if chosen else (),
+            pair_scopes if chosen else (),
         )
         self._pending_action = command.action
         return ConsumerActionUpdate(
@@ -2018,6 +2076,7 @@ class LocalConsumerActions:
                 ConsumerUiEventKind.ACTION_PREPARED,
                 action=command.action,
                 pairs=pairs,
+                pair_scopes=pair_scopes,
                 semantic_identity=plan.semantic_identity,
                 selection_identity=plan.selection.semantic_identity,
                 review_digest=plan.review_digest,
@@ -2783,6 +2842,7 @@ class LocalConsumerActions:
         if command.action is ConsumerActionKind.INSTALL and (
             command.targets != pending.chosen_targets
             or set(command.pairs) != set(pending.chosen_pairs)
+            or set(command.pair_scopes) != set(pending.chosen_pair_scopes)
         ):
             return self._failed(
                 command,

@@ -204,6 +204,9 @@ class ConsumerScreen(str, Enum):
     REVIEW_SELECTION = "05-review-selection"
     AUTOMATIC_INSPECTION = "06-automatic-inspection"
     REQUIRED_INPUTS = "07-required-inputs"
+    # 07a puts each artifact×harness pair on one scope (§172.5). It follows the configuration form
+    # and appears only when some pair is offered more than one scope.
+    INSTALL_SCOPE = "07a-scope"
     READY = "09-ready"
     INSTALLING = "10-installing"
     SUCCESS = "11-success"
@@ -296,24 +299,8 @@ class HarnessTargetView:
             raise ValueError("a harness target view is invalid")
 
 
-#: How screen 05 addresses one install-scope row, in the same shape as a harness row so the list
+#: How screen 05 addresses one Python-backend row, in the same shape as a harness row so the list
 #: has one kind of control rather than a control and a special case.
-SCOPE_ROW_PREFIX = "scope:"
-
-
-def scope_row(scope: str) -> str:
-    return f"{SCOPE_ROW_PREFIX}{scope}"
-
-
-def scope_from_row(row: str) -> str | None:
-    if not isinstance(row, str) or not row.startswith(SCOPE_ROW_PREFIX):
-        return None
-    scope = row[len(SCOPE_ROW_PREFIX) :]
-    return scope if scope in ("project", "user") else None
-
-
-#: How screen 05 addresses one Python-backend row. A separate prefix from `scope:` because the two
-#: questions are answered separately and a shared prefix would make one keystroke ambiguous.
 INSTALLER_ROW_PREFIX = "installer:"
 
 
@@ -529,6 +516,127 @@ def pair_choice_problems(
             options = ", ".join(item.harness for item in targets if artifact in item.artifacts)
             problems.append(f"Choose a harness for {artifact}; it can go into {options}.")
     return tuple(problems)
+
+
+#: How screen 07a addresses one row: `scopes:<pair_key>\t<scope,…>`, the scopes that pair may go to.
+SCOPE_MATRIX_PREFIX = "scopes:"
+#: The pair of 07a's "All installations" row, offered only when there is more than one pair.
+ALL_INSTALLATIONS = "*"
+_SCOPE_ORDER = ("project", "user")
+
+
+def pair_scope_key(pair: str, scope: str) -> str:
+    """One pair's chosen scope, as 07a holds it: the pair key, a tab, the scope."""
+
+    return f"{pair}\t{scope}"
+
+
+def pair_scope_from_key(key: str) -> tuple[str, str] | None:
+    pair, separator, scope = key.rpartition("\t") if isinstance(key, str) else ("", "", "")
+    if not separator or scope not in _SCOPE_ORDER or pair_from_key(pair) is None:
+        return None
+    return pair, scope
+
+
+def scope_matrix_rows(offers: tuple[tuple[str, tuple[str, ...]], ...]) -> tuple[str, ...]:
+    """07a's rows (§172.5): "All installations" when there are several pairs, then one per pair."""
+
+    rows = tuple(
+        f"{SCOPE_MATRIX_PREFIX}{pair}\t{','.join(scopes)}" for pair, scopes in offers if scopes
+    )
+    if len(rows) > 1:
+        offered = tuple(
+            scope for scope in _SCOPE_ORDER if any(scope in scopes for _, scopes in offers)
+        )
+        rows = (f"{SCOPE_MATRIX_PREFIX}{ALL_INSTALLATIONS}\t{','.join(offered)}", *rows)
+    return rows
+
+
+def scope_matrix_from_row(row: str) -> tuple[str, tuple[str, ...]] | None:
+    if not isinstance(row, str) or not row.startswith(SCOPE_MATRIX_PREFIX):
+        return None
+    pair, separator, offered = row[len(SCOPE_MATRIX_PREFIX) :].rpartition("\t")
+    scopes = tuple(item for item in offered.split(",") if item)
+    if (
+        not separator
+        or not scopes
+        or any(item not in _SCOPE_ORDER for item in scopes)
+        or (pair != ALL_INSTALLATIONS and pair_from_key(pair) is None)
+    ):
+        return None
+    return pair, scopes
+
+
+def scope_matrix_columns(rows: tuple[str, ...]) -> tuple[str, ...]:
+    offered = {
+        scope for parsed in map(scope_matrix_from_row, rows) if parsed for scope in parsed[1]
+    }
+    return tuple(scope for scope in _SCOPE_ORDER if scope in offered)
+
+
+def choose_pair_scope(
+    rows: tuple[str, ...], chosen: tuple[str, ...], row: str, scope: str
+) -> tuple[str, ...]:
+    """Put one pair on `scope`, or with the All row every pair that may go there (§172.5).
+
+    Each pair has exactly one scope, so choosing one moves the pair rather than adding to it. A
+    scope a pair is not offered changes nothing for that pair.
+    """
+
+    parsed = scope_matrix_from_row(row)
+    if parsed is None:
+        return chosen
+    pair, _offered = parsed
+    moved = {
+        item[0]
+        for item in map(scope_matrix_from_row, rows)
+        if item is not None
+        and item[0] != ALL_INSTALLATIONS
+        and (pair in (ALL_INSTALLATIONS, item[0]))
+        and scope in item[1]
+    }
+    if not moved:
+        return chosen
+    kept = tuple(key for key in chosen if (pair_scope_from_key(key) or ("", ""))[0] not in moved)
+    order = [
+        item[0]
+        for item in map(scope_matrix_from_row, rows)
+        if item is not None and item[0] in moved
+    ]
+    return (*kept, *(pair_scope_key(item, scope) for item in order))
+
+
+def default_pair_scopes(
+    offers: tuple[tuple[str, tuple[str, ...]], ...],
+    preferred: str,
+    chosen: tuple[str, ...] = (),
+) -> tuple[str, ...]:
+    """Each pair's scope: what was chosen for it, else the Settings default, else what it offers.
+
+    §172.5: a pair starts on the Settings default when that is offered, and on the only offered
+    scope otherwise. A choice for a pair no longer offered, or for a scope it no longer offers, is
+    dropped rather than carried.
+    """
+
+    held = dict(item for item in map(pair_scope_from_key, chosen) if item is not None)
+    scopes: list[str] = []
+    for pair, offered in offers:
+        if not offered:
+            continue
+        scope = held.get(pair)
+        if scope not in offered:
+            scope = preferred if preferred in offered else offered[0]
+        scopes.append(pair_scope_key(pair, scope))
+    return tuple(scopes)
+
+
+def scope_choice_offered(rows: tuple[str, ...]) -> bool:
+    """Whether 07a has anything to ask: some pair may go to more than one scope."""
+
+    return any(
+        parsed is not None and parsed[0] != ALL_INSTALLATIONS and len(parsed[1]) > 1
+        for parsed in map(scope_matrix_from_row, rows)
+    )
 
 
 def pairs_confirmed(view: ConsumerPlanView, pairs: tuple[str, ...]) -> bool:
@@ -862,6 +970,10 @@ class ConsumerPlanView:
     chosen_targets: tuple[str, ...] = ()
     #: The artifact×harness pairs this plan was prepared for (§172.2), as `pair_key` strings.
     chosen_pairs: tuple[str, ...] = ()
+    #: 07a's rows: each prepared pair and the scopes it may go to (§172.5), `scope_matrix_rows`.
+    scope_offers: tuple[str, ...] = ()
+    #: The scope each pair was prepared for, as `pair_scope_key` strings.
+    chosen_pair_scopes: tuple[str, ...] = ()
     #: Which install scopes this selection may go to and which one it is going to, or `None` for a
     #: plan whose scope is not the operator's to choose (an update keeps where it already is).
     #: Screen 05 draws it only when there is something to decide (issue #11a, D-295).
@@ -1053,6 +1165,7 @@ def consumer_plan_to_data(view: ConsumerPlanView) -> dict[str, object]:
         ],
         "chosen_targets": list(view.chosen_targets),
         "chosen_pairs": list(view.chosen_pairs),
+        "chosen_pair_scopes": list(view.chosen_pair_scopes),
     }
 
 
@@ -1077,6 +1190,8 @@ def install_flow_screens(view: ConsumerPlanView) -> tuple[ConsumerScreen, ...]:
     screens = [ConsumerScreen.REVIEW_SELECTION]
     if view.inputs:
         screens.append(ConsumerScreen.REQUIRED_INPUTS)
+    if scope_choice_offered(view.scope_offers):
+        screens.append(ConsumerScreen.INSTALL_SCOPE)
     screens.extend((ConsumerScreen.READY, ConsumerScreen.INSTALLING, ConsumerScreen.SUCCESS))
     return tuple(screens)
 
@@ -2271,13 +2386,16 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.REVIEW_SELECTION: (
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.REQUIRED_INPUTS,
+        ConsumerScreen.INSTALL_SCOPE,
         ConsumerScreen.READY,
     ),
     ConsumerScreen.AUTOMATIC_INSPECTION: (
         ConsumerScreen.REQUIRED_INPUTS,
+        ConsumerScreen.INSTALL_SCOPE,
         ConsumerScreen.READY,
     ),
-    ConsumerScreen.REQUIRED_INPUTS: (ConsumerScreen.READY,),
+    ConsumerScreen.REQUIRED_INPUTS: (ConsumerScreen.INSTALL_SCOPE, ConsumerScreen.READY),
+    ConsumerScreen.INSTALL_SCOPE: (ConsumerScreen.READY,),
     ConsumerScreen.READY: (ConsumerScreen.INSTALLING,),
     ConsumerScreen.INSTALLING: (ConsumerScreen.SUCCESS,),
     ConsumerScreen.SUCCESS: (

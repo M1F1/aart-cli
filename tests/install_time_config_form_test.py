@@ -615,8 +615,9 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 ENTER,
                 value,
                 ENTER,
-                # Submit. The plan still offers a choice of scope, so 05 shows only that (D-380);
-                # Continue goes on to Ready (which holds Remediation's changes since D-403).
+                # Submit. The plan still offers a choice of backend, so 05 shows only that (D-380);
+                # then 07a the scope, then Ready (which holds Remediation's changes since D-403).
+                ENTER,
                 ENTER,
                 ENTER,
                 ENTER,
@@ -689,6 +690,7 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 # so it is cleared first; Set later is the row above it.
                 *((BACKSPACE,) * len("acme")),
                 UP,
+                ENTER,
                 ENTER,
                 ENTER,
                 ENTER,

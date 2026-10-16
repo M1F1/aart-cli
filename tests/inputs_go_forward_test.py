@@ -90,8 +90,9 @@ class TheFormGoesForwardE2ETest(unittest.TestCase):
                 ENTER,
                 value,
                 ENTER,
-                # Submit the form. The plan offers a choice of scope, which 05 still asks until
-                # 07a does (CP-30 step 7); Continue, then confirm Ready. Nothing else.
+                # Submit the form. The plan offers a choice of Python backend, which 05 asks, then
+                # 07a the scope; Continue on each, then confirm Ready. Nothing else.
+                ENTER,
                 ENTER,
                 ENTER,
                 ENTER,
@@ -103,10 +104,13 @@ class TheFormGoesForwardE2ETest(unittest.TestCase):
             first_form = next(i for i, text in enumerate(frames) if "/ Required Inputs" in text)
             after = frames[first_form:]
             self.assertTrue(after)
-            # D-380: 05 after the form is the scope alone; the harness matrix is not drawn again.
+            # D-380: 05 after the form is the backend alone; the harness matrix is not drawn again,
+            # and the scope is asked on 07a only (§172.5).
+            self.assertTrue(any("/ Scope" in text for text in after))
             for text in after:
                 self.assertNotRegex(text, r"claude +opencode +tabnine")
                 self.assertNotIn("company/mcp/github  ", text)
+                self.assertNotIn("Install into:", text)
 
 
 class TheReducerFollowsTheAdapterForwardTest(unittest.TestCase):

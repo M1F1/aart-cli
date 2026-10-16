@@ -36,6 +36,7 @@ from aart_cli.application.consumer_ui import (
 )
 from aart_cli.application.consumer_views import (
     ALL_ARTIFACTS,
+    ALL_INSTALLATIONS,
     SETTING_PURPOSE,
     SETTING_ROWS,
     SUCCESS_CHOICES,
@@ -75,11 +76,13 @@ from aart_cli.application.consumer_views import (
     pair_choice_problems,
     pair_from_key,
     pair_key,
+    pair_scope_key,
     pairs_confirmed,
     project_collection,
     project_registries,
-    scope_from_row,
-    scope_row,
+    scope_choice_offered,
+    scope_matrix_columns,
+    scope_matrix_from_row,
     target_from_row,
     target_row,
 )
@@ -2107,6 +2110,25 @@ _FIRST_RUN_LINES: tuple[str, ...] = (
 _TITLES: dict[ApplicationScreen, str] = {ConsumerScreen.MCP_TEST: "Test MCP Installations"}
 
 
+def _after_configuration(plan: ConsumerPlanView) -> ConsumerScreen:
+    """07a once configuration is settled, while some pair may go to two scopes; else Ready."""
+
+    return (
+        ConsumerScreen.INSTALL_SCOPE
+        if scope_choice_offered(plan.scope_offers)
+        else ConsumerScreen.READY
+    )
+
+
+def _pair_label(pair: str) -> str:
+    """A 07a row's name: the artifact as 05 names it, then the harness it goes into."""
+
+    parsed = pair_from_key(pair)
+    if parsed is None:
+        return pair
+    return f"{_matrix_label(parsed[0])} → {parsed[1]}"
+
+
 def _title(screen: ApplicationScreen) -> str:
     return _TITLES.get(screen) or _human(screen.value.split("-", 1)[1]).title()
 
@@ -3016,6 +3038,7 @@ _PLAN_SCREENS = frozenset(
         ConsumerScreen.REVIEW_SELECTION,
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.REQUIRED_INPUTS,
+        ConsumerScreen.INSTALL_SCOPE,
         ConsumerScreen.READY,
         ConsumerScreen.UPDATE_INPUTS,
     }
@@ -3169,19 +3192,8 @@ class CanonicalScreenSource:
                 # #50: no plan yet because inputs are unanswered, so the harness is the only
                 # thing to decide here; scope and backend are amendments to a plan.
                 return matrix
-            # Scope follows the harnesses rather than leading them. Row order is cursor order on
-            # this screen, and this screen's act is choosing what to install into; putting the
-            # scope first would move the first keypress of every existing install onto a different
-            # control. It is drawn only when there is something to decide -- a selection with one
-            # possible scope has a fact to state, not a control to offer (issue #11a).
-            scopes = (
-                tuple(scope_row(item) for item in plan.scope_choice.offered)
-                if plan.scope_choice is not None and plan.scope_choice.is_a_choice
-                else ()
-            )
-            # The backend rows sit after the scope rows for the same reason the scope rows sit
-            # after the harnesses: each is an amendment to a plan that already exists, and the
-            # cursor opens on the screen's own subject.
+            # The scope is 07a's, one per pair (§172.5). The backend rows sit after the harnesses:
+            # they amend a plan that already exists, and the cursor opens on the screen's subject.
             installers = (
                 tuple(installer_row(item) for item in plan.installer_choice.offered)
                 if plan.installer_choice is not None and plan.installer_choice.is_a_choice
@@ -3189,8 +3201,11 @@ class CanonicalScreenSource:
             )
             if state.inputs_submitted:
                 # D-380: the answers were given for these harnesses; what is left is the choice.
-                return (*scopes, *installers)
-            return (*matrix, *scopes, *installers)
+                return installers
+            return (*matrix, *installers)
+        if screen is ConsumerScreen.INSTALL_SCOPE:
+            plan = self._screens.plan
+            return () if plan is None else plan.scope_offers
         if screen is ConsumerScreen.CREDENTIAL_ACTION:
             # CP-23 task 12: the actions the record permits are the rows (D-262).
             record = self._screens.credential(state.focus)
@@ -3586,16 +3601,26 @@ class CanonicalScreenSource:
             # Once the form was submitted its answers are in the plan, so 07 is not asked again.
             if plan.inputs and not state.inputs_submitted:
                 return ConsumerScreen.REQUIRED_INPUTS
-            return ConsumerScreen.READY
+            return _after_configuration(plan)
         if screen is ConsumerScreen.AUTOMATIC_INSPECTION:
             plan = self._screens.plan
             if plan is None:
                 return None
             if plan.inputs:
                 return ConsumerScreen.REQUIRED_INPUTS
-            return ConsumerScreen.READY
+            return _after_configuration(plan)
         if screen is ConsumerScreen.REQUIRED_INPUTS:
-            return None if self._screens.plan is None else ConsumerScreen.READY
+            plan = self._screens.plan
+            return None if plan is None else _after_configuration(plan)
+        if screen is ConsumerScreen.INSTALL_SCOPE:
+            # Ready reviews the plan prepared for these scopes; a choice still being re-prepared
+            # is not that plan yet.
+            plan = self._screens.plan
+            return (
+                ConsumerScreen.READY
+                if plan is not None and set(state.pair_scopes) == set(plan.chosen_pair_scopes)
+                else None
+            )
         if screen is ConsumerScreen.USER_INPUT_DETAILS:
             return (
                 ConsumerScreen.CONFIGURATION_TARGETS
@@ -3749,6 +3774,8 @@ class CanonicalScreenSource:
             matrix_from_row(state.current_row) is not None
         ):
             return self._matrix_purpose(state)
+        if state.session.screen is ConsumerScreen.INSTALL_SCOPE:
+            return self._scope_matrix_purpose(state)
         if state.session.screen is ConsumerScreen.REVIEW_SELECTION:
             harness = target_from_row(state.current_row)
             if harness is None or not self._offered_targets():
@@ -3982,6 +4009,9 @@ class CanonicalScreenSource:
             record = screens.credential(state.focus)
             assert record is not None
             return render_credential_action(record, state.session.profile)
+        if screen is ConsumerScreen.INSTALL_SCOPE and self.rows(state):
+            # §172.5: Project is this checkout, User is the home; (*) is where each one goes.
+            return ("Each installation goes into the scope marked (*).",)
         if (
             screen is ConsumerScreen.REVIEW_SELECTION
             and screens.plan is None
@@ -4061,6 +4091,74 @@ class CanonicalScreenSource:
         ticked = pair_key(artifact, harness) in state.pairs
         return (f"{_matrix_label(artifact)} {'goes' if ticked else 'does not go'} into {harness}.",)
 
+    def _scope_matrix_purpose(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """What Space does at 07a's cursor: put a pair, or every pair, on that scope."""
+
+        parsed = scope_matrix_from_row(state.current_row)
+        columns = scope_matrix_columns(state.rows)
+        if parsed is None or not columns:
+            return ()
+        pair, scopes = parsed
+        scope = columns[min(state.harness_column, len(columns) - 1)]
+        if pair == ALL_INSTALLATIONS:
+            return (f"Space puts every installation that may go there into {scope} scope.",)
+        label = _pair_label(pair)
+        if scope not in scopes:
+            return (f"{label} cannot go into {scope} scope.",)
+        held = pair_scope_key(pair, scope) in state.pair_scopes
+        return (f"{label} {'goes' if held else 'does not go'} into {scope} scope.",)
+
+    def _scope_matrix_lines(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """Screen 07a: a header of scopes, then one line per artifact×harness pair (§172.5).
+
+        A pair sits on one scope, so its cells are radios. The All row shows `(*)` when every pair
+        that may go to a scope is there, `(~)` when only some are.
+        """
+
+        rows = tuple(row for row in state.rows if scope_matrix_from_row(row) is not None)
+        columns = scope_matrix_columns(rows)
+        if not columns:
+            return ()
+        active = min(state.harness_column, len(columns) - 1)
+        parsed = [item for item in map(scope_matrix_from_row, rows) if item is not None]
+        labels = [
+            "All installations" if pair == ALL_INSTALLATIONS else _pair_label(pair)
+            for pair, _ in parsed
+        ]
+        width = max(len(label) for label in labels)
+        titles = [scope.title() for scope in columns]
+        widths = [max(len(title), 3) for title in titles]
+        header = (
+            "  "
+            + " " * width
+            + "".join(
+                "  " + " " + title.ljust(size) for title, size in zip(titles, widths, strict=True)
+            )
+        )
+        lines = [header.rstrip()]
+        for row, (pair, scopes), label in zip(rows, parsed, labels, strict=True):
+            here = row == state.current_row
+            cells = []
+            for index, (scope, size) in enumerate(zip(columns, widths, strict=True)):
+                if pair == ALL_INSTALLATIONS:
+                    eligible = [
+                        pair_scope_key(other, scope)
+                        for other, offered in parsed
+                        if other != ALL_INSTALLATIONS and scope in offered
+                    ]
+                    held = sum(key in state.pair_scopes for key in eligible)
+                    cell = "(*)" if eligible and held == len(eligible) else "(~)" if held else "( )"
+                elif scope not in scopes:
+                    cell = " – "
+                else:
+                    cell = "(*)" if pair_scope_key(pair, scope) in state.pair_scopes else "( )"
+                marker = ">" if here and index == active else " "
+                cells.append("  " + marker + cell.ljust(size))
+            lines.append(f"{'>' if here else ' '} {label.ljust(width)}{''.join(cells)}".rstrip())
+            if pair == ALL_INSTALLATIONS:
+                lines.append("")
+        return tuple(lines)
+
     def _matrix_lines(self, state: ConsumerUiState) -> tuple[str, ...]:
         """Screen 05's matrix: a header of harnesses, then one line per artifact (§172.2).
 
@@ -4125,14 +4223,6 @@ class CanonicalScreenSource:
 
         cursor = ">" if row == state.current_row else " "
         plan = self._screens.plan
-        scope = scope_from_row(row)
-        if scope is not None:
-            selected = (
-                plan.scope_choice.selected
-                if plan is not None and plan.scope_choice is not None
-                else state.install_scope
-            )
-            return f"{cursor} {'(*)' if scope == selected else '( )'} Install into: {scope.title()}"
         installer = installer_from_row(row)
         if installer is not None:
             chosen = (
@@ -4158,6 +4248,8 @@ class CanonicalScreenSource:
                     if matrix_from_row(row) is None
                 ),
             )
+        if screen is ConsumerScreen.INSTALL_SCOPE and self.rows(state):
+            return self._scope_matrix_lines(state)
         if screen is ConsumerScreen.CONFIGURATION_TARGETS:
             return tuple(
                 f"{'>' if row == state.current_row else ' '} "

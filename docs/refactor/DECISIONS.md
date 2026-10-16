@@ -10451,3 +10451,28 @@ and replaces every other value with `AART_NOT_SET`. The form then submits as usu
   who starts typing is in a field. Enter on Set later is labelled "Set later" in the legend.
 - **What is grouped.** A field is keyed by Registry alias and artifact (`artifact_answer_key`),
   so a local and a remote alias are two groups. Secret rows stay per installation until 07b.
+
+## D-418 — 07a puts each pair on one scope, and the setup report reads each receipt's own (CP-30 step 7)
+
+07a, titled "Scope", is a radio matrix: one row per artifact×harness pair, one column per scope.
+- **When it appears.** Only when some pair may go to two scopes: what its artifact declares, less
+  project when the session has no project. A pair offered one scope has a fact, not a choice.
+- **Where it sits.** After 07, or after 05 when nothing is asked. A plan with a Python-backend
+  choice still returns to 05 for that after the form (D-380), then goes on to 07a. 05 no longer
+  draws the "Install into" radio; the scope rows and `scope_row`/`scope_from_row` are gone.
+- **The starting scope.** Each pair starts on the Settings scope when it is offered, otherwise on
+  its only scope. A choice is kept across re-preparations while the pair and that scope are still
+  offered, and dropped when they are not (`default_pair_scopes`).
+- **The All installations row.** Shown only with more than one pair. Space on it moves every pair
+  that may go to that scope; a pair that may not stays where it is. Its cell reads `(*)` when every
+  eligible pair is there and `(~)` when only some are.
+- **Review integrity.** Choosing a scope re-prepares the plan. Enter goes on to Ready only once
+  the plan's `chosen_pair_scopes` equal the screen's, and execution refuses a confirmation whose
+  pair scopes differ from the reviewed ones.
+- **Rows.** `scopes:<pair>\t<project,user>`, sorted by pair key, so the order does not depend on
+  the order of the ticks on 05.
+- **Setup report.** The post-install setup projection used the session's single scope for every
+  receipt. A user-scope receipt was then measured against the project root and raised. It now
+  reads each receipt's owner scope (`_receipt_scope`). A setup request matches only a receipt at
+  its own scope, and each review item carries its installation's scope.
+

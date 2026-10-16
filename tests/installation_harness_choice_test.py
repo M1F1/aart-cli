@@ -291,6 +291,7 @@ class ChosenHarnessDeliveryE2ETest(unittest.TestCase):
             SPACE,
             ENTER,
             ENTER,
+            ENTER,
         )
         self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
         stored = LocalReceiptStore(str(env.paths.data_root) + "/state").installations()
@@ -327,6 +328,7 @@ class ChosenHarnessDeliveryE2ETest(unittest.TestCase):
                 SPACE,
                 RIGHT,
                 SPACE,
+                ENTER,
                 ENTER,
                 ENTER,
             )

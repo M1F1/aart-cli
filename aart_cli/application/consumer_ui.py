@@ -28,6 +28,7 @@ from .consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
+    choose_pair_scope,
     installer_from_row,
     is_screen_identifier,
     keeps_focus,
@@ -35,7 +36,8 @@ from .consumer_views import (
     matrix_from_row,
     navigation_targets,
     pairs_harnesses,
-    scope_from_row,
+    scope_matrix_columns,
+    scope_matrix_from_row,
     target_from_row,
     toggle_matrix_cell,
 )
@@ -437,11 +439,14 @@ class ConsumerUiEvent:
     registry_commit_subject: str = ""
     #: The artifact×harness pairs an install was prepared for, which 05 adopts while it has none.
     pairs: tuple[str, ...] = ()
+    #: The scope each of those pairs was prepared for, which 07a then shows as chosen.
+    pair_scopes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiEventKind)
             or not _rows_valid(self.pairs)
+            or not _rows_valid(self.pair_scopes)
             or (
                 self.screen is not None
                 and not isinstance(self.screen, (ConsumerScreen, MaintainerScreen))
@@ -482,6 +487,8 @@ class ConsumerUiCommand:
     #: The artifact×harness pairs ticked on screen 05's matrix (§172.2), as `pair_key` strings.
     #: `targets` stays the harnesses they go into, so a plan is still prepared for those hosts.
     pairs: tuple[str, ...] = ()
+    #: The scope chosen for each pair on screen 07a (§172.5), as `pair_scope_key` strings.
+    pair_scopes: tuple[str, ...] = ()
     config_answers: tuple[tuple[str, str], ...] = ()
     #: The scope this one installation chose, or empty to follow the stored preference. It travels
     #: on the command rather than being read from Settings at the boundary, so what was reviewed is
@@ -509,6 +516,7 @@ class ConsumerUiCommand:
             or not _rows_valid(self.selection)
             or not _rows_valid(self.targets)
             or not _rows_valid(self.pairs)
+            or not _rows_valid(self.pair_scopes)
             or not _config_answers_valid(self.config_answers)
             or not isinstance(self.focus, str)
             or any(character in self.focus for character in "\r\n")
@@ -570,6 +578,8 @@ _SELECTABLE = frozenset(
         ConsumerScreen.INSTALLED,
         ConsumerScreen.UPDATES,
         ConsumerScreen.REVIEW_SELECTION,
+        # 07a's rows are pairs, each put on one scope rather than ticked into the selection.
+        ConsumerScreen.INSTALL_SCOPE,
         ConsumerScreen.CONFIGURATION_TARGETS,
         # Screen 47 assembles one registry transaction, so selecting rows is what it is for.
         MaintainerScreen.BULK_PROMOTION,
@@ -677,6 +687,7 @@ class ConsumerUiState:
     #: The artifact×harness pairs ticked on the matrix, and which harness column the cursor is on
     #: (§172.2). `targets` follows the pairs: it is the harnesses some pair goes into.
     pairs: tuple[str, ...] = ()
+    pair_scopes: tuple[str, ...] = ()
     harness_column: int = 0
     #: Non-secret text lives only in this session until it is reviewed and written beside the
     #: artifact. ``config_form_active`` distinguishes the pre-review form from screen 07's later
@@ -717,6 +728,7 @@ class ConsumerUiState:
             or not _rows_valid(self.selection)
             or not _rows_valid(self.targets)
             or not _rows_valid(self.pairs)
+            or not _rows_valid(self.pair_scopes)
             or not isinstance(self.harness_column, int)
             or isinstance(self.harness_column, bool)
             or self.harness_column < 0
@@ -1150,7 +1162,7 @@ def _move(
 def _move_column(
     state: ConsumerUiState, direction: str
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
-    columns = matrix_columns(state.rows)
+    columns = matrix_columns(state.rows) or scope_matrix_columns(state.rows)
     if not columns or direction not in ("left", "right"):
         return state, ()
     step = -1 if direction == "left" else 1
@@ -1178,33 +1190,36 @@ def _toggle_selection(
             else (*state.configuration_targets, harness)
         )
         return replace(state, configuration_targets=targets, quit_pending=False), ()
+    if state.session.screen is ConsumerScreen.INSTALL_SCOPE:
+        columns = scope_matrix_columns(state.rows)
+        if scope_matrix_from_row(key) is None or not columns:
+            return state, ()
+        column = columns[min(state.harness_column, len(columns) - 1)]
+        pair_scopes = choose_pair_scope(state.rows, state.pair_scopes, key, column)
+        if pair_scopes == state.pair_scopes:
+            return state, ()
+        # A scope is where the files land, so choosing one re-prepares the reviewed plan (§172.5).
+        chosen = replace(state, pair_scopes=pair_scopes, quit_pending=False)
+        return chosen, (
+            ConsumerUiCommand(
+                ConsumerUiCommandKind.PREPARE_ACTION,
+                action=ConsumerActionKind.INSTALL,
+                selection=state.selection,
+                targets=state.targets,
+                pairs=state.pairs,
+                pair_scopes=pair_scopes,
+                focus=state.focus,
+                config_answers=state.config_draft.answers,
+                install_scope=state.install_scope,
+                python_installer=state.python_installer,
+            ),
+        )
     if state.session.screen is ConsumerScreen.REVIEW_SELECTION:
-        scope = scope_from_row(key)
-        if scope is not None:
-            # Changing the scope re-prepares: review, paths, effects and receipt all have to name
-            # the scope that was chosen, and a plan kept from the previous one would be a review of
-            # somewhere else (issue #11a).  The stored preference is untouched.
-            chosen_scope = replace(state, install_scope=scope, quit_pending=False)
-            if state.action is not ConsumerActionKind.INSTALL:
-                return chosen_scope, ()
-            return chosen_scope, (
-                ConsumerUiCommand(
-                    ConsumerUiCommandKind.PREPARE_ACTION,
-                    action=ConsumerActionKind.INSTALL,
-                    selection=state.selection,
-                    targets=state.targets,
-                    pairs=state.pairs,
-                    focus=state.focus,
-                    config_answers=state.config_draft.answers,
-                    install_scope=scope,
-                    python_installer=state.python_installer,
-                ),
-            )
         installer = installer_from_row(key)
         if installer is not None:
-            # The same reasoning as the scope: the plan records which backend will resolve the
-            # dependencies, so choosing another one is a different plan to review, not the same
-            # plan relabelled (issue #11b). Settings keep saying what they said.
+            # The plan records which backend will resolve the dependencies, so choosing another one
+            # is a different plan to review, not the same plan relabelled (issue #11b). Settings
+            # keep saying what they said.
             chosen_installer = replace(state, python_installer=installer, quit_pending=False)
             if state.action is not ConsumerActionKind.INSTALL:
                 return chosen_installer, ()
@@ -1215,6 +1230,7 @@ def _toggle_selection(
                     selection=state.selection,
                     targets=state.targets,
                     pairs=state.pairs,
+                    pair_scopes=state.pair_scopes,
                     focus=state.focus,
                     config_answers=state.config_draft.answers,
                     install_scope=state.install_scope,
@@ -1252,6 +1268,7 @@ def _toggle_selection(
                 selection=state.selection,
                 targets=targets,
                 pairs=updated.pairs,
+                pair_scopes=updated.pair_scopes,
                 focus=request_focus,
                 config_answers=state.config_draft.answers,
                 install_scope=state.install_scope,
@@ -1459,6 +1476,7 @@ def _request_action(
             selection=state.selection,
             targets=state.targets,
             pairs=state.pairs,
+            pair_scopes=state.pair_scopes,
             focus=state.focus,
             config_answers=state.config_draft.answers,
             install_scope=(state.install_scope if action is ConsumerActionKind.INSTALL else ""),
@@ -1557,6 +1575,7 @@ def _request_action(
             else ()
         ),
         pairs=state.pairs if action is ConsumerActionKind.INSTALL else (),
+        pair_scopes=state.pair_scopes if action is ConsumerActionKind.INSTALL else (),
         focus=focus,
         promotion_mode=(
             state.promotion_mode
@@ -1634,6 +1653,10 @@ def _action_prepared(
         # §172.2: what the preparation ticked by default is ticked on screen too, so the plan
         # and the matrix agree and Continue can go on without a keypress that changes nothing.
         state = replace(state, pairs=event.pairs, targets=pairs_harnesses(event.pairs))
+    if action is ConsumerActionKind.INSTALL and event.pair_scopes:
+        # §172.5: the adapter merged what 07a chose with each pair's starting scope; that merge is
+        # what the plan was prepared for, so it is what 07a shows.
+        state = replace(state, pair_scopes=event.pair_scopes)
     if action is ConsumerActionKind.INSTALL and event.config_draft is not None:
         if state.session.screen is not ConsumerScreen.REVIEW_SELECTION:
             return state, ()
@@ -1764,6 +1787,7 @@ def _confirm_action(
             else ()
         ),
         pairs=state.pairs if action is ConsumerActionKind.INSTALL else (),
+        pair_scopes=state.pair_scopes if action is ConsumerActionKind.INSTALL else (),
         focus=state.focus,
         review_digest=review_digest,
         config_answers=(
@@ -1926,6 +1950,7 @@ def _action_recorded(
         selection=(),
         targets=(),
         pairs=(),
+        pair_scopes=(),
         harness_column=0,
         config_draft=InstallationConfigDraft(),
         config_form_active=False,
@@ -2547,6 +2572,8 @@ def key_bindings(
     else:
         if matrix_columns(state.rows) and " " not in keys:
             bindings.extend((KeyBinding("Space", "Tick"), KeyBinding("←/→", "Harness")))
+        elif scope_matrix_columns(state.rows) and " " not in keys:
+            bindings.extend((KeyBinding("Space", "Choose"), KeyBinding("←/→", "Scope")))
         elif state.session.screen in _SELECTABLE and " " not in keys:
             label = (
                 "Deselect"
@@ -2570,7 +2597,10 @@ def key_bindings(
         elif state.session.screen in _CONFIRM_SCREENS and "enter" not in keys:
             label = "Continue" if state.action is None else "Confirm"
             bindings.append(KeyBinding("Enter", label))
-        elif state.session.screen is ConsumerScreen.REVIEW_SELECTION and "enter" not in keys:
+        elif (
+            state.session.screen in (ConsumerScreen.REVIEW_SELECTION, ConsumerScreen.INSTALL_SCOPE)
+            and "enter" not in keys
+        ):
             # D-270 (revising D-260's "always advertises"): Enter is offered once the prepared
             # plan matches the chosen harnesses, because only then does it advance; while the
             # choice is incomplete the status says what is missing instead of a key doing nothing.
@@ -2934,7 +2964,9 @@ def key_event(
             if not row
             else ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_CANDIDATE_FILTER, key=row)
         )
-    if key in ("left", "right") and matrix_columns(state.rows):
+    if key in ("left", "right") and (
+        matrix_columns(state.rows) or scope_matrix_columns(state.rows)
+    ):
         return ConsumerUiEvent(ConsumerUiEventKind.MOVE_COLUMN, text=key)
     if key == " ":
         selected = (
