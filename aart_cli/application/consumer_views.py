@@ -978,7 +978,8 @@ class InstallSecretView:
     #: `<alias>/<kind>/<name>\t<input>`, the same key 07 gives an artifact's ordinary input.
     row: str
     label: str
-    #: Every installation of this artifact already holds this secret: "Configured securely".
+    #: Every installation of this artifact already holds a stored value, so 07b says it is
+    #: configured securely.
     configured: bool = False
 
     def __post_init__(self) -> None:
