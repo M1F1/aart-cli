@@ -1,5 +1,17 @@
 # AART Refactor — Next Work
 
+## Where the work is (2026-10-16, after 0.9.0)
+
+**CP-30 is released as 0.9.0** (#69, which also carried #66–#68). Next:
+- **CP-31** (not yet in `plan.json`): rename the promotion modes (#54), then remove the vendor
+  command family (#53, closes #41).
+- **CP-32**, owner request: collection authoring. Today `author init` has no `collection` kind and
+  `author check` skips a collection manifest ("not an artifact manifest: `registry scan` compiles
+  artifacts only"), although Sync compiles collections through `parse_author_collection_manifest`
+  (`aart_cli/protocol/authoring.py`). An owner's collection in an Enterprise source repo was not
+  detected, most likely named other than `aart-cli.json`/`aart-cli.yaml`; nothing told them. Steps
+  are in `plan.json`.
+
 ## Where the work is (2026-10-16)
 
 **CP-29 is merged and released as 0.8.0. The active work is CP-30, the per-artifact install flow:

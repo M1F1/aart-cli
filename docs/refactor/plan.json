@@ -1065,6 +1065,38 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-32",
+      "title": "Collection authoring: a template from author init and a real verdict from author check",
+      "status": "todo",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Specify collection authoring tools: author init --kind collection and author check through the Sync collection parser",
+          "status": "todo"
+        },
+        {
+          "id": "2",
+          "title": "author init --kind collection writes aart-cli.yaml with every accepted field and one line of explanation each",
+          "status": "todo"
+        },
+        {
+          "id": "3",
+          "title": "author check parses collection manifests with parse_author_collection_manifest and reports ok/error instead of skip; correct the 'registry scan compiles artifacts only' message",
+          "status": "todo"
+        },
+        {
+          "id": "4",
+          "title": "Document authoring a collection in a source repo and how a Registry adopts it (Sync, Collection Candidate, approved members)",
+          "status": "todo"
+        },
+        {
+          "id": "5",
+          "title": "Full verification and the PR",
+          "status": "todo"
+        }
+      ]
     }
   ]
 }
