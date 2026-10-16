@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.9.0](https://github.com/M1F1/aart-cli/compare/v0.8.0...v0.9.0) (2026-10-16)
+
+
+### Added
+
+* **harness:** Tabnine installs Skills, memory, hooks and MCP at user scope under ~/.tabnine/agent ([de9ac39](https://github.com/M1F1/aart-cli/commit/de9ac3948c2eb62aae863ecf1c2aa0a7303e8e5f))
+* **inputs:** a skipped input is stored as AART_NOT_SET and blocks nothing ([de9ac39](https://github.com/M1F1/aart-cli/commit/de9ac3948c2eb62aae863ecf1c2aa0a7303e8e5f))
+* **install:** one transaction installs every artifact, harness and scope pair, writing secrets through stdin without prompting ([de9ac39](https://github.com/M1F1/aart-cli/commit/de9ac3948c2eb62aae863ecf1c2aa0a7303e8e5f))
+* **tui:** ask each configuration input once per artifact and copy it into every installation, with Set later first ([de9ac39](https://github.com/M1F1/aart-cli/commit/de9ac3948c2eb62aae863ecf1c2aa0a7303e8e5f))
+* **tui:** choose a scope per artifact and harness pair, starting on the Settings default ([de9ac39](https://github.com/M1F1/aart-cli/commit/de9ac3948c2eb62aae863ecf1c2aa0a7303e8e5f))
+* **tui:** choose harnesses per artifact on a matrix screen, with an "All artifacts" row ([de9ac39](https://github.com/M1F1/aart-cli/commit/de9ac3948c2eb62aae863ecf1c2aa0a7303e8e5f))
+* **tui:** enter each secret once per artifact before Ready, through a hidden prompt ([de9ac39](https://github.com/M1F1/aart-cli/commit/de9ac3948c2eb62aae863ecf1c2aa0a7303e8e5f))
+* **tui:** Ready lists the AART_NOT_SET placeholders, and Doctor, Installed and Credentials and variables warn about them without reading secrets ([de9ac39](https://github.com/M1F1/aart-cli/commit/de9ac3948c2eb62aae863ecf1c2aa0a7303e8e5f))
+
+
+### Fixed
+
+* **tui:** give each Artifact Details statement its own block and name only eligible harnesses ([de9ac39](https://github.com/M1F1/aart-cli/commit/de9ac3948c2eb62aae863ecf1c2aa0a7303e8e5f))
+* **tui:** leave the Undo explanation on Success to More info and the receipt ([de9ac39](https://github.com/M1F1/aart-cli/commit/de9ac3948c2eb62aae863ecf1c2aa0a7303e8e5f))
+
+
+### Changed
+
+* **tui:** name presentation profiles LESS_INFO and MORE_INFO ([de9ac39](https://github.com/M1F1/aart-cli/commit/de9ac3948c2eb62aae863ecf1c2aa0a7303e8e5f))
+
+
+### Documentation
+
+* **spec:** specify the per-artifact install flow with optional inputs (§172) ([de9ac39](https://github.com/M1F1/aart-cli/commit/de9ac3948c2eb62aae863ecf1c2aa0a7303e8e5f))
+
 ## [0.8.0](https://github.com/M1F1/aart-cli/compare/v0.7.0...v0.8.0) (2026-10-16)
 
 
