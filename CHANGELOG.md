@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.8.0](https://github.com/M1F1/aart-cli/compare/v0.7.0...v0.8.0) (2026-10-16)
+
+
+### Added
+
+* **authoring:** refuse inputs on a plugin artifact, because its harness imports the module and AART has nothing to hand a value to ([d68d74d](https://github.com/M1F1/aart-cli/commit/d68d74d13da43f5c41c63ea07da30e3d50eaf4c1))
+* **plugin:** install OpenCode plugins as a vendored artifact kind, registered in opencode.json's plugin list at high-risk-execution risk ([d68d74d](https://github.com/M1F1/aart-cli/commit/d68d74d13da43f5c41c63ea07da30e3d50eaf4c1))
+
+
+### Fixed
+
+* **authoring:** a payload glob that reaches a directory selects the files under it ([d68d74d](https://github.com/M1F1/aart-cli/commit/d68d74d13da43f5c41c63ea07da30e3d50eaf4c1))
+* **registry:** root-anchor every Registry .gitignore entry, so a vendored payload's own .opencode/ or build/ directory is kept ([d68d74d](https://github.com/M1F1/aart-cli/commit/d68d74d13da43f5c41c63ea07da30e3d50eaf4c1))
+* **setup:** count an installed plugin's settings entry as setup evidence instead of reporting no effect ([d68d74d](https://github.com/M1F1/aart-cli/commit/d68d74d13da43f5c41c63ea07da30e3d50eaf4c1))
+
+
+### Documentation
+
+* **spec:** add OpenCode plugin artifacts as a vendored, high-risk kind (§171) ([d68d74d](https://github.com/M1F1/aart-cli/commit/d68d74d13da43f5c41c63ea07da30e3d50eaf4c1))
+
+
+### Packaging
+
+* **dev:** enforce module boundaries with tach as a quality gate, with circular dependencies forbidden ([d68d74d](https://github.com/M1F1/aart-cli/commit/d68d74d13da43f5c41c63ea07da30e3d50eaf4c1))
+
 ## [0.7.0](https://github.com/M1F1/aart-cli/compare/v0.6.0...v0.7.0) (2026-10-15)
 
 
