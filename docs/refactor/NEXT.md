@@ -3,14 +3,14 @@
 ## Where the work is (2026-10-16, after 0.9.0)
 
 **CP-30 is released as 0.9.0** (#69, which also carried #66–#68). Next:
-- **CP-31** (not yet in `plan.json`): rename the promotion modes (#54), then remove the vendor
-  command family (#53, closes #41).
-- **CP-32**, owner request: collection authoring. Today `author init` has no `collection` kind and
+- **CP-31** first (the owner's order): collection authoring. Today `author init` has no `collection` kind and
   `author check` skips a collection manifest ("not an artifact manifest: `registry scan` compiles
   artifacts only"), although Sync compiles collections through `parse_author_collection_manifest`
   (`aart_cli/protocol/authoring.py`). An owner's collection in an Enterprise source repo was not
   detected, most likely named other than `aart-cli.json`/`aart-cli.yaml`; nothing told them. Steps
   are in `plan.json`.
+- **CP-32** after it: rename the promotion modes (#54), then remove the vendor
+  command family (#53, closes #41). Steps are in `plan.json`.
 
 ## Where the work is (2026-10-16)
 
@@ -51,7 +51,7 @@ Step 10 is done. #66, #67 and #68 were merged into #69 so one release (0.9.0) ca
 their conflicts were the appended decisions and #68's profile rename, which the CP-30 code now
 uses (`LESS_INFO`/`MORE_INFO`). The full `pr-check` ran on #69. **CP-30 is complete.**
 
-Next: the owner's squash merge of #69, then Release Please's release PR. After that CP-31 renames
+Next: the owner's squash merge of #69, then Release Please's release PR. After that CP-32 renames
 the promotion modes (#54) and removes the vendor family (#53, closes #41).
 
 ## CP-29 (2026-10-15)

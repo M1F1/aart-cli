@@ -1067,7 +1067,7 @@
       ]
     },
     {
-      "id": "CP-32",
+      "id": "CP-31",
       "title": "Collection authoring: a template from author init and a real verdict from author check",
       "status": "todo",
       "steps": [
@@ -1093,6 +1093,28 @@
         },
         {
           "id": "5",
+          "title": "Full verification and the PR",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "id": "CP-32",
+      "title": "One word per Registry content mode, then canonical Registry content only from an external manifest",
+      "status": "todo",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Rename the content mode: RegistryContentMode = SelfContained | PinnedReference (#54, D-376)",
+          "status": "todo"
+        },
+        {
+          "id": "2",
+          "title": "Remove the vendor command family: canonical Registry content comes only from an external manifest (#53, D-375, closes #41)",
+          "status": "todo"
+        },
+        {
+          "id": "3",
           "title": "Full verification and the PR",
           "status": "todo"
         }
