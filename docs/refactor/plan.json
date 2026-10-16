@@ -1062,7 +1062,7 @@
         {
           "id": "10",
           "title": "Run the full quality, integration and release-facing verification, then the PR",
-          "status": "todo"
+          "status": "blocked"
         }
       ]
     }
