@@ -10218,3 +10218,136 @@ are amended. No compatibility for the old screen id is kept (no-backward-compat,
 Evidence: `tests/remediation_changes_test.py`, rewritten with a property over every remediation
 mix. The flow goes to Ready, and Ready lists exactly the non-routine changes. Emptying the list,
 and dropping the network clause, each turned their tests red.
+
+## D-404 - tach declares the import graph; the gate refuses an undeclared edge
+
+#32, step 1 of CP-29.
+- `tach==0.35.3` is pinned exactly in the dev group, for the same reason `ruff` is.
+- `tach.toml` has one module per top-level `aart_cli` module, and the package root is a module of
+  its own. Its `depends_on` lists are what `tach sync` wrote, so the file describes the graph as it
+  is, and no code changed to produce it.
+- `exact = true`, so an edge that is declared but no longer used is also a failure, and the file
+  cannot accumulate dead permissions.
+- `domain` is the one declared target. It may depend on `aart_cli.redaction` only, which is
+  `DOMAIN_ALLOWED_LEAVES`.
+
+`forbid_circular_dependencies` stays false. With it on, tach reports 11 modules in cycles, and
+breaking them is code change outside this step (B-186).
+
+The hand-written boundary tests stay, as #32 requires. Some of them hold module shape (frozen
+dataclasses, a leaf that imports nothing), which tach cannot express. None is removed until a
+commit shows the rule that replaces it.
+
+Evidence: a planted `aart_cli.io` import in `domain` made `tach check` fail on exactly that line.
+`tests/tach_config_test.py` ties `tach.toml` to the package and to the domain rule. Removing a
+module entry turned it red.
+
+## D-405 - a payload glob that reaches a directory selects the files under it
+
+CP-29 step 2, found while packaging an enterprise fork of superpowers as Skills.
+- `payload.include: ["**"]` was refused with "declared payload selects forbidden directory entry
+  'scripts'". The cause: `**` matched the directory's own snapshot entry, and the selector treated
+  every non-file entry as forbidden content. So a skill with `scripts/` or `references/` could only
+  be declared by naming every file.
+- `_selected_payload` now passes over a matched DIRECTORY entry. Its files are still matched one by
+  one against `include`/`exclude`, so the selection is the same set of files, just reachable by a
+  recursive glob.
+- Symbolic links and special files stay refused. The local snapshot reader refuses them before the
+  compiler sees the tree, and the compiler's own refusal remains behind that.
+
+Evidence: `tests/skill_payload_tree_test.py`, which includes a Hypothesis property over nested
+trees. Removing the DIRECTORY skip turned both tree tests red, and the symlink test stayed green.
+
+## D-406 - an OpenCode plugin is a vendored tree registered by relative path, reviewed as high-risk
+
+CP-29 step 3. This adds Product Specification §171 and INV-255 to INV-257. It is grounded in
+opencode 1.18.29 as measured on 2026-10-15:
+- **The `plugin` key accepts several forms.** It accepts npm specs, `file://` URLs, absolute
+  paths, relative paths and directories. A relative path resolves against the directory of the
+  `opencode.json` that names it: a project run from a subdirectory still loaded it. This holds at
+  user scope too, under an isolated `XDG_CONFIG_HOME`.
+- **The private tree is not discovered.** A tree under `.opencode/aart-cli/` is not
+  auto-discovered: with no registration, `opencode debug skill` found none of the plugin's skills.
+  So the private installation tree of §169.3 is a safe home, and registration is what turns the
+  plugin on.
+- **Unknown top-level keys are refused.** The `plugin` list is the one place a plugin can be named.
+
+Choices:
+- **Kind name.** The kind is `plugin` (`aart-cli.dev/plugin/v1`), not `opencode-plugin`. The
+  measured target table, not the kind name, decides which harness hosts it, the same way a hook is
+  one kind with per-harness targets.
+- **Entry, not npm.** The manifest names one entry module. An npm or git spec is never written,
+  because what it resolves to is not what was reviewed (INV-255).
+- **Dependencies are refused.** A root `package.json` with runtime `dependencies` or
+  `optionalDependencies` is refused at compile time, because AART fetches nothing and the plugin
+  would fail inside the harness. superpowers declares none.
+- **One list entry.** The registration is an `ArtifactSettingsEntry`, one entry of one list in a
+  settings file, generalized from a hook's object entry to a plugin's path string. The interpreter,
+  receipt, uninstall, repair and verification paths a hook uses therefore hold for a plugin too, and
+  no second mechanism for owning a list member exists.
+- **Risk.** Merging a plugin entry is `HIGH_RISK_EXECUTION`, not `CONFIGURATION_MUTATION`. It is the
+  step that makes the harness run the code (INV-256).
+- **OpenCode 2.x is out.** Its `plugins` key with the directory form is not measured here, so it is
+  not targeted.
+
+## D-407 - a plugin takes no inputs, and its installation is found by its settings entry
+
+CP-29 step 4. Choices made while implementing §171:
+- **Inputs are refused on a plugin.** OpenCode imports the module into its own process, and AART
+  starts nothing it could pass an environment variable, argument or file to. A declared input would
+  be collected at setup and handed to nothing, and setup would then fail for want of an effect to
+  attach it to. `parse_author_manifest` refuses `inputs` on a plugin. The skeleton names the input
+  surface as `#?` alternatives, emitted from the same value the other kinds enable, so the
+  anti-drift oracle still holds.
+- **No delivery.** A plugin placement has settings and nothing else: the payload is copied into the
+  private tree as for every kind, and `_plugin_settings` writes the one `plugin` list member,
+  spelled relative to the settings file. An entry that would climb out of that file's directory is
+  refused by `PluginEntry` rather than written.
+- **Found by its entry.** The installed-in-this-scope view read deliveries and merges only, so a
+  plugin installed and then vanished from `status` and `uninstall`. A plugin is now matched by its
+  settings entry's file against the measured `PluginTarget`. The harness eligibility projection
+  counts settings entries for the same reason.
+- **Settings-only receipts need no new verification.** The hook's settings observation, drift and
+  repair path already handles a list member, so a plugin uses it unchanged.
+- **One test refined, not weakened.** The skeleton's "a sequence item is quoted when it must be"
+  test now reads a `- key: value` item through its value, because a mapping item is not a scalar.
+
+## D-408 - a plugin is its own author tree; Registry ignores are root-anchored; settings entries are setup evidence
+
+CP-29 step 5. These came out of installing the superpowers fork live:
+- **A plugin is its own author tree.** A file belongs to the manifest nearest it, so a root plugin
+  manifest above per-skill manifests selects none of the skills. The plugin fork is therefore a
+  separate tree in the upstream layout. That is also the right shape: the skills are installed
+  either as Skills or through the plugin, not both.
+- **Registry ignore entries are root-anchored.** Every `REGISTRY_GITIGNORE` entry begins with `/`.
+  A payload is vendored as reviewed and can carry `.opencode/`, `.claude/`, `build/` and the like,
+  so an unanchored entry silently removed reviewed bytes from `artifacts/`. Registries made with
+  the old file are not migrated (CP-26: no compatibility).
+- **Settings entries are setup evidence.** `_effect_proofs` emits a settings entry as a
+  `merge-json` proof (`merge_mode: list`, digest of the entry). Without it, a plugin's receipt
+  proved no effect, and setup completion was unavailable.
+
+
+## D-409 - the import graph is acyclic by moving modules to the layer they act in
+
+CP-29 step 6, B-186. tach reported 21 top-level modules in two cycles. Every cycle came from a
+module living in the package of its subject rather than of its layer, so the fix moves files and
+changes no behaviour:
+- **Legacy loop.** `build_parser` moved to `cli_parser`; `setup_verify_probes` reads it from there,
+  and `tui._dispatch` resolves `commands.<name>.run` itself instead of importing `cli`.
+- **Registry services.** `application.registry_commands` and `application.registry_publication`
+  only composed `registry_commands` planning. They are `registry_commands.workspace` and
+  `registry_commands.publication_state`, and `application` no longer re-exports them.
+- **Adapters into `io`.** `sources.git` → `io.git_acquisition`, `sources.runtime` →
+  `io.source_runtime`, `curation.runtime` → `io.curation_runtime`, `installation.io` →
+  `io.installation_apply`.
+- **Validation into `registry_maintenance`.** `sources.validation` →
+  `registry_maintenance.source_validation`; it compiles candidates through registry maintenance.
+- **Composition out of `io`.** `io.configured_setup` → `consumer.configured_setup`;
+  `io.consumer_actions`, which composes the whole consumer and maintainer surface, becomes the
+  top-level `consumer_actions`, its own tach module. A top-level file tach does not name joins the
+  root module `aart_cli`, which every module depends on, so an unlisted one recreates a cycle.
+
+`forbid_circular_dependencies = true`. `tests/tach_config_test.py` checks the declared graph is
+acyclic and the flag is set, without tach, in the unit gate. No compatibility imports are left for
+the old paths (CP-26).

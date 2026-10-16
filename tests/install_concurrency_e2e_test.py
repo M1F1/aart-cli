@@ -8,8 +8,8 @@ from pathlib import Path
 from aart_cli.domain.result import Ok
 from aart_cli.install_state.schema import parse_install_state
 from aart_cli.installation.application import finalize_install, prepare_install
-from aart_cli.installation.io import LocalInstallAdapter
 from aart_cli.installation.model import InstallStatus
+from aart_cli.io.installation_apply import LocalInstallAdapter
 from aart_cli.profiles.builtin import builtin
 from tests.canonical_install_application_test import _fixture
 

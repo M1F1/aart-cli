@@ -34,7 +34,7 @@ from aart_cli.tui_layout import (
     wrap,
 )
 
-_KINDS = frozenset({"skill", "guideline", "mcp", "hook", "memory"})
+_KINDS = frozenset({"skill", "guideline", "mcp", "hook", "memory", "plugin"})
 _TRUSTS = frozenset(
     {"unverified", "local", "direct-source", "registry-reviewed", "company-reviewed"}
 )

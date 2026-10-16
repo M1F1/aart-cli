@@ -1290,7 +1290,7 @@ def _parse_version_record(content: bytes, path: str) -> Result[RegistryArtifactV
         if value.get("schema") != "aart-cli.dev/registry-version/v1":
             raise ValueError("registry version schema is unsupported")
         kind = _required_text(value, "kind")
-        if kind not in {"skill", "guideline", "mcp", "hook", "memory", "collection"}:
+        if kind not in {"skill", "guideline", "mcp", "hook", "memory", "plugin", "collection"}:
             raise ValueError("registry version kind is invalid")
         version = RegistryArtifactVersion(
             ArtifactCoordinate(

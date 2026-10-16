@@ -28,8 +28,8 @@ from aart_cli.install_state.model import (
 )
 from aart_cli.install_state.paths import install_state_paths
 from aart_cli.install_state.schema import install_state_bytes, parse_install_state
-from aart_cli.installation.io import _write_atomic
 from aart_cli.installation.model import InstallLocation
+from aart_cli.io.installation_apply import _write_atomic
 from aart_cli.io.object_store import publish_object
 from aart_cli.io.reference_store import read_references
 from aart_cli.marketplace.catalog import build_marketplace

@@ -14,7 +14,7 @@ text, so a comment or a docstring explaining what was removed is not a violation
 still addresses those paths is.
 
 Three modules are allowed to name them, because naming them is their job: `legacy_registry_paths`
-detects the shape, and `curation/runtime.py` and `commands/registry.py` tell an operator which
+detects the shape, and `io/curation_runtime.py` and `commands/registry.py` tell an operator which
 shape their checkout is carrying.  Deleting those would delete the diagnosis along with the code.
 """
 
@@ -54,7 +54,7 @@ RETIRED_PATH_LITERALS = ("aart.lock.json", "aart.index.json", "entries/")
 NAMES_THE_RETIRED_SHAPE = frozenset(
     {
         PACKAGE / "registry_maintenance" / "promoted.py",
-        PACKAGE / "curation" / "runtime.py",
+        PACKAGE / "io" / "curation_runtime.py",
         PACKAGE / "commands" / "registry.py",
         # The reader, for the opposite reason: `legacy_registry_paths` can only name a retired
         # checkout by the paths it was handed, so a root-file list that skipped these two would

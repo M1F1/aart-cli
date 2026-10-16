@@ -34,9 +34,9 @@ from aart_cli.curation.model import (
     CurationOutcome,
     CurationRequest,
 )
-from aart_cli.curation.runtime import load_local_curation_service
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.io.curation_runtime import load_local_curation_service
 from aart_cli.io.registry_workspace import FilesystemRegistryWorkspace
 from aart_cli.protocol.semver import parse_semver
 from aart_cli.registry_commands.model import RegistryInitOptions, RegistryQualityReport

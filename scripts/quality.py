@@ -22,6 +22,7 @@ QUALITY_GATES = (
     "unit",
     "integration",
     "validate",
+    "tach",
     "coverage",
     "packaging-check",
     "docs-check",
@@ -109,6 +110,9 @@ def build_gates(temp_root: Path, python: str = sys.executable) -> tuple[Gate, ..
         # No version gate: the release engine writes the one version value, so there is nothing to
         # reconcile (INV-085, INV-098).
         Gate("validate", ((python, "scripts/validate.py"),)),
+        # Module boundaries as data (#32, D-404): `tach.toml` is the import graph the package is
+        # allowed, and an edge it does not declare is refused.
+        Gate("tach", ((python, "-m", "tach", "check"),)),
         Gate(
             "coverage",
             (
@@ -162,7 +166,7 @@ def build_gates(temp_root: Path, python: str = sys.executable) -> tuple[Gate, ..
 
 # The three the developer extra installs.  Everything else a gate runs is either the standard
 # library or a script in this repository.
-_DEVELOPER_TOOLS = ("ruff", "mypy", "coverage")
+_DEVELOPER_TOOLS = ("ruff", "mypy", "coverage", "tach")
 
 
 def missing_tools(selected: tuple[str, ...], temp_root: Path) -> tuple[str, ...]:

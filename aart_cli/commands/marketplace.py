@@ -42,6 +42,11 @@ from aart_cli.consumer.application import (
     CONSUMER_REVIEW_MISMATCH,
     ConsumerApplicationService,
 )
+from aart_cli.consumer.configured_setup import (
+    ConfiguredSetupService,
+    configured_consumer_completion,
+    configured_installed_setup_completion,
+)
 from aart_cli.consumer.coordinates import (
     CONSUMER_INVALID,
     ArtifactSelector,
@@ -89,11 +94,6 @@ from aart_cli.io.configured_installation_action import (
     InstallationHost,
     complete_configured_installation,
     prepare_configured_installation,
-)
-from aart_cli.io.configured_setup import (
-    ConfiguredSetupService,
-    configured_consumer_completion,
-    configured_installed_setup_completion,
 )
 from aart_cli.io.configured_uninstall_action import (
     complete_configured_uninstall,

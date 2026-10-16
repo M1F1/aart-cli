@@ -32,6 +32,7 @@ from aart_cli.domain.candidates import (
 )
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.result import Err, Ok
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from aart_cli.io.registry_adoption import (
     AdoptionUpstreamDisposition,
     apply_adoption,
@@ -41,7 +42,6 @@ from aart_cli.io.registry_adoption import (
     scan_repository,
 )
 from aart_cli.io.registry_bootstrap import bootstrap_registry_workspace
-from aart_cli.sources.git import acquire_git_snapshot
 from aart_cli.sources.model import GitSnapshotRequest
 
 SKILL_MANIFEST = """schema: aart-cli.dev/skill/v1
@@ -137,7 +137,7 @@ class _Lab(unittest.TestCase):
         under test ever weakens the transport request it makes.
         """
 
-        from aart_cli.curation.runtime import default_native_acquirer
+        from aart_cli.io.curation_runtime import default_native_acquirer
 
         def local(request: GitSnapshotRequest):
             self.assertFalse(
@@ -153,7 +153,7 @@ class _Lab(unittest.TestCase):
                 replace(request, location=local_url, allow_local_transport=True)
             )
 
-        with mock.patch("aart_cli.curation.runtime.acquire_git_snapshot", side_effect=local):
+        with mock.patch("aart_cli.io.curation_runtime.acquire_git_snapshot", side_effect=local):
             return default_native_acquirer(url, ref)
 
     def _scan(self):

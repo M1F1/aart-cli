@@ -52,7 +52,11 @@ from aart_cli.domain.effects import (
     WriteFile,
 )
 from aart_cli.domain.harness import McpRegistration
-from aart_cli.domain.hooks import merge_hook_entry, remove_hook_entry
+from aart_cli.domain.hooks import (
+    merge_settings_entry,
+    remove_settings_entry,
+    settings_entry_label,
+)
 from aart_cli.domain.managed_blocks import (
     merge_managed_block,
     remove_managed_block,
@@ -532,7 +536,7 @@ class SettingsEntryInterpreter:
         if self._matching(effect) is None:
             return _error(
                 EXECUTION_REFUSED,
-                f"nothing here says {self.artifact} owns {effect.entry.matcher} at "
+                f"nothing here says {self.artifact} owns {settings_entry_label(effect.entry)} at "
                 f"{effect.path} in {effect.destination}",
             )
         loaded = self._read(effect.destination)
@@ -542,15 +546,15 @@ class SettingsEntryInterpreter:
         if isinstance(effect, MergeSettingsEntry):
             # No file yet is a harness nobody has configured, which the merge answers by building
             # the document around the entry. Only a removal cares that there was nothing there.
-            written = merge_hook_entry(
+            written = merge_settings_entry(
                 {} if document is None else document, effect.path, effect.entry
             )
-            done = f"registered {effect.entry.matcher} at {effect.path} in {effect.destination}"
+            done = f"registered {settings_entry_label(effect.entry)} at {effect.path} in {effect.destination}"
         else:
             if document is None:
                 return Ok(f"{effect.destination} is already gone, so the entry in it is too")
-            written = remove_hook_entry(document, effect.path, effect.entry)
-            done = f"removed {effect.entry.matcher} at {effect.path} from {effect.destination}"
+            written = remove_settings_entry(document, effect.path, effect.entry)
+            done = f"removed {settings_entry_label(effect.entry)} at {effect.path} from {effect.destination}"
         if isinstance(written, Err):
             # The list could not be written without displacing something somebody else put there,
             # so the file is left exactly as it is and the refusal names why.

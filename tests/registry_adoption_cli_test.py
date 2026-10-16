@@ -16,7 +16,7 @@ from unittest import mock
 
 from aart_cli import cli
 from aart_cli.domain.result import Ok
-from aart_cli.sources.git import acquire_git_snapshot
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from tests.registry_repository_scan_test import OTHER_MANIFEST, _git, _Lab
 
 
@@ -38,7 +38,7 @@ class RegistryAdoptionCliTest(_Lab):
 
         with (
             mock.patch(
-                "aart_cli.curation.runtime.acquire_git_snapshot",
+                "aart_cli.io.curation_runtime.acquire_git_snapshot",
                 side_effect=local_transport,
             ),
             contextlib.redirect_stdout(output),

@@ -13,7 +13,7 @@ import io
 import unittest
 from unittest.mock import patch
 
-from aart_cli import cli
+from aart_cli import cli, cli_parser
 
 
 def _dispatch(argv, *, command, code=0):
@@ -66,7 +66,7 @@ class TestMemoryModeFlag(unittest.TestCase):
 
 class TestTypeFilterMemory(unittest.TestCase):
     def test_memory_in_cli_type_choices(self):
-        self.assertIn("memory", cli._ARTIFACT_TYPES)
+        self.assertIn("memory", cli_parser._ARTIFACT_TYPES)
 
     def test_memory_mode_is_not_offered_where_it_cannot_take_effect(self):
         # update replays the recorded mode and uninstall has no payload to place, so the flag

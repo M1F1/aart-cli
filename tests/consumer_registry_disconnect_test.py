@@ -16,8 +16,8 @@ from aart_cli.application.consumer_ui import (
     reduce_consumer_ui,
 )
 from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
+from aart_cli.consumer_actions import RegistryConnectionSnapshot
 from aart_cli.domain.result import Ok
-from aart_cli.io.consumer_actions import RegistryConnectionSnapshot
 
 
 class RegistryDisconnectInteractionTest(unittest.TestCase):

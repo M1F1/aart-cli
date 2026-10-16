@@ -241,10 +241,10 @@ class HandoverReachesTheInterpreterTest(unittest.TestCase):
     def test_every_hop_from_the_composed_actions_to_the_interpreter_carries_it(self) -> None:
         import inspect
 
+        from aart_cli.consumer_actions import LocalConsumerActions
         from aart_cli.io.configured_installation_action import (
             complete_configured_installation,
         )
-        from aart_cli.io.consumer_actions import LocalConsumerActions
         from aart_cli.io.installation_execution import interpreters_for
 
         for function, parameter in (
@@ -267,8 +267,8 @@ class HandoverReachesTheInterpreterTest(unittest.TestCase):
         import types
         from datetime import datetime, timezone
 
-        import aart_cli.io.consumer_actions as actions_module
-        from aart_cli.io.consumer_actions import LocalConsumerActions
+        import aart_cli.consumer_actions as actions_module
+        from aart_cli.consumer_actions import LocalConsumerActions
 
         recorded: dict = {}
 

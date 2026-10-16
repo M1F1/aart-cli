@@ -12,14 +12,14 @@ from aart_cli.application.store import (
 from aart_cli.domain.identifiers import ObjectDigest
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.install_state.schema import install_state_bytes
-from aart_cli.installation.io import (
+from aart_cli.installation.model import file_snapshot_digest
+from aart_cli.io.installation_apply import (
     LocalInstallAdapter,
     _lock,
     _remove,
     _restore,
     _write_atomic,
 )
-from aart_cli.installation.model import file_snapshot_digest
 from aart_cli.io.reference_store import read_references, write_references
 from aart_cli.io.store_lock import acquire_store_lock, release_store_lock
 from aart_cli.store.model import ReferenceIndex, ReferenceKind, ReferenceReadRequest

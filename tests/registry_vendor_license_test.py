@@ -22,9 +22,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from aart_cli import cli
-from aart_cli.curation.runtime import LocalCurationService
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.result import Err, Ok
+from aart_cli.io.curation_runtime import LocalCurationService
 from aart_cli.protocol.native_tree import SourceSnapshot
 from aart_cli.registry_maintenance.model import NativeReferenceAcquisition
 from tests.registry_maintenance_fixtures import empty_registry_snapshot, write_snapshot

@@ -48,7 +48,7 @@ _REFERENCE_OWNER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,511}$")
 _TRUST_CLASSES = frozenset(
     {"unverified", "local", "direct-source", "registry-reviewed", "company-reviewed"}
 )
-_ARTIFACT_KINDS = frozenset({"skill", "guideline", "mcp", "hook", "memory"})
+_ARTIFACT_KINDS = frozenset({"skill", "guideline", "mcp", "hook", "memory", "plugin"})
 
 
 def _valid_digest(value: object) -> bool:

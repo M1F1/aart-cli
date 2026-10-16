@@ -93,7 +93,7 @@ from .paths import SafeRelativePath, parse_relative_path
 from .semver import SemVer, parse_semver
 from .yaml import parse_yaml
 
-AuthorKind = Literal["skill", "guideline", "mcp", "hook", "memory"]
+AuthorKind = Literal["skill", "guideline", "mcp", "hook", "memory", "plugin"]
 
 _MANIFEST_NAMES = frozenset({"aart-cli.json", "aart-cli.yaml"})
 _COLLECTION_SCHEMA = "aart-cli.dev/collection/v1"
@@ -104,6 +104,7 @@ _KIND_BY_VALUE: dict[AuthorKind, ArtifactKind] = {
     "mcp": ArtifactKind.MCP,
     "hook": ArtifactKind.HOOK,
     "memory": ArtifactKind.MEMORY,
+    "plugin": ArtifactKind.PLUGIN,
 }
 _INSTALL_EFFECTS: dict[AuthorKind, tuple[InstallEffect, ...]] = {
     "skill": ("copy-tree",),
@@ -111,6 +112,8 @@ _INSTALL_EFFECTS: dict[AuthorKind, tuple[InstallEffect, ...]] = {
     "mcp": ("merge-json",),
     "hook": ("copy-tree", "merge-json"),
     "memory": ("managed-block",),
+    # A plugin's tree is copied into the installation and one entry of a JSON list registers it.
+    "plugin": ("copy-tree", "merge-json"),
 }
 #: What an author may say about how a value reaches the running artifact. The names are the
 #: §91 vocabulary; what each one can actually deliver is decided once, by the launcher generator.
@@ -168,6 +171,8 @@ class AuthorManifest:
     compliance: ComplianceLevel
     canonical_intent: JsonObject
     smoke_test: JsonObject | None = None
+    #: The module a plugin's harness loads, relative to the payload root (§171.1).
+    plugin_entry: SafeRelativePath | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1236,6 +1241,68 @@ def package_hook(kind: ArtifactKind, entries: tuple[SnapshotEntry, ...]) -> Resu
 
 
 @dataclass(frozen=True, slots=True)
+class PackagedPlugin:
+    """Which module a plugin package asks its harness to load, relative to the payload root."""
+
+    entry: str
+
+
+def package_plugin(entries: tuple[SnapshotEntry, ...]) -> Result[PackagedPlugin]:
+    """The entry module a compiled plugin package declares, checked against what it carries.
+
+    Read back out of `artifact.json` with the parser that wrote it, as an install description is:
+    the installing machine has the package, not the author's repository.
+    """
+
+    manifest_entry = next(
+        (
+            entry
+            for entry in entries
+            if str(entry.path) == PACKAGE_MANIFEST_FILENAME and entry.kind is SnapshotEntryKind.FILE
+        ),
+        None,
+    )
+    if manifest_entry is None:
+        return _error(
+            AUTHOR_TREE_INVALID,
+            f"a package describes itself in {PACKAGE_MANIFEST_FILENAME}, which this one has none of",
+            path=PACKAGE_MANIFEST_FILENAME,
+        )
+    manifest = parse_artifact_manifest(manifest_entry.content, path=PACKAGE_MANIFEST_FILENAME)
+    if isinstance(manifest, Err):
+        return manifest
+    if manifest.value.identity.kind != "plugin":
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"a {manifest.value.identity.kind} is not installed by a harness loading it",
+        )
+    extension = dict(manifest.value.extensions).get(AUTHORING_EXTENSION)
+    intent = _object(extension, AUTHORING_EXTENSION, path=PACKAGE_MANIFEST_FILENAME)
+    if isinstance(intent, Err):
+        return intent
+    declared = dict(intent.value.entries).get("plugin")
+    if declared is None:
+        return _error(
+            AUTHOR_TREE_INVALID,
+            f"{manifest.value.identity} names no module for its harness to load",
+            path=PACKAGE_MANIFEST_FILENAME,
+        )
+    entry = _parse_plugin(declared, path=PACKAGE_MANIFEST_FILENAME)
+    if isinstance(entry, Err):
+        return entry
+    carried = f"{PACKAGE_PAYLOAD_DIRECTORY}/{entry.value}"
+    if not any(
+        str(item.path) == carried and item.kind is SnapshotEntryKind.FILE for item in entries
+    ):
+        return _error(
+            AUTHOR_PAYLOAD_INVALID,
+            f"{manifest.value.identity} loads {entry.value}, which its package does not carry",
+            path=PACKAGE_MANIFEST_FILENAME,
+        )
+    return Ok(PackagedPlugin(str(entry.value)))
+
+
+@dataclass(frozen=True, slots=True)
 class PackagedDelivery:
     """What a package offers a harness: where inside its payload, and what is there.
 
@@ -1379,6 +1446,8 @@ def _declared_payload_files(manifest: AuthorManifest) -> tuple[str, ...]:
     files: list[str] = []
     if manifest.entrypoint is not None:
         files.append(str(manifest.entrypoint))
+    if manifest.plugin_entry is not None:
+        files.append(str(manifest.plugin_entry))
     spec = manifest.dependencies
     if spec is not None:
         files.append(spec_descriptor_path(spec))
@@ -1572,6 +1641,76 @@ def _validate_pattern(raw: str, *, path: str) -> Result[str]:
     return Ok(raw)
 
 
+#: The modules a measured plugin host loads (§171.1).
+_PLUGIN_MODULE_SUFFIXES = (".js", ".mjs", ".ts")
+#: The `package.json` keys that name packages a plugin needs at run time. AART fetches none of
+#: them, so a plugin that declares any would install cleanly and fail, or fetch, when it first ran.
+_PLUGIN_RUNTIME_DEPENDENCY_KEYS = ("dependencies", "optionalDependencies")
+
+
+def _parse_plugin(value: JsonValue, *, path: str) -> Result[SafeRelativePath]:
+    """The entry module a plugin manifest names, as a safe path below the manifest root."""
+
+    parsed = _object(value, "plugin", path=path)
+    if isinstance(parsed, Err):
+        return parsed
+    fields = _fields(
+        parsed.value,
+        required=frozenset({"entry"}),
+        optional=frozenset(),
+        path=path,
+        label="plugin",
+    )
+    if isinstance(fields, Err):
+        return fields
+    raw = _string(fields.value["entry"], "plugin.entry", path=path)
+    if isinstance(raw, Err):
+        return raw
+    entry = parse_relative_path(
+        raw.value, location=SourceLocation(path=path, pointer="/plugin/entry")
+    )
+    if isinstance(entry, Err):
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            "plugin.entry must be a safe path below the manifest root",
+            path=path,
+        )
+    if not raw.value.endswith(_PLUGIN_MODULE_SUFFIXES):
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            f"plugin.entry names {raw.value!r}; a harness loads a .js, .mjs or .ts module",
+            path=path,
+        )
+    return Ok(entry.value)
+
+
+def _plugin_fetches_nothing(
+    selected: tuple[tuple[str, SnapshotEntry], ...], *, path: str
+) -> Result[None]:
+    """Refuse a plugin whose root `package.json` declares packages it needs at run time (§171.2)."""
+
+    package = next((entry for relative, entry in selected if relative == "package.json"), None)
+    if package is None:
+        return Ok(None)
+    parsed = parse_json(package.content)
+    if isinstance(parsed, Err) or not isinstance(parsed.value, JsonObject):
+        return _error(
+            AUTHOR_PAYLOAD_INVALID, "the plugin's package.json is not a JSON object", path=path
+        )
+    declared = dict(parsed.value.entries)
+    for key in _PLUGIN_RUNTIME_DEPENDENCY_KEYS:
+        value = declared.get(key)
+        if isinstance(value, JsonObject) and value.entries:
+            return _error(
+                AUTHOR_PAYLOAD_INVALID,
+                f"the plugin's package.json declares {key}; AART fetches nothing at install, so "
+                "the plugin would fail or fetch them the first time it ran. Vendor them into the "
+                "payload instead",
+                path=path,
+            )
+    return Ok(None)
+
+
 def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorManifest]:
     """Validate one syntax document into a frozen authoring representation."""
 
@@ -1594,6 +1733,7 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
                 "compatibility",
                 "install",
                 "smoke_test",
+                "plugin",
             }
         ),
         path=raw_path,
@@ -1850,6 +1990,35 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
             return parsed_python
         dependencies = parsed_python.value
 
+    plugin_entry: SafeRelativePath | None = None
+    plugin_object: JsonObject | None = None
+    if "plugin" in root:
+        if author_kind != "plugin":
+            return _error(
+                AUTHOR_MANIFEST_INVALID, "plugin is valid only for a plugin artifact", path=raw_path
+            )
+        parsed_plugin = _parse_plugin(root["plugin"], path=raw_path)
+        if isinstance(parsed_plugin, Err):
+            return parsed_plugin
+        plugin_entry = parsed_plugin.value
+        plugin_object = cast(JsonObject, root["plugin"])
+    elif author_kind == "plugin":
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            "a plugin artifact names the module its harness loads in plugin.entry",
+            path=raw_path,
+        )
+    if author_kind == "plugin" and "inputs" in root:
+        # A module its harness imports reads its own configuration. AART has no environment,
+        # argument or file it starts the module with, so a declared input would be collected at
+        # setup and handed to nothing.
+        return _error(
+            AUTHOR_MANIFEST_INVALID,
+            "inputs are not valid for a plugin artifact: its harness imports the module, so AART "
+            "has nothing to hand a value to",
+            path=raw_path,
+        )
+
     intent_entries: list[tuple[str, JsonValue]] = [
         ("schema", schema_result.value),
         ("payload", payload_object.value),
@@ -1870,6 +2039,8 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
         intent_entries.append(("python", root["python"]))
     if smoke_test is not None:
         intent_entries.append(("smoke_test", smoke_test))
+    if plugin_object is not None:
+        intent_entries.append(("plugin", plugin_object))
 
     return Ok(
         AuthorManifest(
@@ -1893,6 +2064,7 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
             compliance,
             JsonObject(tuple(intent_entries)),
             smoke_test,
+            plugin_entry,
         )
     )
 
@@ -1956,6 +2128,10 @@ def _selected_payload(
         if relative in _MANIFEST_NAMES:
             continue
         if not _matches(relative, manifest.includes) or _matches(relative, manifest.excludes):
+            continue
+        if entry.kind is SnapshotEntryKind.DIRECTORY:
+            # Structure, not content: a glob such as `**` reaches a skill's `scripts/` itself, and
+            # the files under it are matched one by one (D-405).
             continue
         if entry.kind is not SnapshotEntryKind.FILE:
             return _error(
@@ -2077,6 +2253,10 @@ def _compile_one(
                 f"the manifest names {needed!r}, which the payload does not include",
                 path=str(source_manifest.path),
             )
+    if manifest.kind == "plugin":
+        fetches = _plugin_fetches_nothing(selected, path=str(source_manifest.path))
+        if isinstance(fetches, Err):
+            return fetches
     payload_entries = _canonical_payload_entries(manifest, selected)
     if isinstance(payload_entries, Err):
         return payload_entries

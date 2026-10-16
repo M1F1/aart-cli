@@ -17,16 +17,16 @@ from __future__ import annotations
 
 import os
 
-from aart_cli.application.registry_publication import (
-    PublicationOutcome,
-    RegistryPublicationCommand,
-    RegistryPublicationReceipt,
-)
 from aart_cli.configuration.policy import redact_text
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.publication import DEFAULT_BRANCH_PUBLICATION
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.io.git import GitProcessReceipt, GitProcessRequest, run_git_process
+from aart_cli.registry_commands.publication_state import (
+    PublicationOutcome,
+    RegistryPublicationCommand,
+    RegistryPublicationReceipt,
+)
 
 REGISTRY_PUBLICATION_FAILED = DiagnosticCode("registry-publication-failed")
 

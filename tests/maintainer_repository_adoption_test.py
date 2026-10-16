@@ -31,6 +31,7 @@ from aart_cli.application.maintainer_views import (
     maintainer_navigation_targets,
 )
 from aart_cli.domain.result import Ok
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from aart_cli.io.registry_adoption import (
     AdoptedArtifact,
     AdoptionUpstreamCheck,
@@ -39,7 +40,6 @@ from aart_cli.io.registry_adoption import (
     RepositoryScan,
     ScannedArtifact,
 )
-from aart_cli.sources.git import acquire_git_snapshot
 from aart_cli.tui_consumer import CanonicalScreenSource, frame
 from tests.consumer_shell_test import screens
 from tests.registry_repository_scan_test import OTHER_MANIFEST, _git, _Lab
@@ -168,7 +168,7 @@ class RepositoryAdoptionInteractionTest(unittest.TestCase):
         self.assertEqual(commands[0].repository_scan_draft, draft)
 
     def test_scan_result_is_selectable_and_a_requests_adoption(self) -> None:
-        from aart_cli.io.consumer_actions import _project_repository_scan
+        from aart_cli.consumer_actions import _project_repository_scan
         from aart_cli.tui_consumer import ConsumerScreens
 
         projected = _project_repository_scan(_scan())
@@ -218,7 +218,7 @@ class RepositoryAdoptionInteractionTest(unittest.TestCase):
         self.assertIs(completed.session.screen, MaintainerScreen.SCAN_RESULT)
 
     def test_registry_opens_the_adopted_artifact_list_and_enter_requests_one_check(self) -> None:
-        from aart_cli.io.consumer_actions import _project_adopted_artifact
+        from aart_cli.consumer_actions import _project_adopted_artifact
         from aart_cli.tui_consumer import ConsumerScreens
 
         registry = _state(MaintainerScreen.REGISTRY)
@@ -487,7 +487,7 @@ class RepositoryAdoptionCompositionTest(_Lab):
         with (
             mock.patch.dict("os.environ", xdg, clear=False),
             mock.patch(
-                "aart_cli.curation.runtime.acquire_git_snapshot",
+                "aart_cli.io.curation_runtime.acquire_git_snapshot",
                 side_effect=local_transport,
             ),
         ):

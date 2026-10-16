@@ -35,6 +35,12 @@ from aart_cli.domain.diagnostics import (
 )
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.io.source_runtime import (
+    discard_configured_source,
+    observe_configured_source,
+    resubscribe_configured_source,
+    sync_configured_source,
+)
 from aart_cli.io.source_store import read_current_source
 from aart_cli.model import Request
 from aart_cli.sources.model import (
@@ -45,12 +51,6 @@ from aart_cli.sources.model import (
     SourceSyncOutcome,
     source_instance_id,
     source_store_paths,
-)
-from aart_cli.sources.runtime import (
-    discard_configured_source,
-    observe_configured_source,
-    resubscribe_configured_source,
-    sync_configured_source,
 )
 from aart_cli.tui_sources import (
     SourceResubscriptionRequest,

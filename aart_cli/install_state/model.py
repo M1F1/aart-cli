@@ -39,7 +39,7 @@ _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 _HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 _LOCAL_REVISION_RE = re.compile(r"^local(?::[0-9a-f]{64})?$")
 _SETUP_REF_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,255}$")
-_ARTIFACT_KINDS = frozenset({"skill", "guideline", "mcp", "hook", "memory"})
+_ARTIFACT_KINDS = frozenset({"skill", "guideline", "mcp", "hook", "memory", "plugin"})
 _MAX_STATE_BYTES = 10 * 1024 * 1024
 _EFFECT_KINDS = frozenset(
     {

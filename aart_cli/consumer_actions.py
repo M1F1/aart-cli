@@ -100,12 +100,6 @@ from aart_cli.application.maintainer_views import (
     project_source_sync_result,
     project_source_sync_review,
 )
-from aart_cli.application.registry_publication import (
-    RegistryPublicationCommand,
-    RegistryPublicationReceipt,
-    prepare_registry_publication,
-    publication_summary,
-)
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.configuration.schema import configured_source_from_input
@@ -138,8 +132,66 @@ from aart_cli.domain.receipts import ArtifactReceipt, InstallationReceipt, Insta
 from aart_cli.domain.reconciliation import DesiredState
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import ArtifactRequest, ArtifactSelection, VersionConstraint
+from aart_cli.io.configured_configuration_action import (
+    PreparedConfiguredConfiguration,
+    complete_configured_configuration,
+    prepare_configured_configuration,
+)
+from aart_cli.io.configured_installation_action import (
+    CompletedConfiguredInstallation,
+    InstallationHost,
+    PreparedConfiguredInstallation,
+    complete_configured_installation,
+    prepare_configured_installation,
+)
+from aart_cli.io.configured_repair_action import (
+    PreparedConfiguredRepair,
+    complete_configured_repair,
+    prepare_configured_repair,
+)
+from aart_cli.io.configured_uninstall_action import (
+    PreparedConfiguredUninstall,
+    complete_configured_uninstall,
+    prepare_configured_uninstall,
+)
+from aart_cli.io.consumer_machine import read_consumer_machine, read_installed_inspections
+from aart_cli.io.consumer_settings import write_consumer_settings
+from aart_cli.io.credentials import CredentialProviderPort
+from aart_cli.io.execution import CredentialEffectInterpreter, TerminalHandover
+from aart_cli.io.installed_smoke import LocalMcpTest, SmokePlanEntry, SmokeTargetResult
+from aart_cli.io.maintainer_promotion import (
+    PreparedConfiguredCandidatePromotion,
+    complete_configured_candidate_promotion,
+    prepare_configured_bulk_promotion,
+    prepare_configured_candidate_promotion,
+)
+from aart_cli.io.maintainer_sync import (
+    complete_configured_source_sync,
+    prepare_configured_source_sync,
+)
+from aart_cli.io.maintainer_views import read_maintainer_views
+from aart_cli.io.object_store import read_object
+from aart_cli.io.registry_adoption import (
+    AdoptedArtifact,
+    AdoptionUpstreamCheck,
+    PreparedAdoption,
+    RepositoryScan,
+)
+from aart_cli.io.registry_bootstrap import (
+    RegistryBootstrapReport,
+    registry_absent_refusal,
+    registry_identity_refusal,
+)
+from aart_cli.io.registry_publication import publish_registry_commit
+from aart_cli.io.registry_workspace import read_registry_workspace
 from aart_cli.protocol.authoring import read_package_description
 from aart_cli.protocol.hashing import parse_sha256
+from aart_cli.registry_commands.publication_state import (
+    RegistryPublicationCommand,
+    RegistryPublicationReceipt,
+    prepare_registry_publication,
+    publication_summary,
+)
 from aart_cli.store.model import ObjectReadRequest, object_store_paths
 from aart_cli.tui_consumer import (
     CanonicalScreenSource,
@@ -149,59 +201,6 @@ from aart_cli.tui_consumer import (
     MarketplaceEntry,
     screens_from,
 )
-
-from .configured_configuration_action import (
-    PreparedConfiguredConfiguration,
-    complete_configured_configuration,
-    prepare_configured_configuration,
-)
-from .configured_installation_action import (
-    CompletedConfiguredInstallation,
-    InstallationHost,
-    PreparedConfiguredInstallation,
-    complete_configured_installation,
-    prepare_configured_installation,
-)
-from .configured_repair_action import (
-    PreparedConfiguredRepair,
-    complete_configured_repair,
-    prepare_configured_repair,
-)
-from .configured_uninstall_action import (
-    PreparedConfiguredUninstall,
-    complete_configured_uninstall,
-    prepare_configured_uninstall,
-)
-from .consumer_machine import read_consumer_machine, read_installed_inspections
-from .consumer_settings import write_consumer_settings
-from .credentials import CredentialProviderPort
-from .execution import CredentialEffectInterpreter, TerminalHandover
-from .installed_smoke import LocalMcpTest, SmokePlanEntry, SmokeTargetResult
-from .maintainer_promotion import (
-    PreparedConfiguredCandidatePromotion,
-    complete_configured_candidate_promotion,
-    prepare_configured_bulk_promotion,
-    prepare_configured_candidate_promotion,
-)
-from .maintainer_sync import (
-    complete_configured_source_sync,
-    prepare_configured_source_sync,
-)
-from .maintainer_views import read_maintainer_views
-from .object_store import read_object
-from .registry_adoption import (
-    AdoptedArtifact,
-    AdoptionUpstreamCheck,
-    PreparedAdoption,
-    RepositoryScan,
-)
-from .registry_bootstrap import (
-    RegistryBootstrapReport,
-    registry_absent_refusal,
-    registry_identity_refusal,
-)
-from .registry_publication import publish_registry_commit
-from .registry_workspace import read_registry_workspace
 
 __all__ = [
     "CONSUMER_ACTION_NOT_INSTALLED",
@@ -407,6 +406,7 @@ def _installation_targets(
         harnesses = {item.harness for item in placement.targets}
         harnesses.update(item.harness for item in placement.deliveries)
         harnesses.update(item.harness for item in placement.merges)
+        harnesses.update(item.harness for item in placement.settings)
         for profile in profiles:
             if profile in harnesses and coordinate not in hosted[profile]:
                 hosted[profile].append(coordinate)

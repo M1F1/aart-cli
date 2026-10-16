@@ -13,7 +13,7 @@ from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err, Ok
 from aart_cli.io.git import GitProcessReceipt
-from aart_cli.sources.git import (
+from aart_cli.io.git_acquisition import (
     _snapshot_from_archive,
     _tree_listing,
     acquire_git_snapshot,
@@ -278,7 +278,7 @@ class GitSourceAdapterTest(unittest.TestCase):
 
             self.assertIsInstance(acquire_git_snapshot(request, runner=bad_commit), Err)
 
-            with patch("aart_cli.sources.git.Path.mkdir", side_effect=OSError("storage")):
+            with patch("aart_cli.io.git_acquisition.Path.mkdir", side_effect=OSError("storage")):
                 self.assertIsInstance(acquire_git_snapshot(request, runner=base), Err)
 
     def test_embedded_credentials_and_unapproved_file_transport_are_rejected(self) -> None:

@@ -44,6 +44,7 @@ def _artifact_document(artifact_type: str, payload_format: str, **overrides):
         "mcp": ["merge-json"],
         "hook": ["copy-tree", "merge-json"],
         "memory": ["managed-block"],
+        "plugin": ["copy-tree", "merge-json"],
     }
     document = {
         "schema_version": 1,

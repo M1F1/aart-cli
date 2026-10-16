@@ -933,7 +933,7 @@
     {
       "id": "CP-28",
       "title": "The consumer install-and-verify journey: install an artifact into a harness and learn whether it works",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -963,6 +963,48 @@
         {
           "id": "6",
           "title": "Run the full quality, integration and release-facing verification only after CP-28's implementation tasks are complete",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-29",
+      "title": "Module boundaries as data, and OpenCode plugins as an artifact kind proven on an enterprise fork of superpowers",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "tach in the dev group, tach.toml as the current import graph, and a `tach` quality gate (#32 steps 1, 2 and 4)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "superpowers delivered with what exists: its skills as Skill artifacts and its bootstrap as Memory, installed into opencode and checked live",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Specify the OpenCode plugin artifact kind: vendored, digest-pinned, local-path registration, high-risk execution",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Implement the plugin kind end to end: manifest, Registry, Marketplace, plan, placement, receipt, uninstall, verify",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "superpowers as a plugin: an enterprise fork installed into opencode through aart-cli and checked live",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "Break the import cycles tach reports (B-186: 21 modules in two components) and turn on forbid_circular_dependencies, at the owner's request",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "Run the full quality, integration and release-facing verification only after CP-29's implementation tasks are complete",
           "status": "done"
         }
       ]

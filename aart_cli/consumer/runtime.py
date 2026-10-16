@@ -38,6 +38,7 @@ from aart_cli.io.config_store import (
 )
 from aart_cli.io.configured_offers import project_configured_registry
 from aart_cli.io.object_store import publish_object
+from aart_cli.io.source_runtime import observe_configured_source, sync_configured_source
 from aart_cli.io.source_store import (
     read_current_source,
 )
@@ -57,6 +58,7 @@ from aart_cli.registry_maintenance.promoted import (
     is_promoted_registry,
     legacy_registry_paths,
 )
+from aart_cli.registry_maintenance.source_validation import declares_native_source
 from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
 from aart_cli.security.aggregation import ArtifactSecurityEvidence
 from aart_cli.security.application import verify_security_index
@@ -81,8 +83,6 @@ from aart_cli.sources.model import (
     source_instance_id,
     source_store_paths,
 )
-from aart_cli.sources.runtime import observe_configured_source, sync_configured_source
-from aart_cli.sources.validation import declares_native_source
 from aart_cli.store.model import (
     ObjectPublishCommand,
     ObjectStorePaths,

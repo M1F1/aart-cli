@@ -21,7 +21,7 @@ from aart_cli.protocol.semver import parse_semver
 from aart_cli.sources.model import HealthStatus, SourceHealth, source_instance_id
 
 _HEX_64_RE = re.compile(r"^[0-9a-f]{64}$")
-_ARTIFACT_KINDS = frozenset({"skill", "guideline", "mcp", "hook", "memory"})
+_ARTIFACT_KINDS = frozenset({"skill", "guideline", "mcp", "hook", "memory", "plugin"})
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 
 

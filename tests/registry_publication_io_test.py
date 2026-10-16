@@ -9,16 +9,16 @@ import unittest
 from contextlib import contextmanager
 from typing import Iterator
 
-from aart_cli.application.registry_publication import (
-    PublicationOutcome,
-    RegistryPublicationCommand,
-)
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
 from aart_cli.domain.publication import PublicationBranch
 from aart_cli.domain.result import Err, Ok
 from aart_cli.io.registry_publication import (
     publish_registry_commit,
     registry_remote_default_branch,
+)
+from aart_cli.registry_commands.publication_state import (
+    PublicationOutcome,
+    RegistryPublicationCommand,
 )
 
 _DIGEST = ObjectDigest("sha256", "d" * 64)

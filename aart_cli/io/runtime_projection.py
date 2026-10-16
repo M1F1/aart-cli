@@ -26,7 +26,7 @@ from aart_cli.application.runtime_projection import RuntimeProjection
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.effects import DeliveryKind
 from aart_cli.domain.harness import McpRegistration
-from aart_cli.domain.hooks import hook_entry_at
+from aart_cli.domain.hooks import settings_entry_at
 from aart_cli.domain.identifiers import ObjectDigest
 from aart_cli.domain.managed_blocks import managed_block_body
 from aart_cli.domain.python_runtime import ArtifactEnvironment
@@ -226,7 +226,7 @@ def _entry_digest(entry: ArtifactSettingsEntry) -> ObjectDigest | None:
             document = json.load(handle)
     except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return None
-    found = hook_entry_at(document, entry.path, entry.entry)
+    found = settings_entry_at(document, entry.path, entry.entry)
     if isinstance(found, Err) or found.value is None:
         return None
     return settings_entry_digest(found.value)

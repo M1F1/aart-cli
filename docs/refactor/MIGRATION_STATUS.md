@@ -4,6 +4,33 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-15, CP-29 step 7: CP-29 is complete.** The full `pr-check` passed on #64 (run
+38796746723). What remains is the owner's merge, and the release Release Please makes from it.
+
+**2026-10-15, CP-29 step 6 (D-409): the import graph is acyclic and tach forbids cycles.**
+- B-186's 21 modules in two cycles are untangled by moving each misplaced module to the layer it
+  acts in. Behaviour is unchanged.
+- `forbid_circular_dependencies = true`, and the unit gate checks the declared graph for cycles.
+- Evidence is in the CP-29 slice, step 6.
+
+**2026-10-15, CP-29 step 5 (D-408): superpowers runs as an OpenCode plugin installed by aart-cli.**
+- The upstream 7.0.0 plugin was vendored into a plugin artifact, published to a local Registry and
+  installed into opencode.
+- opencode loaded its 15 skills from the private tree, under their upstream names.
+- A live session used `brainstorming` before feature work. The control did not.
+- Uninstall left no superpowers skill.
+- Two defects fixed on the way: root-anchored Registry ignores, and settings entries as setup
+  evidence.
+
+**2026-10-15, CP-29 steps 1–4 (D-404–D-407): tach is a gate, and OpenCode plugins are an artifact kind.**
+- tach checks the import graph (D-404).
+- superpowers' skills and bootstrap were installed into opencode as Skills and Memory, and checked
+  live.
+- §171 specifies plugins, and the `plugin` kind is implemented through authoring, placement,
+  receipt, status and uninstall. Its registration is one `./` path in opencode.json's `plugin` list,
+  reviewed as high-risk.
+- Evidence is in the CP-29 slice, steps 2 and 4, and INV-255–257 in `INVARIANT_TRACEABILITY.md`.
+
 **2026-10-15, D-401–D-403: the install flow is quieter and has one final review.** Review
 Selection (05) in Fast keeps only what is wrong with the harness choice, without the count of
 Marketplace ticks. Statements on Installing, the MCP test and the Dashboard's recent activity are

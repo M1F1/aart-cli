@@ -20,10 +20,10 @@ from aart_cli.configuration.model import (
     UserConfiguration,
     default_user_configuration,
 )
+from aart_cli.consumer_actions import _refusal
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias, SourceId
 from aart_cli.domain.result import Err, Ok
-from aart_cli.io.consumer_actions import _refusal
 from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,

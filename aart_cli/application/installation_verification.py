@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from aart_cli.domain.hooks import hook_entry_fingerprint
+from aart_cli.domain.hooks import settings_entry_fingerprint
 from aart_cli.domain.identifiers import ObjectDigest
 from aart_cli.domain.receipts import InstallationReceipt
 from aart_cli.protocol.hashing import sha256_bytes
@@ -99,7 +99,7 @@ def settings_entry_digest(entry: object) -> ObjectDigest:
     converges.
     """
 
-    return sha256_bytes(hook_entry_fingerprint(entry).encode("utf-8"))
+    return sha256_bytes(settings_entry_fingerprint(entry).encode("utf-8"))
 
 
 @dataclass(frozen=True, slots=True)

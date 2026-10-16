@@ -35,8 +35,8 @@ from aart_cli.configuration.paths import Platform, resolve_config_paths
 from aart_cli.configuration.schema import user_configuration_bytes
 from aart_cli.domain.registry import PublicationStage
 from aart_cli.domain.result import Ok
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from aart_cli.protocol.native_tree import SnapshotEntry, SourceSnapshot
-from aart_cli.sources.git import acquire_git_snapshot
 from aart_cli.sources.model import GitSnapshotRequest
 from tests.configured_installation_draft_e2e_test import _promoted_local_registries
 from tests.configured_update_command_e2e_test import (
@@ -143,7 +143,7 @@ class _PublicationLab:
         output = io.StringIO()
         transport = (
             mock.patch(
-                "aart_cli.sources.runtime.acquire_git_snapshot",
+                "aart_cli.io.source_runtime.acquire_git_snapshot",
                 side_effect=self._local_transport,
             )
             if source_transport

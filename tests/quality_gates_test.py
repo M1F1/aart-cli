@@ -21,6 +21,7 @@ EXPECTED_GATES = (
     "unit",
     "integration",
     "validate",
+    "tach",
     "coverage",
     "packaging-check",
     "docs-check",

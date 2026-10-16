@@ -36,9 +36,9 @@ from aart_cli.application.maintainer_views import (
     project_maintainer_registry_commit,
     project_registry_workspace,
 )
+from aart_cli.consumer_actions import LocalConsumerActions
 from aart_cli.domain.publication import RegistryCommitOrigin
 from aart_cli.domain.result import Ok
-from aart_cli.io.consumer_actions import LocalConsumerActions
 from aart_cli.io.maintainer_promotion import PreparedConfiguredCandidatePromotion
 from aart_cli.tui_consumer import (
     CanonicalScreenSource,
@@ -301,7 +301,7 @@ class RegistryMaintainerOwnsPushTest(unittest.TestCase):
                 )
 
                 with mock.patch(
-                    "aart_cli.io.consumer_actions.read_registry_workspace",
+                    "aart_cli.consumer_actions.read_registry_workspace",
                     return_value=workspace,
                 ):
                     actions._prepare_registry_push(command)
@@ -339,14 +339,14 @@ class RegistryMaintainerOwnsPushTest(unittest.TestCase):
         )
         with (
             mock.patch(
-                "aart_cli.io.consumer_actions.complete_configured_candidate_promotion",
+                "aart_cli.consumer_actions.complete_configured_candidate_promotion",
                 return_value=Ok(_completed(transaction)),
             ),
             mock.patch(
-                "aart_cli.io.consumer_actions.read_maintainer_views",
+                "aart_cli.consumer_actions.read_maintainer_views",
                 return_value=Ok(object()),
             ),
-            mock.patch("aart_cli.io.consumer_actions.replace", side_effect=replace_context),
+            mock.patch("aart_cli.consumer_actions.replace", side_effect=replace_context),
         ):
             actions._execute_candidate_promotion(command, pending)
 

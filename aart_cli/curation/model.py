@@ -14,7 +14,7 @@ from aart_cli.protocol.json import JsonArray, JsonObject
 from aart_cli.runtime_contract import EXECUTABLE_VERSION
 
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
-_KINDS = frozenset({"skill", "guideline", "mcp", "hook", "memory"})
+_KINDS = frozenset({"skill", "guideline", "mcp", "hook", "memory", "plugin"})
 _SCOPES = frozenset({"project", "user"})
 _MODES = frozenset({"copy", "symlink"})
 _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")

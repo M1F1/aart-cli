@@ -21,6 +21,7 @@ from aart_cli.application.sources import (
 )
 from aart_cli.configuration.model import ConfiguredSource, SyncMode
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from aart_cli.io.source_store import (
     acquire_source_lock,
     discard_source_store,
@@ -32,11 +33,10 @@ from aart_cli.io.source_store import (
 )
 from aart_cli.protocol.capabilities import Capability
 from aart_cli.protocol.semver import SemVer
+from aart_cli.registry_maintenance.source_validation import validate_configured_source_candidate
 from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
-
-from .git import acquire_git_snapshot
-from .local import read_local_snapshot
-from .model import (
+from aart_cli.sources.local import read_local_snapshot
+from aart_cli.sources.model import (
     CurrentSourceRequest,
     HealthStatus,
     SnapshotLimits,
@@ -50,7 +50,6 @@ from .model import (
     source_instance_id,
     source_store_paths,
 )
-from .validation import validate_configured_source_candidate
 
 DEFAULT_SOURCE_SYNC_TIMEOUT_SECONDS = 60
 

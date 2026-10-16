@@ -20,6 +20,10 @@ from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactCoordinate, ObjectDigest, SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.io.source_runtime import (
+    DEFAULT_SOURCE_SYNC_TIMEOUT_SECONDS,
+    source_sync_ports,
+)
 from aart_cli.protocol.authoring import compile_author_source
 from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
 from aart_cli.sources.model import (
@@ -28,10 +32,6 @@ from aart_cli.sources.model import (
     SyncFallback,
     source_instance_id,
     source_store_paths,
-)
-from aart_cli.sources.runtime import (
-    DEFAULT_SOURCE_SYNC_TIMEOUT_SECONDS,
-    source_sync_ports,
 )
 
 from .candidate_store import (

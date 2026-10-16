@@ -98,7 +98,7 @@ class VendorAssessmentTest(unittest.TestCase):
                 if snapshot is None
                 else NativeReferenceAcquisition(_URL, "v1.4.0", _COMMIT, snapshot)
             )
-            from aart_cli.curation.runtime import LocalCurationService
+            from aart_cli.io.curation_runtime import LocalCurationService
 
             service = LocalCurationService(
                 str(root), native_acquirer=lambda _url, _ref: Ok(acquisition)

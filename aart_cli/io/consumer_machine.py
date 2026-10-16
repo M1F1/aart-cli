@@ -52,6 +52,7 @@ from aart_cli.domain.harness import (
     delivery_destination,
     delivery_target,
     memory_target,
+    plugin_target,
 )
 from aart_cli.domain.identifiers import ArtifactCoordinate
 from aart_cli.domain.installation_owner import installation_key
@@ -201,6 +202,18 @@ def _targets_scope_and_profile(
             continue
         if merge.destination == os.path.join(harness_root, memory.destination):
             return True
+    # A plugin reaches its harness through one entry in a settings file and nothing else (§171.3),
+    # so that file is the only place this scope can be read off.
+    if kind is ArtifactKind.PLUGIN:
+        for entry in receipt.settings:
+            if profiles and entry.harness not in profiles:
+                continue
+            try:
+                plugin = plugin_target(entry.harness, scope)
+            except KeyError:
+                continue
+            if entry.destination == os.path.join(harness_root, plugin.settings):
+                return True
     return False
 
 

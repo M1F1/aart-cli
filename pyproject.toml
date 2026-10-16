@@ -83,6 +83,11 @@ poetry = { version = "2.4.1", python = ">=3.10,<4.0" }
 # The upper bound is Poetry's, not ours: poetry-core declares `<4.0`, and this project declares
 # only `>=3.10`, so the solver refuses the pair until the narrower range is stated here.
 poetry-core = { version = "2.4.0", python = ">=3.10,<4.0" }
+# Module boundaries as data (#32, CP-29).  Pinned exactly for the reason ruff is: a boundary
+# checker whose reading of the rules moves between versions is red in CI and green locally.  It
+# ships a compiled binary, which is fine for a dev tool and is what the runtime-import gate keeps
+# out of the wheel.
+tach = { version = "0.35.3", python = ">=3.10,<4.0" }
 
 # --------------------------------------------------------------------------- #
 # Developer tooling (optional — see the `dev` extra). None of this touches the

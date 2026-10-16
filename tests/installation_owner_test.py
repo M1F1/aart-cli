@@ -1,6 +1,6 @@
 """One installation owns its credentials, and the address proves it (§169.4-6, D-333/D-349).
 
-What is here today is the thing this replaces: `io/consumer_actions.py` addresses a Keychain item
+What is here today is the thing this replaces: `consumer_actions.py` addresses a Keychain item
 as `aart.<12 hex of the user home>` with the declared input id as the account. That names the
 machine and the input and nothing else, so one artifact installed into two harnesses, two scopes or
 from two Registry aliases reaches for the *same* item -- which is the sharing D-333 removed, in the

@@ -19,7 +19,7 @@ from pathlib import Path
 
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err
-from aart_cli.sources.git import _tree_listing
+from aart_cli.io.git_acquisition import _tree_listing
 from aart_cli.sources.model import (
     GitSnapshotRequest,
     SnapshotLimits,

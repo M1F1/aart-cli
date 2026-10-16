@@ -13,7 +13,7 @@ class SourceBoundaryTest(unittest.TestCase):
         files = (
             root / "sources" / "model.py",
             root / "sources" / "pointer.py",
-            root / "sources" / "validation.py",
+            root / "registry_maintenance" / "source_validation.py",
             root / "application" / "sources.py",
         )
         forbidden = {

@@ -13,7 +13,7 @@ from .json import JsonValue
 from .paths import SafeRelativePath
 from .semver import SemVer, VersionBounds
 
-CanonicalArtifactType = Literal["skill", "guideline", "mcp", "hook", "memory"]
+CanonicalArtifactType = Literal["skill", "guideline", "mcp", "hook", "memory", "plugin"]
 InstallScope = Literal["project", "user"]
 InstallMode = Literal["copy", "symlink"]
 InstallEffect = Literal["copy-tree", "write-file", "merge-json", "managed-block"]
@@ -24,6 +24,7 @@ PAYLOAD_FORMATS: tuple[tuple[CanonicalArtifactType, str], ...] = (
     ("mcp", "aart-cli-mcp-v1"),
     ("hook", "aart-cli-hook-v1"),
     ("memory", "aart-cli-memory-v1"),
+    ("plugin", "aart-cli-plugin-v1"),
 )
 PAYLOAD_FORMAT_BY_TYPE: Mapping[CanonicalArtifactType, str] = MappingProxyType(
     dict(PAYLOAD_FORMATS)
@@ -36,6 +37,7 @@ INSTALL_EFFECTS_BY_TYPE: Mapping[CanonicalArtifactType, frozenset[InstallEffect]
             "mcp": frozenset({"merge-json"}),
             "hook": frozenset({"copy-tree", "merge-json"}),
             "memory": frozenset({"write-file", "managed-block"}),
+            "plugin": frozenset({"copy-tree", "merge-json"}),
         }
     )
 )

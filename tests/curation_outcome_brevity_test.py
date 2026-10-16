@@ -22,8 +22,8 @@ from aart_cli.curation.model import (
     CurationReview,
     render_curation_outcome,
 )
-from aart_cli.curation.runtime import _follow_up
 from aart_cli.domain.identifiers import ObjectDigest
+from aart_cli.io.curation_runtime import _follow_up
 
 DIGEST = ObjectDigest("sha256", "a" * 64)
 

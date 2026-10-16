@@ -19,6 +19,7 @@ import shlex
 import subprocess
 from typing import Tuple
 
+from aart_cli.cli_parser import build_parser
 from aart_cli.setup_verify import VerificationProbes
 
 _SECURITY = "/usr/bin/security"
@@ -119,11 +120,6 @@ def command_accepted(command: str) -> bool | None:
     """
 
     try:
-        from aart_cli import cli  # imported here: `cli` reaches this module in a cycle
-    except ImportError:  # pragma: no cover - the CLI is part of the package
-        return None
-
-    try:
         arguments = shlex.split(command)
     except ValueError:
         return False
@@ -135,7 +131,7 @@ def command_accepted(command: str) -> bool | None:
         contextlib.redirect_stderr(io.StringIO()),
     ):
         try:
-            cli.build_parser().parse_args(arguments[1:])
+            build_parser().parse_args(arguments[1:])
         except SystemExit as exited:
             return exited.code == 0
     return True

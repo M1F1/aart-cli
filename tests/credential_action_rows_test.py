@@ -42,13 +42,13 @@ from aart_cli.application.consumer_views import (
     PresentationProfile,
     project_credential_record,
 )
+from aart_cli.consumer_actions import LocalConsumerActions
 from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialState,
     ProviderState,
 )
 from aart_cli.domain.result import Ok
-from aart_cli.io.consumer_actions import LocalConsumerActions
 from aart_cli.io.consumer_machine import read_consumer_machine
 from aart_cli.io.receipt_store import LocalReceiptStore
 from aart_cli.tui_consumer import CanonicalScreenSource, _reload, frame

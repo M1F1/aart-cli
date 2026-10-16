@@ -19,7 +19,7 @@ import traceback
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import date
-from typing import TYPE_CHECKING, Callable, List, Literal, Mapping, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Callable, List, Literal, Optional, Sequence, Tuple
 
 if TYPE_CHECKING:  # pragma: no cover - imported for annotations only
     from .commands.first_run import FirstRunSeedReport
@@ -43,6 +43,13 @@ from .consumer import (
     ConsumerOutcome,
     ConsumerReview,
 )
+from .consumer.configured_setup import ConfiguredSetupService, configured_consumer_completion
+from .consumer_actions import (
+    ConsumerActionContext,
+    LocalConsumerActions,
+    RegistryBootstrapCompletion,
+    RegistryConnectionSnapshot,
+)
 from .domain.harness import Scope
 from .domain.identifiers import ArtifactCoordinate
 from .domain.result import Err as DomainErr
@@ -51,13 +58,6 @@ from .domain.result import Result as DomainResult
 from .io.configured_installation_action import (
     CompletedConfiguredInstallation,
     InstallationHost,
-)
-from .io.configured_setup import ConfiguredSetupService, configured_consumer_completion
-from .io.consumer_actions import (
-    ConsumerActionContext,
-    LocalConsumerActions,
-    RegistryBootstrapCompletion,
-    RegistryConnectionSnapshot,
 )
 from .io.consumer_machine import read_consumer_machine
 from .io.consumer_settings import read_consumer_settings
@@ -113,24 +113,13 @@ WriteFn = Callable[[str], None]
 
 
 def _dispatch(request: Request) -> int:
-    """Route *request* through the same handlers the flag-mode CLI uses.
+    """Route *request* to the `run` of its command module, the function `cli.DISPATCH` names.
 
-    Prefers ``cli.DISPATCH`` when it exists; otherwise imports the command module
-    for ``request.command`` directly. Both paths call the identical ``run`` function — this
-    module duplicates **no** command logic.
+    Imported on demand, which avoids importing every command. It does not read `cli`: `cli`
+    launches this module, so reading it back closed an import cycle (B-186), and every
+    `DISPATCH` entry is this same function.
     """
-    try:
-        from . import cli
 
-        dispatch = getattr(cli, "DISPATCH", None)
-    except Exception:  # pragma: no cover - cli import is trivial
-        dispatch = None
-
-    if isinstance(dispatch, Mapping) and request.command in dispatch:
-        return int(dispatch[request.command](request))
-
-    # Fallback: import the specific command module on demand (avoids importing all of them
-    # and keeps this independent of the CLI's dispatch table).
     from importlib import import_module
 
     module = import_module(f".commands.{request.command}", package=__package__)

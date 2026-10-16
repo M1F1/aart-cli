@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import ClassVar, TypeAlias
 
-from .hooks import HookEntry
+from .hooks import HookEntry, PluginEntry, SettingsListEntry
 from .managed_blocks import BlockPosition, is_block_name
 
 
@@ -378,14 +378,17 @@ class MergeSettingsEntry:
     A configuration mutation for the same reason a merged block is (D-077): the file belongs to the
     harness and its user, and this one decides what the harness executes, which is the strongest
     reason yet for a policy ceiling to be able to refuse it.
+
+    A plugin's entry is the exception that raises it (§171.4, INV-256). A hook's entry tells the
+    harness to run a command the person can read; a plugin's tells it to load a module into its own
+    process for every session, so writing that entry is the high-risk execution itself.
     """
 
     harness: str
     artifact: str
     destination: str
     path: str
-    entry: HookEntry
-    risk: ClassVar[RiskClass] = RiskClass.CONFIGURATION_MUTATION
+    entry: SettingsListEntry
     capabilities: ClassVar[EffectCapabilities] = _HARNESS
 
     def __post_init__(self) -> None:
@@ -393,8 +396,14 @@ class MergeSettingsEntry:
         _line(self.artifact, "artifact")
         _line(self.destination, "settings destination")
         _settings_path(self.path)
-        if not isinstance(self.entry, HookEntry):
-            raise ValueError("a merged settings entry needs the hook it writes")
+        if not isinstance(self.entry, (HookEntry, PluginEntry)):
+            raise ValueError("a merged settings entry needs the hook or plugin it writes")
+
+    @property
+    def risk(self) -> RiskClass:
+        if isinstance(self.entry, PluginEntry):
+            return RiskClass.HIGH_RISK_EXECUTION
+        return RiskClass.CONFIGURATION_MUTATION
 
 
 @dataclass(frozen=True, slots=True)
@@ -409,7 +418,7 @@ class UnmergeSettingsEntry:
     artifact: str
     destination: str
     path: str
-    entry: HookEntry
+    entry: SettingsListEntry
     risk: ClassVar[RiskClass] = RiskClass.CONFIGURATION_MUTATION
     capabilities: ClassVar[EffectCapabilities] = _HARNESS
 
@@ -418,8 +427,8 @@ class UnmergeSettingsEntry:
         _line(self.artifact, "artifact")
         _line(self.destination, "settings destination")
         _settings_path(self.path)
-        if not isinstance(self.entry, HookEntry):
-            raise ValueError("a withdrawn settings entry needs the hook it identifies")
+        if not isinstance(self.entry, (HookEntry, PluginEntry)):
+            raise ValueError("a withdrawn settings entry needs the hook or plugin it identifies")
 
 
 Effect: TypeAlias = (
@@ -552,10 +561,15 @@ def effect_to_data(effect: Effect) -> dict[str, object]:
             artifact=effect.artifact,
             destination=effect.destination,
             path=effect.path,
-            shape=effect.entry.shape.value,
-            matcher=effect.entry.matcher,
-            command=effect.entry.command,
         )
+        if isinstance(effect.entry, PluginEntry):
+            data.update(plugin=effect.entry.reference)
+        else:
+            data.update(
+                shape=effect.entry.shape.value,
+                matcher=effect.entry.matcher,
+                command=effect.entry.command,
+            )
     else:
         data.update(kind="verify-requirement", requirement=effect.requirement)
     return data

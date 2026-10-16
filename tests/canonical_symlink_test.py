@@ -12,7 +12,6 @@ from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias
 from aart_cli.domain.result import Err, Ok
 from aart_cli.install_state.schema import parse_install_state
 from aart_cli.installation.application import finalize_install, prepare_install
-from aart_cli.installation.io import LocalInstallAdapter
 from aart_cli.installation.model import (
     InstallLocation,
     InstallRequest,
@@ -23,6 +22,7 @@ from aart_cli.installation.model import (
     PathSnapshot,
     classify_link,
 )
+from aart_cli.io.installation_apply import LocalInstallAdapter
 from aart_cli.io.object_store import publish_object
 from aart_cli.io.reference_store import read_references
 from aart_cli.marketplace.catalog import build_marketplace
@@ -527,7 +527,7 @@ class CanonicalSymlinkTest(unittest.TestCase):
             )
             assert isinstance(retarget, Ok), retarget
             original = __import__(
-                "aart_cli.installation.io", fromlist=["_write_atomic"]
+                "aart_cli.io.installation_apply", fromlist=["_write_atomic"]
             )._write_atomic
             calls = 0
 
@@ -539,7 +539,7 @@ class CanonicalSymlinkTest(unittest.TestCase):
                 return original(path, content, mode=mode)
 
             with patch(
-                "aart_cli.installation.io._write_atomic",
+                "aart_cli.io.installation_apply._write_atomic",
                 side_effect=fail_state_once,
             ):
                 failed = finalize_install(
@@ -632,7 +632,7 @@ class CanonicalSymlinkTest(unittest.TestCase):
             )
             assert isinstance(planned, Ok), planned
             original = __import__(
-                "aart_cli.installation.io", fromlist=["_write_symlink"]
+                "aart_cli.io.installation_apply", fromlist=["_write_symlink"]
             )._write_symlink
             wrong = root / "wrong-target"
             wrong.mkdir()
@@ -644,7 +644,7 @@ class CanonicalSymlinkTest(unittest.TestCase):
                 return original(path, str(wrong) if calls == 1 else target)
 
             with patch(
-                "aart_cli.installation.io._write_symlink",
+                "aart_cli.io.installation_apply._write_symlink",
                 side_effect=write_wrong_once,
             ):
                 outcome = finalize_install(

@@ -37,8 +37,9 @@ from aart_cli.domain.harness import (
     mcp_target,
     measured_harnesses,
     memory_target,
+    plugin_target,
 )
-from aart_cli.domain.hooks import HookEntry
+from aart_cli.domain.hooks import HookEntry, PluginEntry
 from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity
 from aart_cli.domain.inputs import InputValueSource
 from aart_cli.domain.install_description import InstallDescription
@@ -58,6 +59,7 @@ from aart_cli.protocol.authoring import (
     package_hook,
     package_merge,
     package_payload_root,
+    package_plugin,
     read_package_description,
 )
 from aart_cli.protocol.native_models import ArtifactManifest
@@ -256,6 +258,45 @@ def _settings(
         except ValueError as error:
             return _error(f"{identity} cannot be registered with {delivery.harness}: {error}")
     return Ok(tuple(settings))
+
+
+def _plugin_settings(
+    identity: ArtifactIdentity,
+    entries: object,
+    *,
+    profile: str,
+    scope: Scope,
+    profiles_requested: bool,
+    root: str,
+    harness_root: str,
+) -> Result[tuple[ArtifactSettingsEntry, ...]]:
+    """The one member of the harness's plugin list this installation owns (§171.3).
+
+    Nothing is delivered: the module stays in the private tree, which no measured harness scans,
+    and the entry is what makes the harness load it. It is spelled relative to the settings file,
+    because that is how OpenCode resolves it, so the tree and the entry move together with the
+    root. An entry that would have to climb out of the settings file's directory is refused by
+    `PluginEntry` rather than written, since it is no longer a path inside this installation.
+    """
+
+    packaged = package_plugin(entries)  # type: ignore[arg-type]
+    if isinstance(packaged, Err):
+        return packaged
+    try:
+        target = plugin_target(profile, scope)
+    except KeyError as error:
+        # Named rather than skipped: a vendored tree nothing registers is installed and inert.
+        if _skippable(profile, requested=profiles_requested):
+            return Ok(())
+        return _error(str(error).strip("'"))
+    settings = os.path.join(harness_root, target.settings)
+    module = os.path.join(ArtifactEnvironment(str(identity), root).payload, packaged.value.entry)
+    reference = os.path.relpath(module, os.path.dirname(settings)).replace(os.sep, "/")
+    try:
+        entry = PluginEntry(f"./{reference}")
+    except ValueError as error:
+        return _error(f"{identity} cannot be registered with {profile}: {error}")
+    return Ok((ArtifactSettingsEntry(profile, settings, target.path, entry),))
 
 
 def _deliveries(
@@ -498,6 +539,21 @@ def placements_for(
             if not blocks.value:
                 return Ok(None)
             merges = blocks.value
+        elif kind is ArtifactKind.PLUGIN:
+            registered = _plugin_settings(
+                coordinate.artifact,
+                entries,
+                profile=profile,
+                scope=scope,
+                profiles_requested=profiles_requested,
+                root=root,
+                harness_root=harness_root,
+            )
+            if isinstance(registered, Err):
+                return registered
+            if not registered.value:
+                return Ok(None)
+            settings = registered.value
         else:
             made = _deliveries(
                 coordinate,
@@ -561,7 +617,7 @@ def placements_for(
         if one.value is not None:
             placements.append(one.value)
     if not placements:
-        # The three ways an artifact can reach a harness, so the refusal says which one this
+        # The four ways an artifact can reach a harness, so the refusal says which one this
         # artifact was offering. Named here rather than per harness: one harness that does not
         # host it is not a failed install, and every harness answering that way is.
         verb = (
@@ -569,6 +625,8 @@ def placements_for(
             if not delivered
             else "merges into no file of"
             if kind in _MERGED_KINDS
+            else "is loaded by none of"
+            if kind is ArtifactKind.PLUGIN
             else "is read by none of"
         )
         return _error(

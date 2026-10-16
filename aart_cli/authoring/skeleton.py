@@ -189,7 +189,7 @@ def _mcp_blueprint(name: str) -> _Blueprint:
         document,
         optional=("compatibility", "inputs", "python", "smoke_test"),
         nested_optional=(("artifact", "summary"), ("launch", "arguments"), ("payload", "exclude")),
-        notes=_UNREAD_NOTE,
+        notes=(*_PLUGIN_NOT_GENERATED, *_UNREAD_NOTE),
         payload=_mcp_payload(entrypoint),
     )
 
@@ -323,6 +323,12 @@ _ALTERNATIVES: dict[str, tuple[str, ...]] = {
 #: Root keys `parse_author_manifest` accepts and builds nothing from. There is no shape to
 #: generate for them, so they are named rather than invented.
 _ACCEPTED_UNREAD: tuple[str, ...] = ("credentials", "install", "requirements")
+
+_PLUGIN_NOT_GENERATED: tuple[str, ...] = (
+    "## Plugin-only fields are not valid for this artifact kind:",
+    "#? plugin:",
+    "#?   entry: index.js",
+)
 
 _UNREAD_NOTE: tuple[str, ...] = (
     "## `parse_author_manifest` accepts these three at the top level and builds nothing from",
@@ -528,7 +534,7 @@ def _skill_blueprint(name: str) -> _Blueprint:
         document,
         optional=("compatibility", "inputs"),
         nested_optional=(("artifact", "summary"), ("payload", "exclude")),
-        notes=(*_SKILL_NOT_GENERATED, *_SMOKE_NOT_GENERATED, *_UNREAD_NOTE),
+        notes=(*_SKILL_NOT_GENERATED, *_SMOKE_NOT_GENERATED, *_PLUGIN_NOT_GENERATED, *_UNREAD_NOTE),
         payload=_skill_payload(name),
     )
 
@@ -667,7 +673,12 @@ def _document_blueprint(
         ),
         optional=("compatibility", "inputs"),
         nested_optional=(("artifact", "summary"), ("payload", "exclude")),
-        notes=(*_DOCUMENT_NOT_GENERATED, *_SMOKE_NOT_GENERATED, *_UNREAD_NOTE),
+        notes=(
+            *_DOCUMENT_NOT_GENERATED,
+            *_SMOKE_NOT_GENERATED,
+            *_PLUGIN_NOT_GENERATED,
+            *_UNREAD_NOTE,
+        ),
         payload=payload,
     )
 
@@ -757,7 +768,7 @@ def _hook_blueprint(name: str) -> _Blueprint:
         ),
         optional=("compatibility", "inputs"),
         nested_optional=(("artifact", "summary"), ("payload", "exclude")),
-        notes=(*_HOOK_NOT_GENERATED, *_SMOKE_NOT_GENERATED, *_UNREAD_NOTE),
+        notes=(*_HOOK_NOT_GENERATED, *_SMOKE_NOT_GENERATED, *_PLUGIN_NOT_GENERATED, *_UNREAD_NOTE),
         payload=_hook_payload(name),
     )
 
@@ -792,12 +803,123 @@ def _hook_payload(name: str) -> tuple[PayloadFile, ...]:
     )
 
 
+#: A plugin is a module the harness imports, so nothing launches it and nothing may be fetched for
+#: it: the launch block would advertise a protocol it does not speak, and Python dependencies have
+#: nobody to read them. Named rather than hidden, because hiding an accepted field is drift (§1.5).
+_PLUGIN_LAUNCH_NOT_GENERATED: tuple[str, ...] = (
+    "## A plugin is imported by its harness, not launched, so these are left to you. Declaring",
+    "## them makes the package advertise a protocol the module does not speak:",
+    "#? transport:",
+    "#?   type: stdio",
+    "#? runtime:",
+    "#?   type: python",
+    '#?   version: ">=3.11"',
+    "#? launch:",
+    "#?   type: python",
+    "#?   entrypoint: run.py",
+    "#?   arguments:",
+    '#?     - "--once"',
+    "## Python dependencies are accepted by the parser and read by nothing a plugin installs:",
+    "#? python:",
+    "#?   dependencies:",
+    "#?     type: requirements",
+    "#?     path: requirements.txt",
+    "#?   dependencies:",
+    "#?     type: pyproject",
+    "#?     pyproject: pyproject.toml",
+    "#?     lock: uv.lock",
+)
+
+
+def _plugin_inputs_refused() -> tuple[str, ...]:
+    """The input surface, named as alternatives the parser refuses on a plugin.
+
+    Emitted from the same value every other kind enables, so the names cannot drift from what the
+    parser reads. A bare `-` opening an item is folded into the item's first key, which is the same
+    YAML and keeps every offered line a mapping entry or a sequence item.
+    """
+
+    emitted = emit_yaml(_object(("inputs", _inputs())))
+    assert isinstance(emitted, Ok), emitted
+    lines: list[str] = []
+    for line in emitted.value.splitlines():
+        if lines and lines[-1].strip() == "-":
+            opener = lines.pop()
+            line = f"{opener} {line.lstrip(' ')}"
+        lines.append(line)
+    return (
+        "## A plugin reads its own configuration, and AART starts nothing it could hand a value to,",
+        "## so `inputs` is refused on one. This is what other kinds accept:",
+        *(f"{ALTERNATIVE_PREFIX}{line}" for line in lines),
+    )
+
+
+_PLUGIN_ENTRY = "index.js"
+
+
+def _plugin_blueprint(name: str) -> _Blueprint:
+    """A plugin: a module the harness loads into its own process, and whatever it reads (§171).
+
+    `plugin.entry` names the module and `package_plugin` requires the payload to carry it. The
+    payload is vendored as reviewed, so everything the module imports has to be in it: a
+    `package.json` declaring runtime dependencies is refused, because nothing fetches them.
+    """
+
+    return _Blueprint(
+        "plugin",
+        _object(
+            ("schema", "aart-cli.dev/plugin/v1"),
+            (
+                "artifact",
+                _object(
+                    ("kind", "plugin"),
+                    ("name", name),
+                    ("summary", f"{_humanized(name)} plugin."),
+                    ("version", "0.1.0"),
+                ),
+            ),
+            (
+                "payload",
+                _object(
+                    ("exclude", _strings("**/.DS_Store")),
+                    ("include", _strings(_PLUGIN_ENTRY)),
+                ),
+            ),
+            ("plugin", _object(("entry", _PLUGIN_ENTRY))),
+            (
+                "compatibility",
+                _object(
+                    ("harnesses", _strings("opencode")),
+                    ("platforms", _strings("darwin", "linux")),
+                ),
+            ),
+        ),
+        optional=("compatibility",),
+        nested_optional=(("artifact", "summary"), ("payload", "exclude")),
+        notes=(
+            *_PLUGIN_LAUNCH_NOT_GENERATED,
+            *_plugin_inputs_refused(),
+            *_SMOKE_NOT_GENERATED,
+            *_UNREAD_NOTE,
+        ),
+        payload=(
+            PayloadFile(
+                _PLUGIN_ENTRY,
+                "// Loaded by the harness into its own process for every session. Replace it.\n"
+                "export const Plugin = async () => ({});\n"
+                "export default Plugin;\n",
+            ),
+        ),
+    )
+
+
 #: Kind -> the blueprint for it. Registering one here is the whole of adding a generated kind.
 _BLUEPRINTS: dict[str, Callable[[str], _Blueprint]] = {
     "guideline": _guideline_blueprint,
     "hook": _hook_blueprint,
     "mcp": _mcp_blueprint,
     "memory": _memory_blueprint,
+    "plugin": _plugin_blueprint,
     "skill": _skill_blueprint,
 }
 

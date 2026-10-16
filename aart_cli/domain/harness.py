@@ -30,12 +30,14 @@ __all__ = [
     "MANAGED_TREE_TARGETS",
     "MCP_TARGETS",
     "MEMORY_TARGETS",
+    "PLUGIN_TARGETS",
     "DeliveryTarget",
     "HookTarget",
     "ManagedTreeTarget",
     "McpRegistration",
     "McpTarget",
     "MemoryTarget",
+    "PluginTarget",
     "Scope",
     "delivery_destination",
     "delivery_target",
@@ -45,6 +47,7 @@ __all__ = [
     "mcp_target",
     "measured_harnesses",
     "memory_target",
+    "plugin_target",
     "registration_entry",
     "registered_command",
     "registration_from_data",
@@ -641,6 +644,67 @@ def hook_event_path(target: HookTarget, event: str) -> str:
         if declared == event:
             return path
     raise KeyError(f"harness {target.harness!r} documents no slot for the {event!r} event")
+
+
+@dataclass(frozen=True, slots=True)
+class PluginTarget:
+    """Where one harness is told which plugin modules to load into its own process (§171.3).
+
+    Only the registration is measured here. A plugin's files are not delivered anywhere the harness
+    scans: they stay in the installation's private tree (§169.3), which no measured build reads on
+    its own, and the entry in `path` is what turns them on. `settings` is relative to the scope's
+    root, like every other target in this module.
+    """
+
+    harness: str
+    scope: Scope
+    settings: str
+    path: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.harness, str) or _SLUG_RE.fullmatch(self.harness) is None:
+            raise ValueError("harness must be a canonical slug")
+        if not isinstance(self.scope, Scope):
+            raise ValueError("plugin target scope is invalid")
+        if (
+            not isinstance(self.settings, str)
+            or not self.settings
+            or self.settings.startswith("/")
+            or any(part in ("", "..") for part in self.settings.split("/"))
+            or any(character in self.settings for character in "\r\n")
+        ):
+            raise ValueError("a plugin settings file must stay inside its scope root")
+        if _NAME_SLOT in self.settings:
+            raise ValueError("a plugin settings file is shared, so it cannot name one artifact")
+        if (
+            not isinstance(self.path, str)
+            or not self.path
+            or any(not part or part.strip() != part for part in self.path.split("."))
+        ):
+            raise ValueError("a plugin list path is dotted, non-empty and untrimmed")
+
+
+#: Measured plugin registrations. OpenCode 1.18.29, 2026-10-15 (D-406): the `plugin` list of the
+#: `opencode.json` at the project root, and of the one in the config directory `opencode debug
+#: paths` reports for the user, each loading a `./` path relative to the file that names it. No
+#: other measured harness loads code this way; OpenCode 2.x's `plugins` key is unmeasured.
+PLUGIN_TARGETS: dict[tuple[str, Scope], PluginTarget] = {
+    ("opencode", Scope.PROJECT): PluginTarget("opencode", Scope.PROJECT, "opencode.json", "plugin"),
+    ("opencode", Scope.USER): PluginTarget(
+        "opencode", Scope.USER, ".config/opencode/opencode.json", "plugin"
+    ),
+}
+
+
+def plugin_target(harness: str, scope: Scope) -> PluginTarget:
+    """The measured plugin list for `harness`, or `KeyError` if nobody measured one."""
+
+    try:
+        return PLUGIN_TARGETS[(harness, scope)]
+    except KeyError:
+        raise KeyError(
+            f"no measured plugin target for harness {harness!r} at {scope.value} scope"
+        ) from None
 
 
 def memory_target(harness: str, scope: Scope) -> MemoryTarget:

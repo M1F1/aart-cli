@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import unittest
 
-from aart_cli.application.registry_publication import prepare_registry_publication_state
 from aart_cli.domain.result import Ok
 from aart_cli.registry_commands.planning import project_registry_workspace_plan
 from aart_cli.registry_commands.publication import REGISTRY_PUBLICATION_GATES
+from aart_cli.registry_commands.publication_state import prepare_registry_publication_state
 from aart_cli.registry_commands.templates import REGISTRY_CI_WORKFLOW
 from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
 from tests.registry_maintenance_fixtures import (

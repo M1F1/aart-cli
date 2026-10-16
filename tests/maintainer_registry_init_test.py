@@ -521,7 +521,7 @@ class MaintainerRegistryInitActionTest(unittest.TestCase):
             )
         )
         with _environment() as env, mock.patch.dict(os.environ, env.xdg, clear=False):
-            from aart_cli.io.consumer_actions import RegistryBootstrapCompletion
+            from aart_cli.consumer_actions import RegistryBootstrapCompletion
 
             actions = self._composed(env)
             actions._registry_bootstrap = lambda draft: Ok(  # type: ignore[assignment]

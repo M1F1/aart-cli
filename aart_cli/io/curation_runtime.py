@@ -9,19 +9,21 @@ import tempfile
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-from aart_cli.application.registry_commands import (
-    finalize_registry_workspace,
-    prepare_artifact_revendor,
-    prepare_artifact_vendor,
-    prepare_registry_collection,
-    prepare_registry_init,
-    read_vendored_artifact_origin,
-)
-from aart_cli.application.registry_publication import prepare_registry_publication_state
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.curation.model import (
+    CurationAction,
+    CurationChange,
+    CurationCheck,
+    CurationOutcome,
+    CurationOutcomeStatus,
+    CurationRequest,
+    CurationReview,
+    curation_review_digest,
+)
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.io.git_acquisition import acquire_git_snapshot
 from aart_cli.io.registry_workspace import FilesystemRegistryWorkspace
 from aart_cli.protocol.native_models import CanonicalArtifactType
 from aart_cli.protocol.native_tree import SnapshotEntryKind, SourceSnapshot
@@ -47,6 +49,15 @@ from aart_cli.registry_commands.planning import (
     validate_registry_workspace,
     verify_vendored_artifact,
 )
+from aart_cli.registry_commands.publication_state import prepare_registry_publication_state
+from aart_cli.registry_commands.workspace import (
+    finalize_registry_workspace,
+    prepare_artifact_revendor,
+    prepare_artifact_vendor,
+    prepare_registry_collection,
+    prepare_registry_init,
+    read_vendored_artifact_origin,
+)
 from aart_cli.registry_maintenance.model import (
     NativeAcquirer,
     NativeReferenceAcquisition,
@@ -65,24 +76,12 @@ from aart_cli.registry_maintenance.vendoring import (
 )
 from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
 from aart_cli.security.model import AssessmentStatus, SecurityAssessment
-from aart_cli.sources.git import acquire_git_snapshot
 from aart_cli.sources.model import (
     GitSnapshotRequest,
     SnapshotLimits,
     SourceCandidate,
     source_instance_id,
     source_snapshot_digest,
-)
-
-from .model import (
-    CurationAction,
-    CurationChange,
-    CurationCheck,
-    CurationOutcome,
-    CurationOutcomeStatus,
-    CurationRequest,
-    CurationReview,
-    curation_review_digest,
 )
 
 _VERSION = EXECUTABLE_VERSION
