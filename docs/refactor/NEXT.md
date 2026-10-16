@@ -2,15 +2,20 @@
 
 ## Where the work is (2026-10-16, after 0.9.0)
 
-**CP-30 is released as 0.9.0** (#69, which also carried #66–#68). Next:
-- **CP-31** first (the owner's order): collection authoring. Today `author init` has no `collection` kind and
-  `author check` skips a collection manifest ("not an artifact manifest: `registry scan` compiles
-  artifacts only"), although Sync compiles collections through `parse_author_collection_manifest`
-  (`aart_cli/protocol/authoring.py`). An owner's collection in an Enterprise source repo was not
-  detected, most likely named other than `aart-cli.json`/`aart-cli.yaml`; nothing told them. Steps
-  are in `plan.json`.
-- **CP-32** after it: rename the promotion modes (#54), then remove the vendor
-  command family (#53, closes #41). Steps are in `plan.json`.
+**CP-30 is released as 0.9.0** (#69, which also carried #66–#68). Next is **CP-31**, the owner's
+order, with twelve steps in `plan.json`:
+- **Collections end to end.** Today a Collection cannot reach a consumer on the configured path.
+  `author init` has no `collection` kind, and `author check` skips a Collection manifest, although
+  Sync compiles it (`parse_author_collection_manifest`). An approved Collection Candidate is never
+  promoted, and `io/configured_selection.py` skips kind `collection`. So the Marketplace lists no
+  Collections whatever was approved, and installing one answers `collection-not-found`. This is
+  B-067, now on the critical path; `CollectionsAreNotReachableTest` pins the gap. An owner's
+  Collection in an Enterprise source repo was not detected for these reasons.
+- **The install flow, as the owner asked.** A Collection is one artifact for 05's harness choice
+  and 07a's scope, applied to every member. Configuration and credentials are asked once per member
+  artifact, and may be skipped with Set later, as for any artifact (§172.3).
+- **Then, at the end of CP-31**, rename the content mode (#54) and remove the vendor command family
+  (#53, closes #41).
 
 ## Where the work is (2026-10-16)
 

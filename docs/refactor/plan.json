@@ -1068,12 +1068,12 @@
     },
     {
       "id": "CP-31",
-      "title": "Collection authoring: a template from author init and a real verdict from author check",
+      "title": "Collections end to end: authored, checked, approved, offered and installed as one artifact; then one word per content mode and no vendor family",
       "status": "todo",
       "steps": [
         {
           "id": "1",
-          "title": "Specify collection authoring tools: author init --kind collection and author check through the Sync collection parser",
+          "title": "Specify Collections end to end: authoring, promotion, the published version, the Marketplace offer, and installing a Collection as one artifact (B-067, INV-186, INV-213)",
           "status": "todo"
         },
         {
@@ -1083,38 +1083,51 @@
         },
         {
           "id": "3",
-          "title": "author check parses collection manifests with parse_author_collection_manifest and reports ok/error instead of skip; correct the 'registry scan compiles artifacts only' message",
+          "title": "author check parses Collection manifests with the Sync parser and reports ok/error instead of skip; correct the 'registry scan compiles artifacts only' message",
           "status": "todo"
         },
         {
           "id": "4",
-          "title": "Document authoring a collection in a source repo and how a Registry adopts it (Sync, Collection Candidate, approved members)",
+          "title": "Promotion publishes an approved Collection Candidate as a Registry version of kind collection, and the Registry reads it back as a Collection (B-067 layers 1-2)",
           "status": "todo"
         },
         {
           "id": "5",
-          "title": "Full verification and the PR",
+          "title": "The configured Marketplace offers approved Collections instead of skipping them (B-067 layer 3)",
           "status": "todo"
-        }
-      ]
-    },
-    {
-      "id": "CP-32",
-      "title": "One word per Registry content mode, then canonical Registry content only from an external manifest",
-      "status": "todo",
-      "steps": [
+        },
         {
-          "id": "1",
+          "id": "6",
+          "title": "05 and 07a treat a Collection as one artifact: one harness row and one scope per Collection×harness pair, applied to every member",
+          "status": "todo"
+        },
+        {
+          "id": "7",
+          "title": "07 and 07b ask each member's configuration and credentials once per member artifact, with Set later; nothing blocks (§172.3)",
+          "status": "todo"
+        },
+        {
+          "id": "8",
+          "title": "Installed, Doctor and uninstall show a Collection with health from its members and keep the ownership graph (INV-186)",
+          "status": "todo"
+        },
+        {
+          "id": "9",
+          "title": "Document authoring a Collection in a source repo and how a Registry adopts and offers it",
+          "status": "todo"
+        },
+        {
+          "id": "10",
           "title": "Rename the content mode: RegistryContentMode = SelfContained | PinnedReference (#54, D-376)",
           "status": "todo"
         },
         {
-          "id": "2",
+          "id": "11",
           "title": "Remove the vendor command family: canonical Registry content comes only from an external manifest (#53, D-375, closes #41)",
           "status": "todo"
         },
         {
-          "id": "3",
+          "id": "12",
           "title": "Full verification and the PR",
           "status": "todo"
         }
