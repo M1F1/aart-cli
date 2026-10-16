@@ -78,3 +78,19 @@ ruff, mypy, tach clean.
 Targeted mutation: deleting the disabled `summary` line turned exactly
 `test_every_field_the_collection_parser_accepts_is_named` and
 `test_the_same_text_with_every_disabled_line_enabled_parses_too` red.
+
+## Step 4 — `author check` for Collections
+
+Done. A manifest the artifact compiler neither compiles nor refuses is a Collection, so the check
+hands it to `parse_author_collection_manifest`, the parser Sync uses, with `NO_REGISTRY`: members
+are not resolved, because a check has no Registry. It reports `ok ... -> collection/<name>` or the
+parser's error. `skip`, `ManifestVerdict.checked` and the JSON `checked` field are gone (§173.3:
+it never says the manifest was skipped).
+
+Evidence: `tests/author_check_test.py` `CollectionTest` -- a Collection is `ok` with its identity
+and counts as promotable; a written version is an error with the parser's message; no members is
+an error; what `author init --kind collection` writes passes; JSON names `collection/<name>` and
+has no `checked`. 79 tests across the four author modules green; mypy and tach clean.
+
+Targeted mutation: a Collection verdict that drops the parser's diagnostics turned exactly the two
+error tests red.

@@ -4,6 +4,9 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-31 step 4: `author check` judges Collections.**
+- The Collection parser Sync uses gives the verdict; nothing is reported as skipped.
+
 **2026-10-16, CP-31 step 3 (D-426): `author init --kind collection`.**
 - Writes a versionless Collection manifest the Collection parser accepts. Evidence in the slice.
 

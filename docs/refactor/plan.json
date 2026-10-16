@@ -1089,7 +1089,7 @@
         {
           "id": "4",
           "title": "author check parses Collection manifests with the Sync parser and reports ok/error instead of skip; correct the 'registry scan compiles artifacts only' message",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "5",
