@@ -316,14 +316,14 @@ class ScreenSkeletonFrameTest(TestCase):
         """`QA-070`: the per-row explanations are switchable rather than always present."""
 
         fast = ConsumerUiState(
-            ConsumerSession(ConsumerScreen.DASHBOARD, profile=PresentationProfile.FAST),
+            ConsumerSession(ConsumerScreen.DASHBOARD, profile=PresentationProfile.LESS_INFO),
             rows=(ConsumerScreen.MARKETPLACE.value,),
-            settings=ConsumerSettings(profile=PresentationProfile.FAST),
+            settings=ConsumerSettings(profile=PresentationProfile.LESS_INFO),
         )
         verbose = ConsumerUiState(
-            ConsumerSession(ConsumerScreen.DASHBOARD, profile=PresentationProfile.VERBOSE),
+            ConsumerSession(ConsumerScreen.DASHBOARD, profile=PresentationProfile.MORE_INFO),
             rows=(ConsumerScreen.MARKETPLACE.value,),
-            settings=ConsumerSettings(profile=PresentationProfile.VERBOSE),
+            settings=ConsumerSettings(profile=PresentationProfile.MORE_INFO),
         )
         described = "Browse and install approved tools from configured registries."
 

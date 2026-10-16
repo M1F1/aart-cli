@@ -121,7 +121,7 @@ class DashboardBlockTest(TestCase):
         source = CanonicalScreenSource(
             ConsumerScreens(project_dashboard((), registry_count=0)) if first_run else screens()
         )
-        profile = PresentationProfile.VERBOSE if verbose else PresentationProfile.FAST
+        profile = PresentationProfile.MORE_INFO if verbose else PresentationProfile.LESS_INFO
         state = ConsumerUiState(
             ConsumerSession(ConsumerScreen.DASHBOARD, profile=profile),
             settings=ConsumerSettings(profile=profile),
@@ -319,7 +319,7 @@ class SettingsBlockTest(TestCase):
     def _frame(
         self, *, maintainer: bool = True, verbose: bool = False, cursor: int = 0
     ) -> tuple[str, ...]:
-        profile = PresentationProfile.VERBOSE if verbose else PresentationProfile.FAST
+        profile = PresentationProfile.MORE_INFO if verbose else PresentationProfile.LESS_INFO
         source = CanonicalScreenSource(ConsumerScreens(project_dashboard((), registry_count=0)))
         state = ConsumerUiState(
             ConsumerSession(ConsumerScreen.SETTINGS, profile=profile),
@@ -382,7 +382,7 @@ class DoctorBlockTest(TestCase):
     """Screen 29: what is installed and how it is, then how the whole machine is."""
 
     def _frame(self, *, verbose: bool = False) -> tuple[str, ...]:
-        profile = PresentationProfile.VERBOSE if verbose else PresentationProfile.FAST
+        profile = PresentationProfile.MORE_INFO if verbose else PresentationProfile.LESS_INFO
         source = CanonicalScreenSource(screens())
         state = ConsumerUiState(
             ConsumerSession(ConsumerScreen.DOCTOR, profile=profile),
@@ -434,7 +434,7 @@ class DoctorBlockTest(TestCase):
     def test_the_command_line_still_gets_the_whole_report(self) -> None:
         """`render_doctor` is the CLI's output too, and a report is read top to bottom."""
 
-        rendered = render_doctor(screens().doctor, PresentationProfile.FAST)
+        rendered = render_doctor(screens().doctor, PresentationProfile.LESS_INFO)
 
         self.assertEqual(rendered[0], "AART / Check system")
         self.assertIn("✓ public/mcp/github@1.6.0", rendered)
@@ -667,7 +667,7 @@ class RebuildRegistryRowsTest(TestCase):
         state = ConsumerUiState(
             ConsumerSession(
                 MaintainerScreen.REGISTRY_REBUILD,
-                profile=PresentationProfile.VERBOSE if verbose else PresentationProfile.FAST,
+                profile=PresentationProfile.MORE_INFO if verbose else PresentationProfile.LESS_INFO,
             ),
             settings=ConsumerSettings().with_maintainer_mode(True),
             workspace="/lab",

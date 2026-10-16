@@ -66,7 +66,7 @@ _KEYS = st.one_of(
 )
 
 
-def _success(profile: PresentationProfile = PresentationProfile.FAST, *, receipts=()):
+def _success(profile: PresentationProfile = PresentationProfile.LESS_INFO, *, receipts=()):
     """Screen 11 over a recorded outcome, focused on the receipt the operation recorded."""
 
     _, state = at(ConsumerScreen.SUCCESS, profile)
@@ -162,8 +162,8 @@ class SuccessRowsTest(unittest.TestCase):
                 self.assertIn(("Enter", label), {(item.key, item.label) for item in legend})
 
     def test_verbose_describes_where_the_focused_row_goes_and_fast_does_not(self) -> None:
-        source, verbose = _success(PresentationProfile.VERBOSE)
-        _, fast = _success(PresentationProfile.FAST)
+        source, verbose = _success(PresentationProfile.MORE_INFO)
+        _, fast = _success(PresentationProfile.LESS_INFO)
 
         described = [source.description(_on_row(verbose, row)) for row in _ROWS]
 
@@ -212,7 +212,7 @@ class UndoIsExplainedNotOfferedTest(unittest.TestCase):
         flow = _ran(_bulk_flow())
         view = flow.outcome
 
-        drawn = "\n".join(render_transaction_success(view, PresentationProfile.FAST))
+        drawn = "\n".join(render_transaction_success(view, PresentationProfile.LESS_INFO))
 
         self.assertFalse(view.undo.available)
         self.assertIn(f"Undo unavailable: {view.undo.reason}", drawn)
@@ -227,7 +227,7 @@ class UndoIsExplainedNotOfferedTest(unittest.TestCase):
             undo=UndoAvailability(True, "every change can be reversed", ("launcher",)),
         )
 
-        drawn = "\n".join(render_transaction_success(view, PresentationProfile.FAST))
+        drawn = "\n".join(render_transaction_success(view, PresentationProfile.LESS_INFO))
 
         self.assertIn("Undo is not offered here", drawn)
         self.assertNotIn("[ Undo ]", drawn)
@@ -238,7 +238,7 @@ class UndoIsExplainedNotOfferedTest(unittest.TestCase):
             undo=UndoAvailability(True, "every change can be reversed", ("launcher",)),
         )
 
-        drawn = "\n".join(render_receipt_detail(receipt, PresentationProfile.VERBOSE))
+        drawn = "\n".join(render_receipt_detail(receipt, PresentationProfile.MORE_INFO))
 
         self.assertIn("no reviewed undo is offered here", drawn)
         self.assertNotIn("Undo: available", drawn)

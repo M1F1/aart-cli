@@ -165,7 +165,7 @@ def frame_violations(source: ConsumerScreenSource, state: ConsumerUiState) -> tu
             found.append(f"{screen}: draws {len(drawn)} row(s) for {len(state.rows)} in the state")
         elif cursors != [state.cursor]:
             found.append(f"{screen}: the cursor is drawn on {cursors}, not row {state.cursor}")
-    if blocks.described and state.session.profile is not PresentationProfile.VERBOSE:
+    if blocks.described and state.session.profile is not PresentationProfile.MORE_INFO:
         found.append(f"{screen}: describes the cursor row in Fast")
     if blocks.described and not state.rows:
         found.append(f"{screen}: describes a row on a screen with none")

@@ -87,7 +87,7 @@ class MarketplaceShellTest(unittest.TestCase):
 
         _, fast = drive(UP, state=_at(ConsumerScreen.MARKETPLACE))
         at = _at(ConsumerScreen.MARKETPLACE)
-        verbose_at = replace(at, session=replace(at.session, profile=PresentationProfile.VERBOSE))
+        verbose_at = replace(at, session=replace(at.session, profile=PresentationProfile.MORE_INFO))
         _, verbose = drive(UP, state=verbose_at)
 
         self.assertNotIn("Everything a developer needs", fast.last)

@@ -71,7 +71,7 @@ def _credential(name: str = "github-token", health: str = "present") -> Credenti
 
 def _drawn(configurations, credentials, current_row: str = "") -> tuple[str, ...]:
     return render_artifact_user_inputs(
-        COORDINATE, configurations, credentials, current_row, PresentationProfile.FAST
+        COORDINATE, configurations, credentials, current_row, PresentationProfile.LESS_INFO
     )
 
 

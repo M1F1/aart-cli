@@ -140,7 +140,7 @@ def render_maintainer_dashboard(
     # the status block reads to tell one list item from the next.
     activity = list(listed(view.recent_activity)) or ["  none yet"]
     candidates = [_candidate_summary(view.active_candidate_count, view.settled_candidate_count)]
-    if profile is PresentationProfile.VERBOSE and view.lifecycle_counts:
+    if profile is PresentationProfile.MORE_INFO and view.lifecycle_counts:
         candidates.append(f"Candidate lifecycle: {_lifecycle(view.lifecycle_counts)}")
     return separate(
         (f"Sources: {view.source_count}",),
@@ -191,7 +191,7 @@ def render_maintainer_source(
     if not isinstance(source, MaintainerSourceView) or not isinstance(profile, PresentationProfile):
         raise ValueError("Maintainer Source rendering needs a Source view and profile")
     revision = source.revision or "never synchronized"
-    if profile is PresentationProfile.FAST and source.revision is not None:
+    if profile is PresentationProfile.LESS_INFO and source.revision is not None:
         revision = source.revision[:12]
     lines = [
         f"{source.alias} — {_human(source.status.value)}",
@@ -202,7 +202,7 @@ def render_maintainer_source(
         f"{_candidate_summary(source.active_count, source.settled_count)}"
         f" — {source.ready_count} ready, {source.invalid_count} invalid",
     ]
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.extend(
             (
                 f"Kind: {_human(source.kind)}",
@@ -230,7 +230,7 @@ def render_source_sync_review(
         raise ValueError("Source Sync review rendering needs a typed view and profile")
     revision = view.current_revision or "never synchronized"
     registry_revision = view.approved_revision
-    if profile is PresentationProfile.FAST:
+    if profile is PresentationProfile.LESS_INFO:
         if view.current_revision is not None:
             revision = view.current_revision[:12]
         registry_revision = registry_revision[:12]
@@ -241,7 +241,7 @@ def render_source_sync_review(
         f"Location: {view.location}",
         f"Branch: {view.branch or 'local'}",
     ]
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         identity.append(f"Source kind: {_human(view.kind)}")
     standing = [
         f"Current revision: {revision}",
@@ -253,7 +253,7 @@ def render_source_sync_review(
         "Registry mutations: none",
     ]
     evidence = []
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         evidence.append(f"Approved snapshot: {view.approved_snapshot}")
     evidence.append(f"Review identity: {view.review_digest}")
     return action_prompt(
@@ -269,7 +269,7 @@ def render_source_sync_result(
         profile, PresentationProfile
     ):
         raise ValueError("Source Sync result rendering needs a typed view and profile")
-    revision = view.revision if profile is PresentationProfile.VERBOSE else view.revision[:12]
+    revision = view.revision if profile is PresentationProfile.MORE_INFO else view.revision[:12]
     # `QA-029` again, on the screen the run lands on: the outcome, what it found, what it left
     # alone, and the evidence.
     outcome = [f"Source Sync {view.disposition}: {view.alias}", f"Pinned revision: {revision}"]
@@ -277,7 +277,7 @@ def render_source_sync_result(
         f"Discovered manifests: {view.manifest_count}",
         f"Candidates: {view.candidate_count}",
     ]
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         found.append(
             "Candidate states: "
             + (
@@ -378,7 +378,7 @@ def maintainer_candidate_detail(
 
 
 def _short(value: str, profile: PresentationProfile) -> str:
-    return value if profile is PresentationProfile.VERBOSE else value[:19]
+    return value if profile is PresentationProfile.MORE_INFO else value[:19]
 
 
 def render_maintainer_candidate(
@@ -414,7 +414,7 @@ def render_maintainer_candidate(
             lines.append(f"    format: {item.format_hint}")
         if item.obtain_from is not None:
             lines.append(f"    obtain from: {item.obtain_from}")
-            if profile is PresentationProfile.VERBOSE and item.obtain_from_url is not None:
+            if profile is PresentationProfile.MORE_INFO and item.obtain_from_url is not None:
                 lines.append(f"    guidance URL: {item.obtain_from_url}")
     lines.append("Validation findings:")
     lines.extend(listed(f"{item}" for item in view.findings))
@@ -442,7 +442,7 @@ def render_maintainer_candidate_lifecycle(
         lines.append(f"  {stage.detail}")
         if stage.evidence is not None:
             lines.append(f"  {_short(stage.evidence, profile)}")
-        if profile is PresentationProfile.VERBOSE:
+        if profile is PresentationProfile.MORE_INFO:
             lines.append(f"  Candidate {stage.candidate_id}")
     lines.append("Promotion is shown only when both registry version and audit evidence match.")
     return tuple(lines)
@@ -479,7 +479,7 @@ def render_maintainer_provenance(
     lines.extend(listed(f"{item}" for item in view.warnings))
     if not view.warnings:
         lines.append("  none")
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.append(f"Candidate: {view.candidate_id}")
     return tuple(lines)
 
@@ -514,7 +514,7 @@ def render_maintainer_version_conflict(
     else:
         lines.append("  exact digest evidence unavailable")
     lines.extend((view.evidence_detail, f"Required action: {view.required_action}"))
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.append(f"Candidate: {view.candidate_id}")
         if view.published_candidate_id is not None:
             lines.append(f"Published Candidate: {view.published_candidate_id}")
@@ -645,10 +645,10 @@ def render_maintainer_collection_validation(
     for member in view.members:
         resolved = member.resolved_coordinate or "not resolved"
         lines.append(f"  {_human(member.outcome)}  {member.request} → {resolved}")
-        if profile is PresentationProfile.VERBOSE or member.outcome != "approved":
+        if profile is PresentationProfile.MORE_INFO or member.outcome != "approved":
             lines.append(f"    {member.detail}")
     lines.extend(f"Attention: {item}" for item in view.diagnostics)
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.append(f"Candidate: {view.candidate_id}")
     return tuple(lines)
 
@@ -689,7 +689,7 @@ def render_maintainer_candidate_diff(
     for changed_file in view.file_changes:
         marker = {"added": "+", "removed": "-", "modified": "~"}[changed_file.status]
         lines.append(f"{marker} {changed_file.path} — {changed_file.status}")
-    if profile is not PresentationProfile.VERBOSE:
+    if profile is not PresentationProfile.MORE_INFO:
         lines.extend(("", "Press v to view bounded redacted file diffs."))
         return tuple(lines)
     lines.extend(("", "Bounded redacted file diffs:"))
@@ -1003,7 +1003,7 @@ def render_maintainer_registry(
 
     if not isinstance(view, MaintainerRegistryView) or not isinstance(selected, bool):
         raise ValueError("Maintainer registry rendering needs a typed view")
-    fast = PresentationProfile.FAST
+    fast = PresentationProfile.LESS_INFO
     lines = [
         f"{'>' if selected else ' '} {view.alias}  {'✓ Valid' if view.valid else '⚠ Attention'}",
     ]
@@ -1378,7 +1378,7 @@ def render_repository_adoption_review(
         "",
         "The repository will not be saved as a Source. Nothing is pushed or merged.",
     ]
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.append(f"Review identity: {view.review_digest}")
     return action_prompt(
         lines, "Press Enter to write this exact transaction into the local registry checkout."
@@ -1410,7 +1410,7 @@ def render_adopted_artifacts(
         lines.append(f"{'>' if item.coordinate == cursor else ' '} {item.coordinate}")
         lines.append(f"    {item.url} at {item.ref}")
         lines.append(
-            f"    adopted commit: {_short(item.recorded_commit, PresentationProfile.FAST)}"
+            f"    adopted commit: {_short(item.recorded_commit, PresentationProfile.LESS_INFO)}"
         )
     return tuple(lines)
 

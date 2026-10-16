@@ -28,7 +28,7 @@ from tests.placement_offer_test import _machine, _nothing_installed, _offer, _sk
 
 def _ready(flow) -> str:
     assert isinstance(flow, Ok), getattr(flow, "diagnostics", ())
-    return "\n".join(render_ready(flow.value.plan, PresentationProfile.FAST))
+    return "\n".join(render_ready(flow.value.plan, PresentationProfile.LESS_INFO))
 
 
 def _registrations(*harnesses: str) -> tuple[McpRegistration, ...]:

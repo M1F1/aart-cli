@@ -82,7 +82,7 @@ def _unused_source() -> CanonicalScreenSource:
 
 
 def _on_action(
-    *, unused: bool = False, profile: PresentationProfile = PresentationProfile.FAST
+    *, unused: bool = False, profile: PresentationProfile = PresentationProfile.LESS_INFO
 ) -> tuple[CanonicalScreenSource, ConsumerUiState]:
     source, state = at(ConsumerScreen.CREDENTIALS, profile)
     if unused:
@@ -185,7 +185,7 @@ class TheActionsAreRowsTest(unittest.TestCase):
                 )
 
     def test_verbose_describes_the_row_and_fast_does_not(self) -> None:
-        source, verbose = _on_action(unused=True, profile=PresentationProfile.VERBOSE)
+        source, verbose = _on_action(unused=True, profile=PresentationProfile.MORE_INFO)
         _, fast = _on_action(unused=True)
 
         for row, words in (

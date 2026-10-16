@@ -283,7 +283,7 @@ class ConsumerApplicationSettingsTest(unittest.TestCase):
             reopened = _actions(env)
 
             self.assertTrue(reopened.settings.maintainer_mode)
-            self.assertIs(reopened.settings.profile, PresentationProfile.FAST)
+            self.assertIs(reopened.settings.profile, PresentationProfile.LESS_INFO)
             opened = dataclasses.replace(
                 opening_state(reopened.settings),
                 session=ConsumerSession(ConsumerScreen.SETTINGS),
@@ -320,9 +320,9 @@ class ConsumerApplicationSettingsTest(unittest.TestCase):
             reopened = _actions(env)
             opened = opening_state(reopened.settings)
 
-            self.assertIs(reopened.settings.profile, PresentationProfile.VERBOSE)
+            self.assertIs(reopened.settings.profile, PresentationProfile.MORE_INFO)
             # The session opens at the stored level rather than rewriting it back to Fast.
-            self.assertIs(opened.session.profile, PresentationProfile.VERBOSE)
+            self.assertIs(opened.session.profile, PresentationProfile.MORE_INFO)
 
 
 class ConsumerApplicationRefusalTest(unittest.TestCase):

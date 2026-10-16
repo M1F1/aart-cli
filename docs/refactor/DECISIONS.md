@@ -10351,3 +10351,12 @@ changes no behaviour:
 `forbid_circular_dependencies = true`. `tests/tach_config_test.py` checks the declared graph is
 acyclic and the flag is set, without tach, in the unit gate. No compatibility imports are left for
 the old paths (CP-26).
+
+## D-412 — Presentation profile members are named by what they show
+
+`PresentationProfile.FAST` / `VERBOSE` become `LESS_INFO` / `MORE_INFO`, with stored values
+`less-info` / `more-info`, so the code uses the words the `[v] More info / Less info` control and the
+Detail level setting already show (D-398). The rename changes no behaviour. A
+`consumer-settings.json` still holding `fast` or `verbose` is refused like any other unknown value
+and has to be chosen again in Settings. Nothing reads the old values (CP-26, no compatibility).
+Prose that names the Fast and Verbose presentations from the Product Specification stays as it is.

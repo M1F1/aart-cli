@@ -89,7 +89,7 @@ def _state(*, targets: tuple[str, ...] = (), verbose: bool = False) -> ConsumerU
     return ConsumerUiState(
         ConsumerSession(
             ConsumerScreen.REVIEW_SELECTION,
-            PresentationProfile.VERBOSE if verbose else PresentationProfile.FAST,
+            PresentationProfile.MORE_INFO if verbose else PresentationProfile.LESS_INFO,
         ),
         selection=("company/mcp/github@1.0.0",),
         targets=targets,
@@ -186,7 +186,7 @@ class HarnessTargetScreenTest(unittest.TestCase):
         # D-401: the ticked row is the choice; Fast does not restate it, More info does.
         self.assertNotIn("Installing into", "\n".join(pending.status(confirmed)))
         verbose = replace(
-            confirmed, session=confirmed.session.switch_profile(PresentationProfile.VERBOSE)
+            confirmed, session=confirmed.session.switch_profile(PresentationProfile.MORE_INFO)
         )
         self.assertIn("Installing into: opencode", "\n".join(pending.status(verbose)))
 
@@ -203,7 +203,7 @@ class HarnessTargetScreenTest(unittest.TestCase):
 
     def test_ready_names_the_chosen_harnesses_as_user_intent(self) -> None:
         rendered = "\n".join(
-            render_ready(_view(chosen=("opencode", "tabnine")), PresentationProfile.FAST)
+            render_ready(_view(chosen=("opencode", "tabnine")), PresentationProfile.LESS_INFO)
         )
 
         self.assertIn("Harnesses: opencode, tabnine", rendered)

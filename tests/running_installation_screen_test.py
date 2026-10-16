@@ -169,7 +169,7 @@ class RunningInstallationScreenTest(unittest.TestCase):
             )
         )
 
-        lines = render_running(view, PresentationProfile.FAST)
+        lines = render_running(view, PresentationProfile.LESS_INFO)
 
         self.assertGreater(len(loud), CONTENT_MEASURE)
         self.assertTrue(all(len(line) <= CONTENT_MEASURE for line in lines), lines)

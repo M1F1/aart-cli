@@ -19,7 +19,7 @@ DECIDING_LAYERS = ("domain", "security", "configuration", "installation", "appli
 # vocabulary of a presentation choice is not the same as consulting one.
 DECLARES_THE_TYPE = "application/consumer_views.py"
 
-PRESENTATION_WORDS = ("PresentationProfile", "fast", "verbose", "FAST", "VERBOSE")
+PRESENTATION_WORDS = ("PresentationProfile", "less-info", "more-info", "LESS_INFO", "MORE_INFO")
 
 
 def _deciding_modules() -> list[Path]:

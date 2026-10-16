@@ -335,7 +335,7 @@ def _run_repair(
     digest = str(prepared.value.review_digest)
     review = repair_plan_to_data(prepared.value.plan.repair)
     review_lines = render_lifecycle_plan(
-        project_lifecycle_plan(prepared.value.plan), PresentationProfile.FAST
+        project_lifecycle_plan(prepared.value.plan), PresentationProfile.LESS_INFO
     )
     base = {
         "schema_version": 1,
@@ -413,7 +413,7 @@ def _run_repair(
             "session_status": receipt.outcome.value,
             "receipt": receipt_detail_to_data(receipt),
         },
-        render_receipt_detail(receipt, PresentationProfile.FAST),
+        render_receipt_detail(receipt, PresentationProfile.LESS_INFO),
     )
     return _common.OK if successful else _common.ERROR
 
@@ -529,7 +529,7 @@ def run(request: Request) -> int:
         print(
             "\n".join(
                 (
-                    *render_doctor(view, PresentationProfile.FAST),
+                    *render_doctor(view, PresentationProfile.LESS_INFO),
                     "",
                     *_offline_lines(offline.value),
                     "",
@@ -537,7 +537,7 @@ def run(request: Request) -> int:
                     "",
                     *_candidate_history_lines(unbound.value),
                     "",
-                    *_activity_lines(recorded.value, timeline, PresentationProfile.FAST),
+                    *_activity_lines(recorded.value, timeline, PresentationProfile.LESS_INFO),
                     "",
                     *_credential_lines(credentials),
                     "",

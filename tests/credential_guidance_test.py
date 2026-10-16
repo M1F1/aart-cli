@@ -323,8 +323,8 @@ class TheGuidanceWordsTest(unittest.TestCase):
             declared_by=(("company/mcp/github@1.5.0", _secret(TOKEN_HELP)),),
         )
 
-        fast = render_required_inputs(views, PresentationProfile.FAST)
-        verbose = render_required_inputs(views, PresentationProfile.VERBOSE)
+        fast = render_required_inputs(views, PresentationProfile.LESS_INFO)
+        verbose = render_required_inputs(views, PresentationProfile.MORE_INFO)
 
         for line in credential_guidance_lines(views[0].guidance):
             self.assertIn(line, fast)
@@ -335,7 +335,7 @@ class TheGuidanceWordsTest(unittest.TestCase):
     def test_a_projection_with_no_owners_still_explains_the_credential(self) -> None:
         views = project_required_inputs((_secret(TOKEN_HELP),))
 
-        drawn = render_required_inputs(views, PresentationProfile.FAST)
+        drawn = render_required_inputs(views, PresentationProfile.LESS_INFO)
 
         self.assertIn("GitHub token", drawn)
         self.assertIn("  Lets the server read the repositories you choose.", drawn)

@@ -116,7 +116,7 @@ class ConsumerFlowTest(InstalledFixture):
         self.assertEqual([item.component for item in view.drift], ["launcher"])
         self.assertTrue(view.drift[0].repairable)
         self.assertIn("repair", view.actions)
-        rendered = "\n".join(render_installed_artifact(view, PresentationProfile.FAST))
+        rendered = "\n".join(render_installed_artifact(view, PresentationProfile.LESS_INFO))
         self.assertIn("launcher", rendered)
 
     def test_the_review_screen_shows_the_minimal_repair_and_one_identity(self):
@@ -126,8 +126,8 @@ class ConsumerFlowTest(InstalledFixture):
         plan = LifecyclePlan(repair_intent(self.desired), planned.value)
 
         view = project_lifecycle_plan(plan)
-        fast = render_lifecycle_plan(view, PresentationProfile.FAST)
-        verbose = render_lifecycle_plan(view, PresentationProfile.VERBOSE)
+        fast = render_lifecycle_plan(view, PresentationProfile.LESS_INFO)
+        verbose = render_lifecycle_plan(view, PresentationProfile.MORE_INFO)
 
         self.assertEqual(view.kind, "repair")
         self.assertEqual([step.component for step in view.steps], ["launcher"])
@@ -146,7 +146,7 @@ class ConsumerFlowTest(InstalledFixture):
         self.assertEqual(view.status, "completed")
         self.assertEqual(view.residual_drift, ())
         self.assertIn(
-            "Completed", "\n".join(render_lifecycle_outcome(view, PresentationProfile.FAST))
+            "Completed", "\n".join(render_lifecycle_outcome(view, PresentationProfile.LESS_INFO))
         )
         answered = self.server_answers()
         self.assertEqual(answered["org"], "acme")
@@ -171,7 +171,7 @@ class ConsumerFlowTest(InstalledFixture):
         self.assertTrue(receipt.undo.available)
         self.assertEqual(receipt.undo.components, ("launcher",))
         self.assertIn(
-            "Undo", "\n".join(render_receipt_detail(receipt, PresentationProfile.VERBOSE))
+            "Undo", "\n".join(render_receipt_detail(receipt, PresentationProfile.MORE_INFO))
         )
 
     def test_a_credential_the_provider_lost_is_reported_without_claiming_it_was_repaired(self):
@@ -244,9 +244,9 @@ class ConsumerFlowTest(InstalledFixture):
             *(
                 "\n".join(render)
                 for render in (
-                    render_activity(timeline, PresentationProfile.VERBOSE),
-                    render_receipt_detail(receipt, PresentationProfile.VERBOSE),
-                    render_installed_artifact(installed, PresentationProfile.VERBOSE),
+                    render_activity(timeline, PresentationProfile.MORE_INFO),
+                    render_receipt_detail(receipt, PresentationProfile.MORE_INFO),
+                    render_installed_artifact(installed, PresentationProfile.MORE_INFO),
                     render_dashboard(project_dashboard((installed,), registry_count=1)),
                 )
             ),

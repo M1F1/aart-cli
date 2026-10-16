@@ -566,7 +566,7 @@ def configuration_review_status(
         (f"Risks: {risks}.",),
         (
             (f"Review identity: {view.review_digest}",)
-            if profile is PresentationProfile.VERBOSE
+            if profile is PresentationProfile.MORE_INFO
             else ()
         ),
     )
@@ -675,7 +675,7 @@ def render_install_plan(view: ConsumerPlanView, profile: PresentationProfile) ->
 
     if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
         raise ValueError("install plan rendering needs a consumer plan and presentation profile")
-    return _fast_plan(view) if profile is PresentationProfile.FAST else _verbose_plan(view)
+    return _fast_plan(view) if profile is PresentationProfile.LESS_INFO else _verbose_plan(view)
 
 
 def render_review_selection(
@@ -704,7 +704,7 @@ def render_review_selection(
     if not selection.resolved:
         lines.append("  \u2022 nothing selected")
     lines.append(selection.explanation)
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.extend(
             (
                 f"Selection mode: {_human(selection.mode.value)}",
@@ -735,7 +735,7 @@ def render_inspection(view: ConsumerPlanView, profile: PresentationProfile) -> t
     ]
     for item in view.requirements:
         lines.append(f"  {item.id}: {_human(item.state)}")
-        if profile is PresentationProfile.VERBOSE:
+        if profile is PresentationProfile.MORE_INFO:
             lines.append(f"    {item.kind}: {item.detail}; owners: {', '.join(item.owners)}")
     if not unresolved and not view.remediations:
         lines.append("Nothing needs a decision.")
@@ -804,10 +804,11 @@ def _planned_harnesses(view: ConsumerPlanView) -> tuple[str, ...]:
 
 
 #: What each detail level is called where a person reads it: by how much it shows, the words `[v]`
-#: uses, rather than Fast / Verbose (D-398). The stored values keep their names.
+#: uses, rather than Fast / Verbose (D-398). The members and stored values carry the same names
+#: (D-412).
 DETAIL_LEVEL_NAMES: dict[PresentationProfile, str] = {
-    PresentationProfile.FAST: "Less info",
-    PresentationProfile.VERBOSE: "More info",
+    PresentationProfile.LESS_INFO: "Less info",
+    PresentationProfile.MORE_INFO: "More info",
 }
 
 
@@ -826,7 +827,7 @@ def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[
 
     if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
         raise ValueError("ready rendering needs a consumer plan and presentation profile")
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         return _verbose_plan(view)
     outcomes = Counter(_OUTCOMES.get(item.outcome, "other change") for item in view.effects)
     lines = ["Ready to install", f"{len(view.selection.resolved)} artifact(s) will be installed."]
@@ -886,7 +887,7 @@ def render_running(view: RunningInstallationView, profile: PresentationProfile) 
     lines = [f"{heading} ({view.done} of {view.total} done)", ""]
     for item in view.steps:
         mark = _STEP_MARKS.get(item.status, "·")
-        if profile is PresentationProfile.VERBOSE:
+        if profile is PresentationProfile.MORE_INFO:
             detail = f" ({item.detail})" if item.detail else ""
             lines.append(f"  {mark} {item.component}: {item.effect}{detail}")
         else:
@@ -904,7 +905,7 @@ def render_progress(view: LifecycleOutcomeView, profile: PresentationProfile) ->
     lines = [f"{_human(view.kind).capitalize()} {view.artifact}", ""]
     for item in view.steps:
         mark = _STEP_MARKS.get(item.status, "·")
-        if profile is PresentationProfile.VERBOSE:
+        if profile is PresentationProfile.MORE_INFO:
             detail = f" ({item.detail})" if item.detail else ""
             lines.append(f"  {mark} {item.component}: {item.effect}{detail}")
         else:
@@ -922,7 +923,7 @@ def _transaction_member(view: ReceiptArtifactView, profile: PresentationProfile)
         lines.append(f"    {message}")
     for step in view.steps:
         mark = _STEP_MARKS.get(step.status, "·")
-        if profile is PresentationProfile.VERBOSE:
+        if profile is PresentationProfile.MORE_INFO:
             detail = f" ({step.detail})" if step.detail else ""
             lines.append(f"    {mark} {step.component}: {step.effect}{detail}")
         else:
@@ -947,7 +948,7 @@ def render_transaction_progress(
         lines.extend(_transaction_member(member, profile))
     if not view.artifacts:
         lines.append("  Nothing to do.")
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.append(f"Review identity: {view.review_digest}")
     return tuple(lines)
 
@@ -1080,7 +1081,7 @@ def render_credential(view: CredentialRecordView, profile: PresentationProfile) 
     lines.extend(f"  • {item}" for item in view.dependants)
     if not view.dependants:
         lines.append("  • nothing installed")
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.extend(
             (
                 f"Reference: {view.reference}",
@@ -1114,7 +1115,7 @@ def render_credential_action(
     else:
         lines.append("Nothing installed uses it.")
     lines.append("AART never reads or shows its current value.")
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.append(f"Reference: {view.reference}")
     return tuple(lines)
 
@@ -1220,7 +1221,9 @@ def render_installed_artifact(
         lines.append("Verified against its desired state.")
     if not view.actions:
         lines.append("No action is offered until it is observed.")
-    shown = view.installation if profile is PresentationProfile.VERBOSE else view.user_facing_paths
+    shown = (
+        view.installation if profile is PresentationProfile.MORE_INFO else view.user_facing_paths
+    )
     if shown:
         # Where it is, which is the first thing somebody opens this view to find out (issue #17).
         # Fast answers with the bytes and the places a harness reads them from; Verbose adds the
@@ -1237,7 +1240,7 @@ def render_installed_artifact(
                 for item in shown
             )
         )
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.append("Ownership:")
         lines.extend(listed(f"{item.kind}: {item.owner}" for item in view.ownership))
         lines.append("Measured drift:")
@@ -1267,7 +1270,7 @@ def render_installed_collection(
         )
     else:
         lines.append("All members are ready or have an update available.")
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.append("Members:")
         lines.extend(
             listed(f"{item.artifact}: {_human(item.health.value)}" for item in view.members)
@@ -1313,7 +1316,7 @@ def _lifecycle_plan_lines(view: LifecyclePlanView, profile: PresentationProfile)
         lines.append("Needs a wider action: " + ", ".join(view.escalated) + ".")
     risks = ", ".join(_human(item) for item in view.risks) or "read only"
     lines.append(f"Risks: {risks}.")
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.append("Drift:")
         lines.extend(
             listed(
@@ -1356,7 +1359,7 @@ def render_lifecycle_outcome(
         lines.append(f"Restoration: {_human(view.restoration_status)}.")
     if view.detail:
         lines.append(view.detail)
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.append("Steps:")
         lines.extend(
             listed(
@@ -1541,7 +1544,7 @@ def doctor_status(view: DoctorView, profile: PresentationProfile) -> tuple[str, 
     # to tell one list item from the next, and a count is not a continuation of the count above it.
     repairable = (
         ("Independently repairable:", *listed(f"{item}" for item in view.repairable_issues))
-        if profile is PresentationProfile.VERBOSE and view.repairable_issues
+        if profile is PresentationProfile.MORE_INFO and view.repairable_issues
         else ()
     )
     return separate(
@@ -1583,7 +1586,7 @@ def render_required_inputs(
             else:
                 status = "Required"
             lines.append(f"  {status}")
-            if profile is PresentationProfile.VERBOSE:
+            if profile is PresentationProfile.MORE_INFO:
                 lines.extend(
                     (
                         f"  Binding: {_human(item.binding)} ({_human(item.exposure)})",
@@ -1599,7 +1602,7 @@ def render_required_inputs(
             lines.append(f"  (e.g. {item.example})")
         if item.validation_hint:
             lines.append(f"  {item.validation_hint}")
-        if profile is PresentationProfile.VERBOSE:
+        if profile is PresentationProfile.MORE_INFO:
             lines.extend(
                 (
                     f"  Binding: {_human(item.binding)} ({_human(item.exposure)})",
@@ -1677,7 +1680,7 @@ def render_marketplace_artifact(
 ) -> tuple[str, ...]:
     if not isinstance(row, MarketplaceArtifactRow) or not isinstance(profile, PresentationProfile):
         raise ValueError("Marketplace rendering needs an artifact row and presentation profile")
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         return render_artifact_detail(row)
     approval = (
         "Approved"
@@ -1750,7 +1753,7 @@ def render_collection(
         statements.append(
             ("Warning: Custom selection", "This will not install the complete Collection.")
         )
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         if contents:
             statements.append(
                 (
@@ -1787,7 +1790,9 @@ def render_activity(view: ActivityView, profile: PresentationProfile) -> tuple[s
         for entry in day.entries:
             line = f"  {entry.mark} {entry.time}  {entry.summary}"
             lines.append(
-                line if profile is PresentationProfile.FAST else f"{line}  {entry.review_digest}"
+                line
+                if profile is PresentationProfile.LESS_INFO
+                else f"{line}  {entry.review_digest}"
             )
     return tuple(lines)
 
@@ -1842,7 +1847,7 @@ def render_receipt_detail(view: ReceiptDetailView, profile: PresentationProfile)
         if view.undo.available
         else f"Undo: not available — {view.undo.reason}."
     )
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.append("Effects:")
         lines.extend(
             listed(
@@ -2320,7 +2325,7 @@ def compose_frame(source: ConsumerScreenSource, state: ConsumerUiState) -> Frame
     # And only where rows are ticked, unless more is asked for: on the screens an install passes
     # through afterwards the count says nothing the reader can act on (D-398).
     counted = selects_rows(state.session.screen) or (
-        state.session.profile is PresentationProfile.VERBOSE
+        state.session.profile is PresentationProfile.MORE_INFO
     )
     if counted and state.selection and not any(line.endswith(" selected") for line in spoken):
         session.append((f"{len(state.selection)} selected",))
@@ -2429,7 +2434,7 @@ def _described(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[st
     Verbose is the screen with them.
     """
 
-    if state.session.profile is not PresentationProfile.VERBOSE:
+    if state.session.profile is not PresentationProfile.MORE_INFO:
         return ()
     return source.description(state)
 
@@ -3909,7 +3914,7 @@ class CanonicalScreenSource:
             status = maintainer_registry_status(
                 screens.maintainer_registries(), registry_workspace_present=present
             )
-            if state.rows or state.session.profile is not PresentationProfile.VERBOSE:
+            if state.rows or state.session.profile is not PresentationProfile.MORE_INFO:
                 return status
             # With no row to describe, `QA-095`'s explanation is still Verbose's to show; it is
             # said with the view's state rather than as a description of nothing.
@@ -3946,7 +3951,7 @@ class CanonicalScreenSource:
             and screens.install_targets
         ):
             problems = self._harness_choice_problems(state)
-            if problems or state.session.profile is not PresentationProfile.VERBOSE:
+            if problems or state.session.profile is not PresentationProfile.MORE_INFO:
                 # The ticked rows are the choice; restating them, and what comes after, is for
                 # More info (D-401). A choice that cannot continue still says why.
                 return problems
@@ -3962,7 +3967,7 @@ class CanonicalScreenSource:
             problems = target_choice_problems(screens.plan, state.targets)
             target_status = (
                 problems
-                if problems or state.session.profile is not PresentationProfile.VERBOSE
+                if problems or state.session.profile is not PresentationProfile.MORE_INFO
                 else (f"Installing into: {', '.join(state.targets)}",)
             )
             return separate(
