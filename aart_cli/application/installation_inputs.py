@@ -19,10 +19,13 @@ from dataclasses import dataclass
 
 from aart_cli.domain.credentials import CredentialObservation, CredentialReference
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from aart_cli.domain.identifiers import InputId
+from aart_cli.domain.identifiers import ArtifactIdentity, InputId, SourceAlias
 from aart_cli.domain.inputs import (
+    SKIPPED_INPUT,
     BoundInputs,
+    ConfigInput,
     InputValueSource,
+    PromptedConfigValue,
     RuntimeInput,
 )
 from aart_cli.domain.installation_owner import InstallationOwner
@@ -34,11 +37,13 @@ from .input_binding import bind_runtime_inputs
 
 __all__ = [
     "INPUT_COMPOSITION_INVALID",
+    "ArtifactAnswer",
     "InstallationInputComposition",
     "InstallationInputField",
     "InstallationInputUse",
     "OwnedInputSource",
     "compose_installation_inputs",
+    "copy_artifact_answers",
 ]
 
 INPUT_COMPOSITION_INVALID = DiagnosticCode("installation-input-composition-invalid")
@@ -283,3 +288,60 @@ def compose_installation_inputs(
         return Ok(InstallationInputComposition(ordered, fields, tuple(bound)))
     except ValueError as error:
         return _error(INPUT_COMPOSITION_INVALID, f"installation inputs are invalid: {error}")
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactAnswer:
+    """One artifact's answer to one ordinary input, given once on 07 (§172.3).
+
+    The artifact is named with its Registry alias, because a local and a remote alias are two
+    artifacts even for one package, and an answer for one is never the other's.
+    """
+
+    source: SourceAlias
+    artifact: ArtifactIdentity
+    input: InputId
+    value: str
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.source, SourceAlias)
+            or not isinstance(self.artifact, ArtifactIdentity)
+            or not isinstance(self.input, InputId)
+        ):
+            raise ValueError("an artifact answer is invalid")
+        # The value is validated as an answer is, by the source it becomes.
+        PromptedConfigValue(self.input, self.value)
+
+
+def copy_artifact_answers(
+    fields: Iterable[InstallationInputField],
+    answers: Iterable[ArtifactAnswer],
+    *,
+    skip_unanswered: bool = False,
+) -> tuple[OwnedInputSource, ...]:
+    """Copy each artifact's answers into every new installation of that artifact, and no other.
+
+    This is the one place D-413 narrows the separation of §169.4: within one operation, one answer
+    is copied into each of an artifact's new installations, and from then on each copy is that
+    installation's own. With `skip_unanswered` (Set later), an ordinary field nobody answered gets
+    the `SKIP` placeholder. Secret fields are left alone; they are 07b's.
+    """
+
+    by_artifact: dict[tuple[SourceAlias, ArtifactIdentity, InputId], str] = {}
+    for answer in answers:
+        key = (answer.source, answer.artifact, answer.input)
+        if key in by_artifact:
+            raise ValueError(f"{answer.artifact} was answered twice for {answer.input}")
+        by_artifact[key] = answer.value
+    copied: list[OwnedInputSource] = []
+    for field in fields:
+        if not isinstance(field.input, ConfigInput):
+            continue
+        owner = field.owner
+        value = by_artifact.get((owner.source, owner.artifact, field.input.id))
+        if value is None and skip_unanswered:
+            value = SKIPPED_INPUT
+        if value is not None:
+            copied.append(OwnedInputSource(owner, PromptedConfigValue(field.input.id, value)))
+    return tuple(copied)

@@ -110,6 +110,21 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
     the carriers and not the loan, and that the carriers are not kept for the next install.
     `install_time_config_form_test`'s fake still refuses any material except the placeholder.
 
+## Step 6, the part that needs no screen (done; the 07 form waits)
+
+- `application/installation_inputs.py` adds `ArtifactAnswer(source, artifact, input, value)` and
+  `copy_artifact_answers(fields, answers, skip_unanswered=…)`. Each artifact's answer is copied
+  into every new installation of that artifact and no other; a local and a remote alias are two
+  artifacts. Set later fills unanswered ordinary fields with `SKIP`. Secret fields are left to 07b,
+  and answering one artifact twice is refused.
+- Evidence: `tests/artifact_answers_copy_test.py` has scenarios plus a Hypothesis property: every
+  installation gets its own artifact's answer, the placeholder, or nothing. Mutation: keying
+  without the Registry alias turns the alias scenario and the property red. 93 tests in modules
+  using `installation_inputs` pass.
+- Still to do, after the owner's mockup decisions: the 07 screen itself, with one group per
+  artifact and the Set later row, wired through `copy_artifact_answers` in
+  `LocalConsumerActions._offer_installation`.
+
 ## Superseded work
 
 - `stash@{0}`, "scope rows before the form (D-412 draft)", was the narrow fix for the missing scope

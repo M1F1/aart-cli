@@ -1042,7 +1042,7 @@
         {
           "id": "6",
           "title": "07 Configuration once per artifact, copied into each new installation, with Set later",
-          "status": "todo"
+          "status": "blocked"
         },
         {
           "id": "7",
