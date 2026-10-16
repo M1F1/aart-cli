@@ -10369,3 +10369,11 @@ Each statement is now its own block (`separate`). Fast names only the eligible h
 there are none. The detected-but-ineligible ones, with their reasons, are in Verbose's
 `installation harnesses` section, which is unchanged. "What it needs" is drawn only when the
 artifact has inputs to name.
+## D-412 — Presentation profile members are named by what they show
+
+`PresentationProfile.FAST` / `VERBOSE` become `LESS_INFO` / `MORE_INFO`, with stored values
+`less-info` / `more-info`, so the code uses the words the `[v] More info / Less info` control and the
+Detail level setting already show (D-398). The rename changes no behaviour. A
+`consumer-settings.json` still holding `fast` or `verbose` is refused like any other unknown value
+and has to be chosen again in Settings. Nothing reads the old values (CP-26, no compatibility).
+Prose that names the Fast and Verbose presentations from the Product Specification stays as it is.

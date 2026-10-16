@@ -326,7 +326,7 @@ def _configure_plan(*harnesses: str) -> LifecyclePlanView:
 class ConfigurationReviewNamesTheChangeTest(unittest.TestCase):
     """CP-23 task 14: 22d said `Review configure for …` and a digest instead of the change."""
 
-    def _review(self, profile: PresentationProfile = PresentationProfile.FAST):
+    def _review(self, profile: PresentationProfile = PresentationProfile.LESS_INFO):
         source, state = _source_and_state(
             {"claude": "old-team", "opencode": "old-team", "tabnine": "other-team"},
             lifecycle=_configure_plan("claude", "tabnine"),
@@ -356,7 +356,7 @@ class ConfigurationReviewNamesTheChangeTest(unittest.TestCase):
         self.assertEqual(frame_violations(source, state), ())
 
     def test_verbose_adds_the_review_identity(self) -> None:
-        source, state = self._review(PresentationProfile.VERBOSE)
+        source, state = self._review(PresentationProfile.MORE_INFO)
 
         status = "\n".join(compose_frame(source, state).status)
 
@@ -412,7 +412,7 @@ class ConfigurationStatusWordsTest(unittest.TestCase):
         ):
             with self.subTest(risks=risks):
                 status = configuration_review_status(
-                    replace(plan, risks=risks), "org", held, "new", PresentationProfile.FAST
+                    replace(plan, risks=risks), "org", held, "new", PresentationProfile.LESS_INFO
                 )
 
                 self.assertEqual(

@@ -281,11 +281,11 @@ class MaintainerReviewsSeparateTheirPromptTest(unittest.TestCase):
         for label, body in (
             (
                 "review",
-                render_source_sync_review(self._sync_review(), PresentationProfile.FAST),
+                render_source_sync_review(self._sync_review(), PresentationProfile.LESS_INFO),
             ),
             (
                 "result",
-                render_source_sync_result(self._sync_result(), PresentationProfile.FAST),
+                render_source_sync_result(self._sync_result(), PresentationProfile.LESS_INFO),
             ),
         ):
             with self.subTest(screen=label):
@@ -303,7 +303,7 @@ class MaintainerReviewsSeparateTheirPromptTest(unittest.TestCase):
     def test_a_verbose_source_sync_review_still_ends_with_the_prompt(self) -> None:
         """Verbose adds evidence lines; evidence is a fact, so it stays above the ask."""
 
-        body = render_source_sync_review(self._sync_review(), PresentationProfile.VERBOSE)
+        body = render_source_sync_review(self._sync_review(), PresentationProfile.MORE_INFO)
 
         self.assertEqual(body[-1], "Press Enter to synchronize.")
         self.assertTrue(any("Approved snapshot" in line for line in body), body)

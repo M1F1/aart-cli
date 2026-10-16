@@ -92,7 +92,7 @@ def _plan(*remediations: RemediationView, inputs: bool = True):
 def _on(
     screen: ConsumerScreen,
     *remediations: RemediationView,
-    profile: PresentationProfile = PresentationProfile.FAST,
+    profile: PresentationProfile = PresentationProfile.LESS_INFO,
     inputs: bool = True,
 ) -> tuple[CanonicalScreenSource, ConsumerUiState]:
     _, state = at(screen, profile)
@@ -102,7 +102,7 @@ def _on(
     return source, _reload(source, state, entering=True)
 
 
-def _drawn(*remediations: RemediationView, profile=PresentationProfile.FAST) -> str:
+def _drawn(*remediations: RemediationView, profile=PresentationProfile.LESS_INFO) -> str:
     source, state = _on(ConsumerScreen.READY, *remediations, profile=profile)
     return "\n".join(frame(source, state))
 
@@ -137,7 +137,7 @@ class ReadyStatesTheChangesAartWillMakeTest(unittest.TestCase):
                 )
 
     def test_the_changes_are_parted_from_their_sentence_and_from_each_other(self) -> None:
-        lines = render_ready(_plan(CREDENTIAL, RUNTIME), PresentationProfile.FAST)
+        lines = render_ready(_plan(CREDENTIAL, RUNTIME), PresentationProfile.LESS_INFO)
         opening = lines.index("AART will make these changes when you confirm:")
 
         self.assertEqual(lines[opening - 1], "")
@@ -151,7 +151,7 @@ class ReadyStatesTheChangesAartWillMakeTest(unittest.TestCase):
     ) -> None:
         remediations = (CREDENTIAL, RUNTIME, NETWORK)
         fast = _drawn(*remediations)
-        verbose = _drawn(*remediations, profile=PresentationProfile.VERBOSE)
+        verbose = _drawn(*remediations, profile=PresentationProfile.MORE_INFO)
 
         for impact in ("credential", "install the python", "network access to api.github.com"):
             self.assertIn(impact, fast.lower())
@@ -166,7 +166,7 @@ class ReadyStatesTheChangesAartWillMakeTest(unittest.TestCase):
         view = dataclasses.replace(
             _plan(*_DECISIONS), risks=("credential-mutation", "network-mutation")
         )
-        drawn = "\n".join(render_ready(view, PresentationProfile.FAST))
+        drawn = "\n".join(render_ready(view, PresentationProfile.LESS_INFO))
 
         for repeated in (
             "installed on this machine",
@@ -182,7 +182,8 @@ class ReadyStatesTheChangesAartWillMakeTest(unittest.TestCase):
         view = dataclasses.replace(_plan(RUNTIME), risks=("network-mutation",))
 
         self.assertIn(
-            "This install changes network access.", render_ready(view, PresentationProfile.FAST)
+            "This install changes network access.",
+            render_ready(view, PresentationProfile.LESS_INFO),
         )
 
     def test_no_profile_claims_a_guarantee_the_plan_does_not_establish(self) -> None:
@@ -199,8 +200,8 @@ class ThereIsNoSeparateStopTest(unittest.TestCase):
         # D-398: *"AART will also: configure the opencode integration ... zbedne dla widoku non
         # verbose"*. The harness counts and Harnesses line already say it; `[v]` keeps the rest.
         plan = _plan(_harness("claude"), _harness("codex"))
-        fast = "\n".join(render_ready(plan, PresentationProfile.FAST))
-        verbose = "\n".join(render_ready(plan, PresentationProfile.VERBOSE))
+        fast = "\n".join(render_ready(plan, PresentationProfile.LESS_INFO))
+        verbose = "\n".join(render_ready(plan, PresentationProfile.MORE_INFO))
 
         self.assertNotIn("AART will make", fast)
         self.assertNotIn("integration", fast)
@@ -214,7 +215,7 @@ class ThereIsNoSeparateStopTest(unittest.TestCase):
     ) -> None:
         plan = _plan(*chosen, inputs=False)
         source, state = _on(ConsumerScreen.REVIEW_SELECTION, *chosen, inputs=False)
-        fast = render_ready(plan, PresentationProfile.FAST)
+        fast = render_ready(plan, PresentationProfile.LESS_INFO)
 
         self.assertEqual(
             install_flow_screens(plan)[-3:],

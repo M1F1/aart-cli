@@ -68,7 +68,9 @@ class CandidateDiffVerboseTest(unittest.TestCase):
             item for item in _views().candidates or () if item.source_alias == "authors"
         )
 
-    def _diff(self, profile: PresentationProfile = PresentationProfile.FAST) -> ConsumerUiState:
+    def _diff(
+        self, profile: PresentationProfile = PresentationProfile.LESS_INFO
+    ) -> ConsumerUiState:
         state = dataclasses.replace(
             _on(MaintainerScreen.CANDIDATE_DIFF, focus=self.candidate.id),
             session=ConsumerSession(
@@ -92,7 +94,7 @@ class CandidateDiffVerboseTest(unittest.TestCase):
         self.assertNotIn(_SHOW, statements[-2])
 
     def test_verbose_adds_the_file_diffs_and_says_how_to_fold_them(self) -> None:
-        drawn = frame(self.source, self._diff(PresentationProfile.VERBOSE))
+        drawn = frame(self.source, self._diff(PresentationProfile.MORE_INFO))
         text = "\n".join(drawn)
 
         self.assertIn("semantic changes:", text)
@@ -127,7 +129,7 @@ class CandidateDiffVerboseTest(unittest.TestCase):
         )
 
     def test_drawing_either_projection_opens_no_file(self) -> None:
-        states = (self._diff(), self._diff(PresentationProfile.VERBOSE))
+        states = (self._diff(), self._diff(PresentationProfile.MORE_INFO))
         original = builtins.open
 
         def refuse(*arguments, **keywords):
@@ -149,7 +151,7 @@ class CandidateDiffVerboseTest(unittest.TestCase):
 
         shown = _FILES in "\n".join(frame(self.source, state))
         self.assertEqual(shown, presses % 2 == 1)
-        self.assertEqual(state.session.profile is PresentationProfile.VERBOSE, shown)
+        self.assertEqual(state.session.profile is PresentationProfile.MORE_INFO, shown)
         self.assertEqual(
             (state.focus, state.session.screen, state.session.history),
             (self.candidate.id, MaintainerScreen.CANDIDATE_DIFF, _REVIEW_HISTORY),
@@ -173,7 +175,7 @@ class CandidateDiffEvidenceIsBoundedAndRedactedTest(unittest.TestCase):
         assignment = "pass" + "word = " + planted
         view, _ = self._candidate("print('old')\n", f"{assignment}\n")
 
-        verbose = "\n".join(render_maintainer_candidate_diff(view, PresentationProfile.VERBOSE))
+        verbose = "\n".join(render_maintainer_candidate_diff(view, PresentationProfile.MORE_INFO))
 
         self.assertIn("Bounded redacted file diffs:", verbose)
         self.assertNotIn(planted, verbose)
@@ -192,7 +194,7 @@ class CandidateDiffEvidenceIsBoundedAndRedactedTest(unittest.TestCase):
             dataclasses.replace(
                 _on(MaintainerScreen.CANDIDATE_DIFF, focus=view.id),
                 session=ConsumerSession(
-                    MaintainerScreen.CANDIDATE_DIFF, profile=PresentationProfile.VERBOSE
+                    MaintainerScreen.CANDIDATE_DIFF, profile=PresentationProfile.MORE_INFO
                 ),
             ),
             entering=True,

@@ -100,7 +100,7 @@ class ArtifactDetailsCompatibilityTest(unittest.TestCase):
     def test_one_eligible_harness_keeps_the_artifact_available(self) -> None:
         row = _row("claude", "opencode", "tabnine")
 
-        rendered = "\n".join(render_marketplace_artifact(row, PresentationProfile.FAST))
+        rendered = "\n".join(render_marketplace_artifact(row, PresentationProfile.LESS_INFO))
 
         self.assertTrue(row.compatible)
         self.assertEqual(row.eligible_harnesses, ("claude",))
@@ -147,7 +147,7 @@ class ArtifactDetailsCompatibilityTest(unittest.TestCase):
     def test_no_eligible_harness_is_a_visible_blocker_with_reasons(self) -> None:
         row = _row("opencode", "tabnine")
 
-        rendered = "\n".join(render_marketplace_artifact(row, PresentationProfile.FAST))
+        rendered = "\n".join(render_marketplace_artifact(row, PresentationProfile.LESS_INFO))
 
         self.assertFalse(row.compatible)
         self.assertEqual(row.eligible_harnesses, ())
@@ -158,7 +158,7 @@ class ArtifactDetailsCompatibilityTest(unittest.TestCase):
 
     def test_verbose_calls_each_detected_harness_eligible_or_unavailable(self) -> None:
         rendered = "\n".join(
-            render_marketplace_artifact(_row("claude", "opencode"), PresentationProfile.VERBOSE)
+            render_marketplace_artifact(_row("claude", "opencode"), PresentationProfile.MORE_INFO)
         )
 
         self.assertIn("installation harnesses", rendered)
@@ -355,7 +355,7 @@ class OneEligibilityRuleTest(unittest.TestCase):
         self.assertNotIn("platform-unsupported", reasons)
         self.assertNotIn(
             "supported platforms: none",
-            "\n".join(render_marketplace_artifact(row, PresentationProfile.VERBOSE)),
+            "\n".join(render_marketplace_artifact(row, PresentationProfile.MORE_INFO)),
         )
 
 

@@ -161,13 +161,13 @@ class KeyboardDisclosureTest(unittest.TestCase):
         state = press(at(ConsumerScreen.MARKETPLACE), DOWN, SPACE)
 
         verbose = press(state, ord("v"))
-        self.assertIs(verbose.session.profile, PresentationProfile.VERBOSE)
-        self.assertIs(verbose.settings.profile, PresentationProfile.VERBOSE)
+        self.assertIs(verbose.session.profile, PresentationProfile.MORE_INFO)
+        self.assertIs(verbose.settings.profile, PresentationProfile.MORE_INFO)
         self.assertEqual(verbose.selection, state.selection)
         self.assertEqual(verbose.session.screen, state.session.screen)
 
         back_to_fast = press(verbose, ord("v"))
-        self.assertIs(back_to_fast.session.profile, PresentationProfile.FAST)
+        self.assertIs(back_to_fast.session.profile, PresentationProfile.LESS_INFO)
         self.assertEqual(back_to_fast.selection, state.selection)
 
     def test_question_toggles_help_without_leaving_the_screen(self):
@@ -184,7 +184,7 @@ class KeyboardDisclosureTest(unittest.TestCase):
         rendered = "\n".join(render_activity(view, state.session.profile))
 
         self.assertIn("sha256:", rendered)
-        self.assertNotIn("sha256:", "\n".join(render_activity(view, PresentationProfile.FAST)))
+        self.assertNotIn("sha256:", "\n".join(render_activity(view, PresentationProfile.LESS_INFO)))
 
 
 class KeyboardQuitTest(unittest.TestCase):

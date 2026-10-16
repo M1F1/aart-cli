@@ -229,8 +229,8 @@ class PresentationProfileIdentityTest(unittest.TestCase):
     ) -> None:
         view = project_install_plan(plan)
 
-        fast = render_install_plan(view, PresentationProfile.FAST)
-        verbose = render_install_plan(view, PresentationProfile.VERBOSE)
+        fast = render_install_plan(view, PresentationProfile.LESS_INFO)
+        verbose = render_install_plan(view, PresentationProfile.MORE_INFO)
 
         self.assertIn(view.review_digest, "\n".join(fast))
         self.assertIn(view.review_digest, "\n".join(verbose))
@@ -253,8 +253,8 @@ class OneCoreTwoSkinsTest(unittest.TestCase):
         view = project_install_plan(plan)
 
         self.assertEqual(
-            render_install_plan(view, PresentationProfile.VERBOSE),
-            render_ready(view, PresentationProfile.VERBOSE),
+            render_install_plan(view, PresentationProfile.MORE_INFO),
+            render_ready(view, PresentationProfile.MORE_INFO),
         )
 
 
@@ -266,7 +266,7 @@ class FastHidesNoMaterialRiskTest(unittest.TestCase):
     ) -> None:
         view = project_install_plan(plan)
 
-        rendered = "\n".join(render_install_plan(view, PresentationProfile.FAST)).lower()
+        rendered = "\n".join(render_install_plan(view, PresentationProfile.LESS_INFO)).lower()
 
         for risk in plan.mutation.risks:
             self.assertIn(_human(risk.name), rendered)
@@ -279,7 +279,7 @@ class FastHidesNoMaterialRiskTest(unittest.TestCase):
     ) -> None:
         view = project_install_plan(plan)
 
-        rendered = "\n".join(render_install_plan(view, PresentationProfile.FAST)).lower()
+        rendered = "\n".join(render_install_plan(view, PresentationProfile.LESS_INFO)).lower()
 
         if plan.remediations:
             self.assertIn("remediation", rendered)
@@ -300,7 +300,7 @@ class FastHidesNoMaterialRiskTest(unittest.TestCase):
 
         view = project_install_plan(plan)
 
-        rendered = "\n".join(render_ready(view, PresentationProfile.FAST)).lower()
+        rendered = "\n".join(render_ready(view, PresentationProfile.LESS_INFO)).lower()
 
         material = {
             "credential-mutation": "credential",
@@ -430,7 +430,7 @@ class ActivityOrderingTest(unittest.TestCase):
         for day in view.days:
             times = [entry.recorded_at for entry in day.entries]
             self.assertEqual(times, sorted(times, reverse=True))
-        rendered = "\n".join(render_activity(view, PresentationProfile.FAST))
+        rendered = "\n".join(render_activity(view, PresentationProfile.LESS_INFO))
         self.assertNotIn("sha256:", rendered)
 
 

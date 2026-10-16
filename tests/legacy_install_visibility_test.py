@@ -182,7 +182,9 @@ class LegacyInstallVisibilityTest(unittest.TestCase):
     def test_it_is_drawn_without_claiming_a_fault_or_a_verification(self) -> None:
         self._write(_legacy_record("skill", "code-review"))
 
-        drawn = render_installed_artifact(self._machine().installed[0], PresentationProfile.VERBOSE)
+        drawn = render_installed_artifact(
+            self._machine().installed[0], PresentationProfile.MORE_INFO
+        )
 
         self.assertIn("company/skill/code-review — unknown", drawn)
         self.assertIn("Installed here, but nothing canonical has observed it yet.", drawn)

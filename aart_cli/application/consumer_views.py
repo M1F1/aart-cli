@@ -168,8 +168,8 @@ __all__ = [
 
 
 class PresentationProfile(str, Enum):
-    FAST = "fast"
-    VERBOSE = "verbose"
+    LESS_INFO = "less-info"
+    MORE_INFO = "more-info"
 
     @property
     def toggle_label(self) -> str:
@@ -179,7 +179,7 @@ class PresentationProfile(str, Enum):
         is the reachability half of INV-149/INV-152.
         """
 
-        return "Less info" if self is PresentationProfile.VERBOSE else "More info"
+        return "Less info" if self is PresentationProfile.MORE_INFO else "More info"
 
 
 class ConsumerScreen(str, Enum):
@@ -921,7 +921,7 @@ def install_flow_screens(view: ConsumerPlanView) -> tuple[ConsumerScreen, ...]:
 @dataclass(frozen=True, slots=True)
 class ConsumerSession:
     screen: ApplicationScreen
-    profile: PresentationProfile = PresentationProfile.FAST
+    profile: PresentationProfile = PresentationProfile.LESS_INFO
     semantic_identity: str | None = None
     selection_identity: str | None = None
     review_digest: str | None = None
@@ -931,7 +931,7 @@ class ConsumerSession:
     def from_plan(cls, view: ConsumerPlanView) -> ConsumerSession:
         return cls(
             ConsumerScreen.READY,
-            PresentationProfile.FAST,
+            PresentationProfile.LESS_INFO,
             view.semantic_identity,
             view.selection.semantic_identity,
             view.review_digest,
@@ -2415,7 +2415,7 @@ def offer_python_installers(
 
 @dataclass(frozen=True, slots=True)
 class ConsumerSettings:
-    profile: PresentationProfile = PresentationProfile.FAST
+    profile: PresentationProfile = PresentationProfile.LESS_INFO
     default_scope: str = "project"
     show_updates: bool = True
     maintainer_mode: bool = False
@@ -2447,9 +2447,9 @@ class ConsumerSettings:
 
         if row == "detail-level":
             return self.with_profile(
-                PresentationProfile.VERBOSE
-                if self.profile is PresentationProfile.FAST
-                else PresentationProfile.FAST
+                PresentationProfile.MORE_INFO
+                if self.profile is PresentationProfile.LESS_INFO
+                else PresentationProfile.LESS_INFO
             )
         if row == "default-scope":
             return replace(
@@ -2600,9 +2600,9 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
         return Err(
             (_settings_invalid(f"stored consumer settings name {unknown[0]}, which AART does not"),)
         )
-    detail = data.get("detail_level", PresentationProfile.FAST.value)
+    detail = data.get("detail_level", PresentationProfile.LESS_INFO.value)
     if detail not in {item.value for item in PresentationProfile}:
-        return Err((_settings_invalid("stored detail level must be fast or verbose"),))
+        return Err((_settings_invalid("stored detail level must be less-info or more-info"),))
     scope = data.get("default_scope", "project")
     if scope not in {"project", "user"}:
         return Err((_settings_invalid("stored default scope must be project or user"),))

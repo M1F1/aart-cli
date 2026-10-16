@@ -955,7 +955,7 @@ def _configured_lifecycle(
                 "review_digest": digest,
                 "review": review_data,
             },
-            render_install_plan(view, PresentationProfile.FAST)
+            render_install_plan(view, PresentationProfile.LESS_INFO)
             + ("Reviewed only; re-run with --yes to apply this exact plan.",),
         )
         return _common.OK
@@ -983,7 +983,7 @@ def _configured_lifecycle(
             (
                 f"{refusal.severity.value}: {refusal.message}",
                 *(f"  remediation: {item}" for item in refusal.remediation),
-                *render_install_plan(view, PresentationProfile.FAST),
+                *render_install_plan(view, PresentationProfile.LESS_INFO),
             ),
         )
         return _common.ERROR
@@ -1027,7 +1027,7 @@ def _configured_lifecycle(
         ],
         "receipt": receipt_data,
     }
-    lines = render_transaction_success(receipt, PresentationProfile.FAST)
+    lines = render_transaction_success(receipt, PresentationProfile.LESS_INFO)
     setup_payload: dict | None = None
     projected = configured_consumer_completion(
         completed.value,
@@ -1330,7 +1330,7 @@ def _configured_uninstall(request: Request, selectors: tuple[ArtifactSelector, .
         request,
         operation,
         payload,
-        render_transaction_success(receipt, PresentationProfile.FAST),
+        render_transaction_success(receipt, PresentationProfile.LESS_INFO),
     )
     return _common.OK if successful else _common.ERROR
 
@@ -1405,7 +1405,7 @@ def _configured_status(request: Request, selectors: tuple[ArtifactSelector, ...]
         tuple(
             line
             for item in installed
-            for line in render_installed_artifact(item, PresentationProfile.FAST)
+            for line in render_installed_artifact(item, PresentationProfile.LESS_INFO)
         ),
     )
     return _common.OK

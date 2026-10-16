@@ -44,7 +44,7 @@ class TuiVisualHierarchyTest(TestCase):
     def test_dashboard_bounds_the_focused_explanation_and_separates_activity(self) -> None:
         # `QA-070` made the explanation a mode: Verbose is the screen that has one to bound.
         state = ConsumerUiState(
-            ConsumerSession(ConsumerScreen.DASHBOARD, profile=PresentationProfile.VERBOSE),
+            ConsumerSession(ConsumerScreen.DASHBOARD, profile=PresentationProfile.MORE_INFO),
             rows=(ConsumerScreen.MARKETPLACE.value,),
         )
         lines = frame(self.source, state)

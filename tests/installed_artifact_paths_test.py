@@ -102,7 +102,7 @@ def _projected(receipt, *observed: tuple[ComponentId, ComponentState]):
     return project_installed_artifact(desired, current, receipt=receipt)
 
 
-def _drawn(receipt, *observed, profile=PresentationProfile.FAST) -> str:
+def _drawn(receipt, *observed, profile=PresentationProfile.LESS_INFO) -> str:
     return "\n".join(render_installed_artifact(_projected(receipt, *observed), profile))
 
 
@@ -144,7 +144,7 @@ class ThePathsAreRecordedFactsTest(unittest.TestCase):
         view = _projected(None, *_MATCHED_SKILL)
 
         self.assertEqual(view.installation, ())
-        self.assertNotIn("Installation", "\n".join(render_installed_artifact(view, FAST)))
+        self.assertNotIn("Installation", "\n".join(render_installed_artifact(view, LESS_INFO)))
 
 
 class AMissingPathIsStillNamedTest(unittest.TestCase):
@@ -238,7 +238,7 @@ class VerboseAddsEveryOwnedComponentTest(unittest.TestCase):
         drawn = _drawn(
             _installation(("claude", Scope.PROJECT)),
             (ComponentId(Component.PAYLOAD), ComponentState.MATCHED),
-            profile=PresentationProfile.VERBOSE,
+            profile=PresentationProfile.MORE_INFO,
         )
 
         self.assertIn(f"{MCP_ROOT}/launch.sh", drawn)
@@ -318,7 +318,7 @@ class ThePathsSurviveTheSessionThatWroteThemTest(unittest.TestCase):
             self.assertNotIn(str(env.home / ".claude/settings.json"), drawn)
 
 
-FAST = PresentationProfile.FAST
+LESS_INFO = PresentationProfile.LESS_INFO
 
 
 if __name__ == "__main__":

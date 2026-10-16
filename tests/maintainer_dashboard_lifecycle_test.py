@@ -81,7 +81,7 @@ class TheTwoHalvesOfTheVocabularyTest(unittest.TestCase):
         self.assertEqual(dashboard.settled_candidate_count, 0)
         self.assertIn(
             "Candidates: 2",
-            "\n".join(render_maintainer_dashboard(dashboard, PresentationProfile.FAST)),
+            "\n".join(render_maintainer_dashboard(dashboard, PresentationProfile.LESS_INFO)),
         )
 
     def test_a_promoted_candidate_is_settled_rather_than_waiting(self) -> None:
@@ -185,7 +185,7 @@ class TheScreenSaysWhichIsWhichTest(unittest.TestCase):
 
     def test_a_fully_promoted_source_does_not_report_candidates_awaiting_action(self) -> None:
         rendered = self._rendered(
-            _source("authors", ((CandidateState.PROMOTED, 2),)), PresentationProfile.FAST
+            _source("authors", ((CandidateState.PROMOTED, 2),)), PresentationProfile.LESS_INFO
         )
 
         self.assertIn("Candidates: 0 awaiting action, 2 settled", rendered)
@@ -194,7 +194,7 @@ class TheScreenSaysWhichIsWhichTest(unittest.TestCase):
         """No settled records means no second clause: the fix must not tax the ordinary case."""
 
         rendered = self._rendered(
-            _source("authors", ((CandidateState.READY, 3),)), PresentationProfile.FAST
+            _source("authors", ((CandidateState.READY, 3),)), PresentationProfile.LESS_INFO
         )
 
         self.assertIn("Candidates: 3", rendered)
@@ -203,8 +203,8 @@ class TheScreenSaysWhichIsWhichTest(unittest.TestCase):
     def test_verbose_carries_the_full_lifecycle_breakdown(self) -> None:
         source = _source("authors", ((CandidateState.READY, 3), (CandidateState.PROMOTED, 2)))
 
-        verbose = self._rendered(source, PresentationProfile.VERBOSE)
-        fast = self._rendered(source, PresentationProfile.FAST)
+        verbose = self._rendered(source, PresentationProfile.MORE_INFO)
+        fast = self._rendered(source, PresentationProfile.LESS_INFO)
 
         self.assertIn("Candidate lifecycle: ready=3, promoted=2", verbose)
         self.assertNotIn("Candidate lifecycle", fast)
@@ -215,7 +215,7 @@ class TheScreenSaysWhichIsWhichTest(unittest.TestCase):
         rendered = "\n".join(
             render_maintainer_source(
                 _source("authors", ((CandidateState.PROMOTED, 2),)),
-                PresentationProfile.FAST,
+                PresentationProfile.LESS_INFO,
             )
         )
 

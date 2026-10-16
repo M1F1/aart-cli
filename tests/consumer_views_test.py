@@ -192,9 +192,9 @@ class ConsumerPlanProjectionTest(unittest.TestCase):
         )
         session = ConsumerSession.from_plan(view)
 
-        fast = render_install_plan(view, PresentationProfile.FAST)
-        verbose = render_install_plan(view, PresentationProfile.VERBOSE)
-        switched = session.switch_profile(PresentationProfile.VERBOSE)
+        fast = render_install_plan(view, PresentationProfile.LESS_INFO)
+        verbose = render_install_plan(view, PresentationProfile.MORE_INFO)
+        switched = session.switch_profile(PresentationProfile.MORE_INFO)
 
         self.assertEqual(session.semantic_identity, switched.semantic_identity)
         self.assertEqual(view.review_digest, str(plan.review_digest))
@@ -205,7 +205,7 @@ class ConsumerPlanProjectionTest(unittest.TestCase):
     def test_fast_keeps_every_material_risk_and_review_action_visible(self) -> None:
         view = project_install_plan(_plan())
 
-        rendered = "\n".join(render_install_plan(view, PresentationProfile.FAST))
+        rendered = "\n".join(render_install_plan(view, PresentationProfile.LESS_INFO))
 
         self.assertIn("local mutation", rendered.lower())
         self.assertIn("credential mutation", rendered.lower())
@@ -217,14 +217,14 @@ class ConsumerPlanProjectionTest(unittest.TestCase):
         session = ConsumerSession.from_plan(view)
 
         before = consumer_plan_to_data(view)
-        session = session.switch_profile(PresentationProfile.VERBOSE)
+        session = session.switch_profile(PresentationProfile.MORE_INFO)
         after = consumer_plan_to_data(view)
 
         self.assertEqual(before, after)
         self.assertEqual(len(before["requirements"]), 2)
         self.assertEqual(len(before["effects"]), 2)
         self.assertEqual(before["review_digest"], view.review_digest)
-        self.assertEqual(session.profile, PresentationProfile.VERBOSE)
+        self.assertEqual(session.profile, PresentationProfile.MORE_INFO)
 
     def test_required_credential_view_has_no_value_channel(self) -> None:
         runtime_input, bound, observation = _credential_input()
@@ -396,8 +396,8 @@ class HarnessTargetChoiceTest(unittest.TestCase):
             credential_observations=(observation,),
         )
 
-        fast = "\n".join(render_required_inputs(inputs, PresentationProfile.FAST))
-        verbose = "\n".join(render_required_inputs(inputs, PresentationProfile.VERBOSE))
+        fast = "\n".join(render_required_inputs(inputs, PresentationProfile.LESS_INFO))
+        verbose = "\n".join(render_required_inputs(inputs, PresentationProfile.MORE_INFO))
 
         self.assertIn("platform-team", fast)
         self.assertIn("Configured securely", fast)
@@ -413,7 +413,7 @@ class HarnessTargetChoiceTest(unittest.TestCase):
             credential_observations=(absent,),
         )
 
-        fast = "\n".join(render_required_inputs(inputs, PresentationProfile.FAST))
+        fast = "\n".join(render_required_inputs(inputs, PresentationProfile.LESS_INFO))
 
         self.assertIn("Enter securely during installation", fast)
         self.assertNotIn("Configured securely", fast)
@@ -444,7 +444,7 @@ class HarnessTargetChoiceTest(unittest.TestCase):
 
         fast = "\n".join(
             render_required_inputs(
-                project_required_inputs((secret, config)), PresentationProfile.FAST
+                project_required_inputs((secret, config)), PresentationProfile.LESS_INFO
             )
         )
 
@@ -464,8 +464,8 @@ class HarnessTargetChoiceTest(unittest.TestCase):
             MarketplaceTarget(("claude",), "darwin", "project", "copy"),
         )[0]
 
-        fast = "\n".join(render_marketplace_artifact(row, PresentationProfile.FAST))
-        verbose = "\n".join(render_marketplace_artifact(row, PresentationProfile.VERBOSE))
+        fast = "\n".join(render_marketplace_artifact(row, PresentationProfile.LESS_INFO))
+        verbose = "\n".join(render_marketplace_artifact(row, PresentationProfile.MORE_INFO))
 
         # CP-25.09 moved the description out of Fast and behind Verbose: the row leads with
         # installation state and eligible harnesses, which is what a choice there turns on
@@ -503,7 +503,7 @@ class HarnessTargetChoiceTest(unittest.TestCase):
         self.assertTrue(exact.exact)
         self.assertFalse(custom.exact)
         self.assertNotEqual(exact.semantic_identity, custom.semantic_identity)
-        rendered = "\n".join(render_collection(custom, PresentationProfile.FAST))
+        rendered = "\n".join(render_collection(custom, PresentationProfile.LESS_INFO))
         self.assertIn("1 / 2 selected", rendered)
         self.assertIn("Custom selection", rendered)
 

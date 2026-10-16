@@ -32,7 +32,7 @@ INSTALLATIONS = ("company/mcp/github@1.0.0#opencode", "company/mcp/jira@2.0.0#op
 
 class StatementsBreatheTest(unittest.TestCase):
     def test_progress_parts_its_heading_from_the_steps(self) -> None:
-        lines = render_progress(screens().outcome, PresentationProfile.FAST)
+        lines = render_progress(screens().outcome, PresentationProfile.LESS_INFO)
 
         self.assertEqual(lines[1], "")
         self.assertTrue(lines[2].lstrip().startswith(("✓", "·", "✗")))

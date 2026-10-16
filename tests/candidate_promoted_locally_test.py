@@ -249,7 +249,9 @@ class CandidatesSayWhatTheRegistryRecordsTest(unittest.TestCase):
         views = self._views(CandidatePromotionRecord.PROMOTED_LOCALLY)
         cursor = self.promoted.candidate.id.value
 
-        table = render_maintainer_candidates(views, cursor=cursor, profile=PresentationProfile.FAST)
+        table = render_maintainer_candidates(
+            views, cursor=cursor, profile=PresentationProfile.LESS_INFO
+        )
         row = next(line for line in table if line.startswith(">"))
         detail = "\n".join(maintainer_candidate_detail(views, cursor=cursor))
 
@@ -266,7 +268,7 @@ class CandidatesSayWhatTheRegistryRecordsTest(unittest.TestCase):
         row = next(
             line
             for line in render_maintainer_candidates(
-                views, cursor=cursor, profile=PresentationProfile.FAST
+                views, cursor=cursor, profile=PresentationProfile.LESS_INFO
             )
             if line.startswith(">")
         )

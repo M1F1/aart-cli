@@ -357,7 +357,7 @@ class PromotionReviewRenderingTest(unittest.TestCase):
             mode=PromotionMode.VENDORED,
         )
 
-        drawn = "\n".join(render_maintainer_promotion_review(view, PresentationProfile.VERBOSE))
+        drawn = "\n".join(render_maintainer_promotion_review(view, PresentationProfile.MORE_INFO))
 
         self.assertIn("company", drawn)
         self.assertIn("vendored", drawn)
@@ -374,7 +374,7 @@ class PromotionReviewRenderingTest(unittest.TestCase):
             mode=PromotionMode.VENDORED,
         )
 
-        drawn = "\n".join(render_maintainer_promotion_review(view, PresentationProfile.FAST))
+        drawn = "\n".join(render_maintainer_promotion_review(view, PresentationProfile.LESS_INFO))
 
         self.assertIn("cannot be promoted", drawn)
         self.assertNotIn("Review digest:", drawn)
@@ -618,7 +618,7 @@ class RegistryDiffProjectionTest(unittest.TestCase):
             mode=PromotionMode.VENDORED,
         )
 
-        drawn = "\n".join(render_maintainer_registry_diff(view, PresentationProfile.VERBOSE))
+        drawn = "\n".join(render_maintainer_registry_diff(view, PresentationProfile.MORE_INFO))
 
         self.assertIn("registry/index.json", drawn)
         self.assertIn("added", drawn)

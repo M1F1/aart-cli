@@ -911,7 +911,9 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 self.assertIs(candidate.promotion, CandidatePromotionRecord.PROMOTED_LOCALLY)
                 table = "\n".join(
                     render_maintainer_candidates(
-                        views.candidates or (), cursor=promoted_id, profile=PresentationProfile.FAST
+                        views.candidates or (),
+                        cursor=promoted_id,
+                        profile=PresentationProfile.LESS_INFO,
                     )
                 )
                 self.assertIn("Promoted locally", table)

@@ -51,7 +51,7 @@ class CandidatesScreenSeparatesTableFromDetailTest(unittest.TestCase):
         return _reload(self.source, state, entering=True)
 
     def test_verbose_draws_the_focused_identity_below_its_own_rule(self) -> None:
-        state = self._listed(PresentationProfile.VERBOSE)
+        state = self._listed(PresentationProfile.MORE_INFO)
         focused = next(item for item in _views().candidates if item.id == state.current_row)
 
         drawn = frame(self.source, state)
@@ -68,7 +68,7 @@ class CandidatesScreenSeparatesTableFromDetailTest(unittest.TestCase):
         self.assertIn(focused.source_alias, described[2])
 
     def test_fast_draws_the_table_and_no_identity_block(self) -> None:
-        drawn = "\n".join(frame(self.source, self._listed(PresentationProfile.FAST)))
+        drawn = "\n".join(frame(self.source, self._listed(PresentationProfile.LESS_INFO)))
 
         self.assertIn("ARTIFACT", drawn)
         self.assertNotIn("Under the cursor:", drawn)
@@ -76,14 +76,14 @@ class CandidatesScreenSeparatesTableFromDetailTest(unittest.TestCase):
             self.assertNotRegex(drawn, rf"(?m)^  {label}\b")
 
     def test_v_collapses_and_restores_the_same_candidate(self) -> None:
-        verbose = dataclasses.replace(self._listed(PresentationProfile.VERBOSE), cursor=1)
+        verbose = dataclasses.replace(self._listed(PresentationProfile.MORE_INFO), cursor=1)
         expected = self.source.description(verbose)
 
         fast, fast_commands = reduce_consumer_ui(verbose, key_event("v", verbose))
         again, again_commands = reduce_consumer_ui(fast, key_event("v", fast))
 
-        self.assertIs(fast.session.profile, PresentationProfile.FAST)
-        self.assertIs(again.session.profile, PresentationProfile.VERBOSE)
+        self.assertIs(fast.session.profile, PresentationProfile.LESS_INFO)
+        self.assertIs(again.session.profile, PresentationProfile.MORE_INFO)
         self.assertEqual((fast.current_row, again.current_row), (verbose.current_row,) * 2)
         fast_drawn = frame(self.source, fast)
         self.assertTrue(expected)
@@ -96,7 +96,7 @@ class CandidatesScreenSeparatesTableFromDetailTest(unittest.TestCase):
         )
 
     def test_moving_the_cursor_describes_the_new_row_from_the_other_source(self) -> None:
-        state = self._listed(PresentationProfile.VERBOSE)
+        state = self._listed(PresentationProfile.MORE_INFO)
         views = {item.id: item for item in _views().candidates}
         seen_sources = set()
         for index in range(len(state.rows)):
@@ -109,7 +109,7 @@ class CandidatesScreenSeparatesTableFromDetailTest(unittest.TestCase):
         self.assertEqual(seen_sources, {"authors", "vendors"})
 
     def test_filtering_describes_only_a_row_that_is_still_listed(self) -> None:
-        state = self._listed(PresentationProfile.VERBOSE)
+        state = self._listed(PresentationProfile.MORE_INFO)
 
         narrowed = _reload(self.source, dataclasses.replace(state, search="jira"))
         emptied = _reload(self.source, dataclasses.replace(state, search="no-such-candidate"))
@@ -125,14 +125,14 @@ class CandidatesScreenSeparatesTableFromDetailTest(unittest.TestCase):
     def test_a_row_the_search_excludes_is_not_described_before_the_rows_reload(self) -> None:
         """Rows and description read one filter, so a stale cursor cannot outlive the query."""
 
-        state = self._listed(PresentationProfile.VERBOSE)
+        state = self._listed(PresentationProfile.MORE_INFO)
         typed = dataclasses.replace(state, search="jira")
 
         self.assertNotIn("jira", self.source.description(state)[0])
         self.assertEqual(self.source.description(typed), ())
 
     def test_a_narrow_short_terminal_clips_the_detail_and_keeps_the_keys(self) -> None:
-        state = self._listed(PresentationProfile.VERBOSE)
+        state = self._listed(PresentationProfile.MORE_INFO)
         lines = frame(self.source, state)
         screen = _Screen(height=20, width=40)
 
@@ -156,7 +156,7 @@ class CandidateDetailProjectionTest(unittest.TestCase):
 
         detail = maintainer_candidate_detail((_candidate(), focused), cursor=focused.id)
         table = render_maintainer_candidates(
-            (_candidate(), focused), cursor=focused.id, profile=PresentationProfile.VERBOSE
+            (_candidate(), focused), cursor=focused.id, profile=PresentationProfile.MORE_INFO
         )
 
         self.assertIn(LONG, "".join(line.strip() for line in detail))
@@ -167,7 +167,7 @@ class CandidateDetailProjectionTest(unittest.TestCase):
         focused = _candidate(LONG, source="superpowers-test")
 
         table = render_maintainer_candidates(
-            (focused,), cursor=focused.id, profile=PresentationProfile.VERBOSE
+            (focused,), cursor=focused.id, profile=PresentationProfile.MORE_INFO
         )
 
         self.assertEqual(len(table), 2)
@@ -187,7 +187,7 @@ class CandidateDetailProjectionTest(unittest.TestCase):
 
         detail = maintainer_candidate_detail(candidates, cursor=pick)
         table = render_maintainer_candidates(
-            candidates, cursor=pick, profile=PresentationProfile.VERBOSE
+            candidates, cursor=pick, profile=PresentationProfile.MORE_INFO
         )
 
         if pick in ids:

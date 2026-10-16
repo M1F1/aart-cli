@@ -118,7 +118,7 @@ def _assert_rows_share_the_header_grid(
 class CandidateListHoldsItsColumnsTest(unittest.TestCase):
     def _rendered(self, *candidates: MaintainerCandidateView, cursor: str = "") -> tuple[str, ...]:
         return render_maintainer_candidates(
-            candidates, cursor=cursor, profile=PresentationProfile.FAST
+            candidates, cursor=cursor, profile=PresentationProfile.LESS_INFO
         )
 
     def test_a_long_name_does_not_push_the_later_columns_out(self) -> None:
@@ -180,7 +180,7 @@ class CandidateListHoldsItsColumnsTest(unittest.TestCase):
 
     def test_an_empty_list_still_says_so(self) -> None:
         self.assertEqual(
-            render_maintainer_candidates((), profile=PresentationProfile.FAST),
+            render_maintainer_candidates((), profile=PresentationProfile.LESS_INFO),
             ("No active Candidates have been discovered.",),
         )
 
@@ -198,7 +198,7 @@ class CandidateListHoldsItsColumnsTest(unittest.TestCase):
     def test_the_grid_holds_for_any_names(self, names: list[str]) -> None:
         candidates = tuple(_candidate(f"mcp/{name}") for name in names)
 
-        rendered = render_maintainer_candidates(candidates, profile=PresentationProfile.FAST)
+        rendered = render_maintainer_candidates(candidates, profile=PresentationProfile.LESS_INFO)
 
         header, *rest = rendered
         rows = [line for line in rest if line.strip()][: len(candidates)]
