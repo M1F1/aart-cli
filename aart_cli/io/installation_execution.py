@@ -51,7 +51,7 @@ from .execution import (
     SettingsEntryInterpreter,
     TerminalHandover,
 )
-from .harness import LocalHarnessRegistry
+from .harness import HarnessRegistryPort, LocalHarnessRegistry, ScopedHarnessRegistry
 from .python_runtime import LocalPythonRuntime
 
 __all__ = ["INTERPRETERS_UNAVAILABLE", "interpreters_for"]
@@ -67,7 +67,7 @@ def _error(message: str) -> Err:
 def interpreters_for(
     installations: tuple[PlannedArtifact, ...],
     *,
-    registry: LocalHarnessRegistry,
+    registry: HarnessRegistryPort,
     credential_providers: tuple[CredentialProviderPort, ...] = (),
     timeout_seconds: float = 900.0,
     offline: bool = False,
@@ -87,7 +87,7 @@ def interpreters_for(
 
     if any(not isinstance(item, (PlannedInstallation, PlannedPlacement)) for item in installations):
         raise ValueError("assembling interpreters needs planned installations")
-    if not isinstance(registry, LocalHarnessRegistry):
+    if not isinstance(registry, (LocalHarnessRegistry, ScopedHarnessRegistry)):
         raise ValueError("assembling interpreters needs a harness registry")
     providers = {item.provider: item for item in credential_providers}
     if len(providers) != len(credential_providers):

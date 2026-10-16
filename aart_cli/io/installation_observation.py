@@ -44,7 +44,7 @@ from aart_cli.domain.reconciliation import ComponentState, CurrentState, Desired
 from aart_cli.domain.result import Err
 
 from .credentials import CredentialProviderPort
-from .harness import LocalHarnessRegistry
+from .harness import HarnessRegistryPort
 from .runtime_projection import observe_installation, observe_placement
 
 __all__ = [
@@ -107,7 +107,7 @@ def observe_recorded_installation(
     desired: DesiredState,
     receipt: ArtifactReceipt,
     *,
-    registry: LocalHarnessRegistry,
+    registry: HarnessRegistryPort,
     credential_providers: tuple[CredentialProviderPort, ...] = (),
 ) -> CurrentState:
     """Measure the machine against a state that was recorded rather than planned.
@@ -135,7 +135,7 @@ def observe_recorded_installation(
 def observe_planned_installation(
     planned: PlannedArtifact,
     *,
-    registry: LocalHarnessRegistry,
+    registry: HarnessRegistryPort,
     credential_providers: tuple[CredentialProviderPort, ...] = (),
 ) -> CurrentState:
     """Measure the machine where `planned` would install, in the vocabulary it will be judged in.

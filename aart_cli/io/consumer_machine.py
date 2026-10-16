@@ -20,7 +20,7 @@ them.  An unreadable manifest is a refusal, never an empty list.
 from __future__ import annotations
 
 import os
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -68,7 +68,7 @@ from aart_cli.install_state.schema import parse_install_state
 from aart_cli.protocol.hashing import sha256_bytes
 
 from .credentials import CredentialProviderPort
-from .harness import LocalHarnessRegistry
+from .harness import HarnessRegistryPort, LocalHarnessRegistry, ScopedHarnessRegistry
 from .installation_observation import COMPONENT_STATE
 from .receipt_store import LocalReceiptStore
 from .runtime_projection import observe_installation, observe_placement
@@ -327,6 +327,7 @@ def read_installed_inspections(
     credential_providers: tuple[CredentialProviderPort, ...] = (),
     scope: Scope | None = None,
     profiles: tuple[str, ...] = (),
+    scope_roots: Mapping[Scope, str] | None = None,
 ) -> Result[InspectedInstallations]:
     """Read every canonical receipt in scope and measure what is actually there.
 
@@ -375,7 +376,11 @@ def read_installed_inspections(
         observations.append(observed.value)
 
     by_reference = {item.reference: item for item in observations}
-    registry = LocalHarnessRegistry(harness_root)
+    # A whole-machine read holds installations of both scopes, and each is measured under its own
+    # root (§172.5); a read narrowed to one scope still has only that root to offer.
+    registry: HarnessRegistryPort = (
+        ScopedHarnessRegistry(scope_roots) if scope_roots else LocalHarnessRegistry(harness_root)
+    )
     inspections = []
     for record in records:
         receipt = record.receipt
@@ -454,6 +459,15 @@ def read_consumer_machine(
         credential_providers=credential_providers,
         scope=scope,
         profiles=profiles,
+        scope_roots=(
+            {
+                each: root
+                for each, root in ((Scope.PROJECT, project_root), (Scope.USER, user_home))
+                if root
+            }
+            if scope is None
+            else None
+        ),
     )
     if isinstance(read, Err):
         return read

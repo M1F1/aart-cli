@@ -27,6 +27,7 @@ from aart_cli.application.credential_guidance import (
     credential_prompt_briefing,
     gather_credential_guidance,
 )
+from aart_cli.application.execution import MutationLockPort
 from aart_cli.application.skill_projection import project_skill_document
 from aart_cli.domain.credentials import CredentialReference
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -70,7 +71,7 @@ from aart_cli.domain.receipts import (
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.io.credentials import CredentialProviderPort
 from aart_cli.io.fs import write_atomic
-from aart_cli.io.harness import LocalHarnessRegistry
+from aart_cli.io.harness import HarnessRegistryPort, LocalHarnessRegistry, ScopedHarnessRegistry
 from aart_cli.io.python_runtime import LocalPythonRuntime
 from aart_cli.io.store_lock import acquire_store_lock, release_store_lock
 from aart_cli.protocol.hashing import sha256_bytes
@@ -174,6 +175,42 @@ class LocalMutationLock:
 
     def release(self, token: str) -> Result[None]:
         return release_store_lock(StoreLockLease(self.lock_directory, token))
+
+
+class CompositeMutationLock:
+    """Every lease one transaction needs, taken in sorted key order and given back in reverse.
+
+    A transaction that writes both scopes holds both scopes' leases (§172.5, INV-260). One fixed
+    order is what keeps two such transactions from each holding one lease and waiting on the
+    other. A refusal part-way gives back what was already held.
+    """
+
+    def __init__(self, leases: tuple[tuple[str, MutationLockPort], ...]) -> None:
+        if not leases or len({key for key, _ in leases}) != len(leases):
+            raise ValueError("a composite lock needs distinct scope keys")
+        self._leases = tuple(sorted(leases, key=lambda item: item[0]))
+        self._held: list[tuple[MutationLockPort, str]] = []
+
+    def acquire(self) -> Result[str]:
+        held: list[tuple[MutationLockPort, str]] = []
+        for _, lease in self._leases:
+            acquired = lease.acquire()
+            if isinstance(acquired, Err):
+                for earlier, token in reversed(held):
+                    earlier.release(token)
+                return acquired
+            held.append((lease, acquired.value))
+        self._held = held
+        return Ok(held[-1][1])
+
+    def release(self, token: str) -> Result[None]:
+        held, self._held = self._held, []
+        failure: Result[None] = Ok(None)
+        for lease, own in reversed(held):
+            released = lease.release(own)
+            if isinstance(released, Err) and isinstance(failure, Ok):
+                failure = released
+        return failure
 
 
 class FileEffectInterpreter:
@@ -640,12 +677,12 @@ class HarnessEffectInterpreter:
 
     def __init__(
         self,
-        registry: LocalHarnessRegistry,
+        registry: HarnessRegistryPort,
         registrations: tuple[McpRegistration, ...] = (),
         *,
         artifact: str,
     ) -> None:
-        if not isinstance(registry, LocalHarnessRegistry):
+        if not isinstance(registry, (LocalHarnessRegistry, ScopedHarnessRegistry)):
             raise ValueError("a harness interpreter needs a registry")
         if (
             not isinstance(artifact, str)

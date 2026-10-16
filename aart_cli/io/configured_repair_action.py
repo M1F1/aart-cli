@@ -61,7 +61,7 @@ from .execution import (
     RuntimeEffectInterpreter,
     SettingsEntryInterpreter,
 )
-from .harness import LocalHarnessRegistry
+from .harness import HarnessRegistryPort, LocalHarnessRegistry
 from .installation_observation import observe_recorded_installation
 from .python_runtime import LocalPythonRuntime
 from .receipt_store import LocalReceiptStore
@@ -85,7 +85,7 @@ def _error(message: str) -> Err:
 def interpreters_for_receipt(
     receipt: ArtifactReceipt,
     *,
-    registry: LocalHarnessRegistry,
+    registry: HarnessRegistryPort,
     credential_providers: tuple[CredentialProviderPort, ...] = (),
     timeout_seconds: float = 900.0,
     offline: bool = False,
