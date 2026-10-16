@@ -416,10 +416,13 @@ class ConsumerUiEvent:
     review_digest: str = ""
     config_draft: InstallationConfigDraft | None = None
     registry_commit_subject: str = ""
+    #: The artifact×harness pairs an install was prepared for, which 05 adopts while it has none.
+    pairs: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiEventKind)
+            or not _rows_valid(self.pairs)
             or (
                 self.screen is not None
                 and not isinstance(self.screen, (ConsumerScreen, MaintainerScreen))
@@ -1600,6 +1603,15 @@ def _action_prepared(
     action = event.action
     if action is None or action is not state.action:
         return state, ()
+    if (
+        action is ConsumerActionKind.INSTALL
+        and event.pairs
+        and not state.pairs
+        and state.session.screen is ConsumerScreen.REVIEW_SELECTION
+    ):
+        # §172.2: what the preparation ticked by default is ticked on screen too, so the plan
+        # and the matrix agree and Continue can go on without a keypress that changes nothing.
+        state = replace(state, pairs=event.pairs, targets=pairs_harnesses(event.pairs))
     if action is ConsumerActionKind.INSTALL and event.config_draft is not None:
         if state.session.screen is not ConsumerScreen.REVIEW_SELECTION:
             return state, ()

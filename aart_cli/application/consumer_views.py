@@ -416,6 +416,23 @@ def pairs_harnesses(pairs: tuple[str, ...]) -> tuple[str, ...]:
     )
 
 
+def default_pairs(targets: tuple[HarnessTargetView, ...]) -> tuple[str, ...]:
+    """The pairs 05 starts with: an artifact that only one harness can host has it ticked (§172.2).
+
+    Every other artifact starts with nothing ticked, so a real choice is always the person's.
+    """
+
+    options: dict[str, list[str]] = {}
+    for target in targets:
+        for artifact in target.artifacts:
+            options.setdefault(artifact, []).append(target.harness)
+    return tuple(
+        pair_key(artifact, harnesses[0])
+        for artifact, harnesses in options.items()
+        if len(harnesses) == 1
+    )
+
+
 def matrix_rows(targets: tuple[HarnessTargetView, ...]) -> tuple[str, ...]:
     """Screen 05's rows: "All artifacts" when there are several, then one row per artifact."""
 

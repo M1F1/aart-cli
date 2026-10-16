@@ -25,6 +25,7 @@ from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     HarnessTargetView,
+    default_pairs,
     matrix_columns,
     matrix_from_row,
     matrix_rows,
@@ -107,6 +108,29 @@ class TickingCellsTest(unittest.TestCase):
             self.assertEqual(len(set(pairs)), len(pairs))
 
 
+class OnlyOneHarnessIsTickedAlreadyTest(unittest.TestCase):
+    """§172.2: an artifact with exactly one eligible harness has it ticked already."""
+
+    def test_only_the_artifact_with_one_option_starts_ticked(self) -> None:
+        self.assertEqual(default_pairs(TARGETS), (pair_key(REVIEW, "opencode"),))
+
+    @given(st.lists(st.sets(st.sampled_from((GITHUB, JIRA, REVIEW))), min_size=1, max_size=3))
+    def test_a_default_is_offered_and_leaves_no_artifact_problem_of_its_own(self, hosted) -> None:
+        targets = tuple(
+            HarnessTargetView(f"h{index}", tuple(sorted(artifacts)))
+            for index, artifacts in enumerate(hosted)
+            if artifacts
+        )
+        defaults = default_pairs(targets)
+        offered = {pair_key(a, t.harness) for t in targets for a in t.artifacts}
+
+        self.assertLessEqual(set(defaults), offered)
+        for artifact in {a for t in targets for a in t.artifacts}:
+            options = [t.harness for t in targets if artifact in t.artifacts]
+            ticked = [key for key in defaults if pair_from_key(key)[0] == artifact]  # type: ignore[index]
+            self.assertEqual(ticked, [pair_key(artifact, options[0])] if len(options) == 1 else [])
+
+
 class PairChoiceProblemsTest(unittest.TestCase):
     def test_every_artifact_needs_a_harness(self) -> None:
         problems = pair_choice_problems(TARGETS, (pair_key(GITHUB, "claude"),))
@@ -164,6 +188,45 @@ class TheArrowsMoveBetweenHarnessesTest(unittest.TestCase):
 
 
 class EachTickedPairIsInstalledTest(unittest.TestCase):
+    def test_an_artifact_only_one_harness_can_host_continues_without_a_tick(self) -> None:
+        from tests.configured_install_command_e2e_test import _environment
+        from tests.consumer_application_e2e_test import _at, _drive
+        from tests.consumer_shell_test import ENTER, SPACE
+        from tests.installed_multi_uninstall_e2e_test import LINT_SKILL
+
+        with _environment(authored=LINT_SKILL) as env:
+            finished, terminal, _ = _drive(
+                env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"), ENTER, ENTER
+            )
+
+            self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
+            stored = LocalReceiptStore(str(env.paths.data_root) + "/state").installations()
+            assert isinstance(stored, Ok), getattr(stored, "diagnostics", ())
+            self.assertEqual([item.receipt.owner.harness for item in stored.value], ["claude"])
+
+    def test_a_complete_choice_keeps_the_scope_it_offers(self) -> None:
+        """Re-preparing for the ticked pairs used to drop the scope offer, leaving no radio set."""
+
+        from tests.configured_install_command_e2e_test import _environment
+        from tests.configured_installation_draft_e2e_test import _published_registries
+        from tests.consumer_application_e2e_test import _at, _drive
+        from tests.consumer_shell_test import DOWN, SPACE
+        from tests.installation_harness_choice_test import _AUTHORED_MCP, _AUTHORED_SKILL
+
+        def both(_authored, **keywords):
+            return _published_registries(_AUTHORED_SKILL, _AUTHORED_MCP, **keywords)
+
+        with (
+            mock.patch("tests.configured_install_command_e2e_test._published_registry", both),
+            _environment() as env,
+        ):
+            _, terminal, _ = _drive(
+                env, _at(ConsumerScreen.MARKETPLACE), SPACE, DOWN, SPACE, ord("i"), SPACE
+            )
+
+        self.assertRegex(terminal.last, r"All artifacts +>\[x\]")
+        self.assertIn("(*) Install into: Project", terminal.last)
+
     def test_two_artifacts_each_go_only_into_the_harness_ticked_for_them(self) -> None:
         from tests.configured_install_command_e2e_test import _environment
         from tests.configured_installation_draft_e2e_test import _published_registries

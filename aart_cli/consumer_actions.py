@@ -60,11 +60,13 @@ from aart_cli.application.consumer_views import (
     McpTestView,
     PythonInstallerChoiceView,
     RunningInstallationView,
+    default_pairs,
     harness_choice_problems,
     offer_install_scopes,
     offer_python_installers,
     pair_choice_problems,
     pair_from_key,
+    pairs_harnesses,
     project_lifecycle_plan,
     project_running_installation,
     target_choice_problems,
@@ -1742,6 +1744,9 @@ class LocalConsumerActions:
             if command.action is ConsumerActionKind.INSTALL
             else ()
         )
+        # §172.2: until 05 is answered, an artifact only one harness can host has it ticked.
+        pairs = command.pairs or (default_pairs(targets) if not command.targets else ())
+        chosen_targets = command.targets or pairs_harnesses(pairs)
         if targets and not prepared.value.ready:
             # #50: configuration is per installation and an installation is a harness, so nothing
             # is asked until the harness is chosen. Before then the answer is the choice itself; a
@@ -1750,20 +1755,21 @@ class LocalConsumerActions:
                 dict.fromkeys(artifact for item in targets for artifact in item.artifacts)
             )
             if (
-                pair_choice_problems(targets, command.pairs)
-                if command.pairs
-                else harness_choice_problems(targets, eligible_artifacts, command.targets)
+                pair_choice_problems(targets, pairs)
+                if pairs
+                else harness_choice_problems(targets, eligible_artifacts, chosen_targets)
             ):
                 return ConsumerActionUpdate(
                     self.source(install_targets=targets),
                     ConsumerUiEvent(
                         ConsumerUiEventKind.ACTION_PREPARED,
                         action=command.action,
+                        pairs=pairs,
                         config_draft=InstallationConfigDraft(),
                     ),
                 )
-            host = replace(host, profiles=command.targets)
-            assignments = _assignments(command.pairs, host.scope)
+            host = replace(host, profiles=chosen_targets)
+            assignments = _assignments(pairs, host.scope)
             prepared = prepare_configured_installation(
                 context.effective,
                 selection,
@@ -1899,6 +1905,7 @@ class LocalConsumerActions:
                     ConsumerUiEvent(
                         ConsumerUiEventKind.ACTION_PREPARED,
                         action=command.action,
+                        pairs=pairs,
                         config_draft=draft,
                     ),
                 )
@@ -1925,15 +1932,15 @@ class LocalConsumerActions:
         reviewed_host = host
         if command.action is ConsumerActionKind.INSTALL:
             problems = (
-                pair_choice_problems(plan.targets, command.pairs)
-                if command.pairs
-                else target_choice_problems(plan, command.targets)
+                pair_choice_problems(plan.targets, pairs)
+                if pairs
+                else target_choice_problems(plan, chosen_targets)
             )
             if not problems:
-                chosen = command.targets
+                chosen = chosen_targets
             if chosen:
                 reviewed_host = replace(host, profiles=chosen)
-                assignments = _assignments(command.pairs, host.scope)
+                assignments = _assignments(pairs, host.scope)
                 narrowed = prepare_configured_installation(
                     context.effective,
                     selection,
@@ -1960,12 +1967,14 @@ class LocalConsumerActions:
                 plan = replace(
                     narrowed_action.flow.plan,
                     targets=targets,
+                    scope_choice=plan.scope_choice,
+                    installer_choice=plan.installer_choice,
                     chosen_targets=chosen,
-                    chosen_pairs=command.pairs,
+                    chosen_pairs=pairs,
                 )
         self._pending_host = reviewed_host
         self._pending = _PendingInstall(
-            reviewed, previous_receipts, targets, chosen, command.pairs if chosen else ()
+            reviewed, previous_receipts, targets, chosen, pairs if chosen else ()
         )
         self._pending_action = command.action
         return ConsumerActionUpdate(
@@ -1973,6 +1982,7 @@ class LocalConsumerActions:
             ConsumerUiEvent(
                 ConsumerUiEventKind.ACTION_PREPARED,
                 action=command.action,
+                pairs=pairs,
                 semantic_identity=plan.semantic_identity,
                 selection_identity=plan.selection.semantic_identity,
                 review_digest=plan.review_digest,

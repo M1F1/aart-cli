@@ -139,9 +139,22 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
   - Mutations: `_assignments` returning nothing turns only the two-artifact e2e test red. Dropping
     the arrows from `_SPECIAL_KEYS` turns the arrow test and the e2e test red.
   - 1823 related tests pass, along with ruff, ruff format and mypy.
-- Seen and left to step 7: after a re-prepare with more than one artifact, neither scope radio is
-  drawn as chosen. This was already so before the matrix (checked on the stashed tree). 07a
-  replaces the radio.
+- §172.2's default: an artifact only one harness can host has it ticked already
+  (`default_pairs`).
+  - `LocalConsumerActions` uses those pairs while 05 has none, and sends them back on
+    `ACTION_PREPARED` (`ConsumerUiEvent.pairs`). The reducer adopts them, so the matrix and the
+    plan agree and Continue works without a keypress.
+  - Evidence: a scenario plus a Hypothesis property over random hosting, and an e2e test in which
+    a claude-only Skill goes from `i` to Success with two Enters.
+  - Mutation: dropping the adoption turns that e2e test red.
+- Fixed on the way: the narrowed plan, the one prepared for the ticked pairs, dropped
+  `scope_choice` and `installer_choice`, so no scope radio was drawn as chosen afterwards. This
+  predates the matrix (checked on the stashed tree).
+  - Now that the scope offer survives, `install_time_config_form_test`'s form goes back to 05 for
+    the scope, as D-380 specifies, and needs one more Enter.
+  - Evidence: `test_a_complete_choice_keeps_the_scope_it_offers`. Mutation: dropping
+    `scope_choice=` turns it red.
+  - 1827 related tests pass.
 
 ## Step 6, the part that needs no screen (done; the 07 form waits)
 

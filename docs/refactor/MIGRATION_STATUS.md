@@ -8,7 +8,8 @@ contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 - Each ticked pair becomes one installation. The two-artifact e2e test installs the MCP only into
   claude and the Skill only into opencode.
 - ←/→ choose the harness column. Before this, an arrow key raised in `key_event`.
-- 1823 related tests pass, with ruff, ruff format and mypy.
+- An artifact only one harness can host starts ticked (§172.2), and the narrowed plan keeps its
+  scope offer. 1827 related tests pass, with ruff, ruff format and mypy.
 - Next: step 6's 07 form.
 
 **2026-10-16, CP-30 steps 2–4 (D-413, D-414).**

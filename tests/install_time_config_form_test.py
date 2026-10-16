@@ -582,8 +582,9 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 ENTER,
                 value,
                 ENTER,
-                # Submit, then Ready (which holds Remediation's changes since D-403): the form goes
-                # forward, not back to 05 (D-380).
+                # Submit. The plan still offers a choice of scope, so 05 shows only that (D-380);
+                # Continue goes on to Ready (which holds Remediation's changes since D-403).
+                ENTER,
                 ENTER,
                 ENTER,
                 actions=handler,
