@@ -10360,3 +10360,12 @@ Success screen with the reason, e.g. "Undo unavailable: a credential change cann
 previous value is retained anywhere, deliberately". That is detail, not the outcome, so
 `render_transaction_success` prints it only under Verbose. Receipt Details keeps its `Undo:` line
 under both profiles, so the reason is still one row away, on the exact record. Verbose is unchanged.
+## D-411 - Artifact Details states each fact in its own block, and Fast names only eligible harnesses
+
+**Owner request, 2026-10-16. No Product Specification change.** Fast Artifact Details drew the
+coordinate, approval, installed state and harness lists as one block. It also listed harnesses
+"Detected but not eligible" and "What it needs: nothing else before choosing an eligible harness".
+Each statement is now its own block (`separate`). Fast names only the eligible harnesses, or why
+there are none. The detected-but-ineligible ones, with their reasons, are in Verbose's
+`installation harnesses` section, which is unchanged. "What it needs" is drawn only when the
+artifact has inputs to name.

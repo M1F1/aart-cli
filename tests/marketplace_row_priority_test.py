@@ -83,7 +83,7 @@ class TheFastRowLeadsWithWhatDecidesTest(unittest.TestCase):
 
         for harness in row.eligible_harnesses:
             with self.subTest(harness=harness):
-                self.assertRegex(rendered, rf"  - {harness}\n")
+                self.assertRegex(rendered, rf"  - {harness}(\n|$)")
 
 
 class TheDescriptionIsDisclosedRatherThanRepeatedTest(unittest.TestCase):
