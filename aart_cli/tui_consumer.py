@@ -37,6 +37,7 @@ from aart_cli.application.consumer_ui import (
 from aart_cli.application.consumer_views import (
     ALL_ARTIFACTS,
     ALL_INSTALLATIONS,
+    PLACEHOLDER_WARNING,
     SETTING_PURPOSE,
     SETTING_ROWS,
     SUCCESS_CHOICES,
@@ -79,6 +80,7 @@ from aart_cli.application.consumer_views import (
     pair_key,
     pair_scope_key,
     pairs_confirmed,
+    placeholders_left,
     project_collection,
     project_registries,
     scope_choice_offered,
@@ -123,6 +125,7 @@ from aart_cli.application.maintainer_views import (
     parse_validation_row,
     project_maintainer_candidate_filters,
 )
+from aart_cli.domain.inputs import SKIPPED_INPUT, is_skipped_value
 from aart_cli.domain.registry import PromotionMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import Collection
@@ -387,6 +390,13 @@ def render_user_inputs_area(
             lines.append("    Credentials: none")
         for credential in credentials:
             lines.append(f"    Credentials: {_credential_row(credential)}")
+        left = sorted(
+            {
+                *(name for file in configurations for name in file.placeholders),
+                *(item.input for item in credentials if item.placeholder),
+            }
+        )
+        lines.extend(f"    {name}: {PLACEHOLDER_WARNING}" for name in left)
     return tuple(lines) if rows else ("No installed artifact has runtime inputs.",)
 
 
@@ -431,6 +441,8 @@ def render_artifact_user_inputs(
             value = next((value for name, value in file.values if name == identifier), None)
             shown = "value unavailable" if value is None else value
             lines.append(f"    {file.harness}: {shown} — {_human(file.state)}")
+            if value is not None and is_skipped_value(value):
+                lines.append(f"      {PLACEHOLDER_WARNING}")
     if credentials:
         if lines:
             lines.append("")
@@ -438,7 +450,9 @@ def render_artifact_user_inputs(
     for credential in credentials:
         row = _user_credential_row(credential.reference)
         status = (
-            "Configured securely"
+            PLACEHOLDER_WARNING
+            if credential.placeholder
+            else "Configured securely"
             if credential.health == "present"
             else _human(credential.health).title()
         )
@@ -834,13 +848,19 @@ _MATERIAL_RISKS: tuple[tuple[str, str], ...] = (
 )
 
 
-def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
-    """Screen 09. Outcomes in Fast; the same InstallPlan, undiminished, in Verbose."""
+def render_ready(
+    view: ConsumerPlanView, profile: PresentationProfile, *, entered: tuple[str, ...] = ()
+) -> tuple[str, ...]:
+    """Screen 09. Outcomes in Fast; the same InstallPlan, undiminished, in Verbose.
+
+    Both end with what will be stored as `AART_NOT_SET`, so a skip is never a surprise (§172.3).
+    """
 
     if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
         raise ValueError("ready rendering needs a consumer plan and presentation profile")
+    left = _placeholders_block(view, entered)
     if profile is PresentationProfile.VERBOSE:
-        return _verbose_plan(view)
+        return (*_verbose_plan(view), *left)
     outcomes = Counter(_OUTCOMES.get(item.outcome, "other change") for item in view.effects)
     lines = ["Ready to install", f"{len(view.selection.resolved)} artifact(s) will be installed."]
     lines.extend(f"  {count} {name}" for name, count in sorted(outcomes.items()))
@@ -879,8 +899,21 @@ def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[
     )
     if attention:
         lines.append("This install " + ", ".join(attention) + ".")
+    lines.extend(left)
     lines.append("Press [v] for more info: the full plan.")
     return tuple(lines)
+
+
+def _placeholders_block(view: ConsumerPlanView, entered: tuple[str, ...]) -> tuple[str, ...]:
+    left = placeholders_left(view, entered)
+    if not left:
+        return ()
+    return (
+        "",
+        f"Left as {SKIPPED_INPUT}, to set later in Credentials and variables:",
+        *listed(row.replace("\t", ": ", 1) for row in left),
+        "",
+    )
 
 
 def render_running(view: RunningInstallationView, profile: PresentationProfile) -> tuple[str, ...]:
@@ -1231,6 +1264,7 @@ def render_installed_artifact(
         lines.append("Needs attention: " + ", ".join(item.component for item in view.drift) + ".")
     else:
         lines.append("Verified against its desired state.")
+    lines.extend(f"{name}: {PLACEHOLDER_WARNING}." for name in view.placeholders)
     if not view.actions:
         lines.append("No action is offered until it is observed.")
     shown = view.installation if profile is PresentationProfile.VERBOSE else view.user_facing_paths
@@ -1514,10 +1548,11 @@ def doctor_rows(view: DoctorView, *, leaving_out: tuple[str, ...] = ()) -> tuple
     for item in view.artifacts:
         if item.row in leaving_out:
             continue
-        marker = "✓" if item.health in {"ready", "update"} else "⚠"
-        lines.append(f"{marker} {item.row}")
+        healthy = item.health in {"ready", "update"} and not item.placeholders
+        lines.append(f"{'✓' if healthy else '⚠'} {item.row}")
         if item.health in {"attention", "broken"}:
             lines.extend(f"  {drift.component}: {_human(drift.kind)}" for drift in item.drift)
+        lines.extend(f"  {name}: {PLACEHOLDER_WARNING}" for name in item.placeholders)
     return tuple(lines)
 
 
@@ -1537,6 +1572,8 @@ def doctor_issue_rows(view: DoctorView, rows: tuple[str, ...], current: str) -> 
         item = artifacts.get(row)
         drift = () if item is None else item.drift
         lines.extend(f"    {entry.component}: {_human(entry.kind)}" for entry in drift)
+        placeholders = () if item is None else item.placeholders
+        lines.extend(f"    {name}: {PLACEHOLDER_WARNING}" for name in placeholders)
     return tuple(lines)
 
 
@@ -1557,9 +1594,13 @@ def doctor_status(view: DoctorView, profile: PresentationProfile) -> tuple[str, 
         if profile is PresentationProfile.VERBOSE and view.repairable_issues
         else ()
     )
+    unset = sum(1 for item in view.artifacts if item.placeholders)
     return separate(
         (f"{view.ready_count} ready",),
         (f"{view.attention_count} needs attention",),
+        # §172.3: a placeholder is no fault, so it is not counted as one, but it is not hidden
+        # behind "ready" either.
+        (f"{unset} still hold {SKIPPED_INPUT}",) if unset else (),
         ("Actions: repair issues using minimal reconciliation plans.",) if view.actions else (),
         repairable,
     )
@@ -4841,7 +4882,7 @@ class CanonicalScreenSource:
             return render_inspection(plan, profile)
         if screen in (ConsumerScreen.REQUIRED_INPUTS, ConsumerScreen.UPDATE_INPUTS):
             return render_required_inputs(plan.inputs, profile)
-        return render_ready(plan, profile)
+        return render_ready(plan, profile, entered=state.entered_secrets)
 
     def _list(self, state: ConsumerUiState, entries: tuple[str, ...]) -> tuple[str, ...]:
         if not entries:

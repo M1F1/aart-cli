@@ -301,6 +301,32 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
   - 1265 related tests pass (every module naming Tabnine or a harness table), with ruff,
     ruff format, mypy and tach. `install_scope_test` holds the legacy profile matrix with the new row.
 
+## Step 9: the placeholder warnings (done)
+
+- The design is in D-421. `consumer_views` adds `PLACEHOLDER_WARNING`, `placeholders_left`,
+  `ConsumerPlanView.config_placeholders`, `ConfigurationFileView.placeholders`,
+  `CredentialRecordView.placeholder` and `InstalledArtifactView.placeholders`.
+  `assemble_consumer_machine` fills the last from the installation's configuration file and
+  credentials. The adapter's `_config_placeholders` fills the plan's list.
+- The TUI: `render_ready` takes the entered rows and ends with the list; `render_installed_artifact`,
+  `doctor_rows`, `doctor_issue_rows`, `doctor_status`, `render_user_inputs_area` and
+  `render_artifact_user_inputs` say the warning.
+- Evidence, `placeholder_warnings_test`, 5 tests:
+  - e2e: with the configuration and the credential skipped, Ready lists both; with both answered,
+    Ready names no placeholder;
+  - e2e: after a skip-everything install into two harnesses, Doctor, Installed details, 22 and
+    22a warn about the value and the secret, and Doctor counts the two installations; after an
+    answered install none of them warns and 22a says "Configured securely";
+  - unit: only a value that is exactly `AART_NOT_SET` is a placeholder.
+  - The secret's warning comes from a provider fake answering `placeholder` about what it holds,
+    as the Keychain provider does by counting matches (step 3); no value is read back.
+  - Mutations, each caught: no ordinary placeholders found (the unit test and the installed e2e);
+    the provider's answer dropped from the record (the installed e2e); entered secrets still
+    listed on Ready (the answered Ready e2e); the plan's configuration list left empty (the
+    skipped Ready e2e); Doctor marking a placeholder installation `✓` (the installed e2e).
+  - 1768 related tests pass (modules touching the consumer UI, views, actions, session, Doctor or
+    the frame law), with ruff, ruff format, mypy and tach.
+
 ## Superseded work
 
 - `stash@{0}`, "scope rows before the form (D-412 draft)", was the narrow fix for the missing scope

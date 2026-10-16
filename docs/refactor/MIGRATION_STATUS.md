@@ -4,6 +4,14 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-30 step 9 (D-421): placeholders are said before and after they are stored.**
+- Ready lists every input being left as `AART_NOT_SET`, in Fast and Verbose.
+- Doctor, Installed and Credentials and variables warn "Still the AART_NOT_SET placeholder — set
+  it in Credentials and variables". Ordinary values are compared as text; a secret's answer comes
+  from the provider's own comparison, and no value is read.
+- 1768 related tests pass, with ruff, ruff format, mypy and tach.
+- Next: step 10, full verification and the PR.
+
 **2026-10-16, CP-30 (D-420): Tabnine installs at user scope.**
 - This was the owner's request. The tables gain Tabnine's user Skill, memory and hook rows, all
   under `~/.tabnine/agent`, as Tabnine CLI documents.

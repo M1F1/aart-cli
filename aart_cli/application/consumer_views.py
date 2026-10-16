@@ -25,6 +25,7 @@ from aart_cli.domain.credentials import (
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.effects import RiskClass, effect_to_data
 from aart_cli.domain.inputs import (
+    SKIPPED_INPUT,
     BoundInputs,
     ConfigInput,
     InputValidation,
@@ -86,6 +87,7 @@ from .removal_proposal import RemovalProposal
 __all__ = [
     "ALL_ARTIFACTS",
     "ALL_INSTALLATIONS",
+    "PLACEHOLDER_WARNING",
     "InstallSecretView",
     "choose_pair_scope",
     "default_pair_scopes",
@@ -95,6 +97,7 @@ __all__ = [
     "scope_matrix_columns",
     "scope_matrix_from_row",
     "scope_matrix_rows",
+    "placeholders_left",
     "secrets_to_ask",
     "MATRIX_ROW_PREFIX",
     "matrix_columns",
@@ -1004,6 +1007,22 @@ def secrets_to_ask(view: ConsumerPlanView) -> tuple[InstallSecretView, ...]:
     return tuple(item for item in view.secrets if not item.configured)
 
 
+#: What Doctor, Installed and Credentials and variables say about a value still left by a skip
+#: (§172.3). The words are the specification's.
+PLACEHOLDER_WARNING = f"Still the {SKIPPED_INPUT} placeholder — set it in Credentials and variables"
+
+
+def placeholders_left(view: ConsumerPlanView, entered: tuple[str, ...]) -> tuple[str, ...]:
+    """Every `<artifact>\t<input>` this plan will store as `AART_NOT_SET`, for Ready (§172.6).
+
+    The ordinary ones are in the plan. A secret is one 07b asked for and nobody entered: which were
+    entered is the screen's to know, and only as row keys.
+    """
+
+    secrets = tuple(item.row for item in secrets_to_ask(view) if item.row not in entered)
+    return tuple(sorted({*view.config_placeholders, *secrets}))
+
+
 @dataclass(frozen=True, slots=True)
 class ConsumerPlanView:
     canonical: InstallPlan
@@ -1030,6 +1049,9 @@ class ConsumerPlanView:
     chosen_pair_scopes: tuple[str, ...] = ()
     #: Screen 07b's secrets, one per artifact and input (§172.6).
     secrets: tuple[InstallSecretView, ...] = ()
+    #: The ordinary inputs this plan writes as `AART_NOT_SET`, one `<artifact>\t<input>` row per
+    #: artifact (§172.6): what Ready lists beside the secrets 07b left unentered.
+    config_placeholders: tuple[str, ...] = ()
     #: Which install scopes this selection may go to and which one it is going to, or `None` for a
     #: plan whose scope is not the operator's to choose (an update keeps where it already is).
     #: Screen 05 draws it only when there is something to decide (issue #11a, D-295).
@@ -1223,6 +1245,7 @@ def consumer_plan_to_data(view: ConsumerPlanView) -> dict[str, object]:
         "chosen_pairs": list(view.chosen_pairs),
         "chosen_pair_scopes": list(view.chosen_pair_scopes),
         "secrets": [{"row": item.row, "configured": item.configured} for item in view.secrets],
+        "config_placeholders": list(view.config_placeholders),
     }
 
 
@@ -1333,6 +1356,8 @@ class CredentialRecordView:
     detail: str
     dependants: tuple[str, ...]
     actions: tuple[str, ...]
+    #: The provider holds exactly `AART_NOT_SET`, compared in its own processes (§172.3).
+    placeholder: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1396,6 +1421,12 @@ class ConfigurationFileView:
 
         return self.installation or self.coordinate
 
+    @property
+    def placeholders(self) -> tuple[str, ...]:
+        """The values in this file that are still `AART_NOT_SET`, by comparing the text (§172.3)."""
+
+        return tuple(name for name, value in self.values if value == SKIPPED_INPUT)
+
 
 def project_credential_record(
     observation: CredentialObservation,
@@ -1427,6 +1458,7 @@ def project_credential_record(
         observation.detail,
         ordered_dependants,
         actions,
+        observation.placeholder,
     )
 
 
@@ -1480,6 +1512,9 @@ class InstalledArtifactView:
     #: profiles. Empty where the record names no owner, which is what a row with no harness in it
     #: means: nobody wrote down which installation this was.
     harness: str = ""
+    #: The inputs this installation still holds as `AART_NOT_SET`, ordinary and secret alike
+    #: (§172.3). Filled where the machine is assembled, which is where both are known.
+    placeholders: tuple[str, ...] = ()
 
     @property
     def row(self) -> str:

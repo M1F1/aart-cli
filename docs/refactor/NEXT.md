@@ -5,7 +5,7 @@
 **CP-29 is merged and released as 0.8.0. The active work is CP-30, the per-artifact install flow:
 `docs/refactor/slices/CP-30-per-artifact-install-flow.md`, on `feat/cp-30-install-flow-per-artifact`.**
 Product Specification §172 and D-413 define it, plus D-414. Its ten steps are in `plan.json`.
-Steps 1–8 are done; the first four are:
+Steps 1–9 are done; the first four are:
 1. the specification;
 2. one transaction over artifact×harness×scope pairs;
 3. the `AART_NOT_SET` placeholder;
@@ -32,8 +32,10 @@ the scope.
 Step 8 is done (D-419). 07b reads each secret once per artifact with a hidden prompt on the lent
 terminal, into one carrier per installation. A secret already held is "Configured securely"; Set
 later and Continue go to Ready, and anything not entered is stored as `AART_NOT_SET`.
-Next comes step 9: it adds the placeholder warnings on Ready, Success, Doctor, Installed and Credentials and
-variables. Step 10 is full verification and the PR.
+Step 9 is done (D-421). Ready lists what is left as `AART_NOT_SET`; Doctor, Installed and
+Credentials and variables warn about it, without reading a secret.
+Tabnine also installs at user scope now (D-420, owner request; live walk owed, B-191).
+Next is step 10: full verification and the PR.
 
 Open PRs waiting for the owner: #66 (Undo line under More info), #67 (Artifact Details blocks),
 #68 (profile rename). After CP-30, CP-31 renames the promotion modes (#54) and removes the vendor

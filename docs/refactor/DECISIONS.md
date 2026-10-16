@@ -10536,3 +10536,26 @@ Evidence:
   (§169), and it asks for Tabnine CLI user scope to be characterised rather than taken from an old
   capability table.
 - A live walk against the company build is still owed (B-191).
+
+## D-421 — Where a placeholder is said, and how it is known (CP-30 step 9)
+
+§172.3 and §172.6 ask Ready to list what will be stored as `AART_NOT_SET`, and Doctor, Installed
+and Credentials and variables to warn about every value that still is, without reading a secret.
+
+- **Ready** lists, in Fast and Verbose, every `artifact: input` left as the placeholder. The
+  ordinary ones come from the narrowed plan's `config_placeholders`: the bound non-secret inputs
+  whose value is exactly `AART_NOT_SET`. The secrets are the 07b rows not entered in this visit,
+  which the UI state already knows by row key (D-419). `placeholders_left` joins the two.
+- **Installed** carries the answer as `InstalledArtifactView.placeholders`, filled where the
+  machine is assembled, because that is the one place both the configuration files and the
+  credential observations are known. Ordinary values are compared as text
+  (`ConfigurationFileView.placeholders`). Secrets use `CredentialObservation.placeholder`, which
+  the provider answers by counting matches in its own processes (step 3); it is now kept on
+  `CredentialRecordView.placeholder`.
+- **Doctor** marks an installation with a placeholder `⚠` and lists the warning under it, and its
+  status adds "N still hold AART_NOT_SET". The placeholder is not counted as needing attention
+  and offers no repair: nothing is broken, and Credentials and variables is where it is set.
+- **Credentials and variables**: screen 22 lists the warning per installation; 22a puts it under
+  the value and in place of "Configured securely" for the credential.
+- Success does not repeat the list. The specification does not ask for it, Ready has just said it,
+  and Installed says it from then on.

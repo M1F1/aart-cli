@@ -141,6 +141,7 @@ from aart_cli.domain.inputs import (
     RuntimeInput,
     SecretInput,
     SecretProviderReference,
+    is_skipped_value,
 )
 from aart_cli.domain.installation_owner import (
     credential_address,
@@ -268,6 +269,23 @@ def _names_a_command(step: str) -> bool:
 
 
 _ELSEWHERE = "The next step for this is not available on this screen yet."
+
+
+def _config_placeholders(prepared: PreparedConfiguredInstallation) -> tuple[str, ...]:
+    """The ordinary inputs a skip left as `AART_NOT_SET`, once per artifact, for Ready (§172.3)."""
+
+    return tuple(
+        sorted(
+            {
+                f"{artifact_answer_key(owner)}\t{item.input.id.value}"
+                for owner, bound in prepared.draft.inputs.bound
+                for item in bound.inputs
+                if not isinstance(item.input, SecretInput)
+                and not isinstance(item.source, SecretProviderReference)
+                and is_skipped_value(item.source.value)
+            }
+        )
+    )
 
 
 def _refusal(diagnostics: tuple[Diagnostic, ...]) -> tuple[str, ...]:
@@ -2181,6 +2199,7 @@ class LocalConsumerActions:
                     scope_offers=scope_matrix_rows(scope_offers),
                     chosen_pair_scopes=pair_scopes,
                     secrets=self._install_secrets(reviewed),
+                    config_placeholders=_config_placeholders(reviewed),
                 )
         self._pending_host = reviewed_host
         self._pending_plan = plan
