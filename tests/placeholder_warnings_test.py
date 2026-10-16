@@ -20,7 +20,7 @@ from aart_cli.domain.inputs import SKIPPED_INPUT
 from aart_cli.domain.result import Ok
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
-from tests.consumer_application_e2e_test import _actions, _at, _drive
+from tests.consumer_application_e2e_test import BothBackendsMeasured, _actions, _at, _drive
 from tests.consumer_shell_test import BACKSPACE, DOWN, ENTER, RIGHT, SPACE, UP
 from tests.install_credentials_test import _Keeping
 
@@ -77,7 +77,7 @@ def _text(frames) -> str:
     return "\n\n".join("\n".join(frame) for frame in frames)
 
 
-class ReadyListsWhatWillBePlaceholderE2ETest(unittest.TestCase):
+class ReadyListsWhatWillBePlaceholderE2ETest(BothBackendsMeasured):
     def test_a_skipped_value_and_an_unentered_secret_are_listed_before_confirming(self) -> None:
         install, _ = _installed(_SKIP_ALL)
 
@@ -94,7 +94,7 @@ class ReadyListsWhatWillBePlaceholderE2ETest(unittest.TestCase):
         self.assertNotIn(SKIPPED_INPUT, ready)
 
 
-class InstalledPlaceholdersWarnE2ETest(unittest.TestCase):
+class InstalledPlaceholdersWarnE2ETest(BothBackendsMeasured):
     def test_doctor_installed_and_credentials_warn_about_each_placeholder(self) -> None:
         _, drawn = _installed(_SKIP_ALL)
 

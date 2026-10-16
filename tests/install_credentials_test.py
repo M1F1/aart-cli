@@ -25,7 +25,7 @@ from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
 from aart_cli.domain.inputs import SKIPPED_INPUT
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
-from tests.consumer_application_e2e_test import _actions, _at, _drive
+from tests.consumer_application_e2e_test import BothBackendsMeasured, _actions, _at, _drive
 from tests.consumer_shell_test import DOWN, ENTER, ESCAPE, RIGHT, SPACE, UP
 from tests.credential_guidance_test import _Journal
 from tests.install_time_config_form_test import _MemoryCredentialProvider
@@ -95,7 +95,7 @@ def _install(*keys, answer: str = TYPED):
     return finished, terminal, provider, journal, asked, handler, files
 
 
-class EnteredBeforeReadyE2ETest(unittest.TestCase):
+class EnteredBeforeReadyE2ETest(BothBackendsMeasured):
     def test_an_entered_value_reaches_the_provider_for_each_installation_and_nowhere_else(
         self,
     ) -> None:

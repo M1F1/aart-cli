@@ -40,7 +40,7 @@ from aart_cli.tui_consumer import CanonicalScreenSource, compose_frame, frame
 from tests.artifact_installation_e2e_test import ORG
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
-from tests.consumer_application_e2e_test import _actions, _at, _drive
+from tests.consumer_application_e2e_test import BothBackendsMeasured, _actions, _at, _drive
 from tests.consumer_shell_test import BACKSPACE, ENTER, RIGHT, SPACE, UP, screens
 from tests.credential_fixtures import access_token
 
@@ -510,7 +510,7 @@ class _MemoryCredentialProvider:
         return self.inspect(reference)
 
 
-class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
+class InstallTimeConfigPreparationE2ETest(BothBackendsMeasured):
     def test_answer_reissues_the_real_preparation_as_a_prompted_source(self) -> None:
         with _environment(authored=AUTHORED_MCP) as env:
             handler = _actions(env)

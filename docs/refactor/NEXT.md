@@ -35,7 +35,17 @@ later and Continue go to Ready, and anything not entered is stored as `AART_NOT_
 Step 9 is done (D-421). Ready lists what is left as `AART_NOT_SET`; Doctor, Installed and
 Credentials and variables warn about it, without reading a secret.
 Tabnine also installs at user scope now (D-420, owner request; live walk owed, B-191).
-Next is step 10: full verification and the PR.
+Step 10 is in progress. PR #69 is open (title `feat(install): per-artifact install flow with
+optional inputs, and Tabnine at user scope`). Its first two CI runs failed:
+1. `secret_shape_check` flagged a comment in `consumer_views.py` (fixed, `fix(tui): word 07b's…`).
+2. Unit gate, 11 tests: the CP-30 e2e drives counted a 05 backend re-offer that only appears when
+   `uv` is on PATH (D-380); CI's container has no uv. Fixed by `BothBackendsMeasured` in
+   `tests/consumer_application_e2e_test.py`, which pins pip+uv for the drives that count screens.
+   `declared_harness_narrowing_test` now expects tabnine (D-420).
+**Exact next task:** confirm the CI run on the pushed fix passes (`gh pr checks 69 --watch`). If
+anything else fails, reproduce it in `docker run python:3.11` (the CI image) — Docker reproduces CI,
+macOS with uv does not. When `pr-check` is green: `handoff-plan set CP-30.10 done`, update
+MIGRATION_STATUS and the slice "Step 10" section, commit, push. The owner merges.
 
 Open PRs waiting for the owner: #66 (Undo line under More info), #67 (Artifact Details blocks),
 #68 (profile rename). After CP-30, CP-31 renames the promotion modes (#54) and removes the vendor

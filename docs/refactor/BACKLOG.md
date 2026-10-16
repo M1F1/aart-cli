@@ -4596,3 +4596,10 @@ chosen with a user-scope default is offered Project too. The fix is to intersect
 the placement tables (`MCP_TARGETS`, `DELIVERY_TARGETS`, `MEMORY_TARGETS`, `HOOK_TARGETS`, plugin
 targets) for that harness and kind. Noncritical: such a choice is re-prepared, and placement
 refuses it before Ready. That refusal path was not exercised in a test.
+
+## B-193 — e2e drives inherit the host's Python backends
+
+`observe_python_installers` reads uv from PATH, so whether 05 re-offers the backend after 07
+(D-380) depends on the machine. CP-30's drives broke in CI for it. `BothBackendsMeasured` pins the
+drives that failed; other drives through `_environment` may still be host-dependent. Consider
+pinning the measurement in `_environment` itself.

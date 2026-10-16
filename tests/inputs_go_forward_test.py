@@ -32,7 +32,7 @@ from aart_cli.application.consumer_views import (
 from aart_cli.tui_consumer import CanonicalScreenSource, screens_from
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
-from tests.consumer_application_e2e_test import _actions, _drive
+from tests.consumer_application_e2e_test import BothBackendsMeasured, _actions, _drive
 from tests.consumer_shell_test import ENTER, RIGHT, SPACE, UP, _at
 from tests.consumer_views_test import _plan as _view_plan
 from tests.install_time_config_form_test import _MemoryCredentialProvider, _state
@@ -69,7 +69,7 @@ def _submitted() -> ConsumerUiState:
     return submitted
 
 
-class TheFormGoesForwardE2ETest(unittest.TestCase):
+class TheFormGoesForwardE2ETest(BothBackendsMeasured):
     def test_after_the_form_no_screen_asks_for_the_harness_again(self) -> None:
         value = "platform-team-forward"
         with _environment(authored=AUTHORED_MCP) as env:
