@@ -789,6 +789,8 @@ _TEXT_KEY_WORDS: dict[str, int] = {
     "return": 10,
     "up": 259,
     "down": 258,
+    "left": 260,
+    "right": 261,
     "esc": 27,
     "escape": 27,
     "back": 263,
@@ -796,7 +798,9 @@ _TEXT_KEY_WORDS: dict[str, int] = {
     "space": 32,
 }
 
-_TEXT_KEY_HINT = "Keys: one character, or up / down / enter / esc / back. Blank line = enter."
+_TEXT_KEY_HINT = (
+    "Keys: one character, or up / down / left / right / enter / esc / back. Blank line = enter."
+)
 
 
 class _TextTerminal:

@@ -256,6 +256,26 @@ def assemble_consumer_machine(
         )
         for item in inspections
     )
+    # §172.3: a value still left by a skip is warned about wherever the installation is shown.
+    views = tuple(
+        replace(
+            view,
+            placeholders=tuple(
+                sorted(
+                    {
+                        *(
+                            name
+                            for file in configurations
+                            if file.row == view.row
+                            for name in file.placeholders
+                        ),
+                        *(item.input for item in view.credentials if item.placeholder),
+                    }
+                )
+            ),
+        )
+        for view in views
+    )
     # Drawn in the same list, because two lists would let the canonical one answer "not installed"
     # about something that is. Ordered after the measured ones and marked unknown, so nothing reads
     # an unmeasured installation as a healthy one.

@@ -24,8 +24,10 @@ from aart_cli.application.consumer_views import (
     ConsumerSession,
     HarnessTargetView,
     PresentationProfile,
+    matrix_columns,
+    matrix_rows,
+    pair_key,
     project_install_plan,
-    target_row,
 )
 from aart_cli.consumer_actions import LocalConsumerActions, _installation_targets
 from aart_cli.domain.effects import RiskClass
@@ -36,7 +38,7 @@ from aart_cli.io.receipt_store import LocalReceiptStore
 from aart_cli.tui_consumer import CanonicalScreenSource, frame, render_ready, screens_from
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions, _at, _drive
-from tests.consumer_shell_test import DOWN, ENTER, SPACE
+from tests.consumer_shell_test import ENTER, RIGHT, SPACE
 from tests.consumer_views_test import _plan
 from tests.frame_contract import key_violations
 
@@ -66,6 +68,13 @@ _AUTHORED_MCP = (
 )
 
 
+ARTIFACT = "company/mcp/github@1.0.0"
+
+
+def _pairs(*harnesses: str) -> tuple[str, ...]:
+    return tuple(pair_key(ARTIFACT, harness) for harness in harnesses)
+
+
 def _view(*, chosen: tuple[str, ...] = ()):
     view = project_install_plan(_plan())
     artifact = view.selection.resolved[0]
@@ -77,6 +86,7 @@ def _view(*, chosen: tuple[str, ...] = ()):
             HarnessTargetView("tabnine", (artifact,)),
         ),
         chosen_targets=chosen,
+        chosen_pairs=_pairs(*chosen),
     )
 
 
@@ -91,8 +101,9 @@ def _state(*, targets: tuple[str, ...] = (), verbose: bool = False) -> ConsumerU
             ConsumerScreen.REVIEW_SELECTION,
             PresentationProfile.MORE_INFO if verbose else PresentationProfile.LESS_INFO,
         ),
-        selection=("company/mcp/github@1.0.0",),
+        selection=(ARTIFACT,),
         targets=targets,
+        pairs=_pairs(*targets),
         action=ConsumerActionKind.INSTALL,
     )
 
@@ -135,8 +146,9 @@ class HarnessTargetScreenTest(unittest.TestCase):
             )
 
         self.assertEqual(state.targets, chosen)
+        self.assertEqual(state.pairs, _pairs(*chosen))
 
-    def test_screen_05_has_unselected_harness_rows_below_the_selection_review(self) -> None:
+    def test_screen_05_is_one_matrix_row_with_a_column_per_harness(self) -> None:
         source = _source()
         state = _state()
         rows = source.rows(state)
@@ -144,30 +156,24 @@ class HarnessTargetScreenTest(unittest.TestCase):
 
         drawn = "\n".join(frame(source, state))
 
-        self.assertEqual(
-            rows,
-            (target_row("claude"), target_row("opencode"), target_row("tabnine")),
-        )
-        self.assertIn("[ ] claude", drawn)
-        self.assertIn("[ ] opencode", drawn)
-        self.assertIn("[ ] tabnine", drawn)
+        self.assertEqual(rows[0], matrix_rows(_view().targets)[0])
+        self.assertEqual(matrix_columns(rows), tuple(_COMPATIBLE))
+        self.assertRegex(drawn, r"claude +opencode +tabnine")
+        self.assertRegex(drawn, r"> company/mcp/github +>\[ \] +\[ \] +\[ \]")
         self.assertIn("unique artifact(s) will be installed", drawn)
-        self.assertIn("choose at least one harness to install into.", drawn)
+        self.assertIn("hoose at least one harness.", drawn)
         # D-270: Enter is offered once it advances; until then the status says what is missing.
         self.assertNotIn("[Enter]", drawn)
         self.assertEqual(key_violations(source, state), ())
 
-    def test_a_stale_choice_stays_visible_and_refuses_to_continue(self) -> None:
+    def test_a_stale_choice_is_named_and_refuses_to_continue(self) -> None:
         source = _source()
         state = _state(targets=("removed-harness",))
-        rows = source.rows(state)
-        state = replace(state, rows=rows, cursor=len(rows) - 1)
+        state = replace(state, rows=source.rows(state))
 
         drawn = "\n".join(frame(source, state))
 
-        self.assertEqual(rows[-1], target_row("removed-harness"))
-        self.assertIn("[x] removed-harness", drawn)
-        self.assertIn("removed-harness cannot host anything", drawn)
+        self.assertIn(f"{ARTIFACT} cannot go into removed-harness; untick it.", drawn)
         self.assertIsNone(source.detail(state))
 
     def test_only_the_exact_reprepared_choice_can_continue(self) -> None:
@@ -183,23 +189,21 @@ class HarnessTargetScreenTest(unittest.TestCase):
             self.assertEqual(key_violations(pending, state), ())
         confirmed = replace(confirmed, rows=pending.rows(confirmed))
         self.assertIn("[Enter] Continue", "\n".join(frame(pending, confirmed)))
-        # D-401: the ticked row is the choice; Fast does not restate it, More info does.
-        self.assertNotIn("Installing into", "\n".join(pending.status(confirmed)))
+        # D-401: the ticked cell is the choice; Fast does not restate it, More info does.
+        self.assertNotIn("into opencode", "\n".join(pending.status(confirmed)))
         verbose = replace(
             confirmed, session=confirmed.session.switch_profile(PresentationProfile.MORE_INFO)
         )
-        self.assertIn("Installing into: opencode", "\n".join(pending.status(verbose)))
+        self.assertIn("company/mcp/github into opencode", "\n".join(pending.status(verbose)))
 
-    def test_verbose_cursor_description_names_artifacts_the_harness_can_host(self) -> None:
+    def test_verbose_cursor_description_names_the_cell_under_the_cursor(self) -> None:
         source = _source()
         state = _state(verbose=True)
-        rows = source.rows(state)
-        state = replace(state, rows=rows, cursor=1)
+        state = replace(state, rows=source.rows(state), cursor=0, harness_column=1)
 
         described = "\n".join(source.description(state))
 
-        self.assertIn("opencode", described)
-        self.assertIn("company/mcp/github@1.0.0", described)
+        self.assertIn("company/mcp/github does not go into opencode.", described)
 
     def test_ready_names_the_chosen_harnesses_as_user_intent(self) -> None:
         rendered = "\n".join(
@@ -283,8 +287,9 @@ class ChosenHarnessDeliveryE2ETest(unittest.TestCase):
             _at(ConsumerScreen.MARKETPLACE),
             SPACE,
             ord("i"),
-            *((DOWN,) * offset),
+            *((RIGHT,) * offset),
             SPACE,
+            ENTER,
             ENTER,
             ENTER,
         )
@@ -319,10 +324,11 @@ class ChosenHarnessDeliveryE2ETest(unittest.TestCase):
                 _at(ConsumerScreen.MARKETPLACE),
                 SPACE,
                 ord("i"),
-                DOWN,
+                RIGHT,
                 SPACE,
-                DOWN,
+                RIGHT,
                 SPACE,
+                ENTER,
                 ENTER,
                 ENTER,
             )

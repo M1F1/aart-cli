@@ -112,12 +112,17 @@ class CredentialObservation:
     provider_state: ProviderState
     state: CredentialState
     detail: str = ""
+    #: The stored item is still the placeholder a skip left (§172.3). It is present, and nothing
+    #: refuses it; it is reported so somebody sets it.
+    placeholder: bool = False
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.reference, CredentialReference)
             or not isinstance(self.provider_state, ProviderState)
             or not isinstance(self.state, CredentialState)
+            or not isinstance(self.placeholder, bool)
+            or (self.placeholder and self.state is not CredentialState.PRESENT)
             or not isinstance(self.detail, str)
             or any(character in self.detail for character in "\r\n")
         ):

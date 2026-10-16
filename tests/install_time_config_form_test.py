@@ -8,6 +8,7 @@ from dataclasses import replace
 
 from aart_cli.application.consumer_ui import (
     CONFIG_CONTINUE_ROW,
+    CONFIG_SET_LATER_ROW,
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -25,21 +26,22 @@ from aart_cli.application.consumer_views import (
     ConsumerSession,
     CredentialInputView,
     HarnessTargetView,
-    target_row,
+    matrix_from_row,
+    pair_key,
 )
 from aart_cli.domain.credentials import (
     CredentialObservation,
     CredentialState,
     ProviderState,
 )
-from aart_cli.domain.inputs import InputValidation, PromptedConfigValue
+from aart_cli.domain.inputs import SKIPPED_INPUT, InputValidation, PromptedConfigValue
 from aart_cli.domain.result import Ok
 from aart_cli.tui_consumer import CanonicalScreenSource, compose_frame, frame
 from tests.artifact_installation_e2e_test import ORG
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
-from tests.consumer_application_e2e_test import _actions, _at, _drive
-from tests.consumer_shell_test import DOWN, ENTER, SPACE, screens
+from tests.consumer_application_e2e_test import BothBackendsMeasured, _actions, _at, _drive
+from tests.consumer_shell_test import BACKSPACE, ENTER, RIGHT, SPACE, UP, screens
 from tests.credential_fixtures import access_token
 
 
@@ -133,6 +135,48 @@ class InstallTimeConfigFormInteractionTest(unittest.TestCase):
         self.assertEqual(commands[0].config_answers, (("organization", "acme"),))
         self.assertIs(commands[0].action, ConsumerActionKind.INSTALL)
 
+    def test_the_form_opens_on_its_first_field_not_on_set_later(self) -> None:
+        state = replace(_state(), rows=("elsewhere",), cursor=0)
+
+        opened, _ = reduce_consumer_ui(
+            state,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.SET_ROWS,
+                rows=(CONFIG_SET_LATER_ROW, "organization", CONFIG_CONTINUE_ROW),
+            ),
+        )
+
+        self.assertEqual(opened.current_row, "organization")
+
+    def test_set_later_keeps_valid_values_and_skips_the_rest_then_goes_on(self) -> None:
+        """§172.3-4: a default left in place is an answer; an empty or invalid value is skipped."""
+
+        draft = InstallationConfigDraft(
+            (
+                InstallationConfigField("organization", "acme", InputValidation("identifier")),
+                InstallationConfigField("project", ""),
+                InstallationConfigField("team", "not an id", InputValidation("identifier")),
+            )
+        )
+        state = replace(
+            _state(draft),
+            rows=(CONFIG_SET_LATER_ROW, "organization", "project", "team", CONFIG_CONTINUE_ROW),
+            cursor=0,
+        )
+        self.assertFalse(state.config_draft.ready)
+
+        event = key_event("enter", state)
+        assert event is not None
+        reviewed, commands = reduce_consumer_ui(state, event)
+
+        self.assertIs(reviewed.session.screen, ConsumerScreen.REVIEW_SELECTION)
+        self.assertTrue(reviewed.config_draft.ready)
+        self.assertEqual(
+            commands[0].config_answers,
+            (("organization", "acme"), ("project", SKIPPED_INPUT), ("team", SKIPPED_INPUT)),
+        )
+        self.assertIs(commands[0].action, ConsumerActionKind.INSTALL)
+
     def test_editing_an_accepted_field_requires_enter_again(self) -> None:
         accepted = _draft().accept("organization")
         state = _state(accepted)
@@ -184,11 +228,17 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
 
         source = self._source()
         state = _state()
-        state = replace(state, rows=source.rows(state))
+        state = replace(state, rows=source.rows(state), cursor=1)
 
         drawn = "\n".join(frame(source, state))
+        on_set_later = "\n".join(frame(source, replace(state, cursor=0)))
 
-        self.assertEqual(source.rows(state), ("organization", CONFIG_CONTINUE_ROW))
+        self.assertEqual(
+            source.rows(state), (CONFIG_SET_LATER_ROW, "organization", CONFIG_CONTINUE_ROW)
+        )
+        self.assertIn("[Enter] Set later", on_set_later)
+        # §172.3: Set later comes first.
+        self.assertRegex(drawn, r"\n[> ] Set later\n")
         self.assertIn("GitHub organization", drawn)
         self.assertIn("[acme]", drawn)
         self.assertIn("Continue", drawn)
@@ -198,56 +248,53 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
         for gone in ("Credentials", "GitHub token", "kept beside", "AART keeps only references"):
             self.assertNotIn(gone, drawn)
 
-    def test_each_installation_has_its_own_field_set_apart_by_a_blank_line(self) -> None:
-        owners = (
-            "claude/project:company/mcp/github",
-            "tabnine/project:company/mcp/github",
-        )
+    def test_each_artifact_is_one_group_of_fields_set_apart_by_blank_lines(self) -> None:
+        """§172.4: a field per artifact, headed by its artifact once there are two to tell apart."""
+
+        artifacts = ("company/mcp/github", "company/mcp/jira")
         base = screens()
         source = CanonicalScreenSource(
             replace(
                 base,
                 installation_inputs=tuple(
-                    item
-                    for owner in owners
-                    for item in (
-                        replace(_config_view(), owner=owner),
-                        replace(_credential_view(), owner=owner),
-                    )
+                    replace(_config_view(), owner=artifact) for artifact in artifacts
                 ),
             )
         )
         draft = InstallationConfigDraft(
             tuple(
                 InstallationConfigField(
-                    "organization",
-                    "acme",
-                    InputValidation("identifier"),
-                    owner=owner,
+                    "organization", "acme", InputValidation("identifier"), owner=artifact
                 )
-                for owner in owners
+                for artifact in artifacts
             )
         )
         state = replace(_state(draft), rows=source.rows(_state(draft)))
 
-        drawn = "\n".join(frame(source, state))
+        actions = compose_frame(source, state).actions
 
         self.assertEqual(
             source.rows(state),
-            tuple(f"{owner}\torganization" for owner in owners) + (CONFIG_CONTINUE_ROW,),
+            (
+                CONFIG_SET_LATER_ROW,
+                *(f"{artifact}\torganization" for artifact in artifacts),
+                CONFIG_CONTINUE_ROW,
+            ),
         )
-        actions = compose_frame(source, state).actions
-        starts = [
-            index
-            for index, line in enumerate(actions)
-            if "GitHub organization —" in line or "Continue" in line
-        ]
-        self.assertEqual(len(starts), 3, actions)
-        for owner in owners:
-            self.assertIn(f"GitHub organization — {owner}", drawn)
-        for index in starts:
-            self.assertEqual(actions[index - 1], "", "a field is not set apart by a blank line")
-        self.assertNotIn("GitHub token", drawn)
+        headings = [actions.index(artifact) for artifact in artifacts]
+        self.assertLess(headings[0], headings[1])
+        fields = [index for index, line in enumerate(actions) if "GitHub organization" in line]
+        self.assertEqual(len(fields), 2, actions)
+        self.assertTrue(all(headings[n] < fields[n] for n in range(2)))
+        for index in (*headings, *fields):
+            self.assertEqual(actions[index - 1], "", "a group or field is not set apart")
+        self.assertNotIn("—", "\n".join(actions))
+
+    def test_one_artifact_has_no_heading_of_its_own(self) -> None:
+        source = self._source()
+        state = replace(_state(), rows=source.rows(_state()))
+
+        self.assertNotIn("company/mcp/github", compose_frame(source, state).actions)
 
     def test_05_without_a_plan_offers_the_harnesses_and_continues_only_once_chosen(self) -> None:
         """#50: before any field is drawn, 05 asks only which harnesses to install into."""
@@ -272,11 +319,18 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
         )
         state = replace(state, rows=source.rows(state))
         unchosen = "\n".join(frame(source, state))
-        chosen = replace(state, targets=("tabnine",))
+        chosen = replace(
+            state,
+            targets=("tabnine",),
+            pairs=(pair_key("company/mcp/github@1.5.0", "tabnine"),),
+        )
         empty = replace(chosen, config_draft=InstallationConfigDraft())
 
-        self.assertEqual(source.rows(state), (target_row("opencode"), target_row("tabnine")))
-        self.assertIn("[ ] opencode", unchosen)
+        self.assertEqual(
+            [matrix_from_row(row) for row in source.rows(state)],
+            [("company/mcp/github@1.5.0", ("opencode", "tabnine"))],
+        )
+        self.assertRegex(unchosen, r"company/mcp/github +>\[ \] +\[ \]")
         self.assertIn("choose at least one harness", unchosen)
         self.assertNotIn("GitHub organization", unchosen)
         self.assertIsNone(source.detail(state))
@@ -289,11 +343,11 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
     def test_verbose_describes_what_the_field_under_the_cursor_binds_to(self) -> None:
         source = self._source()
         state = _state()
-        state = replace(state, rows=source.rows(state))
+        state = replace(state, rows=source.rows(state), cursor=1)
         verbose, _ = reduce_consumer_ui(
-            replace(state, cursor=1), ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROFILE)
+            replace(state, cursor=2), ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROFILE)
         )
-        verbose = replace(verbose, cursor=0)
+        verbose = replace(verbose, cursor=1)
 
         self.assertEqual(compose_frame(source, verbose).described[0].split()[0], "Binding:")
         self.assertEqual(source.actions(verbose), source.actions(state))
@@ -445,7 +499,8 @@ class _MemoryCredentialProvider:
         return ("/usr/bin/false", "--service", reference.provider.service)
 
     def store(self, reference, secret=None, *, replace: bool = False) -> Ok:
-        if secret is not None:
+        # §172.4: with nothing entered before Ready, only the placeholder may arrive here.
+        if secret is not None and secret.consume() != SKIPPED_INPUT:
             raise AssertionError("the application handed credential material to the provider fake")
         self.stored.add(self._address(reference))
         return self.inspect(reference)
@@ -455,7 +510,7 @@ class _MemoryCredentialProvider:
         return self.inspect(reference)
 
 
-class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
+class InstallTimeConfigPreparationE2ETest(BothBackendsMeasured):
     def test_answer_reissues_the_real_preparation_as_a_prompted_source(self) -> None:
         with _environment(authored=AUTHORED_MCP) as env:
             handler = _actions(env)
@@ -499,9 +554,8 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 if isinstance(item, ConfigInputView)
             )
             config_rows = tuple(item.row for item in config_views)
-            # One field per chosen harness, and none for the harness nobody chose.
-            self.assertEqual(sorted(row.split("/", 1)[0] for row in config_rows), sorted(chosen))
-            self.assertEqual(len(config_rows), len(set(config_rows)))
+            # §172.4: one field for the artifact, however many harnesses it goes into.
+            self.assertEqual(config_rows, ("company/mcp/github\tgithub-org",))
             for row in config_rows:
                 self.assertEqual(first.event.config_draft.value(row), "acme")
             self.assertFalse(first.event.config_draft.ready)
@@ -511,20 +565,10 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 for item in first.source.screens.installation_inputs
                 if isinstance(item, CredentialInputView)
             )
-            self.assertEqual(len(credentials), len(config_views))
+            # Secrets stay per installation until 07b asks them once per artifact (step 8).
+            self.assertEqual(len(credentials), len(chosen))
             self.assertEqual(len({item.owner for item in credentials}), len(credentials))
             self.assertTrue(all(item.provider_reference is not None for item in credentials))
-
-            incomplete = handler.handle(
-                ConsumerUiCommand(
-                    ConsumerUiCommandKind.PREPARE_ACTION,
-                    action=ConsumerActionKind.INSTALL,
-                    selection=("company/mcp/github@1.5.0",),
-                    targets=chosen,
-                    config_answers=((config_rows[0], "platform-team"),),
-                )
-            )
-            self.assertFalse(incomplete.event.review_digest)
 
             second = handler.handle(
                 ConsumerUiCommand(
@@ -539,10 +583,10 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
         self.assertTrue(second.event.review_digest)
         pending = handler._pending  # noqa: SLF001 - held reviewed action is the assertion subject
         self.assertIsNotNone(pending)
-        # Each answer typed on screen 07 reaches only the installation named by its row (D-353).
+        # The one answer typed on 07 is copied into each installation of its artifact (INV-259).
         composed = pending.prepared.draft.inputs  # type: ignore[union-attr]
         owners = tuple(pending.prepared.draft.owners)  # type: ignore[union-attr]
-        self.assertEqual(len(owners), len(config_rows))
+        self.assertEqual(sorted(owner.harness for owner in owners), sorted(chosen))
         for owner in owners:
             self.assertIn(
                 PromptedConfigValue(ORG, "platform-team"),
@@ -563,18 +607,21 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 _at(ConsumerScreen.MARKETPLACE),
                 SPACE,
                 ord("i"),
-                # #50: the harnesses first, then a field for each of them and no other.
-                DOWN,
+                # #50: the harnesses first, then one field for the artifact (§172.4).
+                RIGHT,
                 SPACE,
-                DOWN,
+                RIGHT,
                 SPACE,
                 ENTER,
                 value,
                 ENTER,
-                value,
+                # Submit. The plan still offers a choice of backend, so 05 shows only that (D-380);
+                # then 07a the scope, then Ready (which holds Remediation's changes since D-403).
                 ENTER,
-                # Submit, then Ready (which holds Remediation's changes since D-403): the form goes
-                # forward, not back to 05 (D-380).
+                ENTER,
+                ENTER,
+                # 07b: Set later, above the credential the cursor opens on (§172.6).
+                UP,
                 ENTER,
                 ENTER,
                 actions=handler,
@@ -621,6 +668,51 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 [1, 1], [sum(h in item for item in held) for h in ("opencode", "tabnine")]
             )
             self.assertEqual([], [item for item in held if "claude" in item])
+
+    def test_set_later_installs_with_the_placeholder_in_each_installation(self) -> None:
+        """§172.3, INV-261: skipping the form blocks nothing; each copy holds `AART_NOT_SET`."""
+
+        with _environment(authored=AUTHORED_MCP) as env:
+            handler = _actions(env)
+            provider = _MemoryCredentialProvider()
+            handler._context = replace(  # noqa: SLF001 - production composition under test
+                handler._context,
+                credential_providers=(provider,),
+            )
+            finished, terminal, _ = _drive(
+                env,
+                _at(ConsumerScreen.MARKETPLACE),
+                SPACE,
+                ord("i"),
+                RIGHT,
+                SPACE,
+                RIGHT,
+                SPACE,
+                ENTER,
+                # The form opens on its field. Its declared default would be an answer (§172.4),
+                # so it is cleared first; Set later is the row above it.
+                *((BACKSPACE,) * len("acme")),
+                UP,
+                ENTER,
+                ENTER,
+                ENTER,
+                # 07b: Set later, above the credential the cursor opens on (§172.6).
+                UP,
+                ENTER,
+                ENTER,
+                actions=handler,
+            )
+
+            self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
+            for harness, directory in (("opencode", ".opencode"), ("tabnine", ".tabnine")):
+                path = (
+                    env.project
+                    / directory
+                    / "aart-cli/mcp/company/github/config"
+                    / f"{harness}.conf"
+                )
+                self.assertIn(f"{ORG}={SKIPPED_INPUT}\n", path.read_text(encoding="utf-8"))
+            self.assertEqual(len(provider.stored), 2)
 
 
 if __name__ == "__main__":

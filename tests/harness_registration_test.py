@@ -35,7 +35,10 @@ class McpTargetTest(unittest.TestCase):
         target = mcp_target("tabnine", Scope.PROJECT)
         self.assertEqual(target.settings_file, ".tabnine/agent/settings.json")
         self.assertEqual(target.server_map, "mcpServers")
-        self.assertEqual(mcp_target("tabnine", Scope.USER).settings_file, "agent/settings.json")
+        # The user root is the home directory, so the path keeps `.tabnine` (D-420).
+        self.assertEqual(
+            mcp_target("tabnine", Scope.USER).settings_file, ".tabnine/agent/settings.json"
+        )
 
     def test_the_measured_claude_target_is_preserved(self):
         self.assertEqual(mcp_target("claude", Scope.PROJECT).settings_file, ".mcp.json")

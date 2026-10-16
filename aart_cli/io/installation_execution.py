@@ -24,6 +24,8 @@ interpreter built from it can verify or delete the value through the provider bu
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from aart_cli.application.credential_guidance import (
     CredentialGuidance,
     gather_credential_guidance,
@@ -40,7 +42,7 @@ from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.inputs import InputGuidance, SecretProviderReference
 from aart_cli.domain.result import Err, Ok, Result
 
-from .credentials import CredentialProviderPort
+from .credentials import CredentialProviderPort, TransientSecret
 from .execution import (
     CredentialEffectInterpreter,
     DeliveryEffectInterpreter,
@@ -51,7 +53,7 @@ from .execution import (
     SettingsEntryInterpreter,
     TerminalHandover,
 )
-from .harness import LocalHarnessRegistry
+from .harness import HarnessRegistryPort, LocalHarnessRegistry, ScopedHarnessRegistry
 from .python_runtime import LocalPythonRuntime
 
 __all__ = ["INTERPRETERS_UNAVAILABLE", "interpreters_for"]
@@ -67,12 +69,14 @@ def _error(message: str) -> Err:
 def interpreters_for(
     installations: tuple[PlannedArtifact, ...],
     *,
-    registry: LocalHarnessRegistry,
+    registry: HarnessRegistryPort,
     credential_providers: tuple[CredentialProviderPort, ...] = (),
     timeout_seconds: float = 900.0,
     offline: bool = False,
     interactive_credentials: bool = False,
     credential_handover: TerminalHandover | None = None,
+    credential_secrets: Mapping[str, TransientSecret] | None = None,
+    skipped_secrets_as_placeholders: bool = False,
 ) -> Result[tuple[EffectInterpreter, ...]]:
     """Build the interpreters `installations` are executed through, or say what is missing.
 
@@ -87,7 +91,7 @@ def interpreters_for(
 
     if any(not isinstance(item, (PlannedInstallation, PlannedPlacement)) for item in installations):
         raise ValueError("assembling interpreters needs planned installations")
-    if not isinstance(registry, LocalHarnessRegistry):
+    if not isinstance(registry, (LocalHarnessRegistry, ScopedHarnessRegistry)):
         raise ValueError("assembling interpreters needs a harness registry")
     providers = {item.provider: item for item in credential_providers}
     if len(providers) != len(credential_providers):
@@ -170,6 +174,12 @@ def interpreters_for(
             interactive_store=interactive_credentials,
             terminal_handover=credential_handover,
             guidance=guidance,
+            secrets={
+                str(reference): carrier
+                for reference in references[name]
+                if (carrier := (credential_secrets or {}).get(str(reference))) is not None
+            },
+            skipped_as_placeholder=skipped_secrets_as_placeholders,
         )
         for name in sorted(references)
     )

@@ -55,7 +55,7 @@ from .execution import (
     ManagedBlockInterpreter,
     SettingsEntryInterpreter,
 )
-from .harness import LocalHarnessRegistry
+from .harness import HarnessRegistryPort, LocalHarnessRegistry
 from .installation_observation import observe_recorded_installation
 from .receipt_store import LocalReceiptStore
 
@@ -113,7 +113,7 @@ def _interpreters(
     removals: tuple[PlannedRemoval, ...],
     proposal: RemovalProposal,
     *,
-    registry: LocalHarnessRegistry,
+    registry: HarnessRegistryPort,
     credential_providers: tuple[CredentialProviderPort, ...],
 ) -> Result[tuple[EffectInterpreter, ...]]:
     """The adapters this removal is carried out through, each bound to what it may take away.

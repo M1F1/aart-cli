@@ -18,17 +18,20 @@ from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
+    ConsumerUiEventKind,
     ConsumerUiState,
 )
 from aart_cli.application.consumer_views import (
     ConsumerScreen,
     InstallScopeChoiceView,
     offer_install_scopes,
+    pair_key,
+    pair_scope_key,
 )
 from aart_cli.domain.result import Err, Ok
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _INSTALL, ENTER, _actions, _drive
-from tests.consumer_shell_test import DOWN, SPACE, _at
+from tests.consumer_shell_test import RIGHT, SPACE, _at
 
 SCOPES = ("project", "user")
 
@@ -273,48 +276,50 @@ if __name__ == "__main__":
 
 
 class TheReviewScreenShowsTheChoiceTest(unittest.TestCase):
-    """The half of issue #11a an operator can see.
+    """The half of issue #11a an operator can see, on 07a since §172.5.
 
-    The seam underneath could already carry a chosen scope, but nothing on screen said a choice
-    existed: the review screen drew the scope rows as `[ ] None`, so the only way to reach the
-    other scope was to change the stored preference first -- which is the thing this issue is
-    about not having to do.
+    The scope is chosen after the harness, per installation: 05 picks the harness and 07a, one
+    radio row per artifact×harness pair, picks where each one goes.
     """
 
-    def test_the_review_screen_names_both_scopes_the_selection_supports(self) -> None:
-        with _environment() as env:
-            _, terminal, _ = _drive(env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"))
+    _TO_SCOPE = (SPACE, ord("i"), SPACE, ENTER)
 
-            self.assertIn("Install into: Project", terminal.last)
-            self.assertIn("Install into: User", terminal.last)
-            self.assertNotIn("[ ] None", terminal.last)
+    def test_the_scope_screen_names_both_scopes_the_selection_supports(self) -> None:
+        with _environment() as env:
+            finished, terminal, _ = _drive(env, _at(ConsumerScreen.MARKETPLACE), *self._TO_SCOPE)
+
+            self.assertIs(finished.session.screen, ConsumerScreen.INSTALL_SCOPE, terminal.last)
+            self.assertRegex(terminal.last, r"Project +User")
+            self.assertNotIn("Install into:", terminal.last)
+
+    def test_the_review_screen_no_longer_asks_the_scope(self) -> None:
+        with _environment() as env:
+            _, terminal, _ = _drive(env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"), SPACE)
+
+            self.assertNotIn("Install into:", terminal.last)
+            self.assertNotIn("(*)", terminal.last)
 
     def test_the_offer_opens_on_the_stored_preference(self) -> None:
         with _environment() as env:
-            _, terminal, _ = _drive(env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"))
+            _, terminal, _ = _drive(env, _at(ConsumerScreen.MARKETPLACE), *self._TO_SCOPE)
 
-            self.assertIn("(*) Install into: Project", terminal.last)
-            self.assertIn("( ) Install into: User", terminal.last)
+            self.assertRegex(terminal.last, r"code-review → claude +>\(\*\) +\( \)")
 
     def test_choosing_the_other_scope_moves_the_mark_to_it(self) -> None:
         with _environment() as env:
             _, terminal, _ = _drive(
-                env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"), DOWN, DOWN, SPACE
+                env, _at(ConsumerScreen.MARKETPLACE), *self._TO_SCOPE, RIGHT, SPACE
             )
 
-            self.assertIn("( ) Install into: Project", terminal.last)
-            self.assertIn("(*) Install into: User", terminal.last)
+            self.assertRegex(terminal.last, r"code-review → claude +\( \) +>\(\*\)")
 
-    def test_a_scope_chosen_on_the_review_screen_is_where_the_files_land(self) -> None:
+    def test_a_scope_chosen_on_the_scope_screen_is_where_the_files_land(self) -> None:
         with _environment() as env:
             _drive(
                 env,
                 _at(ConsumerScreen.MARKETPLACE),
-                SPACE,
-                ord("i"),
-                SPACE,
-                DOWN,
-                DOWN,
+                *self._TO_SCOPE,
+                RIGHT,
                 SPACE,
                 ENTER,
                 ENTER,
@@ -323,12 +328,45 @@ class TheReviewScreenShowsTheChoiceTest(unittest.TestCase):
 
             self.assertTrue(
                 (env.home / ".claude/skills/code-review-company-user/SKILL.md").exists(),
-                "the scope chosen on the review screen never reached the user home",
+                "the scope chosen on 07a never reached the user home",
             )
             self.assertFalse(
                 (env.project / ".claude/skills/code-review-company-project/SKILL.md").exists(),
                 "the install went to the project the operator had just moved away from",
             )
+
+    def test_a_confirmation_naming_other_scopes_than_the_review_is_refused(self) -> None:
+        """What runs is what was reviewed: a pair moved after review is a new review (§172.5)."""
+
+        coordinate = "company/skill/code-review@1.2.0"
+        pair = pair_key(coordinate, "claude")
+        with _environment() as env:
+            handler = _actions(env)
+            prepared = handler.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.PREPARE_ACTION,
+                    action=ConsumerActionKind.INSTALL,
+                    selection=(coordinate,),
+                    pairs=(pair,),
+                )
+            )
+            self.assertEqual(prepared.event.pair_scopes, (pair_scope_key(pair, "project"),))
+
+            refused = handler.handle(
+                ConsumerUiCommand(
+                    ConsumerUiCommandKind.EXECUTE_ACTION,
+                    action=ConsumerActionKind.INSTALL,
+                    selection=(coordinate,),
+                    targets=("claude",),
+                    pairs=(pair,),
+                    pair_scopes=(pair_scope_key(pair, "user"),),
+                    review_digest=prepared.event.review_digest,
+                )
+            )
+
+            self.assertIs(refused.event.kind, ConsumerUiEventKind.ACTION_FAILED)
+            self.assertFalse((env.project / ".claude").exists())
+            self.assertFalse((env.home / ".claude/skills").exists())
 
     def test_a_selection_with_one_possible_scope_states_it_without_a_control(self) -> None:
         """A fact is not a choice: nothing is drawn to press when only one scope is possible."""

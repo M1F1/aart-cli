@@ -60,6 +60,7 @@ class ScriptedSecurity:
         self.statuses = statuses
         self.timeline = [] if timeline is None else timeline
         self.calls: list[tuple[tuple[str, ...], bool]] = []
+        self.stdin: list[str] = []
 
     def __call__(
         self,
@@ -67,10 +68,15 @@ class ScriptedSecurity:
         *,
         capture: bool,
         timeout: float,
+        stdin: str | None = None,
     ) -> ProcessOutcome:
         self.calls.append((argv, capture))
-        self.timeline.append(argv[1])
-        return self.statuses.get(argv[1].replace("-", "_"), ProcessOutcome(0))
+        # `security -i` takes its command on stdin; the command's first word is the subcommand.
+        subcommand = stdin.split()[0] if argv[1:] == ("-i",) and stdin else argv[1]
+        if stdin is not None:
+            self.stdin.append(stdin)
+        self.timeline.append(subcommand)
+        return self.statuses.get(subcommand.replace("-", "_"), ProcessOutcome(0))
 
     @property
     def subcommands(self) -> tuple[str, ...]:
@@ -88,9 +94,11 @@ class ScriptedCounter:
         printed: int | None = 0,
         hex_encoded: int | None = 0,
         timeline: list[str] | None = None,
+        placeholder: int | None = 0,
     ) -> None:
         self.printed = printed
         self.hex_encoded = hex_encoded
+        self.placeholder = placeholder
         self.timeline = [] if timeline is None else timeline
         self.calls: list[tuple[str, ...]] = []
 
@@ -104,6 +112,9 @@ class ScriptedCounter:
         timeout: float,
     ) -> int | None:
         self.calls.append(producer)
+        if "-x" in counter:  # The exact comparison against the skip placeholder.
+            self.timeline.append("match" + producer[-2])
+            return self.placeholder
         self.timeline.append("measure" + producer[-2])
         return self.hex_encoded if from_stderr else self.printed
 
@@ -193,7 +204,8 @@ class KeychainInterpreterTest(unittest.TestCase):
         assert isinstance(result, Ok), result
         self.assertEqual(result.value.state, CredentialState.PRESENT)
         self.assertEqual(result.value.detail, "a value of 11 bytes is present")
-        self.assertEqual([argv[-2] for argv in counter.calls], ["-w", "-g"])
+        # The placeholder comparison, then the two measurements; every one in a child pipeline.
+        self.assertEqual([argv[-2] for argv in counter.calls], ["-w", "-w", "-g"])
 
     def test_a_value_sitting_on_the_prompt_ceiling_is_reported_as_probably_cut(self) -> None:
         runner = ScriptedSecurity(find_generic_password=ProcessOutcome(0))
@@ -241,7 +253,7 @@ class KeychainInterpreterTest(unittest.TestCase):
             BindingExposure.PRIVATE,
         )
 
-    def test_the_non_interactive_store_names_the_exposure_it_accepts(self) -> None:
+    def test_the_non_interactive_store_keeps_the_value_off_argv(self) -> None:
         runner = ScriptedSecurity(
             add_generic_password=ProcessOutcome(0),
             find_generic_password=ProcessOutcome(0),
@@ -252,10 +264,11 @@ class KeychainInterpreterTest(unittest.TestCase):
 
         assert isinstance(result, Ok), result
         self.assertTrue(secret.consumed)
-        self.assertIn("value-from-a-pipeline", runner.flat())
+        self.assertNotIn("value-from-a-pipeline", runner.flat())
+        self.assertIn(b"value-from-a-pipeline".hex(), runner.stdin[0])
         self.assertEqual(
             MacOsKeychainProvider.store_exposure(interactive=False),
-            BindingExposure.PROCESS_TABLE,
+            BindingExposure.PRIVATE,
         )
 
     def test_replacement_removes_then_adds_and_never_reads_the_previous_value(self) -> None:
@@ -281,6 +294,7 @@ class KeychainInterpreterTest(unittest.TestCase):
                 "delete-generic-password",
                 "add-generic-password",
                 "find-generic-password",
+                "match-w",
                 "measure-w",
                 "measure-g",
             ],

@@ -212,7 +212,7 @@ class UndoIsExplainedNotOfferedTest(unittest.TestCase):
         flow = _ran(_bulk_flow())
         view = flow.outcome
 
-        drawn = "\n".join(render_transaction_success(view, PresentationProfile.VERBOSE))
+        drawn = "\n".join(render_transaction_success(view, PresentationProfile.MORE_INFO))
 
         self.assertFalse(view.undo.available)
         self.assertIn(f"Undo unavailable: {view.undo.reason}", drawn)
@@ -229,13 +229,13 @@ class UndoIsExplainedNotOfferedTest(unittest.TestCase):
 
         for shown in (view, reversible):
             with self.subTest(available=shown.undo.available):
-                drawn = "\n".join(render_transaction_success(shown, PresentationProfile.FAST))
+                drawn = "\n".join(render_transaction_success(shown, PresentationProfile.LESS_INFO))
 
                 self.assertNotIn("Undo", drawn)
                 self.assertIn(shown.outcome.mark, drawn)
 
         receipt = dataclasses.replace(shell_screens().receipts[0], undo=view.undo)
-        kept = "\n".join(render_receipt_detail(receipt, PresentationProfile.FAST))
+        kept = "\n".join(render_receipt_detail(receipt, PresentationProfile.LESS_INFO))
 
         self.assertIn(f"Undo: not available — {view.undo.reason}.", kept)
 
@@ -247,7 +247,7 @@ class UndoIsExplainedNotOfferedTest(unittest.TestCase):
             undo=UndoAvailability(True, "every change can be reversed", ("launcher",)),
         )
 
-        drawn = "\n".join(render_transaction_success(view, PresentationProfile.VERBOSE))
+        drawn = "\n".join(render_transaction_success(view, PresentationProfile.MORE_INFO))
 
         self.assertIn("Undo is not offered here", drawn)
         self.assertNotIn("[ Undo ]", drawn)

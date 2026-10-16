@@ -24,8 +24,10 @@ reads as "nothing was established", which leaves the session exactly where it wa
 
 from __future__ import annotations
 
+import getpass
 import hashlib
 import json
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Callable, Literal, Protocol
@@ -48,11 +50,14 @@ from aart_cli.application.consumer_ui import (
     installation_is_mcp,
 )
 from aart_cli.application.consumer_views import (
+    ConfigInputView,
     ConsumerPlanView,
     ConsumerScreen,
     ConsumerSettings,
     HarnessTargetView,
+    InputView,
     InstallScopeChoiceView,
+    InstallSecretView,
     LifecyclePlanView,
     McpTestEntryView,
     McpTestResultView,
@@ -60,15 +65,26 @@ from aart_cli.application.consumer_views import (
     McpTestView,
     PythonInstallerChoiceView,
     RunningInstallationView,
+    default_pair_scopes,
+    default_pairs,
     harness_choice_problems,
     offer_install_scopes,
     offer_python_installers,
+    pair_choice_problems,
+    pair_from_key,
+    pair_key,
+    pair_scope_from_key,
+    pairs_harnesses,
     project_lifecycle_plan,
     project_running_installation,
+    scope_choice_offered,
+    scope_matrix_rows,
+    secrets_to_ask,
     target_choice_problems,
 )
 from aart_cli.application.credential_guidance import (
     CredentialGuidance,
+    credential_entry_briefing,
     gather_credential_guidance,
 )
 from aart_cli.application.credential_lifecycle import (
@@ -77,7 +93,12 @@ from aart_cli.application.credential_lifecycle import (
     plan_credential_mutation,
 )
 from aart_cli.application.execution import StepProgress
-from aart_cli.application.installation_inputs import OwnedInputSource
+from aart_cli.application.installation_inputs import (
+    ArtifactAnswer,
+    OwnedInputSource,
+    artifact_answer_key,
+    copy_artifact_answers,
+)
 from aart_cli.application.installed_setup import DeclaredArtifactSetup
 from aart_cli.application.maintainer_promotion import (
     CandidatePromotionExecutionResult,
@@ -106,6 +127,7 @@ from aart_cli.configuration.schema import configured_source_from_input
 from aart_cli.domain.candidates import CandidateId
 from aart_cli.domain.credentials import (
     CredentialIntent,
+    CredentialReference,
     CredentialState,
     ProviderState,
 )
@@ -116,13 +138,12 @@ from aart_cli.domain.identifiers import ArtifactCoordinate, InputId, SourceAlias
 from aart_cli.domain.inputs import (
     ConfigInput,
     InputGuidance,
-    PromptedConfigValue,
     RuntimeInput,
     SecretInput,
     SecretProviderReference,
+    is_skipped_value,
 )
 from aart_cli.domain.installation_owner import (
-    InstallationOwner,
     credential_address,
     installation_key,
 )
@@ -137,6 +158,7 @@ from aart_cli.io.configured_configuration_action import (
     complete_configured_configuration,
     prepare_configured_configuration,
 )
+from aart_cli.io.configured_installation import InstallationAssignment
 from aart_cli.io.configured_installation_action import (
     CompletedConfiguredInstallation,
     InstallationHost,
@@ -156,7 +178,7 @@ from aart_cli.io.configured_uninstall_action import (
 )
 from aart_cli.io.consumer_machine import read_consumer_machine, read_installed_inspections
 from aart_cli.io.consumer_settings import write_consumer_settings
-from aart_cli.io.credentials import CredentialProviderPort
+from aart_cli.io.credentials import CredentialProviderPort, TransientSecret
 from aart_cli.io.execution import CredentialEffectInterpreter, TerminalHandover
 from aart_cli.io.installed_smoke import LocalMcpTest, SmokePlanEntry, SmokeTargetResult
 from aart_cli.io.maintainer_promotion import (
@@ -247,6 +269,23 @@ def _names_a_command(step: str) -> bool:
 
 
 _ELSEWHERE = "The next step for this is not available on this screen yet."
+
+
+def _config_placeholders(prepared: PreparedConfiguredInstallation) -> tuple[str, ...]:
+    """The ordinary inputs a skip left as `AART_NOT_SET`, once per artifact, for Ready (§172.3)."""
+
+    return tuple(
+        sorted(
+            {
+                f"{artifact_answer_key(owner)}\t{item.input.id.value}"
+                for owner, bound in prepared.draft.inputs.bound
+                for item in bound.inputs
+                if not isinstance(item.input, SecretInput)
+                and not isinstance(item.source, SecretProviderReference)
+                and is_skipped_value(item.source.value)
+            }
+        )
+    )
 
 
 def _refusal(diagnostics: tuple[Diagnostic, ...]) -> tuple[str, ...]:
@@ -373,20 +412,64 @@ class _PendingInstall:
     previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = ()
     targets: tuple[HarnessTargetView, ...] = ()
     chosen_targets: tuple[str, ...] = ()
+    chosen_pairs: tuple[str, ...] = ()
+    chosen_pair_scopes: tuple[str, ...] = ()
+
+
+def _assignments(
+    pairs: tuple[str, ...], pair_scopes: tuple[str, ...], scope: Scope
+) -> tuple[InstallationAssignment, ...]:
+    """Screen 05's ticked pairs as the installations they become (§172.2).
+
+    Each pair goes to the scope 07a put it on (§172.5); one 07a has not reached yet goes to
+    `scope`, the scope the session prepares for.
+    """
+
+    chosen = dict(parsed for parsed in map(pair_scope_from_key, pair_scopes) if parsed is not None)
+    return tuple(
+        InstallationAssignment(
+            artifact,
+            harness,
+            Scope(chosen.get(pair_key(artifact, harness), scope.value)),
+        )
+        for artifact, harness in (
+            parsed for parsed in map(pair_from_key, pairs) if parsed is not None
+        )
+    )
+
+
+def _per_artifact(views: tuple[InputView, ...], artifacts: dict[str, str]) -> tuple[InputView, ...]:
+    """07's ordinary fields, one per artifact and input rather than one per installation (§172.4).
+
+    `artifacts` maps each installation owner to its artifact's answer key. Secret rows are left
+    per installation; asking them once per artifact is 07b's.
+    """
+
+    seen: set[str] = set()
+    projected: list[InputView] = []
+    for view in views:
+        if isinstance(view, ConfigInputView) and view.owner in artifacts:
+            view = replace(view, owner=artifacts[view.owner])
+            if view.row in seen:
+                continue
+            seen.add(view.row)
+        projected.append(view)
+    return tuple(projected)
 
 
 def _after_inputs(plan: ConsumerPlanView) -> ConsumerScreen:
-    """Where a reviewed install goes once its form was submitted (D-380, §161.5).
+    """Where a reviewed install goes once its form was submitted (D-380, §161.5, §172.5).
 
-    05 again only while the plan still offers a real choice of scope or backend; otherwise the
-    next screen that asks anything, which is Remediation only when a decision is needed.
+    05 again only while the plan still offers a real choice of backend, then 07a while some pair
+    may go to more than one scope; otherwise Ready.
     """
 
-    if any(
-        choice is not None and choice.is_a_choice
-        for choice in (plan.scope_choice, plan.installer_choice)
-    ):
+    if plan.installer_choice is not None and plan.installer_choice.is_a_choice:
         return ConsumerScreen.REVIEW_SELECTION
+    if scope_choice_offered(plan.scope_offers):
+        return ConsumerScreen.INSTALL_SCOPE
+    if secrets_to_ask(plan):
+        return ConsumerScreen.INSTALL_CREDENTIALS
     return ConsumerScreen.READY
 
 
@@ -667,6 +750,7 @@ class LocalConsumerActions:
         repository_adopted_list: RepositoryAdoptedListPort | None = None,
         terminal_handover: TerminalHandover | None = None,
         mcp_test: McpTestPort | None = None,
+        secret_reader: Callable[[str], str] | None = None,
     ) -> None:
         if not isinstance(context, ConsumerActionContext):
             raise ValueError("consumer actions need a composed action context")
@@ -696,6 +780,18 @@ class LocalConsumerActions:
         #: keyboard.  A credential prompt belongs to the provider, not to AART (161.8/161.9), and
         #: under the TUI it would otherwise be spoken over a drawn frame (`QA-081`).
         self._terminal_handover = terminal_handover
+        #: Secrets entered before Ready, one single-use carrier per credential reference (§172.4).
+        #: They live here and never in a view or a plan; the install that follows consumes them.
+        self._entered_secrets: dict[str, TransientSecret] = {}
+        #: The plan 07b redraws after each entry; it says what is asked, never what was typed.
+        self._pending_plan: ConsumerPlanView | None = None
+        #: What each 07b row answers: the references it fills, what the artifact says about the
+        #: credential, and the provider that will keep it. References and guidance only.
+        self._secret_rows: dict[
+            str, tuple[tuple[CredentialReference, ...], tuple[CredentialGuidance, ...], str]
+        ] = {}
+        #: The hidden prompt 07b reads with; injected so a test never touches the real terminal.
+        self._secret_reader = secret_reader if secret_reader is not None else getpass.getpass
         self._scanned_repository: RepositoryScan | None = None
         self._adoption_review: MaintainerAdoptionReviewView | None = None
         self._adoption_upstream: AdoptionUpstreamCheck | None = None
@@ -789,6 +885,33 @@ class LocalConsumerActions:
             preferred=chosen or self._context.settings.default_scope,
         )
         return offered.value if isinstance(offered, Ok) else None
+
+    def _pair_scope_offers(self, pairs: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        """Which scopes each ticked pair may go to on this machine (§172.5).
+
+        A pair is offered what its artifact declares, less project when this session has no
+        project to install into. An artifact this composition holds no row for is offered nothing,
+        so 07a never claims a scope it cannot stand behind.
+        """
+
+        declared = {
+            entry.row.key: entry.row.declared_scopes for entry in self._context.offers.artifacts
+        }
+        project = bool(self._context.host.project_root)
+        offers: list[tuple[str, tuple[str, ...]]] = []
+        # Sorted, so 07a lists the installations in one order however 05 ticked them.
+        for pair in sorted(pairs):
+            parsed = pair_from_key(pair)
+            if parsed is None or parsed[0] not in declared:
+                continue
+            offered = tuple(
+                scope
+                for scope in ("project", "user")
+                if scope in declared[parsed[0]] and (project or scope != "project")
+            )
+            if offered:
+                offers.append((pair, offered))
+        return tuple(offers)
 
     def _reviewed_host(self) -> InstallationHost:
         """The machine the held review was prepared against, not the one preferences name now.
@@ -887,7 +1010,107 @@ class LocalConsumerActions:
             return self._prepare(command)
         if command.kind is ConsumerUiCommandKind.EXECUTE_ACTION:
             return self._execute(command)
+        if command.kind is ConsumerUiCommandKind.ENTER_SECRET:
+            return self._enter_secret(command)
         raise ValueError(f"{command.kind.value} is not a consumer action")
+
+    def discard_secrets(self) -> None:
+        """Forget every value 07b took; the session left the screens that may hold one."""
+
+        self._entered_secrets = {}
+
+    def _enter_secret(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Read one 07b secret with a hidden prompt and keep it for this artifact's installations.
+
+        The value goes into one single-use carrier per credential reference and nowhere else: the
+        answer to the screen says only whether something was entered (§172.6). An empty answer
+        withdraws whatever was entered before, so the install stores the placeholder.
+        """
+
+        row = command.focus
+        held = self._secret_rows.get(row)
+        if held is None or not isinstance(self._pending, _PendingInstall):
+            return ConsumerActionUpdate(
+                self.source(notice=_lines("this credential is not part of the reviewed install")),
+                ConsumerUiEvent(
+                    ConsumerUiEventKind.SECRET_ENTERED,
+                    action=ConsumerActionKind.INSTALL,
+                    key=row,
+                    accepted=False,
+                ),
+            )
+        references, guidance, provider = held
+        briefing = credential_entry_briefing(
+            guidance, provider=provider, installations=len(references)
+        )
+        handover = self._terminal_handover
+        with handover(briefing) if handover is not None else nullcontext():
+            value = self._secret_reader("Value: ")
+        for reference in references:
+            self._entered_secrets.pop(str(reference), None)
+        entered = bool(value)
+        if entered:
+            for reference in references:
+                self._entered_secrets[str(reference)] = TransientSecret(value)
+        del value
+        return ConsumerActionUpdate(
+            self.source(plan=self._pending_plan),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.SECRET_ENTERED,
+                action=ConsumerActionKind.INSTALL,
+                key=row,
+                accepted=entered,
+            ),
+        )
+
+    def _install_secrets(
+        self, prepared: PreparedConfiguredInstallation
+    ) -> tuple[InstallSecretView, ...]:
+        """07b's rows: each secret input once per artifact, over every installation it reaches.
+
+        A row is "Configured securely" when every installation already holds a value -- the
+        provider says so; nothing is read back (§172.6).
+        """
+
+        grouped: dict[str, list[tuple[str, SecretInput, CredentialReference]]] = {}
+        for owner, bound in prepared.draft.inputs.bound:
+            for item in bound.inputs:
+                if isinstance(item.input, SecretInput) and isinstance(
+                    item.source, SecretProviderReference
+                ):
+                    row = f"{artifact_answer_key(owner)}\t{item.input.id.value}"
+                    grouped.setdefault(row, []).append(
+                        (str(owner), item.input, item.source.reference)
+                    )
+        views = []
+        for row in sorted(grouped):
+            members = grouped[row]
+            references = tuple(dict.fromkeys(reference for _, _, reference in members))
+            configured = True
+            for reference in references:
+                keeper = next(
+                    (
+                        item
+                        for item in self._context.credential_providers
+                        if item.provider == reference.provider.provider
+                    ),
+                    None,
+                )
+                observed = None if keeper is None else keeper.inspect(reference)
+                if (
+                    not isinstance(observed, Ok)
+                    or observed.value.state is not CredentialState.PRESENT
+                ):
+                    configured = False
+            first = members[0][1]
+            label = first.guidance.label if first.guidance is not None else first.id.value
+            guidance = gather_credential_guidance(
+                first.id.value,
+                ((name, declared.guidance) for name, declared, _ in members),
+            )
+            self._secret_rows[row] = (references, guidance, references[0].provider.provider)
+            views.append(InstallSecretView(row, label, configured=configured))
+        return tuple(views)
 
     # -- preparation --------------------------------------------------------- #
 
@@ -1694,8 +1917,13 @@ class LocalConsumerActions:
         previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
     ) -> ConsumerActionUpdate:
         context = self._context
+        if command.action is ConsumerActionKind.INSTALL:
+            # A new review is a new set of questions; nothing entered for the last one carries over.
+            self._entered_secrets, self._secret_rows = {}, {}
         host = self._host(command.install_scope)
         preferred = PythonInstaller(command.python_installer or context.settings.python_installer)
+        # Until screen 05 has been answered there are no pairs, and placement measures every harness.
+        assignments: tuple[InstallationAssignment, ...] = ()
         # Every installation this selection would create has to be known before an answer can be
         # addressed to one (D-353), and only placement knows which harnesses an artifact reaches.
         # The draft is therefore built once with nothing answered. Each owner-qualified screen row
@@ -1711,6 +1939,7 @@ class LocalConsumerActions:
             resolvers=context.credential_providers,
             previous=previous,
             preferred_installer=preferred,
+            assignments=assignments,
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
@@ -1721,6 +1950,17 @@ class LocalConsumerActions:
             if command.action is ConsumerActionKind.INSTALL
             else ()
         )
+        # §172.2: until 05 is answered, an artifact only one harness can host has it ticked.
+        pairs = command.pairs or (default_pairs(targets) if not command.targets else ())
+        chosen_targets = command.targets or pairs_harnesses(pairs)
+        # §172.5: each pair starts on the Settings scope when it may go there and keeps what 07a
+        # chose for it; a pair no longer ticked has no scope to keep.
+        scope_offers = self._pair_scope_offers(pairs)
+        pair_scopes = default_pair_scopes(
+            scope_offers,
+            command.install_scope or context.settings.default_scope,
+            command.pair_scopes,
+        )
         if targets and not prepared.value.ready:
             # #50: configuration is per installation and an installation is a harness, so nothing
             # is asked until the harness is chosen. Before then the answer is the choice itself; a
@@ -1728,16 +1968,22 @@ class LocalConsumerActions:
             eligible_artifacts = tuple(
                 dict.fromkeys(artifact for item in targets for artifact in item.artifacts)
             )
-            if harness_choice_problems(targets, eligible_artifacts, command.targets):
+            if (
+                pair_choice_problems(targets, pairs)
+                if pairs
+                else harness_choice_problems(targets, eligible_artifacts, chosen_targets)
+            ):
                 return ConsumerActionUpdate(
                     self.source(install_targets=targets),
                     ConsumerUiEvent(
                         ConsumerUiEventKind.ACTION_PREPARED,
                         action=command.action,
+                        pairs=pairs,
                         config_draft=InstallationConfigDraft(),
                     ),
                 )
-            host = replace(host, profiles=command.targets)
+            host = replace(host, profiles=chosen_targets)
+            assignments = _assignments(pairs, pair_scopes, host.scope)
             prepared = prepare_configured_installation(
                 context.effective,
                 selection,
@@ -1749,21 +1995,25 @@ class LocalConsumerActions:
                 resolvers=context.credential_providers,
                 previous=previous,
                 preferred_installer=preferred,
+                assignments=assignments,
             )
             if isinstance(prepared, Err):
                 return self._declined(command, _refusal(prepared.diagnostics))
-        fields_by_row = {
-            f"{field.owner}\t{field.input.id.value}": field
+        # §172.4: 07 asks each ordinary input once per artifact. The answer is copied into every
+        # installation of that artifact this operation creates, and into no other (INV-259).
+        artifacts = {
+            artifact_answer_key(field.owner): field.owner
             for field in prepared.value.draft.inputs.fields
         }
-        sources = tuple(
-            OwnedInputSource(
-                fields_by_row[row].owner,
-                PromptedConfigValue(fields_by_row[row].input.id, value),
-            )
-            for row, value in command.config_answers
-            if row in fields_by_row
-        )
+        answers = []
+        for row, value in command.config_answers:
+            key, _, identifier = row.rpartition("\t")
+            if key in artifacts and identifier:
+                held_by = artifacts[key]
+                answers.append(
+                    ArtifactAnswer(held_by.source, held_by.artifact, InputId(identifier), value)
+                )
+        sources = copy_artifact_answers(prepared.value.draft.inputs.fields, answers)
         if sources:
             prepared = prepare_configured_installation(
                 context.effective,
@@ -1776,6 +2026,7 @@ class LocalConsumerActions:
                 resolvers=context.credential_providers,
                 previous=previous,
                 preferred_installer=preferred,
+                assignments=assignments,
             )
             if isinstance(prepared, Err):
                 return self._declined(command, _refusal(prepared.diagnostics))
@@ -1826,15 +2077,18 @@ class LocalConsumerActions:
                     resolvers=context.credential_providers,
                     previous=previous,
                     preferred_installer=preferred,
+                    assignments=assignments,
                 )
                 if isinstance(prepared, Err):
                     return self._declined(command, _refusal(prepared.diagnostics))
         if not prepared.value.ready:
-            config_fields: tuple[tuple[InstallationOwner, ConfigInput], ...] = ()
+            config_fields: dict[tuple[str, str], ConfigInput] = {}
             for field in prepared.value.draft.inputs.unanswered:
                 runtime_input = field.input
                 if isinstance(runtime_input, ConfigInput):
-                    config_fields = (*config_fields, (field.owner, runtime_input))
+                    config_fields.setdefault(
+                        (artifact_answer_key(field.owner), runtime_input.id.value), runtime_input
+                    )
             if config_fields:
                 observations = []
                 for reference in prepared.value.draft.inputs.credential_references:
@@ -1857,19 +2111,26 @@ class LocalConsumerActions:
                             runtime_input.id.value,
                             runtime_input.default or "",
                             runtime_input.validation,
-                            owner=str(owner),
+                            owner=artifact,
                         )
-                        for owner, runtime_input in config_fields
+                        for (artifact, _), runtime_input in config_fields.items()
                     )
                 )
                 return ConsumerActionUpdate(
                     self.source(
-                        installation_inputs=prepared.value.draft.inputs.views(tuple(observations)),
+                        installation_inputs=_per_artifact(
+                            prepared.value.draft.inputs.views(tuple(observations)),
+                            {
+                                str(field.owner): artifact_answer_key(field.owner)
+                                for field in prepared.value.draft.inputs.fields
+                            },
+                        ),
                         install_targets=targets,
                     ),
                     ConsumerUiEvent(
                         ConsumerUiEventKind.ACTION_PREPARED,
                         action=command.action,
+                        pairs=pairs,
                         config_draft=draft,
                     ),
                 )
@@ -1895,11 +2156,16 @@ class LocalConsumerActions:
         reviewed = prepared.value
         reviewed_host = host
         if command.action is ConsumerActionKind.INSTALL:
-            problems = target_choice_problems(plan, command.targets)
+            problems = (
+                pair_choice_problems(plan.targets, pairs)
+                if pairs
+                else target_choice_problems(plan, chosen_targets)
+            )
             if not problems:
-                chosen = command.targets
+                chosen = chosen_targets
             if chosen:
                 reviewed_host = replace(host, profiles=chosen)
+                assignments = _assignments(pairs, pair_scopes, host.scope)
                 narrowed = prepare_configured_installation(
                     context.effective,
                     selection,
@@ -1911,6 +2177,7 @@ class LocalConsumerActions:
                     resolvers=context.credential_providers,
                     previous=previous,
                     preferred_installer=preferred,
+                    assignments=assignments,
                 )
                 if isinstance(narrowed, Err):
                     return self._declined(command, _refusal(narrowed.diagnostics))
@@ -1925,16 +2192,33 @@ class LocalConsumerActions:
                 plan = replace(
                     narrowed_action.flow.plan,
                     targets=targets,
+                    scope_choice=plan.scope_choice,
+                    installer_choice=plan.installer_choice,
                     chosen_targets=chosen,
+                    chosen_pairs=pairs,
+                    scope_offers=scope_matrix_rows(scope_offers),
+                    chosen_pair_scopes=pair_scopes,
+                    secrets=self._install_secrets(reviewed),
+                    config_placeholders=_config_placeholders(reviewed),
                 )
         self._pending_host = reviewed_host
-        self._pending = _PendingInstall(reviewed, previous_receipts, targets, chosen)
+        self._pending_plan = plan
+        self._pending = _PendingInstall(
+            reviewed,
+            previous_receipts,
+            targets,
+            chosen,
+            pairs if chosen else (),
+            pair_scopes if chosen else (),
+        )
         self._pending_action = command.action
         return ConsumerActionUpdate(
             self.source(plan=plan),
             ConsumerUiEvent(
                 ConsumerUiEventKind.ACTION_PREPARED,
                 action=command.action,
+                pairs=pairs,
+                pair_scopes=pair_scopes,
                 semantic_identity=plan.semantic_identity,
                 selection_identity=plan.selection.semantic_identity,
                 review_digest=plan.review_digest,
@@ -2697,9 +2981,10 @@ class LocalConsumerActions:
                     "and review the installation again"
                 ),
             )
-        if (
-            command.action is ConsumerActionKind.INSTALL
-            and command.targets != pending.chosen_targets
+        if command.action is ConsumerActionKind.INSTALL and (
+            command.targets != pending.chosen_targets
+            or set(command.pairs) != set(pending.chosen_pairs)
+            or set(command.pair_scopes) != set(pending.chosen_pair_scopes)
         ):
             return self._failed(
                 command,
@@ -2729,10 +3014,13 @@ class LocalConsumerActions:
             recorded_at=recorded_at,
             today=today,  # type: ignore[arg-type]
             offline=self._context.offline,
-            interactive_credentials=True,
-            credential_handover=self._terminal_handover,
+            # Nothing is asked for mid-transaction and nothing blocks: what was entered before
+            # Ready is written, and every other secret is stored as the AART_NOT_SET placeholder.
+            credential_secrets=self._entered_secrets,
+            skipped_secrets_as_placeholders=True,
             observe=None if self._progress is None else observe,
         )
+        self._entered_secrets = {}
         if isinstance(completed, Err):
             return self._failed(command, _refusal(completed.diagnostics))
         self._machine = completed.value.machine

@@ -8,6 +8,7 @@ inputs produced the form.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from aart_cli.application.installation_inputs import (
@@ -86,6 +87,30 @@ def _selected(placements: tuple[ArtifactPlacement, ...]) -> tuple[ResolvedArtifa
         if placement.artifact not in covered:
             covered.append(placement.artifact)
     return tuple(covered)
+
+
+@dataclass(frozen=True, slots=True)
+class InstallationAssignment:
+    """One ticked artifact and harness at the scope chosen for it: an installation to be (§172).
+
+    `artifact` is the resolved coordinate as a Selection writes it, which is what screen 05's rows
+    name. The owner follows once placement adds the Registry alias and the concrete root.
+    """
+
+    artifact: str
+    harness: str
+    scope: Scope
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.artifact, str)
+            or not self.artifact
+            or not isinstance(self.harness, str)
+            or not self.harness
+            or not isinstance(self.scope, Scope)
+            or any(character in self.artifact + self.harness for character in "\t\r\n")
+        ):
+            raise ValueError("an installation assignment is invalid")
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,12 +339,17 @@ def prepare_configured_installation_draft(
     harness_root: str | None = None,
     resolution_policy: ResolutionPolicy | None = None,
     preferred_installer: PythonInstaller | None = None,
+    assignments: tuple[InstallationAssignment, ...] = (),
+    scope_roots: Mapping[Scope, str] | None = None,
 ) -> Result[ConfiguredInstallationDraft]:
     """Resolve, materialize and place one Selection without planning target-machine mutation.
 
     `harness_root` is the scope's own root. Only an artifact a harness reads off a path needs it,
     and `placement_for` refuses by name when one is selected and no root was supplied -- rather
     than resolving a harness path against whatever directory this process happens to be in.
+
+    `assignments`, when given, replace `scope` and `profiles`: each artifact is placed into exactly
+    its own pairs, every scope against its root in `scope_roots` (§172, INV-258, INV-260).
     """
 
     resolved = resolve_configured_selection(
@@ -332,25 +362,58 @@ def prepare_configured_installation_draft(
         return resolved
     store = object_store_paths(data_root)
     owner_root = harness_root if harness_root is not None else project_root
+    keys = {str(artifact.version.coordinate) for artifact in resolved.value.artifacts}
+    stray = sorted({item.artifact for item in assignments} - keys)
+    if stray:
+        return _error(
+            CONFIGURED_INSTALLATION_INVALID,
+            f"{stray[0]} was given a harness but is not part of this selection",
+        )
     placements: list[ArtifactPlacement] = []
     for artifact in resolved.value.artifacts:
         materialized = _materialize(effective, artifact, data_root=data_root, store=store)
         if isinstance(materialized, Err):
             return materialized
-        placed = placements_for(
-            artifact,
-            scope=scope,
-            profiles=profiles,
-            profiles_requested=profiles_requested,
-            project_root=project_root,
-            data_root=data_root,
-            store=store,
-            harness_root=owner_root,
-            preferred_installer=preferred_installer,
-        )
-        if isinstance(placed, Err):
-            return placed
-        placements.extend(placed.value)
+        if not assignments:
+            groups: tuple[tuple[Scope, tuple[str, ...], bool, str | None], ...] = (
+                (scope, profiles, profiles_requested, owner_root),
+            )
+        else:
+            # §172: each artifact goes where its own pairs say, each scope under its own root. A
+            # pair names a harness somebody ticked, so a harness unable to host it is a refusal.
+            key = str(artifact.version.coordinate)
+            pairs = tuple(item for item in assignments if item.artifact == key)
+            if not pairs:
+                return _error(
+                    CONFIGURED_INSTALLATION_INVALID,
+                    f"{key} has no harness chosen to install into",
+                )
+            roots = scope_roots or {}
+            groups = tuple(
+                (
+                    each,
+                    tuple(dict.fromkeys(item.harness for item in pairs if item.scope is each)),
+                    True,
+                    roots.get(each),
+                )
+                for each in (Scope.PROJECT, Scope.USER)
+                if any(item.scope is each for item in pairs)
+            )
+        for each, chosen, requested, root in groups:
+            placed = placements_for(
+                artifact,
+                scope=each,
+                profiles=chosen,
+                profiles_requested=requested,
+                project_root=project_root,
+                data_root=data_root,
+                store=store,
+                harness_root=root,
+                preferred_installer=preferred_installer,
+            )
+            if isinstance(placed, Err):
+                return placed
+            placements.extend(placed.value)
     owners: list[InstallationOwner] = []
     for placement in placements:
         owned = placement_owner(placement)

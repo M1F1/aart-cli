@@ -24,8 +24,8 @@ from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     PresentationProfile,
+    matrix_columns,
     project_dashboard,
-    target_from_row,
 )
 from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.harness import Scope
@@ -113,8 +113,8 @@ class ArtifactDetailsCompatibilityTest(unittest.TestCase):
 
         row = _row("claude", "opencode", "tabnine")
 
-        fast = "\n".join(render_marketplace_artifact(row, PresentationProfile.FAST))
-        verbose = "\n".join(render_marketplace_artifact(row, PresentationProfile.VERBOSE))
+        fast = "\n".join(render_marketplace_artifact(row, PresentationProfile.LESS_INFO))
+        verbose = "\n".join(render_marketplace_artifact(row, PresentationProfile.MORE_INFO))
 
         self.assertNotIn("Detected but not eligible", fast)
         self.assertNotIn("opencode", fast)
@@ -128,7 +128,7 @@ class ArtifactDetailsCompatibilityTest(unittest.TestCase):
 
         row = _row("claude", "opencode")
 
-        rendered = render_marketplace_artifact(row, PresentationProfile.FAST)
+        rendered = render_marketplace_artifact(row, PresentationProfile.LESS_INFO)
 
         self.assertEqual(
             rendered,
@@ -230,6 +230,7 @@ class ArtifactDetailsControlTest(unittest.TestCase):
                 ENTER,
                 ord("i"),
                 SPACE,
+                ENTER,
                 ENTER,
                 ENTER,
             )
@@ -340,9 +341,9 @@ class OneEligibilityRuleTest(unittest.TestCase):
             row.unavailable_harnesses, tuple(item for item in seen if item not in expected)
         )
         self.assertIs(row.compatible, bool(expected))
-        needs = "\n".join(render_marketplace_artifact(row, PresentationProfile.FAST)).partition(
-            "What it needs"
-        )[2]
+        needs = "\n".join(
+            render_marketplace_artifact(row, PresentationProfile.LESS_INFO)
+        ).partition("What it needs")[2]
         for item in row.unavailable_harnesses:
             self.assertNotIn(item, needs)
 
@@ -432,13 +433,8 @@ class DetailsAgreesWithReviewSelectionE2ETest(unittest.TestCase):
                 row, review, _terminal, _ = self._details_then_review(_skill(harnesses))
 
                 self.assertIs(review.session.screen, ConsumerScreen.REVIEW_SELECTION)
-                # Screen 05 also carries the installation-scope rows (issue #11a), which are a
-                # different question; the harnesses are the target rows.
-                offered = tuple(
-                    harness
-                    for harness in (target_from_row(item) for item in review.rows)
-                    if harness is not None
-                )
+                # §172.2: the harnesses are the columns of 05's matrix.
+                offered = matrix_columns(review.rows)
                 self.assertEqual(row.eligible_harnesses, offered)
                 self.assertTrue(set(expected) >= set(offered))
                 self.assertIn("claude", offered)

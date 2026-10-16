@@ -38,6 +38,7 @@ from aart_cli.application.consumer_views import (
     ConsumerSession,
     PresentationProfile,
 )
+from aart_cli.domain.inspection import RemediationCapability, RemediationCapabilityKind
 from aart_cli.domain.result import Ok
 from aart_cli.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
@@ -79,6 +80,28 @@ def _actions(env):
     return composed.value
 
 
+class BothBackendsMeasured(unittest.TestCase):
+    """pip and uv both measured, whatever this host has, so 05 offers the backend after the form.
+
+    Whether 05 comes back after 07 depends on uv being on PATH (D-380). A drive written on a
+    machine with uv and run on one without lands every later key a screen early, so the drives
+    that count screens pin the measurement instead of inheriting the host's.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        measured = tuple(
+            RemediationCapability(RemediationCapabilityKind.PYTHON_INSTALLER, name)
+            for name in ("pip", "uv")
+        )
+        patcher = mock.patch(
+            "aart_cli.io.configured_installation_action.observe_python_installers",
+            return_value=measured,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+
 class _Terminal(FakeTerminal):
     """The scripted terminal, and the answer to what a pending selection asks on the way out."""
 
@@ -109,7 +132,7 @@ def _drive(env, state: ConsumerUiState, *codes: int, actions=None):
 #: harness, continue and confirm the exact narrowed plan. Fast mode keeps inspection in the plan
 #: but does not stop at a mandatory inspection screen. Harness configuration is routine, so this
 #: fixture does not stop at Remediation (D-258/D-260).
-_INSTALL = (SPACE, ord("i"), SPACE, ENTER, ENTER)
+_INSTALL = (SPACE, ord("i"), SPACE, ENTER, ENTER, ENTER)
 
 
 class ConsumerApplicationInstallTest(unittest.TestCase):

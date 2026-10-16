@@ -159,8 +159,12 @@ class CredentialDiagnosticProjectionTest(unittest.TestCase):
         silently reaching the report.
         """
 
-        names = {field.name for field in dataclasses.fields(CredentialObservation)}
-        self.assertEqual(names, {"reference", "provider_state", "state", "detail"})
+        fields = {field.name: field.type for field in dataclasses.fields(CredentialObservation)}
+        self.assertEqual(
+            set(fields), {"reference", "provider_state", "state", "detail", "placeholder"}
+        )
+        # §172.3: the placeholder flag is a yes/no, so it cannot carry a value either.
+        self.assertEqual(fields["placeholder"], "bool")
 
     def test_a_credential_reports_its_health_and_who_depends_on_it(self) -> None:
         """Every published field, because a field nothing reads is a contract nobody is keeping."""

@@ -17,6 +17,7 @@ from aart_cli.application.consumer_ui import (
     ACTION_ANSWER_SCREENS,
     ACTION_REQUEST_SCREENS,
     CONFIG_CONTINUE_ROW,
+    CONFIG_SET_LATER_ROW,
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -34,6 +35,9 @@ from aart_cli.application.consumer_ui import (
     workflow_progress,
 )
 from aart_cli.application.consumer_views import (
+    ALL_ARTIFACTS,
+    ALL_INSTALLATIONS,
+    PLACEHOLDER_WARNING,
     SETTING_PURPOSE,
     SETTING_ROWS,
     SUCCESS_CHOICES,
@@ -53,6 +57,7 @@ from aart_cli.application.consumer_views import (
     InputView,
     InstalledArtifactView,
     InstalledCollectionView,
+    InstallSecretView,
     LifecycleOutcomeView,
     LifecyclePlanView,
     MarketplaceCollectionView,
@@ -63,19 +68,27 @@ from aart_cli.application.consumer_views import (
     RegistryView,
     RemediationView,
     RunningInstallationView,
-    harness_choice_problems,
     installer_from_row,
     installer_row,
     material_remediations,
+    matrix_columns,
+    matrix_from_row,
+    matrix_rows,
     navigation_targets,
+    pair_choice_problems,
+    pair_from_key,
+    pair_key,
+    pair_scope_key,
+    pairs_confirmed,
+    placeholders_left,
     project_collection,
     project_registries,
-    scope_from_row,
-    scope_row,
-    target_choice_problems,
+    scope_choice_offered,
+    scope_matrix_columns,
+    scope_matrix_from_row,
+    secrets_to_ask,
     target_from_row,
     target_row,
-    targets_confirmed,
 )
 from aart_cli.application.credential_guidance import credential_guidance_lines
 from aart_cli.application.installed_setup import DeclaredArtifactSetup
@@ -112,6 +125,7 @@ from aart_cli.application.maintainer_views import (
     parse_validation_row,
     project_maintainer_candidate_filters,
 )
+from aart_cli.domain.inputs import SKIPPED_INPUT, is_skipped_value
 from aart_cli.domain.registry import PromotionMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import Collection
@@ -257,6 +271,8 @@ _KEY_NAMES: dict[int, str] = {
     127: "backspace",
     258: "down",  # curses.KEY_DOWN
     259: "up",  # curses.KEY_UP
+    260: "left",  # curses.KEY_LEFT
+    261: "right",  # curses.KEY_RIGHT
     263: "backspace",  # curses.KEY_BACKSPACE
     343: "enter",  # curses.KEY_ENTER
 }
@@ -374,6 +390,13 @@ def render_user_inputs_area(
             lines.append("    Credentials: none")
         for credential in credentials:
             lines.append(f"    Credentials: {_credential_row(credential)}")
+        left = sorted(
+            {
+                *(name for file in configurations for name in file.placeholders),
+                *(item.input for item in credentials if item.placeholder),
+            }
+        )
+        lines.extend(f"    {name}: {PLACEHOLDER_WARNING}" for name in left)
     return tuple(lines) if rows else ("No installed artifact has runtime inputs.",)
 
 
@@ -418,6 +441,8 @@ def render_artifact_user_inputs(
             value = next((value for name, value in file.values if name == identifier), None)
             shown = "value unavailable" if value is None else value
             lines.append(f"    {file.harness}: {shown} — {_human(file.state)}")
+            if value is not None and is_skipped_value(value):
+                lines.append(f"      {PLACEHOLDER_WARNING}")
     if credentials:
         if lines:
             lines.append("")
@@ -425,7 +450,9 @@ def render_artifact_user_inputs(
     for credential in credentials:
         row = _user_credential_row(credential.reference)
         status = (
-            "Configured securely"
+            PLACEHOLDER_WARNING
+            if credential.placeholder
+            else "Configured securely"
             if credential.health == "present"
             else _human(credential.health).title()
         )
@@ -822,13 +849,19 @@ _MATERIAL_RISKS: tuple[tuple[str, str], ...] = (
 )
 
 
-def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[str, ...]:
-    """Screen 09. Outcomes in Fast; the same InstallPlan, undiminished, in Verbose."""
+def render_ready(
+    view: ConsumerPlanView, profile: PresentationProfile, *, entered: tuple[str, ...] = ()
+) -> tuple[str, ...]:
+    """Screen 09. Outcomes in Fast; the same InstallPlan, undiminished, in Verbose.
+
+    Both end with what will be stored as `AART_NOT_SET`, so a skip is never a surprise (§172.3).
+    """
 
     if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
         raise ValueError("ready rendering needs a consumer plan and presentation profile")
+    left = _placeholders_block(view, entered)
     if profile is PresentationProfile.MORE_INFO:
-        return _verbose_plan(view)
+        return (*_verbose_plan(view), *left)
     outcomes = Counter(_OUTCOMES.get(item.outcome, "other change") for item in view.effects)
     lines = ["Ready to install", f"{len(view.selection.resolved)} artifact(s) will be installed."]
     lines.extend(f"  {count} {name}" for name, count in sorted(outcomes.items()))
@@ -867,8 +900,21 @@ def render_ready(view: ConsumerPlanView, profile: PresentationProfile) -> tuple[
     )
     if attention:
         lines.append("This install " + ", ".join(attention) + ".")
+    lines.extend(left)
     lines.append("Press [v] for more info: the full plan.")
     return tuple(lines)
+
+
+def _placeholders_block(view: ConsumerPlanView, entered: tuple[str, ...]) -> tuple[str, ...]:
+    left = placeholders_left(view, entered)
+    if not left:
+        return ()
+    return (
+        "",
+        f"Left as {SKIPPED_INPUT}, to set later in Credentials and variables:",
+        *listed(row.replace("\t", ": ", 1) for row in left),
+        "",
+    )
 
 
 def render_running(view: RunningInstallationView, profile: PresentationProfile) -> tuple[str, ...]:
@@ -966,7 +1012,7 @@ def render_transaction_success(
     # CP-23 task 06 (D-256): the choices are rows on the screen, not words in its report, and Undo
     # is never one of them -- no reviewed installation undo exists to start from here. Why is
     # detail (D-410): Verbose states it, and the receipt states it under either profile.
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         lines.append(
             "Undo is not offered here: no reviewed undo exists for an installation yet."
             if view.undo.available
@@ -1221,6 +1267,7 @@ def render_installed_artifact(
         lines.append("Needs attention: " + ", ".join(item.component for item in view.drift) + ".")
     else:
         lines.append("Verified against its desired state.")
+    lines.extend(f"{name}: {PLACEHOLDER_WARNING}." for name in view.placeholders)
     if not view.actions:
         lines.append("No action is offered until it is observed.")
     shown = (
@@ -1506,10 +1553,11 @@ def doctor_rows(view: DoctorView, *, leaving_out: tuple[str, ...] = ()) -> tuple
     for item in view.artifacts:
         if item.row in leaving_out:
             continue
-        marker = "✓" if item.health in {"ready", "update"} else "⚠"
-        lines.append(f"{marker} {item.row}")
+        healthy = item.health in {"ready", "update"} and not item.placeholders
+        lines.append(f"{'✓' if healthy else '⚠'} {item.row}")
         if item.health in {"attention", "broken"}:
             lines.extend(f"  {drift.component}: {_human(drift.kind)}" for drift in item.drift)
+        lines.extend(f"  {name}: {PLACEHOLDER_WARNING}" for name in item.placeholders)
     return tuple(lines)
 
 
@@ -1529,6 +1577,8 @@ def doctor_issue_rows(view: DoctorView, rows: tuple[str, ...], current: str) -> 
         item = artifacts.get(row)
         drift = () if item is None else item.drift
         lines.extend(f"    {entry.component}: {_human(entry.kind)}" for entry in drift)
+        placeholders = () if item is None else item.placeholders
+        lines.extend(f"    {name}: {PLACEHOLDER_WARNING}" for name in placeholders)
     return tuple(lines)
 
 
@@ -1549,9 +1599,13 @@ def doctor_status(view: DoctorView, profile: PresentationProfile) -> tuple[str, 
         if profile is PresentationProfile.MORE_INFO and view.repairable_issues
         else ()
     )
+    unset = sum(1 for item in view.artifacts if item.placeholders)
     return separate(
         (f"{view.ready_count} ready",),
         (f"{view.attention_count} needs attention",),
+        # §172.3: a placeholder is no fault, so it is not counted as one, but it is not hidden
+        # behind "ready" either.
+        (f"{unset} still hold {SKIPPED_INPUT}",) if unset else (),
         ("Actions: repair issues using minimal reconciliation plans.",) if view.actions else (),
         repairable,
     )
@@ -1635,12 +1689,19 @@ def render_installation_config_form(
         raise ValueError("installation config form needs projected inputs and a safe draft")
     projected = {item.row: item for item in inputs if isinstance(item, ConfigInputView)}
     lines = ["Configuration"] if draft.fields else []
+    if draft.fields:
+        mark = ">" if current_row == CONFIG_SET_LATER_ROW else " "
+        lines.extend(("", f"{mark} Set later"))
+    # §172.4: one group per artifact, headed by it only when there is more than one to tell apart.
+    artifacts = tuple(dict.fromkeys(field.owner for field in draft.fields))
+    heading = ""
     for field in draft.fields:
+        if len(artifacts) > 1 and field.owner != heading:
+            heading = field.owner
+            lines.extend(("", heading))
         lines.append("")
         view = projected.get(field.row)
         label = field.id if view is None else view.label
-        if view is not None and view.owner:
-            label = f"{label} — {view.owner}"
         problem = field.problem
         shown = (
             "<credential-shaped value refused>"
@@ -1667,6 +1728,11 @@ def installation_config_purpose(
 ) -> tuple[str, ...]:
     """What the field under the cursor binds to, which Verbose describes rather than drawing."""
 
+    if current_row == CONFIG_SET_LATER_ROW:
+        return (
+            "Leaves every value without an answer as AART_NOT_SET and goes on.",
+            "Set it later in Credentials and variables.",
+        )
     view = next(
         (item for item in inputs if isinstance(item, ConfigInputView) and item.row == current_row),
         None,
@@ -1931,8 +1997,12 @@ class ConsumerActionUpdate:
             # An attempt that stopped is a third thing an action establishes, and the one it used
             # to have to disguise as an empty recording (`QA-033`).
             ConsumerUiEventKind.ACTION_FAILED,
+            # 07b's answer: whether a secret was entered for a row, and never the secret (§172.6).
+            ConsumerUiEventKind.SECRET_ENTERED,
         ):
-            raise ValueError("a consumer action update needs a prepared, recorded or failed event")
+            raise ValueError(
+                "a consumer action update needs a prepared, recorded, failed or entered event"
+            )
         if self.completion is not None and not callable(getattr(self.completion, "complete", None)):
             raise ValueError("a consumer action completion needs a terminal boundary")
 
@@ -2094,6 +2164,66 @@ _FIRST_RUN_LINES: tuple[str, ...] = (
 
 #: Titles the identifier cannot spell, because `.title()` would write an acronym as a word.
 _TITLES: dict[ApplicationScreen, str] = {ConsumerScreen.MCP_TEST: "Test MCP Installations"}
+
+
+def _after_configuration(plan: ConsumerPlanView) -> ConsumerScreen:
+    """07a once configuration is settled, while some pair may go to two scopes; then 07b."""
+
+    if scope_choice_offered(plan.scope_offers):
+        return ConsumerScreen.INSTALL_SCOPE
+    return _after_scope(plan)
+
+
+def _after_scope(plan: ConsumerPlanView) -> ConsumerScreen:
+    """07b while some new installation lacks a secret (§172.6); otherwise Ready."""
+
+    return ConsumerScreen.INSTALL_CREDENTIALS if secrets_to_ask(plan) else ConsumerScreen.READY
+
+
+def render_install_credentials(
+    secrets: tuple[InstallSecretView, ...], entered: tuple[str, ...], current_row: str | None
+) -> tuple[str, ...]:
+    """Screen 07b's rows: each secret once per artifact, and whether a value is waiting for it.
+
+    Nothing typed is ever drawn -- the state knows only which rows have a value (§172.6). A secret
+    every installation already holds is no question, so it is said in the status, not drawn here.
+    """
+
+    asked = tuple(item for item in secrets if not item.configured)
+    lines = [f"{'>' if current_row == CONFIG_SET_LATER_ROW else ' '} Set later"]
+    artifacts = tuple(dict.fromkeys(item.artifact for item in asked))
+    heading = ""
+    for item in asked:
+        if len(artifacts) > 1 and item.artifact != heading:
+            heading = item.artifact
+            lines.extend(("", heading))
+        state = "entered, hidden" if item.row in entered else "not set"
+        mark = ">" if current_row == item.row else " "
+        lines.extend(("", f"{mark} {item.label} ({item.input}): {state}"))
+    lines.extend(("", f"{'>' if current_row == CONFIG_CONTINUE_ROW else ' '} Continue"))
+    return tuple(lines)
+
+
+def install_credentials_status(secrets: tuple[InstallSecretView, ...]) -> tuple[str, ...]:
+    """07b's status: what is stored already, then where anything left goes."""
+
+    return (
+        *(
+            f"Configured securely: {item.label} ({item.input}) for {item.artifact}"
+            for item in secrets
+            if item.configured
+        ),
+        "Nothing typed is shown. Anything not entered is stored as AART_NOT_SET.",
+    )
+
+
+def _pair_label(pair: str) -> str:
+    """A 07a row's name: the artifact as 05 names it, then the harness it goes into."""
+
+    parsed = pair_from_key(pair)
+    if parsed is None:
+        return pair
+    return f"{_matrix_label(parsed[0])} → {parsed[1]}"
 
 
 def _title(screen: ApplicationScreen) -> str:
@@ -2305,6 +2435,28 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
     return render(compose_frame(source, state))
 
 
+def _matrix_label(artifact: str) -> str:
+    """An artifact as a matrix row names it: its coordinate without the version.
+
+    The alias stays, because a local and a remote alias are two artifacts even for one package.
+    """
+
+    return artifact.rpartition("@")[0] or artifact
+
+
+def _pairs_summary(pairs: tuple[str, ...]) -> tuple[str, ...]:
+    """Each artifact and the harnesses it goes into, for More info."""
+
+    chosen: dict[str, list[str]] = {}
+    for parsed in map(pair_from_key, pairs):
+        if parsed is not None:
+            chosen.setdefault(parsed[0], []).append(parsed[1])
+    return tuple(
+        f"{_matrix_label(artifact)} into {', '.join(harnesses)}"
+        for artifact, harnesses in chosen.items()
+    )
+
+
 def compose_frame(source: ConsumerScreenSource, state: ConsumerUiState) -> Frame:
     """The blocks one screen is drawn from, before `render` lays them out.
 
@@ -2513,9 +2665,16 @@ def run_consumer_shell(
                     raise ValueError("changing a setting needs an injected settings writer")
                 settings_writer(current.settings)
                 continue
+            if command.kind is ConsumerUiCommandKind.DISCARD_SECRETS:
+                # Leaving 07b, Ready or Installing drops whatever was typed there (§172.6).
+                discard = getattr(action_handler, "discard_secrets", None)
+                if discard is not None:
+                    discard()
+                continue
             if command.kind not in (
                 ConsumerUiCommandKind.PREPARE_ACTION,
                 ConsumerUiCommandKind.EXECUTE_ACTION,
+                ConsumerUiCommandKind.ENTER_SECRET,
             ):
                 continue
             if action_handler is None:
@@ -2546,6 +2705,8 @@ def run_consumer_shell(
             expected = (
                 (ConsumerUiEventKind.ACTION_PREPARED,)
                 if command.kind is ConsumerUiCommandKind.PREPARE_ACTION
+                else (ConsumerUiEventKind.SECRET_ENTERED,)
+                if command.kind is ConsumerUiCommandKind.ENTER_SECRET
                 else (ConsumerUiEventKind.ACTION_RECORDED, ConsumerUiEventKind.ACTION_FAILED)
             )
             if update.event.kind not in expected or update.event.action is not command.action:
@@ -2983,6 +3144,8 @@ _PLAN_SCREENS = frozenset(
         ConsumerScreen.REVIEW_SELECTION,
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.REQUIRED_INPUTS,
+        ConsumerScreen.INSTALL_SCOPE,
+        ConsumerScreen.INSTALL_CREDENTIALS,
         ConsumerScreen.READY,
         ConsumerScreen.UPDATE_INPUTS,
     }
@@ -3126,33 +3289,18 @@ class CanonicalScreenSource:
                 for item in self._screens.installation_inputs
                 if isinstance(item, ConfigInputView) and item.row in draft_rows
             )
-            return (*fields, CONFIG_CONTINUE_ROW) if fields else ()
+            return (CONFIG_SET_LATER_ROW, *fields, CONFIG_CONTINUE_ROW) if fields else ()
         if screen is ConsumerScreen.REVIEW_SELECTION:
             plan = self._screens.plan
             offered = self._offered_targets()
-            eligible = tuple(target_row(item.harness) for item in offered)
-            stale = tuple(
-                target_row(harness)
-                for harness in state.targets
-                if all(item.harness != harness for item in offered)
-            )
+            # §172.2: the harnesses are chosen per artifact, one matrix row per artifact.
+            matrix = matrix_rows(offered) if offered else ()
             if plan is None:
                 # #50: no plan yet because inputs are unanswered, so the harness is the only
                 # thing to decide here; scope and backend are amendments to a plan.
-                return (*eligible, *stale) if offered else ()
-            # Scope follows the harnesses rather than leading them. Row order is cursor order on
-            # this screen, and this screen's act is choosing what to install into; putting the
-            # scope first would move the first keypress of every existing install onto a different
-            # control. It is drawn only when there is something to decide -- a selection with one
-            # possible scope has a fact to state, not a control to offer (issue #11a).
-            scopes = (
-                tuple(scope_row(item) for item in plan.scope_choice.offered)
-                if plan.scope_choice is not None and plan.scope_choice.is_a_choice
-                else ()
-            )
-            # The backend rows sit after the scope rows for the same reason the scope rows sit
-            # after the harnesses: each is an amendment to a plan that already exists, and the
-            # cursor opens on the screen's own subject.
+                return matrix
+            # The scope is 07a's, one per pair (§172.5). The backend rows sit after the harnesses:
+            # they amend a plan that already exists, and the cursor opens on the screen's subject.
             installers = (
                 tuple(installer_row(item) for item in plan.installer_choice.offered)
                 if plan.installer_choice is not None and plan.installer_choice.is_a_choice
@@ -3160,8 +3308,15 @@ class CanonicalScreenSource:
             )
             if state.inputs_submitted:
                 # D-380: the answers were given for these harnesses; what is left is the choice.
-                return (*scopes, *installers)
-            return (*eligible, *stale, *scopes, *installers)
+                return installers
+            return (*matrix, *installers)
+        if screen is ConsumerScreen.INSTALL_SCOPE:
+            plan = self._screens.plan
+            return () if plan is None else plan.scope_offers
+        if screen is ConsumerScreen.INSTALL_CREDENTIALS:
+            plan = self._screens.plan
+            asked = () if plan is None else tuple(item.row for item in secrets_to_ask(plan))
+            return (CONFIG_SET_LATER_ROW, *asked, CONFIG_CONTINUE_ROW) if asked else ()
         if screen is ConsumerScreen.CREDENTIAL_ACTION:
             # CP-23 task 12: the actions the record permits are the rows (D-262).
             record = self._screens.credential(state.focus)
@@ -3550,23 +3705,38 @@ class CanonicalScreenSource:
                     and state.config_draft.fields
                     else None
                 )
-            if not targets_confirmed(plan, state.targets):
+            if not pairs_confirmed(plan, state.pairs):
                 return None
             # Inspection has already happened to produce this immutable plan. It remains
             # available as a detailed projection, but is not a mandatory click-through step.
             # Once the form was submitted its answers are in the plan, so 07 is not asked again.
             if plan.inputs and not state.inputs_submitted:
                 return ConsumerScreen.REQUIRED_INPUTS
-            return ConsumerScreen.READY
+            return _after_configuration(plan)
         if screen is ConsumerScreen.AUTOMATIC_INSPECTION:
             plan = self._screens.plan
             if plan is None:
                 return None
             if plan.inputs:
                 return ConsumerScreen.REQUIRED_INPUTS
-            return ConsumerScreen.READY
+            return _after_configuration(plan)
         if screen is ConsumerScreen.REQUIRED_INPUTS:
-            return None if self._screens.plan is None else ConsumerScreen.READY
+            plan = self._screens.plan
+            return None if plan is None else _after_configuration(plan)
+        if screen is ConsumerScreen.INSTALL_SCOPE:
+            # Ready reviews the plan prepared for these scopes; a choice still being re-prepared
+            # is not that plan yet.
+            plan = self._screens.plan
+            return (
+                _after_scope(plan)
+                if plan is not None and set(state.pair_scopes) == set(plan.chosen_pair_scopes)
+                else None
+            )
+        if screen is ConsumerScreen.INSTALL_CREDENTIALS:
+            # Set later and Continue both go on: whatever was not entered becomes AART_NOT_SET.
+            return (
+                ConsumerScreen.READY if row in (CONFIG_SET_LATER_ROW, CONFIG_CONTINUE_ROW) else None
+            )
         if screen is ConsumerScreen.USER_INPUT_DETAILS:
             return (
                 ConsumerScreen.CONFIGURATION_TARGETS
@@ -3716,6 +3886,12 @@ class CanonicalScreenSource:
         if state.session.screen is ConsumerScreen.SUCCESS:
             chosen = self.detail(state)
             return () if not isinstance(chosen, ConsumerScreen) else (SUCCESS_PURPOSE[chosen],)
+        if state.session.screen is ConsumerScreen.REVIEW_SELECTION and (
+            matrix_from_row(state.current_row) is not None
+        ):
+            return self._matrix_purpose(state)
+        if state.session.screen is ConsumerScreen.INSTALL_SCOPE:
+            return self._scope_matrix_purpose(state)
         if state.session.screen is ConsumerScreen.REVIEW_SELECTION:
             harness = target_from_row(state.current_row)
             if harness is None or not self._offered_targets():
@@ -3949,6 +4125,13 @@ class CanonicalScreenSource:
             record = screens.credential(state.focus)
             assert record is not None
             return render_credential_action(record, state.session.profile)
+        if screen is ConsumerScreen.INSTALL_SCOPE and self.rows(state):
+            # §172.5: Project is this checkout, User is the home; (*) is where each one goes.
+            return ("Each installation goes into the scope marked (*).",)
+        if screen is ConsumerScreen.INSTALL_CREDENTIALS and self.rows(state):
+            plan = screens.plan
+            assert plan is not None
+            return install_credentials_status(plan.secrets)
         if (
             screen is ConsumerScreen.REVIEW_SELECTION
             and screens.plan is None
@@ -3956,23 +4139,23 @@ class CanonicalScreenSource:
         ):
             problems = self._harness_choice_problems(state)
             if problems or state.session.profile is not PresentationProfile.MORE_INFO:
-                # The ticked rows are the choice; restating them, and what comes after, is for
+                # The ticked cells are the choice; restating them, and what comes after, is for
                 # More info (D-401). A choice that cannot continue still says why.
                 return problems
             return (
-                f"Installing into: {', '.join(state.targets)}",
-                "Configuration for these harnesses is asked next.",
+                *_pairs_summary(state.pairs),
+                "Configuration for these installations is asked next.",
             )
         if (
             screen is ConsumerScreen.REVIEW_SELECTION
             and screens.plan is not None
             and (screens.plan.targets or state.targets)
         ):
-            problems = target_choice_problems(screens.plan, state.targets)
+            problems = pair_choice_problems(screens.plan.targets, state.pairs)
             target_status = (
                 problems
                 if problems or state.session.profile is not PresentationProfile.MORE_INFO
-                else (f"Installing into: {', '.join(state.targets)}",)
+                else _pairs_summary(state.pairs)
             )
             return separate(
                 render_review_selection(screens.plan, state.session.profile),
@@ -4010,12 +4193,145 @@ class CanonicalScreenSource:
         return plan.targets if plan is not None else self._screens.install_targets
 
     def _harness_choice_problems(self, state: ConsumerUiState) -> tuple[str, ...]:
-        offered = self._screens.install_targets
-        return harness_choice_problems(
-            offered,
-            tuple(dict.fromkeys(artifact for item in offered for artifact in item.artifacts)),
-            state.targets,
+        return pair_choice_problems(self._screens.install_targets, state.pairs)
+
+    def _matrix_purpose(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """What Space does on the cell under the cursor, for More info."""
+
+        parsed = matrix_from_row(state.current_row)
+        columns = matrix_columns(state.rows)
+        if parsed is None or not columns:
+            return ()
+        artifact, harnesses = parsed
+        harness = columns[min(state.harness_column, len(columns) - 1)]
+        if artifact == ALL_ARTIFACTS:
+            return (f"Space ticks {harness} for every artifact it can host.",)
+        if harness not in harnesses:
+            return (f"{_matrix_label(artifact)} cannot go into {harness}.",)
+        ticked = pair_key(artifact, harness) in state.pairs
+        return (f"{_matrix_label(artifact)} {'goes' if ticked else 'does not go'} into {harness}.",)
+
+    def _scope_matrix_purpose(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """What Space does at 07a's cursor: put a pair, or every pair, on that scope."""
+
+        parsed = scope_matrix_from_row(state.current_row)
+        columns = scope_matrix_columns(state.rows)
+        if parsed is None or not columns:
+            return ()
+        pair, scopes = parsed
+        scope = columns[min(state.harness_column, len(columns) - 1)]
+        if pair == ALL_INSTALLATIONS:
+            return (f"Space puts every installation that may go there into {scope} scope.",)
+        label = _pair_label(pair)
+        if scope not in scopes:
+            return (f"{label} cannot go into {scope} scope.",)
+        held = pair_scope_key(pair, scope) in state.pair_scopes
+        return (f"{label} {'goes' if held else 'does not go'} into {scope} scope.",)
+
+    def _scope_matrix_lines(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """Screen 07a: a header of scopes, then one line per artifact×harness pair (§172.5).
+
+        A pair sits on one scope, so its cells are radios. The All row shows `(*)` when every pair
+        that may go to a scope is there, `(~)` when only some are.
+        """
+
+        rows = tuple(row for row in state.rows if scope_matrix_from_row(row) is not None)
+        columns = scope_matrix_columns(rows)
+        if not columns:
+            return ()
+        active = min(state.harness_column, len(columns) - 1)
+        parsed = [item for item in map(scope_matrix_from_row, rows) if item is not None]
+        labels = [
+            "All installations" if pair == ALL_INSTALLATIONS else _pair_label(pair)
+            for pair, _ in parsed
+        ]
+        width = max(len(label) for label in labels)
+        titles = [scope.title() for scope in columns]
+        widths = [max(len(title), 3) for title in titles]
+        header = (
+            "  "
+            + " " * width
+            + "".join(
+                "  " + " " + title.ljust(size) for title, size in zip(titles, widths, strict=True)
+            )
         )
+        lines = [header.rstrip()]
+        for row, (pair, scopes), label in zip(rows, parsed, labels, strict=True):
+            here = row == state.current_row
+            cells = []
+            for index, (scope, size) in enumerate(zip(columns, widths, strict=True)):
+                if pair == ALL_INSTALLATIONS:
+                    eligible = [
+                        pair_scope_key(other, scope)
+                        for other, offered in parsed
+                        if other != ALL_INSTALLATIONS and scope in offered
+                    ]
+                    held = sum(key in state.pair_scopes for key in eligible)
+                    cell = "(*)" if eligible and held == len(eligible) else "(~)" if held else "( )"
+                elif scope not in scopes:
+                    cell = " – "
+                else:
+                    cell = "(*)" if pair_scope_key(pair, scope) in state.pair_scopes else "( )"
+                marker = ">" if here and index == active else " "
+                cells.append("  " + marker + cell.ljust(size))
+            lines.append(f"{'>' if here else ' '} {label.ljust(width)}{''.join(cells)}".rstrip())
+            if pair == ALL_INSTALLATIONS:
+                lines.append("")
+        return tuple(lines)
+
+    def _matrix_lines(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """Screen 05's matrix: a header of harnesses, then one line per artifact (§172.2).
+
+        The cursor's row starts with `>`, and the cell Space acts on is marked with `>` too, so
+        which harness the next Space ticks is visible without a second cursor convention.
+        """
+
+        rows = tuple(row for row in state.rows if matrix_from_row(row) is not None)
+        columns = matrix_columns(rows)
+        if not columns:
+            return ()
+        active = min(state.harness_column, len(columns) - 1)
+        parsed = [matrix_from_row(row) for row in rows]
+        labels = [
+            "All artifacts" if item[0] == ALL_ARTIFACTS else _matrix_label(item[0])
+            for item in parsed
+            if item is not None
+        ]
+        width = max(len(label) for label in labels)
+        widths = [max(len(harness), 3) for harness in columns]
+        header = (
+            "  "
+            + " " * width
+            + "".join(
+                "  " + " " + harness.ljust(size)
+                for harness, size in zip(columns, widths, strict=True)
+            )
+        )
+        lines = [header.rstrip()]
+        for row, item, label in zip(rows, parsed, labels, strict=True):
+            assert item is not None
+            artifact, harnesses = item
+            here = row == state.current_row
+            cells = []
+            for index, (harness, size) in enumerate(zip(columns, widths, strict=True)):
+                if artifact == ALL_ARTIFACTS:
+                    hosted = [
+                        pair_key(other[0], harness)
+                        for other in parsed
+                        if other is not None and other[0] != ALL_ARTIFACTS and harness in other[1]
+                    ]
+                    ticked = sum(key in state.pairs for key in hosted)
+                    cell = "[x]" if hosted and ticked == len(hosted) else "[~]" if ticked else "[ ]"
+                elif harness not in harnesses:
+                    cell = " – "
+                else:
+                    cell = "[x]" if pair_key(artifact, harness) in state.pairs else "[ ]"
+                marker = ">" if here and index == active else " "
+                cells.append("  " + marker + cell.ljust(size))
+            lines.append(f"{'>' if here else ' '} {label.ljust(width)}{''.join(cells)}".rstrip())
+            if artifact == ALL_ARTIFACTS:
+                lines.append("")
+        return tuple(lines)
 
     def _review_row(self, row: str, state: ConsumerUiState) -> str:
         """One line of the review screen: a harness to install into, or where it all lands.
@@ -4027,14 +4343,6 @@ class CanonicalScreenSource:
 
         cursor = ">" if row == state.current_row else " "
         plan = self._screens.plan
-        scope = scope_from_row(row)
-        if scope is not None:
-            selected = (
-                plan.scope_choice.selected
-                if plan is not None and plan.scope_choice is not None
-                else state.install_scope
-            )
-            return f"{cursor} {'(*)' if scope == selected else '( )'} Install into: {scope.title()}"
         installer = installer_from_row(row)
         if installer is not None:
             chosen = (
@@ -4052,7 +4360,22 @@ class CanonicalScreenSource:
         screen, profile = state.session.screen, state.session.profile
         screens = self._screens
         if screen is ConsumerScreen.REVIEW_SELECTION and self.rows(state):
-            return tuple(self._review_row(row, state) for row in state.rows)
+            return (
+                *self._matrix_lines(state),
+                *(
+                    self._review_row(row, state)
+                    for row in state.rows
+                    if matrix_from_row(row) is None
+                ),
+            )
+        if screen is ConsumerScreen.INSTALL_SCOPE and self.rows(state):
+            return self._scope_matrix_lines(state)
+        if screen is ConsumerScreen.INSTALL_CREDENTIALS and self.rows(state):
+            plan = screens.plan
+            assert plan is not None
+            return render_install_credentials(
+                plan.secrets, state.entered_secrets, state.current_row
+            )
         if screen is ConsumerScreen.CONFIGURATION_TARGETS:
             return tuple(
                 f"{'>' if row == state.current_row else ' '} "
@@ -4568,7 +4891,7 @@ class CanonicalScreenSource:
             return render_inspection(plan, profile)
         if screen in (ConsumerScreen.REQUIRED_INPUTS, ConsumerScreen.UPDATE_INPUTS):
             return render_required_inputs(plan.inputs, profile)
-        return render_ready(plan, profile)
+        return render_ready(plan, profile, entered=state.entered_secrets)
 
     def _list(self, state: ConsumerUiState, entries: tuple[str, ...]) -> tuple[str, ...]:
         if not entries:

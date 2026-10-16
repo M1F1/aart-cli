@@ -26,14 +26,14 @@ from aart_cli.application.consumer_views import (
     HarnessTargetView,
     PythonInstallerChoiceView,
     installer_row,
+    matrix_rows,
     project_install_plan,
-    target_row,
 )
 from aart_cli.tui_consumer import CanonicalScreenSource, screens_from
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
-from tests.consumer_application_e2e_test import _actions, _drive
-from tests.consumer_shell_test import DOWN, ENTER, SPACE, _at
+from tests.consumer_application_e2e_test import BothBackendsMeasured, _actions, _drive
+from tests.consumer_shell_test import ENTER, RIGHT, SPACE, UP, _at
 from tests.consumer_views_test import _plan as _view_plan
 from tests.install_time_config_form_test import _MemoryCredentialProvider, _state
 
@@ -69,7 +69,7 @@ def _submitted() -> ConsumerUiState:
     return submitted
 
 
-class TheFormGoesForwardE2ETest(unittest.TestCase):
+class TheFormGoesForwardE2ETest(BothBackendsMeasured):
     def test_after_the_form_no_screen_asks_for_the_harness_again(self) -> None:
         value = "platform-team-forward"
         with _environment(authored=AUTHORED_MCP) as env:
@@ -83,16 +83,20 @@ class TheFormGoesForwardE2ETest(unittest.TestCase):
                 _at(ConsumerScreen.MARKETPLACE),
                 SPACE,
                 ord("i"),
-                DOWN,
+                RIGHT,
                 SPACE,
-                DOWN,
+                RIGHT,
                 SPACE,
                 ENTER,
                 value,
                 ENTER,
-                value,
+                # Submit the form. The plan offers a choice of Python backend, which 05 asks, then
+                # 07a the scope; Continue on each, then confirm Ready. Nothing else.
                 ENTER,
-                # Submit the form, confirm Ready. Nothing else.
+                ENTER,
+                ENTER,
+                # 07b: Set later, above the credential the cursor opens on (§172.6).
+                UP,
                 ENTER,
                 ENTER,
                 actions=handler,
@@ -102,14 +106,14 @@ class TheFormGoesForwardE2ETest(unittest.TestCase):
             frames = ["\n".join(frame) for frame in terminal.frames]
             first_form = next(i for i, text in enumerate(frames) if "/ Required Inputs" in text)
             after = frames[first_form:]
-            self.assertFalse(
-                [text for text in after if text.splitlines()[0].endswith("/ Review Selection")],
-                "screen 05 was drawn again after the form",
-            )
-            self.assertFalse(
-                [text for text in after if "[x] opencode" in text],
-                "the harness rows were drawn again after the form",
-            )
+            self.assertTrue(after)
+            # D-380: 05 after the form is the backend alone; the harness matrix is not drawn again,
+            # and the scope is asked on 07a only (§172.5).
+            self.assertTrue(any("/ Scope" in text for text in after))
+            for text in after:
+                self.assertNotRegex(text, r"claude +opencode +tabnine")
+                self.assertNotIn("company/mcp/github  ", text)
+                self.assertNotIn("Install into:", text)
 
 
 class TheReducerFollowsTheAdapterForwardTest(unittest.TestCase):
@@ -188,7 +192,11 @@ class TheAmendmentsScreenTest(unittest.TestCase):
         )
         self.assertEqual(
             source.rows(self._state(submitted=False)),
-            (target_row("claude"), installer_row("pip"), installer_row("uv")),
+            (
+                *matrix_rows((HarnessTargetView("claude", ("company/mcp/github@1.0.0",)),)),
+                installer_row("pip"),
+                installer_row("uv"),
+            ),
         )
 
 

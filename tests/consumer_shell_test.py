@@ -37,6 +37,7 @@ from tests.consumer_activity_test import lifecycle_outcome
 ESCAPE, ENTER, BACKSPACE, SLASH = 27, 10, 263, ord("/")
 QUESTION = ord("?")
 UP, DOWN, SPACE = 259, 258, 32
+LEFT, RIGHT = 260, 261
 VERBOSE = ord("v")
 TODAY = dt.date(2026, 8, 31)
 
