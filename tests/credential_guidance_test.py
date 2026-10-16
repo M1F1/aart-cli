@@ -682,7 +682,7 @@ class SourceToPromptE2ETest(unittest.TestCase):
     def test_authored_guidance_is_on_screen_07_and_the_install_prompts_for_nothing(
         self,
     ) -> None:
-        """§172.4: the secret is not asked for mid-install; with nothing entered it is `SKIP`."""
+        """§172.4: the secret is not asked for mid-install; with nothing entered it is `AART_NOT_SET`."""
 
         terminal, journal, provider = _install(_authored("github", TOKEN_HELP))
 
@@ -719,7 +719,7 @@ class SourceToPromptE2ETest(unittest.TestCase):
         They were once asked for once, with both owners named in a single briefing, because one
         item served both. Each installation holds its own, under the guidance its own author wrote
         -- the value for one artifact is never quietly the value for another. Nothing entered,
-        each is its own `SKIP` placeholder (§172.4).
+        each is its own `AART_NOT_SET` placeholder (§172.4).
         """
 
         terminal, journal, provider = _install(

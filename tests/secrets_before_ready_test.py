@@ -2,7 +2,7 @@
 
 The person enters a value on 07b, or skips it. The transaction then holds a single-use carrier per
 reference. It writes the value to the provider through stdin, so the value never reaches the process
-table. A skipped secret is written as the `SKIP` placeholder. In neither case is there a prompt
+table. A skipped secret is written as the `AART_NOT_SET` placeholder. In neither case is there a prompt
 mid-transaction, and nothing blocks.
 """
 

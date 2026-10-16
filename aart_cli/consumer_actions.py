@@ -2733,7 +2733,7 @@ class LocalConsumerActions:
             today=today,  # type: ignore[arg-type]
             offline=self._context.offline,
             # Nothing is asked for mid-transaction and nothing blocks: what was entered before
-            # Ready is written, and every other secret is stored as the SKIP placeholder.
+            # Ready is written, and every other secret is stored as the AART_NOT_SET placeholder.
             credential_secrets=self._entered_secrets,
             skipped_secrets_as_placeholders=True,
             observe=None if self._progress is None else observe,

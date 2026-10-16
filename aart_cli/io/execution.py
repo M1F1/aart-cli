@@ -953,7 +953,7 @@ class CredentialEffectInterpreter:
 
     An install captures its secrets before Ready instead (§172.4). `secrets` holds what was entered,
     one single-use carrier per reference, and it is written with no prompt and no terminal. With
-    `skipped_as_placeholder`, a reference stored with nothing entered gets the `SKIP` placeholder,
+    `skipped_as_placeholder`, a reference stored with nothing entered gets the `AART_NOT_SET` placeholder,
     so nothing blocks. A replacement is never filled that way: a placeholder stands in for a value
     nobody gave, never for one somebody did, so such an item is left as it is and the run goes on.
     """

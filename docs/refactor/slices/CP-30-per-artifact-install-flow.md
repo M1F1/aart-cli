@@ -26,10 +26,10 @@ variables.
   - Config answer rows are `artifact\tinput_id`.
   - `consumer_actions` fans each one out to every owner of that artifact as an
     `OwnedInputSource`, so each installation still stores its own copy.
-- **Placeholders.** A skipped input is stored as the literal `SKIP`, for ordinary values and
+- **Placeholders.** A skipped input is stored as the literal `AART_NOT_SET`, for ordinary values and
   secrets alike. Nothing blocks on it: the install completes and the launcher starts. Doctor,
   Installed and Credentials and variables warn about it. A secret is matched through
-  `find -w | grep -cx SKIP` in child processes, so this process never reads it.
+  `find -w | grep -cx AART_NOT_SET` in child processes, so this process never reads it.
 - **Secrets.**
   - A hidden prompt under terminal handover captures a `TransientSecret` per artifact secret,
     held by `LocalConsumerActions`.
@@ -61,20 +61,20 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
     does a single-root execution registry.
   - Focused: 838 tests in the install, harness, machine, consumer and credential modules.
 
-## Step 3: the SKIP placeholder (done)
+## Step 3: the AART_NOT_SET placeholder (done)
 
-- `domain/inputs.py` adds `SKIPPED_INPUT = "SKIP"` and `is_skipped_value`. `validate_config_value`
+- `domain/inputs.py` adds `SKIPPED_INPUT = "AART_NOT_SET"` and `is_skipped_value`. `validate_config_value`
   does not judge the placeholder, so a skip never fails a url, identifier or pattern rule.
 - `CredentialObservation.placeholder` is a bool that is valid only on a PRESENT item.
-- `MacOsKeychainProvider.holds_placeholder` prints the item into `grep -c -x -F SKIP` in a child
+- `MacOsKeychainProvider.holds_placeholder` prints the item into `grep -c -x -F AART_NOT_SET` in a child
   pipeline, and only the count returns. `inspect` reports a stored placeholder as PRESENT with
   `placeholder=True` and a "set it in Credentials and variables" detail. Nothing refuses it.
 - Evidence:
-  - `tests/skipped_input_placeholder_test.py` runs against a real temporary keychain: `SKIP`
-    reads as the placeholder; a token and `SKIPPED` do not.
-  - A Hypothesis property: only the exact `SKIP` counts as skipped.
+  - `tests/skipped_input_placeholder_test.py` runs against a real temporary keychain: `AART_NOT_SET`
+    reads as the placeholder; a token and `AART_NOT_SET_LATER` do not.
+  - A Hypothesis property: only the exact `AART_NOT_SET` counts as skipped.
   - The structural no-material test now admits the `placeholder` field and pins it to `bool`.
-  - Mutation: dropping `-x` from the comparison turns the `SKIPPED` case red.
+  - Mutation: dropping `-x` from the comparison turns the `AART_NOT_SET_LATER` case red.
   - Focused: 418 tests in the credential, inputs, doctor, installed and runtime modules.
 
 ## Step 4: secrets written by the transaction, never asked for (done)
@@ -88,7 +88,7 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
   stderr has the hex redacted.
 - `CredentialEffectInterpreter(secrets=…, skipped_as_placeholder=…)`:
   - a Store or Replace with a carrier writes it without a prompt or the terminal;
-  - a Store with nothing entered writes `SKIP`;
+  - a Store with nothing entered writes `AART_NOT_SET`;
   - a Replace with nothing entered leaves the item as it is and the run continues.
 - Plumbed through `interpreters_for` and `complete_configured_installation`
   (`credential_secrets`, `skipped_secrets_as_placeholders`). `LocalConsumerActions` no longer
@@ -99,14 +99,14 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
     that did not take is a failure; a refusal does not echo the hex; the interpreter writes
     carried values, placeholders and keeps-on-replace with no handover. Against a real keychain,
     quotes, backslashes, spaces and non-ASCII survive in the value and the address, and a
-    replacement through stdin holds `SKIP`.
+    replacement through stdin holds `AART_NOT_SET`.
   - The `credential_lifecycle_integration_test` fake learned `security -i`, and its non-interactive
     test now pins the value off argv.
   - Mutations, each turning only its own test red: dropping the placeholder carrier, and dropping
     the quoting.
   - D-414 moves four tests from the install-time prompt to the new contract.
     `credential_guidance_test` keeps the guidance on screen 07 and now asserts no terminal loan
-    and one `SKIP` per installation. `credential_terminal_handover_test` asserts the install gets
+    and one `AART_NOT_SET` per installation. `credential_terminal_handover_test` asserts the install gets
     the carriers and not the loan, and that the carriers are not kept for the next install.
     `install_time_config_form_test`'s fake still refuses any material except the placeholder.
 
@@ -115,7 +115,7 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
 - `application/installation_inputs.py` adds `ArtifactAnswer(source, artifact, input, value)` and
   `copy_artifact_answers(fields, answers, skip_unanswered=…)`. Each artifact's answer is copied
   into every new installation of that artifact and no other; a local and a remote alias are two
-  artifacts. Set later fills unanswered ordinary fields with `SKIP`. Secret fields are left to 07b,
+  artifacts. Set later fills unanswered ordinary fields with `AART_NOT_SET`. Secret fields are left to 07b,
   and answering one artifact twice is refused.
 - Evidence: `tests/artifact_answers_copy_test.py` has scenarios plus a Hypothesis property: every
   installation gets its own artifact's answer, the placeholder, or nothing. Mutation: keying

@@ -11044,18 +11044,18 @@ before anything installs. Nothing in this flow blocks: not the form, not the tra
 the launcher.
 
 07 and 07b never block. Every field may be left unanswered, and one action, `Set later`, skips
-everything still unanswered on that screen. A skipped input becomes the placeholder `SKIP` in each
+everything still unanswered on that screen. A skipped input becomes the placeholder `AART_NOT_SET` in each
 installation it belongs to: in that installation's configuration file for an ordinary input, and
 in its own provider item for a secret. Validation applies to an entered answer, never to the
 placeholder.
 
-The installation then completes like any other. The launcher starts and passes `SKIP` on as the
+The installation then completes like any other. The launcher starts and passes `AART_NOT_SET` on as the
 value, as it would any value. A placeholder is something to set later, not a refusal. Credentials
 and variables (§161.8) sets it one installation at a time, replacing that one installation's value
 and nothing else.
 
 Doctor, Installed and Credentials and variables warn about every value that is still the
-placeholder: `Still the SKIP placeholder — set it in Credentials and variables`.
+placeholder: `Still the AART_NOT_SET placeholder — set it in Credentials and variables`.
 - For an ordinary value the warning comes from comparing the text.
 - For a secret it comes from comparing inside the provider's own processes, with only a match
   count returned. This process never reads the value.
@@ -11101,7 +11101,7 @@ person who cannot find a credential skips it, and the install still completes.
   without prompting, and removes them again if it rolls back. On macOS the value reaches the
   Keychain over standard input, never on the command line.
 - Leaving before confirming on Ready discards every entered value.
-- Ready lists, in every mode, which inputs are being left as the `SKIP` placeholder.
+- Ready lists, in every mode, which inputs are being left as the `AART_NOT_SET` placeholder.
 
 ## 172.7 Acceptance invariants
 
@@ -11120,6 +11120,6 @@ writes both scopes holds both leases and writes each harness configuration under
 
 **INV-261 — Installation never waits or blocks on an input.** Every input is entered or skipped
 before Ready, and the transaction stores each installation's values without prompting. A skipped
-input is stored as the placeholder `SKIP`. Nothing refuses it: the install completes and the
+input is stored as the placeholder `AART_NOT_SET`. Nothing refuses it: the install completes and the
 launcher starts. Doctor, Installed and Credentials and variables warn about it without reading a
 secret value. No secret value reaches UI state, plan, receipt, log or argv.

@@ -3,7 +3,7 @@
 07 asks each artifact once, for all of the harnesses and scopes it is going into. Within that one
 operation the answer is copied into every new installation of that artifact, and afterwards each
 copy is that installation's own. An answer is never copied into another artifact, and a local and a
-remote alias are two artifacts. With Set later, what is unanswered becomes the `SKIP` placeholder.
+remote alias are two artifacts. With Set later, what is unanswered becomes the `AART_NOT_SET` placeholder.
 Secrets are not answered here at all; they are 07b's.
 """
 

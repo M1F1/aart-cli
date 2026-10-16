@@ -1,6 +1,6 @@
-"""§172.3, INV-261: a skipped input is the literal `SKIP`, accepted as stored and then recognised.
+"""§172.3, INV-261: a skipped input is the literal `AART_NOT_SET`, accepted as stored and then recognised.
 
-Nothing blocks on the placeholder. Validation applies to entered answers, so `SKIP` passes every
+Nothing blocks on the placeholder. Validation applies to entered answers, so `AART_NOT_SET` passes every
 rule a real value would have to meet. A provider recognises it as a placeholder without this
 process reading the stored secret.
 """
@@ -38,8 +38,8 @@ REFERENCE = CredentialReference(
 
 
 class ThePlaceholderIsAcceptedAsStoredTest(unittest.TestCase):
-    def test_it_is_the_literal_skip(self) -> None:
-        self.assertEqual(SKIPPED_INPUT, "SKIP")
+    def test_it_is_the_literal_aart_not_set(self) -> None:
+        self.assertEqual(SKIPPED_INPUT, "AART_NOT_SET")
 
     def test_validation_does_not_judge_the_placeholder(self) -> None:
         for validation in (
@@ -53,7 +53,7 @@ class ThePlaceholderIsAcceptedAsStoredTest(unittest.TestCase):
 
     @given(st.text(max_size=12))
     def test_only_the_exact_placeholder_counts_as_skipped(self, value: str) -> None:
-        self.assertEqual(is_skipped_value(value), value == "SKIP")
+        self.assertEqual(is_skipped_value(value), value == "AART_NOT_SET")
 
     def test_an_observation_says_placeholder_only_for_a_present_item(self) -> None:
         held = CredentialObservation(
@@ -91,7 +91,11 @@ class TheKeychainRecognisesThePlaceholderTest(unittest.TestCase):
         subprocess.run(("/usr/bin/security", "-i"), input=command, text=True, check=True)
 
     def test_the_placeholder_is_reported_and_a_value_is_not(self) -> None:
-        for value, placeholder in (("SKIP", True), ("ghp_" + "x" * 36, False), ("SKIPPED", False)):
+        for value, placeholder in (
+            ("AART_NOT_SET", True),
+            ("ghp_" + "x" * 36, False),
+            ("AART_NOT_SET_LATER", False),
+        ):
             with self.subTest(value=value[:4]):
                 self.provider.delete(REFERENCE)
                 self._hold(value)

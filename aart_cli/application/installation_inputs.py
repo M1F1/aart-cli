@@ -325,7 +325,7 @@ def copy_artifact_answers(
     This is the one place D-413 narrows the separation of §169.4: within one operation, one answer
     is copied into each of an artifact's new installations, and from then on each copy is that
     installation's own. With `skip_unanswered` (Set later), an ordinary field nobody answered gets
-    the `SKIP` placeholder. Secret fields are left alone; they are 07b's.
+    the `AART_NOT_SET` placeholder. Secret fields are left alone; they are 07b's.
     """
 
     by_artifact: dict[tuple[SourceAlias, ArtifactIdentity, InputId], str] = {}

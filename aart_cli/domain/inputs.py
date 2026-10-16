@@ -278,7 +278,7 @@ def _url_host(value: str) -> str | None:
 
 #: What a skipped input is stored as, ordinary or secret, in each installation it belongs to
 #: (§172.3). It is something to set later, never a refusal: nothing blocks on it.
-SKIPPED_INPUT = "SKIP"
+SKIPPED_INPUT = "AART_NOT_SET"
 
 
 def is_skipped_value(value: str) -> bool:

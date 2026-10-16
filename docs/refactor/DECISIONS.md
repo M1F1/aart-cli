@@ -10365,13 +10365,13 @@ records it:
 Every screen handles several artifacts at once.
 
 **Optional inputs, and nothing blocks.** Every input may be skipped, and `Set later` skips
-everything still open on a screen. A skipped input is stored as the literal placeholder `SKIP` in
+everything still open on a screen. A skipped input is stored as the literal placeholder `AART_NOT_SET` in
 each installation it belongs to, both ordinary values and secrets. The owner was explicit that
 nothing blocks: the install completes and the launcher starts with whatever is stored. Doctor,
 Installed and Credentials and variables only warn.
 
 **Detecting the placeholder.** A secret is compared inside a child-process pipeline,
-`security find-generic-password -w … | grep -cx SKIP`, over the existing counted-pipeline seam, so
+`security find-generic-password -w … | grep -cx AART_NOT_SET`, over the existing counted-pipeline seam, so
 this process never holds the value. That is an exact match, where a stored-length rule would only
 be a guess, and it was preferred for that reason.
 
@@ -10406,3 +10406,20 @@ continues; a placeholder never displaces a value somebody gave.
 `security -i` answered 0 for a failed command in a probe (a missing keychain). A carried write
 therefore counts only when `inspect` finds the item afterwards, and any echo of the hex in a
 refusal is redacted.
+
+## D-415 — The placeholder is `AART_NOT_SET`, not `SKIP` or one character (CP-30)
+
+The owner chose this after the mockup review on 2026-10-16. A one-character placeholder such as
+`0` was considered and rejected:
+- `0` is a real configuration value (`DEBUG=0`, `RETRIES=0`). It would raise false warnings and
+  bypass validation for legitimate settings.
+- The launcher passes the placeholder through unchanged, and a server could accept `0` as a valid
+  number and misbehave silently.
+
+`AART_NOT_SET` is not a plausible real value. It names its origin wherever it surfaces (Keychain,
+a server log), and detection stays an exact whole-value match, so `AART_NOT_SET_LATER` is not a
+placeholder. It replaces `SKIP` everywhere D-413 and §172 named it.
+
+The same review accepted the matrix screens with their "All artifacts"/"All installations" rows
+(shown only when there is more than one row), the order Harnesses → Configuration → Scope →
+Credentials, and Set later at the top of the form.

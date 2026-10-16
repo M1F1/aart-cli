@@ -6,7 +6,7 @@ contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 
 **2026-10-16, CP-30 steps 2–4 (D-413, D-414).**
 - One transaction now installs across pairs and scopes.
-- A skipped input is stored as `SKIP`, and the Keychain recognises it without reading it.
+- A skipped input is stored as `AART_NOT_SET`, and the Keychain recognises it without reading it.
 - Install secrets are written through `security -i` stdin and never prompted for.
 - Next: the TUI steps 5–9, waiting on the owner's mockup decisions.
 
@@ -14,7 +14,7 @@ contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 - Product Specification §172 defines: harnesses per artifact; configuration once per artifact,
   copied into each new installation; scope per artifact and harness pair; secrets settled before
   Ready.
-- Every input is optional during installation. A skipped one is stored as `SKIP`, nothing blocks
+- Every input is optional during installation. A skipped one is stored as `AART_NOT_SET`, nothing blocks
   on it, and Doctor, Installed and Credentials and variables warn about it.
 - §169.4 and INV-246 are narrowed for one operation. INV-258–INV-261 are added.
 - Implementation starts at step 2.

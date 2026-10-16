@@ -8,21 +8,22 @@ Product Specification §172 and D-413 define it, plus D-414. Its ten steps are i
 Steps 1–4 are done:
 1. the specification;
 2. one transaction over artifact×harness×scope pairs;
-3. the `SKIP` placeholder;
+3. the `AART_NOT_SET` placeholder;
 4. secrets written by the transaction through stdin, with no prompt mid-install.
 
 Steps 5–9 are the TUI screens: 05 harnesses, 07 configuration, 07a scope, 07b credentials, and the
 Ready/Doctor/Installed warnings. They follow the mockups at
-https://claude.ai/artifact/TEEgf2ijGL36So7Esb2gMv and wait on the owner's answers to its five open
-decisions:
-1. a matrix rather than lists;
-2. the "All artifacts" and "All installations" rows;
-3. the order Harnesses → Configuration → Scope → Credentials;
-4. "Set later" at the top;
-5. the literal `SKIP`.
+https://claude.ai/artifact/TEEgf2ijGL36So7Esb2gMv, whose open decisions the owner settled on
+2026-10-16 (D-415):
+- matrix screens;
+- "All artifacts"/"All installations" rows, shown only with more than one row;
+- the order Harnesses → Configuration → Scope → Credentials;
+- Set later at the top;
+- the placeholder `AART_NOT_SET`.
 
-Step 6's core is done too (`copy_artifact_answers`); steps 5–9 are `blocked` in `plan.json` on those decisions. Step 8 fills `LocalConsumerActions._entered_secrets` from 07b. Until then an install stores every
-secret as `SKIP`.
+Step 6's core is done (`copy_artifact_answers`). Step 8 fills
+`LocalConsumerActions._entered_secrets` from 07b. Until then an install stores every secret as
+`AART_NOT_SET`.
 
 Open PRs waiting for the owner: #66 (Undo line under More info), #67 (Artifact Details blocks),
 #68 (profile rename). After CP-30, CP-31 renames the promotion modes (#54) and removes the vendor

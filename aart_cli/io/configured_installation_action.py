@@ -388,7 +388,7 @@ def complete_configured_installation(
     preparation supplies the matching receipts here.
 
     `credential_secrets` are the values entered before Ready, one carrier per credential reference;
-    with `skipped_secrets_as_placeholders` every other secret is stored as `SKIP` (§172.4).
+    with `skipped_secrets_as_placeholders` every other secret is stored as `AART_NOT_SET` (§172.4).
     """
 
     if not isinstance(prepared, PreparedConfiguredInstallation) or not isinstance(
