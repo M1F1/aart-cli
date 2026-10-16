@@ -1,6 +1,17 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-15)
+## Where the work is (2026-10-16)
+
+**CP-29 is merged and released as 0.8.0. The active work is CP-30, the per-artifact install flow:
+`docs/refactor/slices/CP-30-per-artifact-install-flow.md`, on `feat/cp-30-install-flow-per-artifact`.**
+Product Specification §172 and D-413 define it. Its ten steps are in `plan.json`, and step 1 (the
+specification) is done.
+
+Next is step 2, a single transaction over artifact×harness×scope pairs. Open PRs waiting for the
+owner: #66 (Undo line under More info), #67 (Artifact Details blocks), #68 (profile rename). After
+CP-30, CP-31 renames the promotion modes (#54) and removes the vendor family (#53, closes #41).
+
+## CP-29 (2026-10-15)
 
 **CP-28 is released (0.6.0, then 0.7.0). The active work is CP-29:
 `docs/refactor/slices/CP-29-boundaries-and-opencode-plugins.md`, on

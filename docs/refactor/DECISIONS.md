@@ -10351,3 +10351,43 @@ changes no behaviour:
 `forbid_circular_dependencies = true`. `tests/tach_config_test.py` checks the declared graph is
 acyclic and the flag is set, without tach, in the unit gate. No compatibility imports are left for
 the old paths (CP-26).
+
+## D-413 — Per-artifact installation flow with optional inputs (CP-30)
+
+The owner asked for the install flow to be organised around the artifacts that were selected
+(2026-10-16), then for inputs to be optional during installation. Product Specification §172
+records it:
+- **05** chooses harnesses per artifact.
+- **07** asks each ordinary input once per artifact.
+- **07a** chooses the scope per artifact and harness pair, starting on the Settings default.
+- **07b** settles secrets before Ready.
+
+Every screen handles several artifacts at once.
+
+**Optional inputs, and nothing blocks.** Every input may be skipped, and `Set later` skips
+everything still open on a screen. A skipped input is stored as the literal placeholder `SKIP` in
+each installation it belongs to, both ordinary values and secrets. The owner was explicit that
+nothing blocks: the install completes and the launcher starts with whatever is stored. Doctor,
+Installed and Credentials and variables only warn.
+
+**Detecting the placeholder.** A secret is compared inside a child-process pipeline,
+`security find-generic-password -w … | grep -cx SKIP`, over the existing counted-pipeline seam, so
+this process never holds the value. That is an exact match, where a stored-length rule would only
+be a guess, and it was preferred for that reason.
+
+**What it supersedes.** The CP-26 rule "no copy-answers or cross-target prefill" (D-332–D-335,
+§169.4, INV-246) is narrowed for one operation only. The answer is copied once into every new
+installation of the same artifact, and after that the copies are independent. Storage ownership,
+naming and Keychain addressing are unchanged.
+
+**Secrets.** An entered secret is captured by a hidden prompt into a single-use `TransientSecret`
+held by the consumer composition, never by UI state. The transaction writes it, or the
+placeholder, into each owner's item through `security -i` on stdin with `-X <hex>`. The value
+therefore never appears on argv, and quoting cannot corrupt it. This was checked against a
+temporary keychain. The transaction never prompts, so a person who cannot find a credential skips
+it instead of abandoning the install.
+
+**Mixed scopes.** One operation may write both scopes. `McpTarget` already carries its scope, so a
+registry that resolves each target against its own scope's root and a lock that holds both scope
+leases in sorted order keep this one transaction with one review digest. It is not split into two
+transactions that could half-commit.

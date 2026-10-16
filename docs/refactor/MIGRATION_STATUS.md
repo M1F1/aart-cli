@@ -4,6 +4,15 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-30 step 1 (D-413): the per-artifact install flow is specified.**
+- Product Specification §172 defines: harnesses per artifact; configuration once per artifact,
+  copied into each new installation; scope per artifact and harness pair; secrets settled before
+  Ready.
+- Every input is optional during installation. A skipped one is stored as `SKIP`, nothing blocks
+  on it, and Doctor, Installed and Credentials and variables warn about it.
+- §169.4 and INV-246 are narrowed for one operation. INV-258–INV-261 are added.
+- Implementation starts at step 2.
+
 **2026-10-15, CP-29 step 7: CP-29 is complete.** The full `pr-check` passed on #64 (run
 38796746723). What remains is the owner's merge, and the release Release Please makes from it.
 

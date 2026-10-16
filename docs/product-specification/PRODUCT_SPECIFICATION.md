@@ -4377,8 +4377,9 @@ It contains no secrets. The central receipt records ownership, the file path and
 provider references only; it does not duplicate ordinary input values. Configuration remains in
 this installation's tree through supported update/repair, and is removed with that installation.
 
-Each new target collects every required value independently. There is no copy-answers action,
-shared configuration option or cross-target prefill, even within one multi-harness wizard. Remote
+Each new target holds every required value independently. Within one installing operation, one
+answer per artifact is copied to each of that artifact's new targets (§172.4, D-413); otherwise
+there is no copy-answers action, shared configuration option or cross-target prefill. Remote
 and local Registry acquisition use the same rule. A user may enter equal text separately; equality
 does not create shared state. Compatible values may survive an update or repair only inside the
 same complete installation identity.
@@ -8836,7 +8837,12 @@ This will not install the complete Data Scientist Kit collection.
 
 ## 161.5 05–11 Fast Installation Flow — ACCEPTED
 
-Canonical flow:
+**Superseded in part by §172 (D-413).** §172 defines screens 05 to 07b: harnesses per artifact,
+configuration once per artifact, scope per artifact and harness, and credentials settled before
+installation. Where this section disagrees with §172 about those screens, §172 wins. 08 to 11 stand
+as written.
+
+Canonical flow before D-413:
 
 ```text
 Marketplace
@@ -8888,7 +8894,9 @@ GitHub token
 Known valid config is pre-filled only for an existing identical installation owner. Existing
 secrets for that owner are shown only as `Configured securely`. New targets have separate fields
 and secure prompts, including four separate input sets when four harnesses are selected. No
-"same for all" control or cross-installation credential picker is provided.
+"same for all" control or cross-installation credential picker is provided. D-413 changes this
+for one operation: §172.3 and §172.5 ask once per artifact and write a separate copy for each of
+its new installations.
 
 ### 08 Remediation — folded into 09
 
@@ -10591,6 +10599,8 @@ With two ordinary variables and one secret, that operation has eight ordinary in
 four secure secret entries. It writes four ordinary configuration files and four independent
 Keychain items for that secret on macOS. The provider creates the items; the user does not need to
 create Keychain records manually. The user may type the same text independently for each target.
+D-413 (§172) changes how the values are entered, not where they live: one operation asks once per
+artifact, may leave inputs as placeholders, and still writes four files and four items.
 
 There is no global input pool, automatic value propagation, cross-target prefill, copy-answers
 button, shared credential picker or explicit sharing option. Input guidance may be displayed once,
@@ -10630,8 +10640,9 @@ explicit `AART_CLI_HOME` on macOS and Linux; project scope does not create anoth
 its own harness-owned files/fragments, runtime and ordinary configuration. Immutable central
 objects and metadata never imply a shared runtime or cross-target lifecycle mutation.
 
-**INV-246 — New targets require separate input entry.** Four harnesses mean four independent
-configuration and credential sets. TUI, CLI and CI neither implicitly nor explicitly share values
+**INV-246 — New targets get separate input sets.** Four harnesses mean four independent
+configuration and credential sets. Since D-413 one operation enters each value once per artifact
+and writes a separate copy to each of its new installations (INV-259). TUI, CLI and CI neither implicitly nor explicitly share values
 or provider items across installations; compatible reuse is confined to the same existing owner.
 
 **INV-247 — The active namespace is aart-cli.** Distribution, executable, tool-owned filenames,
@@ -10983,3 +10994,132 @@ refuses the plan before mutation.
 **INV-257 — A plugin owns one list entry and one tree.** Install, update, repair and uninstall
 change only this installation's entry and tree. The rest of the configuration file and every other
 entry in the list are left as they were found.
+
+# 172. Per-artifact installation flow
+
+Status: **ACCEPTED 2026-10-16 (D-413)**, on the owner's request. It replaces the 05–09 part of
+§161.5 and narrows the input-entry rule of §169.4 and INV-246 for one installing operation. The
+ownership, naming, layout and secret-handling rules of §169 are unchanged: every installation
+keeps its own configuration file, its own credential item and its own lifecycle.
+
+Every screen in this flow works on every artifact the operation installs together, whether that is
+one artifact or several. Each screen shows the artifacts as groups. No screen forces a person to
+go through the artifacts one at a time.
+
+## 172.1 The flow
+
+```text
+Marketplace
+   ↓
+05 Harnesses            one set of harnesses per artifact
+   ↓
+07 Configuration        [only if needed, optional]  one set of answers per artifact
+   ↓
+07a Scope               [only if a choice exists]  project or user per artifact and harness
+   ↓
+07b Credentials         [only if needed, optional]  entered once per artifact, or skipped
+   ↓
+09 Ready to Install
+   ↓
+10 Installing → 11 Success
+```
+
+A screen that has nothing to ask is not shown (§161.5). Back returns to the previous screen and
+keeps every answer that is still valid. An answer becomes invalid when the thing it answers is no
+longer chosen.
+
+## 172.2 05 Harnesses
+
+Each artifact lists the harnesses on this machine that can host it. A person ticks one or more
+harnesses for each artifact independently. The same harness may be ticked for one artifact and not
+for another. Each artifact must keep at least one harness. To leave an artifact out, a person goes
+back and changes the selection; unticking every harness does not do it. An artifact with exactly
+one eligible harness has it ticked already. Otherwise nothing is ticked until the person chooses.
+Each ticked pair of artifact and harness is one installation (§169.4) once its scope is known.
+
+## 172.3 Entering inputs during installation is optional, and nothing blocks
+
+Installing a whole Collection of MCPs should not mean answering every input of every member
+before anything installs. Nothing in this flow blocks: not the form, not the transaction, and not
+the launcher.
+
+07 and 07b never block. Every field may be left unanswered, and one action, `Set later`, skips
+everything still unanswered on that screen. A skipped input becomes the placeholder `SKIP` in each
+installation it belongs to: in that installation's configuration file for an ordinary input, and
+in its own provider item for a secret. Validation applies to an entered answer, never to the
+placeholder.
+
+The installation then completes like any other. The launcher starts and passes `SKIP` on as the
+value, as it would any value. A placeholder is something to set later, not a refusal. Credentials
+and variables (§161.8) sets it one installation at a time, replacing that one installation's value
+and nothing else.
+
+Doctor, Installed and Credentials and variables warn about every value that is still the
+placeholder: `Still the SKIP placeholder — set it in Credentials and variables`.
+- For an ordinary value the warning comes from comparing the text.
+- For a secret it comes from comparing inside the provider's own processes, with only a match
+  count returned. This process never reads the value.
+
+A warning never stops an operation.
+
+## 172.4 07 Configuration
+
+The form asks each ordinary input once per artifact. An answer applies to every installation of
+that artifact that this operation creates. Each of those installations is then written its own
+configuration file holding its own copy of the answer. After the install, the copies are
+independent. Credentials and variables shows and edits them per installation, and editing one
+installation never changes another.
+
+This is the only sharing there is. It happens while one operation creates the installations, and
+it copies answers between installations of the same artifact. Nothing is pre-filled from another
+artifact or from an existing installation that is a different owner. There is no global input pool,
+and later operations never propagate a value. Defaults declared by the artifact are pre-filled as
+before. An input left at its declared default is an answer, not a skip.
+
+## 172.5 07a Scope
+
+There is one row for each artifact and harness pair. The scopes offered for a pair are the ones
+the artifact declares, minus Project when there is no project root. Each pair starts on the
+default scope in Settings when it is offered, and on the only offered scope otherwise. A person
+may change any pair. The screen is skipped when no pair has more than one scope.
+
+One operation may therefore install into both scopes. It is still one reviewed transaction with
+one review digest. It holds the mutation lease of every scope root it writes (acquired in a fixed
+order), and each harness configuration is written under its own scope's root.
+
+## 172.6 07b Credentials
+
+Credentials are settled before installation, so the transaction never waits for a person. A
+person who cannot find a credential skips it, and the install still completes.
+
+- The screen lists each secret input once per artifact. A secret already stored for the same
+  existing owner shows `Configured securely` and asks nothing.
+- Entering a secret hands the terminal to a hidden prompt, after the input's guidance. The value
+  is held in process memory only, in a single-use carrier, until the transaction stores it. It is
+  never part of UI state, a frame, the plan, a receipt, a log or argv.
+- The transaction stores the value, or the placeholder, in each installation's own provider item
+  without prompting, and removes them again if it rolls back. On macOS the value reaches the
+  Keychain over standard input, never on the command line.
+- Leaving before confirming on Ready discards every entered value.
+- Ready lists, in every mode, which inputs are being left as the `SKIP` placeholder.
+
+## 172.7 Acceptance invariants
+
+**INV-258 — Harness choice is per artifact.** Every installation an operation creates is a ticked
+artifact and harness pair. No harness choice for one artifact adds, removes or narrows an
+installation of another.
+
+**INV-259 — One answer per artifact, then independent copies.** One operation asks each ordinary
+input and each secret at most once per artifact. It writes a separate copy, or a separate
+placeholder, into every installation of that artifact that it creates. After the operation, no
+value is shared, and changing one installation changes nothing else.
+
+**INV-260 — Scope is chosen per installation.** Each artifact and harness pair installs into the
+scope chosen for it, which starts on the Settings default when that is offered. A transaction that
+writes both scopes holds both leases and writes each harness configuration under its own root.
+
+**INV-261 — Installation never waits or blocks on an input.** Every input is entered or skipped
+before Ready, and the transaction stores each installation's values without prompting. A skipped
+input is stored as the placeholder `SKIP`. Nothing refuses it: the install completes and the
+launcher starts. Doctor, Installed and Credentials and variables warn about it without reading a
+secret value. No secret value reaches UI state, plan, receipt, log or argv.
