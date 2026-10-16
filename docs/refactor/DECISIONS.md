@@ -10693,3 +10693,22 @@ the selected payload and the exact resolved versions of the artifact's artifact 
   record. `validate_promoted_registry` checks the package too, so a Registry whose metadata was
   rewritten over an unreviewed Collection is unreadable.
 - **Evidence**: the validation digest is each member with the exact version it resolved to.
+
+## D-428 — How the configured Marketplace offers a Collection (CP-31 step 6)
+
+- **One row per approved Collection: its highest approved version.** Artifacts use the same rule
+  (`_current_versions`). The row's coordinate carries that version
+  (`company/collection/<name>@<version>`). The graph's `CollectionCoordinate` and the native
+  `CollectionManifest` gained an optional `version`, which a native Source's Collection leaves
+  absent.
+- **Members are the exact versions their own rows offer.** A Marketplace graph holds one version
+  per artifact, so the Collection offers its members at those versions. If a member's constraint
+  excludes the version its row offers, as when a member moved to `2.0.0` past a Collection's `^1`,
+  the Collection is **declined**: the reason is added to `ConfiguredMarketplace.declined` and the
+  row is not offered. Offering it would install something the Collection never named. A new
+  Collection version is approved through Sync, as for any changed dependency (D-425).
+- **A member another Registry would provide also declines it.** The protocol v1 graph keeps
+  Collections single-source, and approval never resolved such a member anyway (D-427).
+- **Both consumer readers load Collections.** `io/configured_offers.py` (the graph behind
+  `marketplace list` and the TUI) and `io/configured_selection.py` (the approved resolver) both read
+  them with `read_registry_collection`, so each one refuses the same tampered package.

@@ -1619,6 +1619,11 @@ Evidence/links: D-150; D-029; B-029; CP-17 step 4 probe; `aart_cli/application/i
 
 ## B-067 — An approved Collection never reaches the configured Marketplace
 
+**CP-31 progress.** Layers 1–3 are built: promotion (step 5, D-427), the Registry representation
+and read-back (D-427), and the configured projection (step 6, D-428).
+`CollectionsAreReachableTest` replaces `CollectionsAreNotReachableTest`. Layer 4, install planning
+over members, is steps 7–9.
+
 CP-17 step 5 set out to install a Collection through the public chain and found it cannot be done,
 anywhere, for any registry content.
 
@@ -4603,3 +4608,13 @@ refuses it before Ready. That refusal path was not exercised in a test.
 (D-380) depends on the machine. CP-30's drives broke in CI for it. `BothBackendsMeasured` pins the
 drives that failed; other drives through `_environment` may still be host-dependent. Consider
 pinning the measurement in `_environment` itself.
+
+## B-194 — Hypothesis finds a frame whose duplicate key labels lose one
+
+Found: CP-31 step 6 (2026-10-16), with `tui_layout.py` unchanged since #69. Two properties in
+`tests/screen_skeleton_test.py` fail on generated degenerate input. In
+`test_the_keys_stay_on_the_bottom_rows_whatever_the_terminal_gives`, a frame with
+`keys=('0', '0')` at height 3 places `('', '0')`. `test_every_item_is_marked_and_nothing_said_is_lost`
+fails on `block=('0', ' 0')` (`tui_layout.py:456`, `:461`). No real screen has two identical key
+labels, so this is not on the critical path. Either the layout keeps repeated rows or the strategy
+excludes them, stating why. CI can draw the same examples, so it may flake there.

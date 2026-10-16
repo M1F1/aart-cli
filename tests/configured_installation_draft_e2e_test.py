@@ -11,6 +11,7 @@ from typing import cast
 
 from aart_cli.application.installation_inputs import OwnedInputSource
 from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.application.maintainer_promotion import effective_policy_digest
 from aart_cli.application.promotion import (
     PromotionEvidence,
     load_registry_versions,
@@ -19,6 +20,11 @@ from aart_cli.application.promotion import (
     project_lifecycle_update,
     project_promotion,
 )
+from aart_cli.application.registry_collections import (
+    assess_collection_candidate,
+    collection_validation_digest,
+)
+from aart_cli.application.registry_versions import ApprovedRegistryVersions
 from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.candidates import CandidateId, assess_candidate
 from aart_cli.domain.credentials import CredentialProviderRef, CredentialReference
@@ -45,7 +51,10 @@ from aart_cli.domain.selection import (
 from aart_cli.io.configured_installation import prepare_configured_installation_draft
 from aart_cli.io.object_store import read_object
 from aart_cli.io.source_store import publish_source_snapshot
-from aart_cli.protocol.authoring import CompiledAuthorArtifact, compile_author_snapshot
+from aart_cli.protocol.authoring import (
+    CompiledAuthorArtifact,
+    compile_author_source,
+)
 from aart_cli.protocol.json import canonical_json_bytes
 from aart_cli.protocol.native_tree import (
     SnapshotEntry,
@@ -64,7 +73,7 @@ from aart_cli.sources.model import (
 )
 from aart_cli.store.model import ObjectReadRequest, object_store_paths
 from tests.artifact_installation_e2e_test import MANIFEST, ORG, SERVER_SOURCE, TOKEN
-from tests.fixture_versions import with_fixture_versions
+from tests.fixture_versions import fixture_versions
 from tests.marketplace_fixtures import configured_source, effective_configuration
 from tests.promotion_planning_test import _evidence
 
@@ -159,17 +168,20 @@ def _promote_one_locally(
 
     approved = load_registry_versions(onto)
     assert isinstance(approved, Ok), approved
-    compiled = with_fixture_versions(compile_author_snapshot)(
-        SourceSnapshot(
-            SnapshotOrigin.IMMUTABLE_GIT,
-            tuple(_authored(item) for item in authored),
-        ),
+    tree = SourceSnapshot(
+        SnapshotOrigin.IMMUTABLE_GIT,
+        tuple(_authored(item) for item in authored),
+    )
+    registry = ApprovedRegistryVersions(approved.value, SourceAlias("company"))
+    compiled = compile_author_source(
+        tree,
         source_alias=SourceAlias("authors"),
         source="https://git.example/servers.git",
         revision=revision,
+        versions=dataclasses.replace(fixture_versions(tree), registry=registry),
     )
     assert isinstance(compiled, Ok), compiled
-    artifacts = compiled.value
+    artifacts = compiled.value.artifacts
     if setup is not None:
         artifacts = tuple(_with_setup(artifact, setup) for artifact in artifacts)
     scanned = reconcile_source_scan(
@@ -179,18 +191,41 @@ def _promote_one_locally(
         previous=(),
         approved=approved.value,
         target_registry=SourceAlias("company"),
+        collections=compiled.value.collections,
     )
     assert isinstance(scanned, Ok), scanned
-    bundle = scanned.value.active[0]
-    bundle = dataclasses.replace(bundle, candidate=assess_candidate(bundle.candidate))
-    evidence = cast(tuple[tuple[CandidateId, PromotionEvidence], ...], _evidence(bundle))
-    promoted = plan_bulk_promotion(
-        onto,
-        (bundle,),
-        evidence=evidence,
-        approved=approved.value,
-        mode=mode,
-    )
+    if scanned.value.active:
+        bundle = scanned.value.active[0]
+        bundle = dataclasses.replace(bundle, candidate=assess_candidate(bundle.candidate))
+        evidence = cast(tuple[tuple[CandidateId, PromotionEvidence], ...], _evidence(bundle))
+        promoted = plan_bulk_promotion(
+            onto,
+            (bundle,),
+            evidence=evidence,
+            approved=approved.value,
+            mode=mode,
+        )
+    else:
+        # A tree that authors a Collection: approved the way Maintainer approval does, members
+        # resolved against what this registry has approved so far (D-427).
+        collection = assess_collection_candidate(scanned.value.collection_active[0], registry)
+        promoted = plan_bulk_promotion(
+            onto,
+            (),
+            evidence=(
+                (
+                    collection.id,
+                    PromotionEvidence(
+                        collection_validation_digest(collection, registry),
+                        effective_policy_digest(EffectivePolicy()),
+                        (),
+                    ),
+                ),
+            ),
+            approved=approved.value,
+            mode=mode,
+            collections=(collection,),
+        )
     assert isinstance(promoted, Ok), promoted
     projected = project_promotion(onto, promoted.value)
     assert isinstance(projected, Ok), projected

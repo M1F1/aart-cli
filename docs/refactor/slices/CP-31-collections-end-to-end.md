@@ -143,3 +143,24 @@ Targeted mutations:
 - Ignoring `collection_active` in the configured io turned only the shell approval test red.
 - Skipping the CLI readiness check turned only the refusal test red. `plan_bulk_promotion` still
   refused (layered defence), but without the member named.
+
+## Step 6 — the Marketplace offers approved Collections (D-428)
+
+`io/configured_offers.py` stops declining kind `collection`. It reads each Collection back with
+`read_registry_collection` and offers the highest approved version as one row, its members at the
+exact versions their rows offer. It declines a Collection whose member constraint excludes the
+offered version. `io/configured_selection.py` populates `ApprovedRegistrySnapshot.collections` for
+the approved resolver. The test fixture `_promote_one_locally` promotes an authored Collection tree
+through the real transaction, with members resolved against the Registry built so far.
+
+Evidence: `tests/git_backed_bulk_install_e2e_test.py::CollectionsAreReachableTest` (4), over a
+real Git-backed Registry and a real `source sync`:
+- `marketplace list` offers `company/collection/starter@1.0.0`;
+- its members are `company/mcp/notes@1.0.0` and `company/skill/code-review@1.2.0`;
+- it is declined once `skill/code-review@2.0.0` moves past its `^1`;
+- a Registry with none offers none.
+
+152 consumer, marketplace, graph, install, TUI and screen modules (1511 tests) are green, apart
+from two Hypothesis findings in untouched `tui_layout.py` (B-194). mypy and tach are clean.
+
+Targeted mutation: dropping the member-constraint check turned only the moved-member test red.

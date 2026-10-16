@@ -45,7 +45,10 @@ def _declared(path: str, content: bytes) -> tuple[tuple[str, str], str] | None:
 
 @dataclass(frozen=True)
 class FixtureVersions:
+    """Declared numbers for artifacts; a member resolves in `registry` when one is given."""
+
     declared: tuple[tuple[tuple[str, str], str], ...] = ()
+    registry: object | None = None
 
     def version(self, identity: ArtifactIdentity, input_digest: ObjectDigest) -> SemVer:
         raw = dict(self.declared).get((identity.kind, identity.name), "1.0.0")
@@ -54,7 +57,7 @@ class FixtureVersions:
         return parsed.value
 
     def resolve(self, request: ArtifactRequest) -> str | None:
-        return None
+        return None if self.registry is None else self.registry.resolve(request)  # type: ignore[attr-defined]
 
 
 def fixture_versions(snapshot: SourceSnapshot) -> FixtureVersions:

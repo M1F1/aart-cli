@@ -4,6 +4,10 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-31 step 6 (D-428): the Marketplace offers approved Collections.**
+- One row per approved Collection at its highest version, with members at the exact versions their
+  rows offer. Declined when a member moved past its constraint. Evidence in the slice, Step 6.
+
 **2026-10-16, CP-31 step 5 (D-427): promotion publishes Collections.**
 - A Collection Candidate is approved in the TUI (51 → 52 → 43–45) or with `registry promote`. It
   is written as a vendored package with a version record and an audit, refused while a member is

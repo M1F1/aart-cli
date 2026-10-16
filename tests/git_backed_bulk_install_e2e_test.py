@@ -6,8 +6,8 @@ be built into a runtime and a Skill that only has to be placed where a harness r
 different installations, and a bulk run that treated them alike would either build a runtime for
 the Skill or place the server's files and never make it startable.
 
-The collection half of this step is a refusal rather than an installation, and
-`CollectionsAreNotReachableTest` pins why.
+`CollectionsAreReachableTest` covers the Collection half: an approved Collection is offered by the
+configured Marketplace.
 """
 
 from __future__ import annotations
@@ -21,6 +21,21 @@ from tests.git_backed_consumer_e2e_test import _Environment
 from tests.git_backed_runtime_e2e_test import AUTHORED_SERVER
 from tests.mcp_stdio_e2e_test import speak
 from tests.placed_installation_e2e_test import AUTHORED_SKILL
+
+#: A Collection naming both members, authored without a version like any source manifest.
+AUTHORED_STARTER: tuple[tuple[str, str], ...] = (
+    (
+        "collections/starter/aart-cli.json",
+        json.dumps(
+            {
+                "schema": "aart-cli.dev/collection/v1",
+                "name": "starter",
+                "summary": "Notes and code review.",
+                "artifacts": ["mcp/notes@^1", "skill/code-review@^1"],
+            }
+        ),
+    ),
+)
 
 SERVER = "company/mcp/notes"
 SKILL = "company/skill/code-review"
@@ -116,53 +131,80 @@ class BulkInstallFromOneCommitTest(_Chain):
             )
 
 
-class CollectionsAreNotReachableTest(_Chain):
-    """A Collection cannot be installed through the CLI, and this is where that stops.
+class CollectionsAreReachableTest(_Chain):
+    """An approved Collection is offered by the configured Marketplace (§173.3, B-067 layer 3).
 
-    `io/configured_selection.py` skips every approved version whose kind is `collection` and leaves
-    `ApprovedRegistrySnapshot.collections` at its default, so the configured Marketplace the public
-    verbs read carries none regardless of what a registry approved. The domain models Collections
-    and the resolver has a code for missing ones; nothing on this path can ever populate them.
-
-    Pinned rather than fixed because it is a capability question, not a defect in this slice's
-    chain -- B-067 carries it. The value of the test is that the gap stays a refusal: it must not
-    become a partial install of some members, and it must not silently succeed.
+    The Registry here approved both members and then a Collection naming them, through the same
+    promotion transaction Maintainer approval runs; nothing in this test hands the Marketplace a
+    Collection it did not read from the synchronized commit.
     """
 
-    def test_the_marketplace_offers_no_collections_whatever_was_published(self) -> None:
+    def _synchronized_with_collection(self, raw: str):
+        env = _Environment(Path(raw).resolve(), AUTHORED_SKILL, AUTHORED_SERVER, AUTHORED_STARTER)
+        code, synchronized = env.run("source", "sync", source_transport=True)
+        self.assertEqual(0, code, synchronized)
+        return env
+
+    def test_the_marketplace_offers_the_approved_collection(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            env = self._synchronized_with_collection(raw)
+
+            code, listed = env.run("marketplace", "list")
+
+            self.assertEqual(0, code, listed)
+            self.assertEqual(
+                sorted(item["coordinate"] for item in listed["artifacts"]),
+                ["company/mcp/notes@1.0.0", "company/skill/code-review@1.2.0"],
+            )
+            (collection,) = listed["collections"]
+            self.assertEqual("company/collection/starter@1.0.0", collection["coordinate"])
+
+    def test_its_members_are_the_exact_versions_their_rows_offer(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            env = self._synchronized_with_collection(raw)
+
+            _, listed = env.run("marketplace", "list")
+
+            (collection,) = listed["collections"]
+            self.assertEqual(
+                ["company/mcp/notes@1.0.0", "company/skill/code-review@1.2.0"],
+                collection["members"],
+            )
+
+    def test_a_collection_whose_member_moved_past_its_constraint_is_not_offered(self) -> None:
+        """The member's row now offers 2.0.0, which `^1` excludes (§173.4).
+
+        Offering the Collection would install a version it never named, so it is declined until a
+        new Collection version is approved.
+        """
+
+        skill = [list(item) for item in AUTHORED_SKILL]
+        manifest = json.loads(skill[0][1])
+        manifest["artifact"]["x-fixture-version"] = "2.0.0"
+        skill[0][1] = json.dumps(manifest)
+        skill[1][1] += "\nA second major version.\n"
+        moved = tuple(tuple(item) for item in skill)
+        with tempfile.TemporaryDirectory() as raw:
+            env = _Environment(
+                Path(raw).resolve(), AUTHORED_SKILL, AUTHORED_SERVER, AUTHORED_STARTER, moved
+            )
+            code, synchronized = env.run("source", "sync", source_transport=True)
+            self.assertEqual(0, code, synchronized)
+
+            code, listed = env.run("marketplace", "list")
+
+            self.assertEqual(0, code, listed)
+            self.assertEqual([], listed["collections"])
+            self.assertIn(
+                "company/skill/code-review@2.0.0",
+                [item["coordinate"] for item in listed["artifacts"]],
+            )
+
+    def test_a_registry_that_approved_no_collection_offers_none(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             env, _ = self._synchronized(raw)
 
             code, listed = env.run("marketplace", "list")
 
             self.assertEqual(0, code, listed)
-            # Both members are offered, so the source really is carrying installable content.
-            self.assertEqual(
-                sorted(item["coordinate"] for item in listed["artifacts"]),
-                ["company/mcp/notes@1.0.0", "company/skill/code-review@1.2.0"],
-            )
             self.assertEqual([], listed["collections"])
-
-    def test_installing_a_collection_is_refused_by_name_and_installs_nothing(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            env, _ = self._synchronized(raw)
-
-            code, refused = env.run(
-                "marketplace",
-                "install",
-                "company/collection/starter",
-                "--profile",
-                "claude",
-                "--yes",
-            )
-
-            self.assertEqual(1, code)
-            self.assertFalse(refused["ok"])
-            (diagnostic,) = refused["diagnostics"]
-            self.assertEqual("collection-not-found", diagnostic["code"])
-            # Nothing was installed, and no harness was touched on the way to the refusal.
-            self.assertFalse((env.project / ".claude/aart-cli").exists())
-            mcp = env.project / ".mcp.json"
-            self.assertEqual(
-                {}, json.loads(mcp.read_text()).get("mcpServers", {}) if mcp.exists() else {}
-            )
