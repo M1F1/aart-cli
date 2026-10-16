@@ -10351,3 +10351,12 @@ changes no behaviour:
 `forbid_circular_dependencies = true`. `tests/tach_config_test.py` checks the declared graph is
 acyclic and the flag is set, without tach, in the unit gate. No compatibility imports are left for
 the old paths (CP-26).
+
+## D-410 - Success explains a withheld Undo only under Verbose
+
+**Owner request, 2026-10-16. Refines D-256; no Product Specification change.** The Success
+rule asks only that Undo be offered when a reviewed reversal exists, and none does. Fast ended every
+Success screen with the reason, e.g. "Undo unavailable: a credential change cannot be undone: no
+previous value is retained anywhere, deliberately". That is detail, not the outcome, so
+`render_transaction_success` prints it only under Verbose. Receipt Details keeps its `Undo:` line
+under both profiles, so the reason is still one row away, on the exact record. Verbose is unchanged.

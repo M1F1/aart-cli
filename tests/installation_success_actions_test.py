@@ -212,12 +212,32 @@ class UndoIsExplainedNotOfferedTest(unittest.TestCase):
         flow = _ran(_bulk_flow())
         view = flow.outcome
 
-        drawn = "\n".join(render_transaction_success(view, PresentationProfile.FAST))
+        drawn = "\n".join(render_transaction_success(view, PresentationProfile.VERBOSE))
 
         self.assertFalse(view.undo.available)
         self.assertIn(f"Undo unavailable: {view.undo.reason}", drawn)
         self.assertNotIn("[ Undo ]", drawn)
         self.assertNotIn("View installed", drawn)
+
+    def test_fast_leaves_the_undo_explanation_to_verbose_and_the_receipt(self) -> None:
+        """The owner: the sentence is detail, so Fast drops it; the receipt still states it."""
+
+        view = _ran(_bulk_flow()).outcome
+        reversible = dataclasses.replace(
+            view, undo=UndoAvailability(True, "every change can be reversed", ("launcher",))
+        )
+
+        for shown in (view, reversible):
+            with self.subTest(available=shown.undo.available):
+                drawn = "\n".join(render_transaction_success(shown, PresentationProfile.FAST))
+
+                self.assertNotIn("Undo", drawn)
+                self.assertIn(shown.outcome.mark, drawn)
+
+        receipt = dataclasses.replace(shell_screens().receipts[0], undo=view.undo)
+        kept = "\n".join(render_receipt_detail(receipt, PresentationProfile.FAST))
+
+        self.assertIn(f"Undo: not available — {view.undo.reason}.", kept)
 
     def test_a_reversible_transaction_still_offers_no_undo_this_surface_cannot_review(
         self,
@@ -227,7 +247,7 @@ class UndoIsExplainedNotOfferedTest(unittest.TestCase):
             undo=UndoAvailability(True, "every change can be reversed", ("launcher",)),
         )
 
-        drawn = "\n".join(render_transaction_success(view, PresentationProfile.FAST))
+        drawn = "\n".join(render_transaction_success(view, PresentationProfile.VERBOSE))
 
         self.assertIn("Undo is not offered here", drawn)
         self.assertNotIn("[ Undo ]", drawn)

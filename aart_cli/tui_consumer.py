@@ -963,12 +963,14 @@ def render_transaction_success(
     for drift in view.residual_drift:
         lines.append(f"  Still needs attention: {drift.component} ({_human(drift.kind)})")
     # CP-23 task 06 (D-256): the choices are rows on the screen, not words in its report, and Undo
-    # is never one of them -- no reviewed installation undo exists to start from here.
-    lines.append(
-        "Undo is not offered here: no reviewed undo exists for an installation yet."
-        if view.undo.available
-        else f"Undo unavailable: {view.undo.reason}"
-    )
+    # is never one of them -- no reviewed installation undo exists to start from here. Why is
+    # detail (D-410): Verbose states it, and the receipt states it under either profile.
+    if profile is PresentationProfile.VERBOSE:
+        lines.append(
+            "Undo is not offered here: no reviewed undo exists for an installation yet."
+            if view.undo.available
+            else f"Undo unavailable: {view.undo.reason}"
+        )
     return tuple(lines)
 
 

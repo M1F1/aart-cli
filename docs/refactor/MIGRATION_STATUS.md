@@ -4,6 +4,10 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, D-410: Success leaves the Undo explanation to Verbose and the receipt.** Fast no
+longer ends on why Undo is unavailable; Verbose and Receipt Details still say it
+(`tests/installation_success_actions_test.py`).
+
 **2026-10-15, CP-29 step 7: CP-29 is complete.** The full `pr-check` passed on #64 (run
 38796746723). What remains is the owner's merge, and the release Release Please makes from it.
 
