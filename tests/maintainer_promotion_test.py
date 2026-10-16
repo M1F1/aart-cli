@@ -64,6 +64,7 @@ from aart_cli.tui_maintainer import (
     render_maintainer_promotion_review,
     render_maintainer_registry_diff,
 )
+from tests.fixture_versions import with_fixture_versions
 from tests.marketplace_fixtures import configured_source, source_state
 
 _ARGV_SECRET = {
@@ -97,7 +98,7 @@ def _digest(character: str) -> ObjectDigest:
 def _scan(*, inputs: list[dict[str, object]] | None = None, revision: str = "a" * 40):
     manifest: dict[str, object] = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
+        "artifact": {"name": "github-mcp", "kind": "mcp"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},
@@ -105,7 +106,7 @@ def _scan(*, inputs: list[dict[str, object]] | None = None, revision: str = "a" 
     }
     if inputs is not None:
         manifest["inputs"] = inputs
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT
             if source_revision_kind(revision) == "git"

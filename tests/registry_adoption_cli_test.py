@@ -17,11 +17,11 @@ from unittest import mock
 from aart_cli import cli
 from aart_cli.domain.result import Ok
 from aart_cli.io.git_acquisition import acquire_git_snapshot
-from tests.registry_repository_scan_test import OTHER_MANIFEST, _git, _Lab
+from tests.registry_repository_scan_test import _git, _Lab
 
 
 class RegistryAdoptionCliTest(_Lab):
-    coordinate = "skill/brainstorming@2.1.0"
+    coordinate = "skill/brainstorming@1.0.0"
 
     def _run(self, *arguments: str) -> tuple[int, dict[str, object]]:
         output = io.StringIO()
@@ -84,7 +84,7 @@ class RegistryAdoptionCliTest(_Lab):
         self.assertEqual(payload["resolved_commit"], self.author.head)
         self.assertEqual(
             [item["coordinate"] for item in payload["artifacts"]],
-            ["skill/brainstorming@2.1.0", "skill/verification-before-completion@1.0.0"],
+            ["skill/brainstorming@1.0.0", "skill/verification-before-completion@1.0.0"],
         )
         self.assertEqual(
             _git(self.registry, "status", "--porcelain=v1", "--untracked-files=all"), before
@@ -121,7 +121,7 @@ class RegistryAdoptionCliTest(_Lab):
 
         self.assertEqual(payload["phase"], "adopted-local")
         self.assertTrue(payload["applied"])
-        package = self.registry / "artifacts" / "skill" / "brainstorming" / "2.1.0"
+        package = self.registry / "artifacts" / "skill" / "brainstorming" / "1.0.0"
         self.assertTrue((package / "payload" / "SKILL.md").is_file())
         self.assertFalse((package / "payload" / "NOTES.md").exists())
         self.assertFalse((self.registry / "aart.config.json").exists())
@@ -147,15 +147,16 @@ class RegistryAdoptionCliTest(_Lab):
             _git(self.registry, "status", "--porcelain=v1", "--untracked-files=all"), before
         )
 
-    def test_changed_new_version_is_reviewed_then_added_without_rewriting_the_old_one(self) -> None:
+    def test_a_changed_upstream_is_reviewed_as_the_next_registry_version_then_added_without_rewriting_the_old_one(
+        self,
+    ) -> None:
         self._adopt()
-        old = self.registry / "artifacts" / "skill" / "brainstorming" / "2.1.0"
+        old = self.registry / "artifacts" / "skill" / "brainstorming" / "1.0.0"
         old_bytes = (old / "payload" / "SKILL.md").read_bytes()
         manifest = self.author.path / "skills" / "brainstorming" / "aart-cli.yaml"
-        manifest.write_text(OTHER_MANIFEST.replace("2.1.0", "2.2.0"), encoding="utf-8")
-        (manifest.parent / "SKILL.md").write_text("# brainstorming 2.2\n", encoding="utf-8")
+        (manifest.parent / "SKILL.md").write_text("# brainstorming, revised\n", encoding="utf-8")
         _git(self.author.path, "add", "-A")
-        _git(self.author.path, "commit", "-m", "release brainstorming 2.2")
+        _git(self.author.path, "commit", "-m", "revise brainstorming")
 
         code, review = self._run(
             "registry",
@@ -168,9 +169,9 @@ class RegistryAdoptionCliTest(_Lab):
         self.assertEqual(code, 0, review)
         self.assertEqual(review["disposition"], "changed")
         self.assertFalse(review["applied"])
-        self.assertEqual(review["proposal"]["selected"], ["skill/brainstorming@2.2.0"])
+        self.assertEqual(review["proposal"]["selected"], ["skill/brainstorming@1.0.1"])
         self.assertTrue(review["proposal"]["review_digest"].startswith("sha256:"))
-        self.assertFalse((old.parent / "2.2.0").exists())
+        self.assertFalse((old.parent / "1.0.1").exists())
 
         code, applied = self._run(
             "registry",
@@ -186,7 +187,7 @@ class RegistryAdoptionCliTest(_Lab):
         self.assertEqual(code, 0, applied)
         self.assertTrue(applied["applied"])
         self.assertEqual((old / "payload" / "SKILL.md").read_bytes(), old_bytes)
-        self.assertTrue((old.parent / "2.2.0" / "payload" / "SKILL.md").is_file())
+        self.assertTrue((old.parent / "1.0.1" / "payload" / "SKILL.md").is_file())
 
     def test_the_scan_listing_is_ordered_by_coordinate_whatever_the_compiler_returns(self) -> None:
         """A machine-readable listing that reorders itself between runs is not machine-readable.
@@ -219,7 +220,7 @@ class RegistryAdoptionCliTest(_Lab):
         self.assertEqual(code, 0, payload)
         self.assertEqual(
             [item["coordinate"] for item in payload["artifacts"]],
-            ["skill/brainstorming@2.1.0", "skill/verification-before-completion@1.0.0"],
+            ["skill/brainstorming@1.0.0", "skill/verification-before-completion@1.0.0"],
         )
 
     def test_a_stale_expect_refuses_the_adoption_and_writes_nothing(self) -> None:
@@ -247,7 +248,7 @@ class RegistryAdoptionCliTest(_Lab):
         self.assertNotEqual(code, 0)
         self.assertFalse(payload["ok"])
         self.assertFalse(
-            (self.registry / "artifacts" / "skill" / "brainstorming" / "2.1.0").exists()
+            (self.registry / "artifacts" / "skill" / "brainstorming" / "1.0.0").exists()
         )
         self.assertEqual(
             _git(self.registry, "status", "--porcelain=v1", "--untracked-files=all"), before
@@ -256,10 +257,9 @@ class RegistryAdoptionCliTest(_Lab):
     def test_a_stale_expect_refuses_the_upstream_finalization(self) -> None:
         self._adopt()
         manifest = self.author.path / "skills" / "brainstorming" / "aart-cli.yaml"
-        manifest.write_text(OTHER_MANIFEST.replace("2.1.0", "2.2.0"), encoding="utf-8")
-        (manifest.parent / "SKILL.md").write_text("# brainstorming 2.2\n", encoding="utf-8")
+        (manifest.parent / "SKILL.md").write_text("# brainstorming, revised\n", encoding="utf-8")
         _git(self.author.path, "add", "-A")
-        _git(self.author.path, "commit", "-m", "release brainstorming 2.2")
+        _git(self.author.path, "commit", "-m", "revise brainstorming")
 
         code, payload = self._run(
             "registry",
@@ -275,7 +275,7 @@ class RegistryAdoptionCliTest(_Lab):
         self.assertNotEqual(code, 0)
         self.assertFalse(payload["ok"])
         self.assertFalse(
-            (self.registry / "artifacts" / "skill" / "brainstorming" / "2.2.0").exists()
+            (self.registry / "artifacts" / "skill" / "brainstorming" / "1.0.1").exists()
         )
 
 

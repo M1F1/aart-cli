@@ -21,6 +21,7 @@ from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.protocol.native_tree import SnapshotEntryKind, SnapshotOrigin, SourceSnapshot
 from aart_cli.sources.local import read_local_snapshot
 from aart_cli.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
+from tests.fixture_versions import with_fixture_versions
 
 
 def _digest(character: str) -> ObjectDigest:
@@ -35,7 +36,7 @@ class MaintainerLifecycleIntegrationTest(unittest.TestCase):
             package.mkdir(parents=True)
             manifest = {
                 "schema": "aart-cli.dev/mcp/v1",
-                "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
+                "artifact": {"name": "github-mcp", "kind": "mcp"},
                 "payload": {"include": ["server.py"]},
                 "transport": {"type": "stdio"},
                 "runtime": {"type": "python", "version": ">=3.11"},
@@ -54,7 +55,7 @@ class MaintainerLifecycleIntegrationTest(unittest.TestCase):
                 )
             )
             assert isinstance(acquired, Ok)
-            compiled = compile_author_snapshot(
+            compiled = with_fixture_versions(compile_author_snapshot)(
                 acquired.value.snapshot,
                 source_alias=alias,
                 source="https://git.example/authors.git",

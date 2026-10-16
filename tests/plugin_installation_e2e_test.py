@@ -18,7 +18,7 @@ from tests.configured_install_command_e2e_test import _Environment
 
 MANIFEST = {
     "schema": "aart-cli.dev/plugin/v1",
-    "artifact": {"name": "superpowers", "kind": "plugin", "version": "7.0.0"},
+    "artifact": {"name": "superpowers", "kind": "plugin", "x-fixture-version": "7.0.0"},
     "payload": {"include": [".opencode/plugins/superpowers.js", "skills/**"]},
     "plugin": {"entry": ".opencode/plugins/superpowers.js"},
     "compatibility": {"harnesses": ["opencode"]},

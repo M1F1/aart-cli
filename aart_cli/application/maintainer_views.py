@@ -382,7 +382,6 @@ class MaintainerAdoptionUpstreamView:
     disposition: str
     resolved_commit: str | None
     observed_coordinate: str | None
-    new_version_required: bool
     proposal_available: bool
     details: tuple[str, ...] = ()
 
@@ -406,7 +405,6 @@ class MaintainerAdoptionUpstreamView:
                 or any(character in item for character in "\r\n")
                 for item in self.details
             )
-            or not isinstance(self.new_version_required, bool)
             or not isinstance(self.proposal_available, bool)
             or (self.proposal_available and self.observed_coordinate is None)
         ):

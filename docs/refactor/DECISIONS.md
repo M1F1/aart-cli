@@ -10619,7 +10619,7 @@ The owner decided on 2026-10-16 how the Registry picks the next version once ver
 Implementation choices for §173.1–§173.2, recorded so the next agent need not re-derive them:
 - **The first version is `1.0.0`**, confirming D-423's proposal. §173.2 states it.
 - **The compiler is told the version; it never reads one.** `compile_author_*` take a pure
-  `VersionAssigner` (identity and input digest in, SemVer out). Every caller builds it from the
+  `RegistryVersions` port (identity and input digest in, SemVer out; D-425 adds dependency resolution). Every caller builds it from the
   approved versions it already loads: Sync, `registry adopt`, `check-upstream`, `registry scan` and
   `registry promote`. `author check` has no Registry, so it compiles with `1.0.0` and says nothing
   about versions.
@@ -10635,3 +10635,27 @@ Implementation choices for §173.1–§173.2, recorded so the next agent need no
 - **No compatibility.** A manifest with `artifact.version` (or a Collection `version`) is refused
   with a message to delete it. Test fixtures drop the field; their expected versions become what
   the Registry assigns.
+
+## D-425 — A Collection's members are its dependencies, so it versions by the same rule (CP-31 step 2)
+
+The product owner's rule: a Collection is an artifact, its members are its dependencies, and one
+versioning rule covers both. So the input digest that decides "changed" (D-424) is **the manifest,
+the selected payload and the exact resolved versions of the artifact's artifact dependencies**:
+- **A Collection's digest records each member request with the version it resolves to** in the
+  target Registry, as a canonical `dependencies.json` record. A member's new approved version inside
+  the Collection's constraint changes the digest, so the Collection gets the next Registry version.
+  A version outside the constraint resolves to the same exact version and changes nothing.
+- **Recursive by construction.** A member that is itself a Collection has a version that already
+  follows its members, so a change propagates one approved level at a time, at each Sync.
+- **Resolution is the Registry's, not the Source's.** `RegistryVersions.resolve` answers the
+  highest *published* version the constraint allows in the target Registry (revoked and other
+  registries do not count). A member not approved yet resolves to nothing, and that is recorded.
+- **Python dependency descriptors** (`requirements.txt` and similar) are payload, so they are
+  already in the digest. Nothing extra is needed for them.
+- **`author check` uses `NO_REGISTRY`**: every artifact is `1.0.0`, every member unresolved, and the
+  check prints the identity without a version.
+- **Tests.** The product paths (Sync, `registry scan`/`adopt`/`check-upstream`, `registry promote`)
+  are tested with real `ApprovedRegistryVersions` and assert real numbering (`1.0.0` → `1.0.1`).
+  Tests about something else that were written around particular numbers keep them through a
+  test-only manifest key, `x-fixture-version`, read by `tests/fixture_versions.py`
+  (`with_fixture_versions`). The parser ignores unknown keys, so the key never reaches the product.

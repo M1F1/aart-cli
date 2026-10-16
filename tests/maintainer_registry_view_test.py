@@ -59,6 +59,7 @@ from aart_cli.protocol.native_tree import (
 from aart_cli.protocol.paths import parse_relative_path
 from aart_cli.sources.model import source_snapshot_digest
 from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from tests.fixture_versions import with_fixture_versions
 from tests.marketplace_fixtures import configured_source, source_state
 
 
@@ -75,13 +76,13 @@ def _digest(character: str) -> ObjectDigest:
 def _bundle(*, name: str = "github-mcp", kind: str = "mcp", version: str = "1.0.0"):
     manifest: dict[str, object] = {
         "schema": f"aart-cli.dev/{kind}/v1",
-        "artifact": {"name": name, "kind": kind, "version": version},
+        "artifact": {"name": name, "kind": kind, "x-fixture-version": version},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},
         "launch": {"type": "python", "entrypoint": "server.py"},
     }
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (

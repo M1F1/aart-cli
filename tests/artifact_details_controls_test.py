@@ -299,7 +299,7 @@ def _declaring(profiles: tuple[str, ...], platforms: tuple[str, ...], *detected:
 def _skill(harnesses: list[str] | None = None, platforms: list[str] | None = None):
     manifest: dict[str, object] = {
         "schema": "aart-cli.dev/skill/v1",
-        "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
+        "artifact": {"name": "code-review", "kind": "skill", "x-fixture-version": "1.2.0"},
         "payload": {"include": ["SKILL.md"]},
     }
     compatibility: dict[str, list[str]] = {}
@@ -363,7 +363,7 @@ class OneEligibilityRuleTest(unittest.TestCase):
 class ADeclaredPlatformNarrowsInstallationTest(_PlacementFixture):
     manifest = {
         "schema": "aart-cli.dev/skill/v1",
-        "artifact": {"name": "elsewhere-check", "kind": "skill", "version": "1.0.0"},
+        "artifact": {"name": "elsewhere-check", "kind": "skill"},
         "payload": {"include": ["SKILL.md"]},
         "compatibility": {"harnesses": ["claude"], "platforms": [_ELSEWHERE]},
     }
@@ -389,7 +389,7 @@ class ADeclaredPlatformNarrowsInstallationTest(_PlacementFixture):
 class ThisPlatformIsDeclaredTest(_PlacementFixture):
     manifest = {
         "schema": "aart-cli.dev/skill/v1",
-        "artifact": {"name": "here-check", "kind": "skill", "version": "1.0.0"},
+        "artifact": {"name": "here-check", "kind": "skill"},
         "payload": {"include": ["SKILL.md"]},
         "compatibility": {"harnesses": ["claude"], "platforms": [platform_name(), _ELSEWHERE]},
     }

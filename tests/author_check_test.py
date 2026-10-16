@@ -66,7 +66,6 @@ def _write_collection(directory: Path) -> None:
             {
                 "schema": "aart-cli.dev/collection/v1",
                 "name": "data-engineer",
-                "version": "2.1.0",
                 "summary": "Approved data engineering tools.",
                 "artifacts": ["company/mcp/github@^2"],
             }
@@ -218,13 +217,14 @@ class PromotionTest(unittest.TestCase):
             self.assertIn("outside the declared payload", printed)
 
     def test_the_coordinate_a_manifest_compiles_to_is_what_the_check_reports(self) -> None:
-        """An author who reads `mcp/github-mcp@0.1.0` knows the compile ran, not just the parse."""
+        """An author who reads `mcp/github-mcp` knows the compile ran, not just the parse."""
 
         with _workspace() as root:
             code, printed = _check(root)
 
             self.assertEqual(code, OK)
-            self.assertIn(f"mcp/{_NAME}@0.1.0", printed)
+            # The identity and nothing after it: no version a Registry never assigned.
+            self.assertIn(f"  ->  mcp/{_NAME}\n", printed)
 
     def test_a_collection_manifest_is_not_judged_as_a_broken_artifact(self) -> None:
         """`registry scan` compiles artifacts and passes over Collections, so this check must too.
@@ -277,7 +277,7 @@ class JsonTest(unittest.TestCase):
             (entry,) = json.loads(printed)["manifests"]
 
             self.assertEqual(code, OK)
-            self.assertEqual(entry["package"], f"mcp/{_NAME}@0.1.0")
+            self.assertEqual(entry["package"], f"mcp/{_NAME}")
 
     def test_a_manifest_this_check_does_not_compile_says_so_rather_than_claiming_a_package(
         self,

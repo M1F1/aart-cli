@@ -45,7 +45,7 @@ _HARNESSES = ["claude", "opencode", "tabnine"]
 def _manifest(smoke: dict | None) -> tuple[tuple[str, str], ...]:
     manifest = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": "dummy", "kind": "mcp", "version": "1.0.0"},
+        "artifact": {"name": "dummy", "kind": "mcp"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.10"},

@@ -65,7 +65,10 @@ APPROVED = "company/skill/code-review@1.2.0"
 def _at_version(version: str):
     """The same authored Skill, released again at a later version."""
 
-    manifest = {**SKILL_MANIFEST, "artifact": {**SKILL_MANIFEST["artifact"], "version": version}}
+    manifest = {
+        **SKILL_MANIFEST,
+        "artifact": {**SKILL_MANIFEST["artifact"], "x-fixture-version": version},
+    }
     return tuple(
         (path, json.dumps(manifest)) if path.endswith("aart-cli.json") else (path, content)
         for path, content in AUTHORED_SKILL

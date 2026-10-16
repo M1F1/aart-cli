@@ -69,6 +69,7 @@ from tests.candidate_history_test import _ready_scan
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions
 from tests.consumer_shell_test import DOWN, ENTER, FakeTerminal
+from tests.fixture_versions import with_fixture_versions
 from tests.maintainer_composition_test import _snapshot
 from tests.marketplace_fixtures import configured_source
 
@@ -110,7 +111,7 @@ def _two_ready_candidates():
     for name in ("github-mcp", "jira-mcp"):
         manifest = {
             "schema": "aart-cli.dev/mcp/v1",
-            "artifact": {"name": name, "kind": "mcp", "version": "1.0.0"},
+            "artifact": {"name": name, "kind": "mcp"},
             "payload": {"include": ["server.py"]},
             "transport": {"type": "stdio"},
             "runtime": {"type": "python", "version": ">=3.11"},
@@ -127,7 +128,7 @@ def _two_ready_candidates():
             )
         )
         entries.append(SnapshotEntry(parsed_payload.value, SnapshotEntryKind.FILE, b"print('x')\n"))
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),
         source_alias=SourceAlias("authors"),
         source="https://git.example/authors.git",
@@ -164,7 +165,7 @@ def _collection_scan():
 
     manifest = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
+        "artifact": {"name": "github-mcp", "kind": "mcp"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},
@@ -173,7 +174,6 @@ def _collection_scan():
     collection = {
         "schema": "aart-cli.dev/collection/v1",
         "name": "data-engineer",
-        "version": "2.1.0",
         "summary": "Approved data engineering tools.",
         # The member the approved registry in this environment actually publishes, so screen 52
         # resolves it rather than reporting it unpublished.
@@ -192,7 +192,7 @@ def _collection_scan():
     entries.append(SnapshotEntry(parsed_payload.value, SnapshotEntryKind.FILE, b"print('x')\n"))
     # The production Source Sync compiles through `compile_author_source`, which is the boundary
     # that carries Collections; `compile_author_snapshot` returns artifacts only.
-    compiled = compile_author_source(
+    compiled = with_fixture_versions(compile_author_source)(
         SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),
         source_alias=SourceAlias("authors"),
         source="https://git.example/authors.git",
@@ -333,7 +333,6 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                         "artifact": {
                             "name": "github",
                             "kind": "mcp",
-                            "version": "1.0.0",
                         },
                         "payload": {"include": ["server.py"]},
                         "transport": {"type": "stdio"},
@@ -1015,7 +1014,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             )
             listed = terminal.screen_containing("/ Collection Candidates")
             self.assertIn("data-engineer", listed)
-            self.assertIn("2.1.0", listed)
+            self.assertIn("1.0.0", listed)
             validated = terminal.screen_containing("/ Collection Validation")
             # The member resolves to the version this registry actually approved, and screen 52
             # says which one rather than only that it is satisfiable.

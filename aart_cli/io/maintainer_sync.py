@@ -236,12 +236,13 @@ def complete_configured_source_sync(
             data_root=prepared.request.data_root,
         )
 
-    def compile_snapshot(snapshot, source_alias, source, revision):
+    def compile_snapshot(snapshot, source_alias, source, revision, versions):
         return compile_author_source(
             snapshot,
             source_alias=source_alias,
             source=source,
             revision=revision,
+            versions=versions,
         )
 
     return execute_source_sync(

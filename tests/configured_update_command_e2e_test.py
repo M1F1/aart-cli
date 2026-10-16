@@ -37,7 +37,7 @@ def _authored(
 ) -> tuple[tuple[str, str], ...]:
     manifest = {
         "schema": "aart-cli.dev/skill/v1",
-        "artifact": {"name": "code-review", "kind": "skill", "version": version},
+        "artifact": {"name": "code-review", "kind": "skill", "x-fixture-version": version},
         "payload": {"include": ["SKILL.md", "reference/style.md"]},
         "compatibility": {"harnesses": list(harnesses)},
     }

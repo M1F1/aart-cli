@@ -27,7 +27,7 @@ from tests.placed_installation_e2e_test import AUTHORED_SKILL
 SECOND = "company/skill/lint-review"
 _LINT_MANIFEST = {
     "schema": "aart-cli.dev/skill/v1",
-    "artifact": {"name": "lint-review", "kind": "skill", "version": "1.0.0"},
+    "artifact": {"name": "lint-review", "kind": "skill"},
     "payload": {"include": ["SKILL.md"]},
     "compatibility": {"harnesses": ["claude"]},
 }

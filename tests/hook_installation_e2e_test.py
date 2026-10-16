@@ -21,7 +21,7 @@ from tests.configured_install_command_e2e_test import _Environment
 
 HOOK_MANIFEST = {
     "schema": "aart-cli.dev/hook/v1",
-    "artifact": {"name": "guard-bash", "kind": "hook", "version": "1.2.0"},
+    "artifact": {"name": "guard-bash", "kind": "hook", "x-fixture-version": "1.2.0"},
     "payload": {"include": ["hook.json", "run.sh"]},
     "compatibility": {"harnesses": ["claude"]},
 }

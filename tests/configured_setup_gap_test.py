@@ -41,7 +41,7 @@ CONFIGURED = ".code-review.toml"
 #: exactly `darwin`, so an artifact that declares no platforms at all cannot declare setup.
 MANIFEST = {
     "schema": "aart-cli.dev/skill/v1",
-    "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
+    "artifact": {"name": "code-review", "kind": "skill", "x-fixture-version": "1.2.0"},
     "payload": {"include": ["SKILL.md", "reference/style.md"]},
     "compatibility": {"harnesses": ["claude"], "platforms": ["darwin", "linux"]},
 }

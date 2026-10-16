@@ -1079,7 +1079,7 @@
         {
           "id": "2",
           "title": "Registry-owned versions (#74): source manifests carry no version; Sync detects changes in manifest, payload and dependencies; the Maintainer sees the changed artifacts and the Registry assigns the next version on approval",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "3",

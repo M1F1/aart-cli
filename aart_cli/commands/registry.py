@@ -17,6 +17,7 @@ from aart_cli.application.promotion import (
     load_registry_versions,
     plan_bulk_promotion,
 )
+from aart_cli.application.registry_versions import ApprovedRegistryVersions
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.curation.model import (
     DEFAULT_MAXIMUM_AART,
@@ -627,14 +628,6 @@ def _run_scan(request: Request) -> int:
     if isinstance(acquired, Err):
         return _emit_error(request, "scan", acquired)
     pinned_revision = revision.stdout.strip()
-    compiled = compile_author_snapshot(
-        acquired.value.snapshot,
-        source_alias=source_alias,
-        source=request.candidate_source_url,
-        revision=pinned_revision,
-    )
-    if isinstance(compiled, Err):
-        return _emit_error(request, "scan", compiled)
     approved: tuple[RegistryArtifactVersion, ...] = ()
     if request.source_dir is not None:
         registry_snapshot = FilesystemRegistryWorkspace(_root(request)).snapshot()
@@ -644,6 +637,15 @@ def _run_scan(request: Request) -> int:
         if isinstance(loaded_versions, Err):
             return _emit_error(request, "scan", loaded_versions)
         approved = loaded_versions.value
+    compiled = compile_author_snapshot(
+        acquired.value.snapshot,
+        source_alias=source_alias,
+        source=request.candidate_source_url,
+        revision=pinned_revision,
+        versions=ApprovedRegistryVersions(approved, target_registry),
+    )
+    if isinstance(compiled, Err):
+        return _emit_error(request, "scan", compiled)
     scanned = reconcile_source_scan(
         source_alias,
         pinned_revision,
@@ -787,6 +789,7 @@ def _run_candidate_promotion(request: Request) -> int:
         source_alias=source_alias,
         source=request.candidate_source_url,
         revision=pinned_revision,
+        versions=ApprovedRegistryVersions(approved.value, target_registry),
     )
     if isinstance(compiled, Err):
         return _emit_error(request, "promote", compiled)
@@ -1316,7 +1319,6 @@ def _upstream_check_data(check: AdoptionUpstreamCheck, *, applied: bool) -> dict
         "disposition": check.disposition.value,
         "observed_coordinate": check.observed_coordinate,
         "observed_input_digest": check.observed_input_digest,
-        "new_version_required": check.new_version_required,
         "details": list(check.details),
         "applied": applied,
         "proposal": (None if check.proposal is None else _prepared_adoption_data(check.proposal)),
@@ -1329,10 +1331,6 @@ def _print_upstream_check(check: AdoptionUpstreamCheck, *, applied: bool) -> Non
     print(f"  adopted at {check.recorded_commit}; now {check.resolved_commit or 'unresolved'}")
     for detail in check.details:
         print(f"  {detail}")
-    if check.new_version_required:
-        # The published coordinate is immutable (INV-203). Upstream moved without releasing, so
-        # there is nothing to propose: the authors have to version the change themselves.
-        print("  upstream changed without a new version; the published copy stays as it is")
     if check.proposal is not None:
         _print_adoption(check.proposal, applied=applied)
 

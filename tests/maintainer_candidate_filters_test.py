@@ -53,6 +53,7 @@ from aart_cli.protocol.native_tree import (
 from aart_cli.protocol.paths import parse_relative_path
 from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
 from aart_cli.tui_maintainer import maintainer_candidate_filter_status
+from tests.fixture_versions import with_fixture_versions
 from tests.marketplace_fixtures import configured_source, source_state
 
 
@@ -65,7 +66,7 @@ def _entry(path: str, content: str) -> SnapshotEntry:
 def _mcp(name: str, version: str) -> tuple[SnapshotEntry, ...]:
     manifest = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": name, "kind": "mcp", "version": version},
+        "artifact": {"name": name, "kind": "mcp", "x-fixture-version": version},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},
@@ -80,7 +81,7 @@ def _mcp(name: str, version: str) -> tuple[SnapshotEntry, ...]:
 def _skill(name: str, version: str) -> tuple[SnapshotEntry, ...]:
     manifest = {
         "schema": "aart-cli.dev/skill/v1",
-        "artifact": {"name": name, "kind": "skill", "version": version},
+        "artifact": {"name": name, "kind": "skill", "x-fixture-version": version},
         "payload": {"include": ["SKILL.md"]},
         "compatibility": {"harnesses": ["claude"]},
     }
@@ -97,7 +98,7 @@ _REVISIONS = {"authors": "a" * 40, "vendors": "b" * 40}
 
 def _scan(*, alias: str, registry: str, entries: tuple[SnapshotEntry, ...]):
     revision = _REVISIONS[alias]
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, entries),
         source_alias=SourceAlias(alias),
         source=f"https://git.example/{alias}.git",

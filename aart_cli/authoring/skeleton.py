@@ -135,7 +135,6 @@ def _mcp_blueprint(name: str) -> _Blueprint:
                 ("kind", "mcp"),
                 ("name", name),
                 ("summary", f"{_humanized(name)} MCP server."),
-                ("version", "0.1.0"),
             ),
         ),
         (
@@ -387,7 +386,7 @@ def _anchored(
 
     Keys are written in one order, so a disabled block sits above the first live key that sorts
     after it. One that sorts after every live key in its mapping -- `artifact.summary` after
-    `version` -- has no such key, and closes the block instead.
+    `name` -- has no such key, and closes the block instead.
     """
 
     comments: dict[str, tuple[str, ...]] = {}
@@ -510,7 +509,6 @@ def _skill_blueprint(name: str) -> _Blueprint:
                 ("kind", "skill"),
                 ("name", name),
                 ("summary", f"{_humanized(name)} skill."),
-                ("version", "0.1.0"),
             ),
         ),
         (
@@ -652,7 +650,6 @@ def _document_blueprint(
                     ("kind", kind),
                     ("name", name),
                     ("summary", summary),
-                    ("version", "0.1.0"),
                 ),
             ),
             (
@@ -747,7 +744,6 @@ def _hook_blueprint(name: str) -> _Blueprint:
                     ("kind", "hook"),
                     ("name", name),
                     ("summary", f"{_humanized(name)} hook."),
-                    ("version", "0.1.0"),
                 ),
             ),
             (
@@ -875,7 +871,6 @@ def _plugin_blueprint(name: str) -> _Blueprint:
                     ("kind", "plugin"),
                     ("name", name),
                     ("summary", f"{_humanized(name)} plugin."),
-                    ("version", "0.1.0"),
                 ),
             ),
             (

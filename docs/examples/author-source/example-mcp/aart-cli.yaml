@@ -7,8 +7,7 @@ schema: aart-cli.dev/mcp/v1
 
 artifact:
   name: example-mcp          # lowercase slug, unique within this repository
-  kind: mcp
-  version: 1.0.0             # bump on every change you want the Registry to pick up
+  kind: mcp                  # no version: the Registry assigns one to every approved change
   summary: Example MCP server exposing internal tools
 
 # Files (relative to this directory) that make up the installed payload.

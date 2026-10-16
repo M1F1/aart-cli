@@ -42,7 +42,7 @@ from aart_cli.io.registry_adoption import (
 )
 from aart_cli.tui_consumer import CanonicalScreenSource, frame
 from tests.consumer_shell_test import screens
-from tests.registry_repository_scan_test import OTHER_MANIFEST, _git, _Lab
+from tests.registry_repository_scan_test import _git, _Lab
 
 
 def _state(screen: MaintainerScreen, **changes) -> ConsumerUiState:
@@ -511,7 +511,7 @@ class RepositoryAdoptionCompositionTest(_Lab):
                 ConsumerUiCommand(
                     ConsumerUiCommandKind.PREPARE_ACTION,
                     action=ConsumerActionKind.REPOSITORY_ADOPT,
-                    selection=("skill/brainstorming@2.1.0",),
+                    selection=("skill/brainstorming@1.0.0",),
                 )
             )
             actions.handle(
@@ -523,20 +523,21 @@ class RepositoryAdoptionCompositionTest(_Lab):
             )
             self.assertEqual(
                 tuple(item.coordinate for item in actions.source().screens.adopted_artifacts),
-                ("skill/brainstorming@2.1.0",),
+                ("skill/brainstorming@1.0.0",),
             )
 
             manifest = self.author.path / "skills" / "brainstorming" / "aart-cli.yaml"
-            manifest.write_text(OTHER_MANIFEST.replace("2.1.0", "2.2.0"), encoding="utf-8")
-            (manifest.parent / "SKILL.md").write_text("# brainstorming 2.2\n", encoding="utf-8")
+            (manifest.parent / "SKILL.md").write_text(
+                "# brainstorming, revised\n", encoding="utf-8"
+            )
             _git(self.author.path, "add", "-A")
-            _git(self.author.path, "commit", "-m", "release brainstorming 2.2")
+            _git(self.author.path, "commit", "-m", "revise brainstorming")
 
             checked = actions.handle(
                 ConsumerUiCommand(
                     ConsumerUiCommandKind.PREPARE_ACTION,
                     action=ConsumerActionKind.REPOSITORY_UPSTREAM_CHECK,
-                    focus="skill/brainstorming@2.1.0",
+                    focus="skill/brainstorming@1.0.0",
                 )
             )
             self.assertEqual(checked.source.screens.adoption_upstream.disposition, "changed")
@@ -545,7 +546,7 @@ class RepositoryAdoptionCompositionTest(_Lab):
                 ConsumerUiCommand(
                     ConsumerUiCommandKind.PREPARE_ACTION,
                     action=ConsumerActionKind.REPOSITORY_ADOPT_UPDATE,
-                    focus="skill/brainstorming@2.1.0",
+                    focus="skill/brainstorming@1.0.0",
                 )
             )
             actions.handle(
@@ -556,7 +557,7 @@ class RepositoryAdoptionCompositionTest(_Lab):
                 )
             )
 
-        adopted = self.registry / "artifacts" / "skill" / "brainstorming" / "2.1.0"
+        adopted = self.registry / "artifacts" / "skill" / "brainstorming" / "1.0.0"
         self.assertTrue((adopted / "artifact.json").is_file())
         self.assertTrue((adopted / "payload" / "SKILL.md").is_file())
         self.assertFalse((adopted / "payload" / "NOTES.md").exists())
@@ -567,7 +568,7 @@ class RepositoryAdoptionCompositionTest(_Lab):
                 / "artifacts"
                 / "skill"
                 / "brainstorming"
-                / "2.2.0"
+                / "1.0.1"
                 / "payload"
                 / "SKILL.md"
             ).is_file()

@@ -50,7 +50,7 @@ def _add_second_artifact(author: Path) -> None:
     package.mkdir()
     manifest = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": "jira-mcp", "kind": "mcp", "version": "1.0.0"},
+        "artifact": {"name": "jira-mcp", "kind": "mcp"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},

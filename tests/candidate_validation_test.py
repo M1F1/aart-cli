@@ -33,6 +33,7 @@ from aart_cli.protocol.native_tree import (
     SourceSnapshot,
 )
 from aart_cli.protocol.paths import parse_relative_path
+from tests.fixture_versions import with_fixture_versions
 
 _ENVIRONMENT_SECRET = {
     "id": "github-token",
@@ -72,7 +73,7 @@ def _entry(path: str, content: str, *, executable: bool = False) -> SnapshotEntr
 def _manifest(**overrides: object) -> dict[str, object]:
     manifest: dict[str, object] = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
+        "artifact": {"name": "github-mcp", "kind": "mcp"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},
@@ -88,7 +89,7 @@ def _bundle(
     extra_files: tuple[tuple[str, str], ...] = (),
     **overrides: object,
 ) -> CandidateBundle:
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (

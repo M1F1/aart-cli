@@ -64,6 +64,7 @@ from aart_cli.sources.model import (
 )
 from aart_cli.store.model import ObjectReadRequest, object_store_paths
 from tests.artifact_installation_e2e_test import MANIFEST, ORG, SERVER_SOURCE, TOKEN
+from tests.fixture_versions import with_fixture_versions
 from tests.marketplace_fixtures import configured_source, effective_configuration
 from tests.promotion_planning_test import _evidence
 
@@ -158,7 +159,7 @@ def _promote_one_locally(
 
     approved = load_registry_versions(onto)
     assert isinstance(approved, Ok), approved
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             tuple(_authored(item) for item in authored),

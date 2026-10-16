@@ -83,7 +83,6 @@ SKILL_MANIFEST = """schema: aart-cli.dev/skill/v1
 artifact:
   name: verification-before-completion
   kind: skill
-  version: 1.0.0
 payload:
   include:
     - SKILL.md

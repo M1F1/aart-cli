@@ -1458,13 +1458,6 @@ def render_adoption_upstream_check(
                 "Press a to review the exact local Registry transaction.",
             )
         )
-    elif view.disposition == "changed" and view.new_version_required:
-        lines.extend(
-            (
-                "The declared manifest or payload changed at the published version.",
-                "The upstream author must declare a new version before AART can propose a copy.",
-            )
-        )
     elif view.disposition == "missing":
         lines.append("The recorded manifest is no longer present at this branch or tag.")
     elif view.disposition == "unreachable":

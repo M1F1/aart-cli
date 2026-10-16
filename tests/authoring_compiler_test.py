@@ -24,6 +24,7 @@ from aart_cli.protocol.native_tree import (
 )
 from aart_cli.protocol.paths import SafeRelativePath, parse_relative_path
 from tests.credential_fixtures import assignment
+from tests.fixture_versions import with_fixture_versions
 
 
 def _path(raw: str) -> SafeRelativePath:
@@ -44,7 +45,7 @@ def _snapshot(*entries: SnapshotEntry) -> SourceSnapshot:
 def _document(*, name: str = "github-mcp") -> dict[str, object]:
     return {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": name, "kind": "mcp", "version": "1.4.0"},
+        "artifact": {"name": name, "kind": "mcp", "x-fixture-version": "1.4.0"},
         "payload": {
             "include": ["server.py", "src/**", "requirements.txt"],
             "exclude": ["tests/**", "**/__pycache__/**"],
@@ -69,7 +70,7 @@ def _yaml_manifest(path: str = "github/aart-cli.yaml") -> SnapshotEntry:
 artifact:
   name: github-mcp
   kind: mcp
-  version: 1.4.0
+  x-fixture-version: 1.4.0
 payload:
   include:
     - server.py
@@ -97,7 +98,7 @@ compatibility:
 
 
 def _compile(snapshot: SourceSnapshot):
-    return compile_author_snapshot(
+    return with_fixture_versions(compile_author_snapshot)(
         snapshot,
         source_alias=SourceAlias("internal"),
         source="https://git.example/example-mcp-servers.git",
@@ -164,7 +165,7 @@ class AuthorCompilerTest(unittest.TestCase):
         for kind, name, filename, content in fixtures:
             document = {
                 "schema": f"aart-cli.dev/{kind}/v1",
-                "artifact": {"name": name, "kind": kind, "version": "1.0.0"},
+                "artifact": {"name": name, "kind": kind},
                 "payload": {"include": [filename]},
             }
             entries.extend(
@@ -443,7 +444,7 @@ class AuthorCompilerTest(unittest.TestCase):
 class LocalAuthorRevisionTest(unittest.TestCase):
     def test_local_snapshot_digest_is_a_canonical_pinned_author_revision(self) -> None:
         revision = "local:" + "b" * 64
-        compiled = compile_author_snapshot(
+        compiled = with_fixture_versions(compile_author_snapshot)(
             SourceSnapshot(
                 SnapshotOrigin.LOCAL,
                 (
@@ -470,7 +471,7 @@ class LocalAuthorRevisionTest(unittest.TestCase):
         self.assertEqual(native.value.provenance.origin.resolved_commit, revision)
 
     def test_local_revision_requires_an_absolute_normalized_location(self) -> None:
-        compiled = compile_author_snapshot(
+        compiled = with_fixture_versions(compile_author_snapshot)(
             _snapshot(),
             source_alias=SourceAlias("local-authors"),
             source="relative/authors",

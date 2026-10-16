@@ -23,6 +23,10 @@ order, with fifteen steps in `plan.json`:
 - **At the end of CP-31**: rename the content mode (#54), then prune (#73), including the vendor
   command family (#53, closes #41).
 
+**Step 2 is done** (D-424, D-425): manifests are versionless and the Registry numbers each
+approved change; a Collection's members count as its dependencies. **Next is step 3**,
+`author init --kind collection`, writing a versionless Collection manifest.
+
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).
 

@@ -374,7 +374,6 @@ def _project_adoption_upstream(check: AdoptionUpstreamCheck) -> MaintainerAdopti
         check.disposition.value,
         check.resolved_commit,
         check.observed_coordinate,
-        check.new_version_required,
         check.proposal is not None,
         check.details,
     )

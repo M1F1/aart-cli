@@ -18,6 +18,7 @@ from aart_cli.protocol.native_tree import (
     SourceSnapshot,
 )
 from aart_cli.protocol.paths import parse_relative_path
+from tests.fixture_versions import with_fixture_versions
 
 
 def _entry(path: str, content: str) -> SnapshotEntry:
@@ -29,7 +30,7 @@ def _entry(path: str, content: str) -> SnapshotEntry:
 def _compiled(*, revision: str, version: str, server: str, requirement: str):
     manifest = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": "github-mcp", "kind": "mcp", "version": version},
+        "artifact": {"name": "github-mcp", "kind": "mcp", "x-fixture-version": version},
         "payload": {"include": ["server.py", "requirements.txt"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},
@@ -57,7 +58,7 @@ def _compiled(*, revision: str, version: str, server: str, requirement: str):
         ],
         "python": {"dependencies": {"type": "requirements", "path": "requirements.txt"}},
     }
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (

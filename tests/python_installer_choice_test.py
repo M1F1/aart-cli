@@ -448,7 +448,7 @@ class TheReviewScreenOffersTheBackendTest(unittest.TestCase):
 
 _DEPENDENT_MANIFEST = {
     "schema": "aart-cli.dev/mcp/v1",
-    "artifact": {"name": "code-review", "kind": "mcp", "version": "1.2.0"},
+    "artifact": {"name": "code-review", "kind": "mcp", "x-fixture-version": "1.2.0"},
     "payload": {"include": ["server.py", "requirements.txt"]},
     "transport": {"type": "stdio"},
     "runtime": {"type": "python", "version": ">=3.10"},

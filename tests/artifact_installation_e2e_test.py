@@ -109,6 +109,7 @@ from aart_cli.store.model import (
 )
 from aart_cli.tui_consumer import CanonicalScreenSource, _reload, frame, screens_from
 from tests.consumer_session_e2e_test import TODAY, _route
+from tests.fixture_versions import with_fixture_versions
 from tests.mcp_stdio_e2e_test import SERVER_SOURCE, _FileProvider, speak
 
 MOMENT = "2026-08-31T17:05:00+00:00"
@@ -123,7 +124,7 @@ KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/data-scientis
 #: the tests placed it into several, which is the defect itself written down as a fixture.
 MANIFEST = {
     "schema": "aart-cli.dev/mcp/v1",
-    "artifact": {"name": "github", "kind": "mcp", "version": "1.5.0"},
+    "artifact": {"name": "github", "kind": "mcp", "x-fixture-version": "1.5.0"},
     "payload": {"include": ["server.py", "requirements.txt"]},
     "transport": {"type": "stdio"},
     "runtime": {"type": "python", "version": ">=3.10"},
@@ -191,7 +192,7 @@ class AuthoredInstallationTest(unittest.TestCase):
             )
         )
         self.assertIsInstance(acquired, Ok, getattr(acquired, "diagnostics", ()))
-        compiled = compile_author_snapshot(
+        compiled = with_fixture_versions(compile_author_snapshot)(
             acquired.value.snapshot,
             source_alias=alias,
             source="https://github.company/company/servers.git",

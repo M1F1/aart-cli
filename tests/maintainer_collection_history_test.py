@@ -24,6 +24,7 @@ from aart_cli.protocol.authoring import compile_author_source
 from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
 from tests.authoring_compiler_test import _file
 from tests.maintainer_source_scan_test import _digest
+from tests.registry_versions_test import PinnedVersions
 
 
 def _snapshot(
@@ -35,8 +36,7 @@ def _snapshot(
     document = {
         "schema": "aart-cli.dev/collection/v1",
         "name": "data-engineer",
-        "version": version,
-        "summary": "Approved data engineering tools.",
+        "summary": f"Approved data engineering tools, revision {version}.",
         "artifacts": [member],
     }
     files = [_file("collections/data-engineer/aart-cli.json", json.dumps(document))]
@@ -44,7 +44,7 @@ def _snapshot(
         second = {
             **document,
             "name": "platform-engineer",
-            "summary": "Approved platform engineering tools.",
+            "summary": f"Approved platform engineering tools, revision {version}.",
         }
         files.append(_file("collections/platform-engineer/aart-cli.json", json.dumps(second)))
     return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(files))
@@ -56,6 +56,7 @@ def _compiled(revision: str, *, version: str = "2.1.0", include_second: bool = F
         source_alias=SourceAlias("authors"),
         source="https://git.example/authors.git",
         revision=revision,
+        versions=PinnedVersions(version),
     )
     assert isinstance(result, Ok)
     return result.value

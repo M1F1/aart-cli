@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-31 step 2 (D-424, D-425): the Registry owns versions.**
+- Source manifests carry no version; a written one is refused. Sync, `registry scan`/`adopt`/
+  `check-upstream` and `registry promote` number each change from approved state (patch to 5,
+  minor to 3, then major; first `1.0.0`). A Collection's digest includes its members' resolved
+  versions, so it versions like any artifact with dependencies.
+- Evidence and targeted mutations: `slices/CP-31-collections-end-to-end.md`, Step 2.
+
 **2026-10-16, CP-30 step 10: CP-30 is complete.**
 - PR #69 carries CP-30 plus #66, #67 and #68, merged in so one release holds all four. The
   conflicts were appended decisions and #68's `LESS_INFO`/`MORE_INFO` rename, applied to the

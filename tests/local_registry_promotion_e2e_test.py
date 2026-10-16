@@ -47,11 +47,11 @@ def _git(root: Path, *arguments: str) -> str:
     ).stdout.strip()
 
 
-def _manifest(version: str) -> str:
+def _manifest(summary: str) -> str:
     return json.dumps(
         {
             "schema": "aart-cli.dev/mcp/v1",
-            "artifact": {"name": "github-mcp", "kind": "mcp", "version": version},
+            "artifact": {"name": "github-mcp", "kind": "mcp", "summary": summary},
             "payload": {"include": ["server.py"]},
             "transport": {"type": "stdio"},
             "runtime": {"type": "python", "version": ">=3.11"},
@@ -99,7 +99,9 @@ class LocalRegistryPromotionTest(unittest.TestCase):
             }
             with mock.patch.dict(os.environ, environment, clear=False):
                 _git(author, "init", "-q", "-b", "main")
-                (author / "gh" / "aart-cli.json").write_text(_manifest("1.0.0"), encoding="utf-8")
+                (author / "gh" / "aart-cli.json").write_text(
+                    _manifest("GitHub MCP server."), encoding="utf-8"
+                )
                 (author / "gh" / "server.py").write_text("print('v1')\n", encoding="utf-8")
                 _git(author, "add", "-A")
                 _git(author, "commit", "-qm", "v1")
@@ -161,8 +163,10 @@ class LocalRegistryPromotionTest(unittest.TestCase):
                     code, said = _cli(*step)
                     self.assertEqual(code, 0, said)
 
-                (author / "gh" / "aart-cli.json").write_text(_manifest("1.1.0"), encoding="utf-8")
-                _git(author, "commit", "-qam", "v1.1")
+                (author / "gh" / "aart-cli.json").write_text(
+                    _manifest("GitHub MCP server, with issues."), encoding="utf-8"
+                )
+                _git(author, "commit", "-qam", "describe issues")
                 yield home, registry, author
 
     def _shell(
@@ -193,7 +197,9 @@ class LocalRegistryPromotionTest(unittest.TestCase):
         )
         return terminal
 
-    def test_a_bumped_version_is_promoted_and_committed_into_the_local_registry(self) -> None:
+    def test_a_changed_artifact_is_committed_as_the_registry_s_next_version(self) -> None:
+        """§173.2 end to end: the author changes the manifest, and the Registry numbers it."""
+
         with self._machine() as (home, registry, _author):
             before = _git(registry, "rev-parse", "HEAD")
             # Settings → Registry Maintainer Mode on.
@@ -201,7 +207,7 @@ class LocalRegistryPromotionTest(unittest.TestCase):
             # Registry Maintainer Dashboard → Sources → the authoring Source → Source Sync, confirmed.
             synced = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
             self.assertTrue(synced.screen_containing("/ Source Sync Result"), synced.last)
-            # Candidates → the bumped Candidate → its review walk, through to the commit.
+            # Candidates → the changed Candidate → its review walk, through to the commit.
             walked = self._shell(
                 home,
                 registry,
@@ -218,7 +224,7 @@ class LocalRegistryPromotionTest(unittest.TestCase):
             self.assertNotIn("is not configured and enabled", drawn)
             self.assertNotEqual(_git(registry, "rev-parse", "HEAD"), before, walked.last)
             self.assertTrue(
-                (registry / "registry" / "versions" / "mcp" / "github-mcp" / "1.1.0.json").is_file()
+                (registry / "registry" / "versions" / "mcp" / "github-mcp" / "1.0.1.json").is_file()
             )
             self.assertEqual(_git(registry, "status", "--porcelain=v1"), "")
 
