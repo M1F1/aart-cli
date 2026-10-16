@@ -61,6 +61,22 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
     does a single-root execution registry.
   - Focused: 838 tests in the install, harness, machine, consumer and credential modules.
 
+## Step 3: the SKIP placeholder (done)
+
+- `domain/inputs.py` adds `SKIPPED_INPUT = "SKIP"` and `is_skipped_value`. `validate_config_value`
+  does not judge the placeholder, so a skip never fails a url, identifier or pattern rule.
+- `CredentialObservation.placeholder` is a bool that is valid only on a PRESENT item.
+- `MacOsKeychainProvider.holds_placeholder` prints the item into `grep -c -x -F SKIP` in a child
+  pipeline, and only the count returns. `inspect` reports a stored placeholder as PRESENT with
+  `placeholder=True` and a "set it in Credentials and variables" detail. Nothing refuses it.
+- Evidence:
+  - `tests/skipped_input_placeholder_test.py` runs against a real temporary keychain: `SKIP`
+    reads as the placeholder; a token and `SKIPPED` do not.
+  - A Hypothesis property: only the exact `SKIP` counts as skipped.
+  - The structural no-material test now admits the `placeholder` field and pins it to `bool`.
+  - Mutation: dropping `-x` from the comparison turns the `SKIPPED` case red.
+  - Focused: 418 tests in the credential, inputs, doctor, installed and runtime modules.
+
 ## Superseded work
 
 - `stash@{0}`, "scope rows before the form (D-412 draft)", was the narrow fix for the missing scope

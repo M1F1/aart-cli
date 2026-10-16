@@ -88,9 +88,11 @@ class ScriptedCounter:
         printed: int | None = 0,
         hex_encoded: int | None = 0,
         timeline: list[str] | None = None,
+        placeholder: int | None = 0,
     ) -> None:
         self.printed = printed
         self.hex_encoded = hex_encoded
+        self.placeholder = placeholder
         self.timeline = [] if timeline is None else timeline
         self.calls: list[tuple[str, ...]] = []
 
@@ -104,6 +106,9 @@ class ScriptedCounter:
         timeout: float,
     ) -> int | None:
         self.calls.append(producer)
+        if "-x" in counter:  # The exact comparison against the skip placeholder.
+            self.timeline.append("match" + producer[-2])
+            return self.placeholder
         self.timeline.append("measure" + producer[-2])
         return self.hex_encoded if from_stderr else self.printed
 
@@ -193,7 +198,8 @@ class KeychainInterpreterTest(unittest.TestCase):
         assert isinstance(result, Ok), result
         self.assertEqual(result.value.state, CredentialState.PRESENT)
         self.assertEqual(result.value.detail, "a value of 11 bytes is present")
-        self.assertEqual([argv[-2] for argv in counter.calls], ["-w", "-g"])
+        # The placeholder comparison, then the two measurements; every one in a child pipeline.
+        self.assertEqual([argv[-2] for argv in counter.calls], ["-w", "-w", "-g"])
 
     def test_a_value_sitting_on_the_prompt_ceiling_is_reported_as_probably_cut(self) -> None:
         runner = ScriptedSecurity(find_generic_password=ProcessOutcome(0))
@@ -281,6 +287,7 @@ class KeychainInterpreterTest(unittest.TestCase):
                 "delete-generic-password",
                 "add-generic-password",
                 "find-generic-password",
+                "match-w",
                 "measure-w",
                 "measure-g",
             ],

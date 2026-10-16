@@ -27,7 +27,7 @@ from aart_cli.domain.credentials import (
     ProviderState,
 )
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from aart_cli.domain.inputs import BindingExposure
+from aart_cli.domain.inputs import SKIPPED_INPUT, BindingExposure
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.redaction import redact_text
 
@@ -326,6 +326,17 @@ class MacOsKeychainProvider:
         except subprocess.TimeoutExpired:
             return _failure(CREDENTIAL_PROVIDER_FAILED, "Keychain inspection timed out")
         if outcome.returncode == 0:
+            if self.holds_placeholder(reference):
+                return Ok(
+                    CredentialObservation(
+                        reference,
+                        ProviderState.AVAILABLE,
+                        CredentialState.PRESENT,
+                        f"the {SKIPPED_INPUT} placeholder is stored; set it in Credentials and "
+                        "variables",
+                        placeholder=True,
+                    )
+                )
             return Ok(
                 CredentialObservation(
                     reference,
@@ -354,6 +365,22 @@ class MacOsKeychainProvider:
                 "the Keychain prompt cuts a longer one"
             )
         return f"a value of {stored} bytes is present"
+
+    def holds_placeholder(self, reference: CredentialReference) -> bool:
+        """Whether the stored value is exactly the skip placeholder, compared outside this process.
+
+        The value is printed into `grep` in a child pipeline and only the match count comes back,
+        so recognising a placeholder never puts a real credential in this process (§172.3).
+        """
+
+        matched = self.count(
+            self._locate(reference, "-w"),
+            (GREP_TOOL, "-c", "-x", "-F", SKIPPED_INPUT),
+            from_stderr=False,
+            counter_accepts=(0, 1),
+            timeout=self.timeout_seconds,
+        )
+        return bool(matched)
 
     def stored_length(self, reference: CredentialReference) -> int | None:
         """Measure the stored value in bytes without this process ever holding it.

@@ -1027,7 +1027,7 @@
         {
           "id": "3",
           "title": "The SKIP placeholder for skipped ordinary values and secrets, stored per installation; nothing blocks on it",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "4",
