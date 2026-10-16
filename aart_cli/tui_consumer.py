@@ -3640,6 +3640,14 @@ class CanonicalScreenSource:
                 and self._screens.collection_validation(row) is not None
                 else None
             )
+        if screen is MaintainerScreen.COLLECTION_VALIDATION:
+            # A Collection has no policy checks of its own: approving it is the registry
+            # transaction that publishes its document, reviewed on the same screens 43-45.
+            return (
+                MaintainerScreen.REGISTRY_DIFF
+                if self._screens.registry_diff(state.focus, state.promotion_mode) is not None
+                else None
+            )
         if screen is MaintainerScreen.VALIDATION:
             return (
                 MaintainerScreen.VALIDATION_DETAILS

@@ -26,7 +26,9 @@ from aart_cli.application.maintainer_promotion import (
     PreparedCandidatePromotionTransaction,
     candidate_promotion_record_refusal,
     plan_candidate_promotion,
+    plan_promotion_transaction,
     prepare_candidate_promotion,
+    prepare_collection_promotion,
     promotion_commit_subject,
 )
 from aart_cli.application.maintainer_sync import (
@@ -145,6 +147,7 @@ __all__ = [
     "project_maintainer_candidates",
     "project_maintainer_candidate_lifecycle",
     "project_maintainer_collection_candidate",
+    "project_maintainer_collection_registry_diff",
     "project_maintainer_collection_validation",
     "parse_candidate_filter_row",
     "project_maintainer_candidate_filters",
@@ -1880,6 +1883,81 @@ def project_maintainer_collection_validation(
     )
 
 
+def project_maintainer_collection_registry_diff(
+    candidate: CollectionCandidate,
+    policy: EffectivePolicy,
+    approved: ApprovedRegistryState | None,
+    registry_snapshot: SourceSnapshot | None,
+    *,
+    mode: PromotionMode,
+) -> MaintainerRegistryDiffView:
+    """Screen 43 for a Collection: what approving it would write, or why nothing can be written.
+
+    The transaction mode is the one the operator chose; the Collection itself is always vendored,
+    because its document is all there is to publish (D-427).
+    """
+
+    if (
+        not isinstance(candidate, CollectionCandidate)
+        or not isinstance(policy, EffectivePolicy)
+        or not isinstance(mode, PromotionMode)
+        or not (approved is None or isinstance(approved, ApprovedRegistryState))
+        or not (registry_snapshot is None or isinstance(registry_snapshot, SourceSnapshot))
+    ):
+        raise ValueError("Maintainer Collection registry diff needs a Candidate and a policy")
+    common: dict[str, object] = {
+        "candidate_id": candidate.id.value,
+        "artifact": f"collection/{candidate.name}",
+        "version": candidate.version,
+        "mode": mode.value,
+        "target_registry": candidate.target_registry.value,
+    }
+
+    def _refused(*reasons: str) -> MaintainerRegistryDiffView:
+        return MaintainerRegistryDiffView(
+            **common,  # type: ignore[arg-type]
+            changed_paths=0,
+            changes=(),
+            expected_registry_snapshot=None,
+            next_registry_snapshot=None,
+            plan_digest=None,
+            refusals=tuple(redact_text(item) for item in reasons),
+        )
+
+    if approved is None:
+        return _refused(
+            f"target registry {candidate.target_registry.value} has no synchronized "
+            "approved snapshot to promote into"
+        )
+    if registry_snapshot is None:
+        return _refused(
+            f"registry {candidate.target_registry.value} workspace could not be read, "
+            "so no transaction can be planned"
+        )
+    prepared = prepare_collection_promotion(candidate, policy, approved, mode=mode)
+    if isinstance(prepared, Err):
+        return _refused(*(item.message for item in prepared.diagnostics))
+    try:
+        planned = plan_promotion_transaction((), registry_snapshot, (prepared.value,))
+    except ValueError as error:
+        return _refused(f"this transaction cannot be planned: {error}")
+    if isinstance(planned, Err):
+        return _refused(*(item.message for item in planned.diagnostics))
+    plan = planned.value
+    return MaintainerRegistryDiffView(
+        **common,  # type: ignore[arg-type]
+        changed_paths=len(plan.changes),
+        changes=tuple(
+            MaintainerRegistryChangeView(str(item.path), item.kind.value)
+            for item in plan.changes[:_MAX_REGISTRY_CHANGES]
+        ),
+        expected_registry_snapshot=str(plan.expected_registry_snapshot),
+        next_registry_snapshot=str(plan.next_registry_snapshot),
+        plan_digest=str(plan.review_digest),
+        refusals=(),
+    )
+
+
 class MaintainerCandidateFilterFacet(str, Enum):
     """The four things a Candidate list may be narrowed by (Product Specification 164.10)."""
 
@@ -2814,7 +2892,7 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
     MaintainerScreen.PROVENANCE: (),
     MaintainerScreen.VERSION_CONFLICT: (),
     MaintainerScreen.COLLECTION_CANDIDATES: (MaintainerScreen.COLLECTION_VALIDATION,),
-    MaintainerScreen.COLLECTION_VALIDATION: (MaintainerScreen.VALIDATION,),
+    MaintainerScreen.COLLECTION_VALIDATION: (MaintainerScreen.REGISTRY_DIFF,),
     MaintainerScreen.CANDIDATE_FILTERS: (MaintainerScreen.CANDIDATES,),
 }
 
@@ -3462,6 +3540,15 @@ def _transaction_candidates(
             str(item.evidence.effective_policy_digest),
         )
         for item in prepared.promotions
+    ) + tuple(
+        MaintainerTransactionCandidateView(
+            item.candidate.id.value,
+            f"collection/{item.candidate.name}",
+            item.candidate.version,
+            str(item.evidence.validation_report_digest),
+            str(item.evidence.effective_policy_digest),
+        )
+        for item in prepared.collections
     )
 
 
@@ -3475,7 +3562,7 @@ def project_maintainer_registry_validation(
     return MaintainerRegistryValidationView(
         _transaction_candidates(prepared),
         prepared.target_registry.value,
-        prepared.promotions[0].mode.value,
+        prepared.mode.value,
         str(prepared.registry_snapshot),
         str(prepared.review_digest),
         prepared.approved_version_count,
@@ -3506,7 +3593,7 @@ def project_maintainer_registry_commit(
     return MaintainerRegistryCommitView(
         _transaction_candidates(prepared),
         prepared.target_registry.value,
-        prepared.promotions[0].mode.value,
+        prepared.mode.value,
         str(plan.review_digest),
         str(plan.expected_registry_snapshot),
         str(plan.next_registry_snapshot),

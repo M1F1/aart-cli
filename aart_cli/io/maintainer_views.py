@@ -22,6 +22,7 @@ from aart_cli.application.maintainer_views import (
     project_maintainer_candidate_lifecycle,
     project_maintainer_candidates,
     project_maintainer_collection_candidate,
+    project_maintainer_collection_registry_diff,
     project_maintainer_collection_validation,
     project_maintainer_dashboard,
     project_maintainer_promotion_review,
@@ -174,8 +175,11 @@ def read_maintainer_views(
         # snapshot is a refusal screen 41 can state, not an error that hides the rest of what was
         # composed, so the failed read becomes `None` rather than aborting the composition.
         approved: dict[str, ApprovedRegistryState | None] = {}
-        for bundle, _ in runs:
-            alias = bundle.candidate.target_registry
+        targets = (
+            *(bundle.candidate.target_registry for bundle, _ in runs),
+            *(candidate.target_registry for candidate in collection_candidate_records),
+        )
+        for alias in targets:
             if alias.value not in approved:
                 observed = read_approved_registry_state(effective, alias, data_root=data_root)
                 approved[alias.value] = None if isinstance(observed, Err) else observed.value
@@ -288,6 +292,16 @@ def read_maintainer_views(
                 promotion=promotion[bundle.candidate.id.value],
             )
             for bundle, validation in runs
+            for mode in PromotionMode
+        ) + tuple(
+            project_maintainer_collection_registry_diff(
+                candidate,
+                judged,
+                approved[candidate.target_registry.value],
+                workspaces[candidate.target_registry.value],
+                mode=mode,
+            )
+            for candidate in collection_candidate_records
             for mode in PromotionMode
         )
         promotions = tuple(

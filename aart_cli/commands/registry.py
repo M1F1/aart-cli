@@ -10,12 +10,16 @@ import subprocess
 from aart_cli import command_outcome as _common
 from aart_cli.application.candidate_validation import validate_candidate
 from aart_cli.application.maintainer import CandidateBundle, reconcile_source_scan
-from aart_cli.application.maintainer_promotion import promotion_evidence
+from aart_cli.application.maintainer_promotion import effective_policy_digest, promotion_evidence
 from aart_cli.application.promotion import (
     PromotionEvidence,
     finalize_promotion,
     load_registry_versions,
     plan_bulk_promotion,
+)
+from aart_cli.application.registry_collections import (
+    assess_collection_candidate,
+    collection_validation_digest,
 )
 from aart_cli.application.registry_versions import ApprovedRegistryVersions
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
@@ -30,6 +34,7 @@ from aart_cli.curation.model import (
     render_curation_review,
 )
 from aart_cli.domain.candidates import CandidateState, assess_candidate
+from aart_cli.domain.collection_candidates import CollectionCandidate
 from aart_cli.domain.diagnostics import (
     Diagnostic,
     DiagnosticCode,
@@ -62,7 +67,7 @@ from aart_cli.io.registry_workspace import (
     read_registry_workspace,
 )
 from aart_cli.model import Request
-from aart_cli.protocol.authoring import compile_author_snapshot
+from aart_cli.protocol.authoring import compile_author_source
 from aart_cli.protocol.hashing import parse_sha256
 from aart_cli.protocol.native_tree import SnapshotEntryKind, SourceSnapshot
 from aart_cli.protocol.registry_models import RegistryManifest
@@ -637,26 +642,31 @@ def _run_scan(request: Request) -> int:
         if isinstance(loaded_versions, Err):
             return _emit_error(request, "scan", loaded_versions)
         approved = loaded_versions.value
-    compiled = compile_author_snapshot(
+    versions = ApprovedRegistryVersions(approved, target_registry)
+    compiled = compile_author_source(
         acquired.value.snapshot,
         source_alias=source_alias,
         source=request.candidate_source_url,
         revision=pinned_revision,
-        versions=ApprovedRegistryVersions(approved, target_registry),
+        versions=versions,
     )
     if isinstance(compiled, Err):
         return _emit_error(request, "scan", compiled)
     scanned = reconcile_source_scan(
         source_alias,
         pinned_revision,
-        compiled.value,
+        compiled.value.artifacts,
         previous=(),
         approved=approved,
         target_registry=target_registry,
+        collections=compiled.value.collections,
     )
     if isinstance(scanned, Err):
         return _emit_error(request, "scan", scanned)
     candidates = tuple(item.candidate for item in scanned.value.active)
+    collections = tuple(
+        assess_collection_candidate(item, versions) for item in scanned.value.collection_active
+    )
     if request.json:
         print(
             json.dumps(
@@ -679,6 +689,17 @@ def _run_scan(request: Request) -> int:
                         }
                         for item in candidates
                     ],
+                    "collections": [
+                        {
+                            "candidate_id": item.id.value,
+                            "coordinate": f"{target_registry.value}/collection/{item.name}"
+                            f"@{item.version}",
+                            "canonical_digest": str(item.canonical_digest),
+                            "state": item.state.value,
+                            "findings": [finding.message for finding in item.findings],
+                        }
+                        for item in collections
+                    ],
                 },
                 indent=2,
             )
@@ -686,9 +707,16 @@ def _run_scan(request: Request) -> int:
     else:
         print(f"Source Scan {source_alias.value}@{pinned_revision}")
         print(f"target registry: {target_registry.value}")
-        print(f"{len(candidates)} candidate(s); registry mutations: 0")
+        print(f"{len(candidates) + len(collections)} candidate(s); registry mutations: 0")
         for item in candidates:
             print(f"  {item.state.value:>7}  {item.artifact.coordinate}  {item.id}")
+        for collection in collections:
+            print(
+                f"  {collection.state.value:>7}  {target_registry.value}/collection/"
+                f"{collection.name}@{collection.version}  {collection.id}"
+            )
+            for finding in collection.findings:
+                print(f"           {finding.message}")
     return _common.OK
 
 
@@ -784,27 +812,30 @@ def _run_candidate_promotion(request: Request) -> int:
     if isinstance(acquired, Err):
         return _emit_error(request, "promote", acquired)
     pinned_revision = revision.stdout.strip()
-    compiled = compile_author_snapshot(
+    versions = ApprovedRegistryVersions(approved.value, target_registry)
+    compiled = compile_author_source(
         acquired.value.snapshot,
         source_alias=source_alias,
         source=request.candidate_source_url,
         revision=pinned_revision,
-        versions=ApprovedRegistryVersions(approved.value, target_registry),
+        versions=versions,
     )
     if isinstance(compiled, Err):
         return _emit_error(request, "promote", compiled)
     scanned = reconcile_source_scan(
         source_alias,
         pinned_revision,
-        compiled.value,
+        compiled.value.artifacts,
         previous=(),
         approved=approved.value,
         target_registry=target_registry,
+        collections=compiled.value.collections,
     )
     if isinstance(scanned, Err):
         return _emit_error(request, "promote", scanned)
     by_id = {item.candidate.id.value: item for item in scanned.value.active}
-    if not set(request.promotion_candidate_ids) <= set(by_id):
+    collections_by_id = {item.id.value: item for item in scanned.value.collection_active}
+    if not set(request.promotion_candidate_ids) <= set(by_id) | set(collections_by_id):
         return _emit_error(
             request,
             "promote",
@@ -821,7 +852,37 @@ def _run_candidate_promotion(request: Request) -> int:
     policy = EffectivePolicy()
     selected: list[CandidateBundle] = []
     evidence_by_candidate: list[tuple[CandidateBundle, PromotionEvidence]] = []
+    selected_collections: list[CollectionCandidate] = []
+    collection_evidence: list[tuple[CollectionCandidate, PromotionEvidence]] = []
     for candidate_id in sorted(request.promotion_candidate_ids):
+        if candidate_id in collections_by_id:
+            collection = assess_collection_candidate(collections_by_id[candidate_id], versions)
+            if collection.state is not CandidateState.READY:
+                return _emit_error(
+                    request,
+                    "promote",
+                    _error(
+                        f"Collection Candidate {collection.id} is {collection.state.value} and "
+                        "cannot be promoted: "
+                        + "; ".join(item.message for item in collection.findings),
+                        (
+                            "approve each member in this registry first, or change the "
+                            "Collection's members, commit it and run Source Scan again",
+                        ),
+                    ),
+                )
+            selected_collections.append(collection)
+            collection_evidence.append(
+                (
+                    collection,
+                    PromotionEvidence(
+                        collection_validation_digest(collection, versions),
+                        effective_policy_digest(policy),
+                        (),
+                    ),
+                )
+            )
+            continue
         bundle = by_id[candidate_id]
         validation = validate_candidate(bundle, policy=policy)
         candidate = assess_candidate(
@@ -849,7 +910,10 @@ def _run_candidate_promotion(request: Request) -> int:
         reviewed = CandidateBundle(candidate, bundle.artifact)
         selected.append(reviewed)
         evidence_by_candidate.append((reviewed, recorded.value))
-    evidence = tuple((item.candidate.id, record) for item, record in evidence_by_candidate)
+    evidence = (
+        *((item.candidate.id, record) for item, record in evidence_by_candidate),
+        *((item.id, record) for item, record in collection_evidence),
+    )
     stated_evidence = [
         {
             "candidate_id": item.candidate.id.value,
@@ -859,6 +923,15 @@ def _run_candidate_promotion(request: Request) -> int:
             "warnings": list(record.warnings),
         }
         for item, record in evidence_by_candidate
+    ] + [
+        {
+            "candidate_id": item.id.value,
+            "artifact": f"{target_registry.value}/collection/{item.name}@{item.version}",
+            "validation_report_digest": str(record.validation_report_digest),
+            "effective_policy_digest": str(record.effective_policy_digest),
+            "warnings": [],
+        }
+        for item, record in collection_evidence
     ]
     planned = plan_bulk_promotion(
         registry_snapshot.value,
@@ -866,6 +939,7 @@ def _run_candidate_promotion(request: Request) -> int:
         evidence=evidence,
         approved=approved.value,
         mode=mode,
+        collections=tuple(selected_collections),
     )
     if isinstance(planned, Err):
         return _emit_error(request, "promote", planned)
@@ -899,7 +973,7 @@ def _run_candidate_promotion(request: Request) -> int:
                 )
             )
         else:
-            print(f"Promotion review: {len(selected)} Candidate(s), mode={plan.mode.value}")
+            print(f"Promotion review: {len(stated_evidence)} Candidate(s), mode={plan.mode.value}")
             print(f"review digest: {plan.review_digest}")
             for stated in stated_evidence:
                 print(f"  {stated['artifact']}  {stated['candidate_id']}")
@@ -936,7 +1010,8 @@ def _run_candidate_promotion(request: Request) -> int:
         )
     else:
         print(
-            f"Promoted {len(selected)} Candidate(s) locally ({applied.value.changed_paths} paths)."
+            f"Promoted {len(stated_evidence)} Candidate(s) locally "
+            f"({applied.value.changed_paths} paths)."
         )
         print("Not committed. Not pushed. Canonical-branch publication remains external.")
     return _common.OK

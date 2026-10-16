@@ -15,12 +15,12 @@ from aart_cli.application.maintainer_promotion import (
     PreparedCandidatePromotionTransaction,
     RegistryBaselineMismatch,
     execute_candidate_promotion,
-    prepare_candidate_promotion_transaction,
     prepare_promotion_transaction,
 )
 from aart_cli.configuration.model import ConfiguredSource, git_origin_key
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.domain.candidates import CandidateId
+from aart_cli.domain.collection_candidates import CollectionCandidate
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
@@ -221,13 +221,13 @@ def commit_candidate_promotion(
         return _error(f"local promotion commit is invalid: {error}")
 
 
-def read_configured_candidate(
+def _active_candidates(
     effective: EffectiveConfiguration,
     candidate_id: CandidateId,
     *,
     data_root: str,
-) -> Result[CandidateBundle]:
-    """Read one active Candidate from history that still binds its current Source revision."""
+) -> Result[tuple[tuple[CandidateBundle, ...], tuple[CollectionCandidate, ...]]]:
+    """Every active artifact and Collection Candidate with this ID, from current histories."""
 
     if (
         not isinstance(effective, EffectiveConfiguration)
@@ -236,6 +236,7 @@ def read_configured_candidate(
     ):
         return _error("reading a configured Candidate needs configuration, an ID and data root")
     found: list[CandidateBundle] = []
+    collections: list[CollectionCandidate] = []
     for source in effective.configuration.sources:
         if not source.enabled or source.is_registry:
             continue
@@ -258,12 +259,51 @@ def read_configured_candidate(
                 "synchronize the Source and review the current Candidate again",
             )
         found.extend(item for item in history.value.active if item.candidate.id == candidate_id)
-    if len(found) != 1:
-        return _error(
-            f"active Candidate {candidate_id} is not uniquely available",
-            "open Candidates and review one active Candidate again",
+        collections.extend(
+            item for item in history.value.collection_active if item.id == candidate_id
         )
+    return Ok((tuple(found), tuple(collections)))
+
+
+def _not_unique(candidate_id: CandidateId) -> Err:
+    return _error(
+        f"active Candidate {candidate_id} is not uniquely available",
+        "open Candidates and review one active Candidate again",
+    )
+
+
+def read_configured_candidate(
+    effective: EffectiveConfiguration,
+    candidate_id: CandidateId,
+    *,
+    data_root: str,
+) -> Result[CandidateBundle]:
+    """Read one active Candidate from history that still binds its current Source revision."""
+
+    active = _active_candidates(effective, candidate_id, data_root=data_root)
+    if isinstance(active, Err):
+        return active
+    found, collections = active.value
+    if len(found) != 1 or collections:
+        return _not_unique(candidate_id)
     return Ok(found[0])
+
+
+def read_configured_collection(
+    effective: EffectiveConfiguration,
+    candidate_id: CandidateId,
+    *,
+    data_root: str,
+) -> Result[CollectionCandidate]:
+    """Read one active Collection Candidate from history bound to its current Source revision."""
+
+    active = _active_candidates(effective, candidate_id, data_root=data_root)
+    if isinstance(active, Err):
+        return active
+    found, collections = active.value
+    if len(collections) != 1 or found:
+        return _not_unique(candidate_id)
+    return Ok(collections[0])
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,50 +336,21 @@ def prepare_configured_candidate_promotion(
     policy: EffectivePolicy,
     mode: PromotionMode,
 ) -> Result[PreparedConfiguredCandidatePromotion]:
-    """Re-observe and pre-validate the exact local registry transaction to confirm."""
+    """Re-observe and pre-validate the exact local registry transaction to confirm.
 
-    if (
-        not isinstance(effective, EffectiveConfiguration)
-        or not isinstance(candidate_id, CandidateId)
-        or not isinstance(policy, EffectivePolicy)
-        or not isinstance(mode, PromotionMode)
-        or not os.path.isabs(data_root)
-        or os.path.normpath(data_root) != data_root
-    ):
+    One Candidate, artifact or Collection, is the single-selection case of the bulk transaction.
+    """
+
+    if not isinstance(candidate_id, CandidateId):
         return _error("preparing configured promotion needs typed configuration and local state")
-    candidate = read_configured_candidate(effective, candidate_id, data_root=data_root)
-    if isinstance(candidate, Err):
-        return candidate
-    target = candidate.value.candidate.target_registry
-    registry = _configured_registry(effective, target)
-    if registry is None:
-        return _error(f"target registry {target} is not configured and enabled")
-    root = _registry_root(registry_root, registry)
-    if isinstance(root, Err):
-        return root
-    approved = read_approved_registry_state(effective, target, data_root=data_root)
-    if isinstance(approved, Err):
-        return approved
-    output = FilesystemPromotionOutput(root.value)
-    workspace = output.current()
-    if isinstance(workspace, Err):
-        return workspace
-    validation = validate_candidate(candidate.value, policy=policy)
-    transaction = prepare_candidate_promotion_transaction(
-        candidate.value,
-        validation,
-        policy,
-        approved.value,
-        workspace.value,
+    return prepare_configured_bulk_promotion(
+        effective,
+        (candidate_id,),
+        data_root=data_root,
+        registry_root=registry_root,
+        policy=policy,
         mode=mode,
-        baseline_mismatch=_baseline_context(root.value, registry, approved.value, workspace.value),
     )
-    if isinstance(transaction, Err):
-        return transaction
-    try:
-        return Ok(PreparedConfiguredCandidatePromotion(transaction.value, root.value, data_root))
-    except ValueError as error:
-        return _error(str(error))
 
 
 def prepare_configured_bulk_promotion(
@@ -371,12 +382,19 @@ def prepare_configured_bulk_promotion(
     if len(set(candidate_ids)) != len(candidate_ids):
         return _error("a bulk promotion selection cannot name the same Candidate twice")
     bundles: list[CandidateBundle] = []
+    collections: list[CollectionCandidate] = []
     for candidate_id in candidate_ids:
-        candidate = read_configured_candidate(effective, candidate_id, data_root=data_root)
-        if isinstance(candidate, Err):
-            return candidate
-        bundles.append(candidate.value)
-    targets = {item.candidate.target_registry for item in bundles}
+        active = _active_candidates(effective, candidate_id, data_root=data_root)
+        if isinstance(active, Err):
+            return active
+        found, found_collections = active.value
+        if len(found) + len(found_collections) != 1:
+            return _not_unique(candidate_id)
+        bundles.extend(found)
+        collections.extend(found_collections)
+    targets = {item.candidate.target_registry for item in bundles} | {
+        item.target_registry for item in collections
+    }
     if len(targets) != 1:
         return _error(
             "a bulk promotion writes one registry, and this selection spans several",
@@ -403,6 +421,7 @@ def prepare_configured_bulk_promotion(
         workspace.value,
         mode=mode,
         baseline_mismatch=_baseline_context(root.value, registry, approved.value, workspace.value),
+        collections=tuple(collections),
     )
     if isinstance(transaction, Err):
         return transaction
@@ -460,6 +479,9 @@ def complete_configured_candidate_promotion(
             read_approved,
             FilesystemPromotionOutput(prepared.registry_root),
             lambda command: commit_candidate_promotion(prepared.registry_root, command),
+            lambda candidate_id: read_configured_collection(
+                effective, candidate_id, data_root=prepared.data_root
+            ),
         ),
     )
 
@@ -472,4 +494,5 @@ __all__ = [
     "prepare_configured_bulk_promotion",
     "prepare_configured_candidate_promotion",
     "read_configured_candidate",
+    "read_configured_collection",
 ]

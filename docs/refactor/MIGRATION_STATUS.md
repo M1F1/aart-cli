@@ -4,6 +4,11 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-31 step 5 (D-427): promotion publishes Collections.**
+- A Collection Candidate is approved in the TUI (51 → 52 → 43–45) or with `registry promote`. It
+  is written as a vendored package with a version record and an audit, refused while a member is
+  unapproved, and read back by the Registry. Evidence in the slice, Step 5.
+
 **2026-10-16, CP-31 step 4: `author check` judges Collections.**
 - The Collection parser Sync uses gives the verdict; nothing is reported as skipped.
 

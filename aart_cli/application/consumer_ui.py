@@ -812,6 +812,13 @@ _WORKFLOW_ROUTES: tuple[tuple[ApplicationScreen, ...], ...] = (
         MaintainerScreen.REGISTRY_COMMIT,
     ),
     (
+        MaintainerScreen.COLLECTION_CANDIDATES,
+        MaintainerScreen.COLLECTION_VALIDATION,
+        MaintainerScreen.REGISTRY_DIFF,
+        MaintainerScreen.REGISTRY_VALIDATION,
+        MaintainerScreen.REGISTRY_COMMIT,
+    ),
+    (
         MaintainerScreen.SOURCES,
         MaintainerScreen.SOURCE_ADD,
         MaintainerScreen.SOURCE_ADD_REVIEW,

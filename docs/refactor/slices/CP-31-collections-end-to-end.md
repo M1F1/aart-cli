@@ -111,5 +111,35 @@ modules (885 tests) green; mypy and tach clean.
 Targeted mutations: `_invalid_collection_package` returning nothing turned only the tamper test
 red; member resolution never failing turned exactly the three blocking tests red.
 
-Remaining for step 5: the entry points -- `registry promote` and the Maintainer TUI approval of a
-Collection Candidate.
+## Step 5 — part 2: the entry points
+
+The transaction a Maintainer reviews carries Collections next to artifacts:
+`prepare_collection_promotion` assesses one against the approved baseline, and
+`prepare_promotion_transaction(..., collections=)` plans both kinds in one reviewed state.
+Execution reads every Collection Candidate again through the new `read_collection` port, then
+re-assesses it and refuses if its member resolution moved since review. The commit subject names a
+lone Collection (`Promote collection/<name>@<version> to <registry>`).
+
+- **TUI.** Screen 52 continues with Enter to screen 43. Screen 43 is composed for each Collection
+  Candidate in both modes; the transaction mode is the operator's, and the Collection is always
+  vendored. The route 51 → 52 → 43 → 44 → 45 is one workflow. The configured io reads a Candidate
+  ID from either `active` or `collection_active`, and a single promotion is now the
+  one-element bulk transaction.
+- **CLI.** `registry scan` and `registry promote` compile through `compile_author_source`, so a
+  Collection authored in the checkout is a Candidate there too. `scan` lists it under
+  `collections`, with the finding for each unresolved member. `promote --candidate <id>` accepts a
+  Collection ID and refuses one whose members are not approved, naming each member.
+
+Evidence:
+- `tests/maintainer_composition_e2e_test.py::test_a_collection_candidate_is_approved_through_the_real_shell`:
+  the real shell reaches screen 45 and commits. The Registry then reads the Collection back.
+- `tests/registry_collection_cli_test.py` (3): `scan` lists the Collection; `promote` refuses
+  before its member is approved, naming the member; it is promoted and read back once the member is
+  approved.
+- 133 TUI, maintainer, promotion, registry, Collection and author modules (1412 tests) are green.
+  mypy and tach are clean.
+
+Targeted mutations:
+- Ignoring `collection_active` in the configured io turned only the shell approval test red.
+- Skipping the CLI readiness check turned only the refusal test red. `plan_bulk_promotion` still
+  refused (layered defence), but without the member named.

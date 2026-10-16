@@ -1094,7 +1094,7 @@
         {
           "id": "5",
           "title": "Promotion publishes an approved Collection Candidate as a Registry version of kind collection, and the Registry reads it back as a Collection (B-067 layers 1-2)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "6",

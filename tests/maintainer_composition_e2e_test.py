@@ -28,6 +28,7 @@ from aart_cli.application.promotion import (
     load_registry_versions,
     validate_promoted_registry,
 )
+from aart_cli.application.registry_collections import read_registry_collection
 from aart_cli.configuration.model import (
     ConfiguredSource,
     SourceKind,
@@ -1020,6 +1021,112 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             # says which one rather than only that it is satisfiable.
             self.assertIn("skill/code-review", validated)
             self.assertIn("1.2.0", validated)
+
+    def test_a_collection_candidate_is_approved_through_the_real_shell(self) -> None:
+        """Screens 51-52 continue into 43-45: approving a Collection is a registry transaction."""
+
+        with _environment() as env:
+            original_paths = source_store_paths(
+                env.paths.data_root,
+                source_instance_id(env.source),
+            )
+            original = read_current_source(CurrentSourceRequest(original_paths, env.source.alias))
+            assert isinstance(original, Ok) and original.value is not None
+            registry_root = env.project
+            _materialize(registry_root, original.value.candidate.snapshot)
+            subprocess.run(
+                ("git", "init", "-b", "main", str(registry_root)),
+                check=True,
+                capture_output=True,
+            )
+            _git(registry_root, "config", "user.name", "AART Test")
+            _git(registry_root, "config", "user.email", "aart@example.invalid")
+            _git(registry_root, "add", "-A")
+            _git(registry_root, "commit", "-m", "Initial approved registry")
+
+            authors = configured_source("authors", SourceKind.SOURCE_GIT)
+            pathlib.Path(env.paths.user_config_file).write_bytes(
+                user_configuration_bytes(
+                    UserConfiguration(1, (env.source, authors), env.source.alias, SyncSettings())
+                )
+            )
+            author_paths = source_store_paths(env.paths.data_root, source_instance_id(authors))
+            source_candidate = make_source_candidate(
+                source_instance_id(authors),
+                authors.alias,
+                "a" * 40,
+                _snapshot(),
+            )
+            assert isinstance(source_candidate, Ok)
+            self.assertIsInstance(
+                publish_source_snapshot(
+                    SourcePublishCommand(
+                        author_paths,
+                        ValidatedSourceCandidate(source_candidate.value, SourceId("author-source")),
+                        int(time.time()),
+                    )
+                ),
+                Ok,
+            )
+            self.assertIsInstance(
+                write_candidate_history(candidate_history_paths(author_paths), _collection_scan()),
+                Ok,
+            )
+            self.assertIsInstance(
+                write_consumer_settings(
+                    ConsumerSettings().with_maintainer_mode(True),
+                    data_root=env.paths.data_root,
+                ),
+                Ok,
+            )
+
+            handler = _actions(env)
+            # Candidates (35) -> `c` (51) -> Enter (52) -> Enter (43) -> Enter reviews the
+            # transaction (44) -> Enter opens the commit (45) -> Enter confirms it.
+            terminal = FakeTerminal(
+                *(DOWN for _ in range(8)),
+                ENTER,
+                DOWN,
+                ENTER,
+                ord("c"),
+                ENTER,
+                ENTER,
+                ENTER,
+                ENTER,
+                ENTER,
+            )
+            finished = run_consumer_shell(
+                handler.source(),
+                terminal,
+                state=opening_state(handler.settings),
+                action_handler=handler,
+                settings_writer=handler.save_settings,
+            )
+
+            self.assertIs(
+                finished.session.screen,
+                MaintainerScreen.REGISTRY_COMMIT,
+                terminal.last,
+            )
+            diff = terminal.screen_containing("/ Registry Diff")
+            self.assertIn("artifacts/collection/data-engineer/1.0.0/collection.json", diff)
+            committed = terminal.screen_containing("Approved registry state written locally")
+            self.assertIn("Promote collection/data-engineer@1.0.0 to company", committed)
+            self.assertEqual(_git(registry_root, "status", "--porcelain=v1"), "")
+
+            persisted = FilesystemPromotionOutput(str(registry_root)).current()
+            assert isinstance(persisted, Ok), persisted
+            versions = load_registry_versions(persisted.value)
+            assert isinstance(versions, Ok), versions
+            published = next(
+                item for item in versions.value if item.coordinate.artifact.kind == "collection"
+            )
+            read = read_registry_collection(persisted.value, published)
+            assert isinstance(read, Ok), read
+            self.assertEqual(
+                [str(item.request) for item in read.value.members],
+                ["company/skill/code-review@^1"],
+            )
 
     def test_bulk_promotion_writes_both_candidates_in_one_commit(self) -> None:
         """Screen 47 selects two Candidates and they reach the registry as one transaction."""
