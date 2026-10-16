@@ -25,7 +25,8 @@ from aart_cli.application.consumer_views import (
     ConsumerSession,
     CredentialInputView,
     HarnessTargetView,
-    target_row,
+    matrix_from_row,
+    pair_key,
 )
 from aart_cli.domain.credentials import (
     CredentialObservation,
@@ -39,7 +40,7 @@ from tests.artifact_installation_e2e_test import ORG
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
 from tests.consumer_application_e2e_test import _actions, _at, _drive
-from tests.consumer_shell_test import DOWN, ENTER, SPACE, screens
+from tests.consumer_shell_test import ENTER, RIGHT, SPACE, screens
 from tests.credential_fixtures import access_token
 
 
@@ -272,11 +273,18 @@ class InstallTimeConfigFormRenderingTest(unittest.TestCase):
         )
         state = replace(state, rows=source.rows(state))
         unchosen = "\n".join(frame(source, state))
-        chosen = replace(state, targets=("tabnine",))
+        chosen = replace(
+            state,
+            targets=("tabnine",),
+            pairs=(pair_key("company/mcp/github@1.5.0", "tabnine"),),
+        )
         empty = replace(chosen, config_draft=InstallationConfigDraft())
 
-        self.assertEqual(source.rows(state), (target_row("opencode"), target_row("tabnine")))
-        self.assertIn("[ ] opencode", unchosen)
+        self.assertEqual(
+            [matrix_from_row(row) for row in source.rows(state)],
+            [("company/mcp/github@1.5.0", ("opencode", "tabnine"))],
+        )
+        self.assertRegex(unchosen, r"company/mcp/github +>\[ \] +\[ \]")
         self.assertIn("choose at least one harness", unchosen)
         self.assertNotIn("GitHub organization", unchosen)
         self.assertIsNone(source.detail(state))
@@ -565,9 +573,9 @@ class InstallTimeConfigPreparationE2ETest(unittest.TestCase):
                 SPACE,
                 ord("i"),
                 # #50: the harnesses first, then a field for each of them and no other.
-                DOWN,
+                RIGHT,
                 SPACE,
-                DOWN,
+                RIGHT,
                 SPACE,
                 ENTER,
                 value,

@@ -34,6 +34,7 @@ from aart_cli.application.consumer_ui import (
     workflow_progress,
 )
 from aart_cli.application.consumer_views import (
+    ALL_ARTIFACTS,
     SETTING_PURPOSE,
     SETTING_ROWS,
     SUCCESS_CHOICES,
@@ -63,19 +64,23 @@ from aart_cli.application.consumer_views import (
     RegistryView,
     RemediationView,
     RunningInstallationView,
-    harness_choice_problems,
     installer_from_row,
     installer_row,
     material_remediations,
+    matrix_columns,
+    matrix_from_row,
+    matrix_rows,
     navigation_targets,
+    pair_choice_problems,
+    pair_from_key,
+    pair_key,
+    pairs_confirmed,
     project_collection,
     project_registries,
     scope_from_row,
     scope_row,
-    target_choice_problems,
     target_from_row,
     target_row,
-    targets_confirmed,
 )
 from aart_cli.application.credential_guidance import credential_guidance_lines
 from aart_cli.application.installed_setup import DeclaredArtifactSetup
@@ -257,6 +262,8 @@ _KEY_NAMES: dict[int, str] = {
     127: "backspace",
     258: "down",  # curses.KEY_DOWN
     259: "up",  # curses.KEY_UP
+    260: "left",  # curses.KEY_LEFT
+    261: "right",  # curses.KEY_RIGHT
     263: "backspace",  # curses.KEY_BACKSPACE
     343: "enter",  # curses.KEY_ENTER
 }
@@ -2296,6 +2303,28 @@ def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ..
     return render(compose_frame(source, state))
 
 
+def _matrix_label(artifact: str) -> str:
+    """An artifact as a matrix row names it: its coordinate without the version.
+
+    The alias stays, because a local and a remote alias are two artifacts even for one package.
+    """
+
+    return artifact.rpartition("@")[0] or artifact
+
+
+def _pairs_summary(pairs: tuple[str, ...]) -> tuple[str, ...]:
+    """Each artifact and the harnesses it goes into, for More info."""
+
+    chosen: dict[str, list[str]] = {}
+    for parsed in map(pair_from_key, pairs):
+        if parsed is not None:
+            chosen.setdefault(parsed[0], []).append(parsed[1])
+    return tuple(
+        f"{_matrix_label(artifact)} into {', '.join(harnesses)}"
+        for artifact, harnesses in chosen.items()
+    )
+
+
 def compose_frame(source: ConsumerScreenSource, state: ConsumerUiState) -> Frame:
     """The blocks one screen is drawn from, before `render` lays them out.
 
@@ -3121,16 +3150,12 @@ class CanonicalScreenSource:
         if screen is ConsumerScreen.REVIEW_SELECTION:
             plan = self._screens.plan
             offered = self._offered_targets()
-            eligible = tuple(target_row(item.harness) for item in offered)
-            stale = tuple(
-                target_row(harness)
-                for harness in state.targets
-                if all(item.harness != harness for item in offered)
-            )
+            # §172.2: the harnesses are chosen per artifact, one matrix row per artifact.
+            matrix = matrix_rows(offered) if offered else ()
             if plan is None:
                 # #50: no plan yet because inputs are unanswered, so the harness is the only
                 # thing to decide here; scope and backend are amendments to a plan.
-                return (*eligible, *stale) if offered else ()
+                return matrix
             # Scope follows the harnesses rather than leading them. Row order is cursor order on
             # this screen, and this screen's act is choosing what to install into; putting the
             # scope first would move the first keypress of every existing install onto a different
@@ -3152,7 +3177,7 @@ class CanonicalScreenSource:
             if state.inputs_submitted:
                 # D-380: the answers were given for these harnesses; what is left is the choice.
                 return (*scopes, *installers)
-            return (*eligible, *stale, *scopes, *installers)
+            return (*matrix, *scopes, *installers)
         if screen is ConsumerScreen.CREDENTIAL_ACTION:
             # CP-23 task 12: the actions the record permits are the rows (D-262).
             record = self._screens.credential(state.focus)
@@ -3541,7 +3566,7 @@ class CanonicalScreenSource:
                     and state.config_draft.fields
                     else None
                 )
-            if not targets_confirmed(plan, state.targets):
+            if not pairs_confirmed(plan, state.pairs):
                 return None
             # Inspection has already happened to produce this immutable plan. It remains
             # available as a detailed projection, but is not a mandatory click-through step.
@@ -3707,6 +3732,10 @@ class CanonicalScreenSource:
         if state.session.screen is ConsumerScreen.SUCCESS:
             chosen = self.detail(state)
             return () if not isinstance(chosen, ConsumerScreen) else (SUCCESS_PURPOSE[chosen],)
+        if state.session.screen is ConsumerScreen.REVIEW_SELECTION and (
+            matrix_from_row(state.current_row) is not None
+        ):
+            return self._matrix_purpose(state)
         if state.session.screen is ConsumerScreen.REVIEW_SELECTION:
             harness = target_from_row(state.current_row)
             if harness is None or not self._offered_targets():
@@ -3947,23 +3976,23 @@ class CanonicalScreenSource:
         ):
             problems = self._harness_choice_problems(state)
             if problems or state.session.profile is not PresentationProfile.VERBOSE:
-                # The ticked rows are the choice; restating them, and what comes after, is for
+                # The ticked cells are the choice; restating them, and what comes after, is for
                 # More info (D-401). A choice that cannot continue still says why.
                 return problems
             return (
-                f"Installing into: {', '.join(state.targets)}",
-                "Configuration for these harnesses is asked next.",
+                *_pairs_summary(state.pairs),
+                "Configuration for these installations is asked next.",
             )
         if (
             screen is ConsumerScreen.REVIEW_SELECTION
             and screens.plan is not None
             and (screens.plan.targets or state.targets)
         ):
-            problems = target_choice_problems(screens.plan, state.targets)
+            problems = pair_choice_problems(screens.plan.targets, state.pairs)
             target_status = (
                 problems
                 if problems or state.session.profile is not PresentationProfile.VERBOSE
-                else (f"Installing into: {', '.join(state.targets)}",)
+                else _pairs_summary(state.pairs)
             )
             return separate(
                 render_review_selection(screens.plan, state.session.profile),
@@ -4001,12 +4030,77 @@ class CanonicalScreenSource:
         return plan.targets if plan is not None else self._screens.install_targets
 
     def _harness_choice_problems(self, state: ConsumerUiState) -> tuple[str, ...]:
-        offered = self._screens.install_targets
-        return harness_choice_problems(
-            offered,
-            tuple(dict.fromkeys(artifact for item in offered for artifact in item.artifacts)),
-            state.targets,
+        return pair_choice_problems(self._screens.install_targets, state.pairs)
+
+    def _matrix_purpose(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """What Space does on the cell under the cursor, for More info."""
+
+        parsed = matrix_from_row(state.current_row)
+        columns = matrix_columns(state.rows)
+        if parsed is None or not columns:
+            return ()
+        artifact, harnesses = parsed
+        harness = columns[min(state.harness_column, len(columns) - 1)]
+        if artifact == ALL_ARTIFACTS:
+            return (f"Space ticks {harness} for every artifact it can host.",)
+        if harness not in harnesses:
+            return (f"{_matrix_label(artifact)} cannot go into {harness}.",)
+        ticked = pair_key(artifact, harness) in state.pairs
+        return (f"{_matrix_label(artifact)} {'goes' if ticked else 'does not go'} into {harness}.",)
+
+    def _matrix_lines(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """Screen 05's matrix: a header of harnesses, then one line per artifact (§172.2).
+
+        The cursor's row starts with `>`, and the cell Space acts on is marked with `>` too, so
+        which harness the next Space ticks is visible without a second cursor convention.
+        """
+
+        rows = tuple(row for row in state.rows if matrix_from_row(row) is not None)
+        columns = matrix_columns(rows)
+        if not columns:
+            return ()
+        active = min(state.harness_column, len(columns) - 1)
+        parsed = [matrix_from_row(row) for row in rows]
+        labels = [
+            "All artifacts" if item[0] == ALL_ARTIFACTS else _matrix_label(item[0])
+            for item in parsed
+            if item is not None
+        ]
+        width = max(len(label) for label in labels)
+        widths = [max(len(harness), 3) for harness in columns]
+        header = (
+            "  "
+            + " " * width
+            + "".join(
+                "  " + " " + harness.ljust(size)
+                for harness, size in zip(columns, widths, strict=True)
+            )
         )
+        lines = [header.rstrip()]
+        for row, item, label in zip(rows, parsed, labels, strict=True):
+            assert item is not None
+            artifact, harnesses = item
+            here = row == state.current_row
+            cells = []
+            for index, (harness, size) in enumerate(zip(columns, widths, strict=True)):
+                if artifact == ALL_ARTIFACTS:
+                    hosted = [
+                        pair_key(other[0], harness)
+                        for other in parsed
+                        if other is not None and other[0] != ALL_ARTIFACTS and harness in other[1]
+                    ]
+                    ticked = sum(key in state.pairs for key in hosted)
+                    cell = "[x]" if hosted and ticked == len(hosted) else "[~]" if ticked else "[ ]"
+                elif harness not in harnesses:
+                    cell = " – "
+                else:
+                    cell = "[x]" if pair_key(artifact, harness) in state.pairs else "[ ]"
+                marker = ">" if here and index == active else " "
+                cells.append("  " + marker + cell.ljust(size))
+            lines.append(f"{'>' if here else ' '} {label.ljust(width)}{''.join(cells)}".rstrip())
+            if artifact == ALL_ARTIFACTS:
+                lines.append("")
+        return tuple(lines)
 
     def _review_row(self, row: str, state: ConsumerUiState) -> str:
         """One line of the review screen: a harness to install into, or where it all lands.
@@ -4043,7 +4137,14 @@ class CanonicalScreenSource:
         screen, profile = state.session.screen, state.session.profile
         screens = self._screens
         if screen is ConsumerScreen.REVIEW_SELECTION and self.rows(state):
-            return tuple(self._review_row(row, state) for row in state.rows)
+            return (
+                *self._matrix_lines(state),
+                *(
+                    self._review_row(row, state)
+                    for row in state.rows
+                    if matrix_from_row(row) is None
+                ),
+            )
         if screen is ConsumerScreen.CONFIGURATION_TARGETS:
             return tuple(
                 f"{'>' if row == state.current_row else ' '} "

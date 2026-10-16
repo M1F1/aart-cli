@@ -31,9 +31,13 @@ from .consumer_views import (
     installer_from_row,
     is_screen_identifier,
     keeps_focus,
+    matrix_columns,
+    matrix_from_row,
     navigation_targets,
+    pairs_harnesses,
     scope_from_row,
     target_from_row,
+    toggle_matrix_cell,
 )
 from .maintainer_views import (
     REGISTRY_WORKSPACE_READY_ROW,
@@ -107,6 +111,8 @@ class ConsumerUiEventKind(str, Enum):
     NAVIGATE = "navigate"
     BACK = "back"
     MOVE = "move"
+    #: Left/Right on screen 05's matrix: which harness column Space ticks (§172.2).
+    MOVE_COLUMN = "move-column"
     SET_ROWS = "set-rows"
     SET_SELECTION = "set-selection"
     TOGGLE_PROFILE = "toggle-profile"
@@ -451,6 +457,9 @@ class ConsumerUiCommand:
     registry_init_draft: RegistryInitDraft | None = None
     repository_scan_draft: RepositoryScanDraft | None = None
     targets: tuple[str, ...] = ()
+    #: The artifact×harness pairs ticked on screen 05's matrix (§172.2), as `pair_key` strings.
+    #: `targets` stays the harnesses they go into, so a plan is still prepared for those hosts.
+    pairs: tuple[str, ...] = ()
     config_answers: tuple[tuple[str, str], ...] = ()
     #: The scope this one installation chose, or empty to follow the stored preference. It travels
     #: on the command rather than being read from Settings at the boundary, so what was reviewed is
@@ -477,6 +486,7 @@ class ConsumerUiCommand:
             or (self.action is not None and not isinstance(self.action, ConsumerActionKind))
             or not _rows_valid(self.selection)
             or not _rows_valid(self.targets)
+            or not _rows_valid(self.pairs)
             or not _config_answers_valid(self.config_answers)
             or not isinstance(self.focus, str)
             or any(character in self.focus for character in "\r\n")
@@ -642,6 +652,10 @@ class ConsumerUiState:
     #: Harnesses explicitly chosen on screen 05. These are separate from artifact rows because
     #: changing delivery intent must never change which artifacts the request contains (D-260).
     targets: tuple[str, ...] = ()
+    #: The artifact×harness pairs ticked on the matrix, and which harness column the cursor is on
+    #: (§172.2). `targets` follows the pairs: it is the harnesses some pair goes into.
+    pairs: tuple[str, ...] = ()
+    harness_column: int = 0
     #: Non-secret text lives only in this session until it is reviewed and written beside the
     #: artifact. ``config_form_active`` distinguishes the pre-review form from screen 07's later
     #: summary of the immutable plan.
@@ -680,6 +694,10 @@ class ConsumerUiState:
             or not isinstance(self.searching, bool)
             or not _rows_valid(self.selection)
             or not _rows_valid(self.targets)
+            or not _rows_valid(self.pairs)
+            or not isinstance(self.harness_column, int)
+            or isinstance(self.harness_column, bool)
+            or self.harness_column < 0
             or not isinstance(self.config_draft, InstallationConfigDraft)
             or not isinstance(self.config_form_active, bool)
             or not isinstance(self.inputs_submitted, bool)
@@ -1104,6 +1122,17 @@ def _move(
     return replace(state, cursor=(state.cursor + step) % len(state.rows)), ()
 
 
+def _move_column(
+    state: ConsumerUiState, direction: str
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    columns = matrix_columns(state.rows)
+    if not columns or direction not in ("left", "right"):
+        return state, ()
+    step = -1 if direction == "left" else 1
+    column = (min(state.harness_column, len(columns) - 1) + step) % len(columns)
+    return replace(state, harness_column=column, quit_pending=False), ()
+
+
 def _toggle_selection(
     state: ConsumerUiState, key: str
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
@@ -1139,6 +1168,7 @@ def _toggle_selection(
                     action=ConsumerActionKind.INSTALL,
                     selection=state.selection,
                     targets=state.targets,
+                    pairs=state.pairs,
                     focus=state.focus,
                     config_answers=state.config_draft.answers,
                     install_scope=scope,
@@ -1159,21 +1189,33 @@ def _toggle_selection(
                     action=ConsumerActionKind.INSTALL,
                     selection=state.selection,
                     targets=state.targets,
+                    pairs=state.pairs,
                     focus=state.focus,
                     config_answers=state.config_draft.answers,
                     install_scope=state.install_scope,
                     python_installer=installer,
                 ),
             )
-        harness = target_from_row(key)
-        if harness is None:
-            return state, ()
-        targets = (
-            tuple(item for item in state.targets if item != harness)
-            if harness in state.targets
-            else (*state.targets, harness)
-        )
-        updated = replace(state, targets=targets, quit_pending=False)
+        if matrix_from_row(key) is not None:
+            columns = matrix_columns(state.rows)
+            if not columns:
+                return state, ()
+            column = columns[min(state.harness_column, len(columns) - 1)]
+            pairs = toggle_matrix_cell(state.rows, state.pairs, key, column)
+            if pairs == state.pairs:
+                return state, ()
+            targets = tuple(item for item in columns if item in pairs_harnesses(pairs))
+            updated = replace(state, pairs=pairs, targets=targets, quit_pending=False)
+        else:
+            harness = target_from_row(key)
+            if harness is None:
+                return state, ()
+            targets = (
+                tuple(item for item in state.targets if item != harness)
+                if harness in state.targets
+                else (*state.targets, harness)
+            )
+            updated = replace(state, targets=targets, quit_pending=False)
         if state.action is not ConsumerActionKind.INSTALL:
             return updated, ()
         origin = state.session.history[-1] if state.session.history else None
@@ -1184,6 +1226,7 @@ def _toggle_selection(
                 action=ConsumerActionKind.INSTALL,
                 selection=state.selection,
                 targets=targets,
+                pairs=updated.pairs,
                 focus=request_focus,
                 config_answers=state.config_draft.answers,
                 install_scope=state.install_scope,
@@ -1390,6 +1433,7 @@ def _request_action(
             action=action,
             selection=state.selection,
             targets=state.targets,
+            pairs=state.pairs,
             focus=state.focus,
             config_answers=state.config_draft.answers,
             install_scope=(state.install_scope if action is ConsumerActionKind.INSTALL else ""),
@@ -1487,6 +1531,7 @@ def _request_action(
             if action is ConsumerActionKind.CONFIGURE
             else ()
         ),
+        pairs=state.pairs if action is ConsumerActionKind.INSTALL else (),
         focus=focus,
         promotion_mode=(
             state.promotion_mode
@@ -1684,6 +1729,7 @@ def _confirm_action(
             if action is ConsumerActionKind.CONFIGURE
             else ()
         ),
+        pairs=state.pairs if action is ConsumerActionKind.INSTALL else (),
         focus=state.focus,
         review_digest=review_digest,
         config_answers=(
@@ -1845,6 +1891,8 @@ def _action_recorded(
         moved,
         selection=(),
         targets=(),
+        pairs=(),
+        harness_column=0,
         config_draft=InstallationConfigDraft(),
         config_form_active=False,
         inputs_submitted=False,
@@ -1896,6 +1944,8 @@ def reduce_consumer_ui(
         return _set_rows(state, event.rows)
     if event.kind is ConsumerUiEventKind.MOVE:
         return _move(state, event.text)
+    if event.kind is ConsumerUiEventKind.MOVE_COLUMN:
+        return _move_column(state, event.text)
     if event.kind is ConsumerUiEventKind.SET_SELECTION:
         return _set_selection(state, event.rows)
     if event.kind is ConsumerUiEventKind.TOGGLE_SELECTION:
@@ -2092,7 +2142,7 @@ def reduce_consumer_ui(
 
 
 #: Names the terminal shell gives the keys that are not one printable character.
-_SPECIAL_KEYS = frozenset({"up", "down", "enter", "escape", "backspace"})
+_SPECIAL_KEYS = frozenset({"up", "down", "left", "right", "enter", "escape", "backspace"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -2447,7 +2497,9 @@ def key_bindings(
         if state.rows:
             bindings.append(KeyBinding("Space/Enter", "Toggle filter"))
     else:
-        if state.session.screen in _SELECTABLE and " " not in keys:
+        if matrix_columns(state.rows) and " " not in keys:
+            bindings.extend((KeyBinding("Space", "Tick"), KeyBinding("←/→", "Harness")))
+        elif state.session.screen in _SELECTABLE and " " not in keys:
             label = (
                 "Deselect"
                 if state.session.screen is ConsumerScreen.ARTIFACT_DETAILS
@@ -2830,6 +2882,8 @@ def key_event(
             if not row
             else ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_CANDIDATE_FILTER, key=row)
         )
+    if key in ("left", "right") and matrix_columns(state.rows):
+        return ConsumerUiEvent(ConsumerUiEventKind.MOVE_COLUMN, text=key)
     if key == " ":
         selected = (
             state.focus

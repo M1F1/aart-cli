@@ -84,6 +84,17 @@ from .maintainer_views import MaintainerScreen, maintainer_navigation_targets
 from .removal_proposal import RemovalProposal
 
 __all__ = [
+    "ALL_ARTIFACTS",
+    "MATRIX_ROW_PREFIX",
+    "matrix_columns",
+    "matrix_from_row",
+    "matrix_rows",
+    "pair_choice_problems",
+    "pair_from_key",
+    "pairs_confirmed",
+    "pair_key",
+    "pairs_harnesses",
+    "toggle_matrix_cell",
     "TARGET_ROW_PREFIX",
     "HarnessTargetView",
     "target_choice_problems",
@@ -377,6 +388,138 @@ def harness_choice_problems(
             else f"No eligible harness can host {artifact}."
         )
     return tuple(problems)
+
+
+#: Screen 05's matrix (§172.2). A row is one artifact with the harnesses it can go into, so the
+#: reducer reads the whole matrix off the rows it was given and needs no second channel for it.
+MATRIX_ROW_PREFIX = "pairs:"
+#: The artifact a row names when it is the "All artifacts" row, which ticks a whole column.
+ALL_ARTIFACTS = "*"
+
+
+def pair_key(artifact: str, harness: str) -> str:
+    """One chosen artifact×harness pair, as the state and the command carry it."""
+
+    return f"{artifact}\t{harness}"
+
+
+def pair_from_key(key: str) -> tuple[str, str] | None:
+    artifact, separator, harness = key.partition("\t")
+    return (artifact, harness) if separator and artifact and harness else None
+
+
+def pairs_harnesses(pairs: tuple[str, ...]) -> tuple[str, ...]:
+    """The harnesses some pair goes into, in the order they were first chosen."""
+
+    return tuple(
+        dict.fromkeys(parsed[1] for parsed in map(pair_from_key, pairs) if parsed is not None)
+    )
+
+
+def matrix_rows(targets: tuple[HarnessTargetView, ...]) -> tuple[str, ...]:
+    """Screen 05's rows: "All artifacts" when there are several, then one row per artifact."""
+
+    columns = tuple(item.harness for item in targets)
+    if any("," in harness or "\t" in harness for harness in columns):
+        raise ValueError("a harness name cannot be drawn as a matrix column")
+    artifacts = tuple(dict.fromkeys(artifact for item in targets for artifact in item.artifacts))
+    rows = tuple(
+        f"{MATRIX_ROW_PREFIX}{artifact}\t"
+        + ",".join(item.harness for item in targets if artifact in item.artifacts)
+        for artifact in artifacts
+    )
+    if len(rows) > 1:
+        rows = (f"{MATRIX_ROW_PREFIX}{ALL_ARTIFACTS}\t{','.join(columns)}", *rows)
+    return rows
+
+
+def matrix_from_row(row: str) -> tuple[str, tuple[str, ...]] | None:
+    """The artifact a matrix row names, or `ALL_ARTIFACTS`, and the harnesses it can go into."""
+
+    if not isinstance(row, str) or not row.startswith(MATRIX_ROW_PREFIX):
+        return None
+    artifact, separator, harnesses = row[len(MATRIX_ROW_PREFIX) :].partition("\t")
+    if not separator or not artifact or not harnesses:
+        return None
+    return artifact, tuple(harnesses.split(","))
+
+
+def matrix_columns(rows: tuple[str, ...]) -> tuple[str, ...]:
+    """The matrix's harness columns in host order, read off its rows."""
+
+    return tuple(
+        dict.fromkeys(
+            harness
+            for parsed in map(matrix_from_row, rows)
+            if parsed is not None
+            for harness in parsed[1]
+        )
+    )
+
+
+def toggle_matrix_cell(
+    rows: tuple[str, ...], pairs: tuple[str, ...], row: str, harness: str
+) -> tuple[str, ...]:
+    """The pairs after Space on one cell: one pair, or a whole column on the "All artifacts" row.
+
+    A cell the artifact cannot go into changes nothing. The "All artifacts" row ticks the column
+    over every artifact it can host, unless all of those are ticked already, in which case it
+    clears them; other columns are left alone.
+    """
+
+    parsed = matrix_from_row(row)
+    if parsed is None or harness not in parsed[1]:
+        return pairs
+    artifact, _ = parsed
+    if artifact != ALL_ARTIFACTS:
+        key = pair_key(artifact, harness)
+        return tuple(item for item in pairs if item != key) if key in pairs else (*pairs, key)
+    column = tuple(
+        pair_key(candidate, harness)
+        for candidate, harnesses in (
+            item for item in map(matrix_from_row, rows) if item is not None
+        )
+        if candidate != ALL_ARTIFACTS and harness in harnesses
+    )
+    if all(key in pairs for key in column):
+        return tuple(item for item in pairs if item not in column)
+    return (*pairs, *(key for key in column if key not in pairs))
+
+
+def pair_choice_problems(
+    targets: tuple[HarnessTargetView, ...], pairs: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Why these pairs cannot be installed, in words; empty when they can (§172.2).
+
+    Every pair has to be one the matrix offers -- a stale one is refused, never replaced -- and
+    every artifact has to go into at least one harness.
+    """
+
+    if not targets:
+        return ()
+    if not pairs:
+        return ("Choose at least one harness.",)
+    hosts = {item.harness: item.artifacts for item in targets}
+    chosen = [parsed for parsed in map(pair_from_key, pairs) if parsed is not None]
+    problems = [
+        f"{artifact} cannot go into {harness}; untick it."
+        for artifact, harness in chosen
+        if artifact not in hosts.get(harness, ())
+    ]
+    covered = {artifact for artifact, harness in chosen if artifact in hosts.get(harness, ())}
+    for artifact in dict.fromkeys(item for value in hosts.values() for item in value):
+        if artifact not in covered:
+            options = ", ".join(item.harness for item in targets if artifact in item.artifacts)
+            problems.append(f"Choose a harness for {artifact}; it can go into {options}.")
+    return tuple(problems)
+
+
+def pairs_confirmed(view: ConsumerPlanView, pairs: tuple[str, ...]) -> bool:
+    """Whether this plan is the one prepared for exactly these ticked pairs, and may continue."""
+
+    if not view.targets:
+        return True
+    return not pair_choice_problems(view.targets, pairs) and set(pairs) == set(view.chosen_pairs)
 
 
 def targets_confirmed(view: ConsumerPlanView, chosen: tuple[str, ...]) -> bool:
@@ -700,6 +843,8 @@ class ConsumerPlanView:
     #: The harnesses this plan was prepared for, as somebody chose them. Empty while nothing is
     #: chosen: such a plan is eligibility to choose from, never a plan to confirm (D-260).
     chosen_targets: tuple[str, ...] = ()
+    #: The artifact×harness pairs this plan was prepared for (§172.2), as `pair_key` strings.
+    chosen_pairs: tuple[str, ...] = ()
     #: Which install scopes this selection may go to and which one it is going to, or `None` for a
     #: plan whose scope is not the operator's to choose (an update keeps where it already is).
     #: Screen 05 draws it only when there is something to decide (issue #11a, D-295).
@@ -890,6 +1035,7 @@ def consumer_plan_to_data(view: ConsumerPlanView) -> dict[str, object]:
             for target in view.targets
         ],
         "chosen_targets": list(view.chosen_targets),
+        "chosen_pairs": list(view.chosen_pairs),
     }
 
 

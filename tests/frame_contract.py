@@ -36,7 +36,7 @@ _NOT_A_HEADING = re.compile(r"[.:;!?]")
 #: Keyboard talk that belongs to the legend: a key in brackets, a padded button, or a key that
 #: "selects", "opens" and so on in a sentence.
 _CONTROL = re.compile(
-    r"\[(Enter|Esc|Space|Tab|Backspace|↑/↓|\?|/)\]"
+    r"\[(Enter|Esc|Space|Tab|Backspace|↑/↓|←/→|\?|/)\]"
     r"|\[ [A-Z][A-Za-z ]*[a-z] \]"
     r"|\b(Enter|Space|Esc|Backspace) (selects|checks|toggles|opens|switches|continues|confirms"
     r"|reviews|advances|removes|returns|changes)\b"
@@ -49,6 +49,7 @@ _KEY_NAMES = {
     "Space": (" ",),
     "Backspace": ("backspace",),
     "↑/↓": ("up", "down"),
+    "←/→": ("left", "right"),
 }
 
 #: The universal keys and the one event each must mean wherever the legend offers it.

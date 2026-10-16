@@ -21,7 +21,10 @@ https://claude.ai/artifact/TEEgf2ijGL36So7Esb2gMv, whose open decisions the owne
 - Set later at the top;
 - the placeholder `AART_NOT_SET`.
 
-Step 6's core is done (`copy_artifact_answers`). Step 8 fills
+Step 5 is done (D-416). Screen 05 is the matrix, and its ticked pairs reach the transaction as
+`InstallationAssignment`s, at the plan's single scope until step 7.
+Next comes step 6's 07 form: one group per artifact, Set later at the top, wired through
+`copy_artifact_answers` in `_offer_installation`. Its core is done. Step 8 fills
 `LocalConsumerActions._entered_secrets` from 07b. Until then an install stores every secret as
 `AART_NOT_SET`.
 

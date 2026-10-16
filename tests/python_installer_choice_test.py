@@ -42,6 +42,7 @@ from aart_cli.application.consumer_views import (
     PythonInstallerChoiceView,
     installer_from_row,
     installer_row,
+    matrix_rows,
     offer_python_installers,
     project_install_plan,
     scope_row,
@@ -384,6 +385,10 @@ class TheQuestionThatDoesNotAriseTest(unittest.TestCase):
             self.assertNotIn("Dependencies with", terminal.last)
 
 
+#: One artifact that only claude can host: a single matrix row, ahead of the backend radio.
+_MATRIX = matrix_rows((HarnessTargetView("claude", ("company/mcp/github@1.0.0",)),))
+
+
 class TheReviewScreenOffersTheBackendTest(unittest.TestCase):
     """Screen 05 draws the backend the same way it draws the scope: a radio, after the harnesses."""
 
@@ -410,7 +415,7 @@ class TheReviewScreenOffersTheBackendTest(unittest.TestCase):
 
         rows = source.rows(self._state())
 
-        self.assertEqual(rows, (target_row("claude"), installer_row("pip"), installer_row("uv")))
+        self.assertEqual(rows, (*_MATRIX, installer_row("pip"), installer_row("uv")))
 
     def test_the_offer_opens_on_the_backend_the_plan_was_prepared_with(self) -> None:
         source = self._source(PythonInstallerChoiceView(BACKENDS, "uv"))
@@ -423,12 +428,12 @@ class TheReviewScreenOffersTheBackendTest(unittest.TestCase):
     def test_one_usable_backend_is_disclosed_rather_than_offered(self) -> None:
         source = self._source(PythonInstallerChoiceView(("uv",), "uv"))
 
-        self.assertEqual(source.rows(self._state()), (target_row("claude"),))
+        self.assertEqual(source.rows(self._state()), _MATRIX)
 
     def test_a_plan_with_no_python_dependencies_offers_nothing(self) -> None:
         source = self._source(None)
 
-        self.assertEqual(source.rows(self._state()), (target_row("claude"),))
+        self.assertEqual(source.rows(self._state()), _MATRIX)
 
 
 _DEPENDENT_MANIFEST = {

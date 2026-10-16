@@ -10423,3 +10423,16 @@ placeholder. It replaces `SKIP` everywhere D-413 and §172 named it.
 The same review accepted the matrix screens with their "All artifacts"/"All installations" rows
 (shown only when there is more than one row), the order Harnesses → Configuration → Scope →
 Credentials, and Set later at the top of the form.
+
+## D-416 — Screen 05's matrix: a column cursor and a tri-state All row (CP-30 step 5)
+
+The matrix needs a second axis of movement. ↑/↓ keep moving between rows, and ←/→ choose the
+harness column, drawn as `>` before the cell Space would change. A second cursor convention, or a
+per-cell row list, would have doubled the rows a Collection draws.
+
+The "All artifacts" cell acts on its column, and only over the artifacts that can go into that
+harness. It ticks every one of them unless all are already ticked, in which case it clears them,
+so one key always makes the column uniform. It draws `[~]` while only some are ticked. Cells an
+artifact cannot go into are `–` and do nothing, so a choice can never hold a pair the plan did not
+offer. Each row string carries what that artifact can go into, so the reducer decides this without
+the plan.

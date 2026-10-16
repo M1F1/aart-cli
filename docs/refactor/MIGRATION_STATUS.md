@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-30 step 5 (D-416): screen 05 is the artifact×harness matrix.**
+- Each ticked pair becomes one installation. The two-artifact e2e test installs the MCP only into
+  claude and the Skill only into opencode.
+- ←/→ choose the harness column. Before this, an arrow key raised in `key_event`.
+- 1823 related tests pass, with ruff, ruff format and mypy.
+- Next: step 6's 07 form.
+
 **2026-10-16, CP-30 steps 2–4 (D-413, D-414).**
 - One transaction now installs across pairs and scopes.
 - A skipped input is stored as `AART_NOT_SET`, and the Keychain recognises it without reading it.

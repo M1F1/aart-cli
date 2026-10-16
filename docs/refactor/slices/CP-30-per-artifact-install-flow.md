@@ -110,6 +110,39 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
     the carriers and not the loan, and that the carriers are not kept for the next install.
     `install_time_config_form_test`'s fake still refuses any material except the placeholder.
 
+## Step 5: the 05 harness matrix (done)
+
+- Screen 05 is a matrix: one row per artifact, one column per harness, and a cell is `[x]`, `[ ]`,
+  or `–` where that artifact cannot go into that harness. With more than one artifact an
+  "All artifacts" row comes first. Its cell ticks the column over the artifacts that can host it,
+  clears the column when all of them are ticked, and draws `[~]` when only some are (D-416).
+- ↑/↓ move between rows and ←/→ between harnesses; the cell Space acts on is marked `>`. The row
+  string carries what each artifact can go into (`pairs:<coordinate>\t<harness,…>`), so the
+  reducer stays pure and needs nothing from the plan.
+- `ConsumerUiState.pairs` holds the choice as `<coordinate>\t<harness>` keys, and
+  `ConsumerUiCommand.pairs` carries it to the install. `LocalConsumerActions` turns each pair into an
+  `InstallationAssignment` at the plan's scope; step 7 replaces that single scope with one per pair.
+  The plan records `chosen_pairs`, and execution refuses a plan prepared for a different set.
+- `pair_choice_problems` keeps nothing silent: no tick at all; an artifact with no harness, naming
+  the harnesses it can go into; a pair no longer offered.
+- Found on the way: `key_event` raised on `left`/`right`, because `_SPECIAL_KEYS` did not list them.
+  In the real TUI, an arrow key anywhere would have crashed the shell. They are listed now, and
+  they mean nothing outside the matrix.
+- Evidence:
+  - `tests/harness_matrix_test.py`, 14 tests: the matrix rows, cell and All-row ticking, a
+    Hypothesis property that every ticked pair is one the matrix offers and none repeats, the
+    problems, the arrows on and off the matrix, and an e2e test. In the e2e test the MCP goes
+    into claude and the Skill into opencode, and the receipts are exactly those two pairs.
+  - `installation_harness_choice_test`, `install_time_config_form_test`,
+    `python_installer_choice_test` and `post_install_mcp_test_test` now drive the matrix, choosing
+    a harness with → where they used ↓. `tests/frame_contract.py` knows the `←/→` legend key.
+  - Mutations: `_assignments` returning nothing turns only the two-artifact e2e test red. Dropping
+    the arrows from `_SPECIAL_KEYS` turns the arrow test and the e2e test red.
+  - 1823 related tests pass, along with ruff, ruff format and mypy.
+- Seen and left to step 7: after a re-prepare with more than one artifact, neither scope radio is
+  drawn as chosen. This was already so before the matrix (checked on the stashed tree). 07a
+  replaces the radio.
+
 ## Step 6, the part that needs no screen (done; the 07 form waits)
 
 - `application/installation_inputs.py` adds `ArtifactAnswer(source, artifact, input, value)` and

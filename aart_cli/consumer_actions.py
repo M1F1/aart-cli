@@ -63,6 +63,8 @@ from aart_cli.application.consumer_views import (
     harness_choice_problems,
     offer_install_scopes,
     offer_python_installers,
+    pair_choice_problems,
+    pair_from_key,
     project_lifecycle_plan,
     project_running_installation,
     target_choice_problems,
@@ -137,6 +139,7 @@ from aart_cli.io.configured_configuration_action import (
     complete_configured_configuration,
     prepare_configured_configuration,
 )
+from aart_cli.io.configured_installation import InstallationAssignment
 from aart_cli.io.configured_installation_action import (
     CompletedConfiguredInstallation,
     InstallationHost,
@@ -373,6 +376,18 @@ class _PendingInstall:
     previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = ()
     targets: tuple[HarnessTargetView, ...] = ()
     chosen_targets: tuple[str, ...] = ()
+    chosen_pairs: tuple[str, ...] = ()
+
+
+def _assignments(pairs: tuple[str, ...], scope: Scope) -> tuple[InstallationAssignment, ...]:
+    """Screen 05's ticked pairs as the installations they become, at this scope (§172.2)."""
+
+    return tuple(
+        InstallationAssignment(artifact, harness, scope)
+        for artifact, harness in (
+            parsed for parsed in map(pair_from_key, pairs) if parsed is not None
+        )
+    )
 
 
 def _after_inputs(plan: ConsumerPlanView) -> ConsumerScreen:
@@ -1699,6 +1714,8 @@ class LocalConsumerActions:
         context = self._context
         host = self._host(command.install_scope)
         preferred = PythonInstaller(command.python_installer or context.settings.python_installer)
+        # Until screen 05 has been answered there are no pairs, and placement measures every harness.
+        assignments: tuple[InstallationAssignment, ...] = ()
         # Every installation this selection would create has to be known before an answer can be
         # addressed to one (D-353), and only placement knows which harnesses an artifact reaches.
         # The draft is therefore built once with nothing answered. Each owner-qualified screen row
@@ -1714,6 +1731,7 @@ class LocalConsumerActions:
             resolvers=context.credential_providers,
             previous=previous,
             preferred_installer=preferred,
+            assignments=assignments,
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
@@ -1731,7 +1749,11 @@ class LocalConsumerActions:
             eligible_artifacts = tuple(
                 dict.fromkeys(artifact for item in targets for artifact in item.artifacts)
             )
-            if harness_choice_problems(targets, eligible_artifacts, command.targets):
+            if (
+                pair_choice_problems(targets, command.pairs)
+                if command.pairs
+                else harness_choice_problems(targets, eligible_artifacts, command.targets)
+            ):
                 return ConsumerActionUpdate(
                     self.source(install_targets=targets),
                     ConsumerUiEvent(
@@ -1741,6 +1763,7 @@ class LocalConsumerActions:
                     ),
                 )
             host = replace(host, profiles=command.targets)
+            assignments = _assignments(command.pairs, host.scope)
             prepared = prepare_configured_installation(
                 context.effective,
                 selection,
@@ -1752,6 +1775,7 @@ class LocalConsumerActions:
                 resolvers=context.credential_providers,
                 previous=previous,
                 preferred_installer=preferred,
+                assignments=assignments,
             )
             if isinstance(prepared, Err):
                 return self._declined(command, _refusal(prepared.diagnostics))
@@ -1779,6 +1803,7 @@ class LocalConsumerActions:
                 resolvers=context.credential_providers,
                 previous=previous,
                 preferred_installer=preferred,
+                assignments=assignments,
             )
             if isinstance(prepared, Err):
                 return self._declined(command, _refusal(prepared.diagnostics))
@@ -1829,6 +1854,7 @@ class LocalConsumerActions:
                     resolvers=context.credential_providers,
                     previous=previous,
                     preferred_installer=preferred,
+                    assignments=assignments,
                 )
                 if isinstance(prepared, Err):
                     return self._declined(command, _refusal(prepared.diagnostics))
@@ -1898,11 +1924,16 @@ class LocalConsumerActions:
         reviewed = prepared.value
         reviewed_host = host
         if command.action is ConsumerActionKind.INSTALL:
-            problems = target_choice_problems(plan, command.targets)
+            problems = (
+                pair_choice_problems(plan.targets, command.pairs)
+                if command.pairs
+                else target_choice_problems(plan, command.targets)
+            )
             if not problems:
                 chosen = command.targets
             if chosen:
                 reviewed_host = replace(host, profiles=chosen)
+                assignments = _assignments(command.pairs, host.scope)
                 narrowed = prepare_configured_installation(
                     context.effective,
                     selection,
@@ -1914,6 +1945,7 @@ class LocalConsumerActions:
                     resolvers=context.credential_providers,
                     previous=previous,
                     preferred_installer=preferred,
+                    assignments=assignments,
                 )
                 if isinstance(narrowed, Err):
                     return self._declined(command, _refusal(narrowed.diagnostics))
@@ -1929,9 +1961,12 @@ class LocalConsumerActions:
                     narrowed_action.flow.plan,
                     targets=targets,
                     chosen_targets=chosen,
+                    chosen_pairs=command.pairs,
                 )
         self._pending_host = reviewed_host
-        self._pending = _PendingInstall(reviewed, previous_receipts, targets, chosen)
+        self._pending = _PendingInstall(
+            reviewed, previous_receipts, targets, chosen, command.pairs if chosen else ()
+        )
         self._pending_action = command.action
         return ConsumerActionUpdate(
             self.source(plan=plan),
@@ -2700,9 +2735,9 @@ class LocalConsumerActions:
                     "and review the installation again"
                 ),
             )
-        if (
-            command.action is ConsumerActionKind.INSTALL
-            and command.targets != pending.chosen_targets
+        if command.action is ConsumerActionKind.INSTALL and (
+            command.targets != pending.chosen_targets
+            or set(command.pairs) != set(pending.chosen_pairs)
         ):
             return self._failed(
                 command,
