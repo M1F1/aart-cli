@@ -10436,3 +10436,18 @@ so one key always makes the column uniform. It draws `[~]` while only some are t
 artifact cannot go into are `–` and do nothing, so a choice can never hold a pair the plan did not
 offer. Each row string carries what that artifact can go into, so the reducer decides this without
 the plan.
+
+## D-417 — 07's Set later fills the placeholder into the draft (CP-30 step 6)
+
+Set later is one row at the top of 07. Pressing it accepts every value that is present and valid
+and replaces every other value with `AART_NOT_SET`. The form then submits as usual.
+- **What counts as an answer.** A declared default left in the field is an answer (§172.4). An
+  empty field is unanswered. So is a field whose value has a problem, because it was never a
+  value the form would accept.
+- **Why the draft holds the placeholder.** The placeholder then travels through every later
+  re-preparation as an ordinary answer, and `copy_artifact_answers` copies it like one. No command
+  carries a "set later" flag that a later re-prepare from 05 could drop.
+- **Where the cursor starts.** The form opens on its first field, not on Set later, so a person
+  who starts typing is in a field. Enter on Set later is labelled "Set later" in the legend.
+- **What is grouped.** A field is keyed by Registry alias and artifact (`artifact_answer_key`),
+  so a local and a remote alias are two groups. Secret rows stay per installation until 07b.

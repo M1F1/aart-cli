@@ -17,7 +17,7 @@ from dataclasses import dataclass, replace
 from enum import Enum
 
 from aart_cli.domain.configuration_files import configuration_value_problem
-from aart_cli.domain.inputs import InputValidation, validate_config_value
+from aart_cli.domain.inputs import SKIPPED_INPUT, InputValidation, validate_config_value
 from aart_cli.domain.publication import RegistryCommitOrigin, suggested_publication_branch
 from aart_cli.domain.registry import PromotionMode
 
@@ -57,6 +57,7 @@ __all__ = [
     "ConsumerUiEventKind",
     "ConsumerUiState",
     "CONFIG_CONTINUE_ROW",
+    "CONFIG_SET_LATER_ROW",
     "InstallationConfigDraft",
     "InstallationConfigField",
     "KeyBinding",
@@ -226,6 +227,8 @@ class SourceDraft:
 #: Screen 07's final control is not an input id. Angle brackets cannot occur in an InputId, so an
 #: authored field can never collide with it while rows contain an owner and config input id.
 CONFIG_CONTINUE_ROW = "<continue>"
+#: Screen 07's first row (§172.3): leave every value without an answer as `AART_NOT_SET`, and go on.
+CONFIG_SET_LATER_ROW = "<set-later>"
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,6 +308,22 @@ class InstallationConfigDraft:
         return InstallationConfigDraft(
             tuple(
                 replace(item, value=value, accepted=False) if item.row == identifier else item
+                for item in self.fields
+            )
+        )
+
+    def set_later(self) -> "InstallationConfigDraft":
+        """Set later (§172.3): every value without a valid answer becomes `AART_NOT_SET`.
+
+        A value that is there and valid, a declared default included, is an answer and is kept
+        (§172.4). An empty value or one with a problem is not an answer, so it is the one skipped.
+        """
+
+        return InstallationConfigDraft(
+            tuple(
+                replace(item, accepted=True)
+                if item.value and item.problem is None
+                else replace(item, value=SKIPPED_INPUT, accepted=True)
                 for item in self.fields
             )
         )
@@ -1089,6 +1108,9 @@ def _set_rows(
     if standing not in rows:
         standing = state.focus
     cursor = rows.index(standing) if standing in rows else 0
+    if standing not in rows and rows[:1] == (CONFIG_SET_LATER_ROW,) and len(rows) > 1:
+        # 07 opens on its first field: Set later is offered first, never pressed by accident.
+        cursor = 1
     return replace(state, rows=rows, cursor=cursor), ()
 
 
@@ -1983,6 +2005,17 @@ def reduce_consumer_ui(
         ), ()
     if event.kind is ConsumerUiEventKind.EDIT_INSTALL_CONFIG:
         if (
+            state.session.screen is ConsumerScreen.REQUIRED_INPUTS
+            and state.config_form_active
+            and event.key == CONFIG_SET_LATER_ROW
+            and event.accepted is True
+            and state.config_draft.fields
+        ):
+            return _request_action(
+                replace(state, config_draft=state.config_draft.set_later()),
+                ConsumerActionKind.INSTALL,
+            )
+        if (
             state.session.screen is not ConsumerScreen.REQUIRED_INPUTS
             or not state.config_form_active
             or all(item.row != event.key for item in state.config_draft.fields)
@@ -2501,7 +2534,10 @@ def key_bindings(
         if toggling and acts(" "):
             bindings.append(KeyBinding("Space", _FORM_TOGGLE_LABELS[state.session.screen]))
         if acts("enter"):
-            bindings.append(KeyBinding("Enter", "Next" if typing or toggling else "Continue"))
+            label = "Next" if typing or toggling else "Continue"
+            if state.current_row == CONFIG_SET_LATER_ROW:
+                label = "Set later"
+            bindings.append(KeyBinding("Enter", label))
     elif state.session.screen is ConsumerScreen.SETTINGS:
         bindings.append(KeyBinding("Space/Enter", "Change"))
     elif state.session.screen is MaintainerScreen.CANDIDATE_FILTERS:
@@ -2698,6 +2734,10 @@ def key_event(
         if key == "down":
             return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
         if key == "enter":
+            if row == CONFIG_SET_LATER_ROW:
+                return ConsumerUiEvent(
+                    ConsumerUiEventKind.EDIT_INSTALL_CONFIG, key=row, accepted=True
+                )
             if row == CONFIG_CONTINUE_ROW:
                 return (
                     ConsumerUiEvent(

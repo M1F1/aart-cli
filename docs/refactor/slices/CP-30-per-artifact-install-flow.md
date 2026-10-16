@@ -156,7 +156,7 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
     `scope_choice=` turns it red.
   - 1827 related tests pass.
 
-## Step 6, the part that needs no screen (done; the 07 form waits)
+## Step 6: 07 asks once per artifact, with Set later (done)
 
 - `application/installation_inputs.py` adds `ArtifactAnswer(source, artifact, input, value)` and
   `copy_artifact_answers(fields, answers, skip_unanswered=…)`. Each artifact's answer is copied
@@ -167,9 +167,33 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
   installation gets its own artifact's answer, the placeholder, or nothing. Mutation: keying
   without the Registry alias turns the alias scenario and the property red. 93 tests in modules
   using `installation_inputs` pass.
-- Still to do, after the owner's mockup decisions: the 07 screen itself, with one group per
-  artifact and the Set later row, wired through `copy_artifact_answers` in
-  `LocalConsumerActions._offer_installation`.
+- The 07 screen (D-417):
+  - One field per artifact and input. The row is `<alias>/<kind>/<name>\t<input>`
+    (`artifact_answer_key`), and `_offer_installation` turns each answer into an `ArtifactAnswer`
+    for `copy_artifact_answers`. With more than one artifact, each group is headed by its artifact.
+  - Set later is the first row, but the form opens on the first field. Enter on Set later keeps
+    every value that is there and valid, a declared default included, and writes `AART_NOT_SET`
+    into every other field. It then submits, so the placeholder travels as an ordinary answer and
+    needs no flag on any command.
+  - Secret rows stay per installation until 07b (step 8). Until 07a (step 7), 05 still asks the
+    scope after the form when the plan offers one (D-380).
+- Evidence:
+  - `install_time_config_form_test`, 18 tests:
+    - one row for an artifact going into two harnesses, whose answer reaches both owners;
+    - a group per artifact, with no heading for a single artifact;
+    - the form opening on its field;
+    - Set later keeping a default and skipping an empty and an invalid value;
+    - an e2e test in which a cleared field plus Set later writes `github-org=AART_NOT_SET` into
+      both installations' configuration files and completes.
+  - `inputs_go_forward_test` now holds what D-380 promises: the harness matrix is never drawn
+    again after the form. It had asserted that 05 never comes back, which held only while the
+    scope offer was lost (fixed in step 5). Step 7 tightens it again.
+  - `form_row_keys_test` walks the form's real rows.
+  - Mutations:
+    - Set later leaving blanks empty turns the two Set later tests red.
+    - Keying fields by installation instead of artifact turns the two e2e tests and the
+      re-preparation test red.
+  - 2342 related tests pass, with ruff, ruff format, mypy and tach.
 
 ## Superseded work
 

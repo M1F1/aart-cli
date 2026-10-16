@@ -61,8 +61,9 @@ def _simple_forms():
 def _configuration_forms():
     # With a projected field and a credential beside it, so the form has everything it can draw.
     install = InstallTimeConfigFormRenderingTest._source(None)  # type: ignore[arg-type]
-    for cursor in (0, 1):
-        yield install, replace(_install_form(), cursor=cursor), cursor == 0, False
+    form = replace(_install_form(), rows=install.rows(_install_form()))
+    for cursor, row in enumerate(form.rows):
+        yield install, replace(form, cursor=cursor), row == "organization", False
     source, state = _source_and_state()
     state, _ = _key(source, state, "enter")
     state, _ = _key(source, state, "enter")

@@ -17,6 +17,7 @@ from aart_cli.application.consumer_ui import (
     ACTION_ANSWER_SCREENS,
     ACTION_REQUEST_SCREENS,
     CONFIG_CONTINUE_ROW,
+    CONFIG_SET_LATER_ROW,
     ConsumerActionKind,
     ConsumerUiCommand,
     ConsumerUiCommandKind,
@@ -1637,12 +1638,19 @@ def render_installation_config_form(
         raise ValueError("installation config form needs projected inputs and a safe draft")
     projected = {item.row: item for item in inputs if isinstance(item, ConfigInputView)}
     lines = ["Configuration"] if draft.fields else []
+    if draft.fields:
+        mark = ">" if current_row == CONFIG_SET_LATER_ROW else " "
+        lines.extend(("", f"{mark} Set later"))
+    # §172.4: one group per artifact, headed by it only when there is more than one to tell apart.
+    artifacts = tuple(dict.fromkeys(field.owner for field in draft.fields))
+    heading = ""
     for field in draft.fields:
+        if len(artifacts) > 1 and field.owner != heading:
+            heading = field.owner
+            lines.extend(("", heading))
         lines.append("")
         view = projected.get(field.row)
         label = field.id if view is None else view.label
-        if view is not None and view.owner:
-            label = f"{label} — {view.owner}"
         problem = field.problem
         shown = (
             "<credential-shaped value refused>"
@@ -1669,6 +1677,11 @@ def installation_config_purpose(
 ) -> tuple[str, ...]:
     """What the field under the cursor binds to, which Verbose describes rather than drawing."""
 
+    if current_row == CONFIG_SET_LATER_ROW:
+        return (
+            "Leaves every value without an answer as AART_NOT_SET and goes on.",
+            "Set it later in Credentials and variables.",
+        )
     view = next(
         (item for item in inputs if isinstance(item, ConfigInputView) and item.row == current_row),
         None,
@@ -3146,7 +3159,7 @@ class CanonicalScreenSource:
                 for item in self._screens.installation_inputs
                 if isinstance(item, ConfigInputView) and item.row in draft_rows
             )
-            return (*fields, CONFIG_CONTINUE_ROW) if fields else ()
+            return (CONFIG_SET_LATER_ROW, *fields, CONFIG_CONTINUE_ROW) if fields else ()
         if screen is ConsumerScreen.REVIEW_SELECTION:
             plan = self._screens.plan
             offered = self._offered_targets()

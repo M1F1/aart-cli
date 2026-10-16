@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 from aart_cli.domain.credentials import CredentialObservation, CredentialReference
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from aart_cli.domain.identifiers import ArtifactIdentity, InputId, SourceAlias
+from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, InputId, SourceAlias
 from aart_cli.domain.inputs import (
     SKIPPED_INPUT,
     BoundInputs,
@@ -42,6 +42,7 @@ __all__ = [
     "InstallationInputField",
     "InstallationInputUse",
     "OwnedInputSource",
+    "artifact_answer_key",
     "compose_installation_inputs",
     "copy_artifact_answers",
 ]
@@ -312,6 +313,16 @@ class ArtifactAnswer:
             raise ValueError("an artifact answer is invalid")
         # The value is validated as an answer is, by the source it becomes.
         PromptedConfigValue(self.input, self.value)
+
+
+def artifact_answer_key(owner: InstallationOwner) -> str:
+    """The artifact a 07 answer belongs to: Registry alias and artifact, without version or harness.
+
+    Two installations of one artifact share it, so they share one question (§172.4). A local and a
+    remote alias are two artifacts and two keys.
+    """
+
+    return str(ArtifactCoordinate(owner.source, owner.artifact))
 
 
 def copy_artifact_answers(

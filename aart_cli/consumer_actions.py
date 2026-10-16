@@ -48,10 +48,12 @@ from aart_cli.application.consumer_ui import (
     installation_is_mcp,
 )
 from aart_cli.application.consumer_views import (
+    ConfigInputView,
     ConsumerPlanView,
     ConsumerScreen,
     ConsumerSettings,
     HarnessTargetView,
+    InputView,
     InstallScopeChoiceView,
     LifecyclePlanView,
     McpTestEntryView,
@@ -81,7 +83,12 @@ from aart_cli.application.credential_lifecycle import (
     plan_credential_mutation,
 )
 from aart_cli.application.execution import StepProgress
-from aart_cli.application.installation_inputs import OwnedInputSource
+from aart_cli.application.installation_inputs import (
+    ArtifactAnswer,
+    OwnedInputSource,
+    artifact_answer_key,
+    copy_artifact_answers,
+)
 from aart_cli.application.installed_setup import DeclaredArtifactSetup
 from aart_cli.application.maintainer_promotion import (
     CandidatePromotionExecutionResult,
@@ -120,13 +127,11 @@ from aart_cli.domain.identifiers import ArtifactCoordinate, InputId, SourceAlias
 from aart_cli.domain.inputs import (
     ConfigInput,
     InputGuidance,
-    PromptedConfigValue,
     RuntimeInput,
     SecretInput,
     SecretProviderReference,
 )
 from aart_cli.domain.installation_owner import (
-    InstallationOwner,
     credential_address,
     installation_key,
 )
@@ -390,6 +395,25 @@ def _assignments(pairs: tuple[str, ...], scope: Scope) -> tuple[InstallationAssi
             parsed for parsed in map(pair_from_key, pairs) if parsed is not None
         )
     )
+
+
+def _per_artifact(views: tuple[InputView, ...], artifacts: dict[str, str]) -> tuple[InputView, ...]:
+    """07's ordinary fields, one per artifact and input rather than one per installation (§172.4).
+
+    `artifacts` maps each installation owner to its artifact's answer key. Secret rows are left
+    per installation; asking them once per artifact is 07b's.
+    """
+
+    seen: set[str] = set()
+    projected: list[InputView] = []
+    for view in views:
+        if isinstance(view, ConfigInputView) and view.owner in artifacts:
+            view = replace(view, owner=artifacts[view.owner])
+            if view.row in seen:
+                continue
+            seen.add(view.row)
+        projected.append(view)
+    return tuple(projected)
 
 
 def _after_inputs(plan: ConsumerPlanView) -> ConsumerScreen:
@@ -1785,18 +1809,21 @@ class LocalConsumerActions:
             )
             if isinstance(prepared, Err):
                 return self._declined(command, _refusal(prepared.diagnostics))
-        fields_by_row = {
-            f"{field.owner}\t{field.input.id.value}": field
+        # §172.4: 07 asks each ordinary input once per artifact. The answer is copied into every
+        # installation of that artifact this operation creates, and into no other (INV-259).
+        artifacts = {
+            artifact_answer_key(field.owner): field.owner
             for field in prepared.value.draft.inputs.fields
         }
-        sources = tuple(
-            OwnedInputSource(
-                fields_by_row[row].owner,
-                PromptedConfigValue(fields_by_row[row].input.id, value),
-            )
-            for row, value in command.config_answers
-            if row in fields_by_row
-        )
+        answers = []
+        for row, value in command.config_answers:
+            key, _, identifier = row.rpartition("\t")
+            if key in artifacts and identifier:
+                held_by = artifacts[key]
+                answers.append(
+                    ArtifactAnswer(held_by.source, held_by.artifact, InputId(identifier), value)
+                )
+        sources = copy_artifact_answers(prepared.value.draft.inputs.fields, answers)
         if sources:
             prepared = prepare_configured_installation(
                 context.effective,
@@ -1865,11 +1892,13 @@ class LocalConsumerActions:
                 if isinstance(prepared, Err):
                     return self._declined(command, _refusal(prepared.diagnostics))
         if not prepared.value.ready:
-            config_fields: tuple[tuple[InstallationOwner, ConfigInput], ...] = ()
+            config_fields: dict[tuple[str, str], ConfigInput] = {}
             for field in prepared.value.draft.inputs.unanswered:
                 runtime_input = field.input
                 if isinstance(runtime_input, ConfigInput):
-                    config_fields = (*config_fields, (field.owner, runtime_input))
+                    config_fields.setdefault(
+                        (artifact_answer_key(field.owner), runtime_input.id.value), runtime_input
+                    )
             if config_fields:
                 observations = []
                 for reference in prepared.value.draft.inputs.credential_references:
@@ -1892,14 +1921,20 @@ class LocalConsumerActions:
                             runtime_input.id.value,
                             runtime_input.default or "",
                             runtime_input.validation,
-                            owner=str(owner),
+                            owner=artifact,
                         )
-                        for owner, runtime_input in config_fields
+                        for (artifact, _), runtime_input in config_fields.items()
                     )
                 )
                 return ConsumerActionUpdate(
                     self.source(
-                        installation_inputs=prepared.value.draft.inputs.views(tuple(observations)),
+                        installation_inputs=_per_artifact(
+                            prepared.value.draft.inputs.views(tuple(observations)),
+                            {
+                                str(field.owner): artifact_answer_key(field.owner)
+                                for field in prepared.value.draft.inputs.fields
+                            },
+                        ),
                         install_targets=targets,
                     ),
                     ConsumerUiEvent(

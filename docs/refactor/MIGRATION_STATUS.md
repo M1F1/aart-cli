@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-30 step 6 (D-417): 07 asks each input once per artifact, with Set later.**
+- One answer is copied into each new installation of its artifact.
+- Set later stores `AART_NOT_SET` and the install completes (e2e test).
+- 2342 related tests pass, with ruff, ruff format, mypy and tach.
+- Next: step 7, the 07a scope per pair.
+
 **2026-10-16, CP-30 step 5 (D-416): screen 05 is the artifact×harness matrix.**
 - Each ticked pair becomes one installation. The two-artifact e2e test installs the MCP only into
   claude and the Skill only into opencode.

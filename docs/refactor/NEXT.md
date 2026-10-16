@@ -23,8 +23,11 @@ https://claude.ai/artifact/TEEgf2ijGL36So7Esb2gMv, whose open decisions the owne
 
 Step 5 is done (D-416). Screen 05 is the matrix, and its ticked pairs reach the transaction as
 `InstallationAssignment`s, at the plan's single scope until step 7.
-Next comes step 6's 07 form: one group per artifact, Set later at the top, wired through
-`copy_artifact_answers` in `_offer_installation`. Its core is done. Step 8 fills
+Step 6 is done (D-417). 07 asks each ordinary input once per artifact. Set later is its first row
+and leaves `AART_NOT_SET` in every field without a valid answer.
+Next comes step 7, 07a: one scope per pair, starting on the Settings default, with an "All
+installations" row. Until then `_assignments` uses the plan's single scope, and 05 asks it after
+the form (D-380). Step 8 fills
 `LocalConsumerActions._entered_secrets` from 07b. Until then an install stores every secret as
 `AART_NOT_SET`.
 
