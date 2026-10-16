@@ -277,6 +277,30 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
   - 1540 related tests pass (modules touching the consumer UI, views, actions, guidance or the
     shell drive), with ruff, ruff format, mypy and tach.
 
+## Tabnine at user scope (done, owner request)
+
+- The owner asked during step 8 for Tabnine to install at user scope. The design is in D-420.
+- `domain/harness.py` gains Tabnine's user Skill, memory and hook rows. The user MCP target moves
+  from `agent/settings.json`, which resolved to `~/agent/settings.json`, to
+  `.tabnine/agent/settings.json`. `profiles/builtin.py` says the same, and the Tabnine tutorial
+  lists both scopes.
+- Evidence:
+  - `tabnine_user_scope_test`, e2e through `marketplace install --profile tabnine --scope user`:
+    - a Skill lands in `~/.tabnine/agent/skills/code-review-company-user/`;
+    - an MCP is registered in `~/.tabnine/agent/settings.json`, and nothing appears under
+      `~/agent`.
+  - `delivery_targets_test` and `harness_registration_test` hold the four user rows.
+  - `measured_host_profiles_test`:
+    - Tabnine is reached at user scope for a Skill and for memory;
+    - the skip-a-harness tests, which used Tabnine as the harness with no user row, now take that
+      row out of the table for their own duration. No real row is left to skip.
+  - Red first: before the rows existed, every one of these tests failed. The failures included
+    the MCP written to the wrong file and the Skill refused for Tabnine. Each row is held by a
+    test that fails without it.
+  - A live walk against the company build is still owed (B-191).
+  - 1265 related tests pass (every module naming Tabnine or a harness table), with ruff,
+    ruff format, mypy and tach. `install_scope_test` holds the legacy profile matrix with the new row.
+
 ## Superseded work
 
 - `stash@{0}`, "scope rows before the form (D-412 draft)", was the narrow fix for the missing scope

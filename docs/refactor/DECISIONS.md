@@ -10501,3 +10501,38 @@ and replaces every other value with `AART_NOT_SET`. The form then submits as usu
   `DISCARD_SECRETS`, and the adapter forgets every carrier. A new review also starts empty.
 - **Order.** 07a, when shown, comes before 07b. Choosing a scope re-prepares the plan, which would
   otherwise discard what was entered.
+
+## D-420 — Tabnine at user scope reads `~/.tabnine/agent`, for every kind it documents (CP-30)
+
+The owner asked, during step 8, whether artifacts can be installed for Tabnine at user scope, and
+asked for it to be added if not. Before this change, Tabnine at user scope had:
+- a Guideline target;
+- an MCP target at `agent/settings.json`. The user root is the home directory, so this wrote
+  `~/agent/settings.json`, which Tabnine never reads.
+
+Its Skill, memory and hook rows were missing on purpose: the build measured then documented none.
+Tabnine CLI's published documentation now names all three:
+- Agent Skills in `~/.tabnine/agent/skills/<name>/SKILL.md`, beside the project's
+  `.tabnine/agent/skills/`;
+- the global context file `~/.tabnine/agent/TABNINE.md`;
+- hooks merged from `~/.tabnine/agent/settings.json` as well as the project's.
+
+The tables now carry:
+- MCP `.tabnine/agent/settings.json`;
+- Skill `.tabnine/agent/skills/<name>`;
+- memory `.tabnine/agent/TABNINE.md`;
+- hook scripts `.tabnine/agent/hooks/<name>` with the same settings file, events and flat entry
+  shape as project scope.
+
+Every path is relative to the home. The legacy `profiles/builtin.py` user targets say the same.
+
+Tabnine's `.agents/skills` aliases are not targets. They are the cross-vendor interop directory,
+which another harness could claim, as with Codex.
+
+Evidence:
+- The tables follow published documentation; they were not measured against a live build. Tabnine
+  is not installed on the development machine.
+- The product specification's own example is `~/.tabnine/agent/skills/github-company-user/SKILL.md`
+  (§169), and it asks for Tabnine CLI user scope to be characterised rather than taken from an old
+  capability table.
+- A live walk against the company build is still owed (B-191).

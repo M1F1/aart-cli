@@ -4,6 +4,16 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-30 (D-420): Tabnine installs at user scope.**
+- This was the owner's request. The tables gain Tabnine's user Skill, memory and hook rows, all
+  under `~/.tabnine/agent`, as Tabnine CLI documents.
+- The user MCP target was `~/agent/settings.json`, which Tabnine never reads. It is now
+  `~/.tabnine/agent/settings.json`.
+- In the e2e test, a Skill and an MCP installed with `--scope user` land in Tabnine's directories.
+- 1265 related tests pass, with ruff, ruff format, mypy and tach.
+- Not yet walked against the company build (B-191). 07a's scope offer ignores harness capability
+  (B-192).
+
 **2026-10-16, CP-30 step 8 (D-419): 07b asks each secret once per artifact, before Ready.**
 - Enter on a secret lends the terminal and reads with a hidden prompt. The value goes into one
   single-use carrier per installation; the screen and the state only know "entered, hidden".

@@ -181,7 +181,11 @@ MCP_TARGETS: dict[tuple[str, Scope], McpTarget] = {
     ("tabnine", Scope.PROJECT): McpTarget(
         "tabnine", Scope.PROJECT, ".tabnine/agent/settings.json", "mcpServers"
     ),
-    ("tabnine", Scope.USER): McpTarget("tabnine", Scope.USER, "agent/settings.json", "mcpServers"),
+    # The user root is the home directory, and Tabnine CLI reads `~/.tabnine/agent/settings.json`
+    # (D-420); `agent/settings.json` under the home was a path nothing reads.
+    ("tabnine", Scope.USER): McpTarget(
+        "tabnine", Scope.USER, ".tabnine/agent/settings.json", "mcpServers"
+    ),
     ("claude", Scope.PROJECT): McpTarget("claude", Scope.PROJECT, ".mcp.json", "mcpServers"),
     ("claude", Scope.USER): McpTarget("claude", Scope.USER, ".claude.json", "mcpServers"),
     # OpenCode 1.18.29, measured with `opencode debug config`, which prints the merged
@@ -308,8 +312,9 @@ DELIVERY_TARGETS: dict[tuple[str, Scope, ArtifactKind], DeliveryTarget] = {
     ("claude", Scope.USER, ArtifactKind.GUIDELINE): DeliveryTarget(
         "claude", Scope.USER, ArtifactKind.GUIDELINE, ".claude/rules/<name>.md", DeliveryKind.FILE
     ),
-    # Tabnine, project scope. There is deliberately no user-scope Skill target: that build
-    # documents no Agent Skills discovery location outside a project.
+    # Tabnine CLI's Agent Skills discovery reads `<project>/.tabnine/agent/skills/<name>/` and
+    # `~/.tabnine/agent/skills/<name>/` (D-420). The `.agents/skills` aliases it also reads are the
+    # cross-vendor interop directory, which another harness could claim, so they are not targets.
     ("tabnine", Scope.PROJECT, ArtifactKind.SKILL): DeliveryTarget(
         "tabnine",
         Scope.PROJECT,
@@ -323,6 +328,13 @@ DELIVERY_TARGETS: dict[tuple[str, Scope, ArtifactKind], DeliveryTarget] = {
         ArtifactKind.GUIDELINE,
         ".tabnine/guidelines/<name>.md",
         DeliveryKind.FILE,
+    ),
+    ("tabnine", Scope.USER, ArtifactKind.SKILL): DeliveryTarget(
+        "tabnine",
+        Scope.USER,
+        ArtifactKind.SKILL,
+        ".tabnine/agent/skills/<name>",
+        DeliveryKind.TREE,
     ),
     ("tabnine", Scope.USER, ArtifactKind.GUIDELINE): DeliveryTarget(
         "tabnine",
@@ -410,15 +422,15 @@ class MemoryTarget:
 
 #: Measured shared instruction files, taken from the harness profiles this repository has observed.
 #: A file here is the user's; an artifact installed into it owns one delimited block and nothing
-#: else. Tabnine has no user-scope entry on purpose: that build documents a project-root
-#: `TABNINE.md` and no always-loaded global instruction file, and inventing one would write a block
-#: into a file nothing reads.
+#: else.
 MEMORY_TARGETS: dict[tuple[str, Scope], MemoryTarget] = {
     # Claude Code: `CLAUDE.md` at the project root, `~/.claude/CLAUDE.md` for the user.
     ("claude", Scope.PROJECT): MemoryTarget("claude", Scope.PROJECT, "CLAUDE.md"),
     ("claude", Scope.USER): MemoryTarget("claude", Scope.USER, ".claude/CLAUDE.md"),
-    # Tabnine: project-root `TABNINE.md`.
+    # Tabnine CLI: project-root `TABNINE.md`, and the global context file
+    # `~/.tabnine/agent/TABNINE.md` (D-420).
     ("tabnine", Scope.PROJECT): MemoryTarget("tabnine", Scope.PROJECT, "TABNINE.md"),
+    ("tabnine", Scope.USER): MemoryTarget("tabnine", Scope.USER, ".tabnine/agent/TABNINE.md"),
     # Codex CLI 0.152.0: `AGENTS.md` at the repository root and `$CODEX_HOME/AGENTS.md` for the
     # user, both measured by writing a marker into each and finding it in `codex debug
     # prompt-input`. The same measurement found that `$CODEX_HOME/instructions.md` -- the location
@@ -577,8 +589,15 @@ _CLAUDE_EVENTS = (
     ("Stop", "hooks.Stop"),
 )
 
-#: Measured hook locations. Tabnine has no user-scope entry on purpose: that build documents no
-#: user-global hook discovery target, and inventing one would install a hook nothing ever runs.
+#: The observed Tabnine build spells the same three events its own way.
+_TABNINE_EVENTS = (
+    ("PreToolUse", "hooks.BeforeTool"),
+    ("PostToolUse", "hooks.AfterTool"),
+    ("Stop", "hooks.SessionEnd"),
+)
+
+#: Measured hook locations. Tabnine CLI merges hooks from its user settings as well as the
+#: project's (D-420), so it has both rows.
 #:
 #: Codex and OpenCode are absent for reasons of their own. OpenCode's event model was not measured.
 #: Codex's was, and the absence is the stronger for it (`B-097`): `codex features list` reports
@@ -610,11 +629,15 @@ HOOK_TARGETS: dict[tuple[str, Scope], HookTarget] = {
         Scope.PROJECT,
         ".tabnine/agent/hooks/<name>",
         ".tabnine/agent/settings.json",
-        (
-            ("PreToolUse", "hooks.BeforeTool"),
-            ("PostToolUse", "hooks.AfterTool"),
-            ("Stop", "hooks.SessionEnd"),
-        ),
+        _TABNINE_EVENTS,
+        HookEntryShape.FLAT_COMMAND,
+    ),
+    ("tabnine", Scope.USER): HookTarget(
+        "tabnine",
+        Scope.USER,
+        ".tabnine/agent/hooks/<name>",
+        ".tabnine/agent/settings.json",
+        _TABNINE_EVENTS,
         HookEntryShape.FLAT_COMMAND,
     ),
 }

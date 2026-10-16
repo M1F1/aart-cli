@@ -421,13 +421,18 @@ Walked, not quoted from a design document:
 .aart-cli/manifest.json
 ```
 
-| Artifact kind | Where it goes in a project | Walked |
-|---|---|---|
-| `skill` | `.tabnine/agent/skills/<name>/` | yes |
-| `guideline` | `.tabnine/guidelines/` | yes |
-| `memory` | `TABNINE.md` at the project root | no |
-| `mcp` | `.tabnine/agent/settings.json`, key `mcpServers` | yes — project and user filesystem contract |
-| `hook` | `.tabnine/agent/hooks/<name>/` plus `hooks.BeforeTool`/`AfterTool`/`SessionEnd` in `.tabnine/agent/settings.json` | no |
+| Artifact kind | Where it goes in a project | Where it goes at user scope | Walked |
+|---|---|---|---|
+| `skill` | `.tabnine/agent/skills/<name>/` | `~/.tabnine/agent/skills/<name>/` | yes |
+| `guideline` | `.tabnine/guidelines/` | `~/.tabnine/guidelines/` | yes |
+| `memory` | `TABNINE.md` at the project root | `~/.tabnine/agent/TABNINE.md` | no |
+| `mcp` | `.tabnine/agent/settings.json`, key `mcpServers` | `~/.tabnine/agent/settings.json`, key `mcpServers` | yes — project and user filesystem contract |
+| `hook` | `.tabnine/agent/hooks/<name>/` plus `hooks.BeforeTool`/`AfterTool`/`SessionEnd` in `.tabnine/agent/settings.json` | the same under `~/.tabnine/agent/` | no |
+
+The user-scope Skill, memory and hook locations follow Tabnine CLI's published documentation
+([Agent Skills](https://docs.tabnine.com/main/getting-started/tabnine-cli/features/agent-skills),
+[hook configuration](https://docs.tabnine.com/main/getting-started/tabnine-cli/features/hooks/configuration)).
+They have not been walked against the company build.
 
 `.aart-cli/manifest.json` is AART's own record of what it installed. Commit it if you want
 the project's artifact set to be reproducible for the next person who clones; it contains no
