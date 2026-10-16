@@ -4,6 +4,14 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-30 step 10: CP-30 is complete.**
+- PR #69 carries CP-30 plus #66, #67 and #68, merged in so one release holds all four. The
+  conflicts were appended decisions and #68's `LESS_INFO`/`MORE_INFO` rename, applied to the
+  CP-30 code.
+- CI found two defects, both fixed: a credential-shaped comment, and e2e drives that depended on
+  `uv` being on PATH (B-193). The full `pr-check` passed on #69 before the integration; the
+  integrated head runs it again.
+
 **2026-10-16, D-410: Success leaves the Undo explanation to Verbose and the receipt.** Fast no
 longer ends on why Undo is unavailable; Verbose and Receipt Details still say it
 (`tests/installation_success_actions_test.py`).

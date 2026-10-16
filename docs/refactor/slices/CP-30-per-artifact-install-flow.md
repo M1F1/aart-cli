@@ -327,6 +327,20 @@ See `plan.json` CP-30. Step 1 (spec and D-413) is done.
   - 1768 related tests pass (modules touching the consumer UI, views, actions, session, Doctor or
     the frame law), with ruff, ruff format, mypy and tach.
 
+## Step 10: verification and the PR (done)
+
+- PR #69. The full gates run in CI, across Python 3.10, 3.11 and 3.14.
+- Run 1: `secret_shape_check` flagged a comment naming a secret with a quoted label. Reworded.
+- Run 2: 11 unit failures. The CP-30 drives counted 05's backend re-offer, which appears only
+  when `uv` is on PATH (D-380). CI's image has none, so every later key landed a screen early.
+  Reproduced in `python:3.11` under Docker. `BothBackendsMeasured` pins pip and uv for those
+  drives (B-193 for the rest). `declared_harness_narrowing_test` expected no Tabnine user Skill,
+  which D-420 added.
+- Run 3 passed. #66, #67 and #68 were then merged in for one release; their tests and CP-30's
+  were run together (1544 related tests; the two `workspace_context_line_test` failures come from
+  the worktree's long path being shortened, and pass in the repository), with ruff, mypy, tach,
+  docs-check and the secret-shape check.
+
 ## Superseded work
 
 - `stash@{0}`, "scope rows before the form (D-412 draft)", was the narrow fix for the missing scope
