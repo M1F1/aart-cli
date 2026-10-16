@@ -77,7 +77,7 @@ class ConsumerUiStateTest(unittest.TestCase):
         self.assertEqual(commands[0].kind, ConsumerUiCommandKind.LOAD_SCREEN)
         self.assertEqual(searched.search, "github")
         self.assertEqual(selected.selection, ("company/mcp/github@1.0.0",))
-        self.assertEqual(verbose.session.profile, PresentationProfile.VERBOSE)
+        self.assertEqual(verbose.session.profile, PresentationProfile.MORE_INFO)
         self.assertTrue(help_open.help_visible)
         self.assertEqual(back.session.screen, ConsumerScreen.DASHBOARD)
         self.assertEqual(back.selection, selected.selection)

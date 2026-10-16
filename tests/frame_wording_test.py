@@ -46,7 +46,7 @@ _STORED = "credential(s) stored securely"
 
 class ReadyCountsEachChangeOnceTest(unittest.TestCase):
     def test_a_credential_the_plan_stores_is_counted_once(self) -> None:
-        drawn = "\n".join(render_ready(plan_view(), PresentationProfile.FAST))
+        drawn = "\n".join(render_ready(plan_view(), PresentationProfile.LESS_INFO))
 
         self.assertEqual(drawn.count(_STORED), 1)
 
@@ -54,7 +54,7 @@ class ReadyCountsEachChangeOnceTest(unittest.TestCase):
         view = plan_view()
         kept = tuple(item for item in view.effects if not item.kind.startswith("store-"))
         drawn = "\n".join(
-            render_ready(dataclasses.replace(view, effects=kept), PresentationProfile.FAST)
+            render_ready(dataclasses.replace(view, effects=kept), PresentationProfile.LESS_INFO)
         )
 
         self.assertNotIn(_STORED, drawn)

@@ -19,7 +19,7 @@ from tests.consumer_install_flow_shell_test import at, plan_view
 _TICKED = ("public/mcp/github@1.6.0",)
 
 
-def _drawn(screen: ConsumerScreen, profile=PresentationProfile.FAST) -> str:
+def _drawn(screen: ConsumerScreen, profile=PresentationProfile.LESS_INFO) -> str:
     source, state = at(screen, profile)
     return "\n".join(frame(source, dataclasses.replace(state, selection=_TICKED)))
 
@@ -38,7 +38,7 @@ class TheSelectedCountTest(unittest.TestCase):
         self.assertIn("1 selected", _drawn(ConsumerScreen.MARKETPLACE))
 
     def test_more_info_counts_them_everywhere(self) -> None:
-        self.assertIn("1 selected", _drawn(ConsumerScreen.READY, PresentationProfile.VERBOSE))
+        self.assertIn("1 selected", _drawn(ConsumerScreen.READY, PresentationProfile.MORE_INFO))
 
 
 class ReadyTest(unittest.TestCase):
@@ -49,7 +49,7 @@ class ReadyTest(unittest.TestCase):
             risks=("local-mutation", "network-mutation", "high-risk-execution"),
         )
 
-        fast = "\n".join(render_ready(view, PresentationProfile.FAST))
+        fast = "\n".join(render_ready(view, PresentationProfile.LESS_INFO))
 
         self.assertIn("changes network access", fast)
         self.assertIn("runs high-risk code", fast)
@@ -60,8 +60,8 @@ class ReadyTest(unittest.TestCase):
 class TheDetailKeyTest(unittest.TestCase):
     def test_v_is_named_for_what_pressing_it_gives(self) -> None:
         for profile, label in (
-            (PresentationProfile.FAST, "More info"),
-            (PresentationProfile.VERBOSE, "Less info"),
+            (PresentationProfile.LESS_INFO, "More info"),
+            (PresentationProfile.MORE_INFO, "Less info"),
         ):
             with self.subTest(profile=profile):
                 _, state = at(ConsumerScreen.MARKETPLACE, profile)

@@ -48,11 +48,11 @@ def _installed(row, profile: str, status: LifecycleStatus) -> tuple[LifecycleIte
 
 
 def _fast(row) -> str:
-    return "\n".join(render_marketplace_artifact(row, PresentationProfile.FAST))
+    return "\n".join(render_marketplace_artifact(row, PresentationProfile.LESS_INFO))
 
 
 def _verbose(row) -> str:
-    return "\n".join(render_marketplace_artifact(row, PresentationProfile.VERBOSE))
+    return "\n".join(render_marketplace_artifact(row, PresentationProfile.MORE_INFO))
 
 
 class TheFastRowLeadsWithWhatDecidesTest(unittest.TestCase):
@@ -83,7 +83,7 @@ class TheFastRowLeadsWithWhatDecidesTest(unittest.TestCase):
 
         for harness in row.eligible_harnesses:
             with self.subTest(harness=harness):
-                self.assertRegex(rendered, rf"  - {harness}\n")
+                self.assertRegex(rendered, rf"  - {harness}(\n|$)")
 
 
 class TheDescriptionIsDisclosedRatherThanRepeatedTest(unittest.TestCase):
@@ -110,7 +110,7 @@ class TheDescriptionIsDisclosedRatherThanRepeatedTest(unittest.TestCase):
 
         row = replace(_row("claude", "opencode"), summary=LONG_SUMMARY)
 
-        for line in render_marketplace_artifact(row, PresentationProfile.FAST):
+        for line in render_marketplace_artifact(row, PresentationProfile.LESS_INFO):
             with self.subTest(line=line):
                 self.assertLessEqual(len(line), 72)
 

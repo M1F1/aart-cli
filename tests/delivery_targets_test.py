@@ -57,9 +57,18 @@ class DeliveryTargetTest(unittest.TestCase):
             delivery_target("cursor", Scope.PROJECT, ArtifactKind.SKILL)
 
     def test_a_kind_this_harness_documents_no_location_for_is_refused(self) -> None:
-        # Tabnine documents no user-global Agent Skills discovery location.
+        # Codex reads Skills and AGENTS.md; it has no standalone guideline directory.
         with self.assertRaises(KeyError):
-            delivery_target("tabnine", Scope.USER, ArtifactKind.SKILL)
+            delivery_target("codex", Scope.USER, ArtifactKind.GUIDELINE)
+
+    def test_tabnine_reads_user_skills_from_its_agent_directory(self) -> None:
+        # Tabnine CLI's Agent Skills discovery: `~/.tabnine/agent/skills/<name>/SKILL.md` (D-420).
+        target = delivery_target("tabnine", Scope.USER, ArtifactKind.SKILL)
+        self.assertEqual(DeliveryKind.TREE, target.delivery)
+        self.assertEqual(
+            ".tabnine/agent/skills/github-company-user",
+            delivery_destination(target, "github-company-user"),
+        )
 
     def test_a_kind_that_starts_a_process_is_not_delivered(self) -> None:
         with self.assertRaises(KeyError):
@@ -120,9 +129,11 @@ class MemoryTargetTest(unittest.TestCase):
     def test_tabnine_reads_project_memory_from_its_own_file(self) -> None:
         self.assertEqual("TABNINE.md", memory_target("tabnine", Scope.PROJECT).destination)
 
-    def test_tabnine_documents_no_user_memory_file_so_none_is_invented(self) -> None:
-        with self.assertRaises(KeyError):
-            memory_target("tabnine", Scope.USER)
+    def test_tabnine_reads_user_memory_from_its_agent_directory(self) -> None:
+        # Tabnine CLI's global context file is `~/.tabnine/agent/TABNINE.md` (D-420).
+        self.assertEqual(
+            ".tabnine/agent/TABNINE.md", memory_target("tabnine", Scope.USER).destination
+        )
 
     def test_a_harness_nobody_measured_is_named_rather_than_guessed(self) -> None:
         with self.assertRaises(KeyError):
@@ -182,9 +193,16 @@ class HookTargetTest(unittest.TestCase):
         with self.assertRaises(KeyError):
             hook_event_path(hook_target("claude", Scope.PROJECT), "BeforeEverything")
 
-    def test_tabnine_documents_no_user_hook_target_so_none_is_invented(self) -> None:
-        with self.assertRaises(KeyError):
-            hook_target("tabnine", Scope.USER)
+    def test_tabnine_reads_user_hooks_from_its_user_settings(self) -> None:
+        # Tabnine CLI merges hooks from `~/.tabnine/agent/settings.json` too (D-420), spelled and
+        # shaped as at project scope.
+        user, project = hook_target("tabnine", Scope.USER), hook_target("tabnine", Scope.PROJECT)
+        self.assertEqual(".tabnine/agent/settings.json", user.settings)
+        self.assertEqual(
+            ".tabnine/agent/hooks/lint", delivery_destination(user.scripts_target, "lint")
+        )
+        self.assertEqual(project.events, user.events)
+        self.assertEqual(HookEntryShape.FLAT_COMMAND, user.shape)
 
     def test_a_harness_nobody_measured_is_named_rather_than_guessed(self) -> None:
         with self.assertRaises(KeyError):

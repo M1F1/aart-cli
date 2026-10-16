@@ -209,7 +209,7 @@ class RegistryMaintainerScreenTest(TestCase):
     """Screen 46 with the registry this project publishes on it, read off the real composition."""
 
     def _state(self, *, verbose: bool = False, cursor: int = 0, workspace: bool = True):
-        profile = PresentationProfile.VERBOSE if verbose else PresentationProfile.FAST
+        profile = PresentationProfile.MORE_INFO if verbose else PresentationProfile.LESS_INFO
         views = MaintainerViews(
             project_maintainer_dashboard(()),
             (),
@@ -333,7 +333,7 @@ class ThreeFactsScreen46KeepsApartTest(TestCase):
         return source, registry.view
 
     def _state(self, source, *, verbose: bool = True) -> ConsumerUiState:
-        profile = PresentationProfile.VERBOSE if verbose else PresentationProfile.FAST
+        profile = PresentationProfile.MORE_INFO if verbose else PresentationProfile.LESS_INFO
         state = ConsumerUiState(
             ConsumerSession(MaintainerScreen.REGISTRY, profile=profile),
             settings=ConsumerSettings(profile=profile).with_maintainer_mode(True),

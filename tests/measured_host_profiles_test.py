@@ -23,9 +23,16 @@ import json
 import pathlib
 import tempfile
 import unittest
+from unittest import mock
 
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
-from aart_cli.domain.harness import Scope, measured_harnesses
+from aart_cli.domain.artifacts import ArtifactKind
+from aart_cli.domain.harness import (
+    DELIVERY_TARGETS,
+    MEMORY_TARGETS,
+    Scope,
+    measured_harnesses,
+)
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err, Ok
 from aart_cli.io.artifact_placement import PLACEMENT_UNAVAILABLE, placements_for
@@ -204,11 +211,31 @@ class MachineProfileMcpPlacementTest(_PlacementFixture):
         self.assertIn("codex", placed.diagnostics[0].message)
 
 
-class MachineProfileDeliveryPlacementTest(_PlacementFixture):
+class _WithoutTabnineAtUserScope(_PlacementFixture):
+    """The skip rule, held against a table in which Tabnine reads nothing at user scope.
+
+    Every measured harness now reads Skills and memory at user scope (D-420), so no real row is
+    left to skip. The rule is still the placement's, and still needs holding: these tests take
+    Tabnine's user row out for their own duration, and nothing else.
+    """
+
+    removed: tuple[dict, object] = ({}, None)
+
+    def setUp(self) -> None:
+        super().setUp()
+        table, key = self.removed
+        patched = mock.patch.dict(table)
+        patched.start()
+        self.addCleanup(patched.stop)
+        del table[key]
+
+
+class MachineProfileDeliveryPlacementTest(_WithoutTabnineAtUserScope):
     """A Skill: the same distinction, read off the delivery table instead."""
 
     manifest = SKILL_MANIFEST
     files = (("SKILL.md", "# review\n"), ("reference.md", "detail\n"))
+    removed = (DELIVERY_TARGETS, ("tabnine", Scope.USER, ArtifactKind.SKILL))
 
     def test_a_measured_harness_that_reads_no_skill_at_this_scope_is_left_out(self) -> None:
         placed = self._place(scope=Scope.USER, harness_root=self.home, profiles_requested=False)
@@ -272,11 +299,12 @@ class MachineProfileDeliveryPlacementTest(_PlacementFixture):
         self.assertIs(placed.diagnostics[0].code, PLACEMENT_UNAVAILABLE)
 
 
-class MachineProfileMergePlacementTest(_PlacementFixture):
+class MachineProfileMergePlacementTest(_WithoutTabnineAtUserScope):
     """A memory block: merged into a shared file, and measured in a third table."""
 
     manifest = MEMORY_MANIFEST
     files = (("house.md", "Remember tests.\n"),)
+    removed = (MEMORY_TARGETS, ("tabnine", Scope.USER))
 
     def test_a_measured_harness_with_no_memory_file_at_this_scope_is_left_out(self) -> None:
         placed = self._place(scope=Scope.USER, harness_root=self.home, profiles_requested=False)
@@ -315,6 +343,32 @@ class MachineProfileMergePlacementTest(_PlacementFixture):
         self.assertIsInstance(placed, Err)
         self.assertIs(placed.diagnostics[0].code, PLACEMENT_UNAVAILABLE)
         self.assertIn("tabnine", placed.diagnostics[0].message)
+
+
+class TabnineUserSkillTest(_PlacementFixture):
+    """With the real tables, Tabnine is one more harness a user-scope Skill reaches (D-420)."""
+
+    manifest = SKILL_MANIFEST
+    files = (("SKILL.md", "# review\n"),)
+
+    def test_a_user_scope_skill_reaches_tabnine(self) -> None:
+        placed = self._place(scope=Scope.USER, harness_root=self.home, profiles=("tabnine",))
+
+        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
+        self.assertEqual(["tabnine"], _reached(placed, "deliveries"))
+
+
+class TabnineUserMemoryTest(_PlacementFixture):
+    """And a user-scope memory block, into `~/.tabnine/agent/TABNINE.md` (D-420)."""
+
+    manifest = MEMORY_MANIFEST
+    files = (("house.md", "Remember tests.\n"),)
+
+    def test_a_user_scope_memory_reaches_tabnine(self) -> None:
+        placed = self._place(scope=Scope.USER, harness_root=self.home, profiles=("tabnine",))
+
+        self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
+        self.assertEqual(["tabnine"], _reached(placed, "merges"))
 
 
 if __name__ == "__main__":

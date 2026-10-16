@@ -186,8 +186,9 @@ class AnAbsentDeclarationIsUnconstrainedTest(_PlacementFixture):
         placed = self._place(scope=Scope.USER, harness_root=self.home, profiles_requested=False)
 
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
+        # D-420: Tabnine reads user Skills from `~/.tabnine/agent/skills`.
         self.assertEqual(
-            ["claude", "codex", "opencode"],
+            ["claude", "codex", "opencode", "tabnine"],
             _reached(placed, "deliveries"),
         )
 
@@ -202,8 +203,9 @@ class AnEmptyDeclarationMeansTheSameAsAnAbsentOneTest(_PlacementFixture):
         placed = self._place(scope=Scope.USER, harness_root=self.home, profiles_requested=False)
 
         self.assertIsInstance(placed, Ok, getattr(placed, "diagnostics", ()))
+        # D-420: Tabnine reads user Skills from `~/.tabnine/agent/skills`.
         self.assertEqual(
-            ["claude", "codex", "opencode"],
+            ["claude", "codex", "opencode", "tabnine"],
             _reached(placed, "deliveries"),
         )
 

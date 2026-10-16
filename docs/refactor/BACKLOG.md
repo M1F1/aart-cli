@@ -4576,3 +4576,30 @@ With a project `plugin` entry, opencode 1.18.29 itself writes `.opencode/package
 INV-255 holds. An offline company machine will still see opencode try the network. The decision is
 whether to document this, or measure whether a vendored SDK satisfies it.
 
+
+## B-191 — walk Tabnine's user-scope Skill, memory and hook against the company build
+
+D-420 added Tabnine's user-scope targets from Tabnine CLI's published documentation:
+`~/.tabnine/agent/skills/<name>/`, `~/.tabnine/agent/TABNINE.md`, and hooks in
+`~/.tabnine/agent/settings.json`. The company build has not been walked. Walking it means checking
+that the build discovers a user Skill installed by AART, loads the memory block (`/memory list`),
+and runs a user hook. Noncritical: the paths are the documented ones, and none of them displaces a
+project-scope target.
+
+## B-192 — 07a offers a scope from the artifact's declaration, not from the harness
+
+`_pair_scope_offers` offers a pair every scope its artifact declares, less project without a
+project. It does not ask whether that harness can host that kind at that scope. Before D-420, 07a
+offered User for a Tabnine Skill, and choosing it ended in a placement refusal. With the current
+tables one asymmetry remains: Codex has a user MCP target and no project one, so a Codex MCP pair
+chosen with a user-scope default is offered Project too. The fix is to intersect each offer with
+the placement tables (`MCP_TARGETS`, `DELIVERY_TARGETS`, `MEMORY_TARGETS`, `HOOK_TARGETS`, plugin
+targets) for that harness and kind. Noncritical: such a choice is re-prepared, and placement
+refuses it before Ready. That refusal path was not exercised in a test.
+
+## B-193 — e2e drives inherit the host's Python backends
+
+`observe_python_installers` reads uv from PATH, so whether 05 re-offers the backend after 07
+(D-380) depends on the machine. CP-30's drives broke in CI for it. `BothBackendsMeasured` pins the
+drives that failed; other drives through `_environment` may still be host-dependent. Consider
+pinning the measurement in `_environment` itself.

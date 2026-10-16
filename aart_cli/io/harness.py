@@ -28,6 +28,7 @@ import os
 import shutil
 import stat
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -36,6 +37,7 @@ from aart_cli.domain.harness import (
     McpEditor,
     McpRegistration,
     McpTarget,
+    Scope,
     registered_command,
     registration_entry,
 )
@@ -49,6 +51,8 @@ HARNESS_SETTINGS_UNWRITABLE = DiagnosticCode("harness-settings-unwritable")
 HARNESS_EDITOR_MISSING = DiagnosticCode("harness-editor-missing")
 #: It is installed and refused. That is the harness's answer, not something to work around.
 HARNESS_EDITOR_FAILED = DiagnosticCode("harness-editor-failed")
+#: A target names a scope this operation was given no root for.
+HARNESS_SCOPE_UNROOTED = DiagnosticCode("harness-scope-unrooted")
 
 _DEFAULT_MODE = 0o600
 
@@ -363,3 +367,53 @@ class LocalHarnessRegistry:
         if isinstance(servers, Err):
             return None
         return registered_command(target, servers.value.get(registration.server))
+
+
+class ScopedHarnessRegistry:
+    """Registrations under each scope's own root, chosen by the scope every target names.
+
+    One operation may install into both scopes (§172.5, INV-260). Every `McpTarget` already says
+    which scope it belongs to, so the root follows from the target rather than from the operation.
+    A target whose scope has no root is refused, not resolved against the other scope's root.
+    """
+
+    def __init__(self, roots: Mapping[Scope, str]) -> None:
+        self._registries = {scope: LocalHarnessRegistry(root) for scope, root in roots.items()}
+
+    def _for(self, target: McpTarget) -> LocalHarnessRegistry | None:
+        return self._registries.get(target.scope)
+
+    def _unrooted(self, target: McpTarget) -> Err:
+        return _error(
+            HARNESS_SCOPE_UNROOTED,
+            f"{target.harness} is registered at {target.scope.value} scope, which this operation "
+            "has no root for",
+        )
+
+    def path_for(self, target: McpTarget) -> str:
+        registry = self._for(target)
+        if registry is None:
+            raise ValueError(f"no root is known for {target.scope.value} scope")
+        return registry.path_for(target)
+
+    def register(self, registration: McpRegistration) -> Result[HarnessReceipt]:
+        registry = self._for(registration.target)
+        if registry is None:
+            return self._unrooted(registration.target)
+        return registry.register(registration)
+
+    def unregister(self, target: McpTarget, server: str) -> Result[HarnessReceipt]:
+        registry = self._for(target)
+        if registry is None:
+            return self._unrooted(target)
+        return registry.unregister(target, server)
+
+    def registered(self, target: McpTarget) -> Result[tuple[str, ...]]:
+        registry = self._for(target)
+        if registry is None:
+            return self._unrooted(target)
+        return registry.registered(target)
+
+    def observed_command(self, registration: McpRegistration) -> str | None:
+        registry = self._for(registration.target)
+        return None if registry is None else registry.observed_command(registration)

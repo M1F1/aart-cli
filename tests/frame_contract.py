@@ -36,7 +36,7 @@ _NOT_A_HEADING = re.compile(r"[.:;!?]")
 #: Keyboard talk that belongs to the legend: a key in brackets, a padded button, or a key that
 #: "selects", "opens" and so on in a sentence.
 _CONTROL = re.compile(
-    r"\[(Enter|Esc|Space|Tab|Backspace|↑/↓|\?|/)\]"
+    r"\[(Enter|Esc|Space|Tab|Backspace|↑/↓|←/→|\?|/)\]"
     r"|\[ [A-Z][A-Za-z ]*[a-z] \]"
     r"|\b(Enter|Space|Esc|Backspace) (selects|checks|toggles|opens|switches|continues|confirms"
     r"|reviews|advances|removes|returns|changes)\b"
@@ -49,6 +49,7 @@ _KEY_NAMES = {
     "Space": (" ",),
     "Backspace": ("backspace",),
     "↑/↓": ("up", "down"),
+    "←/→": ("left", "right"),
 }
 
 #: The universal keys and the one event each must mean wherever the legend offers it.
@@ -165,7 +166,7 @@ def frame_violations(source: ConsumerScreenSource, state: ConsumerUiState) -> tu
             found.append(f"{screen}: draws {len(drawn)} row(s) for {len(state.rows)} in the state")
         elif cursors != [state.cursor]:
             found.append(f"{screen}: the cursor is drawn on {cursors}, not row {state.cursor}")
-    if blocks.described and state.session.profile is not PresentationProfile.VERBOSE:
+    if blocks.described and state.session.profile is not PresentationProfile.MORE_INFO:
         found.append(f"{screen}: describes the cursor row in Fast")
     if blocks.described and not state.rows:
         found.append(f"{screen}: describes a row on a screen with none")

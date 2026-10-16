@@ -37,6 +37,7 @@ from tests.consumer_activity_test import lifecycle_outcome
 ESCAPE, ENTER, BACKSPACE, SLASH = 27, 10, 263, ord("/")
 QUESTION = ord("?")
 UP, DOWN, SPACE = 259, 258, 32
+LEFT, RIGHT = 260, 261
 VERBOSE = ord("v")
 TODAY = dt.date(2026, 8, 31)
 
@@ -316,8 +317,8 @@ class ConsumerShellTest(unittest.TestCase):
         fast, terminal = drive(state=_at(ConsumerScreen.ACTIVITY))
         verbose, verbose_terminal = drive(ord("v"), state=_at(ConsumerScreen.ACTIVITY))
 
-        self.assertIs(fast.session.profile, PresentationProfile.FAST)
-        self.assertIs(verbose.session.profile, PresentationProfile.VERBOSE)
+        self.assertIs(fast.session.profile, PresentationProfile.LESS_INFO)
+        self.assertIs(verbose.session.profile, PresentationProfile.MORE_INFO)
         self.assertNotIn("sha256:", terminal.last)
         self.assertIn("sha256:", verbose_terminal.last)
 
@@ -328,8 +329,10 @@ class ConsumerShellTest(unittest.TestCase):
 
         verbose, _ = drive(ord("v"), state=_at(ConsumerScreen.ACTIVITY), preferences=preferences)
 
-        self.assertIs(verbose.settings.profile, PresentationProfile.VERBOSE)
-        self.assertEqual([item.profile for item in preferences.kept], [PresentationProfile.VERBOSE])
+        self.assertIs(verbose.settings.profile, PresentationProfile.MORE_INFO)
+        self.assertEqual(
+            [item.profile for item in preferences.kept], [PresentationProfile.MORE_INFO]
+        )
 
     def test_screen_28_moves_the_setting_under_the_cursor_and_keeps_it(self):
         preferences = _Preferences()
@@ -346,7 +349,7 @@ class ConsumerShellTest(unittest.TestCase):
         self.assertEqual([item.maintainer_mode for item in preferences.kept], [True])
         self.assertIn("> Registry Maintainer Mode: on", terminal.last)
         # Every other control is untouched: one keystroke moves one preference.
-        self.assertIs(state.settings.profile, PresentationProfile.FAST)
+        self.assertIs(state.settings.profile, PresentationProfile.LESS_INFO)
         self.assertEqual(state.settings.default_scope, "project")
         self.assertTrue(state.settings.show_updates)
 

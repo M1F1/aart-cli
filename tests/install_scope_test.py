@@ -44,7 +44,8 @@ class ScopeDomainTests(unittest.TestCase):
         expected_supported = {
             "claude": set(ARTIFACT_TYPES),
             "opencode": {"skill", "mcp", "memory"},
-            "tabnine": {"guideline", "mcp"},
+            # D-420: Tabnine CLI documents user skills, memory and hooks under ~/.tabnine/agent.
+            "tabnine": {"skill", "guideline", "mcp", "hook", "memory"},
             "vibe": {"skill"},
         }
 
@@ -70,6 +71,8 @@ class ScopeDomainTests(unittest.TestCase):
         self.assertEqual(opencode.memory.dest, f"{home}/.config/opencode/AGENTS.md")
         self.assertEqual(tabnine.guidelines.dest, f"{home}/.tabnine/guidelines/")
         self.assertEqual(tabnine.mcp.file, f"{home}/.tabnine/agent/settings.json")
+        self.assertEqual(tabnine.skills.dir, f"{home}/.tabnine/agent/skills/<name>/")
+        self.assertEqual(tabnine.memory.dest, f"{home}/.tabnine/agent/TABNINE.md")
         self.assertEqual(vibe.skills.dir, f"{home}/.vibe/skills/<name>/")
 
     def test_custom_profile_loads_explicit_user_targets_and_reasons(self):

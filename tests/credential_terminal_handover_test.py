@@ -256,8 +256,10 @@ class HandoverReachesTheInterpreterTest(unittest.TestCase):
             with self.subTest(hop=function.__qualname__):
                 self.assertIn(parameter, inspect.signature(function).parameters)
 
-    def test_the_composed_actions_hand_the_loan_on_rather_than_holding_it(self) -> None:
-        """A loan the actions keep to themselves is one the prompt never gets.
+    def test_an_install_hands_on_what_was_entered_and_never_the_terminal(self) -> None:
+        """§172.4: an install prompts for nothing, so it is given the carriers and not the loan.
+
+        The loan still reaches the interpreter for a repair; that route is the test above.
 
         Everything an install needs is stubbed except the hop under test: the recorder stops the
         call the moment it has read what it was handed, so this holds the forwarding and nothing
@@ -285,6 +287,8 @@ class HandoverReachesTheInterpreterTest(unittest.TestCase):
         loan = _Journal().handover
         actions = LocalConsumerActions.__new__(LocalConsumerActions)
         actions._terminal_handover = loan
+        entered: dict = {}
+        actions._entered_secrets = entered
         actions._context = types.SimpleNamespace(
             policy=None, credential_providers=(), offline=False
         )
@@ -303,8 +307,13 @@ class HandoverReachesTheInterpreterTest(unittest.TestCase):
         outcome = actions._execute_installation(command, pending)  # type: ignore[arg-type]
 
         self.assertEqual("refused", outcome)
-        self.assertIs(loan, recorded.get("credential_handover"))
-        self.assertTrue(recorded.get("interactive_credentials"))
+        self.assertIs(entered, recorded.get("credential_secrets"))
+        self.assertTrue(recorded.get("skipped_secrets_as_placeholders"))
+        self.assertIsNone(recorded.get("credential_handover"))
+        self.assertFalse(recorded.get("interactive_credentials", False))
+        # The carriers are used once: nothing entered for this install is held for the next one.
+        self.assertEqual({}, actions._entered_secrets)
+        self.assertIsNot(entered, actions._entered_secrets)
 
 
 if __name__ == "__main__":

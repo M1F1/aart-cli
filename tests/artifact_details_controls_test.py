@@ -24,8 +24,8 @@ from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     PresentationProfile,
+    matrix_columns,
     project_dashboard,
-    target_from_row,
 )
 from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.harness import Scope
@@ -100,22 +100,54 @@ class ArtifactDetailsCompatibilityTest(unittest.TestCase):
     def test_one_eligible_harness_keeps_the_artifact_available(self) -> None:
         row = _row("claude", "opencode", "tabnine")
 
-        rendered = "\n".join(render_marketplace_artifact(row, PresentationProfile.FAST))
+        rendered = "\n".join(render_marketplace_artifact(row, PresentationProfile.LESS_INFO))
 
         self.assertTrue(row.compatible)
         self.assertEqual(row.eligible_harnesses, ("claude",))
         self.assertEqual(row.unavailable_harnesses, ("opencode", "tabnine"))
         self.assertIn("Eligible installation harnesses\n  - claude", rendered)
-        self.assertIn("Detected but not eligible\n  - opencode\n\n  - tabnine", rendered)
         self.assertNotIn("Actions: select, install, verbose.", rendered)
-        needs = rendered.split("What it needs", 1)[1]
-        self.assertNotIn("opencode", needs)
-        self.assertNotIn("tabnine", needs)
+
+    def test_fast_names_only_the_eligible_harnesses(self) -> None:
+        """The owner: harnesses that are detected but not eligible are Verbose detail."""
+
+        row = _row("claude", "opencode", "tabnine")
+
+        fast = "\n".join(render_marketplace_artifact(row, PresentationProfile.LESS_INFO))
+        verbose = "\n".join(render_marketplace_artifact(row, PresentationProfile.MORE_INFO))
+
+        self.assertNotIn("Detected but not eligible", fast)
+        self.assertNotIn("opencode", fast)
+        self.assertNotIn("tabnine", fast)
+        self.assertNotIn("nothing else before choosing", fast)
+        self.assertIn("opencode", verbose)
+        self.assertIn("tabnine", verbose)
+
+    def test_each_statement_is_its_own_block(self) -> None:
+        """The owner: separate the statements on Artifact Details with blank lines."""
+
+        row = _row("claude", "opencode")
+
+        rendered = render_marketplace_artifact(row, PresentationProfile.LESS_INFO)
+
+        self.assertEqual(
+            rendered,
+            (
+                row.key,
+                "",
+                "Approved",
+                "",
+                "Not installed",
+                "",
+                "Eligible installation harnesses",
+                "  - claude",
+            ),
+        )
 
     def test_no_eligible_harness_is_a_visible_blocker_with_reasons(self) -> None:
         row = _row("opencode", "tabnine")
 
-        rendered = "\n".join(render_marketplace_artifact(row, PresentationProfile.FAST))
+        rendered = "\n".join(render_marketplace_artifact(row, PresentationProfile.LESS_INFO))
 
         self.assertFalse(row.compatible)
         self.assertEqual(row.eligible_harnesses, ())
@@ -126,7 +158,7 @@ class ArtifactDetailsCompatibilityTest(unittest.TestCase):
 
     def test_verbose_calls_each_detected_harness_eligible_or_unavailable(self) -> None:
         rendered = "\n".join(
-            render_marketplace_artifact(_row("claude", "opencode"), PresentationProfile.VERBOSE)
+            render_marketplace_artifact(_row("claude", "opencode"), PresentationProfile.MORE_INFO)
         )
 
         self.assertIn("installation harnesses", rendered)
@@ -198,6 +230,7 @@ class ArtifactDetailsControlTest(unittest.TestCase):
                 ENTER,
                 ord("i"),
                 SPACE,
+                ENTER,
                 ENTER,
                 ENTER,
             )
@@ -308,9 +341,9 @@ class OneEligibilityRuleTest(unittest.TestCase):
             row.unavailable_harnesses, tuple(item for item in seen if item not in expected)
         )
         self.assertIs(row.compatible, bool(expected))
-        needs = "\n".join(render_marketplace_artifact(row, PresentationProfile.FAST)).split(
-            "What it needs", 1
-        )[1]
+        needs = "\n".join(
+            render_marketplace_artifact(row, PresentationProfile.LESS_INFO)
+        ).partition("What it needs")[2]
         for item in row.unavailable_harnesses:
             self.assertNotIn(item, needs)
 
@@ -323,7 +356,7 @@ class OneEligibilityRuleTest(unittest.TestCase):
         self.assertNotIn("platform-unsupported", reasons)
         self.assertNotIn(
             "supported platforms: none",
-            "\n".join(render_marketplace_artifact(row, PresentationProfile.VERBOSE)),
+            "\n".join(render_marketplace_artifact(row, PresentationProfile.MORE_INFO)),
         )
 
 
@@ -400,13 +433,8 @@ class DetailsAgreesWithReviewSelectionE2ETest(unittest.TestCase):
                 row, review, _terminal, _ = self._details_then_review(_skill(harnesses))
 
                 self.assertIs(review.session.screen, ConsumerScreen.REVIEW_SELECTION)
-                # Screen 05 also carries the installation-scope rows (issue #11a), which are a
-                # different question; the harnesses are the target rows.
-                offered = tuple(
-                    harness
-                    for harness in (target_from_row(item) for item in review.rows)
-                    if harness is not None
-                )
+                # §172.2: the harnesses are the columns of 05's matrix.
+                offered = matrix_columns(review.rows)
                 self.assertEqual(row.eligible_harnesses, offered)
                 self.assertTrue(set(expected) >= set(offered))
                 self.assertIn("claude", offered)

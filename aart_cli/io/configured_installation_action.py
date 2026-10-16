@@ -24,11 +24,12 @@ from __future__ import annotations
 
 import os
 import sys
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from datetime import date
 
 from aart_cli.application.consumer_session import ConsumerMachine
-from aart_cli.application.execution import ProgressObserver
+from aart_cli.application.execution import MutationLockPort, ProgressObserver
 from aart_cli.application.installation_action import (
     CompletedInstallationAction,
     PreparedInstallationAction,
@@ -57,13 +58,14 @@ from aart_cli.domain.selection import ArtifactSelection
 
 from .configured_installation import (
     ConfiguredInstallationDraft,
+    InstallationAssignment,
     prepare_configured_installation_draft,
 )
 from .consumer_machine import read_consumer_machine
-from .credentials import CredentialProviderPort
+from .credentials import CredentialProviderPort, TransientSecret
 from .environment_inspection import LocalEnvironmentInspector, platform_name
-from .execution import LocalMutationLock, TerminalHandover
-from .harness import LocalHarnessRegistry
+from .execution import CompositeMutationLock, LocalMutationLock, TerminalHandover
+from .harness import ScopedHarnessRegistry
 from .installation_execution import interpreters_for
 from .installation_observation import (
     observe_planned_installation,
@@ -140,7 +142,19 @@ class InstallationHost:
 
     @property
     def lock_scope(self) -> str:
-        return f"{self.scope.value}:{self.harness_root}"
+        return self.lock_scope_for(self.scope)
+
+    def root_for(self, scope: Scope) -> str:
+        """The root one scope's harness paths resolve against, whatever scope the host names."""
+
+        return self.project_root if scope is Scope.PROJECT else self.user_home
+
+    def lock_scope_for(self, scope: Scope) -> str:
+        return f"{scope.value}:{self.root_for(scope)}"
+
+    @property
+    def scope_roots(self) -> dict[Scope, str]:
+        return {scope: self.root_for(scope) for scope in (Scope.PROJECT, Scope.USER)}
 
 
 def local_remediation_capabilities(
@@ -241,6 +255,7 @@ def prepare_configured_installation(
     resolution_policy: ResolutionPolicy | None = None,
     preferred_installer: PythonInstaller | None = None,
     previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
+    assignments: tuple[InstallationAssignment, ...] = (),
 ) -> Result[PreparedConfiguredInstallation]:
     """Resolve, place and offer one configured Selection without mutating the target machine.
 
@@ -265,6 +280,8 @@ def prepare_configured_installation(
         harness_root=host.harness_root,
         resolution_policy=resolution_policy,
         preferred_installer=preferred_installer,
+        assignments=assignments,
+        scope_roots=host.scope_roots,
     )
     if isinstance(drafted, Err):
         return drafted
@@ -275,8 +292,14 @@ def prepare_configured_installation(
     placements = draft.prepared_placements()
     if isinstance(placements, Err):
         return placements
+    # Pairs name the harnesses being configured; without them the host's profiles do.
+    configured = (
+        replace(host, profiles=tuple(dict.fromkeys(item.harness for item in assignments)))
+        if assignments
+        else host
+    )
     capabilities = local_remediation_capabilities(
-        host, credential_providers, interpreter=base_interpreter
+        configured, credential_providers, interpreter=base_interpreter
     )
     facts = EnvironmentFacts(platform_name(), remediation_capabilities=capabilities)
     # An artifact with no usable backend contributes nothing rather than an empty entry: whether
@@ -287,7 +310,8 @@ def prepare_configured_installation(
         if spec is not None
     )
     usable = tuple(item for item in measured if item)
-    registry = LocalHarnessRegistry(host.harness_root)
+    # Every target names its own scope, and one operation may write both (§172.5).
+    registry = ScopedHarnessRegistry(host.scope_roots)
     providers = {provider.provider: provider for provider in credential_providers}
     observations = []
     for reference in draft.inputs.credential_references:
@@ -320,6 +344,24 @@ def prepare_configured_installation(
         return _error(f"this configured installation cannot be prepared: {error}")
 
 
+def _lease(host: InstallationHost, action: PreparedInstallationAction) -> MutationLockPort:
+    """The lease of every scope root this action writes, taken together (§172.5, INV-260)."""
+
+    scopes = sorted(
+        {installation.owner.scope for installation in action.installations if installation.owner}
+        or {host.scope},
+        key=lambda scope: scope.value,
+    )
+    if len(scopes) == 1:
+        return LocalMutationLock(host.state_root, host.lock_scope_for(scopes[0]))
+    return CompositeMutationLock(
+        tuple(
+            (key, LocalMutationLock(host.state_root, key))
+            for key in (host.lock_scope_for(scope) for scope in scopes)
+        )
+    )
+
+
 def complete_configured_installation(
     prepared: PreparedConfiguredInstallation,
     *,
@@ -334,6 +376,8 @@ def complete_configured_installation(
     offline: bool = False,
     interactive_credentials: bool = False,
     credential_handover: TerminalHandover | None = None,
+    credential_secrets: Mapping[str, TransientSecret] | None = None,
+    skipped_secrets_as_placeholders: bool = False,
     observe: ProgressObserver | None = None,
 ) -> Result[CompletedConfiguredInstallation]:
     """Execute the confirmed review, record it, and re-read the machine it left behind.
@@ -342,6 +386,9 @@ def complete_configured_installation(
     when it has to put a failed update back, and that state can only be measured against the
     receipt the version being replaced wrote -- so a caller that supplies `previous` states to
     preparation supplies the matching receipts here.
+
+    `credential_secrets` are the values entered before Ready, one carrier per credential reference;
+    with `skipped_secrets_as_placeholders` every other secret is stored as `AART_NOT_SET` (§172.4).
     """
 
     if not isinstance(prepared, PreparedConfiguredInstallation) or not isinstance(
@@ -355,7 +402,7 @@ def complete_configured_installation(
     if not isinstance(expected_review_digest, ObjectDigest):
         return _error("completing a configured installation needs the confirmed review digest")
 
-    registry = LocalHarnessRegistry(host.harness_root)
+    registry = ScopedHarnessRegistry(host.scope_roots)
     interpreters = interpreters_for(
         action.installations,
         registry=registry,
@@ -364,6 +411,8 @@ def complete_configured_installation(
         offline=offline,
         interactive_credentials=interactive_credentials,
         credential_handover=credential_handover,
+        credential_secrets=credential_secrets,
+        skipped_secrets_as_placeholders=skipped_secrets_as_placeholders,
     )
     if isinstance(interpreters, Err):
         return interpreters
@@ -410,7 +459,7 @@ def complete_configured_installation(
         policy=policy,
         interpreters=interpreters.value,
         inspect=inspect,
-        lock=LocalMutationLock(host.state_root, host.lock_scope),
+        lock=_lease(host, action),
         store=LocalReceiptStore(host.state_root),
         recorded_at=recorded_at,
         observe=observe,

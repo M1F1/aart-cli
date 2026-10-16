@@ -54,7 +54,7 @@ class SourceSyncRefusalViewTest(unittest.TestCase):
         drawn = "\n".join(
             render_source_sync_result(
                 self._view((("bad/aart-cli.json", "invalid SemVer: 'not-a-version'"),)),
-                PresentationProfile.FAST,
+                PresentationProfile.LESS_INFO,
             )
         )
 
@@ -64,7 +64,7 @@ class SourceSyncRefusalViewTest(unittest.TestCase):
     def test_a_clean_sync_says_nothing_about_refusals(self) -> None:
         """An empty section is `QA-068`'s fault; a Source with nothing wrong has nothing to say."""
 
-        drawn = "\n".join(render_source_sync_result(self._view(()), PresentationProfile.FAST))
+        drawn = "\n".join(render_source_sync_result(self._view(()), PresentationProfile.LESS_INFO))
 
         self.assertNotIn("could not", drawn.casefold())
         self.assertNotIn("refus", drawn.casefold())

@@ -17,7 +17,7 @@ from dataclasses import dataclass, replace
 from enum import Enum
 
 from aart_cli.domain.configuration_files import configuration_value_problem
-from aart_cli.domain.inputs import InputValidation, validate_config_value
+from aart_cli.domain.inputs import SKIPPED_INPUT, InputValidation, validate_config_value
 from aart_cli.domain.publication import RegistryCommitOrigin, suggested_publication_branch
 from aart_cli.domain.registry import PromotionMode
 
@@ -28,12 +28,18 @@ from .consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
+    choose_pair_scope,
     installer_from_row,
     is_screen_identifier,
     keeps_focus,
+    matrix_columns,
+    matrix_from_row,
     navigation_targets,
-    scope_from_row,
+    pairs_harnesses,
+    scope_matrix_columns,
+    scope_matrix_from_row,
     target_from_row,
+    toggle_matrix_cell,
 )
 from .maintainer_views import (
     REGISTRY_WORKSPACE_READY_ROW,
@@ -53,6 +59,7 @@ __all__ = [
     "ConsumerUiEventKind",
     "ConsumerUiState",
     "CONFIG_CONTINUE_ROW",
+    "CONFIG_SET_LATER_ROW",
     "InstallationConfigDraft",
     "InstallationConfigField",
     "KeyBinding",
@@ -107,6 +114,8 @@ class ConsumerUiEventKind(str, Enum):
     NAVIGATE = "navigate"
     BACK = "back"
     MOVE = "move"
+    #: Left/Right on screen 05's matrix: which harness column Space ticks (§172.2).
+    MOVE_COLUMN = "move-column"
     SET_ROWS = "set-rows"
     SET_SELECTION = "set-selection"
     TOGGLE_PROFILE = "toggle-profile"
@@ -132,6 +141,9 @@ class ConsumerUiEventKind(str, Enum):
     EDIT_PUBLICATION_BRANCH = "edit-publication-branch"
     EDIT_INSTALL_CONFIG = "edit-install-config"
     EDIT_CONFIGURATION = "edit-configuration"
+    #: Enter on a 07b secret row, and the adapter's answer: whether a value is now held for it.
+    REQUEST_SECRET = "request-secret"
+    SECRET_ENTERED = "secret-entered"
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +232,8 @@ class SourceDraft:
 #: Screen 07's final control is not an input id. Angle brackets cannot occur in an InputId, so an
 #: authored field can never collide with it while rows contain an owner and config input id.
 CONFIG_CONTINUE_ROW = "<continue>"
+#: Screen 07's first row (§172.3): leave every value without an answer as `AART_NOT_SET`, and go on.
+CONFIG_SET_LATER_ROW = "<set-later>"
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,6 +317,22 @@ class InstallationConfigDraft:
             )
         )
 
+    def set_later(self) -> "InstallationConfigDraft":
+        """Set later (§172.3): every value without a valid answer becomes `AART_NOT_SET`.
+
+        A value that is there and valid, a declared default included, is an answer and is kept
+        (§172.4). An empty value or one with a problem is not an answer, so it is the one skipped.
+        """
+
+        return InstallationConfigDraft(
+            tuple(
+                replace(item, accepted=True)
+                if item.value and item.problem is None
+                else replace(item, value=SKIPPED_INPUT, accepted=True)
+                for item in self.fields
+            )
+        )
+
     def accept(self, identifier: str) -> "InstallationConfigDraft":
         if all(item.row != identifier for item in self.fields):
             raise ValueError(f"installation config has no field {identifier}")
@@ -374,6 +404,11 @@ class ConsumerUiCommandKind(str, Enum):
     PREPARE_ACTION = "prepare-action"
     EXECUTE_ACTION = "execute-action"
     PERSIST_SETTINGS = "persist-settings"
+    #: 07b: lend the terminal to a hidden prompt for one secret row (§172.6). The value never
+    #: comes back; the answer says only whether one was entered.
+    ENTER_SECRET = "enter-secret"
+    #: Leaving the install before Ready was confirmed: forget every secret entered on 07b.
+    DISCARD_SECRETS = "discard-secrets"
 
 
 class WorkflowStepStatus(str, Enum):
@@ -410,10 +445,16 @@ class ConsumerUiEvent:
     review_digest: str = ""
     config_draft: InstallationConfigDraft | None = None
     registry_commit_subject: str = ""
+    #: The artifact×harness pairs an install was prepared for, which 05 adopts while it has none.
+    pairs: tuple[str, ...] = ()
+    #: The scope each of those pairs was prepared for, which 07a then shows as chosen.
+    pair_scopes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiEventKind)
+            or not _rows_valid(self.pairs)
+            or not _rows_valid(self.pair_scopes)
             or (
                 self.screen is not None
                 and not isinstance(self.screen, (ConsumerScreen, MaintainerScreen))
@@ -451,6 +492,11 @@ class ConsumerUiCommand:
     registry_init_draft: RegistryInitDraft | None = None
     repository_scan_draft: RepositoryScanDraft | None = None
     targets: tuple[str, ...] = ()
+    #: The artifact×harness pairs ticked on screen 05's matrix (§172.2), as `pair_key` strings.
+    #: `targets` stays the harnesses they go into, so a plan is still prepared for those hosts.
+    pairs: tuple[str, ...] = ()
+    #: The scope chosen for each pair on screen 07a (§172.5), as `pair_scope_key` strings.
+    pair_scopes: tuple[str, ...] = ()
     config_answers: tuple[tuple[str, str], ...] = ()
     #: The scope this one installation chose, or empty to follow the stored preference. It travels
     #: on the command rather than being read from Settings at the boundary, so what was reviewed is
@@ -477,6 +523,8 @@ class ConsumerUiCommand:
             or (self.action is not None and not isinstance(self.action, ConsumerActionKind))
             or not _rows_valid(self.selection)
             or not _rows_valid(self.targets)
+            or not _rows_valid(self.pairs)
+            or not _rows_valid(self.pair_scopes)
             or not _config_answers_valid(self.config_answers)
             or not isinstance(self.focus, str)
             or any(character in self.focus for character in "\r\n")
@@ -538,6 +586,8 @@ _SELECTABLE = frozenset(
         ConsumerScreen.INSTALLED,
         ConsumerScreen.UPDATES,
         ConsumerScreen.REVIEW_SELECTION,
+        # 07a's rows are pairs, each put on one scope rather than ticked into the selection.
+        ConsumerScreen.INSTALL_SCOPE,
         ConsumerScreen.CONFIGURATION_TARGETS,
         # Screen 47 assembles one registry transaction, so selecting rows is what it is for.
         MaintainerScreen.BULK_PROMOTION,
@@ -642,6 +692,13 @@ class ConsumerUiState:
     #: Harnesses explicitly chosen on screen 05. These are separate from artifact rows because
     #: changing delivery intent must never change which artifacts the request contains (D-260).
     targets: tuple[str, ...] = ()
+    #: The artifact×harness pairs ticked on the matrix, and which harness column the cursor is on
+    #: (§172.2). `targets` follows the pairs: it is the harnesses some pair goes into.
+    pairs: tuple[str, ...] = ()
+    pair_scopes: tuple[str, ...] = ()
+    #: The 07b rows a value was entered for. Row keys only: the values stay in the adapter.
+    entered_secrets: tuple[str, ...] = ()
+    harness_column: int = 0
     #: Non-secret text lives only in this session until it is reviewed and written beside the
     #: artifact. ``config_form_active`` distinguishes the pre-review form from screen 07's later
     #: summary of the immutable plan.
@@ -680,6 +737,12 @@ class ConsumerUiState:
             or not isinstance(self.searching, bool)
             or not _rows_valid(self.selection)
             or not _rows_valid(self.targets)
+            or not _rows_valid(self.pairs)
+            or not _rows_valid(self.pair_scopes)
+            or not _rows_valid(self.entered_secrets)
+            or not isinstance(self.harness_column, int)
+            or isinstance(self.harness_column, bool)
+            or self.harness_column < 0
             or not isinstance(self.config_draft, InstallationConfigDraft)
             or not isinstance(self.config_form_active, bool)
             or not isinstance(self.inputs_submitted, bool)
@@ -1068,6 +1131,9 @@ def _set_rows(
     if standing not in rows:
         standing = state.focus
     cursor = rows.index(standing) if standing in rows else 0
+    if standing not in rows and rows[:1] == (CONFIG_SET_LATER_ROW,) and len(rows) > 1:
+        # 07 opens on its first field: Set later is offered first, never pressed by accident.
+        cursor = 1
     return replace(state, rows=rows, cursor=cursor), ()
 
 
@@ -1104,6 +1170,17 @@ def _move(
     return replace(state, cursor=(state.cursor + step) % len(state.rows)), ()
 
 
+def _move_column(
+    state: ConsumerUiState, direction: str
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    columns = matrix_columns(state.rows) or scope_matrix_columns(state.rows)
+    if not columns or direction not in ("left", "right"):
+        return state, ()
+    step = -1 if direction == "left" else 1
+    column = (min(state.harness_column, len(columns) - 1) + step) % len(columns)
+    return replace(state, harness_column=column, quit_pending=False), ()
+
+
 def _toggle_selection(
     state: ConsumerUiState, key: str
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
@@ -1124,32 +1201,36 @@ def _toggle_selection(
             else (*state.configuration_targets, harness)
         )
         return replace(state, configuration_targets=targets, quit_pending=False), ()
+    if state.session.screen is ConsumerScreen.INSTALL_SCOPE:
+        columns = scope_matrix_columns(state.rows)
+        if scope_matrix_from_row(key) is None or not columns:
+            return state, ()
+        column = columns[min(state.harness_column, len(columns) - 1)]
+        pair_scopes = choose_pair_scope(state.rows, state.pair_scopes, key, column)
+        if pair_scopes == state.pair_scopes:
+            return state, ()
+        # A scope is where the files land, so choosing one re-prepares the reviewed plan (§172.5).
+        chosen = replace(state, pair_scopes=pair_scopes, quit_pending=False)
+        return chosen, (
+            ConsumerUiCommand(
+                ConsumerUiCommandKind.PREPARE_ACTION,
+                action=ConsumerActionKind.INSTALL,
+                selection=state.selection,
+                targets=state.targets,
+                pairs=state.pairs,
+                pair_scopes=pair_scopes,
+                focus=state.focus,
+                config_answers=state.config_draft.answers,
+                install_scope=state.install_scope,
+                python_installer=state.python_installer,
+            ),
+        )
     if state.session.screen is ConsumerScreen.REVIEW_SELECTION:
-        scope = scope_from_row(key)
-        if scope is not None:
-            # Changing the scope re-prepares: review, paths, effects and receipt all have to name
-            # the scope that was chosen, and a plan kept from the previous one would be a review of
-            # somewhere else (issue #11a).  The stored preference is untouched.
-            chosen_scope = replace(state, install_scope=scope, quit_pending=False)
-            if state.action is not ConsumerActionKind.INSTALL:
-                return chosen_scope, ()
-            return chosen_scope, (
-                ConsumerUiCommand(
-                    ConsumerUiCommandKind.PREPARE_ACTION,
-                    action=ConsumerActionKind.INSTALL,
-                    selection=state.selection,
-                    targets=state.targets,
-                    focus=state.focus,
-                    config_answers=state.config_draft.answers,
-                    install_scope=scope,
-                    python_installer=state.python_installer,
-                ),
-            )
         installer = installer_from_row(key)
         if installer is not None:
-            # The same reasoning as the scope: the plan records which backend will resolve the
-            # dependencies, so choosing another one is a different plan to review, not the same
-            # plan relabelled (issue #11b). Settings keep saying what they said.
+            # The plan records which backend will resolve the dependencies, so choosing another one
+            # is a different plan to review, not the same plan relabelled (issue #11b). Settings
+            # keep saying what they said.
             chosen_installer = replace(state, python_installer=installer, quit_pending=False)
             if state.action is not ConsumerActionKind.INSTALL:
                 return chosen_installer, ()
@@ -1159,21 +1240,34 @@ def _toggle_selection(
                     action=ConsumerActionKind.INSTALL,
                     selection=state.selection,
                     targets=state.targets,
+                    pairs=state.pairs,
+                    pair_scopes=state.pair_scopes,
                     focus=state.focus,
                     config_answers=state.config_draft.answers,
                     install_scope=state.install_scope,
                     python_installer=installer,
                 ),
             )
-        harness = target_from_row(key)
-        if harness is None:
-            return state, ()
-        targets = (
-            tuple(item for item in state.targets if item != harness)
-            if harness in state.targets
-            else (*state.targets, harness)
-        )
-        updated = replace(state, targets=targets, quit_pending=False)
+        if matrix_from_row(key) is not None:
+            columns = matrix_columns(state.rows)
+            if not columns:
+                return state, ()
+            column = columns[min(state.harness_column, len(columns) - 1)]
+            pairs = toggle_matrix_cell(state.rows, state.pairs, key, column)
+            if pairs == state.pairs:
+                return state, ()
+            targets = tuple(item for item in columns if item in pairs_harnesses(pairs))
+            updated = replace(state, pairs=pairs, targets=targets, quit_pending=False)
+        else:
+            harness = target_from_row(key)
+            if harness is None:
+                return state, ()
+            targets = (
+                tuple(item for item in state.targets if item != harness)
+                if harness in state.targets
+                else (*state.targets, harness)
+            )
+            updated = replace(state, targets=targets, quit_pending=False)
         if state.action is not ConsumerActionKind.INSTALL:
             return updated, ()
         origin = state.session.history[-1] if state.session.history else None
@@ -1184,6 +1278,8 @@ def _toggle_selection(
                 action=ConsumerActionKind.INSTALL,
                 selection=state.selection,
                 targets=targets,
+                pairs=updated.pairs,
+                pair_scopes=updated.pair_scopes,
                 focus=request_focus,
                 config_answers=state.config_draft.answers,
                 install_scope=state.install_scope,
@@ -1390,6 +1486,8 @@ def _request_action(
             action=action,
             selection=state.selection,
             targets=state.targets,
+            pairs=state.pairs,
+            pair_scopes=state.pair_scopes,
             focus=state.focus,
             config_answers=state.config_draft.answers,
             install_scope=(state.install_scope if action is ConsumerActionKind.INSTALL else ""),
@@ -1487,6 +1585,8 @@ def _request_action(
             if action is ConsumerActionKind.CONFIGURE
             else ()
         ),
+        pairs=state.pairs if action is ConsumerActionKind.INSTALL else (),
+        pair_scopes=state.pair_scopes if action is ConsumerActionKind.INSTALL else (),
         focus=focus,
         promotion_mode=(
             state.promotion_mode
@@ -1555,6 +1655,23 @@ def _action_prepared(
     action = event.action
     if action is None or action is not state.action:
         return state, ()
+    if (
+        action is ConsumerActionKind.INSTALL
+        and event.pairs
+        and not state.pairs
+        and state.session.screen is ConsumerScreen.REVIEW_SELECTION
+    ):
+        # §172.2: what the preparation ticked by default is ticked on screen too, so the plan
+        # and the matrix agree and Continue can go on without a keypress that changes nothing.
+        state = replace(state, pairs=event.pairs, targets=pairs_harnesses(event.pairs))
+    if action is ConsumerActionKind.INSTALL:
+        # A new plan names new provider items, so whatever 07b held was for another one; the
+        # adapter has already let those values go.
+        state = replace(state, entered_secrets=())
+    if action is ConsumerActionKind.INSTALL and event.pair_scopes:
+        # §172.5: the adapter merged what 07a chose with each pair's starting scope; that merge is
+        # what the plan was prepared for, so it is what 07a shows.
+        state = replace(state, pair_scopes=event.pair_scopes)
     if action is ConsumerActionKind.INSTALL and event.config_draft is not None:
         if state.session.screen is not ConsumerScreen.REVIEW_SELECTION:
             return state, ()
@@ -1684,6 +1801,8 @@ def _confirm_action(
             if action is ConsumerActionKind.CONFIGURE
             else ()
         ),
+        pairs=state.pairs if action is ConsumerActionKind.INSTALL else (),
+        pair_scopes=state.pair_scopes if action is ConsumerActionKind.INSTALL else (),
         focus=state.focus,
         review_digest=review_digest,
         config_answers=(
@@ -1845,6 +1964,9 @@ def _action_recorded(
         moved,
         selection=(),
         targets=(),
+        pairs=(),
+        pair_scopes=(),
+        harness_column=0,
         config_draft=InstallationConfigDraft(),
         config_form_active=False,
         inputs_submitted=False,
@@ -1878,6 +2000,12 @@ def _apply_setting(
     )
 
 
+#: Where a secret entered on 07b may still be on its way to the transaction (§172.6).
+_SECRET_HOLDING_SCREENS = frozenset(
+    {ConsumerScreen.INSTALL_CREDENTIALS, ConsumerScreen.READY, ConsumerScreen.INSTALLING}
+)
+
+
 def reduce_consumer_ui(
     state: ConsumerUiState,
     event: ConsumerUiEvent,
@@ -1888,6 +2016,21 @@ def reduce_consumer_ui(
         raise ValueError("consumer UI reduction needs typed state and event")
     if state.exited:
         return state, ()
+    reduced, commands = _reduce(state, event)
+    if reduced.entered_secrets and (
+        reduced.session.screen not in _SECRET_HOLDING_SCREENS or reduced.exited
+    ):
+        # §172.6: leaving before Ready was confirmed discards every value entered on 07b.
+        return replace(reduced, entered_secrets=()), (
+            *commands,
+            ConsumerUiCommand(ConsumerUiCommandKind.DISCARD_SECRETS),
+        )
+    return reduced, commands
+
+
+def _reduce(
+    state: ConsumerUiState, event: ConsumerUiEvent
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
     if event.kind is ConsumerUiEventKind.NAVIGATE:
         return _navigate(state, event.screen)
     if event.kind is ConsumerUiEventKind.BACK:
@@ -1896,6 +2039,8 @@ def reduce_consumer_ui(
         return _set_rows(state, event.rows)
     if event.kind is ConsumerUiEventKind.MOVE:
         return _move(state, event.text)
+    if event.kind is ConsumerUiEventKind.MOVE_COLUMN:
+        return _move_column(state, event.text)
     if event.kind is ConsumerUiEventKind.SET_SELECTION:
         return _set_selection(state, event.rows)
     if event.kind is ConsumerUiEventKind.TOGGLE_SELECTION:
@@ -1919,7 +2064,38 @@ def reduce_consumer_ui(
             session=replace(state.session, review_digest=None),
             quit_pending=False,
         ), ()
+    if event.kind is ConsumerUiEventKind.REQUEST_SECRET:
+        if (
+            state.session.screen is not ConsumerScreen.INSTALL_CREDENTIALS
+            or state.action is not ConsumerActionKind.INSTALL
+            or event.key in (CONFIG_SET_LATER_ROW, CONFIG_CONTINUE_ROW)
+            or event.key not in state.rows
+        ):
+            return state, ()
+        return replace(state, quit_pending=False), (
+            ConsumerUiCommand(
+                ConsumerUiCommandKind.ENTER_SECRET,
+                action=ConsumerActionKind.INSTALL,
+                focus=event.key,
+            ),
+        )
+    if event.kind is ConsumerUiEventKind.SECRET_ENTERED:
+        if state.session.screen is not ConsumerScreen.INSTALL_CREDENTIALS:
+            return state, ()
+        held = tuple(item for item in state.entered_secrets if item != event.key)
+        return replace(state, entered_secrets=(*held, event.key) if event.accepted else held), ()
     if event.kind is ConsumerUiEventKind.EDIT_INSTALL_CONFIG:
+        if (
+            state.session.screen is ConsumerScreen.REQUIRED_INPUTS
+            and state.config_form_active
+            and event.key == CONFIG_SET_LATER_ROW
+            and event.accepted is True
+            and state.config_draft.fields
+        ):
+            return _request_action(
+                replace(state, config_draft=state.config_draft.set_later()),
+                ConsumerActionKind.INSTALL,
+            )
         if (
             state.session.screen is not ConsumerScreen.REQUIRED_INPUTS
             or not state.config_form_active
@@ -2092,7 +2268,7 @@ def reduce_consumer_ui(
 
 
 #: Names the terminal shell gives the keys that are not one printable character.
-_SPECIAL_KEYS = frozenset({"up", "down", "enter", "escape", "backspace"})
+_SPECIAL_KEYS = frozenset({"up", "down", "left", "right", "enter", "escape", "backspace"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -2439,7 +2615,10 @@ def key_bindings(
         if toggling and acts(" "):
             bindings.append(KeyBinding("Space", _FORM_TOGGLE_LABELS[state.session.screen]))
         if acts("enter"):
-            bindings.append(KeyBinding("Enter", "Next" if typing or toggling else "Continue"))
+            label = "Next" if typing or toggling else "Continue"
+            if state.current_row == CONFIG_SET_LATER_ROW:
+                label = "Set later"
+            bindings.append(KeyBinding("Enter", label))
     elif state.session.screen is ConsumerScreen.SETTINGS:
         bindings.append(KeyBinding("Space/Enter", "Change"))
     elif state.session.screen is MaintainerScreen.CANDIDATE_FILTERS:
@@ -2447,7 +2626,11 @@ def key_bindings(
         if state.rows:
             bindings.append(KeyBinding("Space/Enter", "Toggle filter"))
     else:
-        if state.session.screen in _SELECTABLE and " " not in keys:
+        if matrix_columns(state.rows) and " " not in keys:
+            bindings.extend((KeyBinding("Space", "Tick"), KeyBinding("←/→", "Harness")))
+        elif scope_matrix_columns(state.rows) and " " not in keys:
+            bindings.extend((KeyBinding("Space", "Choose"), KeyBinding("←/→", "Scope")))
+        elif state.session.screen in _SELECTABLE and " " not in keys:
             label = (
                 "Deselect"
                 if state.session.screen is ConsumerScreen.ARTIFACT_DETAILS
@@ -2458,6 +2641,15 @@ def key_bindings(
         chosen = _row_action(state)
         if chosen is not None and "enter" not in keys:
             bindings.append(KeyBinding("Enter", chosen[1]))
+        elif state.session.screen is ConsumerScreen.INSTALL_CREDENTIALS and "enter" not in keys:
+            row = state.current_row
+            if row == CONFIG_SET_LATER_ROW:
+                bindings.append(KeyBinding("Enter", "Set later"))
+            elif row == CONFIG_CONTINUE_ROW:
+                bindings.append(KeyBinding("Enter", "Continue"))
+            elif row:
+                label = "Enter again" if row in state.entered_secrets else "Enter value"
+                bindings.append(KeyBinding("Enter", label))
         elif _answered_in_place(state) and "enter" not in keys:
             bindings.append(KeyBinding("Enter", "Credential details"))
         elif _uninstall_finished(state) and "enter" not in keys:
@@ -2470,7 +2662,10 @@ def key_bindings(
         elif state.session.screen in _CONFIRM_SCREENS and "enter" not in keys:
             label = "Continue" if state.action is None else "Confirm"
             bindings.append(KeyBinding("Enter", label))
-        elif state.session.screen is ConsumerScreen.REVIEW_SELECTION and "enter" not in keys:
+        elif (
+            state.session.screen in (ConsumerScreen.REVIEW_SELECTION, ConsumerScreen.INSTALL_SCOPE)
+            and "enter" not in keys
+        ):
             # D-270 (revising D-260's "always advertises"): Enter is offered once the prepared
             # plan matches the chosen harnesses, because only then does it advance; while the
             # choice is incomplete the status says what is missing instead of a key doing nothing.
@@ -2625,6 +2820,14 @@ def key_event(
             )
         return None
 
+    if (
+        state.session.screen is ConsumerScreen.INSTALL_CREDENTIALS
+        and key == "enter"
+        and (cursor or state.current_row) not in ("", CONFIG_SET_LATER_ROW, CONFIG_CONTINUE_ROW)
+    ):
+        # §172.6: a secret row is answered in a hidden prompt, never typed into a frame.
+        return ConsumerUiEvent(ConsumerUiEventKind.REQUEST_SECRET, key=cursor or state.current_row)
+
     if state.session.screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
         row = cursor or state.current_row
         if key == "escape":
@@ -2634,6 +2837,10 @@ def key_event(
         if key == "down":
             return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
         if key == "enter":
+            if row == CONFIG_SET_LATER_ROW:
+                return ConsumerUiEvent(
+                    ConsumerUiEventKind.EDIT_INSTALL_CONFIG, key=row, accepted=True
+                )
             if row == CONFIG_CONTINUE_ROW:
                 return (
                     ConsumerUiEvent(
@@ -2830,6 +3037,10 @@ def key_event(
             if not row
             else ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_CANDIDATE_FILTER, key=row)
         )
+    if key in ("left", "right") and (
+        matrix_columns(state.rows) or scope_matrix_columns(state.rows)
+    ):
+        return ConsumerUiEvent(ConsumerUiEventKind.MOVE_COLUMN, text=key)
     if key == " ":
         selected = (
             state.focus

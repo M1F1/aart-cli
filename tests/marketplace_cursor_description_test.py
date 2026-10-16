@@ -61,7 +61,7 @@ def _distinct():
 
 
 def _listed(
-    composed=None, profile: PresentationProfile = PresentationProfile.VERBOSE, **fields
+    composed=None, profile: PresentationProfile = PresentationProfile.MORE_INFO, **fields
 ) -> tuple[CanonicalScreenSource, ConsumerUiState]:
     source = CanonicalScreenSource(_distinct() if composed is None else composed)
     state = _at(ConsumerScreen.MARKETPLACE, **fields)
@@ -103,7 +103,7 @@ class FocusedOfferIsDescribedTest(unittest.TestCase):
 
     def test_fast_draws_the_list_and_no_description(self) -> None:
         composed = _distinct()
-        source, state = _listed(composed, PresentationProfile.FAST)
+        source, state = _listed(composed, PresentationProfile.LESS_INFO)
 
         drawn = "\n".join(frame(source, state))
 

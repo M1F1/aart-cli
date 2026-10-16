@@ -39,6 +39,7 @@ from aart_cli.install_state.model import (
     ArtifactEvidence,
     EffectProof,
     InstallationRecord,
+    InstallScope,
     SourceEvidence,
 )
 from aart_cli.installation.model import InstallLocation
@@ -97,8 +98,20 @@ def _unversioned(coordinate: ArtifactCoordinate) -> ArtifactCoordinate:
     return ArtifactCoordinate(coordinate.source, coordinate.artifact)
 
 
-def _relative_destination(path: str, host: InstallationHost) -> str:
-    if host.scope.value == "user":
+def _receipt_scope(
+    receipt: InstallationReceipt | PlacedArtifactReceipt, host: InstallationHost
+) -> str:
+    """The scope this installation went to: its owner's, and the session's for an ownerless one.
+
+    One install can put two installations into two scopes (§172.5), so the session's scope is
+    not the scope of every receipt it left.
+    """
+
+    return (host.scope if receipt.owner is None else receipt.owner.scope).value
+
+
+def _relative_destination(path: str, host: InstallationHost, scope: str) -> str:
+    if scope == "user":
         return path
     try:
         relative = Path(path).relative_to(host.project_root).as_posix()
@@ -125,13 +138,14 @@ def _effect_proofs(
     profile: str,
     host: InstallationHost,
 ) -> tuple[EffectProof, ...]:
+    scope = _receipt_scope(receipt, host)
     if isinstance(receipt, InstallationReceipt):
         if profile not in receipt_profiles(receipt):
             return ()
         return (
             EffectProof(
                 "write-file",
-                _relative_destination(receipt.launcher, host),
+                _relative_destination(receipt.launcher, host, scope),
                 "copy",
                 receipt.launcher_digest,
                 source_path=_source_path(receipt.launcher, receipt.root),
@@ -140,7 +154,7 @@ def _effect_proofs(
     deliveries = tuple(
         EffectProof(
             "copy-tree" if item.kind is DeliveryKind.TREE else "write-file",
-            _relative_destination(item.destination, host),
+            _relative_destination(item.destination, host, scope),
             "copy",
             item.digest,
             source_path=_source_path(item.source, receipt.root),
@@ -151,7 +165,7 @@ def _effect_proofs(
     merges = tuple(
         EffectProof(
             "managed-block",
-            _relative_destination(item.destination, host),
+            _relative_destination(item.destination, host, scope),
             "copy",
             item.digest,
         )
@@ -163,7 +177,7 @@ def _effect_proofs(
     settings = tuple(
         EffectProof(
             "merge-json",
-            _relative_destination(item.destination, host),
+            _relative_destination(item.destination, host, scope),
             "copy",
             settings_entry_digest(settings_entry_to_json(item.entry)),
             json_path=item.path,
@@ -187,8 +201,6 @@ def configured_setup_subject(
     receipts = LocalReceiptStore(host.state_root)
 
     def resolve(request: SetupRequest) -> Result[InstalledSubject]:
-        if request.scope != host.scope.value:
-            return _error("setup scope does not match the configured installation store")
         installed = receipts.installations()
         if isinstance(installed, Err):
             return installed
@@ -197,6 +209,7 @@ def configured_setup_subject(
             for item in installed.value
             if _unversioned(item.coordinate) == request.coordinate
             and request.profile in receipt_profiles(item.receipt)
+            and _receipt_scope(item.receipt, host) == request.scope
         )
         if len(matches) != 1:
             return _error("setup requires one exact configured installation receipt")
@@ -391,6 +404,12 @@ def configured_consumer_completion(
     placeholder = sha256_bytes(b"unreviewed-consumer-action")
     for installed in completed.action.prepared.installations:
         exact = installed.coordinate
+        # §172.5: each installation reports at the scope it went to.
+        scope: InstallScope = (
+            "user"
+            if (host.scope if installed.owner is None else installed.owner.scope).value == "user"
+            else "project"
+        )
         member = executions.get(exact)
         changed = bool(
             member is not None and member.outcome is not None and member.outcome.primary.applied
@@ -410,7 +429,7 @@ def configured_consumer_completion(
             setup_request = SetupRequest(
                 _unversioned(exact),
                 profile,
-                host.scope.value,
+                scope,
                 platform=plan.platform,
             )
             subject = subject_port(setup_request)
@@ -432,13 +451,13 @@ def configured_consumer_completion(
                 )
                 if isinstance(package, Err):
                     return package
-                key = f"{exact}#{profile}/{host.scope.value}"
+                key = f"{exact}#{profile}/{scope}"
                 items.append(
                     ConsumerReviewItem(
                         key,
                         exact,
                         profile,
-                        host.scope.value,
+                        scope,
                         action,
                         "unavailable-after-failed-install",
                         TrustClass.REGISTRY_REVIEWED.value,
@@ -463,12 +482,12 @@ def configured_consumer_completion(
                 )
                 continue
             declaration = pending.get((exact.source, exact.artifact))
-            key = f"{exact}#{profile}/{host.scope.value}"
+            key = f"{exact}#{profile}/{scope}"
             review_item = ConsumerReviewItem(
                 key,
                 exact,
                 profile,
-                host.scope.value,
+                scope,
                 action,
                 subject.value.record.source.resolved_commit,
                 subject.value.trust.value,

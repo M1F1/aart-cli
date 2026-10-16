@@ -260,7 +260,7 @@ class ValidationRenderingTest(unittest.TestCase):
         )
 
         drawn = "\n".join(
-            render_maintainer_validation_check(view.check("policy"), PresentationProfile.FAST)
+            render_maintainer_validation_check(view.check("policy"), PresentationProfile.LESS_INFO)
         )
 
         self.assertIn("declared: python", drawn)
@@ -275,7 +275,7 @@ class ValidationRenderingTest(unittest.TestCase):
             validate_candidate(_bundle(), policy=policy), _bundle(), policy=policy
         )
 
-        drawn = "\n".join(render_maintainer_policy_review(review, PresentationProfile.FAST))
+        drawn = "\n".join(render_maintainer_policy_review(review, PresentationProfile.LESS_INFO))
 
         self.assertIn("Approval required", drawn)
         self.assertIn("stdio", drawn)

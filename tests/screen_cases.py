@@ -22,9 +22,13 @@ from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
+    InstallSecretView,
     McpTestEntryView,
     McpTestView,
+    default_pair_scopes,
+    pair_key,
     project_dashboard,
+    scope_matrix_rows,
 )
 from aart_cli.application.maintainer_views import (
     MaintainerScreen,
@@ -77,6 +81,8 @@ RECORDED_SCREENS: tuple[ApplicationScreen, ...] = (
     ConsumerScreen.REVIEW_SELECTION,
     ConsumerScreen.AUTOMATIC_INSPECTION,
     ConsumerScreen.REQUIRED_INPUTS,
+    ConsumerScreen.INSTALL_SCOPE,
+    ConsumerScreen.INSTALL_CREDENTIALS,
     ConsumerScreen.READY,
     ConsumerScreen.INSTALLING,
     ConsumerScreen.SUCCESS,
@@ -247,6 +253,58 @@ def _consumer_cases() -> dict[ConsumerScreen, ScreenCase]:
     )
     cases[ConsumerScreen.MCP_TEST] = ScreenCase(
         "11a:prepared-offer", mcp_source, _reload(mcp_source, mcp_state, entering=True)
+    )
+
+    # 07a is recorded with two pairs of one artifact, one of which may go to either scope, so the
+    # All row, a radio cell and a scope the pair is not offered are all drawn (§172.5).
+    offers = (
+        (pair_key("company/mcp/github@1.0.0", "claude"), ("project", "user")),
+        (pair_key("company/mcp/github@1.0.0", "opencode"), ("user",)),
+    )
+    chosen = default_pair_scopes(offers, "project")
+    base = consumer_install_flow_shell_test.screens()
+    assert base.plan is not None
+    scope_source = CanonicalScreenSource(
+        replace(
+            base,
+            plan=replace(
+                base.plan, scope_offers=scope_matrix_rows(offers), chosen_pair_scopes=chosen
+            ),
+        )
+    )
+    scope_state = ConsumerUiState(
+        ConsumerSession(ConsumerScreen.INSTALL_SCOPE, review_digest=base.plan.review_digest),
+        action=ConsumerActionKind.INSTALL,
+        pair_scopes=chosen,
+    )
+    cases[ConsumerScreen.INSTALL_SCOPE] = ScreenCase(
+        "07a:two-pairs", scope_source, _reload(scope_source, scope_state, entering=True)
+    )
+
+    # 07b is recorded with two artifacts, one secret already stored and two to ask, one of which
+    # has a value waiting, so every row state is drawn and no value ever is (§172.6).
+    secrets_source = CanonicalScreenSource(
+        replace(
+            base,
+            plan=replace(
+                base.plan,
+                secrets=(
+                    InstallSecretView("company/mcp/github\tgithub-token", "GitHub token"),
+                    InstallSecretView("company/mcp/github\tapi-key", "API key", configured=True),
+                    InstallSecretView("company/mcp/jira\tjira-token", "Jira token"),
+                ),
+            ),
+        )
+    )
+    secrets_state = ConsumerUiState(
+        ConsumerSession(ConsumerScreen.INSTALL_CREDENTIALS, review_digest=base.plan.review_digest),
+        action=ConsumerActionKind.INSTALL,
+        entered_secrets=("company/mcp/jira\tjira-token",),
+    )
+    cases[ConsumerScreen.INSTALL_CREDENTIALS] = ScreenCase(
+        "07b:two-artifacts",
+        secrets_source,
+        _reload(secrets_source, secrets_state, entering=True),
     )
 
     activity_source = CanonicalScreenSource(activity_screens())

@@ -970,7 +970,7 @@
     {
       "id": "CP-29",
       "title": "Module boundaries as data, and OpenCode plugins as an artifact kind proven on an enterprise fork of superpowers",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -1005,6 +1005,63 @@
         {
           "id": "7",
           "title": "Run the full quality, integration and release-facing verification only after CP-29's implementation tasks are complete",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-30",
+      "title": "Per-artifact installation flow: harnesses and scope per artifact, inputs once per artifact and optional, credentials settled before installation",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Specify the per-artifact flow and optional inputs (§172, D-413), narrowing §169.4/INV-246",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "One transaction over artifact×harness×scope pairs: per-pair placement, a scope-routing harness registry, both scope leases",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The AART_NOT_SET placeholder for skipped ordinary values and secrets, stored per installation; nothing blocks on it",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Secrets captured before Ready into single-use carriers and stored by the transaction through stdin, never prompting",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "05 Harnesses per artifact, for one or many artifacts",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "07 Configuration once per artifact, copied into each new installation, with Set later",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "07a Scope per artifact and harness pair, starting on the Settings default",
+          "status": "done"
+        },
+        {
+          "id": "8",
+          "title": "07b Credentials once per artifact: enter, or skip as a placeholder; Set later",
+          "status": "done"
+        },
+        {
+          "id": "9",
+          "title": "Ready lists placeholders; Doctor, Installed and Credentials and variables warn about AART_NOT_SET without reading secrets",
+          "status": "done"
+        },
+        {
+          "id": "10",
+          "title": "Run the full quality, integration and release-facing verification, then the PR",
           "status": "done"
         }
       ]

@@ -241,7 +241,7 @@ class ActivityRenderingTest(unittest.TestCase):
     def test_fast_shows_the_timeline_a_person_reads(self):
         lines = render_activity(
             project_activity((record(1, "16:02:00"), record(0)), today=TODAY),
-            PresentationProfile.FAST,
+            PresentationProfile.LESS_INFO,
         )
         joined = "\n".join(lines)
         self.assertIn("Today", joined)
@@ -252,8 +252,8 @@ class ActivityRenderingTest(unittest.TestCase):
 
     def test_verbose_adds_the_digest_without_changing_what_happened(self):
         view = project_activity((record(),), today=TODAY)
-        fast = render_activity(view, PresentationProfile.FAST)
-        verbose = render_activity(view, PresentationProfile.VERBOSE)
+        fast = render_activity(view, PresentationProfile.LESS_INFO)
+        verbose = render_activity(view, PresentationProfile.MORE_INFO)
         self.assertIn("sha256:", "\n".join(verbose))
         self.assertEqual(
             [line for line in fast if "Installed" in line],
@@ -265,7 +265,7 @@ class ActivityRenderingTest(unittest.TestCase):
             project_receipt_detail(
                 record(statuses=(StepStatus.FAILED, StepStatus.NOT_ATTEMPTED), converged=False)
             ),
-            PresentationProfile.VERBOSE,
+            PresentationProfile.MORE_INFO,
         )
         joined = "\n".join(lines)
         self.assertIn("Undo", joined)

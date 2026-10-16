@@ -115,7 +115,7 @@ class InstalledConsumerViewsTest(unittest.TestCase):
         self.assertEqual(tuple(item.component for item in broken.drift), ("launcher",))
         self.assertIn("repair", broken.actions)
         self.assertNotIn("repair", ready.actions)
-        rendered = "\n".join(render_installed_artifact(broken, PresentationProfile.FAST))
+        rendered = "\n".join(render_installed_artifact(broken, PresentationProfile.LESS_INFO))
         self.assertIn("launcher", rendered)
         self.assertNotIn("copy-tree", rendered)
 
@@ -130,7 +130,7 @@ class InstalledConsumerViewsTest(unittest.TestCase):
 
         self.assertEqual(view.health, InstalledHealth.BROKEN.value)
         self.assertEqual(view.members_requiring_attention, ("company/mcp/github@1.0.0",))
-        rendered = "\n".join(render_installed_collection(view, PresentationProfile.FAST))
+        rendered = "\n".join(render_installed_collection(view, PresentationProfile.LESS_INFO))
         self.assertIn("company/mcp/github@1.0.0", rendered)
 
 
@@ -144,8 +144,8 @@ class LifecycleConsumerViewsTest(unittest.TestCase):
         assert isinstance(planned, Ok), planned
 
         view = project_lifecycle_plan(planned.value)
-        fast = "\n".join(render_lifecycle_plan(view, PresentationProfile.FAST))
-        verbose = "\n".join(render_lifecycle_plan(view, PresentationProfile.VERBOSE))
+        fast = "\n".join(render_lifecycle_plan(view, PresentationProfile.LESS_INFO))
+        verbose = "\n".join(render_lifecycle_plan(view, PresentationProfile.MORE_INFO))
 
         self.assertEqual(tuple(item.component for item in view.drift), ("launcher",))
         self.assertEqual(tuple(item.component for item in view.steps), ("launcher",))
@@ -168,7 +168,7 @@ class LifecycleConsumerViewsTest(unittest.TestCase):
         assert isinstance(planned, Ok), planned
 
         view = project_lifecycle_plan(planned.value)
-        rendered = "\n".join(render_lifecycle_plan(view, PresentationProfile.FAST))
+        rendered = "\n".join(render_lifecycle_plan(view, PresentationProfile.LESS_INFO))
 
         self.assertTrue(view.retained)
         self.assertEqual(view.steps, ())
@@ -196,7 +196,7 @@ class LifecycleConsumerViewsTest(unittest.TestCase):
         outcome = LifecycleExecutionOutcome(planned.value, primary)
 
         view = project_lifecycle_outcome(outcome)
-        rendered = "\n".join(render_lifecycle_outcome(view, PresentationProfile.FAST))
+        rendered = "\n".join(render_lifecycle_outcome(view, PresentationProfile.LESS_INFO))
 
         self.assertEqual(view.status, "partially-applied")
         self.assertNotIn("Success", rendered)

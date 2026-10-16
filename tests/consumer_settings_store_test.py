@@ -84,7 +84,7 @@ class ConsumerSettingsValueTest(unittest.TestCase):
             {"show_updates": "yes"},
             {"maintainer_mode": 1},
             {"maintainer_mode": False, "beta_features": True},
-            ["fast"],
+            ["less-info"],
         ):
             with self.subTest(payload=payload):
                 read = settings_from_data(payload)
@@ -130,9 +130,9 @@ class ConsumerSettingsStoreTest(unittest.TestCase):
             read = read_consumer_settings(root)
 
             self.assertIsInstance(read, Ok)
-            self.assertIs(read.value.profile, PresentationProfile.FAST)
+            self.assertIs(read.value.profile, PresentationProfile.LESS_INFO)
             stored = json.loads(pathlib.Path(consumer_settings_path(root)).read_text())
-            self.assertEqual(stored["detail_level"], "fast")
+            self.assertEqual(stored["detail_level"], "less-info")
 
     def test_a_file_that_is_not_readable_json_refuses_rather_than_opening_on_defaults(self) -> None:
         with tempfile.TemporaryDirectory() as root:

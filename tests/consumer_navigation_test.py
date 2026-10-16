@@ -99,11 +99,11 @@ class ConsumerNavigationTest(unittest.TestCase):
 
         marketplace = session.navigate(ConsumerScreen.MARKETPLACE)
         detail = marketplace.navigate(ConsumerScreen.ARTIFACT_DETAILS)
-        verbose = detail.switch_profile(PresentationProfile.VERBOSE)
+        verbose = detail.switch_profile(PresentationProfile.MORE_INFO)
 
         self.assertEqual(session.screen, ConsumerScreen.DASHBOARD)
         self.assertEqual(verbose.back().screen, ConsumerScreen.MARKETPLACE)
-        self.assertEqual(verbose.back().profile, PresentationProfile.VERBOSE)
+        self.assertEqual(verbose.back().profile, PresentationProfile.MORE_INFO)
         self.assertEqual(verbose.history, (ConsumerScreen.DASHBOARD, ConsumerScreen.MARKETPLACE))
 
 
@@ -126,7 +126,7 @@ class ConsumerOverviewTest(unittest.TestCase):
         self.assertEqual(doctor.issues, ("company/mcp/jira@1.0.0",))
         self.assertIn("repair-issues", doctor.actions)
         self.assertIn("3 installed", "\n".join(render_dashboard(dashboard)))
-        rendered_doctor = "\n".join(render_doctor(doctor, PresentationProfile.FAST))
+        rendered_doctor = "\n".join(render_doctor(doctor, PresentationProfile.LESS_INFO))
         self.assertIn("company/mcp/jira@1.0.0", rendered_doctor)
         self.assertNotIn("reinstall", rendered_doctor.lower())
 
@@ -142,7 +142,7 @@ class ConsumerOverviewTest(unittest.TestCase):
             line
             for registry in registries.values()
             for line in (
-                *render_registry(registry, PresentationProfile.FAST),
+                *render_registry(registry, PresentationProfile.LESS_INFO),
                 *registry_purpose(registry),
             )
         )
@@ -155,7 +155,7 @@ class ConsumerOverviewTest(unittest.TestCase):
         settings = ConsumerSettings()
         enabled = settings.with_maintainer_mode(True)
 
-        self.assertEqual(settings.profile, PresentationProfile.FAST)
+        self.assertEqual(settings.profile, PresentationProfile.LESS_INFO)
         self.assertFalse(settings.maintainer_mode)
         self.assertTrue(enabled.maintainer_mode)
         self.assertFalse(settings.maintainer_mode)

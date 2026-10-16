@@ -99,10 +99,10 @@ def route(screen: ConsumerScreen) -> tuple[ConsumerScreen, ...]:
     return ()
 
 
-def at(screen: ConsumerScreen, profile: PresentationProfile = PresentationProfile.FAST):
+def at(screen: ConsumerScreen, profile: PresentationProfile = PresentationProfile.LESS_INFO):
     source = CanonicalScreenSource(screens())
     state = _reload(source, ConsumerUiState(), entering=True)
-    if profile is PresentationProfile.VERBOSE:
+    if profile is PresentationProfile.MORE_INFO:
         state, _ = reduce_consumer_ui(state, ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROFILE))
     for hop in route(screen):
         state, _ = _navigate(source, state, hop)
@@ -111,7 +111,9 @@ def at(screen: ConsumerScreen, profile: PresentationProfile = PresentationProfil
     return source, state
 
 
-def drawn(screen: ConsumerScreen, profile: PresentationProfile = PresentationProfile.FAST) -> str:
+def drawn(
+    screen: ConsumerScreen, profile: PresentationProfile = PresentationProfile.LESS_INFO
+) -> str:
     source, state = at(screen, profile)
     return "\n".join(frame(source, state))
 
@@ -131,12 +133,13 @@ class InstallFlowScreenTest(unittest.TestCase):
         # D-401: the identity is More info's, as on Ready.
         self.assertNotIn("Review identity:", fast)
         self.assertIn(
-            "Review identity:", drawn(ConsumerScreen.REVIEW_SELECTION, PresentationProfile.VERBOSE)
+            "Review identity:",
+            drawn(ConsumerScreen.REVIEW_SELECTION, PresentationProfile.MORE_INFO),
         )
 
     def test_inspection_reports_what_it_found_without_asking_anything(self):
         fast = drawn(ConsumerScreen.AUTOMATIC_INSPECTION)
-        verbose = drawn(ConsumerScreen.AUTOMATIC_INSPECTION, PresentationProfile.VERBOSE)
+        verbose = drawn(ConsumerScreen.AUTOMATIC_INSPECTION, PresentationProfile.MORE_INFO)
 
         self.assertIn("python", fast)
         self.assertIn("satisfied", fast.lower())
@@ -157,7 +160,7 @@ class InstallFlowScreenTest(unittest.TestCase):
 
     def test_ready_summarises_outcomes_and_verbose_shows_the_same_plan(self):
         fast = drawn(ConsumerScreen.READY)
-        verbose = drawn(ConsumerScreen.READY, PresentationProfile.VERBOSE)
+        verbose = drawn(ConsumerScreen.READY, PresentationProfile.MORE_INFO)
 
         self.assertIn("securely", fast.lower())
         self.assertNotIn("copy-tree", fast)
@@ -168,8 +171,8 @@ class InstallFlowScreenTest(unittest.TestCase):
 
     def test_progress_is_meaningful_rather_than_a_log_until_verbose(self):
         view = screens().outcome
-        fast = "\n".join(render_progress(view, PresentationProfile.FAST))
-        verbose = "\n".join(render_progress(view, PresentationProfile.VERBOSE))
+        fast = "\n".join(render_progress(view, PresentationProfile.LESS_INFO))
+        verbose = "\n".join(render_progress(view, PresentationProfile.MORE_INFO))
 
         self.assertIn("launcher", fast)
         self.assertNotIn("write-file", fast)

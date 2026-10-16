@@ -201,12 +201,14 @@ class MaintainerRenderingTest(unittest.TestCase):
         )
 
     def test_fast_dashboard_and_source_list_are_outcome_oriented(self) -> None:
-        dashboard = "\n".join(render_maintainer_dashboard(self.dashboard, PresentationProfile.FAST))
+        dashboard = "\n".join(
+            render_maintainer_dashboard(self.dashboard, PresentationProfile.LESS_INFO)
+        )
         sources = "\n".join(
             render_maintainer_sources(
                 (self.source,),
                 cursor="authors",
-                profile=PresentationProfile.FAST,
+                profile=PresentationProfile.LESS_INFO,
             )
         )
 
@@ -222,7 +224,7 @@ class MaintainerRenderingTest(unittest.TestCase):
 
         other = dataclasses.replace(self.source, alias="tools")
         lines = render_maintainer_sources(
-            (self.source, other), cursor="authors", profile=PresentationProfile.FAST
+            (self.source, other), cursor="authors", profile=PresentationProfile.LESS_INFO
         )
 
         self.assertEqual(lines.count(""), 1)
@@ -231,8 +233,8 @@ class MaintainerRenderingTest(unittest.TestCase):
         self.assertNotEqual(lines[-1], "")
 
     def test_verbose_source_detail_discloses_the_full_pinned_revision(self) -> None:
-        fast = "\n".join(render_maintainer_source(self.source, PresentationProfile.FAST))
-        verbose = "\n".join(render_maintainer_source(self.source, PresentationProfile.VERBOSE))
+        fast = "\n".join(render_maintainer_source(self.source, PresentationProfile.LESS_INFO))
+        verbose = "\n".join(render_maintainer_source(self.source, PresentationProfile.MORE_INFO))
 
         self.assertIn("https://authors.example/agents/authors.git", fast)
         self.assertIn("branch: main", fast)

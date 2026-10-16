@@ -21,6 +21,7 @@ from .credentials import CredentialProviderRef, CredentialReference, credential_
 from .identifiers import InputId
 
 __all__ = [
+    "SKIPPED_INPUT",
     "BindingExposure",
     "BoundInput",
     "BoundInputs",
@@ -44,6 +45,7 @@ __all__ = [
     "binding_kind",
     "bound_inputs_to_data",
     "input_to_data",
+    "is_skipped_value",
     "validate_config_value",
 ]
 
@@ -274,10 +276,24 @@ def _url_host(value: str) -> str | None:
     return host.lower()
 
 
-def validate_config_value(validation: InputValidation | None, value: str) -> str | None:
-    """Return why the value is unacceptable, or None when it satisfies the rule."""
+#: What a skipped input is stored as, ordinary or secret, in each installation it belongs to
+#: (§172.3). It is something to set later, never a refusal: nothing blocks on it.
+SKIPPED_INPUT = "AART_NOT_SET"
 
-    if validation is None:
+
+def is_skipped_value(value: str) -> bool:
+    """Whether a stored ordinary value is still the placeholder a skip left behind."""
+
+    return value == SKIPPED_INPUT
+
+
+def validate_config_value(validation: InputValidation | None, value: str) -> str | None:
+    """Return why the value is unacceptable, or None when it satisfies the rule.
+
+    The placeholder is not an answer, so it is not judged as one (§172.3).
+    """
+
+    if validation is None or is_skipped_value(value):
         return None
     if validation.kind == "identifier":
         return None if _ID_RE.fullmatch(value) else validation.message or "expected an identifier"

@@ -110,7 +110,7 @@ class RegistryCommitScreenExplainsManualPublicationTest(unittest.TestCase):
 
     def test_nothing_after_the_commit_calls_it_published_or_offers_a_push(self) -> None:
         drawn = "\n".join(
-            render_maintainer_registry_commit(self.applied, PresentationProfile.VERBOSE)
+            render_maintainer_registry_commit(self.applied, PresentationProfile.MORE_INFO)
         )
 
         for claim in ("Published", "published", "press p", "Enter pushes", "Publication"):

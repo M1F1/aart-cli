@@ -4,6 +4,82 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-30 step 10: CP-30 is complete.**
+- PR #69 carries CP-30 plus #66, #67 and #68, merged in so one release holds all four. The
+  conflicts were appended decisions and #68's `LESS_INFO`/`MORE_INFO` rename, applied to the
+  CP-30 code.
+- CI found two defects, both fixed: a credential-shaped comment, and e2e drives that depended on
+  `uv` being on PATH (B-193). The full `pr-check` passed on #69 before the integration; the
+  integrated head runs it again.
+
+**2026-10-16, D-410: Success leaves the Undo explanation to Verbose and the receipt.** Fast no
+longer ends on why Undo is unavailable; Verbose and Receipt Details still say it
+(`tests/installation_success_actions_test.py`).
+**2026-10-16, CP-30 step 9 (D-421): placeholders are said before and after they are stored.**
+- Ready lists every input being left as `AART_NOT_SET`, in Fast and Verbose.
+- Doctor, Installed and Credentials and variables warn "Still the AART_NOT_SET placeholder — set
+  it in Credentials and variables". Ordinary values are compared as text; a secret's answer comes
+  from the provider's own comparison, and no value is read.
+- 1768 related tests pass, with ruff, ruff format, mypy and tach.
+- Next: step 10, full verification and the PR.
+
+**2026-10-16, CP-30 (D-420): Tabnine installs at user scope.**
+- This was the owner's request. The tables gain Tabnine's user Skill, memory and hook rows, all
+  under `~/.tabnine/agent`, as Tabnine CLI documents.
+- The user MCP target was `~/agent/settings.json`, which Tabnine never reads. It is now
+  `~/.tabnine/agent/settings.json`.
+- In the e2e test, a Skill and an MCP installed with `--scope user` land in Tabnine's directories.
+- 1265 related tests pass, with ruff, ruff format, mypy and tach.
+- Not yet walked against the company build (B-191). 07a's scope offer ignores harness capability
+  (B-192).
+
+**2026-10-16, CP-30 step 8 (D-419): 07b asks each secret once per artifact, before Ready.**
+- Enter on a secret lends the terminal and reads with a hidden prompt. The value goes into one
+  single-use carrier per installation; the screen and the state only know "entered, hidden".
+- A secret every installation already holds is "Configured securely" and asks nothing. Set later
+  and Continue go to Ready; anything not entered is stored as `AART_NOT_SET`.
+- Leaving 07b, Ready or Installing discards every entry.
+- 1540 related tests pass, with ruff, ruff format, mypy and tach.
+- Next: step 9, the placeholder warnings.
+
+**2026-10-16, CP-30 step 7 (D-418): 07a puts each artifact×harness pair on its own scope.**
+- 05 no longer asks the scope. 07a appears when some pair may go to two scopes, with an All
+  installations row when there is more than one pair.
+- In the e2e test, one install puts the MCP into the user home and the Skill into the project. The
+  setup report reads each receipt at its own scope.
+- Execution refuses pair scopes that differ from the review's.
+- 2334 related tests pass, with ruff, ruff format, mypy and tach.
+- Next: step 8, 07b credentials.
+
+**2026-10-16, CP-30 step 6 (D-417): 07 asks each input once per artifact, with Set later.**
+- One answer is copied into each new installation of its artifact.
+- Set later stores `AART_NOT_SET` and the install completes (e2e test).
+- 2342 related tests pass, with ruff, ruff format, mypy and tach.
+- Next: step 7, the 07a scope per pair.
+
+**2026-10-16, CP-30 step 5 (D-416): screen 05 is the artifact×harness matrix.**
+- Each ticked pair becomes one installation. The two-artifact e2e test installs the MCP only into
+  claude and the Skill only into opencode.
+- ←/→ choose the harness column. Before this, an arrow key raised in `key_event`.
+- An artifact only one harness can host starts ticked (§172.2), and the narrowed plan keeps its
+  scope offer. 1827 related tests pass, with ruff, ruff format and mypy.
+- Next: step 6's 07 form.
+
+**2026-10-16, CP-30 steps 2–4 (D-413, D-414).**
+- One transaction now installs across pairs and scopes.
+- A skipped input is stored as `AART_NOT_SET`, and the Keychain recognises it without reading it.
+- Install secrets are written through `security -i` stdin and never prompted for.
+- Next: the TUI steps 5–9, waiting on the owner's mockup decisions.
+
+**2026-10-16, CP-30 step 1 (D-413): the per-artifact install flow is specified.**
+- Product Specification §172 defines: harnesses per artifact; configuration once per artifact,
+  copied into each new installation; scope per artifact and harness pair; secrets settled before
+  Ready.
+- Every input is optional during installation. A skipped one is stored as `AART_NOT_SET`, nothing blocks
+  on it, and Doctor, Installed and Credentials and variables warn about it.
+- §169.4 and INV-246 are narrowed for one operation. INV-258–INV-261 are added.
+- Implementation starts at step 2.
+
 **2026-10-15, CP-29 step 7: CP-29 is complete.** The full `pr-check` passed on #64 (run
 38796746723). What remains is the owner's merge, and the release Release Please makes from it.
 

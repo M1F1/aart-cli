@@ -10351,3 +10351,236 @@ changes no behaviour:
 `forbid_circular_dependencies = true`. `tests/tach_config_test.py` checks the declared graph is
 acyclic and the flag is set, without tach, in the unit gate. No compatibility imports are left for
 the old paths (CP-26).
+
+## D-410 - Success explains a withheld Undo only under Verbose
+
+**Owner request, 2026-10-16. Refines D-256; no Product Specification change.** The Success
+rule asks only that Undo be offered when a reviewed reversal exists, and none does. Fast ended every
+Success screen with the reason, e.g. "Undo unavailable: a credential change cannot be undone: no
+previous value is retained anywhere, deliberately". That is detail, not the outcome, so
+`render_transaction_success` prints it only under Verbose. Receipt Details keeps its `Undo:` line
+under both profiles, so the reason is still one row away, on the exact record. Verbose is unchanged.
+## D-411 - Artifact Details states each fact in its own block, and Fast names only eligible harnesses
+
+**Owner request, 2026-10-16. No Product Specification change.** Fast Artifact Details drew the
+coordinate, approval, installed state and harness lists as one block. It also listed harnesses
+"Detected but not eligible" and "What it needs: nothing else before choosing an eligible harness".
+Each statement is now its own block (`separate`). Fast names only the eligible harnesses, or why
+there are none. The detected-but-ineligible ones, with their reasons, are in Verbose's
+`installation harnesses` section, which is unchanged. "What it needs" is drawn only when the
+artifact has inputs to name.
+## D-412 — Presentation profile members are named by what they show
+
+`PresentationProfile.FAST` / `VERBOSE` become `LESS_INFO` / `MORE_INFO`, with stored values
+`less-info` / `more-info`, so the code uses the words the `[v] More info / Less info` control and the
+Detail level setting already show (D-398). The rename changes no behaviour. A
+`consumer-settings.json` still holding `fast` or `verbose` is refused like any other unknown value
+and has to be chosen again in Settings. Nothing reads the old values (CP-26, no compatibility).
+Prose that names the Fast and Verbose presentations from the Product Specification stays as it is.
+## D-413 — Per-artifact installation flow with optional inputs (CP-30)
+
+The owner asked for the install flow to be organised around the artifacts that were selected
+(2026-10-16), then for inputs to be optional during installation. Product Specification §172
+records it:
+- **05** chooses harnesses per artifact.
+- **07** asks each ordinary input once per artifact.
+- **07a** chooses the scope per artifact and harness pair, starting on the Settings default.
+- **07b** settles secrets before Ready.
+
+Every screen handles several artifacts at once.
+
+**Optional inputs, and nothing blocks.** Every input may be skipped, and `Set later` skips
+everything still open on a screen. A skipped input is stored as the literal placeholder `AART_NOT_SET` in
+each installation it belongs to, both ordinary values and secrets. The owner was explicit that
+nothing blocks: the install completes and the launcher starts with whatever is stored. Doctor,
+Installed and Credentials and variables only warn.
+
+**Detecting the placeholder.** A secret is compared inside a child-process pipeline,
+`security find-generic-password -w … | grep -cx AART_NOT_SET`, over the existing counted-pipeline seam, so
+this process never holds the value. That is an exact match, where a stored-length rule would only
+be a guess, and it was preferred for that reason.
+
+**What it supersedes.** The CP-26 rule "no copy-answers or cross-target prefill" (D-332–D-335,
+§169.4, INV-246) is narrowed for one operation only. The answer is copied once into every new
+installation of the same artifact, and after that the copies are independent. Storage ownership,
+naming and Keychain addressing are unchanged.
+
+**Secrets.** An entered secret is captured by a hidden prompt into a single-use `TransientSecret`
+held by the consumer composition, never by UI state. The transaction writes it, or the
+placeholder, into each owner's item through `security -i` on stdin with `-X <hex>`. The value
+therefore never appears on argv, and quoting cannot corrupt it. This was checked against a
+temporary keychain. The transaction never prompts, so a person who cannot find a credential skips
+it instead of abandoning the install.
+
+**Mixed scopes.** One operation may write both scopes. `McpTarget` already carries its scope, so a
+registry that resolves each target against its own scope's root and a lock that holds both scope
+leases in sorted order keep this one transaction with one review digest. It is not split into two
+transactions that could half-commit.
+
+## D-414 — The install transaction lends no terminal; repair keeps the briefed prompt (CP-30 step 4)
+
+Under D-413 an install prompts for nothing. `LocalConsumerActions` therefore stops passing
+`interactive_credentials`/`credential_handover` to `complete_configured_installation`. It passes
+the carriers entered before Ready and turns on `skipped_secrets_as_placeholders`. This supersedes
+the install-time half of D-263 (the briefing on the lent terminal before the provider's prompt).
+Install guidance is shown on screen 07, and on 07b once step 8 lands. The briefed prompt and the
+terminal loan remain for repairs from Credentials and variables, which still run the provider's
+own prompt. With nothing entered, a `ReplaceCredential` leaves the item as it is and the run
+continues; a placeholder never displaces a value somebody gave.
+
+`security -i` answered 0 for a failed command in a probe (a missing keychain). A carried write
+therefore counts only when `inspect` finds the item afterwards, and any echo of the hex in a
+refusal is redacted.
+
+## D-415 — The placeholder is `AART_NOT_SET`, not `SKIP` or one character (CP-30)
+
+The owner chose this after the mockup review on 2026-10-16. A one-character placeholder such as
+`0` was considered and rejected:
+- `0` is a real configuration value (`DEBUG=0`, `RETRIES=0`). It would raise false warnings and
+  bypass validation for legitimate settings.
+- The launcher passes the placeholder through unchanged, and a server could accept `0` as a valid
+  number and misbehave silently.
+
+`AART_NOT_SET` is not a plausible real value. It names its origin wherever it surfaces (Keychain,
+a server log), and detection stays an exact whole-value match, so `AART_NOT_SET_LATER` is not a
+placeholder. It replaces `SKIP` everywhere D-413 and §172 named it.
+
+The same review accepted the matrix screens with their "All artifacts"/"All installations" rows
+(shown only when there is more than one row), the order Harnesses → Configuration → Scope →
+Credentials, and Set later at the top of the form.
+
+## D-416 — Screen 05's matrix: a column cursor and a tri-state All row (CP-30 step 5)
+
+The matrix needs a second axis of movement. ↑/↓ keep moving between rows, and ←/→ choose the
+harness column, drawn as `>` before the cell Space would change. A second cursor convention, or a
+per-cell row list, would have doubled the rows a Collection draws.
+
+The "All artifacts" cell acts on its column, and only over the artifacts that can go into that
+harness. It ticks every one of them unless all are already ticked, in which case it clears them,
+so one key always makes the column uniform. It draws `[~]` while only some are ticked. Cells an
+artifact cannot go into are `–` and do nothing, so a choice can never hold a pair the plan did not
+offer. Each row string carries what that artifact can go into, so the reducer decides this without
+the plan.
+
+## D-417 — 07's Set later fills the placeholder into the draft (CP-30 step 6)
+
+Set later is one row at the top of 07. Pressing it accepts every value that is present and valid
+and replaces every other value with `AART_NOT_SET`. The form then submits as usual.
+- **What counts as an answer.** A declared default left in the field is an answer (§172.4). An
+  empty field is unanswered. So is a field whose value has a problem, because it was never a
+  value the form would accept.
+- **Why the draft holds the placeholder.** The placeholder then travels through every later
+  re-preparation as an ordinary answer, and `copy_artifact_answers` copies it like one. No command
+  carries a "set later" flag that a later re-prepare from 05 could drop.
+- **Where the cursor starts.** The form opens on its first field, not on Set later, so a person
+  who starts typing is in a field. Enter on Set later is labelled "Set later" in the legend.
+- **What is grouped.** A field is keyed by Registry alias and artifact (`artifact_answer_key`),
+  so a local and a remote alias are two groups. Secret rows stay per installation until 07b.
+
+## D-418 — 07a puts each pair on one scope, and the setup report reads each receipt's own (CP-30 step 7)
+
+07a, titled "Scope", is a radio matrix: one row per artifact×harness pair, one column per scope.
+- **When it appears.** Only when some pair may go to two scopes: what its artifact declares, less
+  project when the session has no project. A pair offered one scope has a fact, not a choice.
+- **Where it sits.** After 07, or after 05 when nothing is asked. A plan with a Python-backend
+  choice still returns to 05 for that after the form (D-380), then goes on to 07a. 05 no longer
+  draws the "Install into" radio; the scope rows and `scope_row`/`scope_from_row` are gone.
+- **The starting scope.** Each pair starts on the Settings scope when it is offered, otherwise on
+  its only scope. A choice is kept across re-preparations while the pair and that scope are still
+  offered, and dropped when they are not (`default_pair_scopes`).
+- **The All installations row.** Shown only with more than one pair. Space on it moves every pair
+  that may go to that scope; a pair that may not stays where it is. Its cell reads `(*)` when every
+  eligible pair is there and `(~)` when only some are.
+- **Review integrity.** Choosing a scope re-prepares the plan. Enter goes on to Ready only once
+  the plan's `chosen_pair_scopes` equal the screen's, and execution refuses a confirmation whose
+  pair scopes differ from the reviewed ones.
+- **Rows.** `scopes:<pair>\t<project,user>`, sorted by pair key, so the order does not depend on
+  the order of the ticks on 05.
+- **Setup report.** The post-install setup projection used the session's single scope for every
+  receipt. A user-scope receipt was then measured against the project root and raised. It now
+  reads each receipt's owner scope (`_receipt_scope`). A setup request matches only a receipt at
+  its own scope, and each review item carries its installation's scope.
+
+
+## D-419 — 07b reads each secret with a hidden prompt, once per artifact, before Ready (CP-30 step 8)
+
+07b, titled "Credentials", asks the secrets that some new installation does not hold yet.
+- **Rows.** Set later first, then one row per artifact×secret input (`<artifact>\t<input>`, the
+  key 07 uses), then Continue. With more than one artifact the rows are grouped under it. The cursor
+  opens on the first secret, as 07 opens on its first field.
+- **Configured securely.** A secret every installation already holds, as its provider reports, is
+  no question. It is not a row: the status says "Configured securely" for it. When nothing is left
+  to ask, 07b is not shown.
+- **Entering.** Enter on a row asks the adapter (`ENTER_SECRET`). The adapter lends the terminal
+  with a briefing (`credential_entry_briefing`: what the credential is, who needs it, where it is
+  stored and for how many installations, and that nothing is echoed). It reads with `getpass`,
+  which is injectable as `secret_reader`. One `TransientSecret` is created per credential
+  reference, so the artifact's value goes into each of its installations and no other (INV-259).
+- **What the UI knows.** The answer is `SECRET_ENTERED` with the row and whether a value was
+  entered. The state keeps only row keys (`entered_secrets`); a row reads "entered, hidden" or
+  "not set". No value reaches a view, a plan, a frame or the state (§172.6).
+- **An empty answer** withdraws an earlier entry for that row; the row stays "not set".
+- **Set later and Continue** both go to Ready. Anything not entered is stored as `AART_NOT_SET`
+  by the transaction (D-414).
+- **Discarding.** Leaving 07b, Ready and Installing for any other screen, or quitting, emits
+  `DISCARD_SECRETS`, and the adapter forgets every carrier. A new review also starts empty.
+- **Order.** 07a, when shown, comes before 07b. Choosing a scope re-prepares the plan, which would
+  otherwise discard what was entered.
+
+## D-420 — Tabnine at user scope reads `~/.tabnine/agent`, for every kind it documents (CP-30)
+
+The owner asked, during step 8, whether artifacts can be installed for Tabnine at user scope, and
+asked for it to be added if not. Before this change, Tabnine at user scope had:
+- a Guideline target;
+- an MCP target at `agent/settings.json`. The user root is the home directory, so this wrote
+  `~/agent/settings.json`, which Tabnine never reads.
+
+Its Skill, memory and hook rows were missing on purpose: the build measured then documented none.
+Tabnine CLI's published documentation now names all three:
+- Agent Skills in `~/.tabnine/agent/skills/<name>/SKILL.md`, beside the project's
+  `.tabnine/agent/skills/`;
+- the global context file `~/.tabnine/agent/TABNINE.md`;
+- hooks merged from `~/.tabnine/agent/settings.json` as well as the project's.
+
+The tables now carry:
+- MCP `.tabnine/agent/settings.json`;
+- Skill `.tabnine/agent/skills/<name>`;
+- memory `.tabnine/agent/TABNINE.md`;
+- hook scripts `.tabnine/agent/hooks/<name>` with the same settings file, events and flat entry
+  shape as project scope.
+
+Every path is relative to the home. The legacy `profiles/builtin.py` user targets say the same.
+
+Tabnine's `.agents/skills` aliases are not targets. They are the cross-vendor interop directory,
+which another harness could claim, as with Codex.
+
+Evidence:
+- The tables follow published documentation; they were not measured against a live build. Tabnine
+  is not installed on the development machine.
+- The product specification's own example is `~/.tabnine/agent/skills/github-company-user/SKILL.md`
+  (§169), and it asks for Tabnine CLI user scope to be characterised rather than taken from an old
+  capability table.
+- A live walk against the company build is still owed (B-191).
+
+## D-421 — Where a placeholder is said, and how it is known (CP-30 step 9)
+
+§172.3 and §172.6 ask Ready to list what will be stored as `AART_NOT_SET`, and Doctor, Installed
+and Credentials and variables to warn about every value that still is, without reading a secret.
+
+- **Ready** lists, in Fast and Verbose, every `artifact: input` left as the placeholder. The
+  ordinary ones come from the narrowed plan's `config_placeholders`: the bound non-secret inputs
+  whose value is exactly `AART_NOT_SET`. The secrets are the 07b rows not entered in this visit,
+  which the UI state already knows by row key (D-419). `placeholders_left` joins the two.
+- **Installed** carries the answer as `InstalledArtifactView.placeholders`, filled where the
+  machine is assembled, because that is the one place both the configuration files and the
+  credential observations are known. Ordinary values are compared as text
+  (`ConfigurationFileView.placeholders`). Secrets use `CredentialObservation.placeholder`, which
+  the provider answers by counting matches in its own processes (step 3); it is now kept on
+  `CredentialRecordView.placeholder`.
+- **Doctor** marks an installation with a placeholder `⚠` and lists the warning under it, and its
+  status adds "N still hold AART_NOT_SET". The placeholder is not counted as needing attention
+  and offers no repair: nothing is broken, and Credentials and variables is where it is set.
+- **Credentials and variables**: screen 22 lists the warning per installation; 22a puts it under
+  the value and in place of "Configured securely" for the credential.
+- Success does not repeat the list. The specification does not ask for it, Ready has just said it,
+  and Installed says it from then on.

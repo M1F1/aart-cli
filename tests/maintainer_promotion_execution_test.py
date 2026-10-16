@@ -286,7 +286,9 @@ class CandidatePromotionScreenProjectionTest(unittest.TestCase):
 
     def test_screen_44_reports_the_validated_projected_registry_without_writing(self) -> None:
         view = project_maintainer_registry_validation(self.prepared)
-        drawn = "\n".join(render_maintainer_registry_validation(view, PresentationProfile.VERBOSE))
+        drawn = "\n".join(
+            render_maintainer_registry_validation(view, PresentationProfile.MORE_INFO)
+        )
 
         self.assertEqual(view.registry_snapshot, str(self.prepared.registry_snapshot))
         self.assertIn("Registry validation: Passed", drawn)
@@ -295,7 +297,7 @@ class CandidatePromotionScreenProjectionTest(unittest.TestCase):
 
     def test_screen_45_commits_locally_and_leaves_publication_to_git(self) -> None:
         ready = project_maintainer_registry_commit(self.prepared)
-        drawn = "\n".join(render_maintainer_registry_commit(ready, PresentationProfile.FAST))
+        drawn = "\n".join(render_maintainer_registry_commit(ready, PresentationProfile.LESS_INFO))
 
         self.assertFalse(ready.applied)
         self.assertIn("Ready to write approved registry state", drawn)
@@ -312,7 +314,9 @@ class CandidatePromotionScreenProjectionTest(unittest.TestCase):
             "Promote mcp/github-mcp@1.0.0 to company",
         )
         applied = project_maintainer_registry_commit(self.prepared, result=completed)
-        persisted = "\n".join(render_maintainer_registry_commit(applied, PresentationProfile.FAST))
+        persisted = "\n".join(
+            render_maintainer_registry_commit(applied, PresentationProfile.LESS_INFO)
+        )
         self.assertTrue(applied.applied)
         self.assertIn("Approved registry state written locally", persisted)
         self.assertIn("Subscribers cannot see this commit yet", persisted)

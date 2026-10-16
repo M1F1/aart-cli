@@ -1,6 +1,48 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-15)
+## Where the work is (2026-10-16)
+
+**CP-29 is merged and released as 0.8.0. The active work is CP-30, the per-artifact install flow:
+`docs/refactor/slices/CP-30-per-artifact-install-flow.md`, on `feat/cp-30-install-flow-per-artifact`.**
+Product Specification §172 and D-413 define it, plus D-414. Its ten steps are in `plan.json`.
+Steps 1–9 are done; the first four are:
+1. the specification;
+2. one transaction over artifact×harness×scope pairs;
+3. the `AART_NOT_SET` placeholder;
+4. secrets written by the transaction through stdin, with no prompt mid-install.
+
+Steps 5–9 are the TUI screens: 05 harnesses, 07 configuration, 07a scope, 07b credentials, and the
+Ready/Doctor/Installed warnings. They follow the mockups at
+https://claude.ai/artifact/TEEgf2ijGL36So7Esb2gMv, whose open decisions the owner settled on
+2026-10-16 (D-415):
+- matrix screens;
+- "All artifacts"/"All installations" rows, shown only with more than one row;
+- the order Harnesses → Configuration → Scope → Credentials;
+- Set later at the top;
+- the placeholder `AART_NOT_SET`.
+
+Step 5 is done (D-416). Screen 05 is the matrix, and its ticked pairs reach the transaction as
+`InstallationAssignment`s, at the plan's single scope until step 7.
+Step 6 is done (D-417). 07 asks each ordinary input once per artifact. Set later is its first row
+and leaves `AART_NOT_SET` in every field without a valid answer.
+Step 7 is done (D-418). 07a puts each pair on one scope, starting on the Settings default, with
+an "All installations" row. It appears only when some pair may go to two scopes. 05 no longer asks
+the scope.
+
+Step 8 is done (D-419). 07b reads each secret once per artifact with a hidden prompt on the lent
+terminal, into one carrier per installation. A secret already held is "Configured securely"; Set
+later and Continue go to Ready, and anything not entered is stored as `AART_NOT_SET`.
+Step 9 is done (D-421). Ready lists what is left as `AART_NOT_SET`; Doctor, Installed and
+Credentials and variables warn about it, without reading a secret.
+Tabnine also installs at user scope now (D-420, owner request; live walk owed, B-191).
+Step 10 is done. #66, #67 and #68 were merged into #69 so one release (0.9.0) carries all four;
+their conflicts were the appended decisions and #68's profile rename, which the CP-30 code now
+uses (`LESS_INFO`/`MORE_INFO`). The full `pr-check` ran on #69. **CP-30 is complete.**
+
+Next: the owner's squash merge of #69, then Release Please's release PR. After that CP-31 renames
+the promotion modes (#54) and removes the vendor family (#53, closes #41).
+
+## CP-29 (2026-10-15)
 
 **CP-28 is released (0.6.0, then 0.7.0). The active work is CP-29:
 `docs/refactor/slices/CP-29-boundaries-and-opencode-plugins.md`, on

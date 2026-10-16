@@ -27,6 +27,7 @@ from aart_cli.application.credential_guidance import (
     credential_prompt_briefing,
     gather_credential_guidance,
 )
+from aart_cli.application.execution import MutationLockPort
 from aart_cli.application.skill_projection import project_skill_document
 from aart_cli.domain.credentials import CredentialReference
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -57,6 +58,7 @@ from aart_cli.domain.hooks import (
     remove_settings_entry,
     settings_entry_label,
 )
+from aart_cli.domain.inputs import SKIPPED_INPUT
 from aart_cli.domain.managed_blocks import (
     merge_managed_block,
     remove_managed_block,
@@ -68,9 +70,9 @@ from aart_cli.domain.receipts import (
     ArtifactSettingsEntry,
 )
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.io.credentials import CredentialProviderPort
+from aart_cli.io.credentials import CredentialProviderPort, TransientSecret
 from aart_cli.io.fs import write_atomic
-from aart_cli.io.harness import LocalHarnessRegistry
+from aart_cli.io.harness import HarnessRegistryPort, LocalHarnessRegistry, ScopedHarnessRegistry
 from aart_cli.io.python_runtime import LocalPythonRuntime
 from aart_cli.io.store_lock import acquire_store_lock, release_store_lock
 from aart_cli.protocol.hashing import sha256_bytes
@@ -174,6 +176,42 @@ class LocalMutationLock:
 
     def release(self, token: str) -> Result[None]:
         return release_store_lock(StoreLockLease(self.lock_directory, token))
+
+
+class CompositeMutationLock:
+    """Every lease one transaction needs, taken in sorted key order and given back in reverse.
+
+    A transaction that writes both scopes holds both scopes' leases (§172.5, INV-260). One fixed
+    order is what keeps two such transactions from each holding one lease and waiting on the
+    other. A refusal part-way gives back what was already held.
+    """
+
+    def __init__(self, leases: tuple[tuple[str, MutationLockPort], ...]) -> None:
+        if not leases or len({key for key, _ in leases}) != len(leases):
+            raise ValueError("a composite lock needs distinct scope keys")
+        self._leases = tuple(sorted(leases, key=lambda item: item[0]))
+        self._held: list[tuple[MutationLockPort, str]] = []
+
+    def acquire(self) -> Result[str]:
+        held: list[tuple[MutationLockPort, str]] = []
+        for _, lease in self._leases:
+            acquired = lease.acquire()
+            if isinstance(acquired, Err):
+                for earlier, token in reversed(held):
+                    earlier.release(token)
+                return acquired
+            held.append((lease, acquired.value))
+        self._held = held
+        return Ok(held[-1][1])
+
+    def release(self, token: str) -> Result[None]:
+        held, self._held = self._held, []
+        failure: Result[None] = Ok(None)
+        for lease, own in reversed(held):
+            released = lease.release(own)
+            if isinstance(released, Err) and isinstance(failure, Ok):
+                failure = released
+        return failure
 
 
 class FileEffectInterpreter:
@@ -640,12 +678,12 @@ class HarnessEffectInterpreter:
 
     def __init__(
         self,
-        registry: LocalHarnessRegistry,
+        registry: HarnessRegistryPort,
         registrations: tuple[McpRegistration, ...] = (),
         *,
         artifact: str,
     ) -> None:
-        if not isinstance(registry, LocalHarnessRegistry):
+        if not isinstance(registry, (LocalHarnessRegistry, ScopedHarnessRegistry)):
             raise ValueError("a harness interpreter needs a registry")
         if (
             not isinstance(artifact, str)
@@ -912,6 +950,12 @@ class CredentialEffectInterpreter:
     provider's own prompt says only that it wants a password, so before it asks, the lent terminal
     is given what the credential is, who needs it and how to get it (D-263). A reference nobody
     described is still briefed, with the honest fallback.
+
+    An install captures its secrets before Ready instead (§172.4). `secrets` holds what was entered,
+    one single-use carrier per reference, and it is written with no prompt and no terminal. With
+    `skipped_as_placeholder`, a reference stored with nothing entered gets the `AART_NOT_SET` placeholder,
+    so nothing blocks. A replacement is never filled that way: a placeholder stands in for a value
+    nobody gave, never for one somebody did, so such an item is left as it is and the run goes on.
     """
 
     def __init__(
@@ -922,12 +966,16 @@ class CredentialEffectInterpreter:
         interactive_store: bool = False,
         terminal_handover: TerminalHandover | None = None,
         guidance: Mapping[str, tuple[CredentialGuidance, ...]] | None = None,
+        secrets: Mapping[str, TransientSecret] | None = None,
+        skipped_as_placeholder: bool = False,
     ) -> None:
         self.provider = provider
         self.references = tuple(references)
         self.interactive_store = interactive_store
         self.terminal_handover = terminal_handover
         self.guidance = dict(guidance or {})
+        self.secrets = dict(secrets or {})
+        self.skipped_as_placeholder = skipped_as_placeholder
 
     def supports(self, effect: Effect) -> bool:
         """Whether this interpreter was given the reference `effect` names (see the harness one)."""
@@ -950,6 +998,25 @@ class CredentialEffectInterpreter:
             )
             else None
         )
+        if isinstance(effect, (StoreCredential, ReplaceCredential)) and reference is not None:
+            carrier = self.secrets.pop(effect.reference, None)
+            if (
+                carrier is None
+                and self.skipped_as_placeholder
+                and isinstance(effect, StoreCredential)
+            ):
+                carrier = TransientSecret(SKIPPED_INPUT)
+            if carrier is not None:
+                written = self.provider.store(
+                    reference, carrier, replace=isinstance(effect, ReplaceCredential)
+                )
+                if isinstance(written, Err):
+                    return written
+                return Ok(f"{effect.reference} is {written.value.state.value}")
+            if self.skipped_as_placeholder:
+                return Ok(
+                    f"{effect.reference} was left as it is; set it in Credentials and variables"
+                )
         if isinstance(effect, (StoreCredential, ReplaceCredential)) and not self.interactive_store:
             return _error(
                 EXECUTION_NEEDS_A_PERSON,

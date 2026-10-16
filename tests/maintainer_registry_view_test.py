@@ -381,7 +381,7 @@ class MaintainerRegistryShellTest(unittest.TestCase):
         self.assertNotIn("determine what Marketplace can offer", drawn)
 
         verbose = replace(
-            state, session=replace(state.session, profile=PresentationProfile.VERBOSE)
+            state, session=replace(state.session, profile=PresentationProfile.MORE_INFO)
         )
         opened = "\n".join(frame(source, _reload(source, verbose, entering=True)))
 

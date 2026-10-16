@@ -25,7 +25,7 @@ class ReviewNamesTheHarnessesTest(unittest.TestCase):
         begun = _begin()
         assert isinstance(begun, Ok), getattr(begun, "diagnostics", ())
         plan = replace(begun.value.plan, chosen_targets=chosen)
-        return "\n".join(render_ready(plan, PresentationProfile.FAST))
+        return "\n".join(render_ready(plan, PresentationProfile.LESS_INFO))
 
     def test_the_review_names_the_harness_the_artifact_will_reach(self) -> None:
         self.assertIn("tabnine", self._ready())

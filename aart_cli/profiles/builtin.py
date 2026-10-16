@@ -173,20 +173,39 @@ _TABNINE = Profile(
         ),
     ),
     memory=MemoryTarget(kind="file", dest="TABNINE.md"),
+    # Tabnine CLI documents user skills, the global TABNINE.md, and MCP and hooks in the user
+    # settings, all under ~/.tabnine/agent (D-420).
     user=ProfileTargets(
+        skills=CopyTarget(dir="~/.tabnine/agent/skills/<name>/"),
         guidelines=GuidelineTarget(dest="~/.tabnine/guidelines/"),
         mcp=MergeSpec(
             file="~/.tabnine/agent/settings.json",
             json_path="mcpServers",
             mode="key",
         ),
-        unsupported=MappingProxyType(
-            {
-                "skill": "Tabnine does not document an Agent Skills discovery location",
-                "hook": "Tabnine CLI does not document a user-global hook discovery target",
-                "memory": "Tabnine CLI documents project-root TABNINE.md, not a global memory file",
-            }
+        hooks=HookTarget(
+            scripts_dir="~/.tabnine/agent/hooks/<name>/",
+            events=MappingProxyType(
+                {
+                    "PreToolUse": "hooks.BeforeTool",
+                    "PostToolUse": "hooks.AfterTool",
+                    "Stop": "hooks.SessionEnd",
+                }
+            ),
+            merge=MergeSpec(
+                file="~/.tabnine/agent/settings.json",
+                json_path="hooks.BeforeTool",
+                mode="list",
+                identity=("matcher", "command"),
+                entry_template=MappingProxyType(
+                    {
+                        "matcher": "${matcher}",
+                        "command": "${command}",
+                    }
+                ),
+            ),
         ),
+        memory=MemoryTarget(kind="file", dest="~/.tabnine/agent/TABNINE.md"),
     ),
 )
 
