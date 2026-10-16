@@ -29,7 +29,6 @@ DEFAULT_MAXIMUM_AART = f"{EXECUTABLE_VERSION.major + 1}.0.0"
 
 class CurationAction(str, Enum):
     INIT = "init"
-    COLLECTION = "collection"
     FORMAT = "format"
     VENDOR = "vendor"
     VENDOR_BATCH = "vendor-batch"
@@ -65,7 +64,6 @@ class CurationRequest:
     kind: str | None = None
     name: str | None = None
     summary: str | None = None
-    members: tuple[str, ...] = ()
     vendor_manifest: str | None = None
     # `None` means the maintainer did not state one.  Re-vendoring needs that distinction: upstream
     # movement without a stated version is reported, never applied, and a default would
@@ -99,12 +97,6 @@ class CurationRequest:
             or (self.kind is not None and self.kind not in _KINDS)
             or (self.name is not None and _SLUG_RE.fullmatch(self.name) is None)
             or (self.summary is not None and not _one_line(self.summary))
-            or any(
-                len(value.split("/")) != 2
-                or value.split("/", 1)[0] not in _KINDS
-                or _SLUG_RE.fullmatch(value.split("/", 1)[1]) is None
-                for value in self.members
-            )
             or (
                 self.vendor_manifest is not None
                 and (
@@ -131,7 +123,6 @@ class CurationRequest:
         ):
             raise ValueError("curation request is invalid")
         object.__setattr__(self, "profiles", tuple(sorted(set(self.profiles))))
-        object.__setattr__(self, "members", tuple(sorted(set(self.members))))
         object.__setattr__(self, "platforms", tuple(sorted(set(self.platforms))))
         object.__setattr__(self, "scopes", tuple(sorted(set(self.scopes))))
         object.__setattr__(self, "modes", tuple(sorted(set(self.modes))))

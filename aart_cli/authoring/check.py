@@ -19,11 +19,8 @@ from aart_cli.domain.diagnostics import Diagnostic, Severity
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.protocol.authoring import (
-    COLLECTION_KIND,
-    DiscoveredAuthorManifest,
     compile_author_manifests,
     discover_author_manifests,
-    parse_author_collection_manifest,
 )
 from aart_cli.protocol.codes import AUTHOR_TREE_INVALID
 from aart_cli.protocol.native_tree import SourceSnapshot
@@ -36,8 +33,8 @@ class ManifestVerdict:
 
     `package` is the identity the compiler produced, so an author reading it knows the compile
     ran rather than only the parse. It carries no version: the Registry assigns that. A
-    Collection is judged too, by the parser Sync uses for one, so no manifest is ever skipped
-    (§173.3).
+    Collection manifest is refused by the same compiler Sync uses, saying the Registry creates
+    Collections (§173.1), so no manifest is ever skipped.
     """
 
     path: str
@@ -115,39 +112,8 @@ def check_author_manifests(
     verdicts: list[ManifestVerdict] = []
     for manifest in discovered.value:
         path = str(manifest.path)
-        if path not in promoted and path not in refused:
-            # The artifact compiler neither compiled it nor refused it, which is how it says "a
-            # Collection": that is the one other document an author writes.
-            verdicts.append(
-                _collection_verdict(
-                    manifest, source_alias=source_alias, source=source, revision=revision
-                )
-            )
-            continue
         verdicts.append(ManifestVerdict(path, refused.get(path, ()), promoted.get(path)))
     return Ok(AuthorCheckReport(tuple(verdicts)))
-
-
-def _collection_verdict(
-    manifest: DiscoveredAuthorManifest,
-    *,
-    source_alias: SourceAlias,
-    source: str,
-    revision: str,
-) -> ManifestVerdict:
-    """The Collection parser's verdict. Its members are not resolved: a check has no Registry."""
-
-    path = str(manifest.path)
-    collection = parse_author_collection_manifest(
-        manifest,
-        source_alias=source_alias,
-        source=source,
-        revision=revision,
-        versions=NO_REGISTRY,
-    )
-    if isinstance(collection, Err):
-        return ManifestVerdict(path, collection.diagnostics)
-    return ManifestVerdict(path, (), f"{COLLECTION_KIND}/{collection.value.name}")
 
 
 __all__ = ["AuthorCheckReport", "ManifestVerdict", "check_author_manifests"]

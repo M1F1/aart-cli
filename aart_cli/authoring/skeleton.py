@@ -27,18 +27,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from aart_cli.domain.diagnostics import Diagnostic, Severity
-from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.protocol.authoring import (
+    COLLECTION_IN_SOURCE,
     COLLECTION_KIND,
     DiscoveredAuthorManifest,
-    parse_author_collection_manifest,
     parse_author_manifest,
 )
 from aart_cli.protocol.codes import AUTHOR_MANIFEST_INVALID
 from aart_cli.protocol.json import JsonArray, JsonObject, JsonValue
 from aart_cli.protocol.paths import parse_relative_path
-from aart_cli.protocol.registry_versions import NO_REGISTRY
 from aart_cli.protocol.yaml import emit_yaml
 
 PROSE_PREFIX = "## "
@@ -443,7 +441,10 @@ def author_skeleton(kind: str, name: str) -> Result[AuthorSkeleton]:
     """
 
     if kind == COLLECTION_KIND:
-        return _collection_skeleton(name)
+        return _error(
+            f"{COLLECTION_IN_SOURCE}; create it there with "
+            "`aart-cli registry collection NAME --summary TEXT --include KIND/NAME`"
+        )
     if kind not in _BLUEPRINTS:
         offered = ", ".join(INIT_KINDS)
         return _error(f"this build generates no {kind!r} skeleton yet; it generates {offered}")
@@ -929,80 +930,9 @@ _BLUEPRINTS: dict[str, Callable[[str], _Blueprint]] = {
 
 GENERATED_KINDS = tuple(sorted(_BLUEPRINTS))
 
-#: What `aart-cli author init --kind` offers: every artifact kind, and a Collection.
-INIT_KINDS: tuple[str, ...] = tuple(sorted((*GENERATED_KINDS, COLLECTION_KIND)))
-
-_COLLECTION_SCHEMA = "aart-cli.dev/collection/v1"
-
-#: The example member. It names an artifact no Registry has, so a Sync shows the Collection as
-#: unsatisfied until the author replaces it, rather than installing something they did not choose.
-_EXAMPLE_MEMBER = "skill/example-skill@^1"
-
-
-def _collection_skeleton(name: str) -> Result[AuthorSkeleton]:
-    """The `aart-cli.yaml` for a Collection: its name, its summary and its members, no version."""
-
-    live = JsonObject(
-        (
-            ("artifacts", JsonArray((_EXAMPLE_MEMBER,))),
-            ("name", name),
-            ("schema", _COLLECTION_SCHEMA),
-        )
-    )
-    summary = f"{_humanized(name)}: the artifacts one role needs."
-    full = JsonObject((*live.entries, ("summary", summary)))
-    header = (
-        f"## {_humanized(name)}: an AART Collection.",
-        "## A Collection installs whole: every member, into each harness you choose, or none.",
-        "## It carries no version. The Registry assigns one, and a member's new version inside",
-        "## its constraint is a new version of the Collection. Disabled lines begin `# `; `##` is",
-        "## a note and `#?` is an alternative to the line above it. Edit, then run",
-        "## `aart-cli author check`.",
-    )
-    members = (
-        "## The members, each `[source/]kind/name[@constraint]`. A constraint keeps SemVer",
-        "## meaning: `^1` is any 1.x.y the Registry has approved. Replace the example; the `#?`",
-        "## lines show a member from a named Source, and one with no constraint:",
-    )
-    alternatives = (
-        "#? - authors/mcp/example-mcp@^1",
-        "#? - guideline/example-guideline",
-    )
-    closing = (
-        "## One line the Marketplace shows. Without it, the name is used:",
-        *(f"{COMMENTED_YAML_PREFIX}{line}" for line in (f"summary: {summary}",)),
-    )
-    emitted = emit_yaml(
-        live,
-        comments={"": header, "artifacts": members},
-        trailing={"artifacts": alternatives, "": closing},
-    )
-    if isinstance(emitted, Err):
-        return emitted
-    accepted = _verified_collection(emitted.value)
-    if isinstance(accepted, Err):
-        return accepted
-    return Ok(AuthorSkeleton(COLLECTION_KIND, name, emitted.value, live, full, ()))
-
-
-def _verified_collection(manifest: str) -> Result[None]:
-    """The Collection parser's own verdict, for the same reason `_verified` exists."""
-
-    path = parse_relative_path(SKELETON_MANIFEST_NAME)
-    if isinstance(path, Err):  # pragma: no cover - a literal filename is always relative
-        return path
-    parsed = parse_author_collection_manifest(
-        DiscoveredAuthorManifest(path.value, manifest.encode()),
-        # The Collection parser compiles as it parses, so it needs a provenance. Nothing is
-        # published from this one; the values only have to be well formed.
-        source_alias=SourceAlias("skeleton"),
-        source="aart-cli author init",
-        revision="0" * 40,
-        versions=NO_REGISTRY,
-    )
-    if isinstance(parsed, Err):
-        return parsed
-    return Ok(None)
+#: What `aart-cli author init --kind` offers: every artifact kind. A Collection is the Registry's
+#: (§173.3, D-430), so it is refused with where to create one instead.
+INIT_KINDS: tuple[str, ...] = GENERATED_KINDS
 
 
 def _verified(manifest: str) -> Result[None]:

@@ -18,7 +18,7 @@ from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias, SourceId
 from aart_cli.domain.result import Err, Ok
-from aart_cli.protocol.authoring import compile_author_source
+from aart_cli.protocol.authoring import COLLECTION_IN_SOURCE, compile_author_source
 from aart_cli.protocol.capabilities import parse_capability
 from aart_cli.protocol.native_tree import (
     SnapshotEntry,
@@ -314,18 +314,20 @@ class MaintainerSourceSyncApplicationTest(unittest.TestCase):
             ],
         )
 
-    def test_confirmed_sync_compiles_and_persists_a_collection_candidate(self) -> None:
+    def test_sync_refuses_a_collection_manifest_and_names_where_collections_are_made(self) -> None:
+        """§173.1, D-430: a Source defines no Collection; the Registry creates it."""
+
         ports = _Ports()
         ports.candidate = _candidate_for(_collection_snapshot())
         prepared = _unwrap(prepare_source_sync(_request(), None, None, ports.approved))
 
         result = execute_source_sync(prepared, prepared.review_digest, ports.ports())
 
-        self.assertIsInstance(result, Ok)
-        assert isinstance(result, Ok)
+        assert isinstance(result, Ok), result
         self.assertEqual(result.value.scan.active, ())
-        self.assertEqual(len(result.value.scan.collection_active), 1)
-        self.assertEqual(result.value.scan.collection_active[0].version, "1.0.0")
+        (refusal,) = result.value.refusals
+        self.assertEqual(str(refusal.manifest_path), "collections/data-engineer/aart-cli.json")
+        self.assertEqual(refusal.diagnostics[0].message, COLLECTION_IN_SOURCE)
         self.assertEqual(result.value.scan.registry_mutations, ())
 
     def test_wrong_review_or_changed_registry_refuses_before_source_mutation(self) -> None:

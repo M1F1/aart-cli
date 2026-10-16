@@ -181,7 +181,7 @@ def _baseline(
             None if current is None else current.candidate.snapshot_digest,
             None if current is None else current.declared_source_id,
             history_digest,
-            (0 if history is None else len(history.active) + len(history.collection_active)),
+            (0 if history is None else len(history.active)),
         )
     )
 
@@ -446,8 +446,6 @@ def execute_source_sync(
         previous=() if bound_history is None else bound_history.history,
         approved=prepared.approved.versions,
         target_registry=prepared.target_registry,
-        collections=compiled.value.collections,
-        previous_collections=(() if bound_history is None else bound_history.collection_history),
     )
     if isinstance(reconciled, Err):
         return _release(reconciled, ports, lease.value)

@@ -21,8 +21,8 @@ from aart_cli.application.promotion import (
     project_promotion,
 )
 from aart_cli.application.registry_collections import (
-    assess_collection_candidate,
     collection_validation_digest,
+    plan_collection_definition,
 )
 from aart_cli.application.registry_versions import ApprovedRegistryVersions
 from aart_cli.configuration.model import SourceKind
@@ -32,6 +32,7 @@ from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
+    ArtifactKind,
     SourceAlias,
     SourceId,
 )
@@ -41,7 +42,11 @@ from aart_cli.domain.installation_owner import (
     installation_owner,
 )
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode, publish_registry_version
+from aart_cli.domain.registry import (
+    PromotionMode,
+    RegistryArtifactVersion,
+    publish_registry_version,
+)
 from aart_cli.domain.result import Ok
 from aart_cli.domain.selection import (
     ArtifactRequest,
@@ -151,8 +156,64 @@ def _packaged(path: str, content: bytes) -> SnapshotEntry:
     return SnapshotEntry(parsed.value, SnapshotEntryKind.FILE, content)
 
 
+@dataclasses.dataclass(frozen=True)
+class RegistryCollection:
+    """A Collection the Registry Maintainer defines from what the Registry approved (D-430).
+
+    It stands where an author tree would in the fixtures below, so a Registry is built in the order
+    a Maintainer builds one: members first, then the Collection naming them.
+    """
+
+    name: str
+    summary: str
+    members: tuple[str, ...]
+
+
+def _define_collection(
+    collection: RegistryCollection,
+    *,
+    onto: SourceSnapshot,
+    approved: tuple[RegistryArtifactVersion, ...],
+) -> SourceSnapshot:
+    defined = plan_collection_definition(
+        approved,
+        onto,
+        target_registry=SourceAlias("company"),
+        name=collection.name,
+        summary=collection.summary,
+        members=tuple(
+            ArtifactIdentity(*cast(tuple[ArtifactKind, str], tuple(item.split("/", 1))))
+            for item in collection.members
+        ),
+    )
+    assert isinstance(defined, Ok) and defined.value is not None, defined
+    change = defined.value
+    promoted = plan_bulk_promotion(
+        onto,
+        (),
+        evidence=(
+            (
+                change.id,
+                PromotionEvidence(
+                    collection_validation_digest(change),
+                    effective_policy_digest(EffectivePolicy()),
+                ),
+            ),
+        ),
+        approved=approved,
+        collections=(change,),
+    )
+    assert isinstance(promoted, Ok), promoted
+    projected = project_promotion(onto, promoted.value)
+    assert isinstance(projected, Ok), projected
+    return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, projected.value.entries)
+
+
+Authored = tuple[tuple[str, str] | tuple[str, str, bool], ...] | RegistryCollection
+
+
 def _promote_one_locally(
-    authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    authored: Authored,
     *,
     onto: SourceSnapshot,
     revision: str,
@@ -168,6 +229,8 @@ def _promote_one_locally(
 
     approved = load_registry_versions(onto)
     assert isinstance(approved, Ok), approved
+    if isinstance(authored, RegistryCollection):
+        return _define_collection(authored, onto=onto, approved=approved.value)
     tree = SourceSnapshot(
         SnapshotOrigin.IMMUTABLE_GIT,
         tuple(_authored(item) for item in authored),
@@ -191,41 +254,18 @@ def _promote_one_locally(
         previous=(),
         approved=approved.value,
         target_registry=SourceAlias("company"),
-        collections=compiled.value.collections,
     )
     assert isinstance(scanned, Ok), scanned
-    if scanned.value.active:
-        bundle = scanned.value.active[0]
-        bundle = dataclasses.replace(bundle, candidate=assess_candidate(bundle.candidate))
-        evidence = cast(tuple[tuple[CandidateId, PromotionEvidence], ...], _evidence(bundle))
-        promoted = plan_bulk_promotion(
-            onto,
-            (bundle,),
-            evidence=evidence,
-            approved=approved.value,
-            mode=mode,
-        )
-    else:
-        # A tree that authors a Collection: approved the way Maintainer approval does, members
-        # resolved against what this registry has approved so far (D-427).
-        collection = assess_collection_candidate(scanned.value.collection_active[0], registry)
-        promoted = plan_bulk_promotion(
-            onto,
-            (),
-            evidence=(
-                (
-                    collection.id,
-                    PromotionEvidence(
-                        collection_validation_digest(collection, registry),
-                        effective_policy_digest(EffectivePolicy()),
-                        (),
-                    ),
-                ),
-            ),
-            approved=approved.value,
-            mode=mode,
-            collections=(collection,),
-        )
+    bundle = scanned.value.active[0]
+    bundle = dataclasses.replace(bundle, candidate=assess_candidate(bundle.candidate))
+    evidence = cast(tuple[tuple[CandidateId, PromotionEvidence], ...], _evidence(bundle))
+    promoted = plan_bulk_promotion(
+        onto,
+        (bundle,),
+        evidence=evidence,
+        approved=approved.value,
+        mode=mode,
+    )
     assert isinstance(promoted, Ok), promoted
     projected = project_promotion(onto, promoted.value)
     assert isinstance(projected, Ok), projected
@@ -233,7 +273,7 @@ def _promote_one_locally(
 
 
 def _promote_one(
-    authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    authored: Authored,
     *,
     onto: SourceSnapshot,
     revision: str,
@@ -260,7 +300,7 @@ def _promote_one(
 
 
 def _promoted_local_registries(
-    *authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    *authored: Authored,
     setup: AuthoredSetup | None = None,
     mode: PromotionMode = PromotionMode.VENDORED,
 ) -> SourceSnapshot:
@@ -279,7 +319,7 @@ def _promoted_local_registries(
 
 
 def _published_registries(
-    *authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    *authored: Authored,
     setup: AuthoredSetup | None = None,
     mode: PromotionMode = PromotionMode.VENDORED,
 ) -> SourceSnapshot:

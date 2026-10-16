@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from aart_cli.domain.diagnostics import Diagnostic, Severity, sort_diagnostics
-from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest
+from aart_cli.domain.identifiers import ObjectDigest
 from aart_cli.protocol.hashing import json_digest, sha256_bytes
 from aart_cli.protocol.json import JsonArray, JsonObject
 from aart_cli.protocol.paths import SafeRelativePath
@@ -80,23 +80,6 @@ class RegistryInitOptions:
             or not self.minimum_aart < self.maximum_aart_exclusive
         ):
             raise ValueError("registry init options are invalid")
-
-
-@dataclass(frozen=True, slots=True)
-class CollectionAuthorOptions:
-    name: str
-    summary: str
-    members: tuple[ArtifactIdentity, ...]
-
-    def __post_init__(self) -> None:
-        if (
-            _SLUG_RE.fullmatch(self.name) is None
-            or not _one_safe_line(self.summary)
-            or not self.members
-            or any(not isinstance(member, ArtifactIdentity) for member in self.members)
-        ):
-            raise ValueError("collection author options are invalid")
-        object.__setattr__(self, "members", tuple(sorted(set(self.members), key=str)))
 
 
 @dataclass(frozen=True, slots=True, order=True)

@@ -5,12 +5,10 @@ from __future__ import annotations
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.protocol.capabilities import Capability
 from aart_cli.protocol.paths import SafeRelativePath
 from aart_cli.protocol.registry_models import ReviewRecord
 from aart_cli.protocol.semver import SemVer
 from aart_cli.registry_commands.model import (
-    CollectionAuthorOptions,
     RegistryApplyCommand,
     RegistryApplyReceipt,
     RegistryInitOptions,
@@ -22,7 +20,6 @@ from aart_cli.registry_commands.planning import (
     VendoredArtifactOrigin,
     plan_artifact_revendor,
     plan_artifact_vendor,
-    plan_registry_collection,
     plan_registry_format,
     plan_registry_init,
     project_registry_workspace_plan,
@@ -49,24 +46,6 @@ def prepare_registry_init(
     if isinstance(current, Err):
         return current
     return plan_registry_init(current.value, options)
-
-
-def prepare_registry_collection(
-    options: CollectionAuthorOptions,
-    *,
-    executable_version: SemVer,
-    available_capabilities: tuple[Capability, ...],
-    output: RegistryWorkspacePort,
-) -> Result[RegistryWorkspacePlan]:
-    current = output.current()
-    if isinstance(current, Err):
-        return current
-    return plan_registry_collection(
-        current.value,
-        options,
-        executable_version=executable_version,
-        available_capabilities=available_capabilities,
-    )
 
 
 def prepare_artifact_vendor(

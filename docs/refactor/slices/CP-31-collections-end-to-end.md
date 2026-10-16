@@ -24,6 +24,11 @@ See `docs/refactor/plan.json`, epic CP-31. In order:
 14. Pruning: the vendor family and other legacy routes (#53, #73).
 15. Full verification and the PR.
 
+After step 7 the owner moved Collections into the Registry (D-430), adding steps 16–19, which ran
+before step 8: 16 the specification, 17 removing source-authored Collections, 18 `registry
+collection` and the TUI Collections view, 19 the automatic bump. Steps 3, 4 and the Candidate half
+of 5 are superseded by them.
+
 ## Step 1 — specification
 
 §173 is accepted, with INV-262–INV-266. D-424 records the implementation choices for versions:
@@ -189,3 +194,54 @@ from the two B-194 Hypothesis findings. mypy and tach are clean.
 
 Targeted mutation: making `_member_pair_scopes` return its input unchanged turned only the 07a
 test red.
+
+## Steps 16–19 — the Registry owns Collections (D-430, D-431, D-432)
+
+Step 16 amended §173 and added INV-266. Step 17 removed what a Source could say about a
+Collection:
+- `author init --kind collection` and `author check` refuse with `COLLECTION_IN_SOURCE`, pointing at
+  `registry collection`;
+- Sync refuses a Collection manifest the same way;
+- Collection Candidates, their history and the old screens 51/52 are gone, and so are the legacy
+  curation `collection` action and `prepare_registry_collection`.
+
+Step 18 adds the two entry points:
+- **CLI.** `registry collection NAME [--summary TEXT] --include KIND/NAME …` reviews and, with
+  `--yes`, publishes. A new Collection needs a summary, and an unchanged definition says there is
+  nothing to publish.
+- **TUI.** 46 → `o` → 51 lists the Collections and New Collection. 52 is the editor, then 44 and
+  45 (D-432).
+
+Both use `plan_collection_definition`, which pins each member to its highest published version
+(`domain/collection_changes.py`, `RegistryCollectionChange`). Step 19 is `collection_bumps`, called
+inside `plan_bulk_promotion`, so every promotion route gets it: TUI 43/47, `registry promote` and
+adoption.
+
+Evidence:
+- `tests/registry_collection_promotion_test.py` (18): definition rules, publication and read-back,
+  bumps, plus a Hypothesis property over one to four successive bumps.
+- `tests/registry_collection_cli_test.py` (5): review only, `--yes` publish and read back, an
+  unapproved member refused, an unchanged definition, and `registry promote` showing and publishing
+  the bump.
+- `tests/maintainer_collection_editor_test.py` (10): Hypothesis properties that a 51 row names back
+  its registry and Collection; 46 `o` → 51; an existing Collection opening ticked and drafted;
+  letters as text on the text rows; Continue carrying the draft and members to 44.
+- `tests/maintainer_composition_e2e_test.py::test_a_collection_defined_on_52_is_committed_as_one_registry_transaction`:
+  through the real shell, 46 → 51 → 52 → 44 → 45. It checks one local commit, a clean tree,
+  `collection/starter@1.0.0` read back with its summary and exact pin, and a valid Registry.
+- `tests/git_backed_bulk_install_e2e_test.py`, `tests/collection_install_tui_e2e_test.py` and
+  `tests/configured_installation_draft_e2e_test.py` now make their Collection in the Registry
+  (`RegistryCollection`), and a member's new version is offered in the Collection's next version
+  (`starter@1.0.1`).
+- 51 and 52 are in the recorded frame matrix (`tests/screen_cases.py`).
+
+217 affected modules (2356 tests) are green, apart from the two B-194 Hypothesis findings in
+untouched `tui_layout.py`. mypy, tach, ruff and docs-check are clean.
+
+Targeted mutations:
+- `newer_version > pinned` → `<` in `collection_bumps` turned only the three bump tests red.
+- Dropping `bumped.value` from `plan_bulk_promotion` turned the three pure bump tests and the CLI
+  bump test red.
+- Making 52's `selected` seed nothing turned only the three editor tests that open an existing
+  Collection red.
+- Sending `summary=None` from the TUI action turned only the shell e2e red.

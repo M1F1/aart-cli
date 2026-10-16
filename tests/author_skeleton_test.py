@@ -194,9 +194,6 @@ class AntiDriftTest(unittest.TestCase):
             missing = sorted(
                 name
                 for site in parser_field_surface()
-                # A Collection manifest is a different document with its own generator, and its
-                # half of this oracle is `tests/author_collection_skeleton_test.py`.
-                if site.owner != "parse_author_collection_manifest"
                 for name in (*site.required, *site.optional)
                 if name not in _keys(skeleton.manifest)
             )

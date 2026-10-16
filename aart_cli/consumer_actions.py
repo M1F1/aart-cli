@@ -116,6 +116,7 @@ from aart_cli.application.maintainer_views import (
     MaintainerRepositoryArtifactView,
     MaintainerRepositoryScanView,
     MaintainerViews,
+    parse_collection_row,
     parse_validation_row,
     project_maintainer_registry_commit,
     project_maintainer_registry_validation,
@@ -135,7 +136,12 @@ from aart_cli.domain.credentials import (
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.effects import VerifyCredential
 from aart_cli.domain.harness import Scope
-from aart_cli.domain.identifiers import ArtifactCoordinate, InputId, SourceAlias
+from aart_cli.domain.identifiers import (
+    ArtifactCoordinate,
+    ArtifactIdentity,
+    InputId,
+    SourceAlias,
+)
 from aart_cli.domain.inputs import (
     ConfigInput,
     InputGuidance,
@@ -187,6 +193,7 @@ from aart_cli.io.maintainer_promotion import (
     complete_configured_candidate_promotion,
     prepare_configured_bulk_promotion,
     prepare_configured_candidate_promotion,
+    prepare_configured_collection,
 )
 from aart_cli.io.maintainer_sync import (
     complete_configured_source_sync,
@@ -1251,6 +1258,8 @@ class LocalConsumerActions:
             return self._prepare_candidate_promotion(command)
         if action is ConsumerActionKind.BULK_PROMOTION:
             return self._prepare_bulk_promotion(command)
+        if action is ConsumerActionKind.COLLECTION_DEFINE:
+            return self._prepare_collection_definition(command)
         if action in _CREDENTIAL_INTENTS:
             return self._prepare_credential_action(command)
         if action is ConsumerActionKind.MCP_TEST:
@@ -1861,6 +1870,60 @@ class LocalConsumerActions:
                 command,
                 _lines("the selection changed after screen 47 was composed; review it again"),
             )
+        self._pending = prepared.value
+        self._pending_action = command.action
+        transaction = prepared.value.transaction
+        self._promotion_transaction = transaction
+        self._promotion_result = None
+        return ConsumerActionUpdate(
+            self.source(
+                promotion_validation=project_maintainer_registry_validation(transaction),
+                promotion_commit=project_maintainer_registry_commit(transaction),
+            ),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=str(prepared.value.review_digest),
+            ),
+        )
+
+    def _prepare_collection_definition(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Screen 52's Collection version, prepared as the transaction 44 and 45 review (D-430)."""
+
+        if self._data_root is None:
+            return self._declined(
+                command, _lines("a Collection needs the configured durable data root")
+            )
+        opened = parse_collection_row(command.focus)
+        draft = command.collection_draft
+        if opened is None or draft is None:
+            return self._declined(command, _lines("a Collection is defined from screen 52"))
+        alias, existing = opened
+        name = existing if existing is not None else draft.name.strip()
+        if not name:
+            return self._declined(command, _lines("a new Collection needs a name"))
+        summary = draft.summary.strip()
+        if not command.selection:
+            return self._declined(command, _lines(f"Collection {name} needs at least one member"))
+        members: list[ArtifactIdentity] = []
+        for row in command.selection:
+            kind, _, member = row.partition("/")
+            try:
+                members.append(ArtifactIdentity(kind, member))  # type: ignore[arg-type]
+            except ValueError as error:
+                return self._declined(command, _lines(str(error)))
+        prepared = prepare_configured_collection(
+            self._context.effective,
+            SourceAlias(alias),
+            name=name,
+            summary=summary or None,
+            members=tuple(members),
+            data_root=self._data_root,
+            registry_root=self._context.host.project_root,
+            policy=self._context.policy,
+        )
+        if isinstance(prepared, Err):
+            return self._declined(command, _refusal(prepared.diagnostics))
         self._pending = prepared.value
         self._pending_action = command.action
         transaction = prepared.value.transaction

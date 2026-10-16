@@ -10765,3 +10765,43 @@ What changes:
 - **D-428's decline rule goes away.** A current Collection version always pins its members'
   current versions (INV-266), so the Marketplace row's members are always the members' own rows.
 - Revoking or deprecating a member does not bump anything yet (B-196).
+
+## D-431 — What a Registry-defined Collection version's approval record says (CP-31 steps 18–19)
+
+A Collection version has no Candidate and no Source, so its promotion audit could not be read from
+one. Each version still needs the same `PromotionAudit` every approved version carries, or registry
+validity would report a published version nobody approved.
+
+- **Provenance is the Registry itself.** `PromotionSourceProvenance(LOCAL_SNAPSHOT,
+  local_snapshot_digest=<registry state before the transaction>)`. The Collection was made from
+  that state, and nothing else is its source.
+- **Evidence names what was checked.** The validation digest is `collection_validation_digest`:
+  the coordinate and every exact member it pins (schema `aart-cli.dev/collection-validation/v2`).
+  The policy digest is the transaction's own policy for a definition, and the causing member's
+  effective policy digest for an automatic bump.
+- **The Candidate id is the canonical digest** of the Collection document, so the audit set of a
+  transaction is its promoted Candidates plus its Collection versions, and both are checked equal.
+- **A Collection defined in the transaction is not bumped by it.** When one transaction both
+  defines a Collection and promotes one of its members, the definition already pins the newest
+  approved member, so no second version is made (`defined` in `collection_bumps`).
+
+## D-432 — The Collections view is screens 51 and 52, reviewed on 44 and 45 (CP-31 step 18)
+
+D-430 asked for a new Maintainer TUI view. The numbers the source-authored Collection screens had
+are reused, because those screens are gone.
+
+- **51 Collections** is reached from screen 46 with `o` (`c` is already Candidates there). Its rows
+  are `<registry>/<name>` for each Collection at its highest version, then `<registry>/+` for a new
+  one, offered only once the Registry approved something. A cursor on 46's own workspace row opens
+  51 for the only configured registry.
+- **52 Collection editor** has a Name row (new only), a Summary row, one row per approved artifact
+  `kind/name` with its highest published version, and Continue. Members are the session selection,
+  so Space ticks them as on every selectable screen; the text rows take every printable key
+  (D-269). An existing Collection opens with its members ticked and its summary drafted.
+- **Continue prepares `COLLECTION_DEFINE`** through `prepare_configured_collection`, which reads
+  the approved state and the checkout, pins each member with `plan_collection_definition`, and
+  builds the same transaction a promotion does (`prepare_collection_transaction`). 44 reviews it and
+  45 commits it locally; the commit origin is `define-collection`, so 46j suggests
+  `aart/define-collection`. An unchanged definition is refused on 52 rather than committed.
+- **Like a promotion, the checkout must be the approved baseline.** A second Collection after an
+  unpublished local commit is refused until the commit is published and synchronized.

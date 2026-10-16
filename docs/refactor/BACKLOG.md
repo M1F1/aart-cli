@@ -4633,3 +4633,10 @@ D-430 bumps a Collection when a member gets a new approved version. A member ver
 revoked or deprecated leaves the Collection pinning it, and the install then refuses the revoked
 pin. Deciding whether the Registry should re-pin to the previous approved version, mark the
 Collection, or ask the maintainer is not on CP-31's critical path.
+
+## B-197 — Removing or renaming a Registry Collection
+
+Found: CP-31 step 18 (2026-10-16). Screen 52 and `registry collection` create a Collection and
+publish its next versions; neither removes, deprecates or renames one. A Collection whose members
+are all revoked is left pinning them (see B-196). Not on CP-31's critical path: a maintainer can
+stop changing a Collection, and installs keep resolving its exact pins.

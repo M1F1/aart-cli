@@ -30,8 +30,6 @@ from aart_cli.application.maintainer_views import (
     MaintainerViews,
     MaintainerWorkingTreeState,
     MaintainerWorkingTreeView,
-    project_maintainer_collection_candidate,
-    project_maintainer_collection_validation,
     project_maintainer_dashboard,
 )
 from aart_cli.domain.policies import EffectivePolicy
@@ -50,7 +48,6 @@ from aart_cli.tui_maintainer import (
 from tests import (
     maintainer_bulk_promotion_test,
     maintainer_candidate_filters_test,
-    maintainer_collection_candidate_test,
     maintainer_registry_view_test,
     maintainer_validation_views_test,
 )
@@ -134,27 +131,6 @@ class ValidationTest(_Contract):
         state = _on(source, MaintainerScreen.VALIDATION, focus=views.candidates[0].id)
 
         self.assertKeepsTheFrame(source, state)
-
-
-class CollectionCandidatesTest(_Contract):
-    def test_51_describes_the_collection_under_the_cursor_rather_than_growing_its_row(self) -> None:
-        module = maintainer_collection_candidate_test
-        candidate = module._candidate(
-            module._request("github", "^1"), module._request("jira", "^3")
-        )
-        views = MaintainerViews(
-            project_maintainer_dashboard(()),
-            (),
-            collection_candidates=(project_maintainer_collection_candidate(candidate),),
-            collection_validations=(
-                project_maintainer_collection_validation(candidate, module._approved_marketplace()),
-            ),
-        )
-        source = CanonicalScreenSource(
-            ConsumerScreens(project_dashboard((), registry_count=0), maintainer=views)
-        )
-
-        self.assertKeepsTheFrame(source, _on(source, MaintainerScreen.COLLECTION_CANDIDATES))
 
 
 class RegistryMaintainerTest(_Contract):

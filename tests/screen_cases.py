@@ -49,7 +49,7 @@ from tests import (
     maintainer_bulk_promotion_test,
     maintainer_candidate_lifecycle_test,
     maintainer_candidate_shell_test,
-    maintainer_collection_candidate_test,
+    maintainer_collection_editor_test,
     maintainer_promotion_shell_execution_test,
     maintainer_promotion_test,
     maintainer_registry_view_test,
@@ -148,8 +148,8 @@ RECORDED_SCREENS: tuple[ApplicationScreen, ...] = (
     MaintainerScreen.CANDIDATE_LIFECYCLE,
     MaintainerScreen.PROVENANCE,
     MaintainerScreen.VERSION_CONFLICT,
-    MaintainerScreen.COLLECTION_CANDIDATES,
-    MaintainerScreen.COLLECTION_VALIDATION,
+    MaintainerScreen.COLLECTIONS,
+    MaintainerScreen.COLLECTION_EDITOR,
     MaintainerScreen.CANDIDATE_FILTERS,
 )
 
@@ -420,23 +420,6 @@ def _maintainer_cases() -> dict[MaintainerScreen, ScreenCase]:
         _reload(conflict_source, conflict_state, entering=True),
     )
 
-    collection = maintainer_collection_candidate_test.MaintainerCollectionCandidateRouteTest()
-    collection.setUp()
-    for screen in (
-        MaintainerScreen.COLLECTION_CANDIDATES,
-        MaintainerScreen.COLLECTION_VALIDATION,
-    ):
-        state = ConsumerUiState(
-            ConsumerSession(screen),
-            settings=settings,
-            focus=collection.candidate.id.value,
-        )
-        cases[screen] = ScreenCase(
-            f"{screen.value}:versioned-collection",
-            collection.source,
-            _reload(collection.source, state, entering=True),
-        )
-
     registry = maintainer_registry_view_test.MaintainerRegistryShellTest()
     registry.setUp()
     registry_state = ConsumerUiState(
@@ -529,6 +512,23 @@ def _maintainer_cases() -> dict[MaintainerScreen, ScreenCase]:
     bulk.setUp()
     cases[MaintainerScreen.BULK_PROMOTION] = ScreenCase(
         "47:selectable-promotion", bulk.source, bulk._state()
+    )
+    collections = maintainer_collection_editor_test._source()
+    cases[MaintainerScreen.COLLECTIONS] = ScreenCase(
+        "51:registry-collections",
+        collections,
+        _reload(
+            collections,
+            ConsumerUiState(
+                ConsumerSession(MaintainerScreen.COLLECTIONS), settings=settings, focus="company"
+            ),
+            entering=True,
+        ),
+    )
+    cases[MaintainerScreen.COLLECTION_EDITOR] = ScreenCase(
+        "52:existing-collection",
+        collections,
+        maintainer_collection_editor_test._opened("company/starter"),
     )
     return cases
 

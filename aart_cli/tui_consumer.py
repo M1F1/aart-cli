@@ -16,6 +16,7 @@ from aart_cli.application.consumer_session import ConsumerMachine
 from aart_cli.application.consumer_ui import (
     ACTION_ANSWER_SCREENS,
     ACTION_REQUEST_SCREENS,
+    COLLECTION_SAVE_ROW,
     CONFIG_CONTINUE_ROW,
     CONFIG_SET_LATER_ROW,
     ConsumerActionKind,
@@ -105,8 +106,7 @@ from aart_cli.application.maintainer_views import (
     MaintainerCandidateFilter,
     MaintainerCandidateLifecycleView,
     MaintainerCandidateView,
-    MaintainerCollectionCandidateView,
-    MaintainerCollectionValidationView,
+    MaintainerCollectionView,
     MaintainerPromotionReviewView,
     MaintainerProvenanceView,
     MaintainerRegistryCommitView,
@@ -121,7 +121,9 @@ from aart_cli.application.maintainer_views import (
     MaintainerValidationView,
     MaintainerVersionConflictView,
     MaintainerViews,
+    collection_row,
     filter_maintainer_candidates,
+    parse_collection_row,
     parse_validation_row,
     project_maintainer_candidate_filters,
 )
@@ -159,7 +161,8 @@ from aart_cli.tui_maintainer import (
     maintainer_candidate_detail,
     maintainer_candidate_filter_detail,
     maintainer_candidate_filter_status,
-    maintainer_collection_candidate_detail,
+    maintainer_collection_detail,
+    maintainer_collection_editor_status,
     maintainer_registry_descriptor,
     maintainer_registry_detail,
     maintainer_registry_push_status,
@@ -177,8 +180,8 @@ from aart_cli.tui_maintainer import (
     render_maintainer_candidate_filters,
     render_maintainer_candidate_lifecycle,
     render_maintainer_candidates,
-    render_maintainer_collection_candidates,
-    render_maintainer_collection_validation,
+    render_maintainer_collection_editor,
+    render_maintainer_collections,
     render_maintainer_dashboard,
     render_maintainer_policy_review,
     render_maintainer_promotion_review,
@@ -2142,7 +2145,14 @@ _REGISTRY_REBUILD_INTRO: tuple[str, ...] = (
 )
 """Why a rebuild is offered, and the boundary it stops at (`QA-087`)."""
 
+_COLLECTION_EDITOR_INTRO: tuple[str, ...] = (
+    "A Collection version pins the exact approved version of each member. When a",
+    "member gets a new approved version, the Collection's next version follows it.",
+)
+"""What a Collection version is, and why it moves on its own (D-430)."""
+
 _FORM_PROSE: dict[ConsumerScreen | MaintainerScreen, tuple[str, ...]] = {
+    MaintainerScreen.COLLECTION_EDITOR: _COLLECTION_EDITOR_INTRO,
     ConsumerScreen.REGISTRY_ADD: _REGISTRY_ADD_INTRO,
     MaintainerScreen.SOURCE_ADD: _SOURCE_ADD_INTRO,
     MaintainerScreen.REGISTRY_INIT: _REGISTRY_INIT_INTRO,
@@ -2744,12 +2754,14 @@ def _reload(
     text = source.drafted(reloaded) if entering else None
     if text is None:
         return reloaded
-    drafted, _ = reduce_consumer_ui(
-        reloaded,
-        ConsumerUiEvent(
+    event = (
+        ConsumerUiEvent(ConsumerUiEventKind.EDIT_COLLECTION, key="summary", text=text)
+        if reloaded.session.screen is MaintainerScreen.COLLECTION_EDITOR
+        else ConsumerUiEvent(
             ConsumerUiEventKind.EDIT_CONFIGURATION, key=reloaded.configuration_input, text=text
-        ),
+        )
     )
+    drafted, _ = reduce_consumer_ui(reloaded, event)
     return drafted
 
 
@@ -2943,20 +2955,6 @@ class ConsumerScreens:
         """The already-composed immutable-version refusal for one Candidate, when present."""
 
         return None if self.maintainer is None else self.maintainer.version_conflict(candidate_id)
-
-    def collection_candidates(self) -> tuple[MaintainerCollectionCandidateView, ...]:
-        """The already-composed active Collection Candidate rows."""
-
-        if self.maintainer is None or self.maintainer.collection_candidates is None:
-            return ()
-        return self.maintainer.collection_candidates
-
-    def collection_validation(self, candidate_id: str) -> MaintainerCollectionValidationView | None:
-        """The approved-registry resolution for one Collection Candidate."""
-
-        return (
-            None if self.maintainer is None else self.maintainer.collection_validation(candidate_id)
-        )
 
     def promotion(
         self,
@@ -3400,6 +3398,26 @@ class CanonicalScreenSource:
             return (() if workspace is None else (workspace_row,)) + tuple(
                 item.alias for item in self._screens.maintainer_registries()
             )
+        if screen is MaintainerScreen.COLLECTIONS:
+            registry = self._collection_registry(state)
+            if registry is None:
+                return ()
+            new = (collection_row(registry.alias, None),) if registry.approved_artifacts else ()
+            return (
+                *(collection_row(registry.alias, item.name) for item in registry.collections),
+                *new,
+            )
+        if screen is MaintainerScreen.COLLECTION_EDITOR:
+            registry = self._collection_registry(state)
+            opened = parse_collection_row(state.focus)
+            if registry is None or opened is None:
+                return ()
+            return (
+                *(("name",) if opened[1] is None else ()),
+                "summary",
+                *(identity for identity, _version in registry.approved_artifacts),
+                COLLECTION_SAVE_ROW,
+            )
         if screen is MaintainerScreen.REGISTRY_PUSH:
             workspace = self._registry_workspace()
             return (
@@ -3426,8 +3444,6 @@ class CanonicalScreenSource:
             # The row identity is the Candidate ID rather than the artifact name: two Sources may
             # both publish `github-mcp`, and a list keyed by name would open the wrong one.
             return tuple(item.id for item in self._screens.candidates(_candidate_filter(state)))
-        if screen is MaintainerScreen.COLLECTION_CANDIDATES:
-            return tuple(item.candidate_id for item in self._screens.collection_candidates())
         if screen is MaintainerScreen.CANDIDATE_FILTERS:
             # The values on offer come from every composed Candidate rather than from the already
             # narrowed list: a row that vanished the moment it was ticked could never be unticked.
@@ -3529,6 +3545,9 @@ class CanonicalScreenSource:
         for the reader would be a decision the screen has no business making.
         """
 
+        if state.session.screen is MaintainerScreen.COLLECTION_EDITOR:
+            collection = self._opened_collection(state)
+            return None if collection is None else collection.summary
         if state.session.screen is not ConsumerScreen.CONFIGURATION_VALUE:
             return None
         held = {value for _harness, value in self._held(state, state.configuration_targets)}
@@ -3554,6 +3573,9 @@ class CanonicalScreenSource:
 
         if state.session.screen is MaintainerScreen.SCAN_RESULT:
             return ()
+        if state.session.screen is MaintainerScreen.COLLECTION_EDITOR:
+            collection = self._opened_collection(state)
+            return () if collection is None else collection.identities
         if state.session.screen is ConsumerScreen.CONFIGURATION_TARGETS:
             return tuple(
                 item.harness
@@ -3565,6 +3587,29 @@ class CanonicalScreenSource:
             return None
         entry = self._screens.offered_collection(state.focus)
         return None if entry is None else entry.members
+
+    def _collection_registry(self, state: ConsumerUiState) -> MaintainerRegistryView | None:
+        """The registry screens 51 and 52 are about: the one opened from 46, or the only one."""
+
+        registries = self._screens.maintainer_registries()
+        if state.session.screen is MaintainerScreen.COLLECTION_EDITOR:
+            opened = parse_collection_row(state.focus)
+            alias = None if opened is None else opened[0]
+        else:
+            alias = state.focus
+        found = next((item for item in registries if item.alias == alias), None)
+        if found is None and state.session.screen is MaintainerScreen.COLLECTIONS:
+            return registries[0] if len(registries) == 1 else None
+        return found
+
+    def _opened_collection(self, state: ConsumerUiState) -> MaintainerCollectionView | None:
+        """The Collection screen 52 edits, or None for a new one."""
+
+        registry = self._collection_registry(state)
+        opened = parse_collection_row(state.focus)
+        if registry is None or opened is None or opened[1] is None:
+            return None
+        return registry.collection(opened[1])
 
     def _success_choices(self) -> tuple[tuple[ConsumerScreen, str], ...]:
         """Success's rows: the test is offered only for an install that made an MCP (§170.4)."""
@@ -3611,6 +3656,12 @@ class CanonicalScreenSource:
                 ),
                 None,
             )
+        if screen is MaintainerScreen.COLLECTIONS:
+            return (
+                MaintainerScreen.COLLECTION_EDITOR
+                if parse_collection_row(row) is not None
+                else None
+            )
         if screen is MaintainerScreen.REGISTRY:
             # Screen 46's rows are registries; opening one is where its transaction is assembled.
             # The registry this project *publishes* is not one of them: it has no candidates to
@@ -3654,22 +3705,6 @@ class CanonicalScreenSource:
             return (
                 MaintainerScreen.VERSION_CONFLICT
                 if self._screens.version_conflict(state.focus) is not None
-                else None
-            )
-        if screen is MaintainerScreen.COLLECTION_CANDIDATES:
-            return (
-                MaintainerScreen.COLLECTION_VALIDATION
-                if self._screens.maintainer is not None
-                and self._screens.maintainer.collection_candidate(row) is not None
-                and self._screens.collection_validation(row) is not None
-                else None
-            )
-        if screen is MaintainerScreen.COLLECTION_VALIDATION:
-            # A Collection has no policy checks of its own: approving it is the registry
-            # transaction that publishes its document, reviewed on the same screens 43-45.
-            return (
-                MaintainerScreen.REGISTRY_DIFF
-                if self._screens.registry_diff(state.focus, state.promotion_mode) is not None
                 else None
             )
         if screen is MaintainerScreen.VALIDATION:
@@ -3876,10 +3911,6 @@ class CanonicalScreenSource:
             )
         if state.session.screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
             return installation_config_purpose(self._screens.installation_inputs, state.current_row)
-        if state.session.screen is MaintainerScreen.COLLECTION_CANDIDATES:
-            return maintainer_collection_candidate_detail(
-                self._screens.collection_candidates(), state.current_row
-            )
         if state.session.screen is MaintainerScreen.VALIDATION:
             validation = self._screens.validation(state.focus)
             return (
@@ -3976,6 +4007,15 @@ class CanonicalScreenSource:
                 maintainer_registry_descriptor(registries, registry_workspace_present=present),
                 () if subscribed is None else maintainer_registry_detail(subscribed),
             )
+        if state.session.screen is MaintainerScreen.COLLECTIONS:
+            collections_of = self._collection_registry(state)
+            opened = parse_collection_row(state.current_row)
+            collection = (
+                None
+                if collections_of is None or opened is None or opened[1] is None
+                else collections_of.collection(opened[1])
+            )
+            return () if collection is None else maintainer_collection_detail(collection)
         if state.session.screen is MaintainerScreen.REGISTRY_REBUILD:
             # The whole-sequence row names its four stages in its own label, so it has nothing
             # left to add here and says nothing rather than repeating itself.
@@ -4063,6 +4103,14 @@ class CanonicalScreenSource:
 
         screen, screens = state.session.screen, self._screens
         prose = self._form_prose(state)
+        if screen is MaintainerScreen.COLLECTION_EDITOR:
+            registry = self._collection_registry(state)
+            return separate(
+                ()
+                if registry is None
+                else maintainer_collection_editor_status(registry, self._opened_collection(state)),
+                prose,
+            )
         if prose:
             return prose
         if screen is MaintainerScreen.REGISTRY_PUSH and self.rows(state):
@@ -4530,18 +4578,6 @@ class CanonicalScreenSource:
                 if conflict is None
                 else render_maintainer_version_conflict(conflict, profile)
             )
-        if screen is MaintainerScreen.COLLECTION_CANDIDATES:
-            return render_maintainer_collection_candidates(
-                screens.collection_candidates(),
-                cursor=state.current_row,
-            )
-        if screen is MaintainerScreen.COLLECTION_VALIDATION:
-            collection_validation = screens.collection_validation(state.focus)
-            return (
-                ("That Collection Candidate's validation is not available.",)
-                if collection_validation is None
-                else render_maintainer_collection_validation(collection_validation, profile)
-            )
         if screen is MaintainerScreen.CANDIDATE_FILTERS:
             return render_maintainer_candidate_filters(
                 project_maintainer_candidate_filters(
@@ -4577,6 +4613,23 @@ class CanonicalScreenSource:
                 ("That Candidate's registry transaction is not available.",)
                 if registry_diff is None
                 else render_maintainer_registry_diff(registry_diff, profile)
+            )
+        if screen is MaintainerScreen.COLLECTIONS:
+            return render_maintainer_collections(
+                self._collection_registry(state), cursor=state.current_row
+            )
+        if screen is MaintainerScreen.COLLECTION_EDITOR:
+            registry = self._collection_registry(state)
+            if registry is None or not state.rows:
+                return ("Open a Collection from screen 51 first.",)
+            return render_maintainer_collection_editor(
+                registry,
+                self._opened_collection(state),
+                rows=state.rows,
+                cursor=state.current_row,
+                name=state.collection_draft.name,
+                summary=state.collection_draft.summary,
+                selection=state.selection,
             )
         if screen is MaintainerScreen.REGISTRY:
             present = (

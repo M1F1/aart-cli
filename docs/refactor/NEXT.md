@@ -36,9 +36,14 @@ Marketplace offers each approved Collection at its highest version, members exac
 in a Source. The Registry maintainer creates and maintains it in a new TUI view and a new CLI
 command, from artifacts the Registry already approved. Its version bumps automatically when a
 promotion bumps one of its members, which happens after a Source change is synchronized. The
-specification is amended (D-430, INV-266, plan step 16). **Next are plan steps 17–19**, in
-`plan.json` order after step 7: remove source-authored Collections, add `registry collection` and
-the TUI Collections view, then the automatic bump. Steps 8–15 follow.
+specification is amended (D-430, INV-266, plan step 16).
+
+**Steps 17–19 are done** (D-431, D-432): source-authored Collections are removed;
+`registry collection` and the TUI screens 51/52 define a Collection version, reviewed on 44 and
+committed on 45; and a promotion that approves a member's new version publishes the containing
+Collections' next versions in the same transaction. **Next is step 8**: 07 and 07b ask each
+member's configuration and credentials once per member artifact, with Set later. Steps 9–15
+follow.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).

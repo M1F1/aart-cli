@@ -8,7 +8,6 @@ scope, and every member there goes to it (D-422).
 
 from __future__ import annotations
 
-import json
 import unittest
 from unittest import mock
 
@@ -16,24 +15,14 @@ from aart_cli.application.consumer_views import ConsumerScreen
 from aart_cli.domain.result import Ok
 from aart_cli.io.receipt_store import LocalReceiptStore
 from tests.configured_install_command_e2e_test import _environment
-from tests.configured_installation_draft_e2e_test import _published_registries
+from tests.configured_installation_draft_e2e_test import RegistryCollection, _published_registries
 from tests.consumer_application_e2e_test import _at, _drive
 from tests.consumer_shell_test import DOWN, ENTER, RIGHT, SPACE
 from tests.installation_harness_choice_test import _AUTHORED_MCP, _AUTHORED_SKILL
 
 STARTER = "company/collection/starter@1.0.0"
-_AUTHORED_STARTER = (
-    (
-        "starter/aart-cli.json",
-        json.dumps(
-            {
-                "schema": "aart-cli.dev/collection/v1",
-                "name": "starter",
-                "summary": "The dummy server and code review.",
-                "artifacts": ["mcp/dummy@^1", "skill/code-review@^1"],
-            }
-        ),
-    ),
+_AUTHORED_STARTER = RegistryCollection(
+    "starter", "The dummy server and code review.", ("mcp/dummy", "skill/code-review")
 )
 #: Marketplace rows are the two artifacts, then the Collection; Enter opens its preview.
 _TO_PREVIEW = (DOWN, DOWN, ENTER)

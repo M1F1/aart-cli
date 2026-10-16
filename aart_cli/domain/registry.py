@@ -10,7 +10,7 @@ from .candidates import Candidate, CandidateId, CandidateState
 from .identifiers import ArtifactCoordinate, ArtifactIdentity, ObjectDigest
 
 if TYPE_CHECKING:
-    from .collection_candidates import CollectionCandidate
+    from .collection_changes import RegistryCollectionChange
 
 
 class PromotionMode(str, Enum):
@@ -153,35 +153,28 @@ def registry_version_from_candidate(
     )
 
 
-def registry_version_from_collection_candidate(
-    candidate: CollectionCandidate,
+def registry_version_from_collection_change(
+    change: RegistryCollectionChange,
     *,
     object_digest: ObjectDigest,
     registry_snapshot: ObjectDigest,
 ) -> RegistryArtifactVersion:
     """A Collection's approved version: the same record an artifact gets, of kind `collection`.
 
-    A Collection has no payload of its own; its canonical document is all of it, so that digest
-    stands for the payload too. It is always vendored, because the Registry is its only home
-    (D-427).
+    A Collection has no payload and no Source input of its own; its canonical document is all of
+    it, so that digest stands for all three. It is always vendored (D-430).
     """
 
-    if candidate.state not in {
-        CandidateState.READY,
-        CandidateState.WARNING,
-        CandidateState.PROMOTED,
-    }:
-        raise ValueError("registry version requires a validated Collection Candidate")
     return RegistryArtifactVersion(
         ArtifactCoordinate(
-            candidate.target_registry,
-            ArtifactIdentity("collection", candidate.name),
-            candidate.version,
+            change.target_registry,
+            ArtifactIdentity("collection", change.name),
+            change.version,
         ),
-        candidate.id,
-        candidate.input_digest,
-        candidate.canonical_digest,
-        candidate.canonical_digest,
+        change.id,
+        change.canonical_digest,
+        change.canonical_digest,
+        change.canonical_digest,
         object_digest,
         registry_snapshot,
         PromotionMode.VENDORED,

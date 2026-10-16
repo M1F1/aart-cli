@@ -31,7 +31,6 @@ from aart_cli.protocol.paths import SafeRelativePath, parse_relative_path
 from aart_cli.protocol.registry_models import ReviewRecord
 from aart_cli.protocol.semver import SemVer, parse_semver
 from aart_cli.registry_commands.model import (
-    CollectionAuthorOptions,
     RegistryInitOptions,
     RegistryOperation,
     RegistryQualityReport,
@@ -54,7 +53,6 @@ from aart_cli.registry_commands.workspace import (
     finalize_registry_workspace,
     prepare_artifact_revendor,
     prepare_artifact_vendor,
-    prepare_registry_collection,
     prepare_registry_init,
     read_vendored_artifact_origin,
 )
@@ -181,7 +179,6 @@ def _follow_up(
     quoted = shlex.quote(workspace)
     if action in {
         CurationAction.INIT,
-        CurationAction.COLLECTION,
         # A vendored package is new owned content, so the catalogs derived from the approvals are
         # stale until `build` recomputes them.
         CurationAction.VENDOR,
@@ -351,33 +348,6 @@ class LocalCurationService:
             "at once",
         )
         return Ok(self._workspace_review(request, planned.value, warnings=warnings))
-
-    def _prepare_collection(self, request: CurationRequest) -> Result[PreparedCuration]:
-        if request.name is None or request.summary is None or not request.members:
-            return _error("collection requires name, summary, and at least one member")
-        try:
-            options = CollectionAuthorOptions(
-                request.name,
-                request.summary,
-                tuple(
-                    ArtifactIdentity(
-                        cast(CanonicalArtifactType, member.split("/", 1)[0]),
-                        member.split("/", 1)[1],
-                    )
-                    for member in request.members
-                ),
-            )
-        except ValueError as error:
-            return _error(str(error))
-        planned = prepare_registry_collection(
-            options,
-            executable_version=_VERSION,
-            available_capabilities=_CAPABILITIES,
-            output=self.workspace,
-        )
-        if isinstance(planned, Err):
-            return planned
-        return Ok(self._workspace_review(request, planned.value))
 
     def _vendor_review_check(
         self,
@@ -1169,7 +1139,6 @@ class LocalCurationService:
             return _error("curation request targets a different workspace")
         mutating = request.action in {
             CurationAction.INIT,
-            CurationAction.COLLECTION,
             CurationAction.FORMAT,
             CurationAction.VENDOR,
             CurationAction.VENDOR_BATCH,
@@ -1184,8 +1153,6 @@ class LocalCurationService:
                 return target
         if request.action is CurationAction.INIT:
             return self._prepare_init(request)
-        if request.action is CurationAction.COLLECTION:
-            return self._prepare_collection(request)
         if request.action is CurationAction.FORMAT:
             return self._prepare_format(request)
         if request.action is CurationAction.VENDOR:

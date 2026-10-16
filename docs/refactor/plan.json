@@ -1114,17 +1114,17 @@
         {
           "id": "17",
           "title": "Remove source-authored Collections: author init --kind collection, Sync Collection Candidates, screens 51/52 and promote of Collection Candidates; author check and Sync refuse a Collection manifest and point at registry collection",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "18",
           "title": "registry collection NAME --summary --include KIND/NAME and the Maintainer TUI Collections view create or change a Collection through one reviewed Registry transaction; each version pins exact approved members",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "19",
           "title": "Automatic bump: a promotion that approves a member's new version publishes the next version of every Collection naming it in the same transaction, shown in the Registry diff and the promote review (INV-266)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "8",

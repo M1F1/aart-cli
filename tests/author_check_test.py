@@ -57,22 +57,15 @@ def _manifest(root: Path) -> Path:
     return next(root.rglob("aart-cli.yaml"))
 
 
-def _write_collection(
-    directory: Path,
-    *,
-    artifacts: list[str] | None = None,
-    version: str | None = None,
-) -> None:
-    """A Collection manifest: discovered by the same walk, compiled by a different function."""
+def _write_collection(directory: Path) -> None:
+    """A Collection manifest, which a Source may not carry."""
 
-    document: dict[str, object] = {
+    document = {
         "schema": "aart-cli.dev/collection/v1",
         "name": "data-engineer",
         "summary": "Approved data engineering tools.",
-        "artifacts": ["company/mcp/github@^2"] if artifacts is None else artifacts,
+        "artifacts": ["company/mcp/github@^2"],
     }
-    if version is not None:
-        document["version"] = version
     directory.mkdir(parents=True)
     (directory / "aart-cli.json").write_text(json.dumps(document), encoding="utf-8")
 
@@ -231,47 +224,18 @@ class PromotionTest(unittest.TestCase):
 
 
 class CollectionTest(unittest.TestCase):
-    """§173.3: a Collection manifest is checked by the parser Sync uses, and never skipped."""
+    """§173.1, D-430: a Source defines no Collection, so a Collection manifest is an error."""
 
-    def test_a_collection_is_checked_and_reported_as_the_collection_it_compiles_to(self) -> None:
+    def test_a_collection_manifest_is_an_error_naming_where_collections_are_made(self) -> None:
         with _workspace() as root:
             _write_collection(root / "collections" / "data-engineer")
 
             code, printed = _check(root)
 
-            self.assertEqual(code, OK, printed)
-            self.assertIn(
-                "ok    collections/data-engineer/aart-cli.json  ->  collection/data-engineer\n",
-                printed,
-            )
-            self.assertNotIn("skip", printed)
-            self.assertIn("2 manifest(s) would be promoted as written.", printed)
-
-    def test_a_broken_collection_is_an_error_with_the_parser_s_own_message(self) -> None:
-        with _workspace() as root:
-            _write_collection(root / "collections" / "data-engineer", version="1.0.0")
-
-            code, printed = _check(root)
-
-            self.assertEqual(code, ERROR)
+            self.assertEqual(code, ERROR, printed)
             self.assertIn("error collections/data-engineer/aart-cli.json", printed)
-            self.assertIn("the Registry assigns versions", printed)
-
-    def test_a_collection_that_names_no_member_is_an_error(self) -> None:
-        with _workspace() as root:
-            _write_collection(root / "collections" / "data-engineer", artifacts=[])
-
-            code, printed = _check(root)
-
-            self.assertEqual(code, ERROR)
-            self.assertIn("artifacts", printed)
-
-    def test_what_init_writes_for_a_collection_passes(self) -> None:
-        with _workspace("collection", "data-engineer") as root:
-            code, printed = _check(root)
-
-            self.assertEqual(code, OK, printed)
-            self.assertIn("->  collection/data-engineer", printed)
+            self.assertIn("a Collection is not defined in a source", printed)
+            self.assertIn("aart-cli registry collection", printed)
 
 
 class JsonTest(unittest.TestCase):
@@ -309,19 +273,6 @@ class JsonTest(unittest.TestCase):
 
             self.assertEqual(code, OK)
             self.assertEqual(entry["package"], f"mcp/{_NAME}")
-
-    def test_a_collection_names_the_collection_it_compiles_to(self) -> None:
-        with _workspace() as root:
-            _write_collection(root / "collections" / "data-engineer")
-
-            report = json.loads(_check(root, as_json=True)[1])
-            entry = next(
-                item for item in report["manifests"] if item["path"].endswith("aart-cli.json")
-            )
-
-            self.assertIs(entry["ok"], True)
-            self.assertEqual(entry["package"], "collection/data-engineer")
-            self.assertNotIn("checked", entry)
 
 
 def _enabled_inputs(text: str) -> str:

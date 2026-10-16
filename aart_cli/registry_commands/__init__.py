@@ -1,7 +1,6 @@
 """Maintainer registry command functional core."""
 
 from .model import (
-    CollectionAuthorOptions,
     RegistryApplyCommand,
     RegistryApplyReceipt,
     RegistryInitOptions,
@@ -14,7 +13,6 @@ from .model import (
 )
 from .planning import (
     audit_registry_workspace,
-    plan_registry_collection,
     plan_registry_format,
     plan_registry_init,
     plan_registry_workspace_files,
@@ -24,7 +22,6 @@ from .planning import (
 )
 
 __all__ = [
-    "CollectionAuthorOptions",
     "RegistryApplyCommand",
     "RegistryApplyReceipt",
     "RegistryInitOptions",
@@ -35,7 +32,6 @@ __all__ = [
     "RegistryWorkspacePlan",
     "WorkspaceChangeKind",
     "audit_registry_workspace",
-    "plan_registry_collection",
     "plan_registry_format",
     "plan_registry_init",
     "plan_registry_workspace_files",

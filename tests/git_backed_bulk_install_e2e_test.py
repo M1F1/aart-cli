@@ -17,24 +17,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.configured_installation_draft_e2e_test import RegistryCollection
 from tests.git_backed_consumer_e2e_test import _Environment
 from tests.git_backed_runtime_e2e_test import AUTHORED_SERVER
 from tests.mcp_stdio_e2e_test import speak
 from tests.placed_installation_e2e_test import AUTHORED_SKILL
 
-#: A Collection naming both members, authored without a version like any source manifest.
-AUTHORED_STARTER: tuple[tuple[str, str], ...] = (
-    (
-        "collections/starter/aart-cli.json",
-        json.dumps(
-            {
-                "schema": "aart-cli.dev/collection/v1",
-                "name": "starter",
-                "summary": "Notes and code review.",
-                "artifacts": ["mcp/notes@^1", "skill/code-review@^1"],
-            }
-        ),
-    ),
+#: A Collection naming both members, which the Registry Maintainer defines once both are approved.
+AUTHORED_STARTER = RegistryCollection(
+    "starter", "Notes and code review.", ("mcp/notes", "skill/code-review")
 )
 
 SERVER = "company/mcp/notes"
@@ -171,11 +162,10 @@ class CollectionsAreReachableTest(_Chain):
                 collection["members"],
             )
 
-    def test_a_collection_whose_member_moved_past_its_constraint_is_not_offered(self) -> None:
-        """The member's row now offers 2.0.0, which `^1` excludes (§173.4).
+    def test_a_member_s_new_version_is_offered_in_the_collection_s_next_version(self) -> None:
+        """INV-266: promoting the member published the Collection's next version with it.
 
-        Offering the Collection would install a version it never named, so it is declined until a
-        new Collection version is approved.
+        The Marketplace offers the highest Collection version, which pins the member's new one.
         """
 
         skill = [list(item) for item in AUTHORED_SKILL]
@@ -194,10 +184,11 @@ class CollectionsAreReachableTest(_Chain):
             code, listed = env.run("marketplace", "list")
 
             self.assertEqual(0, code, listed)
-            self.assertEqual([], listed["collections"])
-            self.assertIn(
-                "company/skill/code-review@2.0.0",
-                [item["coordinate"] for item in listed["artifacts"]],
+            (collection,) = listed["collections"]
+            self.assertEqual("company/collection/starter@1.0.1", collection["coordinate"])
+            self.assertEqual(
+                ["company/mcp/notes@1.0.0", "company/skill/code-review@2.0.0"],
+                collection["members"],
             )
 
     def test_installing_the_collection_installs_every_member_in_one_receipt(self) -> None:

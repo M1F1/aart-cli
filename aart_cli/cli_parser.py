@@ -694,15 +694,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_collection = registry_sub.add_parser(
         "collection",
-        help="author a collection from artifacts this registry already holds",
+        help="define or change a Collection of artifacts this registry approved",
     )
     _add_registry_source(p_collection)
     p_collection.add_argument("names", nargs=1, metavar="NAME")
     p_collection.add_argument(
         "--summary",
-        required=True,
         metavar="TEXT",
-        help="one-line collection description",
+        help="one-line Collection description (required for a new Collection)",
     )
     p_collection.add_argument(
         "--include",
@@ -710,7 +709,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         dest="collection_members",
         metavar="KIND/NAME",
-        help="artifact already held by this registry (repeatable)",
+        help="approved artifact, pinned at its highest approved version (repeatable)",
     )
     _add_registry_finalize(p_collection)
     _add_json(p_collection)
@@ -1317,9 +1316,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--kind",
         dest="artifact_kind",
         required=True,
-        # The parser's own vocabulary: every artifact kind it accepts, and a Collection.
+        # The parser's own vocabulary. A Collection is in it only to be refused with where the
+        # Registry makes one (D-430).
         choices=AUTHORED_KINDS,
-        help="what kind of artifact, or a collection, to start",
+        help="what kind of artifact to start",
     )
     p_author_init.add_argument(
         "--name",

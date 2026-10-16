@@ -23,6 +23,7 @@ from aart_cli.application.promotion import (
     plan_bulk_promotion,
     project_promotion,
 )
+from aart_cli.application.registry_versions import ApprovedRegistryVersions
 from aart_cli.domain.candidates import assess_candidate
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
 from aart_cli.domain.registry import PromotionMode
@@ -207,17 +208,18 @@ def _promote(
     authored: tuple[SnapshotEntry, ...],
 ) -> SourceSnapshot:
     source_alias = SourceAlias(alias)
+    approved = load_registry_versions(current)
+    if not isinstance(approved, Ok):
+        raise RuntimeError(approved.diagnostics[0].message)
     compiled = compile_author_snapshot(
         SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, authored),
         source_alias=source_alias,
         source=url,
         revision=revision,
+        versions=ApprovedRegistryVersions(approved.value, SourceAlias("manual-registry")),
     )
     if not isinstance(compiled, Ok):
         raise RuntimeError(compiled.diagnostics[0].message)
-    approved = load_registry_versions(current)
-    if not isinstance(approved, Ok):
-        raise RuntimeError(approved.diagnostics[0].message)
     scanned = reconcile_source_scan(
         source_alias,
         revision,
@@ -443,7 +445,7 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
 
     skill_manifest = {
         "schema": "aart-cli.dev/skill/v1",
-        "artifact": {"name": "manual-check", "kind": "skill", "version": "1.0.0"},
+        "artifact": {"name": "manual-check", "kind": "skill"},
         "payload": {"include": ["SKILL.md"]},
         "compatibility": {
             "harnesses": ["claude", "opencode", "tabnine"],
@@ -460,7 +462,7 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
 
     mcp_manifest = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": "dummy-mcp", "kind": "mcp", "version": "1.0.0"},
+        "artifact": {"name": "dummy-mcp", "kind": "mcp"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},

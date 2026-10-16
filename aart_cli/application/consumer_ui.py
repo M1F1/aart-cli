@@ -65,6 +65,8 @@ __all__ = [
     "KeyBinding",
     "RegistryDraft",
     "RegistryInitDraft",
+    "CollectionDraft",
+    "COLLECTION_SAVE_ROW",
     "RepositoryScanDraft",
     "SourceDraft",
     "WorkflowProgressStep",
@@ -88,6 +90,8 @@ class ConsumerActionKind(str, Enum):
     SOURCE_SYNC = "source-sync"
     CANDIDATE_PROMOTION = "candidate-promotion"
     BULK_PROMOTION = "bulk-promotion"
+    #: Screen 52's answer: one Collection version defined in the Registry (D-430).
+    COLLECTION_DEFINE = "collection-define"
     REGISTRY_ADD = "registry-add"
     REGISTRY_SYNC = "registry-sync"
     REGISTRY_REMOVE = "registry-remove"
@@ -137,6 +141,7 @@ class ConsumerUiEventKind(str, Enum):
     EDIT_REGISTRY = "edit-registry"
     EDIT_SOURCE = "edit-source"
     EDIT_REGISTRY_INIT = "edit-registry-init"
+    EDIT_COLLECTION = "edit-collection"
     EDIT_REPOSITORY_SCAN = "edit-repository-scan"
     EDIT_PUBLICATION_BRANCH = "edit-publication-branch"
     EDIT_INSTALL_CONFIG = "edit-install-config"
@@ -383,6 +388,25 @@ class RegistryInitDraft:
 
 
 @dataclass(frozen=True, slots=True)
+class CollectionDraft:
+    """Screen 52's text: a new Collection's name, and the summary any Collection carries.
+
+    The members are the session's ticked rows, so Space is the same key it is on every other
+    selectable screen. An existing Collection's name is the row it was opened from, not text.
+    """
+
+    name: str = ""
+    summary: str = ""
+
+    def __post_init__(self) -> None:
+        if any(
+            not isinstance(value, str) or any(char in value for char in "\r\n")
+            for value in (self.name, self.summary)
+        ):
+            raise ValueError("collection draft is invalid")
+
+
+@dataclass(frozen=True, slots=True)
 class RepositoryScanDraft:
     """The credential-free remote identity read once for artifact-scoped adoption."""
 
@@ -491,6 +515,7 @@ class ConsumerUiCommand:
     source_draft: SourceDraft | None = None
     registry_init_draft: RegistryInitDraft | None = None
     repository_scan_draft: RepositoryScanDraft | None = None
+    collection_draft: CollectionDraft | None = None
     targets: tuple[str, ...] = ()
     #: The artifact×harness pairs ticked on screen 05's matrix (§172.2), as `pair_key` strings.
     #: `targets` stays the harnesses they go into, so a plan is still prepared for those hosts.
@@ -546,6 +571,10 @@ class ConsumerUiCommand:
                 self.repository_scan_draft is not None
                 and not isinstance(self.repository_scan_draft, RepositoryScanDraft)
             )
+            or (
+                self.collection_draft is not None
+                and not isinstance(self.collection_draft, CollectionDraft)
+            )
         ):
             raise ValueError("consumer UI command is invalid")
         if (
@@ -592,6 +621,8 @@ _SELECTABLE = frozenset(
         # Screen 47 assembles one registry transaction, so selecting rows is what it is for.
         MaintainerScreen.BULK_PROMOTION,
         MaintainerScreen.SCAN_RESULT,
+        # Screen 52's members are ticked the same way; its text rows are the form's own.
+        MaintainerScreen.COLLECTION_EDITOR,
     }
 )
 
@@ -684,6 +715,7 @@ class ConsumerUiState:
     registry_commit_origin: RegistryCommitOrigin | None = None
     registry_commit_subject: str = ""
     repository_scan_draft: RepositoryScanDraft = RepositoryScanDraft()
+    collection_draft: CollectionDraft = CollectionDraft()
     #: The directory this session was launched from, already written for a reader. It is context
     #: for every screen -- an install and a Registry edit land relative to it -- so it is carried
     #: on the state rather than fetched where it is drawn, which keeps the frame off the
@@ -772,6 +804,7 @@ class ConsumerUiState:
             or not isinstance(self.registry_init_draft, RegistryInitDraft)
             or not isinstance(self.registry_commit_applied, bool)
             or not isinstance(self.repository_scan_draft, RepositoryScanDraft)
+            or not isinstance(self.collection_draft, CollectionDraft)
         ):
             raise ValueError("consumer UI state is invalid")
         if self.session.profile is not self.settings.profile:
@@ -812,9 +845,9 @@ _WORKFLOW_ROUTES: tuple[tuple[ApplicationScreen, ...], ...] = (
         MaintainerScreen.REGISTRY_COMMIT,
     ),
     (
-        MaintainerScreen.COLLECTION_CANDIDATES,
-        MaintainerScreen.COLLECTION_VALIDATION,
-        MaintainerScreen.REGISTRY_DIFF,
+        MaintainerScreen.REGISTRY,
+        MaintainerScreen.COLLECTIONS,
+        MaintainerScreen.COLLECTION_EDITOR,
         MaintainerScreen.REGISTRY_VALIDATION,
         MaintainerScreen.REGISTRY_COMMIT,
     ),
@@ -1011,6 +1044,10 @@ _FORM_DRAFTS: dict[ApplicationScreen, Callable[[ConsumerUiState], ConsumerUiStat
     ),
     MaintainerScreen.REPOSITORY_SCAN: lambda state: replace(
         state, repository_scan_draft=RepositoryScanDraft()
+    ),
+    # The members a Collection opens with are seeded as the editor is entered.
+    MaintainerScreen.COLLECTION_EDITOR: lambda state: replace(
+        state, collection_draft=CollectionDraft(), selection=()
     ),
 }
 
@@ -1300,6 +1337,15 @@ def _toggle_selection(
     return replace(state, selection=selected, quit_pending=False), ()
 
 
+#: The actions reviewed on screen 44 and committed on 45 as one local Registry transaction.
+_REGISTRY_TRANSACTIONS = frozenset(
+    {
+        ConsumerActionKind.CANDIDATE_PROMOTION,
+        ConsumerActionKind.BULK_PROMOTION,
+        ConsumerActionKind.COLLECTION_DEFINE,
+    }
+)
+
 _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen] = {
     (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_ADD): ConsumerScreen.REGISTRY_REVIEW,
     # A refresh is requested from the list, where the row being refreshed is the row under the
@@ -1378,6 +1424,11 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     (
         ConsumerActionKind.BULK_PROMOTION,
         MaintainerScreen.BULK_PROMOTION,
+    ): MaintainerScreen.REGISTRY_VALIDATION,
+    # Screen 52's Collection version is the same kind of Registry transaction, reviewed alike.
+    (
+        ConsumerActionKind.COLLECTION_DEFINE,
+        MaintainerScreen.COLLECTION_EDITOR,
     ): MaintainerScreen.REGISTRY_VALIDATION,
     # CP-23 task 12: screen 24's rows are the actions, and each opens 24a about the same reference.
     (
@@ -1559,9 +1610,7 @@ def _request_action(
         ),
         quit_pending=False,
         registry_commit_applied=(
-            False
-            if action in (ConsumerActionKind.CANDIDATE_PROMOTION, ConsumerActionKind.BULK_PROMOTION)
-            else moved.registry_commit_applied
+            False if action in _REGISTRY_TRANSACTIONS else moved.registry_commit_applied
         ),
     )
     selection = state.selection
@@ -1609,6 +1658,9 @@ def _request_action(
         ),
         repository_scan_draft=(
             state.repository_scan_draft if action is ConsumerActionKind.REPOSITORY_SCAN else None
+        ),
+        collection_draft=(
+            state.collection_draft if action is ConsumerActionKind.COLLECTION_DEFINE else None
         ),
         install_scope=(state.install_scope if action is ConsumerActionKind.INSTALL else ""),
         python_installer=(state.python_installer if action is ConsumerActionKind.INSTALL else ""),
@@ -1779,6 +1831,10 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
         ConsumerActionKind.BULK_PROMOTION,
         MaintainerScreen.REGISTRY_COMMIT,
     ): None,
+    (
+        ConsumerActionKind.COLLECTION_DEFINE,
+        MaintainerScreen.REGISTRY_COMMIT,
+    ): None,
     (ConsumerActionKind.CREDENTIAL_REPLACE, ConsumerScreen.CREDENTIAL_REVIEW): None,
     (ConsumerActionKind.CREDENTIAL_SET, ConsumerScreen.CREDENTIAL_REVIEW): None,
     (ConsumerActionKind.CREDENTIAL_DELETE, ConsumerScreen.CREDENTIAL_REVIEW): None,
@@ -1936,6 +1992,7 @@ def _action_recorded(
         ConsumerActionKind.REGISTRY_REBUILD: RegistryCommitOrigin.REBUILD_REGISTRY,
         ConsumerActionKind.CANDIDATE_PROMOTION: RegistryCommitOrigin.PROMOTE,
         ConsumerActionKind.BULK_PROMOTION: RegistryCommitOrigin.BULK_PROMOTE,
+        ConsumerActionKind.COLLECTION_DEFINE: RegistryCommitOrigin.DEFINE_COLLECTION,
     }
     commit_origin = origins.get(action, state.registry_commit_origin)
     commit_subject = (
@@ -1946,7 +2003,7 @@ def _action_recorded(
         else state.registry_commit_subject
     )
     if (
-        action in (ConsumerActionKind.CANDIDATE_PROMOTION, ConsumerActionKind.BULK_PROMOTION)
+        action in _REGISTRY_TRANSACTIONS
         and state.session.screen is MaintainerScreen.REGISTRY_COMMIT
     ):
         return replace(
@@ -2200,6 +2257,17 @@ def _reduce(
         else:
             return state, ()
         return replace(state, registry_init_draft=init_draft, quit_pending=False), ()
+    if event.kind is ConsumerUiEventKind.EDIT_COLLECTION:
+        if state.session.screen is not MaintainerScreen.COLLECTION_EDITOR:
+            return state, ()
+        collection_draft = state.collection_draft
+        if event.key == "name":
+            collection_draft = replace(collection_draft, name=event.text)
+        elif event.key == "summary":
+            collection_draft = replace(collection_draft, summary=event.text)
+        else:
+            return state, ()
+        return replace(state, collection_draft=collection_draft, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.EDIT_REPOSITORY_SCAN:
         if state.session.screen is not MaintainerScreen.REPOSITORY_SCAN:
             return state, ()
@@ -2348,7 +2416,6 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     ),
     MaintainerScreen.CANDIDATES: (
         _navigate_binding("f", "Filters", MaintainerScreen.CANDIDATE_FILTERS),
-        _navigate_binding("c", "Collections", MaintainerScreen.COLLECTION_CANDIDATES),
     ),
     MaintainerScreen.CANDIDATE_DETAILS: (
         _navigate_binding("d", "Diff", MaintainerScreen.CANDIDATE_DIFF),
@@ -2371,6 +2438,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _navigate_binding("s", "Scan Repository", MaintainerScreen.REPOSITORY_SCAN),
         _navigate_binding("u", "Check upstream", MaintainerScreen.ADOPTED_ARTIFACTS),
         _action_binding("p", "Push", ConsumerActionKind.REGISTRY_PUSH),
+        _navigate_binding("o", "Collections", MaintainerScreen.COLLECTIONS),
     ),
     # The end of a Source journey. Enter is bound here rather than left to the generic rule
     # because a result screen has nothing to open, and an Enter that does nothing is how somebody
@@ -2419,6 +2487,7 @@ _FORM_TEXT_ROWS: dict[ApplicationScreen, frozenset[str]] = {
     ConsumerScreen.REGISTRY_ADD: frozenset({"alias", "url", "ref"}),
     MaintainerScreen.SOURCE_ADD: frozenset({"alias", "location", "ref"}),
     MaintainerScreen.REGISTRY_INIT: frozenset({"id", "name"}),
+    MaintainerScreen.COLLECTION_EDITOR: frozenset({"name", "summary"}),
     MaintainerScreen.REPOSITORY_SCAN: frozenset({"url", "ref"}),
     MaintainerScreen.REGISTRY_PUSH: frozenset({"branch"}),
 }
@@ -2443,6 +2512,19 @@ def _form_text_rows(state: ConsumerUiState) -> frozenset[str] | None:
             else None
         )
     return _FORM_TEXT_ROWS.get(screen)
+
+
+#: Screen 52's submit row. Every row between the text fields and this one is a member.
+COLLECTION_SAVE_ROW = "save"
+
+
+def _collection_member_row(state: ConsumerUiState) -> bool:
+    return state.session.screen is MaintainerScreen.COLLECTION_EDITOR and state.current_row not in {
+        "",
+        "name",
+        "summary",
+        COLLECTION_SAVE_ROW,
+    }
 
 
 def typing_text(state: ConsumerUiState) -> bool:
@@ -2621,6 +2703,10 @@ def key_bindings(
         toggling = state.current_row == _FORM_TOGGLE_ROWS.get(state.session.screen)
         if toggling and acts(" "):
             bindings.append(KeyBinding("Space", _FORM_TOGGLE_LABELS[state.session.screen]))
+        elif _collection_member_row(state) and acts(" "):
+            toggling = True
+            label = "Leave out" if state.current_row in state.selection else "Include"
+            bindings.append(KeyBinding("Space", label))
         if acts("enter"):
             label = "Next" if typing or toggling else "Continue"
             if state.current_row == CONFIG_SET_LATER_ROW:
@@ -2911,6 +2997,33 @@ def key_event(
         if row in values and key.isprintable():
             text = key if len(key) > 1 else values[row] + key
             return ConsumerUiEvent(ConsumerUiEventKind.EDIT_REGISTRY_INIT, key=row, text=text)
+        return None
+
+    if state.session.screen is MaintainerScreen.COLLECTION_EDITOR:
+        row = cursor or state.current_row
+        values = {"name": state.collection_draft.name, "summary": state.collection_draft.summary}
+        if key == "escape":
+            return ConsumerUiEvent(ConsumerUiEventKind.BACK)
+        if key == "up":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
+        if key == "down":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if key == " " and row not in values and row != COLLECTION_SAVE_ROW:
+            return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_SELECTION, key=row)
+        if key == "enter":
+            if row == COLLECTION_SAVE_ROW:
+                return ConsumerUiEvent(
+                    ConsumerUiEventKind.REQUEST_ACTION,
+                    action=ConsumerActionKind.COLLECTION_DEFINE,
+                )
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if row in values and key == "backspace":
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_COLLECTION, key=row, text=values[row][:-1]
+            )
+        if row in values and key.isprintable():
+            text = key if len(key) > 1 else values[row] + key
+            return ConsumerUiEvent(ConsumerUiEventKind.EDIT_COLLECTION, key=row, text=text)
         return None
 
     if state.session.screen is MaintainerScreen.REPOSITORY_SCAN:

@@ -38,7 +38,6 @@ from aart_cli.sources.model import (
     source_store_paths,
 )
 from tests.candidate_history_test import _compiled, _ready_scan
-from tests.maintainer_collection_history_test import _scan as _collection_scan
 from tests.marketplace_fixtures import configured_source, effective_configuration
 
 
@@ -111,14 +110,6 @@ class MaintainerCompositionTest(unittest.TestCase):
         written = write_candidate_history(candidate_history_paths(source_paths), _ready_scan())
         self.assertIsInstance(written, Ok)
 
-    def _write_collection_scan(self) -> None:
-        source_paths = source_store_paths(self.data_root, source_instance_id(self.authors))
-        written = write_candidate_history(
-            candidate_history_paths(source_paths),
-            _collection_scan("a" * 40),
-        )
-        self.assertIsInstance(written, Ok)
-
     def test_reader_projects_only_authoring_sources_with_matching_history(self) -> None:
         self._publish()
         self._write_scan()
@@ -165,22 +156,6 @@ class MaintainerCompositionTest(unittest.TestCase):
         self.assertIsInstance(composed, Ok)
         assert isinstance(composed, Ok)
         self.assertEqual(composed.value.sources[0].candidate_count, 0)
-
-    def test_reader_composes_durable_collection_candidate_and_unavailable_validation(self) -> None:
-        self._publish()
-        self._write_collection_scan()
-
-        composed = read_maintainer_views(self.effective, data_root=self.data_root)
-
-        self.assertIsInstance(composed, Ok)
-        assert isinstance(composed, Ok)
-        self.assertEqual(composed.value.dashboard.candidate_count, 1)
-        self.assertEqual(len(composed.value.collection_candidates or ()), 1)
-        collection = (composed.value.collection_candidates or ())[0]
-        self.assertEqual(collection.coordinate, "company/collection/data-engineer@2.1.0")
-        validation = composed.value.collection_validation(collection.candidate_id)
-        assert validation is not None
-        self.assertEqual(validation.outcome, "unavailable")
 
     def test_corrupt_history_refuses_instead_of_projecting_zero_candidates(self) -> None:
         self._publish()
@@ -268,19 +243,6 @@ class MaintainerCompositionTest(unittest.TestCase):
                 self.assertEqual(source.candidate_count, 0)
                 self.assertEqual(source.status, MaintainerSourceStatus.ATTENTION)
                 self.assertIn(UNBOUND_SCAN_DIAGNOSTIC, source.diagnostics)
-
-    def test_a_collection_candidate_of_an_unbound_scan_is_not_projected_either(self) -> None:
-        """The same scan feeds the collection lists, so tolerating it must not leak them."""
-
-        self._publish("b" * 40)
-        self._write_collection_scan()
-
-        composed = read_maintainer_views(self.effective, data_root=self.data_root)
-
-        self.assertIsInstance(composed, Ok)
-        assert isinstance(composed, Ok)
-        self.assertEqual(composed.value.collection_candidates or (), ())
-        self.assertEqual(composed.value.dashboard.candidate_count, 0)
 
     def test_an_unbound_scan_hides_neither_the_other_sources_nor_their_candidates(self) -> None:
         """What the refusal actually cost: every other Source disappeared with it."""

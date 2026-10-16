@@ -26,20 +26,13 @@ from aart_cli.application.maintainer_promotion import (
     PreparedCandidatePromotionTransaction,
     candidate_promotion_record_refusal,
     plan_candidate_promotion,
-    plan_promotion_transaction,
     prepare_candidate_promotion,
-    prepare_collection_promotion,
     promotion_commit_subject,
 )
 from aart_cli.application.maintainer_sync import (
     ApprovedRegistryState,
     PreparedSourceSync,
     SourceSyncExecutionResult,
-)
-from aart_cli.application.marketplace_resolution import (
-    ApprovedMarketplace,
-    aggregate_approved_marketplace,
-    resolve_selection,
 )
 from aart_cli.application.promotion import (
     PromotionAudit,
@@ -48,6 +41,7 @@ from aart_cli.application.promotion import (
     promotion_source_provenance,
     registry_state_digest,
 )
+from aart_cli.application.registry_collections import current_collection
 from aart_cli.configuration.model import ConfiguredSource
 from aart_cli.configuration.policy import redact_text
 from aart_cli.domain.artifacts import ArtifactKind
@@ -58,7 +52,6 @@ from aart_cli.domain.candidates import (
     CandidateState,
     semantic_candidate_diff,
 )
-from aart_cli.domain.collection_candidates import CollectionCandidate
 from aart_cli.domain.identifiers import ArtifactCoordinate, SourceAlias
 from aart_cli.domain.inputs import ConfigInput, RuntimeInput, SecretInput
 from aart_cli.domain.policies import EffectivePolicy
@@ -71,20 +64,25 @@ from aart_cli.domain.python_runtime import (
 from aart_cli.domain.registry import (
     PromotionMode,
     RegistryArtifactVersion,
+    RegistryLifecycle,
     promotion_mode_consequences,
 )
 from aart_cli.domain.result import Err
-from aart_cli.domain.selection import ArtifactRequest, ArtifactSelection
 from aart_cli.protocol.authoring import read_package_description
 from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SourceSnapshot,
 )
+from aart_cli.protocol.semver import SemVer, parse_semver
 from aart_cli.sources.model import HealthStatus, SourceHealth, source_snapshot_digest
 
 __all__ = [
+    "COLLECTION_NEW_ROW",
     "MAINTAINER_SCREENS",
+    "MaintainerCollectionView",
+    "collection_row",
+    "parse_collection_row",
     "MaintainerDashboardView",
     "MaintainerCandidateFileChangeView",
     "MaintainerCandidateFilter",
@@ -100,9 +98,6 @@ __all__ = [
     "MaintainerCandidateFilterGroupView",
     "MaintainerCandidateFilterOptionView",
     "MaintainerCandidateFilterView",
-    "MaintainerCollectionCandidateView",
-    "MaintainerCollectionMemberValidationView",
-    "MaintainerCollectionValidationView",
     "MaintainerScreen",
     "MaintainerSourceStatus",
     "MaintainerSourceSyncResultView",
@@ -146,9 +141,6 @@ __all__ = [
     "project_maintainer_dashboard",
     "project_maintainer_candidates",
     "project_maintainer_candidate_lifecycle",
-    "project_maintainer_collection_candidate",
-    "project_maintainer_collection_registry_diff",
-    "project_maintainer_collection_validation",
     "parse_candidate_filter_row",
     "project_maintainer_candidate_filters",
     "project_maintainer_provenance",
@@ -245,8 +237,10 @@ class MaintainerScreen(str, Enum):
     CANDIDATE_LIFECYCLE = "48-candidate-lifecycle"
     PROVENANCE = "49-provenance"
     VERSION_CONFLICT = "50-version-conflict"
-    COLLECTION_CANDIDATES = "51-collection-candidates"
-    COLLECTION_VALIDATION = "52-collection-validation"
+    # 51/52 are the Registry's own Collections (D-430): the list, and the editor one Collection
+    # version is defined on. The editor hands its transaction to screen 44 the way 47 does.
+    COLLECTIONS = "51-collections"
+    COLLECTION_EDITOR = "52-collection-editor"
     CANDIDATE_FILTERS = "53-candidate-filters"
 
 
@@ -1041,119 +1035,6 @@ class MaintainerVersionConflictView:
             CandidateId(self.published_candidate_id)
 
 
-@dataclass(frozen=True, slots=True)
-class MaintainerCollectionCandidateView:
-    """Screen 51's versioned declarative Collection Candidate row/detail."""
-
-    candidate_id: str
-    state: CandidateState
-    coordinate: str
-    source_alias: str
-    source_location: str
-    source_revision: str
-    manifest_path: str
-    summary: str
-    input_digest: str
-    canonical_digest: str
-    members: tuple[str, ...]
-
-    def __post_init__(self) -> None:
-        values = (
-            self.candidate_id,
-            self.coordinate,
-            self.source_alias,
-            self.source_location,
-            self.source_revision,
-            self.manifest_path,
-            self.summary,
-            self.input_digest,
-            self.canonical_digest,
-            *self.members,
-        )
-        if (
-            not isinstance(self.state, CandidateState)
-            or not self.members
-            or any(
-                not isinstance(item, str)
-                or not item
-                or any(character in item for character in "\r\n")
-                for item in values
-            )
-            or len(set(self.members)) != len(self.members)
-            or tuple(sorted(self.members)) != self.members
-        ):
-            raise ValueError("Maintainer Collection Candidate view is invalid")
-        CandidateId(self.candidate_id)
-
-
-@dataclass(frozen=True, slots=True)
-class MaintainerCollectionMemberValidationView:
-    """One declared Collection member and the approved version that satisfies it, if any."""
-
-    request: str
-    outcome: str
-    resolved_coordinate: str | None
-    detail: str
-
-    def __post_init__(self) -> None:
-        values = (self.request, self.outcome, self.detail)
-        if any(
-            not isinstance(item, str) or not item or any(character in item for character in "\r\n")
-            for item in values
-        ) or (
-            self.resolved_coordinate is not None
-            and (
-                not isinstance(self.resolved_coordinate, str)
-                or not self.resolved_coordinate
-                or any(character in self.resolved_coordinate for character in "\r\n")
-            )
-        ):
-            raise ValueError("Maintainer Collection member validation is invalid")
-
-
-@dataclass(frozen=True, slots=True)
-class MaintainerCollectionValidationView:
-    """Screen 52's whole-Collection resolution against one approved target registry."""
-
-    candidate_id: str
-    coordinate: str
-    outcome: str
-    registry_snapshot: str | None
-    members: tuple[MaintainerCollectionMemberValidationView, ...]
-    diagnostics: tuple[str, ...] = ()
-
-    def __post_init__(self) -> None:
-        values = (self.candidate_id, self.coordinate, self.outcome, *self.diagnostics)
-        if (
-            not self.members
-            or any(
-                not isinstance(item, MaintainerCollectionMemberValidationView)
-                for item in self.members
-            )
-            or any(
-                not isinstance(item, str)
-                or not item
-                or any(character in item for character in "\r\n")
-                for item in values
-            )
-            or (
-                self.registry_snapshot is not None
-                and (
-                    not isinstance(self.registry_snapshot, str)
-                    or not self.registry_snapshot
-                    or any(character in self.registry_snapshot for character in "\r\n")
-                )
-            )
-        ):
-            raise ValueError("Maintainer Collection validation view is invalid")
-        CandidateId(self.candidate_id)
-
-
-_MAX_FILE_DIFF_BYTES = 256 * 1024
-_MAX_FILE_DIFF_LINES = 200
-_MAX_FILE_DIFF_LINE = 512
-
-
 def _input_view(item: RuntimeInput) -> MaintainerCandidateInputView:
     guidance = item.guidance
     obtain = None if guidance is None else guidance.obtain_from
@@ -1198,6 +1079,11 @@ def _entry_map(bundle: CandidateBundle) -> dict[str, SnapshotEntry]:
         for entry in bundle.artifact.canonical_entries
         if entry.kind is SnapshotEntryKind.FILE
     }
+
+
+_MAX_FILE_DIFF_BYTES = 256 * 1024
+_MAX_FILE_DIFF_LINES = 200
+_MAX_FILE_DIFF_LINE = 512
 
 
 def _safe_file_text(content: bytes) -> list[str] | None:
@@ -1759,205 +1645,6 @@ def project_maintainer_version_conflict(
     )
 
 
-def _collection_coordinate(candidate: CollectionCandidate) -> str:
-    return f"{candidate.target_registry}/collection/{candidate.name}@{candidate.version}"
-
-
-def project_maintainer_collection_candidate(
-    candidate: CollectionCandidate,
-) -> MaintainerCollectionCandidateView:
-    """Project screen 51 without flattening its declarative version constraints."""
-
-    if not isinstance(candidate, CollectionCandidate):
-        raise ValueError("Maintainer Collection projection needs a Collection Candidate")
-    return MaintainerCollectionCandidateView(
-        candidate.id.value,
-        candidate.state,
-        _collection_coordinate(candidate),
-        candidate.source_alias.value,
-        redact_text(candidate.source_location),
-        candidate.source_revision,
-        candidate.manifest_path,
-        redact_text(candidate.summary),
-        str(candidate.input_digest),
-        str(candidate.canonical_digest),
-        tuple(sorted(str(item) for item in candidate.members)),
-    )
-
-
-def _collection_member_validation(
-    request: ArtifactRequest,
-    marketplace: ApprovedMarketplace,
-) -> MaintainerCollectionMemberValidationView:
-    resolved = resolve_selection(marketplace, ArtifactSelection(artifacts=(request,)))
-    if isinstance(resolved, Err):
-        detail = "; ".join(redact_text(item.message) for item in resolved.diagnostics)
-        return MaintainerCollectionMemberValidationView(str(request), "invalid", None, detail)
-    version = next(
-        (
-            item.version
-            for item in resolved.value.artifacts
-            if item.version.coordinate.artifact == request.identity
-            and (request.source is None or item.version.coordinate.source == request.source)
-        ),
-        None,
-    )
-    if version is None:
-        return MaintainerCollectionMemberValidationView(
-            str(request),
-            "invalid",
-            None,
-            "approved resolution did not retain the declared member",
-        )
-    return MaintainerCollectionMemberValidationView(
-        str(request),
-        "approved",
-        str(version.coordinate),
-        "approved published version satisfies the declared constraint",
-    )
-
-
-def project_maintainer_collection_validation(
-    candidate: CollectionCandidate,
-    marketplace: ApprovedMarketplace | None,
-) -> MaintainerCollectionValidationView:
-    """Resolve one Collection Candidate only against its approved target-registry snapshot."""
-
-    if not isinstance(candidate, CollectionCandidate) or not (
-        marketplace is None or isinstance(marketplace, ApprovedMarketplace)
-    ):
-        raise ValueError("Maintainer Collection validation needs typed Candidate and marketplace")
-    coordinate = _collection_coordinate(candidate)
-    target = (
-        None
-        if marketplace is None
-        else next(
-            (item for item in marketplace.registries if item.alias == candidate.target_registry),
-            None,
-        )
-    )
-    if target is None:
-        members = tuple(
-            MaintainerCollectionMemberValidationView(
-                str(item),
-                "unavailable",
-                None,
-                "approved target registry state is unavailable",
-            )
-            for item in candidate.members
-        )
-        return MaintainerCollectionValidationView(
-            candidate.id.value,
-            coordinate,
-            "unavailable",
-            None,
-            members,
-            ("Approved target registry state is unavailable.",),
-        )
-    scoped = aggregate_approved_marketplace((target,))
-    if isinstance(scoped, Err):
-        raise ValueError("approved target registry cannot form a Collection validation input")
-    members = tuple(_collection_member_validation(item, scoped.value) for item in candidate.members)
-    resolved = resolve_selection(
-        scoped.value,
-        ArtifactSelection(artifacts=candidate.members),
-    )
-    diagnostics = (
-        ()
-        if not isinstance(resolved, Err)
-        else tuple(
-            redact_text(
-                "Collection members must resolve to approved compatible versions for all declared "
-                "constraints: " + item.message
-            )
-            for item in resolved.diagnostics
-        )
-    )
-    return MaintainerCollectionValidationView(
-        candidate.id.value,
-        coordinate,
-        "invalid" if isinstance(resolved, Err) else "ready",
-        str(target.snapshot),
-        members,
-        diagnostics,
-    )
-
-
-def project_maintainer_collection_registry_diff(
-    candidate: CollectionCandidate,
-    policy: EffectivePolicy,
-    approved: ApprovedRegistryState | None,
-    registry_snapshot: SourceSnapshot | None,
-    *,
-    mode: PromotionMode,
-) -> MaintainerRegistryDiffView:
-    """Screen 43 for a Collection: what approving it would write, or why nothing can be written.
-
-    The transaction mode is the one the operator chose; the Collection itself is always vendored,
-    because its document is all there is to publish (D-427).
-    """
-
-    if (
-        not isinstance(candidate, CollectionCandidate)
-        or not isinstance(policy, EffectivePolicy)
-        or not isinstance(mode, PromotionMode)
-        or not (approved is None or isinstance(approved, ApprovedRegistryState))
-        or not (registry_snapshot is None or isinstance(registry_snapshot, SourceSnapshot))
-    ):
-        raise ValueError("Maintainer Collection registry diff needs a Candidate and a policy")
-    common: dict[str, object] = {
-        "candidate_id": candidate.id.value,
-        "artifact": f"collection/{candidate.name}",
-        "version": candidate.version,
-        "mode": mode.value,
-        "target_registry": candidate.target_registry.value,
-    }
-
-    def _refused(*reasons: str) -> MaintainerRegistryDiffView:
-        return MaintainerRegistryDiffView(
-            **common,  # type: ignore[arg-type]
-            changed_paths=0,
-            changes=(),
-            expected_registry_snapshot=None,
-            next_registry_snapshot=None,
-            plan_digest=None,
-            refusals=tuple(redact_text(item) for item in reasons),
-        )
-
-    if approved is None:
-        return _refused(
-            f"target registry {candidate.target_registry.value} has no synchronized "
-            "approved snapshot to promote into"
-        )
-    if registry_snapshot is None:
-        return _refused(
-            f"registry {candidate.target_registry.value} workspace could not be read, "
-            "so no transaction can be planned"
-        )
-    prepared = prepare_collection_promotion(candidate, policy, approved, mode=mode)
-    if isinstance(prepared, Err):
-        return _refused(*(item.message for item in prepared.diagnostics))
-    try:
-        planned = plan_promotion_transaction((), registry_snapshot, (prepared.value,))
-    except ValueError as error:
-        return _refused(f"this transaction cannot be planned: {error}")
-    if isinstance(planned, Err):
-        return _refused(*(item.message for item in planned.diagnostics))
-    plan = planned.value
-    return MaintainerRegistryDiffView(
-        **common,  # type: ignore[arg-type]
-        changed_paths=len(plan.changes),
-        changes=tuple(
-            MaintainerRegistryChangeView(str(item.path), item.kind.value)
-            for item in plan.changes[:_MAX_REGISTRY_CHANGES]
-        ),
-        expected_registry_snapshot=str(plan.expected_registry_snapshot),
-        next_registry_snapshot=str(plan.next_registry_snapshot),
-        plan_digest=str(plan.review_digest),
-        refusals=(),
-    )
-
-
 class MaintainerCandidateFilterFacet(str, Enum):
     """The four things a Candidate list may be narrowed by (Product Specification 164.10)."""
 
@@ -2331,8 +2018,6 @@ class MaintainerViews:
     lifecycles: tuple[MaintainerCandidateLifecycleView, ...] | None = None
     provenances: tuple[MaintainerProvenanceView, ...] | None = None
     version_conflicts: tuple[MaintainerVersionConflictView, ...] | None = None
-    collection_candidates: tuple[MaintainerCollectionCandidateView, ...] | None = None
-    collection_validations: tuple[MaintainerCollectionValidationView, ...] | None = None
     # Whether the project this TUI was opened in is itself a Registry workspace. Connected
     # registries are Marketplace inputs and do not establish this fact.
     registry_workspace_present: bool = True
@@ -2385,28 +2070,6 @@ class MaintainerViews:
                     )
                     or len({item.candidate_id for item in self.version_conflicts})
                     != len(self.version_conflicts)
-                )
-            )
-            or (
-                self.collection_candidates is not None
-                and (
-                    any(
-                        not isinstance(item, MaintainerCollectionCandidateView)
-                        for item in self.collection_candidates
-                    )
-                    or len({item.candidate_id for item in self.collection_candidates})
-                    != len(self.collection_candidates)
-                )
-            )
-            or (
-                self.collection_validations is not None
-                and (
-                    any(
-                        not isinstance(item, MaintainerCollectionValidationView)
-                        for item in self.collection_validations
-                    )
-                    or len({item.candidate_id for item in self.collection_validations})
-                    != len(self.collection_validations)
                 )
             )
             or (
@@ -2473,9 +2136,7 @@ class MaintainerViews:
                         for candidate in self.candidates
                     )
                     or len({candidate.id for candidate in self.candidates}) != len(self.candidates)
-                    or self.dashboard.candidate_count
-                    != len(self.candidates)
-                    + (0 if self.collection_candidates is None else len(self.collection_candidates))
+                    or self.dashboard.candidate_count != len(self.candidates)
                 )
             )
         ):
@@ -2546,26 +2207,6 @@ class MaintainerViews:
             return None
         return next(
             (item for item in self.version_conflicts if item.candidate_id == candidate_id),
-            None,
-        )
-
-    def collection_candidate(self, candidate_id: str) -> MaintainerCollectionCandidateView | None:
-        """One versioned Collection Candidate by stable ID."""
-
-        if self.collection_candidates is None:
-            return None
-        return next(
-            (item for item in self.collection_candidates if item.candidate_id == candidate_id),
-            None,
-        )
-
-    def collection_validation(self, candidate_id: str) -> MaintainerCollectionValidationView | None:
-        """The approved-registry resolution composed for one Collection Candidate."""
-
-        if self.collection_validations is None:
-            return None
-        return next(
-            (item for item in self.collection_validations if item.candidate_id == candidate_id),
             None,
         )
 
@@ -2647,12 +2288,7 @@ def project_source_sync_result(
         target_registry, SourceAlias
     ):
         raise ValueError("Source Sync result projection needs a persisted result and target")
-    counts = Counter(
-        (
-            *(bundle.candidate.state for bundle in result.scan.active),
-            *(candidate.state for candidate in result.scan.collection_active),
-        )
-    )
+    counts = Counter((bundle.candidate.state for bundle in result.scan.active))
     return MaintainerSourceSyncResultView(
         result.scan.source_alias.value,
         target_registry.value,
@@ -2748,25 +2384,13 @@ def project_maintainer_source(
     # Source nobody could repair without deleting files by hand (issue #8, D-280).
     bound = scan if scan is not None and scan_binds_current_pin(configured, health, scan) else None
     unbound = scan is not None and bound is None
-    candidate_states_to_count = (
-        ()
-        if bound is None
-        else (
-            *(bundle.candidate.state for bundle in bound.active),
-            *(candidate.state for candidate in bound.collection_active),
-        )
-    )
-    counts = Counter(candidate_states_to_count)
+    counts = Counter(() if bound is None else (bundle.candidate.state for bundle in bound.active))
     candidate_states = tuple((state, counts[state]) for state in CandidateState if counts[state])
     registries = tuple(
         sorted(
             {
                 bundle.candidate.target_registry.value
                 for bundle in (() if bound is None else bound.active)
-            }
-            | {
-                candidate.target_registry.value
-                for candidate in (() if bound is None else bound.collection_active)
             }
         )
     )
@@ -2836,7 +2460,6 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
     MaintainerScreen.CANDIDATES: (
         MaintainerScreen.CANDIDATE_DETAILS,
         MaintainerScreen.BULK_PROMOTION,
-        MaintainerScreen.COLLECTION_CANDIDATES,
         MaintainerScreen.CANDIDATE_FILTERS,
     ),
     MaintainerScreen.CANDIDATE_DETAILS: (
@@ -2871,7 +2494,10 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
         # Push is reached from this screen and from nowhere else: it is an action on the local
         # workspace row, not a step any promotion or rebuild flows into (D-312).
         MaintainerScreen.REGISTRY_PUSH,
+        MaintainerScreen.COLLECTIONS,
     ),
+    MaintainerScreen.COLLECTIONS: (MaintainerScreen.COLLECTION_EDITOR,),
+    MaintainerScreen.COLLECTION_EDITOR: (MaintainerScreen.REGISTRY_VALIDATION,),
     MaintainerScreen.REGISTRY_INIT: (MaintainerScreen.REGISTRY_INIT_REVIEW,),
     MaintainerScreen.REGISTRY_INIT_REVIEW: (MaintainerScreen.REGISTRY,),
     MaintainerScreen.REGISTRY_REBUILD: (MaintainerScreen.REGISTRY_REBUILD_REVIEW,),
@@ -2891,8 +2517,6 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
     MaintainerScreen.CANDIDATE_LIFECYCLE: (MaintainerScreen.PROVENANCE,),
     MaintainerScreen.PROVENANCE: (),
     MaintainerScreen.VERSION_CONFLICT: (),
-    MaintainerScreen.COLLECTION_CANDIDATES: (MaintainerScreen.COLLECTION_VALIDATION,),
-    MaintainerScreen.COLLECTION_VALIDATION: (MaintainerScreen.REGISTRY_DIFF,),
     MaintainerScreen.CANDIDATE_FILTERS: (MaintainerScreen.CANDIDATES,),
 }
 
@@ -3541,14 +3165,19 @@ def _transaction_candidates(
         )
         for item in prepared.promotions
     ) + tuple(
+        # A Collection version is in the plan either because the Maintainer defined it or because
+        # a promoted member bumped it (INV-266); both are shown, so a bump is never a surprise.
         MaintainerTransactionCandidateView(
-            item.candidate.id.value,
-            f"collection/{item.candidate.name}",
-            item.candidate.version,
-            str(item.evidence.validation_report_digest),
-            str(item.evidence.effective_policy_digest),
+            version.candidate_id.value,
+            str(version.coordinate.artifact),
+            str(version.coordinate.version),
+            str(audit.validation_report_digest),
+            str(audit.effective_policy_digest),
         )
-        for item in prepared.collections
+        for version in prepared.plan.versions
+        if str(version.coordinate.artifact.kind) == "collection"
+        for audit in prepared.plan.audits
+        if audit.candidate_id == version.candidate_id
     )
 
 
@@ -3562,7 +3191,7 @@ def project_maintainer_registry_validation(
     return MaintainerRegistryValidationView(
         _transaction_candidates(prepared),
         prepared.target_registry.value,
-        prepared.mode.value,
+        prepared.plan.mode.value,
         str(prepared.registry_snapshot),
         str(prepared.review_digest),
         prepared.approved_version_count,
@@ -3593,7 +3222,7 @@ def project_maintainer_registry_commit(
     return MaintainerRegistryCommitView(
         _transaction_candidates(prepared),
         prepared.target_registry.value,
-        prepared.mode.value,
+        prepared.plan.mode.value,
         str(plan.review_digest),
         str(plan.expected_registry_snapshot),
         str(plan.next_registry_snapshot),
@@ -3804,6 +3433,51 @@ class MaintainerRegistryTransactionView:
         object.__setattr__(self, "candidate_ids", tuple(sorted(self.candidate_ids)))
 
 
+#: Screen 51's last row: a Collection this registry does not have yet.
+COLLECTION_NEW_ROW = "+"
+
+
+def collection_row(alias: str, name: str | None) -> str:
+    """Screen 51's row for one Collection of one registry, or for a new one there."""
+
+    return f"{alias}/{COLLECTION_NEW_ROW if name is None else name}"
+
+
+def parse_collection_row(row: str) -> tuple[str, str | None] | None:
+    """The registry and Collection a screen 51 row names; None as the name is a new one."""
+
+    alias, separator, name = row.partition("/")
+    if not separator or not alias or not name or "/" in name:
+        return None
+    return alias, None if name == COLLECTION_NEW_ROW else name
+
+
+@dataclass(frozen=True, slots=True)
+class MaintainerCollectionView:
+    """One Collection on screen 51: its highest version and the exact members it pins."""
+
+    name: str
+    version: str
+    summary: str
+    members: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not self.name
+            or not self.version
+            or not isinstance(self.summary, str)
+            or not self.members
+            or any(not isinstance(item, str) or not item for item in self.members)
+        ):
+            raise ValueError("Maintainer Collection view is invalid")
+
+    @property
+    def identities(self) -> tuple[str, ...]:
+        """The members as `kind/name`, which is what screen 52 ticks."""
+
+        return tuple(item.partition("@")[0] for item in self.members)
+
+
 @dataclass(frozen=True, slots=True)
 class MaintainerRegistryView:
     """Screen 46: registry validity, contents, checkout state and recent promotions."""
@@ -3817,10 +3491,20 @@ class MaintainerRegistryView:
     working_tree: MaintainerWorkingTreeView
     transactions: tuple[MaintainerRegistryTransactionView, ...]
     diagnostics: tuple[str, ...] = ()
+    #: Screens 51 and 52: the Collections it holds, and what a Collection could be made of --
+    #: each approved artifact as `kind/name` with its highest published version.
+    collections: tuple[MaintainerCollectionView, ...] = ()
+    approved_artifacts: tuple[tuple[str, str], ...] = ()
+
+    def collection(self, name: str) -> MaintainerCollectionView | None:
+        return next((item for item in self.collections if item.name == name), None)
 
     def __post_init__(self) -> None:
         if (
             not self.alias
+            or any(not isinstance(item, MaintainerCollectionView) for item in self.collections)
+            or len({item.name for item in self.collections}) != len(self.collections)
+            or len({item[0] for item in self.approved_artifacts}) != len(self.approved_artifacts)
             or not isinstance(self.valid, bool)
             or self.version_count < 0
             or not isinstance(self.working_tree, MaintainerWorkingTreeView)
@@ -3971,7 +3655,61 @@ def project_maintainer_registry(
         working,
         _registry_transactions(audits, chain),
         tuple(diagnostics),
+        _collections(alias, approved, registry_snapshot),
+        _approved_artifacts(alias, approved),
     )
+
+
+def _approved_artifacts(
+    alias: SourceAlias, approved: ApprovedRegistryState
+) -> tuple[tuple[str, str], ...]:
+    highest: dict[str, tuple[SemVer, str]] = {}
+    for item in approved.versions:
+        identity = item.coordinate.artifact
+        parsed = parse_semver(item.coordinate.version or "")
+        if (
+            str(identity.kind) == "collection"
+            or item.lifecycle is not RegistryLifecycle.PUBLISHED
+            or isinstance(parsed, Err)
+        ):
+            continue
+        key = f"{identity.kind}/{identity.name}"
+        if key not in highest or parsed.value > highest[key][0]:
+            highest[key] = (parsed.value, str(item.coordinate.version))
+    return tuple((key, highest[key][1]) for key in sorted(highest))
+
+
+def _collections(
+    alias: SourceAlias,
+    approved: ApprovedRegistryState,
+    registry_snapshot: SourceSnapshot | None,
+) -> tuple[MaintainerCollectionView, ...]:
+    """Each Collection's highest version, read back; one that does not read is not offered."""
+
+    if registry_snapshot is None:
+        return ()
+    names = sorted(
+        {
+            item.coordinate.artifact.name
+            for item in approved.versions
+            if str(item.coordinate.artifact.kind) == "collection"
+        }
+    )
+    views: list[MaintainerCollectionView] = []
+    for name in names:
+        read = current_collection(approved.versions, registry_snapshot, alias, name)
+        if isinstance(read, Err) or read.value is None:
+            continue
+        record, collection = read.value
+        views.append(
+            MaintainerCollectionView(
+                name,
+                str(record.coordinate.version),
+                collection.summary,
+                tuple(str(member.request) for member in collection.members),
+            )
+        )
+    return tuple(views)
 
 
 @dataclass(frozen=True, slots=True)

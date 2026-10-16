@@ -40,12 +40,9 @@ from aart_cli.protocol.hashing import file_entry, sha256_bytes, tree_digest
 from aart_cli.protocol.json import canonical_json_bytes, parse_json
 from aart_cli.protocol.native_models import (
     ArtifactManifest,
-    ArtifactSelector,
-    CollectionManifest,
     SourceManifest,
 )
 from aart_cli.protocol.native_schema import (
-    collection_manifest_to_json,
     parse_artifact_manifest,
     parse_provenance,
     parse_source_manifest,
@@ -101,7 +98,6 @@ from aart_cli.sources.model import source_snapshot_digest
 from aart_cli.sources.subtree import TakenSubtree, take_subtree
 
 from .model import (
-    CollectionAuthorOptions,
     RegistryInitOptions,
     RegistryOperation,
     RegistryQualityCheck,
@@ -585,57 +581,6 @@ def _source_manifest(files: dict[str, SnapshotEntry]) -> Result[SourceManifest]:
             _CANONICAL_ROOTS,
         )
     return parsed
-
-
-def plan_registry_collection(
-    snapshot: SourceSnapshot,
-    options: CollectionAuthorOptions,
-    *,
-    executable_version: SemVer,
-    available_capabilities: tuple[Capability, ...],
-) -> Result[RegistryWorkspacePlan]:
-    """Author one collection solely from identities this registry already holds."""
-
-    parsed = _registry_inputs(snapshot)
-    if isinstance(parsed, Err):
-        return parsed
-    registry, source = parsed.value
-    if not source.collection_roots:
-        return _error(
-            "registry source declares no collection root",
-            _CANONICAL_ROOTS,
-        )
-    files = _files(snapshot)
-    assert isinstance(files, Ok)
-    native = registry_native_content(
-        snapshot,
-        files.value,
-        registry,
-        executable_version=executable_version,
-        available_capabilities=available_capabilities,
-    )
-    if isinstance(native, Err):
-        return native
-    available = {item.identity for item in native.value[0]}
-    missing = tuple(member for member in options.members if member not in available)
-    if missing:
-        return _error(
-            "collection members are absent from this registry: "
-            + ", ".join(str(member) for member in missing),
-            _LIST_PACKAGES,
-        )
-    manifest = CollectionManifest(
-        1,
-        options.name,
-        options.summary,
-        tuple(ArtifactSelector(member) for member in options.members),
-    )
-    target = f"{source.collection_roots[0]}/{options.name}.json"
-    return _plan(
-        RegistryOperation.COLLECTION,
-        snapshot,
-        ((target, canonical_json_bytes(collection_manifest_to_json(manifest)), False),),
-    )
 
 
 def _adopted_authored(

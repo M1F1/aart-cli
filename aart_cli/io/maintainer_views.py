@@ -21,9 +21,6 @@ from aart_cli.application.maintainer_views import (
     project_maintainer_bulk_promotion,
     project_maintainer_candidate_lifecycle,
     project_maintainer_candidates,
-    project_maintainer_collection_candidate,
-    project_maintainer_collection_registry_diff,
-    project_maintainer_collection_validation,
     project_maintainer_dashboard,
     project_maintainer_promotion_review,
     project_maintainer_provenance,
@@ -53,7 +50,6 @@ from aart_cli.sources.model import (
 )
 
 from .candidate_store import candidate_history_paths, read_candidate_history
-from .configured_selection import load_configured_approved_marketplace
 from .maintainer_sync import read_approved_registry_state
 from .registry_bootstrap import registry_absent_refusal
 from .registry_promotion import FilesystemPromotionOutput
@@ -136,7 +132,7 @@ def read_maintainer_views(
         try:
             projected.append(project_maintainer_source(configured, health, history.value))
             # Only history that binds the pinned snapshot is Candidate data.  The projection says
-            # so for the Source itself; the collection and validation lists below are fed from
+            # so for the Source itself; the validation lists below are fed from
             # here, so the same rule has to hold for them.
             scanned = history.value
             if scanned is not None and scan_binds_current_pin(configured, health, scanned):
@@ -145,24 +141,6 @@ def read_maintainer_views(
             return _error(f"cannot bind Candidate history for {configured.alias}: {error}")
     sources = tuple(projected)
     try:
-        collection_candidate_records = tuple(
-            candidate for scan in scans for candidate in scan.collection_active
-        )
-        collection_candidates = tuple(
-            project_maintainer_collection_candidate(candidate)
-            for candidate in collection_candidate_records
-        )
-        loaded_marketplace = load_configured_approved_marketplace(
-            effective,
-            data_root=data_root,
-        )
-        approved_marketplace = (
-            None if isinstance(loaded_marketplace, Err) else loaded_marketplace.value
-        )
-        collection_validations = tuple(
-            project_maintainer_collection_validation(candidate, approved_marketplace)
-            for candidate in collection_candidate_records
-        )
         runs = tuple(
             (bundle, validate_candidate(bundle, policy=judged))
             for scan in scans
@@ -175,11 +153,8 @@ def read_maintainer_views(
         # snapshot is a refusal screen 41 can state, not an error that hides the rest of what was
         # composed, so the failed read becomes `None` rather than aborting the composition.
         approved: dict[str, ApprovedRegistryState | None] = {}
-        targets = (
-            *(bundle.candidate.target_registry for bundle, _ in runs),
-            *(candidate.target_registry for candidate in collection_candidate_records),
-        )
-        for alias in targets:
+        for bundle, _ in runs:
+            alias = bundle.candidate.target_registry
             if alias.value not in approved:
                 observed = read_approved_registry_state(effective, alias, data_root=data_root)
                 approved[alias.value] = None if isinstance(observed, Err) else observed.value
@@ -293,16 +268,6 @@ def read_maintainer_views(
             )
             for bundle, validation in runs
             for mode in PromotionMode
-        ) + tuple(
-            project_maintainer_collection_registry_diff(
-                candidate,
-                judged,
-                approved[candidate.target_registry.value],
-                workspaces[candidate.target_registry.value],
-                mode=mode,
-            )
-            for candidate in collection_candidate_records
-            for mode in PromotionMode
         )
         promotions = tuple(
             project_maintainer_promotion_review(
@@ -365,8 +330,6 @@ def read_maintainer_views(
                 lifecycles,
                 provenances,
                 version_conflicts,
-                collection_candidates,
-                collection_validations,
                 registry_workspace_present,
                 published_registry,
             )

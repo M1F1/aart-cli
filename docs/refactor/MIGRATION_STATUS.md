@@ -4,6 +4,14 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-31 steps 17–19 (D-430–D-432): the Registry owns Collections.**
+- Source-authored Collections are gone: `author init --kind collection`, Sync's Collection
+  Candidates and the old screens 51/52 are removed, and a Collection manifest is refused with the
+  command that replaces it. `registry collection` and the TUI screens 51 (Collections) and 52
+  (editor) define a version from approved artifacts, reviewed on 44 and committed on 45. A promotion
+  that approves a member's new version publishes each containing Collection's next version in the
+  same transaction. Evidence in the slice, Steps 17–19.
+
 **2026-10-16, CP-31 step 7 (D-429): a Collection installs as one artifact.**
 - CLI and TUI install the Collection itself. 05 offers a harness only when it hosts every member
   and names the first member it cannot host; 07a's scope applies to every member. Evidence in the

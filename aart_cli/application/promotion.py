@@ -15,8 +15,10 @@ from typing import Protocol, cast
 from aart_cli.application.maintainer import CandidateBundle
 from aart_cli.application.registry_collections import (
     COLLECTION_PACKAGE_FILE,
+    collection_bumps,
     collection_package_entries,
     collection_package_prefix,
+    collection_validation_digest,
 )
 from aart_cli.domain.candidates import (
     CandidateFinding,
@@ -24,7 +26,7 @@ from aart_cli.domain.candidates import (
     CandidateState,
     FindingSeverity,
 )
-from aart_cli.domain.collection_candidates import CollectionCandidate
+from aart_cli.domain.collection_changes import RegistryCollectionChange
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
@@ -41,7 +43,7 @@ from aart_cli.domain.registry import (
     RegistryLifecycle,
     publish_registry_version,
     registry_version_from_candidate,
-    registry_version_from_collection_candidate,
+    registry_version_from_collection_change,
 )
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.protocol.hashing import (
@@ -775,29 +777,70 @@ def plan_bulk_promotion(
     evidence: tuple[tuple[CandidateId, PromotionEvidence], ...],
     approved: tuple[RegistryArtifactVersion, ...],
     mode: PromotionMode = PromotionMode.VENDORED,
-    collections: tuple[CollectionCandidate, ...] = (),
+    collections: tuple[RegistryCollectionChange, ...] = (),
 ) -> Result[PromotionPlan]:
     """Plan selected candidates as one deterministic registry transaction.
 
-    `collections` join the same transaction: each one is a package, a version record and an audit
-    record, exactly as an artifact is (D-427).
+    `collections` are Collection versions the Maintainer defined; each needs its evidence like a
+    Candidate. Every Collection whose member gets a newer version here publishes its next version
+    in the same transaction too, with the evidence of the member that moved it (INV-266, D-430).
+    Each Collection version is a package, a version record and an audit record, as an artifact is.
     """
 
     if (
         not isinstance(mode, PromotionMode)
         or not (selected or collections)
-        or any(not isinstance(item, CollectionCandidate) for item in collections)
+        or any(not isinstance(item, RegistryCollectionChange) for item in collections)
     ):
         return _error("bulk promotion requires candidates and an explicit valid mode")
     ordered = tuple(sorted(selected, key=lambda item: item.candidate.id.value))
-    ordered_collections = tuple(sorted(collections, key=lambda item: item.id.value))
+    evidence_by_id = dict(evidence)
+    if len(evidence_by_id) != len(evidence) or set(evidence_by_id) != {
+        *(item.candidate.id for item in ordered),
+        *(item.id for item in collections),
+    }:
+        return _error("each selected candidate requires exactly one promotion evidence record")
+    workspace_registry = registry_state_digest(snapshot)
+    if isinstance(workspace_registry, Err):
+        return _error("registry snapshot is invalid")
+    promoted = tuple(
+        registry_version_from_candidate(
+            bundle.candidate,
+            object_digest=bundle.candidate.canonical_digest,
+            registry_snapshot=workspace_registry.value,
+            mode=mode,
+        )
+        for bundle in ordered
+        if bundle.candidate.state in {CandidateState.READY, CandidateState.WARNING}
+    )
+    bumped = collection_bumps(
+        approved, snapshot, promoted, defined=frozenset(item.name for item in collections)
+    )
+    if isinstance(bumped, Err):
+        return bumped
+    for bump in bumped.value:
+        cause = next(
+            bundle.candidate.id
+            for bundle in ordered
+            if any(
+                bundle.candidate.artifact.coordinate.artifact == member.identity
+                for member in bump.members
+            )
+        )
+        evidence_by_id[bump.id] = PromotionEvidence(
+            collection_validation_digest(bump),
+            evidence_by_id[cause].effective_policy_digest,
+        )
+    ordered_collections = tuple(
+        sorted((*collections, *bumped.value), key=lambda item: item.id.value)
+    )
     candidate_ids = (
         *(item.candidate.id for item in ordered),
         *(item.id for item in ordered_collections),
     )
     coordinates = (
         *(str(item.candidate.artifact.coordinate) for item in ordered),
-        *(f"collection/{item.name}@{item.version}" for item in ordered_collections),
+        *(item.coordinate for item in ordered_collections),
     )
     registries = {
         *(item.candidate.target_registry for item in ordered),
@@ -809,12 +852,8 @@ def plan_bulk_promotion(
         or len(set(coordinates)) != len(coordinates)
         or len(registries) != 1
         or any(item.candidate.state not in ready for item in ordered)
-        or any(item.state not in ready for item in ordered_collections)
     ):
         return _error("bulk promotion selection is duplicated, mixed or not ready")
-    evidence_by_id = dict(evidence)
-    if len(evidence_by_id) != len(evidence) or set(evidence_by_id) != set(candidate_ids):
-        return _error("each selected candidate requires exactly one promotion evidence record")
     # Named `stored` rather than `candidate`: the later loops bind `candidate` to the promotion
     # candidate itself, and reusing the name here would make every one of them a Result.
     object_digests: dict[CandidateId, ObjectDigest] = {}
@@ -917,10 +956,7 @@ def plan_bulk_promotion(
             package_changes.append(change.value)
 
     for collection in ordered_collections:
-        coordinate = (
-            f"{collection.target_registry}/collection/{collection.name}@{collection.version}"
-        )
-        already = approved_by_coordinate.get(coordinate)
+        already = approved_by_coordinate.get(collection.coordinate)
         if already is not None:
             suffix = (
                 "already contains this exact candidate"
@@ -1000,22 +1036,23 @@ def plan_bulk_promotion(
             PromotionAudit(
                 collection.id,
                 collection.canonical_digest,
-                promotion_source_provenance(collection.source_revision),
+                # The Registry is a Collection's Source: its audit names the approved state it
+                # was defined from (D-431).
+                PromotionSourceProvenance(
+                    PromotionSourceKind.LOCAL_SNAPSHOT,
+                    local_snapshot_digest=registry_before.value,
+                ),
                 item_evidence.validation_report_digest,
                 item_evidence.effective_policy_digest,
                 mode,
                 registry_before.value,
                 registry_after.value,
-                tuple(
-                    sorted(
-                        set((*_candidate_warnings(collection.findings), *item_evidence.warnings))
-                    )
-                ),
+                tuple(sorted(set(item_evidence.warnings))),
                 item_evidence.external_audit_reference,
             )
         )
         versions.append(
-            registry_version_from_collection_candidate(
+            registry_version_from_collection_change(
                 collection,
                 object_digest=object_digests[collection.id],
                 registry_snapshot=registry_after.value,
