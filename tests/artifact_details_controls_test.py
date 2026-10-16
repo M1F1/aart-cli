@@ -106,11 +106,43 @@ class ArtifactDetailsCompatibilityTest(unittest.TestCase):
         self.assertEqual(row.eligible_harnesses, ("claude",))
         self.assertEqual(row.unavailable_harnesses, ("opencode", "tabnine"))
         self.assertIn("Eligible installation harnesses\n  - claude", rendered)
-        self.assertIn("Detected but not eligible\n  - opencode\n\n  - tabnine", rendered)
         self.assertNotIn("Actions: select, install, verbose.", rendered)
-        needs = rendered.split("What it needs", 1)[1]
-        self.assertNotIn("opencode", needs)
-        self.assertNotIn("tabnine", needs)
+
+    def test_fast_names_only_the_eligible_harnesses(self) -> None:
+        """The owner: harnesses that are detected but not eligible are Verbose detail."""
+
+        row = _row("claude", "opencode", "tabnine")
+
+        fast = "\n".join(render_marketplace_artifact(row, PresentationProfile.FAST))
+        verbose = "\n".join(render_marketplace_artifact(row, PresentationProfile.VERBOSE))
+
+        self.assertNotIn("Detected but not eligible", fast)
+        self.assertNotIn("opencode", fast)
+        self.assertNotIn("tabnine", fast)
+        self.assertNotIn("nothing else before choosing", fast)
+        self.assertIn("opencode", verbose)
+        self.assertIn("tabnine", verbose)
+
+    def test_each_statement_is_its_own_block(self) -> None:
+        """The owner: separate the statements on Artifact Details with blank lines."""
+
+        row = _row("claude", "opencode")
+
+        rendered = render_marketplace_artifact(row, PresentationProfile.FAST)
+
+        self.assertEqual(
+            rendered,
+            (
+                row.key,
+                "",
+                "Approved",
+                "",
+                "Not installed",
+                "",
+                "Eligible installation harnesses",
+                "  - claude",
+            ),
+        )
 
     def test_no_eligible_harness_is_a_visible_blocker_with_reasons(self) -> None:
         row = _row("opencode", "tabnine")
@@ -308,9 +340,9 @@ class OneEligibilityRuleTest(unittest.TestCase):
             row.unavailable_harnesses, tuple(item for item in seen if item not in expected)
         )
         self.assertIs(row.compatible, bool(expected))
-        needs = "\n".join(render_marketplace_artifact(row, PresentationProfile.FAST)).split(
-            "What it needs", 1
-        )[1]
+        needs = "\n".join(render_marketplace_artifact(row, PresentationProfile.FAST)).partition(
+            "What it needs"
+        )[2]
         for item in row.unavailable_harnesses:
             self.assertNotIn(item, needs)
 

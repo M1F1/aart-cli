@@ -1692,33 +1692,35 @@ def render_marketplace_artifact(
         if row.installed_statuses
         else "Not installed"
     )
-    lines = [row.key, approval, state, "Eligible installation harnesses"]
-    if row.eligible_harnesses:
-        lines.extend(listed(f"{harness}" for harness in row.eligible_harnesses))
-    else:
-        lines.append("  no eligible installation harness is available on this machine.")
-    if row.unavailable_harnesses:
-        lines.append("Detected but not eligible")
-        lines.extend(listed(f"{harness}" for harness in row.unavailable_harnesses))
+    # Each statement is its own block, and Fast names only where the artifact can go: harnesses
+    # detected but not eligible, with why, are Verbose's "installation harnesses" (D-411).
+    harnesses = (
+        ("Eligible installation harnesses", *listed(f"{item}" for item in row.eligible_harnesses))
+        if row.eligible_harnesses
+        else (
+            "Eligible installation harnesses",
+            "  no eligible installation harness is available on this machine.",
+        )
+    )
+    statements: list[tuple[str, ...]] = [(row.key,), (approval,), (state,), harnesses]
     if not row.compatible:
-        lines.append("Why installation is unavailable")
-        lines.extend(
-            listed(
-                f"{item.profile}: "
-                + (
-                    "; ".join(reason.message for reason in item.reasons)
-                    if item.reasons
-                    else "no compatible placement is available"
-                )
-                for item in row.compatibility
+        statements.append(
+            (
+                "Why installation is unavailable",
+                *listed(
+                    f"{item.profile}: "
+                    + (
+                        "; ".join(reason.message for reason in item.reasons)
+                        if item.reasons
+                        else "no compatible placement is available"
+                    )
+                    for item in row.compatibility
+                ),
             )
         )
-    lines.append("What it needs")
     if inputs:
-        lines.extend(listed(f"{item.label}" for item in inputs))
-    else:
-        lines.append("  nothing else before choosing an eligible harness")
-    return tuple(lines)
+        statements.append(("What it needs", *listed(f"{item.label}" for item in inputs)))
+    return separate(*statements)
 
 
 def render_collection(
