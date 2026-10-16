@@ -11126,18 +11126,20 @@ secret value. No secret value reaches UI state, plan, receipt, log or argv.
 
 # 173. Collections end to end, Registry-owned versions, install paths and views
 
-Status: **ACCEPTED 2026-10-16 (D-422, D-423, D-424)**, on the owner's request (B-067, #72–#75,
-#53, #54). It makes §145.1 reachable from a source repository to an installed harness, moves
+Status: **ACCEPTED 2026-10-16 (D-422, D-423, D-424; §173.3 amended by D-430)**, on the owner's
+request (B-067, #72–#75, #53, #54). It makes §145.1 reachable from a source repository to an installed harness, moves
 versions from source manifests to the Registry, adds a default install path beside the §172 flow,
 and removes the routes into a Registry that D-375 forbids. §145, §161.4, §165.5, §172 and §169
 still hold where this section does not narrow them.
 
 ## 173.1 Source manifests carry no version
 
-A source repository says *what* an artifact or Collection is. It never says which version it is.
-- An artifact manifest (`aart-cli.yaml` / `aart-cli.json`) has no `artifact.version`. A
-  Collection manifest has no `version`. A manifest that still carries one is refused, and the
-  refusal says to delete the field because the Registry assigns versions.
+A source repository says *what* an artifact is. It never says which version it is.
+- An artifact manifest (`aart-cli.yaml` / `aart-cli.json`) has no `artifact.version`. A manifest
+  that still carries one is refused, and the refusal says to delete the field because the Registry
+  assigns versions.
+- A source repository defines no Collection (§173.3). A Collection manifest in a source is refused
+  by `author check` and by Sync, and the refusal says a Collection is created in the Registry.
 - Everything a Registry version is built from is the manifest plus the payload it selects. A
   dependency descriptor (`requirements.txt`, `pyproject.toml`, `uv.lock`) is part of that payload,
   so changing a pinned package is a change like any other.
@@ -11159,23 +11161,32 @@ the target Registry. The comparison uses the digest of the manifest and its sele
 Version constraints keep their SemVer meaning: `^1` is every `1.x.y`, so it covers `1.0.0`–`1.3.5`.
 A version says how much an artifact has changed, not whether a change is breaking.
 
-## 173.3 A Collection is authored, adopted and published like an artifact
+## 173.3 A Collection belongs to the Registry
 
-- `author init --kind collection` writes an `aart-cli.yaml` with `schema`, `name`, `summary` and
-  `artifacts`, each with one line saying what it means.
-- `author check` parses a Collection manifest with the same parser Sync uses and reports `ok` or
-  the error. It never says the manifest was skipped.
-- Sync turns a Collection manifest into a Collection Candidate. Its members are resolved against
-  the Registry's approved artifacts. A member that is not approved, or whose constraint matches no
-  approved version, is a finding that blocks approval and names the member.
-- Approving a Collection Candidate publishes a Registry version of kind `collection`. The version
-  is assigned as in §173.2, from the digest of the Collection manifest. The Registry reads that
-  version back as a Collection.
+A Collection is curation: a Registry maintainer's statement that some approved artifacts go
+together. It has no payload and is not authored in a source repository (D-430).
+- **Creating and changing.** The Registry maintainer creates a Collection, or changes its summary
+  or members, in the Maintainer TUI's Collections view and with `registry collection NAME
+  --summary TEXT --include KIND/NAME …`. A member is an artifact this Registry has approved, from
+  any of its sources. A member is named by kind and name. It carries no version constraint.
+- **Reviewed like a promotion.** Each change is one Registry transaction, with the same
+  validation, Registry diff and commit as a promotion (screens 43–45 in the TUI, `--yes` with the
+  digest in the CLI). Nothing is written to the Registry before that review.
+- **Versions pin exact members.** Each Collection version records the exact approved version of
+  every member. The first version is `1.0.0`. Each later change takes the next version by D-423.
+  A change that pins exactly what the current version pins publishes nothing.
+- **Automatic bump.** When a promotion approves a new version of an artifact that is a member of
+  a Collection, the same transaction publishes that Collection's next version. The new version
+  pins the new member version and keeps every other member's pin. The Registry diff and the
+  `registry promote` review show this bump beside the artifact. A Collection is therefore never
+  behind the artifacts it names.
+- The Registry reads each version back as a Collection, and refuses one whose bytes do not match
+  its version record.
 
 ## 173.4 The Marketplace offers approved Collections
 
-The configured Marketplace lists each approved Collection as one row. Its members, resolved to
-exact approved versions, are what installing it installs (§145.1). A member may also be approved
+The configured Marketplace lists each approved Collection as one row, at its highest version. That
+version's pinned members are what installing it installs (§145.1). A member may also be approved
 and offered as an artifact of its own; installing it alone is an ordinary artifact install.
 
 ## 173.5 Installing a Collection treats it as one artifact
@@ -11227,8 +11238,9 @@ the row.
 ## 173.9 Adoption by manifest is the only way in
 
 A Registry is never where an artifact is defined (D-375). The `registry vendor`, `vendor-batch`,
-`discover`, `revendor` and `collection` commands and every other route that writes canonical
-Registry content without a source manifest are removed. What a Registry holds for an approved
+`discover` and `revendor` commands, and every other route that writes canonical artifact content
+without a source manifest, are removed. A Collection is not an artifact: §173.3's `registry
+collection` writes only Registry curation over approved artifacts, through a reviewed transaction. What a Registry holds for an approved
 version is its **content mode**: `RegistryContentMode = SelfContained | PinnedReference` (D-376),
 and `promote --mode` takes `self-contained` or `pinned-reference`. INV-019, INV-020, INV-025,
 INV-204 and INV-207 keep their meaning with these words.
@@ -11247,6 +11259,11 @@ every member. Inputs are still asked once per member artifact and may be set lat
 
 **INV-265 — The default path asks nothing Settings already answers.** It goes from Install to
 the inputs, or to Ready, using the Settings harnesses, scope and Python installer.
+
+**INV-266 — A Collection follows its members.** A Collection is defined only in its Registry, and
+each version pins exact approved members. A transaction that approves a new version of a member
+also publishes the next version of every Collection naming it. No Collection's current version
+pins a member version older than that member's current approved version.
 
 **INV-266 — Only manifests adopt.** Canonical Registry content is written only from a source
 manifest.

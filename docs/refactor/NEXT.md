@@ -35,9 +35,10 @@ Marketplace offers each approved Collection at its highest version, members exac
 **Owner decision (2026-10-16): the Registry owns Collections.** A Collection is no longer authored
 in a Source. The Registry maintainer creates and maintains it in a new TUI view and a new CLI
 command, from artifacts the Registry already approved. Its version bumps automatically when a
-promotion bumps one of its members, which happens after a Source change is synchronized. **Next**:
-amend the Product Specification (§173.3 and the decisions D-425–D-428 it replaces), then rework
-steps 3–5 to that model before continuing with step 8.
+promotion bumps one of its members, which happens after a Source change is synchronized. The
+specification is amended (D-430, INV-266, plan step 16). **Next are plan steps 17–19**, in
+`plan.json` order after step 7: remove source-authored Collections, add `registry collection` and
+the TUI Collections view, then the automatic bump. Steps 8–15 follow.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).

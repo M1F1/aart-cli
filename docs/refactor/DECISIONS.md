@@ -10734,3 +10734,34 @@ the selected payload and the exact resolved versions of the artifact's artifact 
 - **The Collection rows the TUI offers come from the graph path.** `ConfiguredMarketplace`
   carries the approved Collections behind its rows. Each member is shown as the exact version its
   row offers.
+
+## D-430 — The Registry owns Collections, and a member bump bumps them (CP-31, owner decision)
+
+The owner decided on 2026-10-16, after steps 1–7, that a Collection is the Registry maintainer's
+curation, not a Source author's manifest. Product Specification §173.1, §173.3, §173.4 and §173.9
+are amended, and INV-266 is added.
+
+The reasons are recorded because they settle what source-authored Collections got wrong. A source
+Collection was valid only once the Registry had approved its members, so promotion had a forced
+order, and a Source declared something it could not check. A Collection could also not span the
+sources of one Registry.
+
+What changes:
+- **No Source Collection.** `author init --kind collection`, Sync's Collection Candidates and the
+  Collection approval screens 51/52 are removed. `author check` and Sync refuse a Collection
+  manifest and point at `registry collection`. This supersedes D-426 and D-427's Candidate half.
+  D-427's publication half stays: the vendored package, the version record and
+  `read_registry_collection`.
+- **Created in the Registry.** A new Maintainer TUI view creates or changes a Collection. The CLI
+  is `registry collection NAME --summary TEXT --include KIND/NAME …`, the shape the legacy command
+  had, now writing the approved representation. Both go through one reviewed Registry transaction.
+- **Members are identities, and versions pin them.** D-423 counts changes rather than signalling
+  breakage, so a constraint such as `^1` would only stop the bump at the 25th change. Members are
+  therefore `kind/name`, and each Collection version pins each member's exact approved version.
+  This supersedes D-425, under which members were dependencies with constraints.
+- **Automatic bump.** A promotion that approves a member's new version publishes, in the same
+  transaction, each containing Collection's next version (by D-423) with that pin moved. It is
+  shown in the Registry diff and the `registry promote` review.
+- **D-428's decline rule goes away.** A current Collection version always pins its members'
+  current versions (INV-266), so the Marketplace row's members are always the members' own rows.
+- Revoking or deprecating a member does not bump anything yet (B-196).

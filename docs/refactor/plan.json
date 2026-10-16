@@ -1107,6 +1107,26 @@
           "status": "done"
         },
         {
+          "id": "16",
+          "title": "Specify Registry-owned Collections (D-430): amend §173.1/§173.3/§173.4/§173.9 and add INV-266",
+          "status": "done"
+        },
+        {
+          "id": "17",
+          "title": "Remove source-authored Collections: author init --kind collection, Sync Collection Candidates, screens 51/52 and promote of Collection Candidates; author check and Sync refuse a Collection manifest and point at registry collection",
+          "status": "todo"
+        },
+        {
+          "id": "18",
+          "title": "registry collection NAME --summary --include KIND/NAME and the Maintainer TUI Collections view create or change a Collection through one reviewed Registry transaction; each version pins exact approved members",
+          "status": "todo"
+        },
+        {
+          "id": "19",
+          "title": "Automatic bump: a promotion that approves a member's new version publishes the next version of every Collection naming it in the same transaction, shown in the Registry diff and the promote review (INV-266)",
+          "status": "todo"
+        },
+        {
           "id": "8",
           "title": "07 and 07b ask each member's configuration and credentials once per member artifact, with Set later; nothing blocks (§172.3)",
           "status": "todo"
@@ -1128,7 +1148,7 @@
         },
         {
           "id": "12",
-          "title": "Document authoring a Collection in a source repo, Registry-owned versions, and how a Registry adopts and offers content",
+          "title": "Document Registry-owned Collections (creating one, automatic bumps), Registry-owned versions, and how a Registry adopts and offers content",
           "status": "todo"
         },
         {

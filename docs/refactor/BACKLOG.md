@@ -4626,3 +4626,10 @@ the second harness on 05, 07a opens with its cursor on the second scope column (
 there picks User without a Right. This is harmless (the cursor is drawn), but 07a should open on
 its first column. `tests/collection_install_tui_e2e_test.py` relies on the current behaviour, and
 says so.
+
+## B-196 — What a member's revocation or deprecation does to its Collections
+
+D-430 bumps a Collection when a member gets a new approved version. A member version that is
+revoked or deprecated leaves the Collection pinning it, and the install then refuses the revoked
+pin. Deciding whether the Registry should re-pin to the previous approved version, mark the
+Collection, or ask the maintainer is not on CP-31's critical path.
