@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-16, CP-30 steps 2–4 (D-413, D-414).**
+- One transaction now installs across pairs and scopes.
+- A skipped input is stored as `SKIP`, and the Keychain recognises it without reading it.
+- Install secrets are written through `security -i` stdin and never prompted for.
+- Next: the TUI steps 5–9, waiting on the owner's mockup decisions.
+
 **2026-10-16, CP-30 step 1 (D-413): the per-artifact install flow is specified.**
 - Product Specification §172 defines: harnesses per artifact; configuration once per artifact,
   copied into each new installation; scope per artifact and harness pair; secrets settled before

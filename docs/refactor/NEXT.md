@@ -4,12 +4,29 @@
 
 **CP-29 is merged and released as 0.8.0. The active work is CP-30, the per-artifact install flow:
 `docs/refactor/slices/CP-30-per-artifact-install-flow.md`, on `feat/cp-30-install-flow-per-artifact`.**
-Product Specification §172 and D-413 define it. Its ten steps are in `plan.json`, and step 1 (the
-specification) is done.
+Product Specification §172 and D-413 define it, plus D-414. Its ten steps are in `plan.json`.
+Steps 1–4 are done:
+1. the specification;
+2. one transaction over artifact×harness×scope pairs;
+3. the `SKIP` placeholder;
+4. secrets written by the transaction through stdin, with no prompt mid-install.
 
-Next is step 2, a single transaction over artifact×harness×scope pairs. Open PRs waiting for the
-owner: #66 (Undo line under More info), #67 (Artifact Details blocks), #68 (profile rename). After
-CP-30, CP-31 renames the promotion modes (#54) and removes the vendor family (#53, closes #41).
+Steps 5–9 are the TUI screens: 05 harnesses, 07 configuration, 07a scope, 07b credentials, and the
+Ready/Doctor/Installed warnings. They follow the mockups at
+https://claude.ai/artifact/TEEgf2ijGL36So7Esb2gMv and wait on the owner's answers to its five open
+decisions:
+1. a matrix rather than lists;
+2. the "All artifacts" and "All installations" rows;
+3. the order Harnesses → Configuration → Scope → Credentials;
+4. "Set later" at the top;
+5. the literal `SKIP`.
+
+Step 8 fills `LocalConsumerActions._entered_secrets` from 07b. Until then an install stores every
+secret as `SKIP`.
+
+Open PRs waiting for the owner: #66 (Undo line under More info), #67 (Artifact Details blocks),
+#68 (profile rename). After CP-30, CP-31 renames the promotion modes (#54) and removes the vendor
+family (#53, closes #41).
 
 ## CP-29 (2026-10-15)
 
