@@ -60,7 +60,11 @@ from aart_cli.domain.python_runtime import (
     spec_descriptor_path,
 )
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.domain.selection import ArtifactRequest, VersionConstraint
+from aart_cli.domain.selection import (
+    ArtifactRequest,
+    VersionConstraint,
+    artifact_request_sort_key,
+)
 
 from .codes import AUTHOR_MANIFEST_INVALID, AUTHOR_PAYLOAD_INVALID, AUTHOR_TREE_INVALID
 from .hashing import directory_entry, file_entry, sha256_bytes, tree_digest
@@ -1538,6 +1542,37 @@ def _collection_request(raw: str, *, path: str) -> Result[ArtifactRequest]:
         return _error(AUTHOR_MANIFEST_INVALID, str(error), path=path)
 
 
+def parse_collection_member(raw: str, *, path: str) -> Result[ArtifactRequest]:
+    """One Collection member, `[source/]kind/name[@constraint]`, as the Collection parser reads it.
+
+    Public because a published Collection is read back from the Registry with the same grammar it
+    was authored in.
+    """
+
+    return _collection_request(raw, path=path)
+
+
+def collection_document(
+    name: str, summary: str, version: str, members: tuple[ArtifactRequest, ...]
+) -> JsonObject:
+    """The canonical Collection: what its `canonical_digest` hashes and the Registry stores.
+
+    Members are a set, so they are written in their canonical order: reordering the manifest's
+    list is not a change of the Collection.
+    """
+
+    ordered = tuple(sorted(set(members), key=artifact_request_sort_key))
+    return JsonObject(
+        (
+            ("artifacts", JsonArray(tuple(str(item) for item in ordered))),
+            ("name", name),
+            ("schema", _COLLECTION_SCHEMA),
+            ("summary", summary),
+            ("version", version),
+        )
+    )
+
+
 def parse_author_collection_manifest(
     manifest: DiscoveredAuthorManifest,
     *,
@@ -1603,23 +1638,16 @@ def parse_author_collection_manifest(
         members.append(request_result.value)
     # Members are the Collection's dependencies: the exact version each resolves to is part of
     # what the Collection is, so a member's new version is a change of the Collection (D-425).
-    resolved = tuple((str(item), versions.resolve(item)) for item in members)
+    resolved = tuple(
+        (str(item), versions.resolve(item))
+        for item in sorted(set(members), key=artifact_request_sort_key)
+    )
     input_digest = _input_digest(manifest, (), dependencies=resolved)
     if isinstance(input_digest, Err):
         return input_digest
     version = str(versions.version(ArtifactIdentity("collection", name.value), input_digest.value))
     canonical_digest = sha256_bytes(
-        canonical_json_bytes(
-            JsonObject(
-                (
-                    ("artifacts", JsonArray(tuple(str(item) for item in members))),
-                    ("name", name.value),
-                    ("schema", _COLLECTION_SCHEMA),
-                    ("summary", summary),
-                    ("version", version),
-                )
-            )
-        )
+        canonical_json_bytes(collection_document(name.value, summary, version, tuple(members)))
     )
     try:
         return Ok(

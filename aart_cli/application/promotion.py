@@ -13,12 +13,18 @@ from enum import Enum
 from typing import Protocol, cast
 
 from aart_cli.application.maintainer import CandidateBundle
+from aart_cli.application.registry_collections import (
+    COLLECTION_PACKAGE_FILE,
+    collection_package_entries,
+    collection_package_prefix,
+)
 from aart_cli.domain.candidates import (
     CandidateFinding,
     CandidateId,
     CandidateState,
     FindingSeverity,
 )
+from aart_cli.domain.collection_candidates import CollectionCandidate
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
@@ -35,6 +41,7 @@ from aart_cli.domain.registry import (
     RegistryLifecycle,
     publish_registry_version,
     registry_version_from_candidate,
+    registry_version_from_collection_candidate,
 )
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.protocol.hashing import (
@@ -338,7 +345,15 @@ class PromotionPlan:
             or len({item.candidate_id for item in ordered_audits}) != len(ordered_audits)
             or {item.candidate_id for item in ordered_versions}
             != {item.candidate_id for item in ordered_audits}
-            or any(item.mode is not self.mode for item in ordered_versions)
+            # A Collection is vendored whatever the transaction's mode (D-427).
+            or any(
+                item.mode is not self.mode
+                and not (
+                    item.coordinate.artifact.kind == "collection"
+                    and item.mode is PromotionMode.VENDORED
+                )
+                for item in ordered_versions
+            )
             or any(item.mode is not self.mode for item in ordered_audits)
             or any(
                 item.registry_snapshot != self.next_registry_snapshot for item in ordered_versions
@@ -647,6 +662,36 @@ def _legacy_audit_content(audit: PromotionAudit) -> bytes | None:
     )
 
 
+def _invalid_collection_package(
+    files: dict[str, SnapshotEntry], version: RegistryArtifactVersion
+) -> str | None:
+    """Why a published Collection's package does not match its record, or nothing."""
+
+    identity = version.coordinate.artifact
+    assert version.coordinate.version is not None
+    prefix = collection_package_prefix(identity.name, version.coordinate.version)
+    raw_paths = {raw for raw in files if raw.startswith(prefix)}
+    entry = files.get(f"{prefix}{COLLECTION_PACKAGE_FILE}")
+    if (
+        version.mode is not PromotionMode.VENDORED
+        or raw_paths != {f"{prefix}{COLLECTION_PACKAGE_FILE}"}
+        or entry is None
+        or entry.kind is not SnapshotEntryKind.FILE
+    ):
+        return "published Collection package is incomplete"
+    if sha256_bytes(entry.content) != version.canonical_digest:
+        return "published Collection package digest is invalid"
+    path = parse_relative_path(COLLECTION_PACKAGE_FILE)
+    assert isinstance(path, Ok)
+    stored = make_object_candidate(
+        (SnapshotEntry(path.value, SnapshotEntryKind.FILE, entry.content),),
+        expected_digest=version.object_digest,
+    )
+    if isinstance(stored, Err):
+        return "published Collection object digest is invalid"
+    return None
+
+
 def _version_content(version: RegistryArtifactVersion) -> bytes:
     identity = version.coordinate.artifact
     return canonical_json_bytes(
@@ -730,23 +775,41 @@ def plan_bulk_promotion(
     evidence: tuple[tuple[CandidateId, PromotionEvidence], ...],
     approved: tuple[RegistryArtifactVersion, ...],
     mode: PromotionMode = PromotionMode.VENDORED,
+    collections: tuple[CollectionCandidate, ...] = (),
 ) -> Result[PromotionPlan]:
-    """Plan selected candidates as one deterministic registry transaction."""
+    """Plan selected candidates as one deterministic registry transaction.
 
-    if not isinstance(mode, PromotionMode) or not selected:
+    `collections` join the same transaction: each one is a package, a version record and an audit
+    record, exactly as an artifact is (D-427).
+    """
+
+    if (
+        not isinstance(mode, PromotionMode)
+        or not (selected or collections)
+        or any(not isinstance(item, CollectionCandidate) for item in collections)
+    ):
         return _error("bulk promotion requires candidates and an explicit valid mode")
     ordered = tuple(sorted(selected, key=lambda item: item.candidate.id.value))
-    candidate_ids = tuple(item.candidate.id for item in ordered)
-    coordinates = tuple(str(item.candidate.artifact.coordinate) for item in ordered)
-    registries = {item.candidate.target_registry for item in ordered}
+    ordered_collections = tuple(sorted(collections, key=lambda item: item.id.value))
+    candidate_ids = (
+        *(item.candidate.id for item in ordered),
+        *(item.id for item in ordered_collections),
+    )
+    coordinates = (
+        *(str(item.candidate.artifact.coordinate) for item in ordered),
+        *(f"collection/{item.name}@{item.version}" for item in ordered_collections),
+    )
+    registries = {
+        *(item.candidate.target_registry for item in ordered),
+        *(item.target_registry for item in ordered_collections),
+    }
+    ready = {CandidateState.READY, CandidateState.WARNING}
     if (
         len(set(candidate_ids)) != len(candidate_ids)
         or len(set(coordinates)) != len(coordinates)
         or len(registries) != 1
-        or any(
-            item.candidate.state not in {CandidateState.READY, CandidateState.WARNING}
-            for item in ordered
-        )
+        or any(item.candidate.state not in ready for item in ordered)
+        or any(item.state not in ready for item in ordered_collections)
     ):
         return _error("bulk promotion selection is duplicated, mixed or not ready")
     evidence_by_id = dict(evidence)
@@ -762,6 +825,16 @@ def plan_bulk_promotion(
                 f"candidate {bundle.candidate.id} does not form one immutable store object"
             )
         object_digests[bundle.candidate.id] = stored.value.digest
+    collection_entries: dict[CandidateId, tuple[SnapshotEntry, ...]] = {}
+    for collection in ordered_collections:
+        entries = collection_package_entries(collection)
+        if isinstance(entries, Err):
+            return entries
+        stored = make_object_candidate(entries.value)
+        if isinstance(stored, Err):
+            return _error(f"Collection {collection.name} does not form one immutable store object")
+        collection_entries[collection.id] = entries.value
+        object_digests[collection.id] = stored.value.digest
 
     files = _files(snapshot)
     if isinstance(files, Err):
@@ -843,6 +916,36 @@ def plan_bulk_promotion(
                 return change
             package_changes.append(change.value)
 
+    for collection in ordered_collections:
+        coordinate = (
+            f"{collection.target_registry}/collection/{collection.name}@{collection.version}"
+        )
+        already = approved_by_coordinate.get(coordinate)
+        if already is not None:
+            suffix = (
+                "already contains this exact candidate"
+                if already.canonical_digest == collection.canonical_digest
+                else "is immutable and contains different content"
+            )
+            return _error(
+                f"published coordinate/version {already.coordinate} {suffix}",
+                code=PROMOTION_IMMUTABLE_CONFLICT,
+            )
+        prefix = collection_package_prefix(collection.name, collection.version)
+        if any(raw.startswith(prefix) for raw in files.value):
+            return _error(
+                f"published coordinate/version path is immutable: {prefix.rstrip('/')}",
+                code=PROMOTION_IMMUTABLE_CONFLICT,
+            )
+        for entry in collection_entries[collection.id]:
+            path = _path(f"{prefix}{entry.path}")
+            if isinstance(path, Err):
+                return path
+            change = _change(files.value, path.value, entry.content)
+            if isinstance(change, Err):
+                return change
+            package_changes.append(change.value)
+
     package_projection = _project(snapshot, tuple(package_changes))
     if isinstance(package_projection, Err):
         return package_projection
@@ -887,6 +990,41 @@ def plan_bulk_promotion(
             audit_path.value,
             _audit_content(audit),
         )
+        if isinstance(audit_change, Err):
+            return audit_change
+        metadata_changes.append(audit_change.value)
+
+    for collection in ordered_collections:
+        item_evidence = evidence_by_id[collection.id]
+        audits.append(
+            PromotionAudit(
+                collection.id,
+                collection.canonical_digest,
+                promotion_source_provenance(collection.source_revision),
+                item_evidence.validation_report_digest,
+                item_evidence.effective_policy_digest,
+                mode,
+                registry_before.value,
+                registry_after.value,
+                tuple(
+                    sorted(
+                        set((*_candidate_warnings(collection.findings), *item_evidence.warnings))
+                    )
+                ),
+                item_evidence.external_audit_reference,
+            )
+        )
+        versions.append(
+            registry_version_from_collection_candidate(
+                collection,
+                object_digest=object_digests[collection.id],
+                registry_snapshot=registry_after.value,
+            )
+        )
+        audit_path = _path(f"registry/promotions/{collection.id.value}.json")
+        if isinstance(audit_path, Err):
+            return audit_path
+        audit_change = _change(package_files.value, audit_path.value, _audit_content(audits[-1]))
         if isinstance(audit_change, Err):
             return audit_change
         metadata_changes.append(audit_change.value)
@@ -1184,7 +1322,12 @@ def validate_promoted_registry(
             or version_entry.content != _version_content(version)
         ):
             return _error(f"registry version record is missing or stale: {version.coordinate}")
-        if version.mode is PromotionMode.VENDORED:
+        if identity.kind == "collection":
+            assert version.coordinate.version is not None
+            invalid = _invalid_collection_package(files.value, version)
+            if invalid is not None:
+                return _error(f"{invalid}: {version.coordinate}")
+        elif version.mode is PromotionMode.VENDORED:
             prefix = f"artifacts/{identity.kind}/{identity.name}/{version.coordinate.version}/"
             canonical_entries = []
             object_entries = []

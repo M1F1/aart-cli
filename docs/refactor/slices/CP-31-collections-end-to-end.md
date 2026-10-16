@@ -94,3 +94,22 @@ has no `checked`. 79 tests across the four author modules green; mypy and tach c
 
 Targeted mutation: a Collection verdict that drops the parser's diagnostics turned exactly the two
 error tests red.
+
+## Step 5 — promotion publishes Collections (part 1: the pure layer)
+
+`application/registry_collections.py` assesses, packages and reads back a Collection;
+`plan_bulk_promotion` takes `collections`; `validate_promoted_registry` checks a Collection package
+(D-427). Sync already marks a Collection PROMOTED when the Registry holds its version.
+
+Evidence: `tests/registry_collection_promotion_test.py` (12) -- ready and blocked assessment with
+the member named; package, version record and audit written; read back as the approved Collection;
+a later Sync records it PROMOTED; vendored inside a referenced transaction; one transaction with an
+artifact; an invalid Collection refused; a published version immutable; a consistently rebound
+Registry over a tampered package unreadable. 87 promotion, Collection, registry and maintainer
+modules (885 tests) green; mypy and tach clean.
+
+Targeted mutations: `_invalid_collection_package` returning nothing turned only the tamper test
+red; member resolution never failing turned exactly the three blocking tests red.
+
+Remaining for step 5: the entry points -- `registry promote` and the Maintainer TUI approval of a
+Collection Candidate.

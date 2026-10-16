@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from .candidates import Candidate, CandidateId, CandidateState
-from .identifiers import ArtifactCoordinate, ObjectDigest
+from .identifiers import ArtifactCoordinate, ArtifactIdentity, ObjectDigest
+
+if TYPE_CHECKING:
+    from .collection_candidates import CollectionCandidate
 
 
 class PromotionMode(str, Enum):
@@ -146,6 +150,41 @@ def registry_version_from_candidate(
         object_digest,
         registry_snapshot,
         mode,
+    )
+
+
+def registry_version_from_collection_candidate(
+    candidate: CollectionCandidate,
+    *,
+    object_digest: ObjectDigest,
+    registry_snapshot: ObjectDigest,
+) -> RegistryArtifactVersion:
+    """A Collection's approved version: the same record an artifact gets, of kind `collection`.
+
+    A Collection has no payload of its own; its canonical document is all of it, so that digest
+    stands for the payload too. It is always vendored, because the Registry is its only home
+    (D-427).
+    """
+
+    if candidate.state not in {
+        CandidateState.READY,
+        CandidateState.WARNING,
+        CandidateState.PROMOTED,
+    }:
+        raise ValueError("registry version requires a validated Collection Candidate")
+    return RegistryArtifactVersion(
+        ArtifactCoordinate(
+            candidate.target_registry,
+            ArtifactIdentity("collection", candidate.name),
+            candidate.version,
+        ),
+        candidate.id,
+        candidate.input_digest,
+        candidate.canonical_digest,
+        candidate.canonical_digest,
+        object_digest,
+        registry_snapshot,
+        PromotionMode.VENDORED,
     )
 
 

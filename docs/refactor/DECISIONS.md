@@ -10672,3 +10672,24 @@ the selected payload and the exact resolved versions of the artifact's artifact 
   shows the Collection unsatisfied until the author replaces it, instead of installing an artifact
   the author never chose. The `#?` lines show a Source-qualified member and one with no constraint.
 - No version and no payload, as §173.1 and §173.3 require.
+
+## D-427 — How a Collection is published and read back (CP-31 step 5)
+
+- **The same three records as an artifact**: a package, a version record of kind `collection`
+  (`registry/versions/collection/<name>/<version>.json`) and an audit record, planned by
+  `plan_bulk_promotion(..., collections=...)` in the same transaction as any artifacts.
+- **The package is one file**, `artifacts/collection/<name>/<version>/collection.json`: the
+  canonical Collection document (`protocol.authoring.collection_document`). Its sha256 is the
+  Candidate's `canonical_digest`, which also stands for the payload digest; members are written in
+  canonical order, so reordering a manifest's list is not a change of the Collection.
+- **Always vendored**, whatever the transaction's mode: the Registry is a Collection's only home,
+  and there is no payload elsewhere to refer to. The plan invariant allows exactly this exception.
+- **Approval resolves members with `RegistryVersions.resolve`**, the resolver the version number
+  uses (D-425): highest published version the constraint allows in the target Registry. A member
+  with no such version makes the Candidate INVALID with `collection-member-unresolved`, naming it.
+  Members from another Registry do not resolve. Harness compatibility across members is the
+  install's concern (D-422, step 7), not approval's.
+- **Read back by `read_registry_collection`**, which refuses bytes that do not match the version
+  record. `validate_promoted_registry` checks the package too, so a Registry whose metadata was
+  rewritten over an unreviewed Collection is unreadable.
+- **Evidence**: the validation digest is each member with the exact version it resolved to.
