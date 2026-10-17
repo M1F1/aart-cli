@@ -10930,3 +10930,24 @@ asked that AART work on local repositories out of the box, with no conditions on
   directory is read whole, as before.
 - `.gitignore` alone was not parsed by AART: Git's own rules (nested files, `info/exclude`,
   `core.excludesFile`) are the author's rules, and reimplementing them would diverge.
+
+## D-439 — Three roles, three command families; "Source" becomes Upstream repository (§175, CP-32)
+
+Found while helping the owner in enterprise use of 0.10.0: `aart-cli source` configures both
+Registries and author repositories, `source list` shows them together, and a consumer could add an
+author repository although nothing it offers is installable (`configured_offers.py` skips every
+non-Registry). The owner chose the names and the shape:
+
+- **Upstream repository / `upstream`** for an author repository. "Upstream" says which way artifacts
+  flow and is already the spec's word (`check-upstream`); the author is in the definition, not the
+  name, so the TUI heading and the command stay short.
+- **`consume`, `maintain`, `author`** as role verbs, each with nouns: `consume registry`,
+  `maintain upstream|candidate|registry`. `registry` appears in two families and means the
+  consumer's subscription in one and the maintainer's checkout in the other; the verb settles it.
+- **`sync` vs `update`**: `consume registry sync` fetches a Registry's state and reports available
+  updates; `consume update` changes installed artifacts. A `registry update` would read as changing
+  the Registry.
+- `scan` stays beside `upstream sync` (one explicit checkout, report-only); `adopt` and
+  `check-upstream` move under `upstream` rather than going, because adoption by manifest is the only
+  way in (D-437). Candidate rejection on the CLI is not added here (B-200).
+- No aliases or migrators (§169 rules): a CP-26-style break, released pre-1.0.

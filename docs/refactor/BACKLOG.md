@@ -4660,3 +4660,9 @@ Found: CP-31 step 14 (2026-10-17). The audit-level test that an `mcp` package wh
 names a payload file, or has no `server`, is reported by `registry audit` built its package with
 `registry vendor`, and went with it. `describe_delivery` and both messages remain covered directly.
 A replacement adopts an `mcp` manifest and audits the result; not needed for §173.
+
+## B-200 — `maintain candidate reject` on the CLI
+
+The Candidate model carries a rejection reason and the Maintainer TUI shows it, but no CLI command
+rejects a Candidate. CP-32 (D-439) gives Candidates their own noun; a `reject` action with a reason
+belongs there once it is wanted. Not required by §175.

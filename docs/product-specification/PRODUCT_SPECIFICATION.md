@@ -11292,3 +11292,64 @@ refused. AART's own managed snapshots are read whole, as before.
 
 **INV-268 — Ignored files are not the author's Source.** A path the author's Git ignore rules
 exclude from a local checkout never enters a Source snapshot, and never makes reading it fail.
+
+# 175. Three roles, three command families: consume, maintain, author
+
+Status: **ACCEPTED 2026-10-17 (D-439)**, on the owner's decision. Supersedes the single `source`
+command family and the `registry-*` / `source-*` source kinds wherever they meet a user.
+
+## 175.1 The two kinds of repository
+
+- An **Upstream repository** (short: *upstream*) is a repository its authors keep. A Registry
+  maintainer connects it, synchronizes it and promotes its Candidates. A consumer never sees one.
+- A **Registry** is a namespace of approved artifact versions taken from upstreams, plus the
+  Collections its maintainer defines from them. A Registry authors no artifact of its own; a
+  Collection is the only thing it creates. A consumer installs from Registries and from nothing
+  else.
+
+Artifacts flow one way: upstream → Candidate → Registry → consumer. "Source" is no longer a name
+either role sees.
+
+## 175.2 The command families
+
+Every role-specific command lives under its role's verb; commands about the whole installation of
+aart-cli stay at the top level.
+
+```text
+aart-cli consume registry add|list|sync|remove        --kind local|git
+aart-cli consume list|search|install|update|uninstall|status|setup|receipt|health
+aart-cli consume mcp test
+
+aart-cli maintain upstream add|list|sync|remove|scan|adopt|check   --kind local|git
+aart-cli maintain candidate list|promote
+aart-cli maintain registry init|collection|format|validate|lock|build|audit|diff|test|publish|push
+
+aart-cli author init|check
+
+aart-cli doctor|upgrade|reset|security
+```
+
+- `consume registry sync` refreshes what a Registry offers and then says which installed artifacts
+  have a newer approved version and that `consume update` applies them (§82, §83). `sync` never
+  changes installed artifacts; `update` never changes a Registry.
+- `maintain upstream sync` discovers Candidates in connected upstreams; `scan` reports Candidates
+  in one explicit checkout without changing anything; `adopt` and `check` are today's `registry
+  adopt` and `registry check-upstream`. `maintain candidate promote` is today's `registry promote`.
+- The kind is the family plus `local` or `git`; the four `registry-*` / `source-*` kinds go.
+- `security` stays at the top level: consumers verify attestations and maintainers scan.
+- `source`, `marketplace` and the top-level `registry` family are removed, without aliases.
+
+## 175.3 Configuration and TUI
+
+- Configuration keeps two lists, `registries` and `upstreams`. Consumer commands, screens and
+  policy read only `registries`; the policy's direct-source switch goes, because a consumer can no
+  longer connect an upstream at all.
+- The consumer TUI's Registries screen lists Registries only. Registry Maintainer Mode has three
+  areas named as the CLI is: **Upstream repositories** ("Author repositories this Registry takes
+  artifacts from"), **Candidates**, and **Registry** (Collections, Validation, Publish).
+
+**INV-269 — A consumer reads only Registries.** No consumer command, screen or configuration entry
+connects an upstream, and nothing a consumer installs comes from one.
+
+**INV-270 — The first word names the role.** Every command specific to consuming, maintaining or
+authoring is under `consume`, `maintain` or `author`; each noun means one thing within its family.

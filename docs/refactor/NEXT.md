@@ -55,6 +55,12 @@ adoption by manifest is the only way in. **Step 15 is done**: PR #76 passed the 
 Python 3.10, 3.11 and 3.14; merging it closes CP-31. CP-31 is merged and released as 0.10.0. After it, §174 (D-438)
 reads a local author checkout as Git would commit it.
 
+**Next: CP-32** (§175, D-439), the owner's decision of 2026-10-17. Three role families replace
+`source`, `marketplace` and the top-level `registry`: `consume`, `maintain upstream|candidate|registry`
+and `author`. An author repository is an **Upstream repository**, and a consumer reads only
+Registries (INV-269). Step 1 (the specification) is done; step 2, the configuration split, is next.
+See `slices/CP-32-roles-and-upstreams.md`.
+
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).
 

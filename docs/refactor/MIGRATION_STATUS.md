@@ -4,6 +4,10 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-32 specified (§175, D-439): consume, maintain, author.** The owner replaced the
+single `source` family with role families and named author repositories Upstream repositories.
+INV-269 and INV-270 are accepted; no code has changed yet. Next is step 2, the configuration split.
+
 **2026-10-17, §174 (D-438): a local author checkout is read as Git would commit it.**
 `source-local`, `author check` and `registry scan` / `promote --checkout` read only the paths
 `git ls-files --cached --others --exclude-standard` lists, so an ignored `.venv/` no longer stops

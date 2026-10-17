@@ -1167,6 +1167,63 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-32",
+      "title": "Three roles, three command families: consume, maintain, author; Upstream repositories",
+      "status": "todo",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Specify CP-32: §175 (three roles, three command families, Upstream repository), INV-269, INV-270, D-439",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Configuration: separate registries and upstreams lists with kind local|git; consumer policy reads registries only; drop the direct-source switch",
+          "status": "todo"
+        },
+        {
+          "id": "3",
+          "title": "consume family: consume registry add|list|sync|remove (sync reports available updates), the marketplace actions, consume mcp test",
+          "status": "todo"
+        },
+        {
+          "id": "4",
+          "title": "maintain upstream add|list|sync|remove|scan|adopt|check",
+          "status": "todo"
+        },
+        {
+          "id": "5",
+          "title": "maintain candidate list|promote",
+          "status": "todo"
+        },
+        {
+          "id": "6",
+          "title": "maintain registry init|collection|format|validate|lock|build|audit|diff|test|publish|push",
+          "status": "todo"
+        },
+        {
+          "id": "7",
+          "title": "Remove the source, marketplace and top-level registry families and the registry-*/source-* kinds, with no aliases",
+          "status": "todo"
+        },
+        {
+          "id": "8",
+          "title": "TUI: consumer Registries lists Registries only; Maintainer Mode areas Upstream repositories, Candidates, Registry; every hint and message names the new commands",
+          "status": "todo"
+        },
+        {
+          "id": "9",
+          "title": "Documentation: README, tutorials, authoring and Registry guides",
+          "status": "todo"
+        },
+        {
+          "id": "10",
+          "title": "Full verification and the PR",
+          "status": "todo"
+        }
+      ]
     }
   ]
 }
