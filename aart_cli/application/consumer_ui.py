@@ -123,6 +123,7 @@ class ConsumerActionKind(str, Enum):
 
 
 class ConsumerUiEventKind(str, Enum):
+    SCROLL_MARKETPLACE = "scroll-marketplace"
     NAVIGATE = "navigate"
     BACK = "back"
     MOVE = "move"
@@ -695,6 +696,10 @@ class ConsumerUiState:
     search: str = ""
     rows: tuple[str, ...] = ()
     cursor: int = 0
+    #: Usable terminal columns, sampled by the shell; never persisted as a preference.
+    viewport_columns: int = 100
+    viewport_rows: int = 0
+    marketplace_scroll: int = -1
     focus: str = ""
     searching: bool = False
     help_visible: bool = False
@@ -780,6 +785,15 @@ class ConsumerUiState:
             )
             or not _safe_identity(self.registry_commit_subject)
             or not _rows_valid(self.rows)
+            or not isinstance(self.viewport_columns, int)
+            or isinstance(self.viewport_columns, bool)
+            or self.viewport_columns < 1
+            or not isinstance(self.viewport_rows, int)
+            or isinstance(self.viewport_rows, bool)
+            or self.viewport_rows < 0
+            or not isinstance(self.marketplace_scroll, int)
+            or isinstance(self.marketplace_scroll, bool)
+            or self.marketplace_scroll < -1
             or not isinstance(self.cursor, int)
             or isinstance(self.cursor, bool)
             or not 0 <= self.cursor < max(len(self.rows), 1)
@@ -2270,6 +2284,20 @@ def reduce_consumer_ui(
     if state.exited:
         return state, ()
     reduced, commands = _reduce(state, event)
+    if (
+        reduced is not state
+        and reduced.marketplace_scroll != -1
+        and event.kind
+        in (
+            ConsumerUiEventKind.MOVE,
+            ConsumerUiEventKind.SEARCH,
+            ConsumerUiEventKind.SEARCH_CLOSE,
+            ConsumerUiEventKind.NAVIGATE,
+            ConsumerUiEventKind.BACK,
+            ConsumerUiEventKind.TOGGLE_PROFILE,
+        )
+    ):
+        reduced = replace(reduced, marketplace_scroll=-1)
     if reduced.entered_secrets and (
         reduced.session.screen not in _SECRET_HOLDING_SCREENS or reduced.exited
     ):
@@ -2284,6 +2312,11 @@ def reduce_consumer_ui(
 def _reduce(
     state: ConsumerUiState, event: ConsumerUiEvent
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    if event.kind is ConsumerUiEventKind.SCROLL_MARKETPLACE:
+        if state.session.screen is not ConsumerScreen.MARKETPLACE:
+            return state, ()
+        delta = -1 if event.text == "up" else 1
+        return replace(state, marketplace_scroll=max(state.marketplace_scroll + delta, 0)), ()
     if event.kind is ConsumerUiEventKind.NAVIGATE:
         return _navigate(state, event.screen)
     if event.kind is ConsumerUiEventKind.BACK:
@@ -2546,7 +2579,9 @@ def _reduce(
 
 
 #: Names the terminal shell gives the keys that are not one printable character.
-_SPECIAL_KEYS = frozenset({"up", "down", "left", "right", "enter", "escape", "backspace"})
+_SPECIAL_KEYS = frozenset(
+    {"page-up", "page-down", "up", "down", "left", "right", "enter", "escape", "backspace"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -2996,6 +3031,8 @@ def key_bindings(
             bindings.append(KeyBinding("Enter", "Registry"))
     if state.session.screen in _SEARCHABLE:
         bindings.append(KeyBinding("/", "Search"))
+    if state.session.screen is ConsumerScreen.MARKETPLACE and state.viewport_rows:
+        bindings.append(KeyBinding("PgUp/PgDn", "Scroll"))
     if not typing:
         bindings.append(KeyBinding("v", state.session.profile.toggle_label))
     bindings.extend((KeyBinding("↑/↓", "Move"), KeyBinding("Esc", "Back")))
@@ -3047,6 +3084,11 @@ def key_event(
         if len(key) == 1 and key.isprintable():
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text=state.search + key)
         return None
+
+    if state.session.screen is ConsumerScreen.MARKETPLACE and key in ("page-up", "page-down"):
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.SCROLL_MARKETPLACE, text="up" if key == "page-up" else "down"
+        )
 
     text_rows = _form_text_rows(state)
     if (

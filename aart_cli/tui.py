@@ -744,6 +744,14 @@ class _CursesTerminal:
     def __init__(self, stdscr) -> None:
         self._stdscr = stdscr
 
+    @property
+    def rows(self) -> int:
+        return max(self._stdscr.getmaxyx()[0] - 1, 0)
+
+    @property
+    def columns(self) -> int:
+        return max(self._stdscr.getmaxyx()[1] - 1, 1)
+
     def draw(self, lines: Tuple[str, ...]) -> None:
         self._stdscr.clear()
         height, width = self._stdscr.getmaxyx()

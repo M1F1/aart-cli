@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-32 step 14 (D-450): complete labeled Marketplace columns.** Grid
+cells wrap, narrow rows stack labeled fields, and bounded viewports scroll actions/More info
+with PgUp/PgDn while preserving headings and the footer. Resize and paging do not alter offers,
+search or selection. Twelve new focused contracts and targeted truncation evidence hold the
+layout; scoped advisory mutation kills 190/233. Next: documentation (9) and CI repairs/PR (10).
+
 **2026-10-17, CP-32 step 13 (D-449): Marketplace owns artifact details.** More info
 preserves complete approved evidence and declared input guidance, without current answers or
 provider state. The standalone route is gone; search, cursor, selection and single/bulk install

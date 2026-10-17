@@ -329,3 +329,37 @@ B-210 records the unused former wrapper; no fallback view remains. Fresh mutatio
 retain information through indentation, redundant identity or equivalent falsy options, or add
 punctuation to the no-description fallback. The related cross-screen run passes 1479 tests
 in 149 modules plus the frame contracts. Ruff, mypy, tach and docs-check pass.
+
+
+## Step 14 — named, complete Marketplace cells at every width
+
+Done (D-450). Marketplace has Artifact, Status, Scope, Harnesses and Unset headings on the same
+grid as its cells. Values wrap without ellipsizing. Below 67 usable columns, rows stack those
+same labeled fields. A logical row retains its key, cursor and tick regardless of physical height.
+The shell samples terminal dimensions outside projections; resize does not change browsing state.
+PgUp/PgDn scroll actions and More info one physical line at a time, retaining headings and the
+shared footer. The initial viewport follows focus; explicit offsets clamp at both ends.
+
+Red first: the new layout contract failed because no complete row renderer existed. Updated
+receipt-derived E2E assertions reconstruct wrapped cells rather than treating one physical line
+as one row. The first related run found two identity-contract failures: resetting a default scroll
+position needlessly replaced an unchanged state. The fix preserves the original object on refused
+navigation and only resets scroll when a real event changes state.
+
+Evidence: twelve focused tests include generated widths 1–140 and long coordinates, labeled
+narrow rows, column alignment, absent Collection facts, empty catalogs, generated viewport sizes
+with every detail line reachable, a real curses adapter's focus/end-clamping/PageUp behavior,
+resize preservation, and a last-character regression. `wrap_lines` already reserves curses's last
+column, so no terminal clipping change was needed. The targeted truncation mutation (`value[:width]`
+before wrapping) makes exactly the grid, narrow-layout and generated-width tests fail; restored
+source passes. The refused-navigation and focused view selection also pass after the identity fix.
+
+Scoped advisory: `make mutants ONLY=aart_cli/tui_marketplace_rows.py
+TESTS="tests/marketplace_readable_rows_test.py"` initially killed 173/233. Independent header,
+missing-cell, paging, empty-state and explicit-offset claims raised this to 190/233. Reviewed
+survivors preserve information through different hanging indentation or wrapping boundaries,
+redundant strict zip options over fixed tuples, equivalent default wrap arguments, bounded
+viewport overlap, or diagnostic/fallback wording. No test or gate was weakened.
+
+Final related verification: 1510 tests in 152 modules plus frame contracts pass, with the two
+pre-existing B-194 properties excluded. Ruff, mypy, tach and docs-check pass. Full suite stays in CI.

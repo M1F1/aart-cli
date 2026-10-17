@@ -97,7 +97,11 @@ class FocusedOfferIsDescribedTest(unittest.TestCase):
         for value in (focused.identity.name, focused.version, str(focused.source_alias)):
             self.assertIn(value, joined)
         self.assertIn(focused.summary, joined)
-        last_row = max(index for index, line in enumerate(drawn) if line.startswith(("> ", "  [")))
+        last_row = max(
+            index
+            for index, line in enumerate(drawn[: drawn.index(described[0])])
+            if line.strip() and line != SECTION_RULE
+        )
         self.assertEqual(drawn[last_row + 1 : last_row + 4], ("", SECTION_RULE, ""))
         self.assertEqual(drawn[last_row + 4 : last_row + 4 + len(described)], described)
 

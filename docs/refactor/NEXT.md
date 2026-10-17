@@ -62,14 +62,15 @@ Registries (INV-269). Step 1 (the specification, with §175.4 reset-with-backup 
 (the configuration split, D-442) are done, and so are step 11, reset with backup (D-440), and steps 3, 4
 and 6, the `consume` / `maintain upstream` / `maintain registry` families (D-443). Step 5, `maintain candidate list`, is done too (B-202 for
 recording Candidates from the CLI). Step 7 is done: a consumer installs only from Registries (D-444; B-203–B-206 for what it
-exposed). Step 8 (TUI names, D-445) and the owner-reported smoke fix in step 15 (D-447) are done. Steps 12 (Author Mode, D-448) and 13 (Marketplace details under More info, D-449) are done. Next are 14 (complete labeled Marketplace columns), 9 and 10.
+exposed). Step 8 (TUI names, D-445) and the owner-reported smoke fix in step 15 (D-447) are done. Steps 12 (Author Mode, D-448) and 13 (Marketplace details under More info, D-449) are done. Step 14 (complete labeled Marketplace columns, D-450) is done too. Next are 9 and 10.
 
-**Exact next task: CP-32 step 14 (§175.6, INV-274, D-446).** Add visible Marketplace
-column headings and preserve complete wrapped values, including narrow terminals. Confirm the terminal boundary with a
-regression test: `wrap_lines` already reserves the last curses column; use its actual usable width
-when choosing a grid or stacked fields. Step 13 removed standalone Artifact Details and moved all its
-information under More info without losing browsing/install state (D-449).
-After 14: documentation (9) and CI on #78 (10). Full suite stays in CI. See
+**Exact next task: CP-32 step 9 — documentation.** Steps 13 and 14 are implemented:
+complete artifact disclosure stays under More info, and Marketplace columns have headings,
+wrap complete cells or stack labeled fields, and scroll within short terminals (D-449/D-450).
+Finish the README, tutorials, authoring and Registry guides, then step 10's full CI on #78.
+The prior CI run 39034117210 found stale commands in `scripts/manual_test.py`, an invalid direct
+upstream consumer fixture in `scripts/distribution_smoke.py`, and an obsolete INV-023 test name.
+Repair those through scoped tests; do not run a full local suite. See
 `slices/CP-32-roles-and-upstreams.md`; B-209 explains fresh scoped mutation statistics.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major

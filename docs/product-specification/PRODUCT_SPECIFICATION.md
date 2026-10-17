@@ -11424,6 +11424,8 @@ Details screen and extends §173.8.
   heading or a cell value to make the columns fit. It wraps content into additional lines, or
   stacks labeled fields where columns would be unreadable. Row boundaries and the focused
   artifact remain clear; nothing requires opening another view to recover a truncated cell.
+  When wrapping exceeds the terminal height, PgUp/PgDn scroll the content while headings and
+  the navigation footer remain available; moving between offers keeps the focused row visible.
 
 **INV-273 — Marketplace details stay with the offer.** Everything the retired Artifact Details
 screen showed is available under More info on the focused Marketplace artifact, without losing

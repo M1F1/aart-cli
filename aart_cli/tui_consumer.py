@@ -218,6 +218,7 @@ from aart_cli.tui_marketplace import (
     render_artifact_detail,
 )
 from aart_cli.tui_marketplace_detail import artifact_disclosure
+from aart_cli.tui_marketplace_rows import marketplace_viewport, render_marketplace_rows
 
 __all__ = [
     "DETAIL_LEVEL_NAMES",
@@ -292,6 +293,8 @@ _KEY_NAMES: dict[int, str] = {
     260: "left",  # curses.KEY_LEFT
     261: "right",  # curses.KEY_RIGHT
     263: "backspace",  # curses.KEY_BACKSPACE
+    338: "page-down",
+    339: "page-up",
     343: "enter",  # curses.KEY_ENTER
 }
 
@@ -2507,7 +2510,15 @@ def _key_legend(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[s
 def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
     """One drawn screen: heading, body, prompts, and the persistent navigation footer."""
 
-    return render(compose_frame(source, state))
+    view = compose_frame(source, state)
+    if state.session.screen is ConsumerScreen.MARKETPLACE:
+        view, _ = marketplace_viewport(
+            view,
+            columns=state.viewport_columns,
+            height=state.viewport_rows,
+            offset=state.marketplace_scroll,
+        )
+    return render(view)
 
 
 def _matrix_label(artifact: str) -> str:
@@ -2720,6 +2731,22 @@ def run_consumer_shell(
     )
     current = _reload(active_source, current, entering=True)
     while not current.exited:
+        dimensions = (getattr(terminal, "columns", CONTENT_MEASURE), getattr(terminal, "rows", 0))
+        resized = dimensions != (current.viewport_columns, current.viewport_rows)
+        current = replace(
+            current,
+            viewport_columns=dimensions[0],
+            viewport_rows=dimensions[1],
+            marketplace_scroll=-1 if resized else current.marketplace_scroll,
+        )
+        if current.session.screen is ConsumerScreen.MARKETPLACE:
+            _, offset = marketplace_viewport(
+                compose_frame(active_source, current),
+                columns=current.viewport_columns,
+                height=current.viewport_rows,
+                offset=current.marketplace_scroll,
+            )
+            current = replace(current, marketplace_scroll=offset)
         terminal.draw(frame(active_source, current))
         # A paste arrives whole on a text field, and the reducer, not a second list here, knows
         # which rows are text fields (D-269).
@@ -4903,7 +4930,12 @@ class CanonicalScreenSource:
                 elif entry is not None:
                     status = "installed" if key.partition("@")[0] in held else "not installed"
                     cells.append((key, status))
-            return self._list(state, columns(cells, width=CONTENT_MEASURE - _ROW_PREFIX))
+            return render_marketplace_rows(
+                cells,
+                current=state.current_row,
+                selected=state.selection,
+                width=min(CONTENT_MEASURE, state.viewport_columns),
+            )
         if screen in (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE):
             preview = screens.offered_collection(state.focus)
             if preview is None:

@@ -11140,3 +11140,22 @@ Collection preview and Installed details retain their separate navigation.
 Enter on an artifact leaves Marketplace unchanged. More info keeps cursor, search and selection.
 Install uses the marked offers, or explicitly selects the focused offer if no offer is marked,
 preserving the former single-artifact route without an extra tick. An empty list requests nothing.
+
+
+## D-450 — Marketplace wraps complete cells and pages its viewport (CP-32 step 14)
+
+The Marketplace alone replaces the truncating column helper. Artifact, Status, Scope, Harnesses
+and Unset share a grid with wrapped cells when it fits; below 67 usable columns each logical row
+has the same labeled fields stacked. No ellipsis substitutes for content. Collections share the
+headings, with absent facts left empty or explicitly marked in stacked mode.
+
+The shell samples usable terminal width and height outside projections. These transient dimensions
+never become preferences. Resizing chooses the grid or stacked layout again without changing row
+identity, selection or search. Existing `wrap_lines` already reserves curses's last column; no
+terminal clipping fix is needed, as a last-character regression test confirms.
+
+Wrapping increases height. Marketplace therefore pages its actions and More info with PgUp/PgDn,
+keeping headings, frame context, status and the footer. Each press scrolls one physical line so
+small windows never skip lines. Moving/filtering/toggling detail follows the focused logical row;
+a requested offset is clamped before the next key, so PageUp works immediately after the end.
+This is transient presentation state and causes no operation or persistent write.
