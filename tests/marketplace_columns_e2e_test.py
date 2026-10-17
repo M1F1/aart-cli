@@ -37,7 +37,9 @@ def _rows(env, screen: ConsumerScreen) -> list[str]:
         if screen is not ConsumerScreen.MARKETPLACE:
             return [line for line in frame(source, state) if "[ ]" in line]
         lines = source.actions(state)
-        starts = [lines[0].index(label) for label in ("Artifact", "Status", "Scope", "Harnesses", "Unset")]
+        starts = [
+            lines[0].index(label) for label in ("Artifact", "Status", "Scope", "Harnesses", "Unset")
+        ]
         rows = []
         for line in lines[1:]:
             if "[ ]" in line:
