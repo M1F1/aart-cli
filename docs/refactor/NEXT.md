@@ -45,8 +45,10 @@ Collections' next versions in the same transaction. **Step 8 is done** (characte
 and 07b ask each member's configuration and credentials once per member artifact, with Set later.
 **Step 9 is done** (D-434): Installed, Doctor and uninstall for Collections. **Step 10 is done**
 (D-435): screen 05p chooses Default (Settings harnesses, scope and installer; no 05 or 07a) or
-Custom; Settings keeps default harnesses. **Next is step 11**: the Marketplace and Installed
-columns (#72, §173.8). Steps 12–15 follow.
+Custom; Settings keeps default harnesses. **Step 11 is done** (D-436): Marketplace and Installed
+rows are a column grid (status, scope with project count, harnesses with `✓`, unset inputs).
+**Step 12 is done**: the Registry and consumer docs. **Next is step 13**: rename the content mode
+to `RegistryContentMode = SelfContained | PinnedReference` (#54, D-376). Steps 14–15 follow.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).

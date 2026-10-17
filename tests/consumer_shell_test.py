@@ -214,7 +214,7 @@ class ConsumerShellTest(unittest.TestCase):
 
         self.assertEqual(moved.rows, ("public/mcp/github@1.6.0", "public/mcp/jira@2.2.0"))
         self.assertEqual(moved.current_row, "public/mcp/jira@2.2.0")
-        self.assertIn("> [ ] public/mcp/jira@2.2.0  broken", terminal.last)
+        self.assertRegex(terminal.last, r"> \[ \] public/mcp/jira@2\.2\.0\s+broken")
 
     def test_a_filter_narrows_the_rows_the_screen_shows(self):
         state, terminal = drive(

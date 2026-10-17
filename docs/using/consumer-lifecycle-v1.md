@@ -51,6 +51,22 @@ text fallback the same thing is a line: `/review` shows the matching rows, `/` o
 everything again. A filter only hides rows -- what was ticked stays ticked, and every row keeps
 the number it has in the full list.
 
+### What a Marketplace row says
+
+Each row in the TUI's Marketplace is the offer, then: `not installed`, `installed` or
+`update available`; where it is installed (`user`, `2 projects`, or `user + 2 projects`); the
+detected harnesses that can host it, with `✓` on each that holds it; and how many inputs are still
+`AART_NOT_SET`. Installed draws each installation on its own row, with its health, scope, project
+and unset inputs. More info adds the project's directory and the harness.
+
+### Default or Custom
+
+After Install, the TUI asks for a path. **Default** takes the harnesses, the scope and the Python
+installer from Settings and goes straight to what still needs entering, or to Ready. With no
+harness chosen in Settings, it uses every detected harness that can host the artifact; when the
+chosen ones cannot host it, the harness choice is asked after all. **Custom** asks each choice in
+turn. `marketplace install` names its harnesses with `--profile`, so the CLI has no path choice.
+
 ## MCP setup and credentials
 
 A v2 recipe and its package-root `SETUP.md` are compiled before AART plans an installation effect.

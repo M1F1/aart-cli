@@ -4643,3 +4643,13 @@ Found: CP-31 step 18 (2026-10-16). Screen 52 and `registry collection` create a 
 publish its next versions; neither removes, deprecates or renames one. A Collection whose members
 are all revoked is left pinning them (see B-196). Not on CP-31's critical path: a maintainer can
 stop changing a Collection, and installs keep resolving its exact pins.
+
+## B-198 — Installed across projects, and user and project installations in one harness
+
+Found: CP-31 step 11 (2026-10-17). Installed reads every receipt in the application home, so it
+lists installations made in other projects, and measures a project-scope MCP registration against
+the current project's root. `installation_key` is `coordinate#label`, so the same artifact in one
+harness at user and at project scope, or in two projects, shares a key. §173.8's project column
+and count are drawn from the owner's root, which is correct. Filtering Installed to the current
+project (with the others under More info) and adding scope and root to the key touch every
+lifecycle command; neither is needed for §173.8's columns.

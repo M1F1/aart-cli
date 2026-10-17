@@ -1144,17 +1144,17 @@
         {
           "id": "11",
           "title": "Marketplace and Installed columns (#72, #75): installation status, scope with a project count, harnesses, eligible harnesses, inputs still AART_NOT_SET; each installation its own row with its own configuration; detail under More info",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "12",
           "title": "Document Registry-owned Collections (creating one, automatic bumps), Registry-owned versions, and how a Registry adopts and offers content",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "13",
           "title": "Rename the content mode: RegistryContentMode = SelfContained | PinnedReference (#54, D-376)",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "14",

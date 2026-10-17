@@ -10861,3 +10861,28 @@ implementation choices:
   harness under Installation.
 - **The CLI has no path choice.** `marketplace install` already names its harnesses with
   `--profile`, so Default/Custom is a TUI journey only.
+
+## D-436 — Marketplace and Installed columns share one grid, and the harness facts share a cell (CP-31 step 11)
+
+§173.8 names the columns a Marketplace and an Installed row carry. The implementation choices:
+
+- **One grid per list**, laid out by `tui_layout.columns` over the content measure less the
+  `> [x] ` prefix, so every row's cells start at the same place. The cells are pure projections in
+  `consumer_views`: `marketplace_cells` and `installed_cells`.
+- **Marketplace cells**: the key (alias, kind, name, version); `not installed`, `installed` or
+  `update available` (any installation of any version whose health is `update`); the scope, as
+  `user`, `N projects` or `user + N projects`, where N counts distinct project roots; the
+  harnesses; the inputs still `AART_NOT_SET`, summed over installations because each keeps its own
+  (§169.4).
+- **Installed harnesses and eligible harnesses share one cell**: every detected harness the offer
+  is compatible with, plus every harness that holds it, with `✓` on each that holds it. Two
+  separate lists did not fit the 100-column measure beside a coordinate. Eligible means detected
+  (host profiles) and compatible with the offer.
+- **A Collection offer** draws its key and `installed` / `not installed` only; its members carry
+  the rest on their own rows.
+- **An installation's scope and root come from its owner** (§169.3) when the receipt has one,
+  rather than only from MCP registrations. Installed draws health, scope, the project's directory
+  name and the unset count; More info adds `Project: <root>` and `Harness: <label>`.
+- **D-394's `installed:` note is gone**: the columns say it, and its two tests went with it.
+- Listing other projects' installations, and keying a user-scope and a project-scope installation
+  in the same harness apart, are B-198.

@@ -91,7 +91,7 @@ class MarketplaceShellTest(unittest.TestCase):
         _, verbose = drive(UP, state=verbose_at)
 
         self.assertNotIn("Everything a developer needs", fast.last)
-        self.assertIn(f"> [ ] {COLLECTION}\n", fast.last)
+        self.assertRegex(fast.last, rf"> \[ \] {COLLECTION}\s+not installed\n")
         self.assertRegex(verbose.last, r"Description\s+Everything a developer needs")
 
     def test_enter_on_an_artifact_opens_its_details_rather_than_a_collection(self):

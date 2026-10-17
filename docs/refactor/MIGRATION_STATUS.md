@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-31 steps 11–12 (D-436): Marketplace and Installed columns, and the docs.**
+Marketplace rows show status, scope with a project count, the harnesses (eligible, with `✓` where
+installed) and unset inputs on one grid; Installed rows add scope and project, and More info the
+project directory and harness. An installation's scope and root come from its owner. The Registry
+docs cover adoption, Registry-owned versions and Collections; the consumer docs cover the columns
+and the Default/Custom path. Cross-project Installed and the user/project key collision are B-198.
+
 **2026-10-17, CP-31 step 10 (D-435): the Default and Custom install paths.**
 - Install opens screen 05p, where Default comes first. Default takes the harnesses, scope and
   Python installer from Settings and goes to 07, 07b or Ready, never drawing 05 or 07a. When no

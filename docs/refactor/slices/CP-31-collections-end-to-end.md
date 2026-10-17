@@ -362,3 +362,44 @@ Targeted mutation: dropping the Settings filter in `settings_pairs` turned three
 - the Settings-harness install;
 - the unhostable-harness fallback;
 - the `settings_pairs` property.
+
+## Step 11 — Marketplace and Installed columns (§173.8, D-436)
+
+A Marketplace row is now a grid of cells, laid out by `tui_layout.columns`:
+- the offer key;
+- `not installed`, `installed` or `update available`;
+- the scope: `user`, `N projects`, or `user + N projects`;
+- the harnesses: each detected harness that can host it, with `✓` on each that holds it;
+- the inputs still `AART_NOT_SET`, summed over installations.
+
+A Collection offer shows only its key and whether it is installed.
+
+An Installed row is the installation key, then health, scope, the project's directory name and the
+unset inputs. More info adds `Project: <root>` and `Harness: <label>`.
+
+An installation's scope and root now come from its receipt owner (§169.3) where there is one. The
+D-394 `installed:` note and its two tests are replaced by the columns. Other projects'
+installations and the user/project key collision are B-198.
+
+Evidence: `tests/marketplace_columns_e2e_test.py` (5):
+- through the real shell:
+  - the Marketplace row of an installed and an uninstalled Skill share one grid;
+  - the Installed row names its scope and project;
+- the cell projections for status, scope, project count, harness marks and unset count;
+- More info names the project directory and the harness;
+- a Hypothesis property: status, scope and project count follow any set of installations.
+
+Two existing walks now match the grid rather than a fixed two-space gap
+(`consumer_marketplace_shell_test`, `consumer_shell_test`). The 228 affected modules are green,
+apart from the two B-194 Hypothesis findings. mypy, ruff, tach and docs-check are clean.
+
+Targeted mutation: `any` → `all` in the `update available` rule turned two tests red: the cell
+example and the Hypothesis property.
+
+## Step 12 — Documentation
+
+`docs/registry/maintaining-a-registry-v1.md` gains three sections: how content enters a Registry
+(adoption by manifest, `registry adopt`), Registry-owned versions (D-423), and Registry-owned
+Collections with their automatic bump (D-430). `docs/using/consumer-lifecycle-v1.md` describes
+the Marketplace columns and the Default/Custom path. The vendor passages go with the commands in
+step 14.

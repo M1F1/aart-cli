@@ -85,6 +85,8 @@ from .maintainer_views import MaintainerScreen, maintainer_navigation_targets
 from .removal_proposal import RemovalProposal
 
 __all__ = [
+    "installed_cells",
+    "marketplace_cells",
     "ALL_ARTIFACTS",
     "ALL_INSTALLATIONS",
     "PLACEHOLDER_WARNING",
@@ -1548,6 +1550,9 @@ class InstalledArtifactView:
     #: The inputs this installation still holds as `AART_NOT_SET`, ordinary and secret alike
     #: (§172.3). Filled where the machine is assembled, which is where both are known.
     placeholders: tuple[str, ...] = ()
+    #: The concrete root this installation was made into (§169.3): the project directory for a
+    #: project-scope installation. Empty where the record names no owner.
+    root: str = ""
 
     @property
     def row(self) -> str:
@@ -1682,6 +1687,7 @@ def project_installed_artifact(
     ):
         raise ValueError("installed artifact projection received invalid ownership or credentials")
     health = installation_health(desired, current, update_available=update_available)
+    owner = None if receipt is None else receipt.owner
     actions = ["details", "verify", "configure", "uninstall"]
     if health.value == "update":
         actions.insert(2, "update")
@@ -1695,9 +1701,62 @@ def project_installed_artifact(
         tuple(actions),
         credentials,
         _installed_paths(receipt, current),
-        _recorded_scope(receipt),
+        _recorded_scope(receipt) if owner is None else owner.scope.value,
         harness,
+        root="" if owner is None else owner.root,
     )
+
+
+def _counted(count: int, noun: str) -> str:
+    return f"{count} {noun}{'' if count == 1 else 's'}" if count else ""
+
+
+def marketplace_cells(
+    key: str, installed: tuple[InstalledArtifactView, ...], eligible: tuple[str, ...]
+) -> tuple[str, ...]:
+    """One Marketplace row's columns (§173.8), read off the installations of any version.
+
+    The offer, then: installed or not or with an update available; the scopes it is installed in,
+    with how many projects; the harnesses, each detected one that could host it and a `✓` on each
+    that holds it; and the inputs still `AART_NOT_SET`, summed over installations because each
+    keeps its own (§169.4). The two harness facts share one column so a row fits the measure.
+    """
+
+    artifact = key.partition("@")[0]
+    held = tuple(item for item in installed if item.coordinate.partition("@")[0] == artifact)
+    if not held:
+        status = "not installed"
+    elif any(item.health == "update" for item in held):
+        status = "update available"
+    else:
+        status = "installed"
+    projects = _counted(
+        len({item.root for item in held if item.scope == "project" and item.root}), "project"
+    )
+    user = any(item.scope == "user" for item in held)
+    holding = {item.harness for item in held if item.harness}
+    unset = sum(len(item.placeholders) for item in held)
+    return (
+        key,
+        status,
+        " + ".join(part for part in ("user" if user else "", projects) if part),
+        ", ".join(
+            f"{harness} ✓" if harness in holding else harness
+            for harness in sorted(holding | set(eligible))
+        ),
+        f"{unset} not set" if unset else "",
+    )
+
+
+def installed_cells(view: InstalledArtifactView, health: str) -> tuple[str, ...]:
+    """One Installed row's columns after its key (§173.8): health, scope, project, unset inputs.
+
+    The project is the root's last name; the whole path is detail, under More info.
+    """
+
+    project = view.root.rstrip("/").rpartition("/")[2] if view.scope == "project" else ""
+    unset = len(view.placeholders)
+    return (health, view.scope, project, f"{unset} not set" if unset else "")
 
 
 def project_unadopted_installation(coordinate: str) -> InstalledArtifactView:
