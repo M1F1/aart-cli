@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.10.0](https://github.com/M1F1/aart-cli/compare/v0.9.0...v0.10.0) (2026-10-17)
+
+
+### Added
+
+* **author:** author check judges a Collection instead of skipping it (CP-31 step 4) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+* **author:** author init --kind collection writes a versionless Collection (CP-31 step 3) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+* **install:** a Collection installs as one artifact on 05 and 07a (CP-31 step 7) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+* **install:** choose the Default or Custom path after Install (CP-31 step 10) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+* **installed:** an installed Collection is one row with its members under it, and uninstalls as one (CP-31 step 9) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+* **marketplace:** Marketplace and Installed rows are a column grid (CP-31 steps 11–12) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+* **marketplace:** the configured Marketplace offers approved Collections (CP-31 step 6) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+* **registry:** a Collection Candidate is approved from the TUI and registry promote (CP-31 step 5, part 2) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+* **registry:** promotion publishes a Collection and the Registry reads it back (CP-31 step 5, part 1) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+* **registry:** the Registry assigns every version; manifests carry none (CP-31 step 2) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+* **registry:** the Registry owns Collections and bumps them with their members (CP-31 steps 17–19) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+
+
+### Changed
+
+* **registry:** remove the vendor family; adoption by manifest is the only way in (CP-31 step 14) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+* **registry:** the content mode is RegistryContentMode, self-contained or pinned-reference (CP-31 step 13) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+
+
+### Documentation
+
+* **spec:** §173, Collections end to end and Registry-owned versions (CP-31 step 1) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+* **spec:** the Registry owns Collections and bumps them with their members (D-430) ([41d7034](https://github.com/M1F1/aart-cli/commit/41d7034583903300727f83af279a5357e362b250))
+
 ## [0.9.0](https://github.com/M1F1/aart-cli/compare/v0.8.0...v0.9.0) (2026-10-16)
 
 
