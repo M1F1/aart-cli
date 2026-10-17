@@ -549,13 +549,22 @@ def marketplace_catalog_bytes(
     )
 
 
+#: What a person reads each connection as (§175): a Registry, or an Upstream repository.
+_ROLE_LABELS = {
+    SourceKind.REGISTRY_GIT: "Registry",
+    SourceKind.REGISTRY_LOCAL: "Registry",
+    SourceKind.SOURCE_GIT: "Upstream repository",
+    SourceKind.SOURCE_LOCAL: "Upstream repository",
+}
+
+
 def render_marketplace(
     catalog: MarketplaceCatalog,
     *,
     executable_version: SemVer | None = None,
 ) -> str:
     lines = [
-        f"source {source.alias.value} [{source.health.value}] "
+        f"{_ROLE_LABELS[source.kind]} {source.alias.value} [{source.health.value}] "
         f"{source.kind.value} {redact_text(source.origin)}"
         for source in catalog.sources
     ]

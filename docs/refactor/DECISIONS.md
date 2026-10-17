@@ -11159,3 +11159,25 @@ keeping headings, frame context, status and the footer. Each press scrolls one p
 small windows never skip lines. Moving/filtering/toggling detail follows the focused logical row;
 a requested offset is clamped before the next key, so PageUp works immediately after the end.
 This is transient presentation state and causes no operation or persistent write.
+
+
+## D-451 — The distribution smoke installs from a local Registry, by copy (CP-32 step 10)
+
+`scripts/distribution_smoke.py` connected `native-source-v1` as a `source-local` and installed it
+through `load_local_consumer_service`, with a managed symlink as the evidence that state outlives the
+Python environment. D-444 removed that native consumer path (INV-269), and the promotion pipeline
+compiles every authored artifact as `("copy",)` (`protocol/authoring.py`); `consume install` has no
+mode flag. No Registry artifact can be installed by symlink, and the specification promises none.
+
+The smoke keeps its claims: editable and wheel origins, zero runtime dependencies, offline upgrade
+dry-run, and an installation that survives deleting the environment that made it. The orchestrator
+publishes the shared reference content through `tests.reference_registry` into a Git-backed
+`registry-local`; the phases sync it and run the installed `aart-cli consume install|status|
+uninstall` as subprocesses of the environment under test. Survival is a Tabnine delivery whose tree
+still matches the digest its installation record attests, outside both environments. Making the
+survival comparison always fail turns `distribution_e2e_test` red.
+
+`scripts/manual_test.py` uses `maintain registry init`. The lab test connects the Registry with
+`consume registry add` and the skill repository with `maintain upstream add`. Human add/remove
+output and catalog headers name a connection "Registry" or "Upstream repository" (§175), never
+"source"; only a Registry reports `default=`.

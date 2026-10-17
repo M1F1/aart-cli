@@ -78,6 +78,12 @@ def _family_of(source: ConfiguredSource) -> str:
     return "registry" if source.is_registry else "upstream"
 
 
+def _role_label(source: ConfiguredSource) -> str:
+    """What a person reads a connection as (§175): a Registry, or an Upstream repository."""
+
+    return "Registry" if source.is_registry else "Upstream repository"
+
+
 def _in_family(request: Request, source: ConfiguredSource) -> bool:
     return request.source_family is None or _family_of(source) == request.source_family
 
@@ -461,10 +467,15 @@ def _add(request: Request) -> int:
     if request.json:
         print(json.dumps(payload, indent=2))
     else:
+        # Only a Registry can be the default a consumer installs from (§175.2).
+        default = (
+            f"; default={'yes' if result.default_registry == result.source.alias else 'no'}"
+            if result.source.is_registry
+            else ""
+        )
         print(
-            f"source added: {result.source.alias.value}; "
-            f"snapshot {result.synchronized.disposition.value}; "
-            f"default={'yes' if result.default_registry == result.source.alias else 'no'}"
+            f"{_role_label(result.source)} added: {result.source.alias.value}; "
+            f"snapshot {result.synchronized.disposition.value}{default}"
         )
     return _common.OK
 
@@ -551,7 +562,10 @@ def _remove(request: Request) -> int:
     else:
         snapshot = "discarded" if removed.value.snapshot_discarded else "none stored"
         default = "; default registry cleared" if planned.value.cleared_default else ""
-        print(f"source removed: {planned.value.source.alias.value}; snapshot {snapshot}{default}")
+        print(
+            f"{_role_label(planned.value.source)} removed: {planned.value.source.alias.value}; "
+            f"snapshot {snapshot}{default}"
+        )
     return _common.OK
 
 

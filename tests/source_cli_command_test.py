@@ -730,6 +730,62 @@ class SourceCliCommandTests(unittest.TestCase):
         self.assertTrue(payload["snapshot_discarded"])
         self.assertEqual(payload["source"]["alias"], "company")
 
+    def test_human_add_and_remove_name_a_registry_by_its_role(self) -> None:
+        """§175: a consumer connects a Registry, so the text output never calls it a source."""
+
+        added = io.StringIO()
+        runtime = _runtime()
+        with (
+            patch(
+                "aart_cli.commands.source.load_runtime_configuration",
+                side_effect=(Ok(runtime), Ok(runtime)),
+            ),
+            patch(
+                "aart_cli.commands.source.sync_configured_source",
+                return_value=Ok(_sync_outcome()),
+            ),
+            contextlib.redirect_stdout(added),
+        ):
+            add_code = cli.main(
+                [
+                    "consume",
+                    "registry",
+                    "add",
+                    "--alias",
+                    "company",
+                    "--kind",
+                    "git",
+                    "--location",
+                    "https://git.example.test/company/registry.git",
+                ]
+            )
+        _source, configuration = self._configured()
+        removed = io.StringIO()
+        with (
+            patch(
+                "aart_cli.commands.source.load_runtime_configuration",
+                return_value=Ok(_runtime(configuration)),
+            ),
+            patch(
+                "aart_cli.commands.source.discard_configured_source",
+                return_value=Ok(SimpleNamespace(existed=True, discarded=None)),
+            ),
+            patch(
+                "aart_cli.commands.source._source_health",
+                return_value=SourceHealth(HealthStatus.HEALTHY, 12, None),
+            ),
+            contextlib.redirect_stdout(removed),
+        ):
+            remove_code = cli.main(["consume", "registry", "remove", "--alias", "company", "--yes"])
+
+        self.assertEqual((add_code, remove_code), (0, 0), added.getvalue() + removed.getvalue())
+        self.assertTrue(added.getvalue().startswith("Registry added: company;"), added.getvalue())
+        self.assertIn("default=yes", added.getvalue())
+        self.assertTrue(
+            removed.getvalue().startswith("Registry removed: company;"), removed.getvalue()
+        )
+        self.assertNotIn("source", (added.getvalue() + removed.getvalue()).casefold())
+
     def test_remove_never_writes_configuration_when_the_snapshot_cannot_be_discarded(self) -> None:
         events: list[str] = []
         _source, configuration = self._configured()

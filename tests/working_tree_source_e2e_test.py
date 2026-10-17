@@ -63,7 +63,8 @@ class WorkingTreeSourceEndToEndTest(unittest.TestCase):
         self.assertIn("skill/code-review", check_output)
         self.assertNotIn(".venv", check_output)
         self.assertEqual(added, OK, add_output)
-        self.assertIn("source added: authors", add_output)
+        self.assertTrue(add_output.startswith("Upstream repository added: authors;"), add_output)
+        self.assertNotIn("default=", add_output)
 
 
 if __name__ == "__main__":

@@ -358,7 +358,7 @@ def _maintainer_instructions(root: Path, run_id: str, branch: str) -> str:
 
 This lab is isolated from normal AART state. Everything uses `{branch}` and local bare remotes.
 
-**The Registry is empty on purpose.** No manifest, no promotion, no configured Source. You build it
+**The Registry is empty on purpose.** No manifest, no promotion, no configured Upstream repository. You build it
 through the Maintainer TUI, which is the point of this run.
 
 Act I — maintainer. Open the Maintainer TUI:
@@ -366,7 +366,7 @@ Act I — maintainer. Open the Maintainer TUI:
     python {CHECKOUT / "scripts/manual_test.py"} open maintainer --root {root}
 
 Its current project is the empty registry checkout, so screen 46 offers **Initialize Registry**.
-Then add the two author Sources, sync them, review the Candidates, validate, promote and commit —
+Then add the two Upstream repositories, sync them, review the Candidates, validate, promote and commit —
 all in the TUI. The author repositories are already published at:
 
     https://manual.aart.test/skill.git
@@ -524,6 +524,7 @@ def setup_lab(raw_root: Path, *, empty_registry: bool = False) -> ManualLab:
             sys.executable,
             "-m",
             "aart_cli.cli",
+            "maintain",
             "registry",
             "init",
             "--source",
@@ -600,7 +601,7 @@ genuine Git acquisition path is exercised rather than bypassed.
 `dummy-mcp`. In production these would be two teams' repositories.
 
 In Registries use URL `https://manual.aart.test/registry.git`, ref `{branch}`.
-Maintainer Sources can use `https://manual.aart.test/skill.git` and
+Maintainer Upstream repositories can use `https://manual.aart.test/skill.git` and
 `https://manual.aart.test/mcp.git`, both at the same ref.
 
 Marketplace already contains the Skill and credential-bearing MCP so consumer testing is not

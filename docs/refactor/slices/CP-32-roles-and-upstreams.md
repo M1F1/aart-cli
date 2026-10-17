@@ -380,3 +380,21 @@ and INV-269–274 now link to their implementation evidence. Targeted documentat
 replacing README's author-guide link with a nonexistent target makes docs-check fail with exactly
 one DOC002 at that link; restoring it passes. No product code changed, so mutmut is not applicable
 to this documentation step. Final CI remains open; its old tooling failures are step 10.
+
+## Step 10 — Full verification and the PR (in progress)
+
+CI run 39034117210 failed on tooling the role split left behind (D-451):
+
+- `scripts/manual_test.py` called the removed `registry init`; the lab test used `source add`. Both
+  now use `maintain registry init`, `consume registry add` and `maintain upstream add`; the lab's
+  instructions say Upstream repositories. The thirteen lab tests pass (seven were red).
+- `scripts/distribution_smoke.py` read an Upstream through the retired native consumer path and
+  needed a symlink-capable artifact no Registry can offer. It now publishes the reference content as
+  a local Registry and drives the installed `consume` CLI; survival is a copied delivery matching
+  its recorded digest. Targeted mutation: inverting the survival comparison turns the test red.
+- Human output: `consume registry add|remove` and `maintain upstream add|remove` print
+  `Registry added: …` / `Upstream repository added: …`, and catalog headers say `Registry` or
+  `Upstream repository`. Red first in `source_cli_command_test`, `working_tree_source_e2e_test`
+  and `marketplace_projection_test`, then green. 182 related tests across 17 modules pass.
+
+Remaining: push to PR #78 and read the complete CI matrix; close the step when it is green.

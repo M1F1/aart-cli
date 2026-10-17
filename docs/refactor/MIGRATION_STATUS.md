@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-32 step 10 (D-451): CI tooling repaired.** The manual lab uses the role
+commands; the distribution smoke installs from a local Registry through the installed `consume`
+CLI and proves a copied delivery survives environment removal. Human add/remove output and catalog
+headers say Registry or Upstream repository. Lab, distribution and label tests were red, now green;
+182 related tests pass. Next: push PR #78 and verify its full CI matrix.
+
 **2026-10-17, CP-32 step 9: documentation.** README, authoring/consumer/Registry guides
 and tutorials use the role commands and Registry-only consumer boundary, with Author Mode,
 reset/restore, inline details and complete columns. Forty-one role help routes, eight README/

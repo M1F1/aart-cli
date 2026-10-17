@@ -222,26 +222,26 @@ class ManualTestLabTest(unittest.TestCase):
 
         lab = setup_lab(self.root)
         env, project = shell_environment(self.root, "maintainer")
-        for alias, kind, url, default in (
-            ("manual-registry", "registry-git", "registry.git", "--default"),
-            ("manual-skill", "source-git", "skill.git", "--no-default"),
+        for command, alias, url, default in (
+            (("consume", "registry"), "manual-registry", "registry.git", ("--default",)),
+            (("maintain", "upstream"), "manual-skill", "skill.git", ()),
         ):
             added = subprocess.run(
                 (
                     sys.executable,
                     "-m",
                     "aart_cli.cli",
-                    "source",
+                    *command,
                     "add",
                     "--alias",
                     alias,
                     "--kind",
-                    kind,
+                    "git",
                     "--location",
                     f"https://manual.aart.test/{url}",
                     "--ref",
                     lab.branch,
-                    default,
+                    *default,
                 ),
                 cwd=project,
                 env=env,

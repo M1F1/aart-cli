@@ -18,7 +18,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 import venv
 from pathlib import Path
 from typing import Any
@@ -30,10 +29,6 @@ def _unwrap(result: Any) -> Any:
     if not isinstance(result, Ok):
         raise RuntimeError(f"AART operation failed: {result!r}")
     return result.value
-
-
-def _platform() -> str:
-    return "darwin" if sys.platform == "darwin" else "linux"
 
 
 def _config_paths(home: Path):
@@ -70,9 +65,10 @@ def _assert_installed_origin(
     return len(runtime)
 
 
-def _configure_and_sync(source_root: Path, home: Path) -> str:
+def _configure_and_sync(registry_root: Path, home: Path) -> str:
+    # A consumer reads only Registries (INV-269), so the smoke connects the reference content as
+    # the approved local Registry `run_smoke` published, on the branch that publication committed.
     from aart_cli.application.configuration import ConfigDocument
-    from aart_cli.application.sources import SourceSyncPorts, SourceSyncRequest, sync_source
     from aart_cli.configuration.model import (
         ConfiguredSource,
         SourceKind,
@@ -82,24 +78,13 @@ def _configure_and_sync(source_root: Path, home: Path) -> str:
     from aart_cli.configuration.schema import user_configuration_bytes
     from aart_cli.domain.identifiers import SourceAlias
     from aart_cli.io.config_store import write_configuration
-    from aart_cli.io.git_acquisition import acquire_git_snapshot
-    from aart_cli.io.source_store import (
-        acquire_source_lock,
-        publish_source_snapshot,
-        read_current_source,
-        release_source_lock,
-    )
-    from aart_cli.protocol.capabilities import Capability
-    from aart_cli.protocol.semver import SemVer
-    from aart_cli.registry_maintenance.source_validation import validate_source_candidate
-    from aart_cli.sources.local import read_local_snapshot
-    from aart_cli.sources.model import SyncFallback
+    from aart_cli.io.source_runtime import sync_configured_source
 
     source = ConfiguredSource(
         SourceAlias("reference"),
-        SourceKind.SOURCE_LOCAL,
-        str(source_root),
-        None,
+        SourceKind.REGISTRY_LOCAL,
+        str(registry_root),
+        _REGISTRY_BRANCH,
         True,
     )
     configuration = UserConfiguration(
@@ -114,104 +99,99 @@ def _configure_and_sync(source_root: Path, home: Path) -> str:
             ConfigDocument(paths.user_config_file, user_configuration_bytes(configuration))
         )
     )
-    ports = SourceSyncPorts(
-        acquire_source_lock,
-        release_source_lock,
-        read_current_source,
-        read_local_snapshot,
-        acquire_git_snapshot,
-        validate_source_candidate,
-        publish_source_snapshot,
-    )
-    outcome = _unwrap(
-        sync_source(
-            SourceSyncRequest(
-                source,
-                paths.data_root,
-                SemVer(1, 0, 0),
-                (Capability("artifact-manifest-v1"),),
-                int(time.time()),
-                SyncFallback.REQUIRE_FRESH,
-                False,
-                30,
-            ),
-            ports,
-        )
-    )
+    outcome = _unwrap(sync_configured_source(source, data_root=paths.data_root))
     return outcome.disposition.value
 
 
-def _load_service(project: Path, home: Path):
-    from aart_cli.consumer.runtime import load_local_consumer_service
-
-    return _unwrap(load_local_consumer_service(project=str(project), user_home=str(home)))
-
-
-def _apply(service: Any, request: Any) -> Any:
-    review = _unwrap(service.prepare(request))
-    return _unwrap(service.finalize(review, review.review_digest))
+#: The one artifact both phases install: a Skill the reference Registry offers to both profiles.
+_ARTIFACT = "reference/skill/code-review"
+#: The profile whose placed tree the smoke follows across environment removal.
+_PLACED_PROFILE = "tabnine"
 
 
-def _state(service: Any) -> Any:
-    from aart_cli.install_state.paths import install_state_paths
-    from aart_cli.install_state.schema import parse_install_state
+def _consume(project: Path, *argv: str) -> tuple[str, ...]:
+    """Run one `consume` command through the installed distribution; return each item's status.
 
-    location = service.context.location
-    state_path = install_state_paths(
-        "project",
-        project_root=location.project_root,
-        user_home=location.user_home,
-        data_root=location.data_root,
-    ).destination_path
-    try:
-        content = Path(state_path).read_bytes()
-    except FileNotFoundError:
-        raise RuntimeError("project installation state is missing") from None
-    return _unwrap(parse_install_state(content, path=state_path))
-
-
-def _symlink_receipt(service: Any) -> tuple[str, str]:
-    records = tuple(
-        item for item in _state(service).installations if item.requested_mode == "symlink"
-    )
-    if len(records) != 1:
-        raise RuntimeError(f"expected one managed symlink record, found {len(records)}")
-    effects = tuple(effect for effect in records[0].effects if effect.actual_mode == "symlink")
-    if len(effects) != 1 or effects[0].link_semantics != "immutable-object":
-        raise RuntimeError("managed symlink is not bound to one immutable object")
-    effect = effects[0]
-    destination = Path(service.context.location.project_root, effect.destination)
-    if not destination.is_symlink() or effect.link_target is None:
-        raise RuntimeError(f"managed symlink destination is invalid: {destination}")
-    if not Path(effect.link_target).is_dir():
-        raise RuntimeError(f"managed object target is unavailable: {effect.link_target}")
-    return str(destination), effect.link_target
-
-
-def _symlinkable_coordinate(service: Any) -> Any:
-    """The one fixture artifact that declares the symlink mode.
-
-    The smoke proves that a managed *symlink* survives environment recreation, so both phases must
-    drive the same symlink-capable artifact; picking positionally would silently switch to
-    whichever artifact the fixture happens to list first.
+    The phase's own interpreter is the one under test, so this is the CLI a consumer of that
+    environment would run, with nothing from the checkout on its path.
     """
 
-    symlinkable = [
-        item
-        for item in service.context.catalog.items
-        if "symlink" in item.artifact.artifact.install.modes
-    ]
-    if len(symlinkable) != 1:
+    completed = subprocess.run(
+        (
+            sys.executable,
+            "-m",
+            "aart_cli.cli",
+            "consume",
+            *argv,
+            "--project",
+            str(project),
+            "--json",
+        ),
+        cwd=project,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    try:
+        document = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        document = None
+    if (
+        completed.returncode != 0
+        or not isinstance(document, dict)
+        or document.get("ok") is not True
+    ):
         raise RuntimeError(
-            "distribution fixture must expose exactly one symlink-capable marketplace artifact"
+            f"consume {' '.join(argv)} failed ({completed.returncode}):\n"
+            f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
         )
-    return symlinkable[0].coordinate
+    return tuple(str(item["status"]) for item in document["items"])
+
+
+def _installations(home: Path) -> tuple[Any, ...]:
+    """Every installation the application home records, as the consumer runtime stores them."""
+
+    from aart_cli.io.receipt_store import LocalReceiptStore
+
+    return _unwrap(
+        LocalReceiptStore(os.path.join(_config_paths(home).data_root, "state")).installations()
+    )
+
+
+def tree_digest(root: str) -> str | None:
+    from aart_cli.io.runtime_projection import tree_digest_at
+
+    digest = tree_digest_at(root)
+    return None if digest is None else str(digest)
+
+
+def _placed_receipt(project: Path, home: Path) -> tuple[str, str]:
+    """The tree a copy install placed for the followed profile, and the digest its record attests.
+
+    A Registry installation copies a verified object out of the application home, so what has to
+    outlive the Python environment is that placed tree, still matching its installation record.
+    """
+
+    deliveries = tuple(
+        delivery
+        for record in _installations(home)
+        if record.receipt.owner is not None and Path(record.receipt.owner.root) == project
+        for delivery in record.receipt.deliveries
+        if delivery.harness == _PLACED_PROFILE
+    )
+    if len(deliveries) != 1:
+        raise RuntimeError(f"expected one {_PLACED_PROFILE} delivery, found {len(deliveries)}")
+    destination = Path(deliveries[0].destination)
+    if destination.is_symlink() or not destination.is_dir():
+        raise RuntimeError(f"placed tree is not a directory: {destination}")
+    digest = str(deliveries[0].digest)
+    if tree_digest(str(destination)) != digest:
+        raise RuntimeError(f"placed tree does not match its installation record: {destination}")
+    return str(destination), digest
 
 
 def _phase_seed(args: argparse.Namespace) -> dict[str, Any]:
-    from aart_cli.consumer.model import ConsumerActionRequest
-
-    source_root = Path(args.source_root).resolve()
+    registry_root = Path(args.source_root).resolve()
     project = Path(args.project).resolve()
     home = Path(args.home).resolve()
     runtime_dependencies = _assert_installed_origin(
@@ -219,36 +199,21 @@ def _phase_seed(args: argparse.Namespace) -> dict[str, Any]:
         source_root=Path(args.checkout).resolve(),
         environment_root=Path(args.environment_root).resolve(),
     )
-    disposition = _configure_and_sync(source_root, home)
-    service = _load_service(project, home)
-    coordinate = _symlinkable_coordinate(service)
-    copied = _apply(
-        service,
-        ConsumerActionRequest(
-            "install", (coordinate,), ("claude",), mode="copy", platform=_platform()
-        ),
-    )
-    linked = _apply(
-        service,
-        ConsumerActionRequest(
-            "install", (coordinate,), ("tabnine",), mode="symlink", platform=_platform()
-        ),
-    )
-    destination, target = _symlink_receipt(service)
+    disposition = _configure_and_sync(registry_root, home)
+    first = _consume(project, "install", _ARTIFACT, "--profile", "claude", "--yes")
+    second = _consume(project, "install", _ARTIFACT, "--profile", _PLACED_PROFILE, "--yes")
+    destination, digest = _placed_receipt(project, home)
     return {
-        "source_sync": disposition,
-        "initial_copy": sum(item.status == "changed" for item in copied.items),
-        "initial_symlink": sum(item.status == "changed" for item in linked.items),
+        "registry_sync": disposition,
+        "initial_install": sum(status == "completed" for status in first),
+        "second_profile_install": sum(status == "completed" for status in second),
         "runtime_dependencies": runtime_dependencies,
-        "symlink_destination": destination,
-        "symlink_target": target,
+        "placed_destination": destination,
+        "placed_digest": digest,
     }
 
 
 def _phase_resume(args: argparse.Namespace) -> dict[str, Any]:
-    from aart_cli.consumer.model import ConsumerActionRequest
-    from aart_cli.domain.identifiers import ArtifactCoordinate
-
     project = Path(args.project).resolve()
     home = Path(args.home).resolve()
     runtime_dependencies = _assert_installed_origin(
@@ -256,31 +221,18 @@ def _phase_resume(args: argparse.Namespace) -> dict[str, Any]:
         source_root=Path(args.checkout).resolve(),
         environment_root=Path(args.environment_root).resolve(),
     )
-    service = _load_service(project, home)
-    coordinate = _symlinkable_coordinate(service)
-    unversioned = ArtifactCoordinate(coordinate.source, coordinate.artifact)
-    current = _apply(
-        service,
-        ConsumerActionRequest("status", (unversioned,), ("claude", "tabnine")),
-    )
-    removed = _apply(
-        service,
-        ConsumerActionRequest("uninstall", (unversioned,), ("claude", "tabnine")),
-    )
-    reinstalled = _apply(
-        service,
-        ConsumerActionRequest(
-            "install", (coordinate,), ("tabnine",), mode="symlink", platform=_platform()
-        ),
-    )
-    destination, target = _symlink_receipt(service)
+    profiles = f"claude,{_PLACED_PROFILE}"
+    current = _consume(project, "status", _ARTIFACT, "--profile", profiles)
+    removed = _consume(project, "uninstall", _ARTIFACT, "--profile", profiles, "--yes")
+    reinstalled = _consume(project, "install", _ARTIFACT, "--profile", _PLACED_PROFILE, "--yes")
+    destination, digest = _placed_receipt(project, home)
     return {
-        "resumed_current": sum(item.status == "current" for item in current.items),
-        "removed": sum(item.status == "removed" for item in removed.items),
-        "reinstalled_symlink": sum(item.status == "changed" for item in reinstalled.items),
+        "resumed_current": sum(status == "current" for status in current),
+        "removed": sum(status == "removed" for status in removed),
+        "reinstalled": sum(status == "completed" for status in reinstalled),
         "runtime_dependencies": runtime_dependencies,
-        "symlink_destination": destination,
-        "symlink_target": target,
+        "placed_destination": destination,
+        "placed_digest": digest,
     }
 
 
@@ -444,10 +396,29 @@ def _parse_phase(completed: subprocess.CompletedProcess[str]) -> dict[str, Any]:
     return value
 
 
-def _survives_environment_removal(environment: Path, destination: str, target: str) -> bool:
+def _survives_environment_removal(environment: Path, destination: str, digest: str) -> bool:
     shutil.rmtree(environment)
-    link = Path(destination)
-    return link.is_symlink() and Path(target).is_dir() and link.resolve() == Path(target).resolve()
+    return Path(destination).is_dir() and tree_digest(destination) == digest
+
+
+#: The branch the reference Registry commits its approved content to.
+_REGISTRY_BRANCH = "main"
+
+
+def _publish_reference_registry(checkout: Path, registry: Path) -> None:
+    """Promote the shared reference content into an approved Registry checkout at `registry`.
+
+    Only the orchestrator runs this, from the checkout under test; the phases read the committed
+    Registry through the installed distribution and never import the test tree.
+    """
+
+    if str(checkout) not in sys.path:
+        sys.path.insert(0, str(checkout))
+    from tests.reference_registry import BRANCH, write_reference_registry
+
+    if BRANCH != _REGISTRY_BRANCH:
+        raise RuntimeError(f"reference Registry commits to {BRANCH}, not {_REGISTRY_BRANCH}")
+    write_reference_registry(registry)
 
 
 def run_smoke(source_root: Path) -> dict[str, Any]:
@@ -455,18 +426,17 @@ def run_smoke(source_root: Path) -> dict[str, Any]:
 
     source_root = source_root.resolve()
     script = source_root / "scripts" / "distribution_smoke.py"
-    fixture = source_root / "tests" / "fixtures" / "protocol" / "native-source-v1"
     with tempfile.TemporaryDirectory(prefix="aart-distribution-") as raw:
         workspace = Path(raw).resolve()
         outside = workspace / "outside-checkout"
         project = workspace / "consumer-project"
         home = workspace / "user-home"
-        source = workspace / "native-source"
+        source = workspace / "registry"
         editable_environment = workspace / "editable-environment"
         wheel_environment = workspace / "wheel-environment"
         for directory in (outside, project, home):
             directory.mkdir()
-        shutil.copytree(fixture, source)
+        _publish_reference_registry(source_root, source)
         wheel = _build_local_wheel(source_root, workspace)
         environment = os.environ.copy()
         environment.pop("PYTHONHOME", None)
@@ -524,8 +494,8 @@ def run_smoke(source_root: Path) -> dict[str, Any]:
         )
         survived_editable = _survives_environment_removal(
             editable_environment,
-            seed["symlink_destination"],
-            seed["symlink_target"],
+            seed["placed_destination"],
+            seed["placed_digest"],
         )
 
         wheel_python = _make_environment(wheel_environment)
@@ -574,24 +544,25 @@ def run_smoke(source_root: Path) -> dict[str, Any]:
         )
         survived_wheel = _survives_environment_removal(
             wheel_environment,
-            resumed["symlink_destination"],
-            resumed["symlink_target"],
+            resumed["placed_destination"],
+            resumed["placed_digest"],
         )
         if seed["runtime_dependencies"] != resumed["runtime_dependencies"]:
             raise RuntimeError("editable and wheel dependency metadata disagree")
         return {
             "schema_version": 1,
-            "source_sync": seed["source_sync"],
-            "initial_copy": seed["initial_copy"],
-            "initial_symlink": seed["initial_symlink"],
+            "registry_sync": seed["registry_sync"],
+            "initial_install": seed["initial_install"],
+            "second_profile_install": seed["second_profile_install"],
             "resumed_current": resumed["resumed_current"],
             "removed": resumed["removed"],
-            "reinstalled_symlink": resumed["reinstalled_symlink"],
+            "reinstalled": resumed["reinstalled"],
             "survived_editable_removal": survived_editable,
             "survived_wheel_removal": survived_wheel,
             "runtime_dependencies": seed["runtime_dependencies"],
             "upgrade_dry_run": upgrade_dry_run,
-            "symlink_target": resumed["symlink_target"],
+            "placed_destination": resumed["placed_destination"],
+            "placed_digest": resumed["placed_digest"],
             "editable_environment": str(editable_environment),
             "wheel_environment": str(wheel_environment),
         }
