@@ -168,6 +168,7 @@ def _to_request(args: argparse.Namespace) -> Request:
         author_name=getattr(args, "author_name", None),
         author_into=getattr(args, "author_into", None),
         author_source=getattr(args, "author_source", None),
+        reset_restore=getattr(args, "reset_restore", None),
         source_action=getattr(args, "source_action", None),
         source_alias=getattr(args, "source_alias", None),
         source_kind=getattr(args, "source_kind", None),

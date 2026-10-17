@@ -1342,6 +1342,8 @@ def _render_consumer_startup_failure(failure: DomainErr) -> int:
         print(f"{diagnostic.severity.value} [{diagnostic.code.value}]: {diagnostic.message}")
         for remediation in diagnostic.remediation:
             print(f"  fix: {remediation}")
+    # A state another version wrote, or one broken by hand, is never a dead end (§175.4).
+    print("To start clean and keep this state in a backup: aart-cli reset")
     return 2
 
 

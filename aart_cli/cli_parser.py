@@ -64,16 +64,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
 
-    sub.add_parser(
+    p = sub.add_parser(
         "reset",
         formatter_class=_HELP_FORMATTER,
-        help="restore AART's per-user application state to factory defaults",
+        help="start aart-cli clean, keeping the old state in a backup",
         description=(
-            "Remove only AART-owned per-user configuration, managed source snapshots, receipts, "
-            "settings and caches after two exact typed confirmations. Projects, harness files, "
-            "organization policy and credentials owned by other applications are not removed."
+            "Move AART-owned per-user configuration, managed snapshots, receipts, settings and "
+            "caches into <application home>-backups/<UTC timestamp>/ and start as on a new "
+            "machine. Nothing is deleted. Projects, harness files, organization policy and "
+            "credentials owned by other applications are not touched."
         ),
     )
+    p.add_argument(
+        "--restore",
+        dest="reset_restore",
+        metavar="DIR",
+        help="bring a backup back, after backing up the current state",
+    )
+    p.add_argument("--yes", action="store_true", help="skip the typed confirmation")
 
     # doctor ------------------------------------------------------------------ #
     p = sub.add_parser(

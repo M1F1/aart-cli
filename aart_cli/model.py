@@ -452,6 +452,8 @@ class Request:
     author_name: Optional[str] = None
     author_into: Optional[str] = None
     author_source: Optional[str] = None
+    # The backup `reset --restore` brings back (§175.4); ``None`` is a plain reset.
+    reset_restore: Optional[str] = None
     # Canonical configured-source command surface.
     source_action: Optional[str] = None
     source_alias: Optional[str] = None

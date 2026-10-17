@@ -62,3 +62,24 @@ Targeted mutations:
 - Required-registry check without `is_registry`: only the new upstream subtest turned red.
 - `upstreams.git` mapped to `REGISTRY_GIT`: the round trip and the upstream-as-default refusal
   turned red.
+
+## Step 11 — reset with backup
+
+Done (D-440), ahead of steps 3–8 at the owner's priority. `aart-cli reset` renames every planned
+target into `<home>-backups/<UTC timestamp>/` (a `-2`, `-3` suffix when a second reset lands in the
+same second) after one `RESET AART` or `--yes`, and prints the directory and the restore command.
+`reset --restore DIR` refuses a directory inside the home, a symlink, or one holding anything a reset
+could not have put there; it backs the current state up first, moves the entries back and removes
+the emptied backup. A move across filesystems is refused rather than copied. The TUI's "local AART
+state could not be loaded" ends with the reset hint.
+
+Evidence: `tests/factory_reset_test.py` -- one confirmation moves each target with its content into
+the named backup; `--yes` prompts nothing; two resets keep two backups; `AART_CLI_HOME` is backed up
+beside itself; cancel and EOF change nothing and create no backup; symlinked targets and homes are
+refused before anything moves; restore round-trips and keeps the newer state; a foreign directory is
+refused; the startup failure names `aart-cli reset`. The plan-level Hypothesis properties are
+unchanged. 52 tests with `packaging_test` and `tui_stage_failure_test`, green; ruff and mypy clean.
+
+Targeted mutations:
+- Restore without the foreign-entry check: only the foreign-directory test turned red.
+- Deleting instead of moving: the five tests reading the backup and `--yes` turned red.

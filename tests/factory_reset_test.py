@@ -167,7 +167,12 @@ class FactoryResetTest(unittest.TestCase):
         (self.cache / "object").write_text("cache\n")
 
     def _run(
-        self, answers: list[str], environment: dict[str, str] | None = None
+        self,
+        answers: list[str],
+        environment: dict[str, str] | None = None,
+        *,
+        yes: bool = False,
+        restore: str | None = None,
     ) -> tuple[int, str]:
         from aart_cli.commands import reset
 
@@ -175,31 +180,74 @@ class FactoryResetTest(unittest.TestCase):
         with (
             mock.patch.dict("os.environ", environment or {}, clear=False),
             mock.patch.object(reset.sys, "platform", "linux"),
+            mock.patch.object(reset, "_timestamp", return_value="20261017T120000Z"),
             mock.patch("builtins.input", side_effect=answers) as prompt,
             redirect_stdout(output),
         ):
-            status = reset.run(Request("reset", user_home=str(self.home)))
+            status = reset.run(
+                Request("reset", user_home=str(self.home), yes=yes, reset_restore=restore)
+            )
         return status, output.getvalue() + f"\nprompts={prompt.call_count}"
+
+    @property
+    def backups(self) -> pathlib.Path:
+        return self.home / ".aart-cli-backups"
 
     def test_reset_is_a_distinct_public_cli_command(self) -> None:
         from aart_cli import cli
 
         request = cli._to_request(cli.build_parser().parse_args(["reset"]))
+        restoring = cli._to_request(
+            cli.build_parser().parse_args(["reset", "--restore", "/b/1", "--yes"])
+        )
 
         self.assertEqual(request.command, "reset")
         self.assertIn("reset", cli.DISPATCH)
+        self.assertEqual((restoring.reset_restore, restoring.yes), ("/b/1", True))
 
-    def test_two_exact_confirmations_restore_only_aart_owned_state(self) -> None:
-        status, output = self._run(["RESET AART", "DELETE AART STATE"])
+    def test_one_confirmation_moves_aart_state_into_a_named_backup(self) -> None:
+        """§175.4, INV-271: the state is kept beside the home, not removed."""
 
+        status, output = self._run(["RESET AART"])
+
+        backup = self.backups / "20261017T120000Z"
         self.assertEqual(status, 0, output)
-        self.assertFalse(self.config.exists())
-        self.assertFalse(self.lock.exists())
-        self.assertFalse(self.state.exists())
-        self.assertFalse(self.cache.exists())
+        for moved in (self.config, self.lock, self.state, self.cache):
+            self.assertFalse(moved.exists(), moved)
+        self.assertEqual((backup / "config.json").read_text(), '{"sources": []}\n')
+        self.assertEqual((backup / "state" / "receipts.jsonl").read_text(), "state\n")
+        self.assertEqual((backup / "cache" / "object").read_text(), "cache\n")
+        self.assertTrue((backup / "config.json.lock").is_dir())
+        self.assertIn(str(backup), output)
+        self.assertIn("aart-cli reset --restore", output)
         self.assertEqual(self.unrelated.read_text(), "mine\n")
         self.assertEqual((self.project / "AGENTS.md").read_text(), "project\n")
-        self.assertIn("prompts=2", output)
+        self.assertIn("prompts=1", output)
+
+    def test_yes_needs_no_prompt(self) -> None:
+        status, output = self._run([], yes=True)
+
+        self.assertEqual(status, 0, output)
+        self.assertFalse(self.state.exists())
+        self.assertTrue((self.backups / "20261017T120000Z" / "state").is_dir())
+        self.assertIn("prompts=0", output)
+
+    def test_a_second_reset_in_the_same_second_gets_its_own_backup(self) -> None:
+        self._run([], yes=True)
+        self.state.mkdir()
+        (self.state / "receipts.jsonl").write_text("second\n")
+
+        status, output = self._run([], yes=True)
+
+        self.assertEqual(status, 0, output)
+        self.assertEqual(
+            (self.backups / "20261017T120000Z" / "state" / "receipts.jsonl").read_text(),
+            "state\n",
+        )
+        self.assertEqual(
+            (self.backups / "20261017T120000Z-2" / "state" / "receipts.jsonl").read_text(),
+            "second\n",
+        )
 
     def test_what_the_tool_did_not_write_inside_its_own_home_survives(self) -> None:
         """The plan names entries, so a note somebody left in the home is not collateral."""
@@ -207,66 +255,137 @@ class FactoryResetTest(unittest.TestCase):
         theirs = self.application_home / "notes.md"
         theirs.write_text("mine\n")
 
-        status, output = self._run(["RESET AART", "DELETE AART STATE"])
+        status, output = self._run(["RESET AART"])
 
         self.assertEqual(status, 0, output)
         self.assertTrue(self.application_home.exists())
         self.assertEqual(theirs.read_text(), "mine\n")
 
-    def test_an_explicit_home_is_the_one_that_is_reset(self) -> None:
+    def test_an_explicit_home_is_the_one_that_is_reset_and_backed_up_beside_it(self) -> None:
         elsewhere = self.home.parent / "runner-state"
         (elsewhere / "state").mkdir(parents=True)
         (elsewhere / "state" / "receipts.jsonl").write_text("ci\n")
 
-        status, output = self._run(
-            ["RESET AART", "DELETE AART STATE"], {"AART_CLI_HOME": str(elsewhere)}
-        )
+        status, output = self._run(["RESET AART"], {"AART_CLI_HOME": str(elsewhere)})
 
         self.assertEqual(status, 0, output)
         self.assertFalse((elsewhere / "state").exists())
+        self.assertEqual(
+            (
+                self.home.parent
+                / "runner-state-backups"
+                / "20261017T120000Z"
+                / "state"
+                / "receipts.jsonl"
+            ).read_text(),
+            "ci\n",
+        )
         self.assertTrue(self.state.exists(), "the default home was not the target")
 
-    def test_cancelling_either_confirmation_changes_nothing(self) -> None:
-        for answers in (["no"], ["RESET AART", "no"]):
+    def test_cancelling_changes_nothing_and_makes_no_backup(self) -> None:
+        for answers in (["no"], []):
             with self.subTest(answers=answers):
                 status, output = self._run(list(answers))
                 self.assertEqual(status, 0, output)
+                self.assertIn("cancelled", output.lower())
                 self.assertTrue(self.config.exists())
                 self.assertTrue(self.state.exists())
                 self.assertTrue(self.cache.exists())
+                self.assertFalse(self.backups.exists())
 
-    def test_a_symlink_target_is_refused_before_any_deletion(self) -> None:
+    def test_a_symlink_target_is_refused_before_anything_moves(self) -> None:
         real_cache = self.home.parent / "cache-owned-by-someone-else"
         real_cache.mkdir()
         self.cache.rename(real_cache / "moved")
         self.cache.symlink_to(real_cache, target_is_directory=True)
 
-        status, output = self._run(["RESET AART", "DELETE AART STATE"])
+        status, output = self._run(["RESET AART"])
 
         self.assertEqual(status, 1, output)
         self.assertTrue(self.config.exists())
         self.assertTrue(self.state.exists())
         self.assertTrue(self.cache.is_symlink())
         self.assertTrue((real_cache / "moved").exists())
+        self.assertFalse(self.backups.exists())
 
-    def test_a_symlinked_application_home_is_refused_before_any_deletion(self) -> None:
+    def test_a_symlinked_application_home_is_refused_before_anything_moves(self) -> None:
         external = self.home.parent / "home-owned-by-someone-else"
         self.application_home.rename(external)
         self.application_home.symlink_to(external, target_is_directory=True)
 
-        status, output = self._run(["RESET AART", "DELETE AART STATE"])
+        status, output = self._run(["RESET AART"])
 
         self.assertEqual(status, 1, output)
         self.assertTrue(self.application_home.is_symlink())
         self.assertTrue((external / "state" / "receipts.jsonl").exists())
 
-    def test_end_of_input_cancels_without_changing_state(self) -> None:
-        status, output = self._run([])
+    def test_restore_brings_a_backup_back_and_keeps_the_current_state(self) -> None:
+        self._run([], yes=True)
+        old = self.backups / "20261017T120000Z"
+        self.config.write_text('{"schema_version": 1}\n')
 
-        self.assertEqual(status, 0, output)
-        self.assertIn("cancelled", output.lower())
-        self.assertTrue(self.config.exists())
-        self.assertTrue(self.state.exists())
+        from aart_cli.commands import reset
+
+        with mock.patch.object(reset, "_timestamp", return_value="20261017T130000Z"):
+            output = io.StringIO()
+            with (
+                mock.patch.object(reset.sys, "platform", "linux"),
+                mock.patch("builtins.input", side_effect=["RESTORE AART"]),
+                redirect_stdout(output),
+            ):
+                status = reset.run(
+                    Request("reset", user_home=str(self.home), reset_restore=str(old))
+                )
+
+        self.assertEqual(status, 0, output.getvalue())
+        self.assertEqual(self.config.read_text(), '{"sources": []}\n')
+        self.assertEqual((self.state / "receipts.jsonl").read_text(), "state\n")
+        self.assertFalse(old.exists())
+        self.assertEqual(
+            (self.backups / "20261017T130000Z" / "config.json").read_text(),
+            '{"schema_version": 1}\n',
+        )
+
+    def test_restore_refuses_a_directory_that_is_not_an_aart_backup(self) -> None:
+        stranger = self.home.parent / "stranger"
+        stranger.mkdir()
+        (stranger / "config.json").write_text("{}\n")
+        (stranger / "photos").mkdir()
+
+        status, output = self._run([], yes=True, restore=str(stranger))
+
+        self.assertEqual(status, 1, output)
+        self.assertIn("photos", output)
+        self.assertEqual(self.config.read_text(), '{"sources": []}\n')
+        self.assertTrue((stranger / "config.json").exists())
+        self.assertFalse(self.backups.exists())
+
+
+class StartupFailureNamesResetTest(unittest.TestCase):
+    def test_a_state_aart_cannot_load_points_at_a_clean_start(self) -> None:
+        """§175.4: a foreign or broken local state is one command away from a clean start."""
+
+        from aart_cli import tui
+        from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+        from aart_cli.domain.result import Err
+
+        output = io.StringIO()
+        failure = Err(
+            (
+                Diagnostic(
+                    DiagnosticCode("consumer-settings-invalid"),
+                    Severity.ERROR,
+                    "stored detail level must be less-info or more-info",
+                ),
+            )
+        )
+        with redirect_stdout(output):
+            status = tui._render_consumer_startup_failure(failure)
+
+        self.assertEqual(status, 2)
+        self.assertIn("consumer-settings-invalid", output.getvalue())
+        self.assertIn("aart-cli reset", output.getvalue())
+        self.assertIn("backup", output.getvalue())
 
 
 if __name__ == "__main__":

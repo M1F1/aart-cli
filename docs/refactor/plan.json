@@ -1226,7 +1226,7 @@
         {
           "id": "11",
           "title": "aart-cli reset moves state into <home>-backups/<timestamp>/ with one confirmation or --yes; reset --restore DIR; startup refusals of local state name reset (§175.4, INV-271)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "10",

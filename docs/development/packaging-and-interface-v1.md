@@ -30,7 +30,7 @@ aart-cli author init|check
 aart-cli source add|list|sync|remove|resubscribe|health
 aart-cli marketplace list|search|health|install|update|uninstall|status|setup|receipt
 aart-cli doctor
-aart-cli reset
+aart-cli reset [--restore DIR] [--yes]
 aart-cli registry init|collection|scan|promote|adopt|check-upstream|format|validate|lock|build|audit|publish|push|test|diff
 aart-cli security scan|show|verify|analyzers|suites
 aart-cli upgrade --wheel FILE | --source-checkout DIR
@@ -40,9 +40,11 @@ Running `aart-cli` without a subcommand on a TTY opens the human-oriented TUI (c
 fallback). The TUI submits the same canonical requests as flag mode; it is not a second command
 engine.
 
-`aart-cli reset` is the CLI-only factory reset. It lists the exact AART-owned per-user configuration,
-managed state and cache paths, then requires two different typed confirmations. It never removes
-projects, harness files, organization policy or credentials owned by another application.
+`aart-cli reset` is the CLI-only clean start. It lists the exact AART-owned per-user configuration,
+managed state and cache paths, then, after one typed confirmation or `--yes`, moves them into
+`<application home>-backups/<UTC timestamp>/`; `--restore DIR` brings a backup back. It deletes
+nothing and never touches projects, harness files, organization policy or credentials owned by
+another application.
 
 ## Verification
 

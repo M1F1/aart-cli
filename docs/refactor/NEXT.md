@@ -59,8 +59,8 @@ reads a local author checkout as Git would commit it.
 `source`, `marketplace` and the top-level `registry`: `consume`, `maintain upstream|candidate|registry`
 and `author`. An author repository is an **Upstream repository**, and a consumer reads only
 Registries (INV-269). Step 1 (the specification, with §175.4 reset-with-backup and §175.5 Author Mode) and step 2
-(the configuration split, D-442) are done. Step 11, reset with backup, goes next at the owner's
-priority; then steps 3–8, 12, 9 and 10.
+(the configuration split, D-442) are done, and so is step 11, reset with backup (D-440). Next are steps 3–8 (the
+command families and TUI names), then 12 (Author Mode), 9 and 10.
 See `slices/CP-32-roles-and-upstreams.md`.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major

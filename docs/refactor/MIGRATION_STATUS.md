@@ -6,7 +6,9 @@ contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 
 **2026-10-17, CP-32 specified (§175, D-439): consume, maintain, author.** The owner replaced the
 single `source` family with role families and named author repositories Upstream repositories.
-INV-269 and INV-270 are accepted; no code has changed yet. Next is step 2, the configuration split.
+INV-269–INV-272 are accepted (with §175.4 reset with backup and §175.5 Author Mode). Step 2 split
+`config.json` into `registries` and `upstreams` (D-442); step 11 made `reset` back up instead of
+delete, with `--restore` (D-440).
 
 **2026-10-17, §174 (D-438): a local author checkout is read as Git would commit it.**
 `source-local`, `author check` and `registry scan` / `promote --checkout` read only the paths
