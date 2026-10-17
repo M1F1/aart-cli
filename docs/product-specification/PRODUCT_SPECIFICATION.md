@@ -11275,3 +11275,20 @@ pins a member version older than that member's current approved version.
 
 **INV-267 — Only manifests adopt.** Canonical Registry content is written only from a source
 manifest.
+
+# 174. An author's local checkout is read as Git would commit it
+
+Status: **ACCEPTED 2026-10-17 (D-438)**, on the owner's request: AART works on an author's local
+repository out of the box, without conditions on how the author keeps it.
+
+A `source-local` Source, `aart-cli author check`, and `registry scan` / `registry promote
+--checkout` read a directory the author works in. When that directory is inside a Git work tree,
+the Source is the files Git would commit from it: the tracked files and the untracked ones its
+ignore rules do not exclude, each read from the working tree. A virtual environment, cache or
+editor directory the author ignores is not part of the Source, so its symlinks, special files and
+size neither refuse nor bound it. A directory outside Git is read whole. Every file that is read is
+still read without following links, and a symlink or special file Git would commit is still
+refused. AART's own managed snapshots are read whole, as before.
+
+**INV-268 — Ignored files are not the author's Source.** A path the author's Git ignore rules
+exclude from a local checkout never enters a Source snapshot, and never makes reading it fail.

@@ -21,6 +21,10 @@ payload its package format requires: one Markdown document for a guideline or me
 script and `hook.json` for a hook, an entrypoint for an MCP server, or `SKILL.md` for a skill. Each
 skeleton also names the blocks it deliberately leaves to you.
 
+Inside a Git repository, AART reads what Git would commit: the tracked files and the untracked ones
+your ignore rules do not exclude. Keep `.venv/`, caches and editor state in the repository and
+ignore them as usual; they are never part of the Source. Outside Git, the whole directory is read.
+
 `aart-cli author check` reads the directory the way a Source Sync reads one and puts every `aart-cli.yaml`
 and `aart-cli.json` it finds through the parser *and* the compiler a Registry uses. A manifest that
 passes here parses and compiles to the package `aart-cli registry scan` would accept, and the check

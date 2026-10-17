@@ -66,6 +66,7 @@ from aart_cli.io.registry_workspace import (
     FilesystemRegistryWorkspace,
     read_registry_workspace,
 )
+from aart_cli.io.working_tree import read_working_tree
 from aart_cli.model import Request
 from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.protocol.hashing import parse_sha256
@@ -88,7 +89,6 @@ from aart_cli.registry_maintenance.promoted import (
     legacy_registry_paths,
 )
 from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
-from aart_cli.sources.local import read_local_snapshot
 from aart_cli.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
 
 _VERSION = EXECUTABLE_VERSION
@@ -477,7 +477,7 @@ def _run_scan(request: Request) -> int:
             None,
             True,
         )
-        acquired = read_local_snapshot(
+        acquired = read_working_tree(
             LocalSnapshotRequest(
                 source_instance_id(configured),
                 source_alias,
@@ -633,7 +633,7 @@ def _run_candidate_promotion(request: Request) -> int:
             None,
             True,
         )
-        acquired = read_local_snapshot(
+        acquired = read_working_tree(
             LocalSnapshotRequest(
                 source_instance_id(configured),
                 source_alias,

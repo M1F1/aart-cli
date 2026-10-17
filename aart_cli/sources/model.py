@@ -344,6 +344,9 @@ class LocalSnapshotRequest:
     alias: SourceAlias
     root: str
     limits: SnapshotLimits
+    #: The files to read, relative to `root`, when only some belong to the Source (what Git would
+    #: commit from an author's work tree). `None` reads the whole tree.
+    include: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -354,6 +357,14 @@ class LocalSnapshotRequest:
             raise ValueError(
                 "local snapshot request requires an alias and normalized absolute root"
             )
+        if self.include is not None and (
+            not isinstance(self.include, frozenset)
+            or any(
+                not isinstance(item, str) or isinstance(parse_relative_path(item), Err)
+                for item in self.include
+            )
+        ):
+            raise ValueError("local snapshot includes must be safe relative paths")
 
 
 @dataclass(frozen=True, slots=True)

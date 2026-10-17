@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, §174 (D-438): a local author checkout is read as Git would commit it.**
+`source-local`, `author check` and `registry scan` / `promote --checkout` read only the paths
+`git ls-files --cached --others --exclude-standard` lists, so an ignored `.venv/` no longer stops
+a Source on its `bin/python` symlink. Outside Git the directory is read whole; managed snapshots
+are unchanged. Held by `tests/working_tree_snapshot_test.py` (with a Hypothesis property) and
+`tests/working_tree_source_e2e_test.py`.
+
 **2026-10-17, CP-31 step 15: verified.** PR #76 (plan and steps 1–14) passes the full quality
 suite on Python 3.10, 3.11 and 3.14. CI found one host-dependent test (uv absent), fixed by pinning
 the dependency managers; B-194 did not reproduce there. Merging PR #76 closes CP-31.

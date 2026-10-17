@@ -52,7 +52,8 @@ rows are a column grid (status, scope with project count, harnesses with `✓`, 
 self-contained|pinned-reference`. **Step 14 is done** (D-437): `discover`, `vendor`,
 `vendor-batch`, `revendor` and `audit --check-upstream` are gone with what only they used;
 adoption by manifest is the only way in. **Step 15 is done**: PR #76 passed the full suite on
-Python 3.10, 3.11 and 3.14; merging it closes CP-31.
+Python 3.10, 3.11 and 3.14; merging it closes CP-31. CP-31 is merged and released as 0.10.0. After it, §174 (D-438)
+reads a local author checkout as Git would commit it.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).

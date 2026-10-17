@@ -10908,3 +10908,25 @@ TUI and the CLI alike. The implementation choices:
   current with `check-upstream`.
 - **Coverage lost**: the audit-level MCP delivery test built its package with `vendor`. The pure
   check is still held by `tests/registry_mcp_delivery_test.py`; the audit wiring is B-199.
+
+## D-438 — A local author checkout is read as Git would commit it (§174)
+
+Found in enterprise use of 0.10.0: an author repository read as `source-local` stopped on
+`local source symlinks are forbidden: .venv/bin/python`. The reader walks the whole directory and
+refuses symlinks; every Python project keeps an ignored `.venv/` whose interpreter is one. The owner
+asked that AART work on local repositories out of the box, with no conditions on the author.
+
+- **The path set comes from Git**: `git ls-files -z --cached --others --exclude-standard`, run from
+  the checkout through `run_git_process` (allowlisted environment, no hooks). Untracked files that
+  are not ignored stay in, so a manifest the author has not yet `git add`ed is still seen; a tracked
+  file deleted from the working tree is gone. Contents always come from the working tree, which is
+  what `source-local` has always meant.
+- **The reader is unchanged otherwise.** `LocalSnapshotRequest.include` narrows the walk to those
+  paths and the directories leading to them; every included file is still opened non-following
+  and bounded, so a committed symlink is still refused. A gitlink (submodule) is skipped.
+- **Only author directories narrow**: the `source-local` Sync port, `author check`, and `registry
+  scan` / `promote --checkout`. AART's managed snapshots, which are not Git work trees, keep the
+  whole-tree read. Outside Git, or when Git is unavailable or the listing is not UTF-8, the
+  directory is read whole, as before.
+- `.gitignore` alone was not parsed by AART: Git's own rules (nested files, `info/exclude`,
+  `core.excludesFile`) are the author's rules, and reimplementing them would diverge.

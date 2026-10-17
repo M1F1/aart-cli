@@ -31,11 +31,11 @@ from aart_cli.io.source_store import (
     read_current_source,
     release_source_lock,
 )
+from aart_cli.io.working_tree import read_working_tree
 from aart_cli.protocol.capabilities import Capability
 from aart_cli.protocol.semver import SemVer
 from aart_cli.registry_maintenance.source_validation import validate_configured_source_candidate
 from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
-from aart_cli.sources.local import read_local_snapshot
 from aart_cli.sources.model import (
     CurrentSourceRequest,
     HealthStatus,
@@ -64,7 +64,7 @@ def source_sync_ports(source: ConfiguredSource) -> SourceSyncPorts:
         acquire_source_lock,
         release_source_lock,
         read_current_source,
-        read_local_snapshot,
+        read_working_tree,
         acquire_git_snapshot,
         validate,
         publish_source_snapshot,
