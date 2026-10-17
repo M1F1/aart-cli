@@ -432,8 +432,6 @@ def build_parser() -> argparse.ArgumentParser:
         *,
         coordinates: str,
         prune: bool = False,
-        placement: bool = True,
-        memory_mode: bool = False,
     ) -> argparse.ArgumentParser:
         """Declare one canonical lifecycle action over configured sources.
 
@@ -461,24 +459,6 @@ def build_parser() -> argparse.ArgumentParser:
         _add_profile(lifecycle)
         _add_project(lifecycle)
         _add_scope(lifecycle)
-        if placement:
-            lifecycle.add_argument(
-                "--mode",
-                dest="install_mode",
-                choices=("copy", "symlink"),
-                default=None,
-                help="install placement mode (default: copy)",
-            )
-        if memory_mode:
-            lifecycle.add_argument(
-                "--memory-mode",
-                dest="memory_mode",
-                choices=("replace", "prepend", "append", "skip"),
-                default=None,
-                help=(
-                    "how a memory artifact meets an existing instruction file (default: prepend)"
-                ),
-            )
         lifecycle.add_argument(
             "--offline",
             action="store_true",
@@ -515,7 +495,6 @@ def build_parser() -> argparse.ArgumentParser:
         "install",
         "install configured-source artifacts for the selected harness profiles",
         coordinates="artifact or collection coordinate(s) to install",
-        memory_mode=True,
     )
     p_marketplace_update = _add_lifecycle(
         "update",
@@ -527,19 +506,16 @@ def build_parser() -> argparse.ArgumentParser:
         "uninstall",
         "remove installed artifacts recorded for the selected profiles",
         coordinates="artifact or collection coordinate(s) to remove",
-        placement=False,
     )
     _add_lifecycle(
         "status",
         "report installed artifact state against the configured sources",
         coordinates="artifact or collection coordinate(s) to inspect; omit for all installed",
-        placement=False,
     )
     p_marketplace_setup = _add_lifecycle(
         "setup",
         "run declared post-install setup for installed artifacts",
         coordinates="artifact or collection coordinate(s) whose setup should run",
-        placement=False,
     )
 
     def _add_setup_controls(parser: argparse.ArgumentParser) -> None:

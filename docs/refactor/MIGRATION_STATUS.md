@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-32 step 7 (D-444): a consumer installs only from Registries.** The lifecycle
+runs only the Registry seam and names each way it declines. An unsynchronized Registry is
+`registry-not-synchronized`, an unqualified name resolves across Registries, and `--mode` and
+`--memory-mode` are gone. The e2e fixtures install from a real Git-backed `registry-local`
+(`tests/reference_registry.py`). B-203–B-206 record the gaps the retired native path covered.
+
 **2026-10-17, CP-32 specified (§175, D-439): consume, maintain, author.** The owner replaced the
 single `source` family with role families and named author repositories Upstream repositories.
 INV-269–INV-272 are accepted (with §175.4 reset with backup and §175.5 Author Mode). Step 2 split

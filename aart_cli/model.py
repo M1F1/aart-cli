@@ -393,11 +393,6 @@ class Request:
     dry_run: bool = False
     json: bool = False
     prune: bool = False
-    install_mode: InstallMode = "copy"
-    # How a ``memory`` artifact meets an existing harness instruction file.  ``None`` lets the
-    # canonical default (``prepend``) apply; an installed record keeps its own recorded mode
-    # across later updates.
-    memory_mode: Optional[MemoryMode] = None
     # Git reference supplied only while adding a configured canonical source.
     ref: Optional[str] = None
     # The Git URL `registry adopt` reads.  Distinct from configured consumer sources: a maintainer

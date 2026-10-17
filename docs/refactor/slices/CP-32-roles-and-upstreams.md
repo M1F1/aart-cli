@@ -95,6 +95,56 @@ Open in later steps: the consumer catalog still reads upstream
 snapshots, so INV-269's "nothing a consumer installs comes from one" is step 7 with the e2e
 fixtures that install from the shared `reference` upstream.
 
+## Step 7 — a consumer reads only Registries
+
+Done (D-444). The parser families went in steps 3, 4 and 6. The four `SourceKind` names stay
+internal (D-443). This step removes what was left of the other half of INV-269.
+
+- The `consume` lifecycle runs only the Registry seam, and every way it declines has its own code
+  and remediation.
+- Installing never fetches, and a Registry that was never synchronized is named as such
+  (`registry-not-synchronized`).
+- An unqualified name is resolved across Registries.
+- `--mode` and `--memory-mode` are gone.
+- The consumer runtime projects nothing from an Upstream repository, and its native
+  materialization helpers are deleted.
+- Two product fixes the conversion found: a `registry-local` installation's setup evidence is its
+  checkout path, and a refused Registry revision names the snapshot that stays in use.
+
+The e2e fixtures connect `tests/reference_registry.py`: the former reference content, promoted
+through the real pipeline into a Git-backed `registry-local`, and republished by commit. The
+modules converted:
+- lifecycle, memory, setup, interrupted and verification;
+- sync, upstream movement, offline and resolution vocabulary;
+- project isolation, scope teardown, identity agreement, identity change and withdrawal;
+- Tabnine MCP, OpenCode and the promotion boundary;
+- consumer runtime, source CLI and remediation.
+
+Tests whose subject exists only on the retired path are deleted (D-444 lists them). The gaps they
+exposed are B-203 (runtime requirements), B-204 (files left after the last uninstall), B-205
+(status compares nothing against the Registry) and B-206 (the unreachable native pipeline).
+
+Evidence:
+- `tests/resolution_vocabulary_test.py`: no Registry alias, an Upstream alias, an unsynchronized
+  Registry and a missing name give four codes.
+- `tests/offline_capability_test.py`: with or without `--offline`, one refusal; after a sync, the
+  offline install succeeds.
+- `tests/source_upstream_movement_e2e_test.py`: a sync rewrites no record and offers 1.1.0;
+  `update` applies it; a rolled-back Registry is a refused downgrade.
+- `tests/local_registry_checkout_e2e_test.py`: an unqualified name both Registries offer is
+  ambiguous and names both.
+- `tests/install_state_schema_test.py`: local Registry evidence round-trips and malformed origins
+  are refused.
+- Two sweeps of the related modules (84 modules, 759 tests; then 941 tests with every module that
+  installs) are green. `docs/release/schema-freeze.json` is refreshed for the install-state change.
+  ruff, mypy, tach and docs-check are clean.
+
+Targeted mutations:
+- Skipping the Upstream branch in `_outside_registries`: only the two resolution-vocabulary tests
+  naming an Upstream alias turned red.
+- Skipping the `registry-not-synchronized` return: the unsynchronized-Registry tests in
+  `resolution_vocabulary_test` and `offline_capability_test` (both subtests) turned red.
+
 ## Step 5 — maintain candidate list|promote
 
 Done. `maintain candidate list [--source DIR] [--json]` (`commands/candidate.py`) prints the active

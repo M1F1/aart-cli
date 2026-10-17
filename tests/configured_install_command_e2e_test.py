@@ -187,23 +187,6 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
             self.assertEqual(payload["review"]["selection_mode"], "artifacts")
             self.assertEqual(list(env.project.iterdir()), [])
 
-    def test_an_explicit_symlink_mode_is_refused_instead_of_silently_copied(self) -> None:
-        with _environment() as env:
-            code, payload = env.run(
-                "consume",
-                "install",
-                COORDINATE,
-                "--profile",
-                "claude",
-                "--mode",
-                "symlink",
-            )
-
-            self.assertNotEqual(code, 0)
-            self.assertFalse(payload["ok"])
-            self.assertIn("copy mode only", payload["diagnostics"][0]["message"])
-            self.assertEqual(list(env.project.iterdir()), [])
-
     def test_confirmed_review_installs_and_records_without_the_legacy_manifest(self) -> None:
         with _environment() as env:
             _, review = env.run("consume", "install", COORDINATE, "--profile", "claude")

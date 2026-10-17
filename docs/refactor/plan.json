@@ -1206,7 +1206,7 @@
         {
           "id": "7",
           "title": "Remove the source, marketplace and top-level registry families and the registry-*/source-* kinds, with no aliases",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "8",

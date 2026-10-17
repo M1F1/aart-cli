@@ -156,7 +156,9 @@ class SourceCliParserAndDispatchTests(unittest.TestCase):
 
 
 class SourceCliCommandTests(unittest.TestCase):
-    def test_local_source_add_then_agent_browse_uses_durable_state_without_objects(self) -> None:
+    def test_an_added_upstream_is_healthy_and_offers_a_consumer_nothing(self) -> None:
+        """INV-269: an Upstream repository is the Maintainer's input, never the consumer's catalog."""
+
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw).resolve()
             home = root / "aart-cli-home"
@@ -206,7 +208,7 @@ class SourceCliCommandTests(unittest.TestCase):
             )
             marketplace = json.loads(marketplace_stdout.getvalue())
             self.assertTrue(marketplace["ok"])
-            self.assertEqual(len(marketplace["artifacts"]), 2)
+            self.assertEqual(marketplace["artifacts"], [])
             self.assertFalse((root / "data" / "objects").exists())
 
     def test_add_synchronizes_before_saving_and_emits_json(self) -> None:

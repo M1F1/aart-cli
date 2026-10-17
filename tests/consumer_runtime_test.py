@@ -120,7 +120,9 @@ class ConsumerRuntimeTest(unittest.TestCase):
             assert isinstance(loaded, Err)
             self.assertEqual(loaded.diagnostics[0].code.value, "source-policy-denied")
 
-    def test_read_only_marketplace_does_not_materialize_native_objects(self) -> None:
+    def test_a_published_upstream_lists_nothing_to_a_consumer(self) -> None:
+        """INV-269: a valid native package Upstream is still not a Registry a consumer reads."""
+
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw).resolve()
             data_root = root / "data"
@@ -148,13 +150,8 @@ class ConsumerRuntimeTest(unittest.TestCase):
 
             self.assertIsInstance(listed, Ok)
             assert isinstance(listed, Ok)
-            self.assertEqual(len(listed.value.items), 2)
-            digest = listed.value.items[0].artifact.artifact.object_digest.value
-            self.assertFalse(
-                (
-                    Path(object_store_paths(str(data_root)).objects) / digest[:2] / digest[2:]
-                ).exists()
-            )
+            self.assertEqual(listed.value.items, ())
+            self.assertFalse(Path(object_store_paths(str(data_root)).objects).exists())
 
     def test_read_only_marketplace_verifies_but_does_not_materialize_registry_objects(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -277,28 +274,9 @@ class ConsumerRuntimeTest(unittest.TestCase):
                 ("mcp/github-mcp", "mcp/jira-mcp"),
             )
 
-    def test_invalid_native_or_registry_snapshots_fail_closed(self) -> None:
+    def test_invalid_registry_snapshots_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             paths = object_store_paths(str(Path(raw) / "data"))
-            direct = configured_source("team", SourceKind.SOURCE_GIT)
-            # A tree that *says* it is a native package source and then is not.  Claiming the
-            # marker is what makes this a broken native source rather than an authoring
-            # repository, and a broken one must still take nothing from this source into the
-            # consumer graph (B-094 widened admission, not this refusal).
-            broken_native = SourceSnapshot(
-                native_snapshot().origin,
-                tuple(
-                    replace(entry, content=b"{ not json\n")
-                    if str(entry.path) == "aart-cli-source.json"
-                    else entry
-                    for entry in native_snapshot().entries
-                ),
-            )
-            invalid_native = _graph_source(
-                direct,
-                _current(direct, "reference-native-source", broken_native),
-                paths,
-            )
             registry = configured_source("company", SourceKind.REGISTRY_GIT)
             # A native package source is not a Registry: it declares no `aart-cli-registry.json`, so
             # it is refused for what it is rather than compiled as an empty catalog.
@@ -321,7 +299,6 @@ class ConsumerRuntimeTest(unittest.TestCase):
                 paths,
             )
 
-            self.assertNotIsInstance(invalid_native, Ok)
             self.assertNotIsInstance(not_a_registry, Ok)
             assert isinstance(not_a_registry, Err), not_a_registry
             # Its packages sit at `artifacts/<kind>/<name>/`, which is the retired unversioned
@@ -339,8 +316,7 @@ class ConsumerRuntimeTest(unittest.TestCase):
         manifests, which compile to Candidates a maintainer has not approved yet.  Reading it as
         a broken native package tree refused the *whole* projection, which is how one subscribed
         author repository used to empty a consumer's Marketplace (B-094/QA-020).  The right
-        answer is an empty contribution, and the difference is only visible next to the broken
-        native tree above: that one still refuses.
+        answer is an empty contribution, which since INV-269 is what every Upstream gives.
         """
 
         with tempfile.TemporaryDirectory() as raw:
@@ -498,14 +474,9 @@ class ConsumerRuntimeTest(unittest.TestCase):
             for loaded in (persisted.value, prospective.value):
                 rows = loaded.browse(MarketplaceTarget(("claude",), "darwin", "project", "copy"))
                 assert isinstance(rows, Ok), rows
-                self.assertEqual(
-                    tuple(row.key for row in rows.value),
-                    ("team/memory/house@1.0.0", "team/skill/code-review@1.0.0"),
-                )
-                digest = loaded.context.catalog.items[0].artifact.artifact.object_digest.value
-                self.assertTrue(
-                    (Path(loaded.context.store_paths.objects) / digest[:2] / digest[2:]).is_dir()
-                )
+                # Loaded from persisted and from prospective configuration alike, and in both an
+                # Upstream's published snapshot offers the consumer nothing (INV-269).
+                self.assertEqual(tuple(row.key for row in rows.value), ())
 
     def test_verified_registry_security_index_is_bound_to_exact_marketplace_coordinates(
         self,
@@ -664,7 +635,7 @@ class ConsumerRuntimeTest(unittest.TestCase):
                     (),
                 )
 
-    def test_direct_native_snapshot_materializes_objects_and_builds_qualified_graph(self) -> None:
+    def test_a_native_upstream_snapshot_contributes_no_artifact_and_no_object(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             source = configured_source("team", SourceKind.SOURCE_GIT)
             current = _current(source, "reference-native-source", native_snapshot())
@@ -674,17 +645,8 @@ class ConsumerRuntimeTest(unittest.TestCase):
 
             assert isinstance(projected, Ok), projected
             self.assertEqual(projected.value.alias, source.alias)
-            self.assertEqual(len(projected.value.artifacts), 2)
-            self.assertTrue(
-                all(
-                    (
-                        Path(paths.objects)
-                        / artifact.object_digest.value[:2]
-                        / artifact.object_digest.value[2:]
-                    ).is_dir()
-                    for artifact in projected.value.artifacts
-                )
-            )
+            self.assertEqual(projected.value.artifacts, ())
+            self.assertFalse(Path(paths.objects).exists())
 
     def test_registry_catalog_rebinds_runtime_source_identity_and_carries_review_trust(
         self,

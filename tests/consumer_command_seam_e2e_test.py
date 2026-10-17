@@ -1,15 +1,9 @@
 """What the four public consumer commands promise, pinned before their dispatch is rerouted.
 
-`install`, `update`, `uninstall` and `status` are about to stop running through the legacy consumer
-service and start running through `begin_installation` / `execute_installation` /
-`record_installation`. That is a change of machinery, not of contract, and the way to keep it one is
-to write down the contract first -- while the legacy path is still the thing answering, so that what
-is written down is what is actually true rather than what the replacement happens to do.
-
-Every assertion here is therefore a characterization: it describes the seam as it behaves today. If
-rerouting moves one of them, that is the test doing its job, and the choice becomes explicit --
-either the reroute is wrong, or the contract is being changed deliberately and this file changes
-with it. Nothing here is a wish about the canonical path.
+`install`, `update`, `uninstall` and `status` were written down here while the legacy consumer
+service still answered them, so that moving them onto the Registry installation path kept the
+contract rather than whatever the replacement happened to do. Since CP-32 only a Registry answers
+(INV-269), and these are the same promises held over it.
 
 Three properties matter most, because they are the ones a swap of machinery is most likely to break
 quietly:
@@ -24,7 +18,6 @@ quietly:
 
 from __future__ import annotations
 
-import json
 import unittest
 
 from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _environment
@@ -187,8 +180,9 @@ class FailClosedReviewTest(unittest.TestCase):
 
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["finalized"], payload)
-            state = json.loads((env.project / ".aart-cli" / "manifest.json").read_text())
-            self.assertEqual(len(state["installations"]), 1, state)
+            status_code, status = env.run("consume", "status", "--profile", "claude")
+            self.assertEqual(status_code, 0, status)
+            self.assertEqual(len(status["items"]), 1, status)
 
 
 if __name__ == "__main__":

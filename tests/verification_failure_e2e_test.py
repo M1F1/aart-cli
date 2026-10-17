@@ -20,19 +20,15 @@ un-install what a different, already-completed transaction placed.
 
 from __future__ import annotations
 
-import contextlib
 import json
-import shutil
-import tempfile
 import unittest
-from pathlib import Path
 
+from tests.configured_installation_draft_e2e_test import AuthoredSetup
 from tests.marketplace_lifecycle_e2e_test import (
     _CONFIGURED,
     _COORDINATE,
-    _FIXTURE,
     _RECIPE,
-    _Environment,
+    _environment_with_setup,
 )
 
 #: The declared setup of `_environment_declaring_setup`, plus one verification that cannot pass.
@@ -48,33 +44,12 @@ _VERIFIED_RECIPE = {
 }
 
 
-@contextlib.contextmanager
 def _environment_whose_verification_fails():
-    """`_environment_declaring_setup`, with the recipe swapped for one that fails its check.
+    """`_environment_declaring_setup`, with the recipe swapped for one that fails its check."""
 
-    Copied rather than parameterized: the fixture in `marketplace_lifecycle_e2e_test` yields an
-    environment and not the recipe, and threading a parameter through it would change a file this
-    slice is not otherwise touching.
-    """
-
-    with tempfile.TemporaryDirectory() as raw:
-        root = Path(raw).resolve()
-        location = root / "source"
-        shutil.copytree(_FIXTURE, location)
-        artifact = location / "artifacts" / "skill" / "code-review"
-        manifest = json.loads((artifact / "artifact.json").read_text(encoding="utf-8"))
-        manifest["setup"] = {"recipe": "setup/installer.json", "platforms": ["darwin"]}
-        (artifact / "artifact.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        (artifact / "setup").mkdir()
-        (artifact / "setup" / "installer.json").write_text(
-            json.dumps(_VERIFIED_RECIPE, indent=2), encoding="utf-8"
-        )
-        (artifact / "SETUP.md").write_text(
-            "Write `enabled = true` into .code-review.toml yourself.\n", encoding="utf-8"
-        )
-        machine = root / "machine"
-        machine.mkdir()
-        yield _Environment(machine, location)
+    return _environment_with_setup(
+        AuthoredSetup(_VERIFIED_RECIPE, "Write `enabled = true` into .code-review.toml yourself.\n")
+    )
 
 
 @unittest.skipUnless(
@@ -95,7 +70,6 @@ class VerificationFailureE2ETest(unittest.TestCase):
             "--profile",
             "claude",
             "--yes",
-            "--authorize-untrusted-source",
             "--approve-setup-effects",
         )
 
@@ -126,7 +100,6 @@ class VerificationFailureE2ETest(unittest.TestCase):
                 "--profile",
                 "claude",
                 "--yes",
-                "--authorize-untrusted-source",
                 "--approve-setup-effects",
             )
 

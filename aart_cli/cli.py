@@ -179,8 +179,6 @@ def _to_request(args: argparse.Namespace) -> Request:
         dry_run=bool(getattr(args, "dry_run", False)),
         json=bool(getattr(args, "json", False)),
         prune=bool(getattr(args, "prune", False)),
-        install_mode=getattr(args, "install_mode", None) or "copy",
-        memory_mode=getattr(args, "memory_mode", None),
         ref=getattr(args, "ref", None),
         native_url=getattr(args, "native_url", None),
         registry_action=routed.get("registry_action", getattr(args, "registry_action", None)),  # type: ignore[arg-type]

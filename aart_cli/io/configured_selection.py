@@ -7,7 +7,10 @@ Marketplace rows are not sufficient evidence to manufacture a Candidate ID or re
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from aart_cli.application.marketplace_resolution import (
+    ARTIFACT_NOT_FOUND,
     ApprovedMarketplace,
     ApprovedMarketplaceArtifact,
     ApprovedRegistrySnapshot,
@@ -44,11 +47,13 @@ from .source_store import read_current_source
 
 __all__ = [
     "CONFIGURED_SELECTION_INVALID",
+    "REGISTRY_NOT_SYNCHRONIZED",
     "load_configured_approved_marketplace",
     "resolve_configured_selection",
 ]
 
 CONFIGURED_SELECTION_INVALID = DiagnosticCode("configured-selection-invalid")
+REGISTRY_NOT_SYNCHRONIZED = DiagnosticCode("registry-not-synchronized")
 
 
 def _error(message: str) -> Err:
@@ -199,7 +204,72 @@ def resolve_configured_selection(
 
     if not isinstance(selection, ArtifactSelection):
         return _error("configured Selection resolution needs an ArtifactSelection")
+    unsynchronized = _unsynchronized_scope(effective, selection, data_root=data_root)
+    if isinstance(unsynchronized, Err):
+        return unsynchronized
+    if unsynchronized.value:
+        return _not_synchronized(unsynchronized.value)
     marketplace = load_configured_approved_marketplace(effective, data_root=data_root)
     if isinstance(marketplace, Err):
         return marketplace
-    return resolve_selection(marketplace.value, selection, policy=policy)
+    resolved = resolve_selection(marketplace.value, selection, policy=policy)
+    if isinstance(resolved, Err):
+        return Err(tuple(_with_listing(item) for item in resolved.diagnostics))
+    return resolved
+
+
+def _with_listing(diagnostic: Diagnostic) -> Diagnostic:
+    """A name no Registry approved is the one case the operator's next step is to look."""
+
+    if diagnostic.code != ARTIFACT_NOT_FOUND or diagnostic.remediation:
+        return diagnostic
+    return replace(diagnostic, remediation=("aart-cli consume list",))
+
+
+def _unsynchronized_scope(
+    effective: EffectiveConfiguration,
+    selection: ArtifactSelection,
+    *,
+    data_root: str,
+) -> Result[tuple[SourceAlias, ...]]:
+    """The Registries this Selection reads, when not one of them has a snapshot yet.
+
+    Installing reads the last synchronized snapshot and never fetches. A Registry nothing has been
+    synchronized from therefore offers nothing, and reporting that as a missing artifact would send
+    the operator looking for a name that was right. Empty when any Registry in scope can answer.
+    """
+
+    named = {item.source for item in selection.artifacts if item.source is not None} | {
+        item.source for item in (*selection.collections, *selection.derived_from)
+    }
+    unqualified = any(item.source is None for item in selection.artifacts)
+    scope = tuple(
+        configured
+        for configured in effective.configuration.sources
+        if configured.enabled
+        and configured.is_registry
+        and (unqualified or configured.alias in named)
+    )
+    for configured in scope:
+        paths = source_store_paths(data_root, source_instance_id(configured))
+        current = read_current_source(CurrentSourceRequest(paths, configured.alias))
+        if isinstance(current, Err):
+            return current
+        if current.value is not None:
+            return Ok(())
+    return Ok(tuple(configured.alias for configured in scope))
+
+
+def _not_synchronized(aliases: tuple[SourceAlias, ...]) -> Err:
+    rendered = ", ".join(alias.value for alias in aliases)
+    return Err(
+        (
+            Diagnostic(
+                REGISTRY_NOT_SYNCHRONIZED,
+                Severity.ERROR,
+                f"nothing has been synchronized from {rendered} yet; installing reads the last "
+                "synchronized snapshot and never fetches",
+                remediation=(f"aart-cli consume registry sync --alias {aliases[0]}",),
+            ),
+        )
+    )

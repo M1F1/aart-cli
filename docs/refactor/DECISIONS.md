@@ -11020,3 +11020,40 @@ manifests and producing templates is not CLI-only. Choices:
 - **Not yet**: INV-269's second half — the consumer catalog
   still reads upstream snapshots and many e2e fixtures install from one. Step 7 removes that, with
   the fixtures.
+
+## D-444 — A consumer installs only from Registries (CP-32 step 7)
+
+- **Lifecycle.** `consume install|update|uninstall|status|setup` run the configured Registry seam
+  only. When it declines, `_outside_registries` names why, each with its own code:
+  `registry-unavailable` (no Registry connected, or the alias names none),
+  `upstream-not-installable` (the alias is an Upstream repository; the Maintainer promotes its
+  Candidates), `consumer-invalid` (an unqualified name and no default Registry) and
+  `installation-not-found` (nothing installed matches). Uninstall plans from the installation
+  records, so it never answers with a Registry refusal.
+- **`registry-not-synchronized`.** Installing reads the last synchronized snapshot and never
+  fetches. When no Registry in a Selection's scope has a snapshot, `resolve_configured_selection`
+  says so and names `consume registry sync --alias <alias>`, rather than `artifact-not-found`.
+  `--offline` changes nothing here, so there is one message, not two. A name no Registry approves
+  stays `artifact-not-found` and now points at `aart-cli consume list`.
+- **An unqualified name** takes the default Registry when one is set. Without a default it is left
+  for the resolver, which installs from the one Registry that offers it, or names every coordinate
+  when more than one does. Before INV-269 the seam declined such a name for the legacy catalog to
+  choose; nothing else is left to choose now. A Collection still names its Registry.
+- **`--mode` and `--memory-mode` are removed.** A Registry installs a copy, and a memory is always
+  a managed block in the harness instruction file, so neither flag had anything left to choose.
+- **Local Registry setup evidence.** A `registry-local` installation records its checkout path, which
+  is normalized and absolute, at a commit of its branch. It is not refused as a Git URL.
+- **A refused Registry revision** keeps the last synchronized snapshot. Its remediation says so, and
+  names `maintain registry validate` and `consume registry sync`.
+- **The consumer runtime** projects nothing from an Upstream repository, and the native
+  materialization helpers are deleted.
+- **Tests.** The e2e fixtures connect a real Git-backed `registry-local` (`tests/reference_registry.py`)
+  holding the former reference content, promoted through the real pipeline. Tests whose subject
+  exists only on the retired native consumer path are deleted rather than ported:
+  - symlink placement, runtime health, setup review duplicates and the manifest-backed
+    `policy_drift_e2e_test`;
+  - in `consumer_runtime_test`, native materialization;
+  - in `identity_change_reconciliation_test`, the record rebinding. A Registry record binds the
+    alias, not the declared identity, so an identity change strands nothing.
+
+  Status gaps that this exposed go to B-205, and leftover files to B-204.

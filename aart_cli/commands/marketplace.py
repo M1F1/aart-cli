@@ -37,6 +37,7 @@ from aart_cli.application.credential_guidance import (
     guidance_by_input,
 )
 from aart_cli.application.installed_setup import declared_setup_to_data
+from aart_cli.configuration.model import SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration
 from aart_cli.consumer.application import (
     CONSUMER_REVIEW_MISMATCH,
@@ -54,17 +55,13 @@ from aart_cli.consumer.coordinates import (
 )
 from aart_cli.consumer.model import (
     ConsumerAction,
-    ConsumerActionRequest,
     ConsumerOutcome,
     ConsumerReview,
     ConsumerSetupQueue,
-    ConsumerTerminalItem,
     consumer_review_value,
-    render_consumer_outcome,
     render_consumer_review,
-    review_source_freshness,
 )
-from aart_cli.consumer.resolution import resolve_selectors
+from aart_cli.consumer.resolution import INSTALLATION_NOT_FOUND, resolve_selectors
 from aart_cli.consumer.runtime import load_local_consumer_service, load_read_only_marketplace
 from aart_cli.consumer.runtime_requirements import (
     RUNTIME_ENVIRONMENT_INVALID,
@@ -76,7 +73,7 @@ from aart_cli.consumer.runtime_requirements import (
     runtime_capability_to_data,
     runtime_check_to_data,
 )
-from aart_cli.domain.diagnostics import Diagnostic, Severity, diagnostic_to_data
+from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity, diagnostic_to_data
 from aart_cli.domain.effects import effect_to_data
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import ArtifactCoordinate, SourceAlias
@@ -168,12 +165,6 @@ _LIFECYCLE_ACTIONS: dict[str, ConsumerAction] = {
     "setup": "install",
 }
 _REQUIRES_COORDINATES = frozenset({"install", "uninstall", "setup"})
-_MUTATING = frozenset({"install", "update", "uninstall", "setup"})
-# The actions that read what the project already has. Neither fetches anything, so neither
-# needs an enabled source to be answerable — an installed artifact is on disk whether or not the
-# subscription that delivered it is still configured, so an operator who ran `source remove` can
-# still read and clean up their own project.
-_PROJECT_LOCAL = frozenset({"uninstall", "status"})
 
 
 def _emit_error(request: Request, result: Err, operation: str = _LIST_OPERATION) -> int:
@@ -337,6 +328,12 @@ def _search(request: Request) -> int:
     if not hits:
         print("Try one word, or part of one: matching is by substring, not by whole word.")
     return _common.OK
+
+
+#: A Selection naming no connected, enabled Registry (INV-269).
+REGISTRY_UNAVAILABLE = DiagnosticCode("registry-unavailable")
+#: A Selection naming an Upstream repository, which a consumer never installs from (INV-269).
+UPSTREAM_NOT_INSTALLABLE = DiagnosticCode("upstream-not-installable")
 
 
 def _invalid(message: str, *remediation: str) -> Err:
@@ -532,24 +529,6 @@ def _selection(request: Request, action: str) -> Result[tuple]:
     return parse_artifact_selectors(tuple(request.names))
 
 
-def _action_request(
-    request: Request,
-    action: str,
-    coordinates: tuple,
-) -> ConsumerActionRequest:
-    return ConsumerActionRequest(
-        _LIFECYCLE_ACTIONS[action],
-        coordinates,
-        tuple(request.profiles),
-        scope=request.scope,
-        mode=request.install_mode,
-        force=request.force,
-        offline=request.offline,
-        prune=request.prune,
-        memory_mode=request.memory_mode or "prepend",
-    )
-
-
 def _manual_payload(reference: SetupManualReference | None) -> dict | None:
     if reference is None:
         return None
@@ -733,30 +712,6 @@ def _run_setup_queue(
     )
 
 
-def _setup_review_outcome(review: ConsumerReview) -> ConsumerOutcome:
-    """Project setup-eligible Review items without finalizing their payload plans.
-
-    ``prepare_consumer_setup_queue`` intentionally accepts only terminal payload outcomes.  The
-    setup command's read-only branch has no real outcome because Review must not mutate, but an
-    already-installed artifact still needs its canonical setup plan rendered.  This projection
-    supplies only the bounded identity and pending/not-required status needed for that second
-    Review; ``prepare_setup`` remains responsible for proving the installed record exists and
-    matches the immutable marketplace object.
-    """
-
-    return ConsumerOutcome(
-        _LIFECYCLE_ACTIONS["setup"],
-        tuple(
-            ConsumerTerminalItem(
-                item.key,
-                "current",
-                setup_status="pending" if item.setup is not None else "not-required",
-            )
-            for item in review.items
-        ),
-    )
-
-
 def _emit(
     request: Request,
     operation: str,
@@ -775,13 +730,12 @@ def _configured_registry_selection(
     effective: EffectiveConfiguration,
     collections: tuple[Collection, ...] = (),
 ) -> ArtifactSelection | None:
-    """Return the direct Selection whose source is wholly owned by the new registry seam.
+    """Return the Selection the Registry seam resolves, or None when no Registry owns it.
 
-    Direct/local sources stay on the characterized path until their own public replacement
-    evidence exists. An unqualified selector reaches this seam only when the configured default is
-    an approved registry; otherwise choosing a source here would be new product policy. A
-    Collection without a version selects the highest one approved, the one its Marketplace row
-    offers (D-428).
+    An unqualified artifact takes the default Registry when one is set; without one it is left
+    unbound, and the resolver installs the one Registry offering it or names every coordinate when
+    more than one does. A Collection always names its Registry. A Collection without a version
+    selects the highest one approved, the one its Marketplace row offers (D-428).
     """
 
     registry_aliases = {
@@ -794,7 +748,11 @@ def _configured_registry_selection(
         return None
     if any(
         (item.source is not None and item.source not in registry_aliases)
-        or (item.source is None and default not in registry_aliases)
+        or (
+            item.source is None
+            and item.identity.kind == "collection"
+            and default not in registry_aliases
+        )
         for item in selectors
     ):
         return None
@@ -804,7 +762,7 @@ def _configured_registry_selection(
                 ArtifactRequest(
                     item.identity,
                     VersionConstraint(item.version or "*"),
-                    item.source or default,
+                    item.source or (default if default in registry_aliases else None),
                 )
                 for item in selectors
                 if item.identity.kind != "collection"
@@ -897,16 +855,6 @@ def _configured_lifecycle(
     artifact replaces a version already here. Writing that flow twice would let the two drift, and
     the half that drifted would be the half that mutates the machine.
     """
-
-    if request.install_mode != "copy":
-        return _emit_error(
-            request,
-            _invalid(
-                "approved registry installation currently supports copy mode only",
-                "omit --mode or pass --mode copy",
-            ),
-            operation,
-        )
 
     project_root, user_home = resolved_paths(
         data_root=runtime.paths.data_root,
@@ -1420,18 +1368,8 @@ def _configured_status(request: Request, selectors: tuple[ArtifactSelector, ...]
     runtime = load_runtime_configuration(request, content_required=False)
     if isinstance(runtime, Err):
         return _emit_error(request, runtime, operation)
-    effective = runtime.value.loaded.effective
-    registry_aliases = {
-        source.alias
-        for source in effective.configuration.sources
-        if source.enabled and source.is_registry
-    }
-    if selectors:
-        if _configured_registry_selection(selectors, effective) is None:
-            return None
-    elif effective.configuration.default_registry not in registry_aliases:
-        return None
-
+    # Status reads what this machine recorded, so it answers even after the Registry an
+    # installation came from is disconnected.
     project_root, user_home = resolved_paths(
         data_root=runtime.value.paths.data_root,
         project=request.project,
@@ -1593,174 +1531,81 @@ def _lifecycle(request: Request, action: str) -> int:
     selection = _selection(request, action)
     if isinstance(selection, Err):
         return _emit_error(request, selection, operation)
-    if action == "install":
-        configured = _configured_install(request, selection.value)
-        if configured is not None:
-            return configured
-    if action == "update":
-        configured = _configured_update(request, selection.value)
-        if configured is not None:
-            return configured
-    if action == "uninstall":
-        configured = _configured_uninstall(request, selection.value)
-        if configured is not None:
-            return configured
-    if action == "status":
-        configured = _configured_status(request, selection.value)
-        if configured is not None:
-            return configured
-    if action == "setup":
-        configured = _configured_setup(request, selection.value)
-        if configured is not None:
-            return configured
-    service = load_local_consumer_service(
-        project=request.project,
-        user_home=request.user_home,
-        observe_freshness=True,
-        offline=request.offline,
-        # Neither of these is a content operation: one removes what the manifest records, the other
-        # reports it.  Requiring an enabled source here would refuse the exact exit `source remove`
-        # tells operators to take.
-        content_required=action not in _PROJECT_LOCAL,
-    )
-    if isinstance(service, Err):
-        return _emit_error(request, service, operation)
-    if action == "uninstall":
-        # Uninstall resolves against the manifest, never through the source: the project has a
-        # complete record of what it installed, and removing a subscription must not strand it.
-        coordinates = service.value.resolve_uninstall(
-            selection.value,
-            scope=request.scope,
-            profiles=tuple(request.profiles),
-        )
-    else:
-        coordinates = resolve_selectors(
-            service.value.context.catalog, selection.value, offline=request.offline
-        )
-    if isinstance(coordinates, Err):
-        return _emit_error(request, coordinates, operation)
-    prepared = service.value.prepare(_action_request(request, action, coordinates.value))
-    if isinstance(prepared, Err):
-        return _emit_error(request, prepared, operation)
-    review = prepared.value
-    review_data = json.loads(canonical_json_bytes(consumer_review_value(review)).decode("utf-8"))
+    configured = {
+        "install": _configured_install,
+        "update": _configured_update,
+        "uninstall": _configured_uninstall,
+        "status": _configured_status,
+        "setup": _configured_setup,
+    }[action](request, selection.value)
+    if configured is not None:
+        return configured
+    return _emit_error(request, _outside_registries(request, action, selection.value), operation)
 
-    if not request.yes and action in _MUTATING:
-        payload = {
-            "schema_version": 1,
-            "ok": True,
-            "operation": operation,
-            "finalized": False,
-            "review_digest": str(review.review_digest),
-            "review": review_data,
-            # A sibling of ``review``, never a member of it: ``review`` is the exact value the
-            # digest is computed over, and freshness is a clock reading.
-            "source_freshness": [
-                {"alias": alias, "health": health, "age_seconds": age}
-                for alias, health, age in review_source_freshness(review)
-            ],
-        }
-        setup_lines: tuple[str, ...] = ()
-        if action == "setup":
-            setup_queue = service.value.setup_queue(
-                review,
-                _setup_review_outcome(review),
-                authorize_untrusted_source=request.authorize_untrusted_source,
-                authorize_custom_entrypoint=request.authorize_custom_entrypoint,
-            )
-            setup_data = _setup_payload(setup_queue)
-            payload["setup"] = setup_data
-            # The plan renderer alone emits nothing when planning failed, so the
-            # operator approving effects was shown a setup queue and never told it will not run.
-            setup_lines = tuple(
-                line for plan in setup_queue.plans for line in render_setup_review(plan.legacy_plan)
-            ) + render_setup_payload(setup_data, planned_effects=False)
-        _emit(
-            request,
-            operation,
-            payload,
-            render_consumer_review(review)
-            + setup_lines
-            + ("Reviewed only; re-run with --yes to apply this exact plan.",),
-        )
-        return _common.OK
 
-    if request.expect is not None and request.expect != str(review.review_digest):
-        # The reviewed decision did not survive to this command.  Refuse, and render the plan that
-        # would actually run — an operator who cannot see the new plan cannot re-authorize it.
-        refusal = Diagnostic(
-            CONSUMER_REVIEW_MISMATCH,
-            Severity.ERROR,
-            (
-                f"the plan changed since it was reviewed: expected {request.expect}, "
-                f"recomputed {review.review_digest}"
-            ),
-            remediation=("re-read the review below, then re-run --expect with its review_digest",),
-        )
-        _emit(
-            request,
-            operation,
-            {
-                "schema_version": 1,
-                "ok": False,
-                "operation": operation,
-                "finalized": False,
-                "diagnostics": [diagnostic_to_data(refusal)],
-                "expected_review_digest": request.expect,
-                "review_digest": str(review.review_digest),
-                "review": review_data,
-            },
-            (
-                f"{refusal.severity.value}: {refusal.message}",
-                *(f"  remediation: {item}" for item in refusal.remediation),
-                *render_consumer_review(review),
-            ),
-        )
-        return _common.ERROR
+def _outside_registries(
+    request: Request, action: str, selectors: tuple[ArtifactSelector, ...]
+) -> Err:
+    """Why no connected Registry owns this request; a consumer reads nothing else (INV-269)."""
 
-    finalized = service.value.finalize(review, review.review_digest)
-    if isinstance(finalized, Err):
-        return _emit_error(request, finalized, operation)
-    outcome = finalized.value
-    payload = {
-        "schema_version": 1,
-        "ok": True,
-        "operation": operation,
-        "finalized": True,
-        "review_digest": str(review.review_digest),
-        "session_status": outcome.session_status,
-        "offline_last_known_good": outcome.offline_last_known_good,
-        "items": [
-            {
-                "key": item.key,
-                "status": item.status,
-                "detail": item.detail,
-                "setup_status": item.setup_status,
-                "policy_status": item.policy_status,
-                "policy_detail": item.policy_detail,
-                "trust": item.trust,
-            }
-            for item in outcome.items
-        ],
+    runtime = load_runtime_configuration(request, content_required=False)
+    if isinstance(runtime, Err):
+        return runtime
+    configuration = runtime.value.loaded.effective.configuration
+    registries = {
+        source.alias for source in configuration.sources if source.enabled and source.is_registry
     }
-    lines = render_consumer_outcome(outcome)
-    setup_ok = True
-    setup_payload: dict | None = None
-    if action == "setup" or any(item.setup_status == "pending" for item in outcome.items):
-        setup_payload, setup_ok = _run_setup_queue(request, service.value, review, outcome)
-        payload["setup"] = setup_payload
-        # The counts stay, at the end, after the content they summarize.
-        lines += render_setup_payload(setup_payload)
-    # Install and update report the payload transaction they were asked to perform. Setup has its
-    # own separately reviewed effects and consent flags, so declining or failing it does not turn a
-    # successfully placed payload into a failed placement. The explicit setup command owns only
-    # that second operation and therefore reports the queue's terminal verdict as its exit status.
-    setup_controls_exit = action == "setup"
-    payload["ok"] = outcome.session_status != "failed" and (setup_ok or not setup_controls_exit)
-    _emit(request, operation, payload, lines)
-    if outcome.session_status in {"failed", "partial"} or (setup_controls_exit and not setup_ok):
-        return _common.ERROR
-    return _common.OK
+    upstreams = {source.alias for source in configuration.sources if not source.is_registry}
+    connect = f"{SourceKind.REGISTRY_GIT.command} add --alias {{alias}} --kind git --location <url>"
+    if action == "uninstall":
+        # Uninstall plans from the installation records, never from a Registry, so a Registry
+        # removed since is no reason to refuse it and no part of why nothing matched.
+        return _nothing_installed(request, action)
+    if not registries:
+        return _refused(
+            REGISTRY_UNAVAILABLE,
+            "no Registry is connected; a consumer installs only from Registries",
+            connect.format(alias="<alias>"),
+        )
+    for selector in selectors:
+        if selector.source in upstreams:
+            return _refused(
+                UPSTREAM_NOT_INSTALLABLE,
+                f"{selector.source} is an Upstream repository, not a Registry; a consumer installs "
+                "only from Registries",
+                "its Maintainer reviews its Candidates (`aart-cli maintain candidate list`) and "
+                "promotes them into a Registry; install from that Registry",
+            )
+        if selector.source is not None and selector.source not in registries:
+            return _refused(
+                REGISTRY_UNAVAILABLE,
+                f"{selector.source} is not a connected, enabled Registry",
+                connect.format(alias=selector.source),
+                f"{SourceKind.REGISTRY_GIT.command} list",
+            )
+        if (
+            selector.source is None
+            and selector.identity.kind == "collection"
+            and configuration.default_registry not in registries
+        ):
+            return _invalid(
+                f"collection/{selector.identity.name} names no Registry and no default Registry "
+                "is set",
+                "name it as <registry>/collection/<name>",
+            )
+    return _nothing_installed(request, action)
+
+
+def _nothing_installed(request: Request, action: str) -> Err:
+    return _refused(
+        INSTALLATION_NOT_FOUND,
+        f"nothing installed from a Registry matches this {action}",
+        f"aart-cli consume status --profile {','.join(request.profiles)}",
+    )
+
+
+def _refused(code: DiagnosticCode, message: str, *remediation: str) -> Err:
+    return Err((Diagnostic(code, Severity.ERROR, message, remediation=remediation),))
 
 
 def _undo(request: Request, loaded, operation: str) -> int:

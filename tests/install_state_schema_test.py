@@ -239,6 +239,30 @@ class InstallStateSchemaTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "local source origin"):
             replace(source, resolved_commit="a" * 40)
 
+    def test_a_local_registry_is_a_checkout_path_at_a_commit_of_its_branch(self) -> None:
+        """A local Registry is read as its branch commits it, so it records all three (CP-32)."""
+
+        original = _record()
+        source = SourceEvidence(
+            SourceAlias("company"),
+            SourceId("company-agent-artifacts"),
+            SourceKind.REGISTRY_LOCAL,
+            "/work/registry",
+            "a" * 40,
+            "main",
+        )
+        state = InstallState(2, (replace(original, source=source),))
+
+        self.assertEqual(parse_install_state(install_state_bytes(state)), Ok(state))
+        for refused in (
+            {"origin": "work/registry"},
+            {"origin": "/work/../registry"},
+            {"resolved_commit": "local"},
+            {"subscription_ref": "../moving"},
+        ):
+            with self.subTest(refused), self.assertRaises(ValueError):
+                replace(source, **refused)
+
     def test_local_source_accepts_snapshot_bound_revision(self) -> None:
         source = SourceEvidence(
             SourceAlias("local"),

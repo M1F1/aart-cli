@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from aart_cli.application.promotion import (
     load_registry_versions,
     validate_promoted_registry,
@@ -259,11 +261,39 @@ def _registry_identity(request: SourceValidationRequest) -> Result[SourceId]:
     return Ok(registry.value.registry_id)
 
 
+#: What a consumer can do about a Registry revision it refused: the last good snapshot stays.
+_REFUSED_REVISION_REMEDIATION = (
+    "the last synchronized snapshot of this Registry stays in use; ask its Maintainer to publish a "
+    "valid revision (`aart-cli maintain registry validate`), then run "
+    "`aart-cli consume registry sync` again"
+)
+
+
 def validate_registry_source_candidate(
     request: SourceValidationRequest,
 ) -> Result[ValidatedSourceCandidate]:
-    """Require one validated registry representation before admitting a marketplace source."""
+    """Require one validated registry representation before admitting a marketplace source.
 
+    A refusal that names no remediation of its own gets the one a consumer can act on: nothing it
+    runs can repair someone else's Registry, so it is told what keeps working and who can fix it.
+    """
+
+    validated = _validate_registry_source_candidate(request)
+    if isinstance(validated, Ok):
+        return validated
+    return Err(
+        tuple(
+            item
+            if item.remediation
+            else replace(item, remediation=(_REFUSED_REVISION_REMEDIATION,))
+            for item in validated.diagnostics
+        )
+    )
+
+
+def _validate_registry_source_candidate(
+    request: SourceValidationRequest,
+) -> Result[ValidatedSourceCandidate]:
     snapshot = request.candidate.snapshot
     # Promotion produces the approved, versioned registry representation named by the Product
     # Specification (`registry/versions/*` plus exact catalogs), and it is the only representation

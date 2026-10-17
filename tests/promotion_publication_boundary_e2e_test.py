@@ -23,7 +23,6 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import shutil
 import subprocess
 import tempfile
 import unittest
@@ -34,7 +33,8 @@ from aart_cli.application.maintainer_promotion import effective_policy_digest
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.protocol.hashing import sha256_bytes
 from tests.maintainer_scan_cli_test import _author_checkout, _git
-from tests.marketplace_lifecycle_e2e_test import _FIXTURE, _Environment
+from tests.marketplace_lifecycle_e2e_test import _Environment
+from tests.reference_registry import write_reference_registry
 from tests.source_sync_command_e2e_test import _source_json
 
 #: The coordinate the author checkout offers and the published registry has never heard of.
@@ -116,7 +116,7 @@ class PromotionPublicationBoundaryE2ETest(unittest.TestCase):
             _git(checkout, "init", "-q")
             _git(checkout, "config", "user.name", "AART Test")
             _git(checkout, "config", "user.email", "aart@example.invalid")
-            shutil.copytree(_FIXTURE, published)
+            write_reference_registry(published)
             environment = _Environment(machine, published)
             common = [
                 "--source",

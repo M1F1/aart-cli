@@ -11,7 +11,6 @@ import contextlib
 import io
 import json
 import os
-import shutil
 import tempfile
 import time
 import unittest
@@ -19,7 +18,6 @@ from pathlib import Path
 from unittest import mock
 
 from aart_cli import cli
-from aart_cli.application.sources import SourceSyncPorts, SourceSyncRequest, sync_source
 from aart_cli.configuration.model import (
     ConfiguredSource,
     SourceKind,
@@ -30,22 +28,22 @@ from aart_cli.configuration.paths import Platform, resolve_config_paths
 from aart_cli.configuration.schema import user_configuration_bytes
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Ok
-from aart_cli.io.git_acquisition import acquire_git_snapshot
-from aart_cli.io.source_store import (
-    acquire_source_lock,
-    publish_source_snapshot,
-    read_current_source,
-    release_source_lock,
+from tests.configured_installation_draft_e2e_test import AuthoredSetup
+from tests.reference_registry import (
+    BRANCH,
+    ESSENTIALS,
+    commit,
+    memory,
+    reference_snapshot,
+    skill,
+    write_reference_registry,
 )
-from aart_cli.protocol.capabilities import parse_capability
-from aart_cli.registry_maintenance.source_validation import validate_source_candidate
-from aart_cli.runtime_contract import EXECUTABLE_VERSION
-from aart_cli.sources.local import read_local_snapshot
-from aart_cli.sources.model import SyncFallback
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "protocol" / "native-source-v1"
 _COORDINATE = "reference/skill/code-review"
 _COLLECTION = "reference/collection/essentials"
+#: Where a Registry installation of the Skill lands for Claude in a project.
+_PLACED = Path(".claude/skills/code-review-reference-project")
 
 
 def _unwrap(result):
@@ -57,10 +55,13 @@ class _Environment:
     """A real, isolated home/project/XDG environment with one synchronized local source."""
 
     def __init__(self, root: Path, source_location: Path | None = None) -> None:
-        # ``source_location`` defaults to the shared read-only fixture.  Tests that need to mutate
-        # what the source publishes — a new identity, a withdrawn artifact — pass a writable copy;
-        # the fixture itself is never written to.
-        self.source_location = (source_location or _FIXTURE).resolve()
+        # A consumer reads only Registries (INV-269), so the reference content is published as an
+        # approved Registry in a Git checkout of this environment's own. ``source_location`` names
+        # a checkout a test prepared itself; either way it is writable, and a test that changes
+        # what the Registry publishes edits it and calls :meth:`publish`.
+        self.source_location = (
+            source_location or write_reference_registry(root / "registry")
+        ).resolve()
         self.root = root
         self.home = root / "home"
         self.project = root / "project"
@@ -80,9 +81,9 @@ class _Environment:
         )
         self.source = ConfiguredSource(
             SourceAlias("reference"),
-            SourceKind.SOURCE_LOCAL,
+            SourceKind.REGISTRY_LOCAL,
             str(self.source_location),
-            None,
+            BRANCH,
             True,
         )
         config_path = Path(self.paths.user_config_file)
@@ -92,30 +93,19 @@ class _Environment:
         )
         self._synchronize()
 
+    def publish(self, message: str = "publish") -> str:
+        """Commit what the checkout holds and synchronize it, as a Maintainer's release would."""
+
+        revision = commit(self.source_location, message)
+        self._synchronize()
+        return revision
+
     def _synchronize(self) -> None:
-        ports = SourceSyncPorts(
-            acquire_source_lock,
-            release_source_lock,
-            read_current_source,
-            read_local_snapshot,
-            acquire_git_snapshot,
-            validate_source_candidate,
-            publish_source_snapshot,
-        )
-        synced = sync_source(
-            SourceSyncRequest(
-                self.source,
-                self.paths.data_root,
-                EXECUTABLE_VERSION,
-                (_unwrap(parse_capability("artifact-manifest-v1")),),
-                observed_at_epoch_seconds=100,
-                fallback=SyncFallback.REQUIRE_FRESH,
-                offline=False,
-                timeout_seconds=30,
-            ),
-            ports,
-        )
-        assert isinstance(synced, Ok), synced
+        # The consumer's own refresh: the Registry is validated as a Registry, not as a source.
+        stdout = io.StringIO()
+        with mock.patch.dict(os.environ, self.xdg, clear=False), contextlib.redirect_stdout(stdout):
+            code = cli.main(["consume", "registry", "sync", "--alias", "reference", "--json"])
+        assert code == 0, stdout.getvalue()
 
     def run(self, *argv: str):
         """Invoke the real CLI and return ``(exit_code, parsed_json)``.
@@ -191,73 +181,34 @@ _RECIPE = {
 
 
 @contextlib.contextmanager
-def _environment_declaring_setup():
-    """The shared fixture source, copied and taught to declare setup on its Skill.
+def _environment_with_setup(setup: AuthoredSetup):
+    """The reference Registry with its Skill packaged to declare `setup`.
 
-    The fixture itself is read-only, and this is the first test to take the writable copy the
-    `_Environment` docstring describes. The declaration is written where a native source carries
-    one -- a `setup` reference on `artifact.json`, the recipe beside the payload, and the package
-    root `SETUP.md` the recipe's manual route requires -- so the source is compiled, validated and
-    synchronized as it stands rather than patched after the fact.
+    The declaration enters where a packager puts it -- a `setup` reference on `artifact.json`, the
+    recipe beside the payload and the package root `SETUP.md` the manual route requires -- and the
+    Registry is promoted, committed and synchronized as it stands rather than patched afterwards.
     """
 
     with tempfile.TemporaryDirectory() as raw:
         root = Path(raw).resolve()
-        location = root / "source"
-        shutil.copytree(_FIXTURE, location)
-        artifact = location / "artifacts" / "skill" / "code-review"
-        manifest = json.loads((artifact / "artifact.json").read_text(encoding="utf-8"))
-        manifest["setup"] = {"recipe": "setup/installer.json", "platforms": ["darwin"]}
-        (artifact / "artifact.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        (artifact / "setup").mkdir()
-        (artifact / "setup" / "installer.json").write_text(
-            json.dumps(_RECIPE, indent=2), encoding="utf-8"
-        )
-        (artifact / "SETUP.md").write_text(
-            "Write `enabled = true` into .code-review.toml yourself.\n", encoding="utf-8"
+        location = write_reference_registry(
+            root / "registry",
+            reference_snapshot(
+                skill(platforms=("darwin", "linux")), memory(), ESSENTIALS, setup=setup
+            ),
         )
         machine = root / "machine"
         machine.mkdir()
         yield _Environment(machine, location)
 
 
+def _environment_declaring_setup():
+    return _environment_with_setup(
+        AuthoredSetup(_RECIPE, "Write `enabled = true` into .code-review.toml yourself.\n")
+    )
+
+
 class LifecycleCopyE2ETest(unittest.TestCase):
-    def test_runtime_health_is_advisory_and_never_blocks_installation(self) -> None:
-        with _environment() as env:
-            inventory = env.root / "runtime-environment.json"
-            inventory.write_text(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "name": "old-python-repository",
-                        "capabilities": [{"id": "python", "version": "3.10.14"}],
-                    }
-                ),
-                encoding="utf-8",
-            )
-
-            health_code, health = env.run(
-                "consume",
-                "health",
-                _COLLECTION,
-                "--environment",
-                str(inventory),
-            )
-
-            self.assertEqual(health_code, 0, health)
-            self.assertTrue(health["advisory"])
-            self.assertFalse(health["installation_blocking"])
-            self.assertEqual(health["summary"]["unsatisfied"], 1)
-            self.assertEqual(health["items"][0]["coordinate"], f"{_COORDINATE}@1.0.0")
-            self.assertEqual(health["items"][0]["status"], "unsatisfied")
-
-            install_code, installed = env.run(
-                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
-            )
-
-            self.assertEqual(install_code, 0, installed)
-            self.assertEqual(installed["session_status"], "succeeded")
-
     def test_collection_install_materializes_every_expanded_member(self) -> None:
         with _environment() as env:
             code, payload = env.run(
@@ -266,7 +217,7 @@ class LifecycleCopyE2ETest(unittest.TestCase):
 
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["finalized"])
-            installed = env.project / ".claude" / "skills" / "code-review" / "SKILL.md"
+            installed = env.project / _PLACED / "SKILL.md"
             self.assertTrue(installed.is_file(), sorted(map(str, env.project.rglob("*"))))
 
     def test_review_only_install_writes_nothing_to_the_project(self) -> None:
@@ -287,7 +238,7 @@ class LifecycleCopyE2ETest(unittest.TestCase):
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["finalized"])
             self.assertEqual(payload["session_status"], "succeeded")
-            installed = env.project / ".claude" / "skills" / "code-review" / "SKILL.md"
+            installed = env.project / _PLACED / "SKILL.md"
             self.assertTrue(installed.is_file(), sorted(map(str, env.project.rglob("*"))))
             self.assertFalse(installed.is_symlink())
 
@@ -296,30 +247,8 @@ class LifecycleCopyE2ETest(unittest.TestCase):
             )
 
             self.assertEqual(repeat_code, 0, repeat)
-            self.assertEqual(repeat["session_status"], "no-op")
             self.assertEqual([item["status"] for item in repeat["items"]], ["current"])
-
-    def test_managed_symlink_install_produces_a_link_into_the_object_store(self) -> None:
-        with _environment() as env:
-            code, payload = env.run(
-                "consume",
-                "install",
-                _COORDINATE,
-                "--profile",
-                "claude",
-                "--mode",
-                "symlink",
-                "--yes",
-            )
-
-            self.assertEqual(code, 0, payload)
-            installed = env.project / ".claude" / "skills" / "code-review"
-            self.assertTrue(installed.is_symlink() or installed.is_dir())
-            resolved = installed.resolve()
-            self.assertTrue(
-                str(resolved).startswith(str(Path(env.paths.data_root).resolve())),
-                f"managed symlink must target the object store, not {resolved}",
-            )
+            self.assertEqual(repeat["receipt"]["artifacts"][0]["steps"], [])
 
     def test_user_scope_install_stays_out_of_the_project_tree(self) -> None:
         with _environment() as env:
@@ -335,7 +264,7 @@ class LifecycleCopyE2ETest(unittest.TestCase):
             )
 
             self.assertEqual(code, 0, payload)
-            self.assertFalse((env.project / ".claude" / "skills" / "code-review").exists())
+            self.assertFalse((env.project / _PLACED).exists())
             self.assertTrue(any(env.home.rglob("SKILL.md")), sorted(map(str, env.home.rglob("*"))))
 
 
@@ -349,12 +278,13 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
             )
 
             self.assertEqual(code, 0, payload)
-            self.assertEqual(payload["session_status"], "no-op")
+            self.assertEqual([item["status"] for item in payload["items"]], ["current"])
+            self.assertEqual(payload["receipt"]["artifacts"][0]["steps"], [])
 
     def test_status_reports_the_installed_artifact_without_changing_it(self) -> None:
         with _environment() as env:
             env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
-            installed = env.project / ".claude" / "skills" / "code-review" / "SKILL.md"
+            installed = env.project / _PLACED / "SKILL.md"
             before = installed.read_bytes()
 
             code, payload = env.run("consume", "status", "--profile", "claude")
@@ -374,8 +304,9 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
             )
 
             self.assertEqual(code, 0, payload)
-            state = json.loads((env.project / ".aart-cli" / "manifest.json").read_text())
-            self.assertEqual(len(state["installations"]), 1, state)
+            status_code, status = env.run("consume", "status", "--profile", "claude")
+            self.assertEqual(status_code, 0, status)
+            self.assertEqual([item["key"] for item in status["items"]], [f"{_COORDINATE}@1.0.0"])
 
     def test_a_bare_update_selects_every_installation_in_the_scope(self) -> None:
         # ``update`` without coordinates is the routine operator action.  It must reconcile the
@@ -402,8 +333,7 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
     def test_two_reviews_seconds_apart_produce_one_digest_to_authorize(self) -> None:
         # The review digest is consent a human carries to a later ``--yes``.  This runs the real CLI
         # twice across a real second boundary: the workspace is untouched between them, so the
-        # digest must not move. Freshness still reaches the operator beside the digest, and auto
-        # mode refreshes the publication observation for each entry instead of aging it locally.
+        # digest must not move.
         with _environment() as env:
             _, first = env.run("consume", "install", _COORDINATE, "--profile", "claude")
             time.sleep(1.2)
@@ -411,20 +341,6 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
 
             self.assertEqual(first["review_digest"], second["review_digest"])
             self.assertEqual(first["review"], second["review"])
-            ages = [
-                reading["age_seconds"]
-                for payload in (first, second)
-                for reading in payload["source_freshness"]
-            ]
-            self.assertEqual(ages, [0, 0])
-            self.assertTrue(
-                all(
-                    reading["health"] == "healthy"
-                    for payload in (first, second)
-                    for reading in payload["source_freshness"]
-                ),
-                "auto mode must compare and republish before each review",
-            )
 
     def test_expect_carries_one_reviewed_decision_across_two_commands(self) -> None:
         # The workflow the review text prescribes: read the digest from a review, then finalize that
@@ -470,7 +386,7 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
 
             self.assertEqual(code, 0, applied)
             self.assertTrue(applied["finalized"])
-            self.assertTrue((env.project / ".claude" / "skills" / "code-review").exists())
+            self.assertTrue((env.project / _PLACED).exists())
 
     def test_yes_without_expect_keeps_its_meaning(self) -> None:
         with _environment() as env:
@@ -484,7 +400,7 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
     def test_uninstall_removes_the_installed_payload(self) -> None:
         with _environment() as env:
             env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
-            installed = env.project / ".claude" / "skills" / "code-review"
+            installed = env.project / _PLACED
             self.assertTrue(installed.exists())
 
             code, payload = env.run(
@@ -525,8 +441,8 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
 
             self.assertEqual(code, 1)
             diagnostic = payload["diagnostics"][0]
-            self.assertEqual(diagnostic["code"], "artifact-incompatible")
-            self.assertIn("claude", diagnostic["message"])
+            self.assertEqual(diagnostic["code"], "artifact-placement-unavailable")
+            self.assertIn("supported profiles: claude, tabnine", diagnostic["message"])
             self.assertEqual(list(env.project.iterdir()), [])
 
     def test_an_unreadable_install_state_is_a_typed_refusal_not_a_crash(self) -> None:
@@ -534,8 +450,7 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
         # worse, treating the project as if nothing were installed and reinstalling over it.
         with _environment() as env:
             env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
-            state = env.project / ".aart-cli" / "manifest.json"
-            self.assertTrue(state.exists(), sorted(map(str, env.project.rglob("*"))))
+            (state,) = (Path(env.paths.data_root) / "state" / "installations").iterdir()
             state.write_text("{ this is not valid json ]", encoding="utf-8")
 
             code, payload = env.run("consume", "status", "--profile", "claude")
@@ -553,25 +468,19 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn("<source>/<kind>/<name>", payload["diagnostics"][0]["message"])
 
-    def test_setup_on_an_artifact_that_declares_none_completes_with_an_empty_queue(self) -> None:
+    def test_setup_on_an_artifact_that_declares_none_says_so_and_changes_nothing(self) -> None:
         with _environment() as env:
             env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
+            before = sorted(map(str, env.project.rglob("*")))
 
             code, payload = env.run("consume", "setup", _COORDINATE, "--profile", "claude", "--yes")
 
-            self.assertEqual(code, 0, payload)
-            self.assertEqual(payload["setup"]["planned"], [])
-            self.assertEqual(payload["setup"]["planning_failures"], [])
-
-    def test_setup_review_never_executes_and_never_authorizes_implicitly(self) -> None:
-        with _environment() as env:
-            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
-
-            code, payload = env.run("consume", "setup", _COORDINATE, "--profile", "claude")
-
-            self.assertEqual(code, 0, payload)
-            self.assertFalse(payload["finalized"])
-            self.assertIn("setup", payload)
+            self.assertEqual(code, 1, payload)
+            self.assertEqual(
+                payload["diagnostics"][0]["message"],
+                "selected configured installations declare no setup",
+            )
+            self.assertEqual(sorted(map(str, env.project.rglob("*"))), before)
 
     def test_offline_install_from_the_published_snapshot_succeeds(self) -> None:
         with _environment() as env:
@@ -580,7 +489,8 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
             )
 
             self.assertEqual(code, 0, payload)
-            self.assertTrue(payload["offline_last_known_good"])
+            self.assertTrue(payload["finalized"])
+            self.assertTrue((env.project / _PLACED / "SKILL.md").is_file())
 
 
 @unittest.skipUnless(
@@ -589,18 +499,12 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
     "refused for the platform before any of these boundaries is reached",
 )
 class DeclaredSetupE2ETest(unittest.TestCase):
-    """The route on which declared setup actually runs, end to end, from the CLI.
+    """The route on which declared setup runs, end to end, from the CLI, over a local Registry.
 
-    Nothing anywhere proved this before: the only existing setup coverage over a real machine is
-    the empty case -- an artifact that declares none -- and everything else is unit-level against a
-    hand-built install state. So this is the working route's missing evidence, and it is also the
-    contrast that gives `tests/configured_setup_gap_test.py` its meaning: the same declaration on
-    the configured registry seam is never looked at (B-044).
-
-    What runs it is the legacy path, reached because a local source is not an approved registry
-    coordinate, and every gate on the way is asserted here rather than assumed: an unreviewed
-    source refuses without explicit authorization, a reviewed plan applies nothing until its
-    effects are approved, and only both together write the file.
+    A consumer installs only from a Registry (INV-269), and what a Registry publishes is reviewed,
+    so no source-trust gate stands in front of the recipe: the gate that remains is the effects
+    themselves. An install reviews the plan and applies none of it, `setup` without
+    `--approve-setup-effects` does the same, and only the approval writes the file.
     """
 
     #: Install first. Setup configures what is installed, so there is nothing to configure before.
@@ -610,92 +514,45 @@ class DeclaredSetupE2ETest(unittest.TestCase):
         self.assertFalse((env.project / _CONFIGURED).exists())
         return payload
 
+    def _reviewed_and_not_applied(self, env, setup: dict) -> None:
+        self.assertEqual(setup["planning_failures"], [])
+        planned = setup["planned"]
+        self.assertEqual([item["trust"] for item in planned], ["registry-reviewed"])
+        self.assertEqual([item["recipe"] for item in planned], ["setup/installer.json"])
+        self.assertEqual(
+            [effect["target"] for effect in planned[0]["effects"]],
+            [str(env.project / _CONFIGURED)],
+        )
+        self.assertEqual([effect["capability"] for effect in planned[0]["effects"]], ["filesystem"])
+        self.assertEqual([item["status"] for item in setup["items"]], ["cancelled"])
+        self.assertEqual(setup["configured"], 0)
+        self.assertFalse((env.project / _CONFIGURED).exists())
+
     def test_install_names_the_setup_it_did_not_run_instead_of_staying_silent(self) -> None:
-        """The half the configured seam has no answer for at all.
-
-        `install` on this route reaches the setup engine, so an install that leaves setup outstanding
-        says so under a `setup` key with the reason. The same install through the configured seam
-        emits no `setup` key at all, which is the difference B-044 records.
-        """
-
         with _environment_declaring_setup() as env:
             payload = self._installed(env)
 
-            self.assertEqual(payload["setup"]["planned"], [])
+            self._reviewed_and_not_applied(env, payload["setup"])
             self.assertEqual(
-                [item["detail"] for item in payload["setup"]["planning_failures"]],
-                ["setup from local requires explicit source authorization"],
+                [item["retry"] for item in payload["setup"]["items"]],
+                [
+                    f"aart-cli consume setup {_COORDINATE} --profile claude --scope project "
+                    "--yes --approve-setup-effects"
+                ],
             )
 
-    def test_setup_from_an_unreviewed_source_refuses_without_explicit_authorization(self) -> None:
-        """The trust gate, over a real machine.
-
-        A local source is not company-reviewed, so its recipe may not run on somebody's machine
-        because they typed `--yes` to an install. This is the boundary the preserved B-044 draft
-        made unfireable by hardcoding `TrustClass.COMPANY_REVIEWED` into the policy check, and
-        nothing in the suite noticed -- because nothing in the suite reached it.
-        """
+    def test_a_reviewed_plan_applies_nothing_until_its_effects_are_approved(self) -> None:
+        """`--yes` confirms the run; it does not consent to the effects the plan names."""
 
         with _environment_declaring_setup() as env:
             self._installed(env)
 
-            code, payload = env.run(
-                "consume",
-                "setup",
-                _COORDINATE,
-                "--profile",
-                "claude",
-                "--yes",
-                "--approve-setup-effects",
-            )
+            code, payload = env.run("consume", "setup", _COORDINATE, "--profile", "claude", "--yes")
 
-            self.assertEqual(code, 1)
-            self.assertEqual(payload["setup"]["planned"], [])
-            self.assertEqual(
-                [item["detail"] for item in payload["setup"]["planning_failures"]],
-                ["setup from local requires explicit source authorization"],
-            )
-            self.assertFalse((env.project / _CONFIGURED).exists())
-
-    def test_an_authorized_plan_is_reviewed_and_applies_nothing_until_its_effects_are(self) -> None:
-        """Authorizing the source produces a plan; it does not consent to the plan.
-
-        The review names every effect with the capability it needs and the recovery it offers, and
-        the run stops there. Two separate answers, because "I trust this source" and "apply this
-        exact change to this exact file" are two separate questions.
-        """
-
-        with _environment_declaring_setup() as env:
-            self._installed(env)
-
-            code, payload = env.run(
-                "consume",
-                "setup",
-                _COORDINATE,
-                "--profile",
-                "claude",
-                "--yes",
-                "--authorize-untrusted-source",
-            )
-
-            self.assertEqual(payload["setup"]["planning_failures"], [])
-            planned = payload["setup"]["planned"]
-            self.assertEqual([item["trust"] for item in planned], ["local"])
-            self.assertEqual([item["recipe"] for item in planned], ["setup/installer.json"])
-            self.assertEqual(
-                [effect["target"] for effect in planned[0]["effects"]],
-                [str(env.project / _CONFIGURED)],
-            )
-            self.assertEqual(
-                [effect["capability"] for effect in planned[0]["effects"]], ["filesystem"]
-            )
-            # Reviewed, and refused: the effects were never approved, so the file is not there.
-            self.assertEqual([item["status"] for item in payload["setup"]["items"]], ["cancelled"])
-            self.assertEqual(payload["setup"]["configured"], 0)
-            self.assertFalse((env.project / _CONFIGURED).exists())
             self.assertNotEqual(code, 0)
+            self._reviewed_and_not_applied(env, payload["setup"])
 
-    def test_an_authorized_and_approved_setup_writes_the_block_it_reviewed(self) -> None:
+    def test_an_approved_setup_writes_the_block_it_reviewed(self) -> None:
         with _environment_declaring_setup() as env:
             self._installed(env)
 
@@ -706,7 +563,6 @@ class DeclaredSetupE2ETest(unittest.TestCase):
                 "--profile",
                 "claude",
                 "--yes",
-                "--authorize-untrusted-source",
                 "--approve-setup-effects",
             )
 

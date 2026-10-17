@@ -22,19 +22,13 @@ the `no-orphan-run-directory` claim answers `true` about a directory that was ne
 
 from __future__ import annotations
 
-import contextlib
 import json
-import shutil
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
-from tests.marketplace_lifecycle_e2e_test import (
-    _COORDINATE,
-    _FIXTURE,
-    _Environment,
-)
+from tests.configured_installation_draft_e2e_test import AuthoredSetup
+from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _environment_with_setup
 
 #: The protocol AART invokes: `<script> <phase> --result <path>`, one JSON verdict per phase. `plan`
 #: succeeds so the run reaches `apply`; `apply` fails so compensation is attempted; `rollback` fails
@@ -84,37 +78,21 @@ _SETUP = (
     "--profile",
     "claude",
     "--yes",
-    "--authorize-untrusted-source",
     "--approve-setup-effects",
     "--authorize-custom-entrypoint",
 )
 
 
-@contextlib.contextmanager
 def _environment_whose_rollback_fails():
-    """The shared fixture source, copied and taught to carry the failing custom protocol."""
+    """The reference Registry, its Skill packaged to carry the failing custom protocol."""
 
-    with tempfile.TemporaryDirectory() as raw:
-        root = Path(raw).resolve()
-        location = root / "source"
-        shutil.copytree(_FIXTURE, location)
-        artifact = location / "artifacts" / "skill" / "code-review"
-        manifest = json.loads((artifact / "artifact.json").read_text(encoding="utf-8"))
-        manifest["setup"] = {"recipe": "setup/installer.json", "platforms": ["darwin"]}
-        (artifact / "artifact.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        (artifact / "setup").mkdir()
-        (artifact / "setup" / "installer.json").write_text(
-            json.dumps(_RECIPE, indent=2), encoding="utf-8"
+    return _environment_with_setup(
+        AuthoredSetup(
+            _RECIPE,
+            "Run the steps in setup/install.sh yourself.\n",
+            (("setup/install.sh", _SCRIPT, True),),
         )
-        script = artifact / "setup" / "install.sh"
-        script.write_text(_SCRIPT, encoding="utf-8")
-        script.chmod(0o755)
-        (artifact / "SETUP.md").write_text(
-            "Run the steps in setup/install.sh yourself.\n", encoding="utf-8"
-        )
-        machine = root / "machine"
-        machine.mkdir()
-        yield _Environment(machine, location)
+    )
 
 
 def _working_copies(env) -> list[Path]:

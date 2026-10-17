@@ -1,9 +1,9 @@
-"""CP-15: `aart-cli source sync` over a real source whose upstream turned invalid.
+"""CP-15: `aart-cli consume registry sync` over a real Registry whose upstream turned invalid.
 
 INV-218 — *invalid fetched registry state cannot replace last-known-good state* — is already held
 at two seams below the CLI: `source_store_adapter_test` proves a corrupt convergent snapshot never
 becomes `current`, and `source_sync_application_test` proves a validation failure publishes nothing.
-Both drive the seam directly. Nothing drove `aart-cli source sync`, the verb an operator actually runs,
+Both drive the seam directly. Nothing drove the sync verb an operator actually runs,
 over a real source that changed under it — so the invariant was held by the machinery and unproven
 at the surface that uses it.
 
@@ -21,7 +21,6 @@ import contextlib
 import io
 import json
 import os
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -34,17 +33,27 @@ from aart_cli.sources.model import (
     source_instance_id,
     source_store_paths,
 )
-from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _FIXTURE, _Environment
+from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _PLACED, _Environment
+from tests.reference_registry import (
+    ESSENTIALS,
+    commit,
+    memory,
+    republish,
+    skill,
+    write_reference_registry,
+)
+
+#: The approved Skill's payload in the Registry checkout.
+_PUBLISHED_SKILL = Path("artifacts/skill/code-review/1.0.0/payload/SKILL.md")
 
 
 @contextlib.contextmanager
 def _environment_over_a_writable_source():
-    """The shared fixture, copied so the test can publish invalid content into it mid-run."""
+    """The reference Registry in a checkout of its own, so a test can publish into it mid-run."""
 
     with tempfile.TemporaryDirectory() as raw:
         root = Path(raw).resolve()
-        location = root / "source"
-        shutil.copytree(_FIXTURE, location)
+        location = write_reference_registry(root / "registry")
         machine = root / "machine"
         machine.mkdir()
         yield _Environment(machine, location), location
@@ -84,10 +93,11 @@ def _break_upstream(location: Path) -> None:
     """
 
     (location / "aart-cli-registry.json").write_text("{ not json", encoding="utf-8")
-    (location / "artifacts" / "skill" / "code-review" / "payload" / "SKILL.md").write_text(
+    (location / _PUBLISHED_SKILL).write_text(
         "# Code Review\n\nRevision published with an unreadable registry marker.\n",
         encoding="utf-8",
     )
+    commit(location, "broken")
 
 
 def _offered(payload) -> list:
@@ -112,17 +122,22 @@ def _current_digest(env: _Environment) -> str:
     return str(value.candidate.snapshot_digest)
 
 
+def _installation_records(env: _Environment) -> dict[str, bytes]:
+    root = Path(env.paths.data_root) / "state" / "installations"
+    return {path.name: path.read_bytes() for path in sorted(root.iterdir())}
+
+
 class RefusedSyncKeepsLastKnownGoodTest(unittest.TestCase):
     def test_a_refused_sync_reports_the_failure_per_source_and_exits_nonzero(self) -> None:
         with _environment_over_a_writable_source() as (env, location):
             _break_upstream(location)
 
-            code, payload = _source_json(env, "maintain", "upstream", "sync")
+            code, payload = _source_json(env, "consume", "registry", "sync")
 
             self.assertEqual(code, 1, payload)
             self.assertFalse(payload["ok"], payload)
-            self.assertEqual(len(payload["upstreams"]), 1, payload)
-            entry = payload["upstreams"][0]
+            self.assertEqual(len(payload["registries"]), 1, payload)
+            entry = payload["registries"][0]
             self.assertEqual(entry["alias"], "reference")
             self.assertFalse(entry["ok"], entry)
             self.assertTrue(entry["diagnostics"], entry)
@@ -133,11 +148,13 @@ class RefusedSyncKeepsLastKnownGoodTest(unittest.TestCase):
         with _environment_over_a_writable_source() as (env, location):
             _break_upstream(location)
 
-            code, text = _source(env, "maintain", "upstream", "sync")
+            code, text = _source(env, "consume", "registry", "sync")
 
             self.assertEqual(code, 1, text)
             self.assertIn("reference: failed", text)
-            self.assertIn("remediation:", text)
+            self.assertIn(
+                "remediation: the last synchronized snapshot of this Registry stays", text
+            )
 
     def test_the_marketplace_still_serves_the_last_good_snapshot(self) -> None:
         """The point of the invariant: a refused fetch must not take the registry away.
@@ -153,7 +170,7 @@ class RefusedSyncKeepsLastKnownGoodTest(unittest.TestCase):
             good = _current_digest(env)
             _break_upstream(location)
 
-            _source_json(env, "maintain", "upstream", "sync")
+            _source_json(env, "consume", "registry", "sync")
 
             self.assertEqual(_current_digest(env), good)
             _, after = _source_json(env, "consume", "list")
@@ -176,11 +193,11 @@ class RefusedSyncKeepsLastKnownGoodTest(unittest.TestCase):
             self.assertEqual(before["sources"][0]["diagnostics"], [])
             _break_upstream(location)
 
-            _source_json(env, "maintain", "upstream", "sync")
+            _source_json(env, "consume", "registry", "sync")
 
             _, after = _source_json(env, "consume", "list")
             self.assertEqual(after["sources"][0]["health"], "could-not-check")
-            self.assertEqual(after["sources"][0]["diagnostics"], ["source-invalid"])
+            self.assertEqual(after["sources"][0]["diagnostics"], ["promotion-invalid"])
             # Degraded, not withdrawn: the rows are still there to install from.
             self.assertTrue(after["artifacts"], after)
 
@@ -189,18 +206,15 @@ class RefusedSyncKeepsLastKnownGoodTest(unittest.TestCase):
 
         with _environment_over_a_writable_source() as (env, location):
             env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
-            installed = env.project / ".claude" / "skills" / "code-review" / "SKILL.md"
+            installed = env.project / _PLACED / "SKILL.md"
             before = installed.read_bytes()
-            recorded = json.loads((env.project / ".aart-cli" / "manifest.json").read_text())
+            recorded = _installation_records(env)
             _break_upstream(location)
 
-            _source_json(env, "maintain", "upstream", "sync")
+            _source_json(env, "consume", "registry", "sync")
 
             self.assertEqual(installed.read_bytes(), before)
-            self.assertEqual(
-                json.loads((env.project / ".aart-cli" / "manifest.json").read_text()),
-                recorded,
-            )
+            self.assertEqual(_installation_records(env), recorded)
             code, status = env.run("consume", "status", "--profile", "claude")
             self.assertEqual(code, 0, status)
             # Not merely readable: still *current*, because the snapshot it was installed from is
@@ -217,19 +231,17 @@ class RefusedSyncKeepsLastKnownGoodTest(unittest.TestCase):
         """
 
         with _environment_over_a_writable_source() as (env, location):
-            good = (
-                location / "artifacts" / "skill" / "code-review" / "payload" / "SKILL.md"
-            ).read_bytes()
             _break_upstream(location)
-            _source_json(env, "maintain", "upstream", "sync")
+            _source_json(env, "consume", "registry", "sync")
 
             code, payload = env.run(
                 "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
-            placed = env.project / ".claude" / "skills" / "code-review" / "SKILL.md"
-            self.assertEqual(placed.read_bytes(), good)
+            placed = (env.project / _PLACED / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("Check correctness, security, performance", placed)
+            self.assertNotIn("unreadable registry marker", placed)
 
     def test_update_after_a_refused_sync_is_a_no_op_rather_than_a_refusal(self) -> None:
         """The half that hurt: `prepare_update` refused, so there was no way back but uninstall.
@@ -242,13 +254,13 @@ class RefusedSyncKeepsLastKnownGoodTest(unittest.TestCase):
         with _environment_over_a_writable_source() as (env, location):
             env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
             _break_upstream(location)
-            _source_json(env, "maintain", "upstream", "sync")
+            _source_json(env, "consume", "registry", "sync")
 
             code, payload = env.run("consume", "update", "--profile", "claude", "--yes")
 
             self.assertEqual(code, 0, payload)
-            self.assertEqual(payload["session_status"], "no-op")
             self.assertEqual([item["status"] for item in payload["items"]], ["current"])
+            self.assertEqual(payload["receipt"]["artifacts"][0]["steps"], [])
 
     def test_a_repaired_upstream_synchronizes_again(self) -> None:
         """The counterpart: the refusal was about the content, not about `sync` being inert."""
@@ -256,18 +268,21 @@ class RefusedSyncKeepsLastKnownGoodTest(unittest.TestCase):
         with _environment_over_a_writable_source() as (env, location):
             good = _current_digest(env)
             _break_upstream(location)
-            self.assertEqual(_source_json(env, "maintain", "upstream", "sync")[0], 1)
-            (location / "aart-cli-registry.json").unlink()
-            (location / "artifacts" / "skill" / "code-review" / "payload" / "SKILL.md").write_text(
-                "# Code Review\n\nSecond revision.\n", encoding="utf-8"
+            self.assertEqual(_source_json(env, "consume", "registry", "sync")[0], 1)
+            republish(
+                location,
+                skill(),
+                skill("1.1.0", "# Code Review\n\nSecond revision.\n"),
+                memory(),
+                ESSENTIALS,
             )
 
-            code, payload = _source_json(env, "maintain", "upstream", "sync")
+            code, payload = _source_json(env, "consume", "registry", "sync")
 
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["ok"], payload)
-            self.assertEqual(payload["upstreams"][0]["disposition"], "published")
-            self.assertEqual(payload["upstreams"][0]["snapshot_digest"], _current_digest(env))
+            self.assertEqual(payload["registries"][0]["disposition"], "published")
+            self.assertEqual(payload["registries"][0]["snapshot_digest"], _current_digest(env))
             self.assertNotEqual(_current_digest(env), good)
 
 

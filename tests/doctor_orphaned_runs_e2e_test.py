@@ -38,7 +38,6 @@ _SETUP = (
     "--profile",
     "claude",
     "--yes",
-    "--authorize-untrusted-source",
     "--approve-setup-effects",
     "--authorize-custom-entrypoint",
 )

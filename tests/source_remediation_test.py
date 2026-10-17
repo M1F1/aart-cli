@@ -25,7 +25,6 @@ import io
 import json
 import os
 import re
-import shutil
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -51,9 +50,11 @@ from aart_cli.tui_sources import (
 )
 from tests.configuration_application_test import _FakePorts as _ConfigurationPorts
 from tests.configuration_application_test import _paths
-from tests.marketplace_lifecycle_e2e_test import _FIXTURE, _environment
+from tests.marketplace_lifecycle_e2e_test import _environment
+from tests.reference_registry import REFERENCE_CONTENT, republish
 from tests.registry_maintenance_fixtures import approved_registry_snapshot, write_snapshot
 from tests.source_sync_application_test import _candidate, _current, _FakePorts, _request
+from tests.source_sync_command_e2e_test import _environment_over_a_writable_source
 
 _COMMAND = re.compile(r"`(aart-cli [^`]+)`")
 _BACKTICKED = re.compile(r"`(aart-cli\s[^`]+)`")
@@ -594,21 +595,14 @@ class RendererParityTest(unittest.TestCase):
     def test_the_per_source_sync_renderer_renders_the_same_remediation_in_both(self) -> None:
         """The renderer this package repaired, on the refusal `2.1.0` exists to deliver."""
 
-        with _environment() as staging:
-            source = staging.root / "renamed-source"
-            shutil.copytree(_FIXTURE, source)
+        with _environment_over_a_writable_source() as (env, location):
+            republish(location, *REFERENCE_CONTENT, declared_id="renamed-reference-registry")
 
-            with _environment(source) as env:
-                marker = source / "aart-cli-source.json"
-                document = json.loads(marker.read_text(encoding="utf-8"))
-                document["source_id"] = "renamed-reference-source"
-                marker.write_text(json.dumps(document, indent=2), encoding="utf-8")
+            text, envelope = self._both_renderers(env, "consume", "registry", "sync")
 
-                text, envelope = self._both_renderers(env, "maintain", "upstream", "sync")
-
-                self.assertEqual(len(text), 1, text)
-                self.assertIn("aart-cli maintain upstream resubscribe --alias reference", text[0])
-                self.assertEqual(sorted(text), sorted(envelope))
+            self.assertEqual(len(text), 1, text)
+            self.assertIn("aart-cli consume registry resubscribe --alias reference", text[0])
+            self.assertEqual(sorted(text), sorted(envelope))
 
     def test_registry_renders_the_same_remediation_in_both(self) -> None:
         with _environment() as env:

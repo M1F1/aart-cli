@@ -4682,3 +4682,46 @@ Source Sync writes (`io/maintainer_sync.py`), and nothing on the command line wr
 `maintain upstream sync` refreshes the pinned snapshot and `maintain upstream scan` only reports.
 A scripted maintainer therefore has to open the TUI once per change. Not required by §175, which
 names `candidate list|promote` only; the transaction exists and needs a CLI face.
+
+## B-203 — Runtime requirements in the author format
+
+`consume health` reports runtime requirements as not declared for every Registry artifact. The
+only declaration is `aart.runtime-requirements` in the native package format, which a Registry no
+longer serves (D-444). The author manifest (`aart-cli.dev/*/v1`) needs a field for it before health
+can say anything about a Registry installation. Not required by §175.
+
+## B-204 — Uninstall leaves the files AART created
+
+On the Registry path, the last uninstall in a scope leaves three things behind:
+- the instruction file it created, emptied (`CLAUDE.md`, `TABNINE.md`);
+- a settings file it created, now `{"mcpServers": {}}`;
+- empty placement directories (`.claude/skills`, `.claude/aart-cli/...`).
+
+Git ignores empty directories, so a clean checkout stays clean except for those files. The retired
+native path tore the scope down. The Registry path needs install-time evidence that a file did not
+exist before, so that removal can restore its absence. Pinned by `tests/marketplace_memory_e2e_test.py`,
+`tests/tabnine_mcp_e2e_test.py` and `tests/scope_teardown_test.py`.
+
+## B-205 — Registry status compares nothing against the Registry
+
+`consume status` on the Registry path reports `current` in three cases where a comparison against
+the Registry would say otherwise:
+- the Registry has since withdrawn the artifact (was `removed-upstream`);
+- the Registry has been removed (was `source-unavailable`);
+- the installation drifts from policy (§165.21). Development installs are not marked either
+  (§165.23).
+
+The retired path had all of these. The manifest-backed `policy_drift_e2e_test` was deleted with it
+(D-444). `withdrawal_and_purge_e2e_test`, `source_project_isolation_test` and
+`identity_change_reconciliation_test` pin today's answer and name this item.
+
+## B-206 — Delete the unreachable native consumer pipeline
+
+After D-444 the lifecycle never reaches these, but they still exist:
+- `load_local_consumer_service`'s install flow, which `_health` still loads for its environment;
+- the `ConsumerApplicationService` prepare and finalize;
+- the legacy `marketplace/catalog.py` resolution failures;
+- the `Request` fields only they read;
+- the `_FIXTURE` constant in `tests/marketplace_lifecycle_e2e_test.py`.
+
+Delete them once `consume health` reads the Registry seam (B-203).
