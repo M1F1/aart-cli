@@ -1214,9 +1214,14 @@
           "status": "done"
         },
         {
+          "id": "15",
+          "title": "MCP smoke cannot PASS with unset inputs: missing credentials and ordinary or secret AART_NOT_SET values give NOT CONFIGURED, protocol NOT RUN, no server start, and a nonzero CLI result (§170, D-447)",
+          "status": "done"
+        },
+        {
           "id": "12",
           "title": "TUI Author Mode (Settings toggle, off by default): Workspace, Check (author check per manifest) and New artifact (author init) on the same application code as aart-cli author (§175.5, INV-272)",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "13",

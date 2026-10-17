@@ -4740,3 +4740,18 @@ The three survivors that changed the new onboarding Registry sentence prompted a
 assertion in `WizardOnboardingTests`. Explicit mutmut reruns classified those three as timeouts
 (476 killed, 157 survived, 3 timeouts); direct targeted mutation of that sentence is held by the
 updated test. The screen-title regression is separately mutation-proven in the CP-32 slice.
+
+
+## B-208 — Installed smoke mutation findings outside unset-input classification
+
+CP-32 step 15's scoped `make mutants` over `io/installed_smoke.py`, with
+`installed_mcp_configuration_test` and `mcp_smoke_cli_test`, reported 402 mutants: 175 killed,
+156 survived, 71 without tests. Reviewed survivors outside the new missing/placeholder behavior
+include launcher/configuration integrity error branches, unsupported-provider error wording,
+response metadata and declaration/plan fields. Representative ids:
+`x__configuration_values__mutmut_14`, `_29`, `_65`; `x_smoke_installation__mutmut_39`;
+`x_smoke_plan__mutmut_1` (no tests in this scope). Message mutations retaining the placeholder
+and recovery words (`_59`, `_81`, `_89`) preserve this slice's semantic claims.
+Review these on the corresponding next change; this result does not reclassify those independent
+behaviors onto CP-32's active slice. The new classification and no-start claims have dedicated
+red/green, property and targeted-mutation evidence in the slice.

@@ -28,6 +28,7 @@ from aart_cli.application.mcp_smoke import (
 from aart_cli.domain.configuration_files import parse_configuration_file
 from aart_cli.domain.credentials import CredentialState, ProviderState
 from aart_cli.domain.harness import Scope
+from aart_cli.domain.inputs import SKIPPED_INPUT
 from aart_cli.domain.installation_owner import installation_key
 from aart_cli.domain.receipts import InstallationReceipt, InstalledRecord
 from aart_cli.domain.result import Err
@@ -108,18 +109,26 @@ def _response_preview(result: McpCallResult, *, sensitive: tuple[str, ...]) -> d
     }
 
 
-def _configuration_values(receipt: InstallationReceipt) -> tuple[dict[str, str], str | None]:
+def _configuration_failure(
+    reason: str, outcome: SmokeOutcome = SmokeOutcome.BLOCKED
+) -> tuple[dict[str, str], SmokeStageResult]:
+    return {}, SmokeStageResult(SmokeStage.INSTALLATION, outcome, reason)
+
+
+def _configuration_values(
+    receipt: InstallationReceipt,
+) -> tuple[dict[str, str], SmokeStageResult | None]:
     owner = receipt.owner
     if owner is None:
-        return {}, "the installation record has no owner"
+        return _configuration_failure("the installation record has no owner")
     if not os.path.isfile(receipt.launcher) or not os.access(receipt.launcher, os.X_OK):
-        return {}, "the installed launcher is absent or not executable"
+        return _configuration_failure("the installed launcher is absent or not executable")
     try:
         launcher_bytes = Path(receipt.launcher).read_bytes()
     except OSError:
-        return {}, "the installed launcher cannot be read"
+        return _configuration_failure("the installed launcher cannot be read")
     if hashlib.sha256(launcher_bytes).hexdigest() != receipt.launcher_digest.value:
-        return {}, "the installed launcher differs from its receipt"
+        return _configuration_failure("the installed launcher differs from its receipt")
 
     values: dict[str, str] = {}
     for record in receipt.configuration_files:
@@ -128,30 +137,48 @@ def _configuration_values(receipt: InstallationReceipt) -> tuple[dict[str, str],
         try:
             content = Path(record.path).read_bytes()
         except OSError:
-            return {}, "the installation configuration file is unavailable"
+            return _configuration_failure("the installation configuration file is unavailable")
         if hashlib.sha256(content).hexdigest() != record.digest.value:
-            return {}, "the installation configuration differs from its receipt"
+            return _configuration_failure("the installation configuration differs from its receipt")
         try:
             decoded = content.decode("utf-8")
         except UnicodeDecodeError:
-            return {}, "the installation configuration is not UTF-8"
+            return _configuration_failure("the installation configuration is not UTF-8")
         parsed = parse_configuration_file(decoded)
         if isinstance(parsed, Err):
-            return {}, "the installation configuration is malformed"
+            return _configuration_failure("the installation configuration is malformed")
+        if any(value == SKIPPED_INPUT for _, value in parsed.value):
+            return _configuration_failure(
+                "an installation configuration input is still AART_NOT_SET; set it in Credentials and variables",
+                SmokeOutcome.NOT_CONFIGURED,
+            )
         values.update((identifier.value, value) for identifier, value in parsed.value)
 
     provider = MacOsKeychainProvider()
     for reference in receipt.credentials:
         if reference.provider.provider != provider.provider:
-            return {}, "the installation credential provider is unsupported on this host"
+            return _configuration_failure(
+                "the installation credential provider is unsupported on this host"
+            )
         observed = provider.inspect(reference)
         if isinstance(observed, Err):
-            return {}, "the installation credential could not be inspected"
-        if (
-            observed.value.provider_state is not ProviderState.AVAILABLE
-            or observed.value.state is not CredentialState.PRESENT
-        ):
-            return {}, "an installation credential is missing or its provider is unavailable"
+            return _configuration_failure("the installation credential could not be inspected")
+        if observed.value.provider_state is not ProviderState.AVAILABLE:
+            return _configuration_failure("the installation credential provider is unavailable")
+        if observed.value.placeholder:
+            return _configuration_failure(
+                "an installation credential is still AART_NOT_SET; set it in Credentials and variables",
+                SmokeOutcome.NOT_CONFIGURED,
+            )
+        if observed.value.state is CredentialState.ABSENT:
+            return _configuration_failure(
+                "an installation credential is missing; set it in Credentials and variables",
+                SmokeOutcome.NOT_CONFIGURED,
+            )
+        if observed.value.state is not CredentialState.PRESENT:
+            return _configuration_failure(
+                "an installation credential is invalid or could not be inspected"
+            )
     return values, None
 
 
@@ -243,7 +270,7 @@ def smoke_installation(
     config, config_failure = _configuration_values(receipt)
     if config_failure is not None:
         stages = (
-            SmokeStageResult(SmokeStage.INSTALLATION, SmokeOutcome.BLOCKED, config_failure),
+            config_failure,
             _depends_on_installation(),
         )
     else:

@@ -62,7 +62,7 @@ Registries (INV-269). Step 1 (the specification, with §175.4 reset-with-backup 
 (the configuration split, D-442) are done, and so are step 11, reset with backup (D-440), and steps 3, 4
 and 6, the `consume` / `maintain upstream` / `maintain registry` families (D-443). Step 5, `maintain candidate list`, is done too (B-202 for
 recording Candidates from the CLI). Step 7 is done: a consumer installs only from Registries (D-444; B-203–B-206 for what it
-exposed). Step 8 (TUI names, D-445) is done. Next are 12 (Author Mode), 13 (Marketplace details under More info), 14 (complete labeled Marketplace columns), 9 and 10.
+exposed). Step 8 (TUI names, D-445) and the owner-reported smoke fix in step 15 (D-447) are done. Next are 12 (Author Mode), 13 (Marketplace details under More info), 14 (complete labeled Marketplace columns), 9 and 10.
 
 **Exact next task: CP-32 step 12 (§175.5, INV-272, D-441).** Add Author Mode, off by
 default and enabled in Settings independently of Registry Maintainer Mode. Remember one normalized

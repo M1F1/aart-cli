@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-32 step 15 (D-447): unset inputs cannot pass MCP smoke.** A missing
+credential, secret placeholder or ordinary `AART_NOT_SET` yields NOT CONFIGURED and protocol
+NOT RUN. CLI JSON reports `ok: false` and returns nonzero; no server starts. Provider-side
+placeholder evidence is used without reading a secret. Two targeted mutations killed; 20
+directly affected tests and the related MCP E2E modules pass. Scoped mutation findings beyond
+this classification are B-208. Author Mode (step 12) is in progress; steps 13/14 remain planned.
+
 **2026-10-17, CP-32 scope extended (D-446): Marketplace details and readable columns.**
 The owner removed Marketplace's separate Artifact Details view in favor of More info, and
 requires labeled columns whose complete values remain visible at narrow widths. §175.6 and

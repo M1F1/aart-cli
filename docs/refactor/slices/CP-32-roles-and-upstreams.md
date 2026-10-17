@@ -29,6 +29,7 @@ See `docs/refactor/plan.json`, epic CP-32.
 6. `maintain registry`.
 7. Remove `source`, `marketplace`, top-level `registry` and the four kinds.
 8. TUI names and hints.
+15. Correct unset-input smoke outcomes (§170, D-447); owner-reported false PASS.
 12. TUI Author Mode (§175.5, D-441).
 13. Marketplace details under More info; remove its standalone Artifact Details view (§175.6).
 14. Named Marketplace columns with complete values at narrow widths (§175.6).
@@ -229,3 +230,38 @@ shows before removing that route; More info retains the focused offer and browsi
 14 needs generated-width layout properties that preserve complete headings and values, alongside
 focused real-shell cases for readable rows and cursor behavior. Existing column truncation may
 remain on other screens; this acceptance change is specifically Marketplace.
+
+
+## Step 15 — unset MCP inputs cannot pass smoke
+
+Done (D-447), promoted onto the critical path by the owner's observed false PASS. The installation
+configuration check ignored the provider's placeholder flag and ordinary `AART_NOT_SET` values.
+They now yield `NOT CONFIGURED`, with a Credentials and variables recovery, and protocol
+`NOT RUN`. An absent credential does likewise. Unsupported/unavailable providers and invalid or
+unknown credential observations stay BLOCKED. Typed `SmokeStageResult` failures carry their own
+outcomes; no diagnostic wording decides the classification. No secret value is read.
+
+Red first: the new real-file receipt/launcher/configuration tests reported `report.ok == True`
+for both secret and ordinary placeholders before the fix. `installed_mcp_configuration_test`
+covers those cases, a missing credential, configured references, unavailable/invalid providers,
+a generated ordinary-answer property, and the public CLI handler's JSON / nonzero result.
+The ordinary placeholder test has a second configured input, so one missing input is enough.
+
+Evidence: the two directly affected modules pass all 20 tests. The MCP-focused selection,
+stdio, evaluation, CLI, Installed and post-installation E2E modules also pass. Ruff, mypy and
+tach pass; docs-check passes. The separate Author Mode broad run is still an open step, not
+claimed as this step's verification.
+
+Targeted mutations, running all eight new tests:
+- Ignoring `observed.value.placeholder` turns exactly the secret-placeholder service test and
+  its CLI JSON/nonzero test red (the CLI incorrectly returns 0).
+- `any` → `all` over ordinary placeholder values turns exactly the ordinary-placeholder test red.
+
+Scoped advisory: `make mutants ONLY=aart_cli/io/installed_smoke.py
+TESTS="tests/installed_mcp_configuration_test.py tests/mcp_smoke_cli_test.py"`: 402 mutants,
+175 killed, 156 survived, 71 without tests. Initial clean-run collection exposed Hypothesis's
+`differing_executors` health check under mutmut's repeated unittest execution. The generated
+property now runs in a fresh nested function on each test invocation, retaining the same
+examples and assertions without suppressing a health check. The successful scoped run's
+out-of-slice integrity/response/plan findings are B-208; the new outcome/no-start claims are
+additionally held by the direct targeted mutations above.

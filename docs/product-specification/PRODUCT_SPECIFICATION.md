@@ -10768,7 +10768,11 @@ Each selected installation receives two independently evidenced stage results:
 | MCP startup and protocol | Its actual installed launcher responds using a supported MCP protocol, advertises the declared tool, and completes the declared call with a valid result |
 
 The second stage depends on the first: when installation configuration does not pass, the protocol
-stage is `NOT RUN` with the failed prerequisite named. Nothing else is verified. AART does not
+stage is `NOT RUN` with the failed prerequisite named. A missing credential or an ordinary input
+or credential still holding `AART_NOT_SET` makes installation configuration `NOT CONFIGURED`,
+with the input-entry recovery named. A provider item existing is insufficient when the provider
+reports that it is a placeholder; the comparison stays inside the provider (§172.3). This is a
+verification result, not a refusal to install or launch the artifact (§172.3). Nothing else is verified. AART does not
 claim that a passing protocol stage proves external-service access, authentication or permissions:
 a server that turns an upstream failure into an ordinary successful result passes this stage, and
 the report must not suggest otherwise. No keyword reading, result expectation or model assessment

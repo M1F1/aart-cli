@@ -11083,3 +11083,23 @@ Marketplace. Marketplace columns must be labeled and must not be cut off when sp
 documentation and final verification. The existing disclosure control remains the one place
 for details; narrow rows wrap or stack labeled fields. Collection previews and Installed details
 are outside this removal.
+
+
+## D-447 — Unset MCP inputs cannot pass installation-configuration smoke (CP-32 step 15)
+
+The owner's report (2026-10-17) exposed a false PASS: the Keychain adapter correctly reports
+`CredentialObservation.placeholder`, but `_configuration_values` only checked `PRESENT`.
+Ordinary `AART_NOT_SET` values were likewise passed through as configured.
+
+§170.1 already requires missing local bindings to be NOT CONFIGURED. §170.2 now states the
+placeholder case explicitly. A missing credential or either kind of placeholder yields
+`NOT CONFIGURED` and protocol `NOT RUN`, never starting the server; unavailable providers and
+invalid/unknown credential observations remain BLOCKED. Secret values are never read: the
+provider's existing placeholder flag is sufficient. The typed configuration failure carries its
+stage outcome rather than classifying diagnostic text.
+
+The test still makes no claim of authenticated service access (§170.2). A configured server
+whose declared tool returns a valid non-error result may pass protocol regardless of what its
+other tools or an external service would do. Installation and launcher behavior under §172 are
+unchanged. This defect is CP-32 step 15 on the critical path because without it the existing
+§170 missing-binding result is false; no additional authentication stage is introduced.

@@ -28,7 +28,16 @@ def _installed_run(declaration, result, *, config=None, config_failure=None):
         patch.object(
             installed_smoke,
             "_configuration_values",
-            return_value=(config or {}, config_failure),
+            return_value=(
+                config or {},
+                None
+                if config_failure is None
+                else installed_smoke.SmokeStageResult(
+                    installed_smoke.SmokeStage.INSTALLATION,
+                    installed_smoke.SmokeOutcome.BLOCKED,
+                    config_failure,
+                ),
+            ),
         ),
         patch.object(installed_smoke, "_declaration", return_value=(declaration, None)),
         patch.object(
