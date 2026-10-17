@@ -62,26 +62,18 @@ Registries (INV-269). Step 1 (the specification, with §175.4 reset-with-backup 
 (the configuration split, D-442) are done, and so are step 11, reset with backup (D-440), and steps 3, 4
 and 6, the `consume` / `maintain upstream` / `maintain registry` families (D-443). Step 5, `maintain candidate list`, is done too (B-202 for
 recording Candidates from the CLI). Step 7 is done: a consumer installs only from Registries (D-444; B-203–B-206 for what it
-exposed). Next are 8 (TUI names), then 12 (Author Mode), 9 and 10.
+exposed). Step 8 (TUI names, D-445) is done. Next are 12 (Author Mode), 9 and 10.
 
-**Exact next task: CP-32 step 8 (§175.3).** Nothing is implemented yet; a survey found:
-- Maintainer areas are named "Sources" (screen ids `31-sources` …, `MaintainerScreen.SOURCE_*` in
-  `application/maintainer_views.py`). The visible names live in `application/consumer_ui.py`
-  (`_navigate_binding(... "Add Source" / "Sources" / "Candidates" ...)` near line 2530),
-  `tui_maintainer.py` (`Sources: N`, "No authoring Sources are configured."), `wizard.py:47`,
-  `tui_layout._NAMES` ("Source Sync", "Source Scan") and `tui_consumer.py:1566`/`2129`/`2571`.
-- Target: three areas named as the CLI is: **Upstream repositories** (subtitle "Author
-  repositories this Registry takes artifacts from"), **Candidates**, **Registry** (Collections,
-  Validation, Publish). "Source Sync" becomes "Upstream sync", and "Add Source" becomes "Add
-  upstream". Internal enum and screen ids may stay (D-443) unless a test pins the visible id.
-- Every hint names the new commands. Check `consumer_actions.py` ~1959/2963/3012 and
-  `tui_sources.py:708/805` ("Sources stage"): the consumer screen is Registries and
-  lists Registries only. Verify that `tui_sources` loads only `is_registry` connections for screen 21.
-- Tests first: the screen-text tests under `tests/*tui*`, `tests/consumer_shell_test.py`,
-  `tests/local_registry_promotion_e2e_test.py` and the frame contracts pin today's words; change
-  them to the target, then the code. Record a targeted mutation in the slice doc, then
-  `handoff-plan done CP-32.8` and commit.
-See `slices/CP-32-roles-and-upstreams.md`.
+**Exact next task: CP-32 step 12 (§175.5, INV-272, D-441).** Add Author Mode, off by
+default and enabled in Settings independently of Registry Maintainer Mode. Remember one normalized
+absolute workspace outside the application home. Its Check and New artifact actions use the same
+manifest checker and skeleton writer as `aart-cli author`; report every manifest and let a person
+open full diagnostics. Re-run Check with one key. Author Mode never connects an upstream or changes
+a Registry. Existing seams: `authoring.check.check_author_manifests`,
+`authoring.skeleton.author_skeleton`, `io.author_workspace.read_author_workspace` /
+`write_author_skeleton`. Keep effects out of projections and the reducer. Tests first, a targeted
+mutation, focused gates, then `handoff-plan done CP-32.12` and commit. After it: 9, then CI on #78
+for step 10. See `slices/CP-32-roles-and-upstreams.md`.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).

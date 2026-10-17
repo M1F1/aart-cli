@@ -8,7 +8,7 @@ Git author repository
         -> Candidate
         -> selected promotion
         -> Registry
-        -> later Source Sync reports upstream movement
+        -> later Upstream sync reports upstream movement
 ```
 
 Its public entrance is `aart-cli source add --kind source-git`. Until B-094 that entrance validated
@@ -216,7 +216,7 @@ class _Environment:
         return code, (json.loads(raw) if raw.strip() else None)
 
     def synchronize_registry(self):
-        """Source Sync compares Candidates against an approved registry, so give it one."""
+        """Upstream sync compares Candidates against an approved registry, so give it one."""
 
         code, payload = self.run("consume", "registry", "sync")
         assert code == 0, payload
@@ -400,7 +400,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
     """Source -> Candidate -> upstream movement, over the source the public command admitted.
 
     Admission on its own is not the claim B-094 makes; it is the door the claim walks through.
-    These drive the same configured composition the Maintainer Source Sync screens call, over
+    These drive the same configured composition the Maintainer Upstream sync screens call, over
     the durable store `aart-cli source add` just wrote, so what is proven is the real monitored flow
     rather than a compiled snapshot handed to a fixture.
     """
@@ -415,7 +415,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
         )
 
     def _sync_result(self, env: _Environment, alias: str = "superpowers"):
-        """One reviewed Source Sync, exactly as the screen performs it: prepare then confirm."""
+        """One reviewed Upstream sync, exactly as the screen performs it: prepare then confirm."""
 
         with mock.patch(
             "aart_cli.io.source_runtime.acquire_git_snapshot",
@@ -449,7 +449,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
             self.assertEqual(result.scan.revision, env.author.head)
 
     def test_candidate_list_shows_what_the_sync_recorded_and_changes_nothing(self) -> None:
-        """§175.2: `maintain candidate list` reads the history Source Sync wrote."""
+        """§175.2: `maintain candidate list` reads the history Upstream sync wrote."""
 
         with _environment() as env:
             env.synchronize_registry()
@@ -604,7 +604,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
                         "pinned_revision": moved,
                         "recorded_revision": synced.scan.revision,
                         "remediation": (
-                            "run Source Sync on superpowers to rebuild its Candidate history"
+                            "run Upstream sync on superpowers to rebuild its Candidate history"
                         ),
                     }
                 ],

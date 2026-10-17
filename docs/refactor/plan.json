@@ -1211,7 +1211,7 @@
         {
           "id": "8",
           "title": "TUI: consumer Registries lists Registries only; Maintainer Mode areas Upstream repositories, Candidates, Registry; every hint and message names the new commands",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "12",

@@ -146,7 +146,7 @@ class RepositoryAdoptionInteractionTest(unittest.TestCase):
 
         self.assertIn("Repository URL", drawn)
         self.assertIn("Branch or tag", drawn)
-        self.assertIn("not saved as a Source", drawn)
+        self.assertIn("not saved as an upstream", drawn)
         self.assertNotIn("aart ", drawn)
 
     def test_confirming_the_form_carries_the_exact_draft_to_the_scan(self) -> None:

@@ -194,7 +194,7 @@ class MaintainerCompositionTest(unittest.TestCase):
             source.diagnostics,
             (
                 "Candidate history was recorded at another revision than the pinned snapshot; "
-                "run Source Sync on this Source to rebuild it from the pinned snapshot",
+                "run Upstream sync on this upstream to rebuild it from the pinned snapshot",
             ),
         )
 

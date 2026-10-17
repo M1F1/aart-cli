@@ -42,7 +42,7 @@ LONG = "skill/verification-before-completion"
 #: Long enough that the grid cannot fit it inside `CONTENT_MEASURE` and has to cut it -- the
 #: operator's own name is only 36 characters and legitimately fits.
 OVERSIZED = "mcp/" + "a-very-long-artifact-name" * 4
-HEADINGS = ("STATUS", "ARTIFACT", "VERSION", "SOURCE")
+HEADINGS = ("STATUS", "ARTIFACT", "VERSION", "UPSTREAM")
 
 
 def _candidate(

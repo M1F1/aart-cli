@@ -181,3 +181,38 @@ unchanged. 52 tests with `packaging_test` and `tui_stage_failure_test`, green; r
 Targeted mutations:
 - Restore without the foreign-entry check: only the foreign-directory test turned red.
 - Deleting instead of moving: the five tests reading the backup and `--yes` turned red.
+
+
+## Step 8 — TUI role names and connection hints
+
+Done (D-445). Maintainer navigation reads Upstream repositories, Candidates, Registry. Upstream
+add/remove/details/sync, Candidate provenance and table headings use upstream vocabulary;
+Marketplace descriptions identify a Registry. Screen 31 carries the specification's explanation
+in both profiles. Connection kinds are shown as git/local. The consumer wizard and empty states
+name Registries; shared connection reviews name the reviewed connection's own family.
+
+Red first: the updated dashboard, nested-trail and consumer empty-state tests failed in six
+places before production changes. The composed upstream onboarding, sync and removal walks now
+assert the new names without changing their navigation or effects. The existing
+`consumer_registries_screen_test` still proves that neither local nor Git upstreams appear on
+screen 21, including production composition and upstream-first ordering.
+
+Evidence: 124 related modules, **1229 tests**, green. This includes TUI, consumer, maintainer,
+source, wizard, frame/trail and Marketplace cursor-description tests. The two pre-existing
+`screen_skeleton_test` Hypothesis findings (B-194) remain outside this focused run. Ruff, mypy
+and tach pass; docs-check passes. No full local suite was run.
+
+Targeted mutations:
+- Restoring screen 31's title to `Sources` turned only
+  `MaintainerRenderingTest.test_screen_30_and_sources_are_reachable_bodies_in_the_shared_source`
+  red in the targeted run. Its dashboard assertion holds all three area names, and its screen-31
+  assertion holds the subtitle and Add upstream action.
+- Restoring the onboarding's `from a source repository` sentence turned only
+  `WizardOnboardingTests.test_onboarding_keeps_what_the_bar_cannot_say` red in the targeted run.
+
+Scoped advisory mutation: `make mutants ONLY=aart_cli/wizard.py
+TESTS="tests/wizard_render_test.py tests/wizard_state_test.py"` initially found 476 killed and
+160 surviving of 636 mutants. The changed onboarding sentence needed an exact-line assertion;
+explicit reruns of its three mutants timed out (476 killed, 157 survived, 3 timeouts), so its
+claim was additionally checked by the direct targeted mutation above. Other wizard survivors
+are outside this naming slice and recorded in B-207.

@@ -77,10 +77,10 @@ def run(request: Request) -> int:
             )
         )
     elif not items:
-        # Only Registry Maintainer Mode's Source Sync records Candidate history today (B-202).
+        # Only Registry Maintainer Mode's Upstream sync records Candidate history today (B-202).
         print(
             "No Candidates are recorded. Open Registry Maintainer Mode in the TUI and run "
-            "Source Sync on an Upstream repository."
+            "Upstream sync on an Upstream repository."
         )
     else:
         for item in items:

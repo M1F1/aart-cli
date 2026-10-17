@@ -2,7 +2,7 @@
 
 The owner committed a promotion and came back to a Candidates row still reading ``New``, with the
 review, the registry diff and bulk promotion all still offering the same Candidate. Candidate state
-only moves to ``promoted`` when Source Sync reconciles against the *synchronized* approved Registry,
+only moves to ``promoted`` when Upstream sync reconciles against the *synchronized* approved Registry,
 and a local commit is deliberately not a sync (D-249), so nothing had changed what the screens read.
 
 The answer is derived from what the Registry trees record, never stored beside history (D-259): a
@@ -336,7 +336,7 @@ class NoRecordedCandidateIsOfferedAgainTest(unittest.TestCase):
         )
 
         self.assertFalse(review.confirmable)
-        self.assertIn("Source Sync", " ".join(review.refusals))
+        self.assertIn("Upstream sync", " ".join(review.refusals))
 
     def test_an_unrecorded_candidate_is_still_offered(self) -> None:
         review = project_maintainer_promotion_review(
@@ -384,7 +384,7 @@ class TheTransactionRefusesADuplicateTest(unittest.TestCase):
         self.tree = _promoted_tree(self.bundle)
 
     def test_a_synchronized_tree_that_records_the_candidate_is_refused_by_name(self) -> None:
-        # Registry Sync has observed the published commit but Source Sync has not run yet, so the
+        # Registry Sync has observed the published commit but Upstream sync has not run yet, so the
         # Candidate still reads Ready and the baseline matches exactly: only the record refuses.
         prepared = prepare_candidate_promotion_transaction(
             self.bundle, self.validation, _POLICY, _approved(self.tree), self.tree

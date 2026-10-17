@@ -1425,7 +1425,7 @@ def run(
     if source_dir is not None or repo is not None:
         print(
             "error: direct catalog directories and repository aliases are no longer supported; "
-            "add a canonical registry in Sources instead."
+            "add an approved Registry in Registries instead."
         )
         return 2
     canonical_failures = InternalFailureContext()

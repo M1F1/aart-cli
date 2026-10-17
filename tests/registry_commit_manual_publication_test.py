@@ -116,8 +116,8 @@ class RegistryCommitScreenExplainsManualPublicationTest(unittest.TestCase):
         for claim in ("Published", "published", "press p", "Enter pushes", "Publication"):
             with self.subTest(claim=claim):
                 self.assertNotIn(claim, drawn)
-        # Source Sync reads authoring repositories; it is not how an approved Registry is observed.
-        self.assertNotIn("Source Sync", drawn)
+        # Upstream sync reads authoring repositories; it is not how an approved Registry is observed.
+        self.assertNotIn("Upstream sync", drawn)
 
     def test_the_commit_view_and_renderer_carry_no_publication_target(self) -> None:
         fields = {field.name for field in dataclasses.fields(MaintainerRegistryCommitView)}

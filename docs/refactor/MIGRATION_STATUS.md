@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-32 step 8 (D-445): TUI role names.** Maintainer areas are Upstream
+repositories, Candidates and Registry; upstream forms, sync, Candidate columns and connection
+reviews use the role vocabulary. Consumer empty states and the wizard name Registries, and
+screen 21's existing Registry-only boundary remains held. 124 related modules / 1229 tests and
+focused gates pass; two targeted mutations killed. Wizard mutation findings outside this slice
+are B-207. Next: step 12, Author Mode.
+
 **2026-10-17, CP-32 step 7 (D-444): a consumer installs only from Registries.** The lifecycle
 runs only the Registry seam and names each way it declines. An unsynchronized Registry is
 `registry-not-synchronized`, an unqualified name resolves across Registries, and `--mode` and

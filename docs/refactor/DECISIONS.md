@@ -11057,3 +11057,18 @@ manifests and producing templates is not CLI-only. Choices:
     alias, not the declared identity, so an identity change strands nothing.
 
   Status gaps that this exposed go to B-205, and leftover files to B-204.
+
+
+## D-445 — TUI role names change at presentation boundaries (CP-32 step 8)
+
+§175.3's Maintainer areas are **Upstream repositories**, **Candidates** and **Registry**.
+Screen 31 always explains “Author repositories this Registry takes artifacts from”; its add,
+remove, detail and sync screens use upstream names. Candidates identify an Upstream, while
+Marketplace descriptions identify a Registry. Connection kinds shown to a person are `git` or
+`local`; the four internal `SourceKind` values and existing screen ids remain internal (D-443).
+
+The shared connection review renderers choose Registry or Upstream from the reviewed connection's
+family. The first-use consumer wizard names its connection stage Registries. Screen 21 already
+filters out both upstream kinds; its composed-shell acceptance tests remain the evidence for that
+boundary. No configuration, navigation graph, subscription identity or stored Candidate schema
+changes in this step.

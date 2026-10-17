@@ -3116,8 +3116,8 @@ SETTING_PURPOSE: dict[str, str] = {
     "contract and this machine allow either: pip is universally present, uv is faster.",
     "show-updates": "Whether the Dashboard counts the installed artifacts a registry "
     "offers a newer version of.",
-    "maintainer-mode": "Whether this installation authors artifacts as well as installing "
-    "them, which is what puts Sources, Candidates and Registry Workspace on the Dashboard.",
+    "maintainer-mode": "Whether this installation maintains a Registry as well as installing "
+    "artifacts, which is what puts Upstream repositories, Candidates and Registry on the Dashboard.",
 }
 """What each setting changes, for the block `[v]` opens (`QA-097`).
 

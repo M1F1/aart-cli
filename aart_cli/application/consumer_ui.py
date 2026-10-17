@@ -2528,7 +2528,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _action_binding("d", "Disconnect", ConsumerActionKind.REGISTRY_REMOVE),
     ),
     MaintainerScreen.SOURCES: (
-        _navigate_binding("a", "Add Source", MaintainerScreen.SOURCE_ADD),
+        _navigate_binding("a", "Add upstream", MaintainerScreen.SOURCE_ADD),
         _action_binding("s", "Sync", ConsumerActionKind.SOURCE_SYNC),
         _action_binding("d", "Remove", ConsumerActionKind.SOURCE_REMOVE),
     ),
@@ -2565,7 +2565,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     # because a result screen has nothing to open, and an Enter that does nothing is how somebody
     # ends up pressing Esc through every screen they just walked (`QA-027`).
     MaintainerScreen.SOURCE_SYNC_RESULT: (
-        _navigate_binding("Enter", "Sources", MaintainerScreen.SOURCES),
+        _navigate_binding("Enter", "Upstream repositories", MaintainerScreen.SOURCES),
     ),
     MaintainerScreen.SCAN_RESULT: (
         _action_binding("a", "Adopt", ConsumerActionKind.REPOSITORY_ADOPT),

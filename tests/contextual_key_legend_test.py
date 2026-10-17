@@ -74,14 +74,14 @@ class ContextualKeyLegendTest(unittest.TestCase):
             # `QA-071`: a nested view names the parent it was reached through, so the heading is
             # the trail rather than the screen alone.
             any(
-                frame_lines[0] == "AART / Registry Workspace / Rebuild Registry"
+                frame_lines[0] == "AART / Registry / Rebuild Registry"
                 for frame_lines in terminal.frames
             )
         )
 
     def test_each_maintainer_screen_names_its_own_shortcuts(self) -> None:
         expected = {
-            MaintainerScreen.SOURCES: ("[a] Add Source", "[s] Sync"),
+            MaintainerScreen.SOURCES: ("[a] Add upstream", "[s] Sync"),
             MaintainerScreen.CANDIDATES: ("[f] Filters",),
             # D-430: the Registry owns its Collections, so they are reached from its workspace.
             MaintainerScreen.REGISTRY: ("[c] Candidates", "[o] Collections"),

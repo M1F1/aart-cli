@@ -210,7 +210,7 @@ class MaintainerDashboardBlockTest(TestCase):
         blocks = _blocks(self._frame())
         overview = _statements(blocks[2])
 
-        self.assertEqual(overview[0], "sources: 0")
+        self.assertEqual(overview[0], "upstream repositories: 0")
         self.assertNotIn("Maintainer overview", overview)
         self.assertFalse([line for line in overview if line.startswith("> ")])
 
@@ -261,9 +261,9 @@ class RegistriesBlockTest(TestCase):
         self.assertEqual(
             _statements(blocks[2]),
             (
-                "connect an approved Git registry by URL. Local authoring Sources belong in "
+                "connect an approved Git registry by URL. Upstream repositories belong in "
                 "Registry Maintainer Mode.",
-                "no sources are configured.",
+                "no registries are configured.",
                 "marketplace needs an approved registry before it can offer tools.",
                 "choose Add Registry above to connect the first one.",
             ),
@@ -305,10 +305,10 @@ class RegistriesBlockTest(TestCase):
     def test_the_empty_state_guidance_is_gone_once_something_is_connected(self) -> None:
         blocks = _blocks(self._frame(connected=True))
 
-        self.assertNotIn("No sources are configured.", _statements(blocks[2]))
+        self.assertNotIn("No registries are configured.", _statements(blocks[2]))
         self.assertEqual(
             _statements(blocks[2])[0],
-            "connect an approved Git registry by URL. Local authoring Sources belong in "
+            "connect an approved Git registry by URL. Upstream repositories belong in "
             "Registry Maintainer Mode.",
         )
 
@@ -374,7 +374,7 @@ class SettingsBlockTest(TestCase):
         )
         self.assertEqual(
             _statements(off[2]),
-            ("Registry Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
+            ("Registry Maintainer Mode off hides Upstream repositories, Candidates and Registry.",),
         )
 
 
@@ -980,7 +980,7 @@ class BulletedStatusTest(TestCase):
             blocks[2],
             (
                 "",
-                "- sources: 0",
+                "- upstream repositories: 0",
                 "",
                 "- candidates: 0",
                 "",

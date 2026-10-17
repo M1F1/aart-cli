@@ -42,7 +42,7 @@ class NumberedListsTest(unittest.TestCase):
             "AART home",
             "company/mcp/github@1.0.0",
             "Registry Maintainer Mode off hides Sources",
-            "Source Sync does not promote Candidates",
+            "Upstream sync does not promote Candidates",
         ):
             self.assertEqual(lowercase_first(name), name)
 

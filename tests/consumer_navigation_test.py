@@ -169,7 +169,7 @@ class ConsumerOverviewTest(unittest.TestCase):
         self.assertNotIn("Registry Maintainer Mode off hides", rendered)
         self.assertEqual(
             settings_consequence(settings),
-            ("Registry Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
+            ("Registry Maintainer Mode off hides Upstream repositories, Candidates and Registry.",),
         )
 
 

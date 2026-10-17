@@ -460,7 +460,7 @@ def _run_scan(request: Request) -> int:
             request,
             "scan",
             _error(
-                "Source Scan requires one clean pinned Git checkout at HEAD",
+                "Upstream scan requires one clean pinned Git checkout at HEAD",
                 (
                     "commit or discard author checkout changes; `aart-cli maintain upstream scan --help` "
                     "shows the explicit source boundaries",
@@ -546,7 +546,7 @@ def _run_scan(request: Request) -> int:
             )
         )
     else:
-        print(f"Source Scan {source_alias.value}@{pinned_revision}")
+        print(f"Upstream scan {source_alias.value}@{pinned_revision}")
         print(f"target registry: {target_registry.value}")
         print(f"{len(candidates)} candidate(s); registry mutations: 0")
         for item in candidates:
@@ -671,7 +671,7 @@ def _run_candidate_promotion(request: Request) -> int:
             request,
             "promote",
             _error(
-                "one or more selected Candidate IDs no longer match the pinned Source Scan",
+                "one or more selected Candidate IDs no longer match the pinned Upstream scan",
                 (
                     "use `aart-cli maintain upstream scan --help`, run a fresh scan with explicit boundaries, "
                     "and review the current Candidate IDs",
@@ -701,7 +701,7 @@ def _run_candidate_promotion(request: Request) -> int:
                     f"Candidate {candidate.id} is {validation.state.value} and cannot be promoted",
                     (
                         "open the Candidate's validation in the Maintainer screens to see each "
-                        "failing check, fix the author manifest, commit it and run Source Scan again",
+                        "failing check, fix the author manifest, commit it and run Upstream scan again",
                     ),
                 ),
             )

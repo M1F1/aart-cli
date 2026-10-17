@@ -668,8 +668,8 @@ def _source_kind(source: ConfiguredSource) -> str:
     if source.kind is SourceKind.REGISTRY_LOCAL:
         return "local registry checkout"
     if source.kind is SourceKind.SOURCE_GIT:
-        return "direct Git source"
-    return "mutable local source"
+        return "Git upstream"
+    return "local upstream"
 
 
 def render_source_row(row: SourceStageRow) -> str:
@@ -700,27 +700,29 @@ def render_source_stage(view: SourceStageView) -> tuple[str, ...]:
     """Render source setup guidance and rows shared by text and curses frontends."""
 
     heading = (
-        "Choose enabled artifact sources. Registries are optional unless organization policy "
+        "Choose enabled Registries. Registries are optional unless organization policy "
         "marks one as required."
     )
     lines: tuple[str, ...] = (heading,)
     if not view.rows:
-        lines += ("No sources are configured. In the Sources stage, choose Add to configure one.",)
+        lines += (
+            "No registries are configured. In Registries, choose Add Registry to configure one.",
+        )
     if view.unconfigured_recommended:
         lines += (
-            "Organization-recommended source aliases still need configuration: "
+            "Organization-recommended Registry aliases still need configuration: "
             + ", ".join(alias.value for alias in view.unconfigured_recommended),
         )
     if view.unconfigured_required:
         lines += (
-            "Organization-required source aliases still need configuration: "
+            "Organization-required Registry aliases still need configuration: "
             + ", ".join(alias.value for alias in view.unconfigured_required),
         )
     lines += tuple(render_source_row(row) for row in view.rows)
     if view.allow_no_source:
-        lines += ("Continue without sources — exit cleanly without installing artifacts.",)
+        lines += ("Continue without Registries — exit cleanly without installing artifacts.",)
     else:
-        lines += ("Organization policy requires the listed required source(s).",)
+        lines += ("Organization policy requires the listed required Registries.",)
     return lines
 
 
@@ -732,11 +734,11 @@ def render_source_addition_review(request: SourceAdditionRequest) -> tuple[str, 
     ref = "" if source.ref is None else f"; ref: {source.ref}"
     default = "; becomes the default registry" if request.make_default else ""
     return (
-        "Source setup review:",
+        f"{'Registry' if source.is_registry else 'Upstream'} setup review:",
         f"  alias: {source.alias}",
         f"  kind: {_source_kind(source)}",
         f"  origin: {origin}{ref}",
-        "  next: download and validate one immutable source snapshot, then save this source",
+        "  next: download and validate one immutable snapshot, then save this connection",
         f"  effect: enable {source.alias}{default}",
     )
 
@@ -751,7 +753,7 @@ def render_source_sync_review(row: SourceStageRow) -> tuple[str, ...]:
     source = row.source
     ref = "" if source.ref is None else f"; ref: {source.ref}"
     return (
-        "Source sync review:",
+        f"{'Registry' if source.is_registry else 'Upstream'} sync review:",
         f"  alias: {source.alias}",
         f"  kind: {_source_kind(source)}",
         f"  origin: {row.origin}{ref}",
@@ -802,7 +804,7 @@ def plan_source_resubscription(
     if not source.enabled:
         return _error(
             f"source {alias} is disabled",
-            f"enable {alias} in the TUI Sources stage before adopting a new identity",
+            f"enable {alias} in its Registry or Upstream repositories screen before adopting a new identity",
         )
     return Ok(source)
 
@@ -839,7 +841,7 @@ def render_source_resubscription_review(request: SourceResubscriptionRequest) ->
     ref = "" if source.ref is None else f"; ref: {source.ref}"
     transition = request.transition
     return (
-        "Source resubscription review:",
+        f"{'Registry' if source.is_registry else 'Upstream'} resubscription review:",
         f"  alias: {source.alias}",
         f"  kind: {_source_kind(source)}",
         f"  origin: {_origin(source)}{ref}",
@@ -864,12 +866,12 @@ def render_source_removal_review(request: SourceRemovalRequest) -> tuple[str, ..
     source = request.source
     ref = "" if source.ref is None else f"; ref: {source.ref}"
     default = (
-        ("  effect: clear the default registry; no source becomes default in its place",)
+        ("  effect: clear the default registry; no registry becomes default in its place",)
         if request.cleared_default
         else ()
     )
     return (
-        "Source removal review:",
+        f"{'Registry' if source.is_registry else 'Upstream'} removal review:",
         f"  alias: {source.alias}",
         f"  kind: {_source_kind(source)}",
         f"  origin: {_origin(source)}{ref}",
@@ -877,6 +879,6 @@ def render_source_removal_review(request: SourceRemovalRequest) -> tuple[str, ..
         *default,
         "  keeps: every installed artifact and every file in every project",
         "  note: AART cannot see installation records in other project directories; a project "
-        "still naming this alias reports an unconfigured source until it is re-added or "
+        "still naming this alias reports an unconfigured Registry until it is re-added or "
         "uninstalled",
     )

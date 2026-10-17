@@ -106,7 +106,7 @@ class MaintainerSourceAdditionInteractionTest(unittest.TestCase):
 
         self.assertIn("Alias", drawn)
         self.assertIn("Kind", drawn)
-        self.assertIn("source-git", drawn)
+        self.assertIn("Kind: git", drawn)
         self.assertIn("Location", drawn)
         self.assertIn("Branch or tag", drawn)
 
@@ -192,8 +192,8 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
             )
             self.assertEqual(completed.event.text, draft.alias)
             drawn = "\n".join(frame(completed.source, _state(MaintainerScreen.SOURCES)))
-            self.assertIn("source local-authors added", drawn)
-            self.assertIn("Source Sync", drawn)
+            self.assertIn("upstream local-authors added", drawn)
+            self.assertIn("Upstream sync", drawn)
             self.assertIn("discover artifacts", drawn)
             self.assertIn("Candidates", drawn)
             self.assertIn("does not promote", drawn)
@@ -232,7 +232,7 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
             drawn = "\n".join(frame(completed.source, failed))
             self.assertIn("source connection refused", drawn)
             self.assertNotIn("Source refused-authors added", drawn)
-            self.assertNotIn("Run Source Sync", drawn)
+            self.assertNotIn("Run Upstream sync", drawn)
 
     def test_the_composed_action_calls_the_canonical_source_add_transaction(self) -> None:
         """Both kinds, because the kind the form chose is the thing being carried.
@@ -295,8 +295,8 @@ class MaintainerSourceAdditionCompositionTest(unittest.TestCase):
 
         self.assertTrue(prepared.event.review_digest)
         notice = "\n".join(prepared.source.screens.notice)
-        self.assertIn("Source connection review", notice)
-        self.assertIn("source-local", notice)
+        self.assertIn("Upstream connection review", notice)
+        self.assertIn("kind: local", notice)
 
     def test_a_kind_screen_21a_owns_is_refused_by_this_form(self) -> None:
         from tests.configured_install_command_e2e_test import _environment

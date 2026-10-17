@@ -4725,3 +4725,18 @@ After D-444 the lifecycle never reaches these, but they still exist:
 - the `_FIXTURE` constant in `tests/marketplace_lifecycle_e2e_test.py`.
 
 Delete them once `consume health` reads the Registry seam (B-203).
+
+
+## B-207 — Wizard mutation findings outside CP-32's naming slice
+
+A scoped advisory run over `aart_cli/wizard.py` with `wizard_render_test` and `wizard_state_test`
+produced 636 mutants: initially 476 killed and 160 survived. The existing tests leave parts of
+backtracking, basket reconciliation, position retention, finalization and wrapping unheld. Examples:
+`x_back__mutmut_24`, `x_reconcile_basket__mutmut_9`, `x_remember_position__mutmut_6`,
+`x_can_finalize__mutmut_7`, `x__fit__mutmut_13`. These are outside step 8's vocabulary changes;
+review them when changing those behaviors, rather than widening the active slice.
+
+The three survivors that changed the new onboarding Registry sentence prompted an exact-line
+assertion in `WizardOnboardingTests`. Explicit mutmut reruns classified those three as timeouts
+(476 killed, 157 survived, 3 timeouts); direct targeted mutation of that sentence is held by the
+updated test. The screen-title regression is separately mutation-proven in the CP-32 slice.

@@ -165,7 +165,7 @@ class ConsumerShellTest(unittest.TestCase):
         self.assertIn("first run", first)
         self.assertIn("skills", first)
         self.assertIn("MCP servers", first)
-        self.assertIn("No sources are configured", first)
+        self.assertIn("No registries are configured", first)
         self.assertIn("SETUP REQUIRED", first)
         self.assertIn("→ Start here", first)
         self.assertIn("open Registries", first)
@@ -205,7 +205,7 @@ class ConsumerShellTest(unittest.TestCase):
         lines = frame(source, _at(ConsumerScreen.REGISTRIES))
 
         rendered = "\n".join(lines)
-        self.assertIn("no sources are configured", rendered)
+        self.assertIn("no registries are configured", rendered)
         self.assertIn("Add Registry", rendered)
         self.assertIn("connect the first one", rendered)
 

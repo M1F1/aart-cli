@@ -91,7 +91,7 @@ class FocusedOfferIsDescribedTest(unittest.TestCase):
         described = source.description(state)
 
         self.assertEqual(
-            _labels(described), ("Artifact", "Kind", "Version", "Source", "Description")
+            _labels(described), ("Artifact", "Kind", "Version", "Registry", "Description")
         )
         joined = "\n".join(described)
         for value in (focused.identity.name, focused.version, str(focused.source_alias)):
@@ -192,7 +192,7 @@ class CollectionOffersAreDescribedTest(unittest.TestCase):
         joined = "\n".join(described)
 
         self.assertEqual(
-            _labels(described), ("Collection", "Version", "Source", "Includes", "Description")
+            _labels(described), ("Collection", "Version", "Registry", "Includes", "Description")
         )
         self.assertIn(COLLECTION.name, joined)
         self.assertIn("2 artifacts", joined)

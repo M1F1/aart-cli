@@ -1464,7 +1464,7 @@ def render_registry(
     if not view.is_registry:
         # An empty row with no explanation reads as a registry that approved nothing, which is a
         # fault; this one is configured, healthy and simply not a registry (INV-026, B-038).
-        lines.append("    an authoring Source, not a registry")
+        lines.append("    an upstream repository")
     return tuple(lines)
 
 
@@ -1481,7 +1481,7 @@ def registry_purpose(view: RegistryView) -> tuple[str, ...]:
     )
     return (
         purpose,
-        f"Kind: {_human(view.kind)}",
+        f"Kind: {_human(view.kind.removeprefix('registry-'))}",
         f"Origin: {view.origin}",
         f"Health: {_human(view.health)}; last sync: {age}",
         f"Revision: {view.revision or 'none'}",
@@ -1563,7 +1563,7 @@ def settings_consequence(view: ConsumerSettings) -> tuple[str, ...]:
         raise ValueError("settings rendering needs consumer settings")
     if view.maintainer_mode:
         return ("Maintainer screens are reachable from the Dashboard.",)
-    return ("Registry Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",)
+    return ("Registry Maintainer Mode off hides Upstream repositories, Candidates and Registry.",)
 
 
 def doctor_rows(view: DoctorView, *, leaving_out: tuple[str, ...] = ()) -> tuple[str, ...]:
@@ -2115,18 +2115,21 @@ _DASHBOARD_DESCRIPTIONS: dict[ApplicationScreen, str] = {
     ConsumerScreen.MARKETPLACE: "Browse and install approved tools from configured registries.",
     ConsumerScreen.INSTALLED: "See what AART manages in this project and whether it is healthy.",
     ConsumerScreen.UPDATES: "Review newer approved versions; nothing changes without confirmation.",
-    ConsumerScreen.REGISTRIES: "See which sources determine what Marketplace can offer.",
+    ConsumerScreen.REGISTRIES: "See which Registries determine what Marketplace can offer.",
     ConsumerScreen.CREDENTIALS: (
         "Manage ordinary per-harness configuration beside provider-held credentials."
     ),
     ConsumerScreen.ACTIVITY: "Review recorded changes, results and their receipts.",
     ConsumerScreen.DOCTOR: "Inspect health and find the smallest safe repair for detected drift.",
     ConsumerScreen.SETTINGS: "Choose detail, installation scope and optional Registry Maintainer Mode.",
-    MaintainerScreen.DASHBOARD: "Open advanced source, validation and promotion workflows.",
+    MaintainerScreen.DASHBOARD: "Maintain Upstream repositories, Candidates and Registry.",
+    MaintainerScreen.SOURCES: "Author repositories this Registry takes artifacts from",
+    MaintainerScreen.CANDIDATES: "Review artifacts discovered in Upstream repositories.",
+    MaintainerScreen.REGISTRY: "Collections, Validation, Publish.",
 }
 
 _REGISTRY_EXPLANATION: tuple[str, ...] = (
-    "Connect an approved Git registry by URL. Local authoring Sources belong in Registry Maintainer Mode.",
+    "Connect an approved Git registry by URL. Upstream repositories belong in Registry Maintainer Mode.",
 )
 """What a registry is, said on the screen that offers to connect one (`QA-043`)."""
 
@@ -2147,7 +2150,7 @@ _SOURCE_ADD_INTRO: tuple[str, ...] = (
     "Subscribe to an authoring repository. AART discovers only the aart-cli.yaml and",
     "aart-cli.json manifests its authors committed; nothing here is approved content yet.",
     "",
-    "This adds another Source. Nothing already connected is changed.",
+    "This adds another upstream. Nothing already connected is changed.",
 )
 """What subscribing to an authoring repository does, and what it does not approve (`QA-087`)."""
 
@@ -2164,7 +2167,7 @@ _REGISTRY_INIT_INTRO: tuple[str, ...] = (
 
 _REPOSITORY_SCAN_INTRO: tuple[str, ...] = (
     "Look at one repository for explicit aart-cli.yaml and aart-cli.json manifests.",
-    "This is a one-off read: the repository is not saved as a Source or monitored.",
+    "This is a one-off read: the repository is not saved as an upstream or monitored.",
 )
 """What a scan reads, and what it deliberately does not keep (`QA-087`)."""
 
@@ -2205,13 +2208,23 @@ _FIRST_RUN_LINES: tuple[str, ...] = (
     "skills, MCP servers, rules and hooks.",
     "",
     "SETUP REQUIRED",
-    "  No sources are configured, so Marketplace has nothing to offer yet.",
+    "  No registries are configured, so Marketplace has nothing to offer yet.",
     "  → Start here: open Registries and choose Add Registry.",
 )
 
 
 #: Titles the identifier cannot spell, because `.title()` would write an acronym as a word.
-_TITLES: dict[ApplicationScreen, str] = {ConsumerScreen.MCP_TEST: "Test MCP Installations"}
+_TITLES: dict[ApplicationScreen, str] = {
+    ConsumerScreen.MCP_TEST: "Test MCP Installations",
+    MaintainerScreen.SOURCES: "Upstream repositories",
+    MaintainerScreen.SOURCE_ADD: "Add upstream",
+    MaintainerScreen.SOURCE_ADD_REVIEW: "Review upstream",
+    MaintainerScreen.SOURCE_REMOVE: "Remove upstream",
+    MaintainerScreen.SOURCE_DETAILS: "Upstream details",
+    MaintainerScreen.SOURCE_SYNC: "Upstream sync",
+    MaintainerScreen.SOURCE_SYNC_RESULT: "Upstream sync result",
+    MaintainerScreen.REGISTRY: "Registry",
+}
 
 
 def _after_configuration(plan: ConsumerPlanView, *, default_path: bool = False) -> ConsumerScreen:
@@ -2390,7 +2403,7 @@ def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[s
     if screen is ConsumerScreen.REGISTRY_REMOVE:
         return () if not state.focus else (f"Disconnect {state.focus} from this project.",)
     if screen is MaintainerScreen.SOURCE_REMOVE:
-        return () if not state.focus else (f"Remove Source {state.focus} from this project.",)
+        return () if not state.focus else (f"Remove upstream {state.focus} from this project.",)
     if screen is ConsumerScreen.CREDENTIAL_REVIEW:
         record = screens.credential(state.focus)
         if record is None:
@@ -3279,7 +3292,7 @@ def marketplace_offer_description(
             ("Artifact", row.identity.name),
             ("Kind", _human(row.identity.kind).capitalize()),
             ("Version", row.version),
-            ("Source", str(row.source_alias)),
+            ("Registry", str(row.source_alias)),
             ("Description", row.summary.strip() or _NO_APPROVED_DESCRIPTION),
         )
     elif isinstance(entry, MarketplaceCollectionEntry):
@@ -3288,7 +3301,7 @@ def marketplace_offer_description(
         fields = (
             ("Collection", offered.coordinate.name),
             ("Version", offered.coordinate.version),
-            ("Source", str(offered.coordinate.source)),
+            ("Registry", str(offered.coordinate.source)),
             ("Includes", f"{count} artifact{'' if count == 1 else 's'}"),
             ("Description", offered.summary.strip() or _NO_APPROVED_DESCRIPTION),
         )
@@ -4312,10 +4325,12 @@ class CanonicalScreenSource:
                 return _REGISTRY_EXPLANATION
             return separate(
                 _REGISTRY_EXPLANATION,
-                ("No sources are configured.",),
+                ("No registries are configured.",),
                 ("Marketplace needs an approved registry before it can offer tools.",),
                 ("Choose Add Registry above to connect the first one.",),
             )
+        if screen is MaintainerScreen.SOURCES:
+            return ("Author repositories this Registry takes artifacts from",)
         if screen is MaintainerScreen.DASHBOARD:
             # An unavailable composition is the state of the view, not something to put a cursor
             # on -- and saying so here keeps the rows' block holding only rows.
@@ -4574,19 +4589,19 @@ class CanonicalScreenSource:
         if screen is MaintainerScreen.SOURCE_DETAILS:
             source = None if screens.maintainer is None else screens.maintainer.source(state.focus)
             return (
-                ("That authoring Source is not available.",)
+                ("That upstream is not available.",)
                 if source is None
                 else render_maintainer_source(source, profile)
             )
         if screen is MaintainerScreen.SOURCE_SYNC:
             return (
-                ("No Source Sync has been prepared.",)
+                ("No Upstream sync has been prepared.",)
                 if screens.source_sync_review is None
                 else render_source_sync_review(screens.source_sync_review, profile)
             )
         if screen is MaintainerScreen.SOURCE_SYNC_RESULT:
             return (
-                ("No Source Sync result has been persisted.",)
+                ("No Upstream sync result has been persisted.",)
                 if screens.source_sync_result is None
                 else render_source_sync_result(screens.source_sync_result, profile)
             )
@@ -4940,7 +4955,7 @@ class CanonicalScreenSource:
             git = authoring.kind == "source-git"
             values = {
                 "alias": authoring.alias or "<type a short name>",
-                "kind": authoring.kind,
+                "kind": authoring.kind.removeprefix("source-"),
                 "location": authoring.location
                 or (
                     "<type a credential-free Git URL>"

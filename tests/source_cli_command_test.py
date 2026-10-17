@@ -583,7 +583,7 @@ class SourceCliCommandTests(unittest.TestCase):
         self.assertFalse(payload["finalized"])
         self.assertEqual(payload["transition"]["from"]["source_id"], "team-registry")
         self.assertEqual(payload["transition"]["to"]["source_id"], "renamed-registry")
-        self.assertIn("Source resubscription review:", payload["review"][0])
+        self.assertIn("Registry resubscription review:", payload["review"][0])
 
     def test_resubscribe_with_yes_adopts_the_reviewed_transition_and_writes_no_configuration(
         self,
@@ -692,7 +692,7 @@ class SourceCliCommandTests(unittest.TestCase):
         self.assertEqual(payload["operation"], "registry.remove")
         self.assertFalse(payload["finalized"])
         self.assertTrue(payload["source"]["cleared_default"])
-        self.assertIn("Source removal review:", payload["review"][0])
+        self.assertIn("Registry removal review:", payload["review"][0])
 
     def test_remove_with_yes_discards_the_snapshot_before_writing_the_configuration(self) -> None:
         events: list[str] = []

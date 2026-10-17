@@ -32,7 +32,7 @@ from tests.maintainer_candidate_filters_test import _on, _shell, _views
 from tests.screen_skeleton_test import _Screen
 from tests.tabular_list_columns_test import LONG, _candidate
 
-_LABELS = ("Artifact", "Version", "Source", "Status")
+_LABELS = ("Artifact", "Version", "Upstream", "Status")
 
 
 def _labels(lines: tuple[str, ...]) -> tuple[str, ...]:
@@ -58,7 +58,7 @@ class CandidatesScreenSeparatesTableFromDetailTest(unittest.TestCase):
 
         self.assertNotIn("Under the cursor:", "\n".join(drawn))
         header = next(index for index, line in enumerate(drawn) if line.split()[:1] == ["STATUS"])
-        self.assertEqual(drawn[header].split(), ["STATUS", "ARTIFACT", "VERSION", "SOURCE"])
+        self.assertEqual(drawn[header].split(), ["STATUS", "ARTIFACT", "VERSION", "UPSTREAM"])
         table_end = header + 1 + len(state.rows)
         self.assertEqual(drawn[table_end : table_end + 3], ("", SECTION_RULE, ""))
         described = drawn[table_end + 3 : table_end + 3 + len(_LABELS)]

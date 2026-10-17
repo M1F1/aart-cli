@@ -754,7 +754,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="discover native Candidates in one pinned author checkout",
         description=(
             "Read a clean Git author checkout at its exact HEAD, compile only explicit aart-cli.json "
-            "or aart-cli.yaml manifests, and report Candidate state. Source Scan never changes the "
+            "or aart-cli.yaml manifests, and report Candidate state. Upstream scan never changes the "
             "target registry and never promotes a Candidate."
         ),
     )
@@ -1169,7 +1169,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=_HELP_FORMATTER,
         help="parse every aart-cli.yaml/aart-cli.json under a directory",
         description=(
-            "Read the directory the way a Source Sync reads one and put every manifest it "
+            "Read the directory the way a Upstream sync reads one and put every manifest it "
             "finds through the parser a Registry uses. The verdict is the parser's, so a "
             "manifest that passes here is one `registry scan` will accept."
         ),
