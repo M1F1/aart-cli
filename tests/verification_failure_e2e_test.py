@@ -86,12 +86,10 @@ class VerificationFailureE2ETest(unittest.TestCase):
     def _configured(self, env) -> tuple[int, dict]:
         """Install, then run the declared setup with both consents, and return setup's verdict."""
 
-        code, payload = env.run(
-            "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
         return env.run(
-            "marketplace",
+            "consume",
             "setup",
             _COORDINATE,
             "--profile",
@@ -119,10 +117,10 @@ class VerificationFailureE2ETest(unittest.TestCase):
 
     def test_the_human_rendering_names_the_artifact_rather_than_only_a_count(self) -> None:
         with _environment_whose_verification_fails() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
 
             code, text = env.run_text(
-                "marketplace",
+                "consume",
                 "setup",
                 _COORDINATE,
                 "--profile",
@@ -137,7 +135,7 @@ class VerificationFailureE2ETest(unittest.TestCase):
             self.assertIn("verification", text)
             # `configured=0` alone would be a clean-looking line. The retry is what makes the
             # rendering actionable rather than merely non-positive.
-            self.assertIn("aart-cli marketplace setup", text)
+            self.assertIn("aart-cli consume setup", text)
 
     def test_the_compensatable_effect_is_restored(self) -> None:
         with _environment_whose_verification_fails() as env:
@@ -159,7 +157,7 @@ class VerificationFailureE2ETest(unittest.TestCase):
             self._configured(env)
 
             code, payload = env.run(
-                "marketplace", "receipt", "show", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "show", _COORDINATE, "--profile", "claude"
             )
 
             self.assertEqual(code, 0, payload)
@@ -183,7 +181,7 @@ class VerificationFailureE2ETest(unittest.TestCase):
             self._configured(env)
 
             code, payload = env.run(
-                "marketplace", "receipt", "show", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "show", _COORDINATE, "--profile", "claude"
             )
             self.assertEqual(code, 0, payload)
             self.assertEqual(
@@ -194,7 +192,7 @@ class VerificationFailureE2ETest(unittest.TestCase):
             self.assertEqual(payload["receipt"]["rollback_command"], "")
 
             verified, verification = env.run(
-                "marketplace", "receipt", "verify", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "verify", _COORDINATE, "--profile", "claude"
             )
 
             self.assertEqual(verified, 0, verification)
@@ -209,7 +207,7 @@ class VerificationFailureE2ETest(unittest.TestCase):
         with _environment_whose_verification_fails() as env:
             self._configured(env)
 
-            code, payload = env.run("marketplace", "status", "--profile", "claude")
+            code, payload = env.run("consume", "status", "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertEqual([item["status"] for item in payload["items"]], ["current"])

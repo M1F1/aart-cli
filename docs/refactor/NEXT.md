@@ -59,8 +59,10 @@ reads a local author checkout as Git would commit it.
 `source`, `marketplace` and the top-level `registry`: `consume`, `maintain upstream|candidate|registry`
 and `author`. An author repository is an **Upstream repository**, and a consumer reads only
 Registries (INV-269). Step 1 (the specification, with §175.4 reset-with-backup and §175.5 Author Mode) and step 2
-(the configuration split, D-442) are done, and so is step 11, reset with backup (D-440). Next are steps 3–8 (the
-command families and TUI names), then 12 (Author Mode), 9 and 10.
+(the configuration split, D-442) are done, and so are step 11, reset with backup (D-440), and steps 3, 4
+and 6, the `consume` / `maintain upstream` / `maintain registry` families (D-443). Next are step 5
+(`maintain candidate list`), 7 (the consumer catalog stops reading upstreams, INV-269, with the e2e
+fixtures that install from one), 8 (TUI names), then 12 (Author Mode), 9 and 10.
 See `slices/CP-32-roles-and-upstreams.md`.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
@@ -563,7 +565,7 @@ lint/format-check/typecheck/docs-check/validate/secret-shape-check clean. INV-24
 `make mutants` is the one piece of its evidence not produced, and is now B-163.
 
 *(c)* **CP-26.20a is done** (GitHub issue #27, D-348/D-351, D-363/D-364, D-366, D-368, §170).
-`aart-cli mcp test` verifies concrete installed MCP owners over four direct stages -- installation
+`aart-cli consume mcp test` verifies concrete installed MCP owners over four direct stages -- installation
 configuration and credential presence, MCP startup and protocol, the declared result expectation,
 and the external-service read -- while the three harness stages are operator-attested rather than
 driven.
@@ -1508,8 +1510,8 @@ Git transport while driving a real author repository and real registry checkout.
 `tests/maintainer_repository_adoption_test.py` (8 tests); three targeted mutations killed (route,
 adoptability filter, exact selection crossing the port).
 
-B-095/QA-021 is now **complete and awaiting manual retest** (D-192). `aart-cli registry adopt` and
-`aart-cli registry check-upstream` are the machine-complete CLI projection, and they are a skin over
+B-095/QA-021 is now **complete and awaiting manual retest** (D-192). `aart-cli maintain upstream adopt` and
+`aart-cli maintain upstream check` are the machine-complete CLI projection, and they are a skin over
 `io/registry_adoption.py` rather than a second implementation: no planning, discovery or provenance
 logic lives in `commands/registry.py`, so the CLI and the TUI cannot drift into two answers about
 what adopting means. `adopt` with no `--artifact` is a complete answer on its own — it lists every
@@ -1668,7 +1670,7 @@ a declaration is not a dependency graph (D-152).
 Step 2 (INV-072-080, the CI/release profile contract) is done: `tests/enterprise_ci_template_test.py`
 holds the five variable/secret/egress/thinness claims, and `tests/aggregate_gate_test.py` proves the
 aggregate gate by extracting its shell from the YAML and *running* it (D-153). That found a shipped
-defect -- the registry `aart-cli registry init` emits had no requirable aggregate check name, and GitHub
+defect -- the registry `aart-cli maintain registry init` emits had no requirable aggregate check name, and GitHub
 counts a skipped required check as satisfied -- so the emitted registry now gets one too.
 
 Step 3 (legacy removal) is done, and B-070's four unreachable modules are all decided.
@@ -1780,7 +1782,7 @@ the exactness test, whose name claimed source *and* version while only ever omit
 removing the version requirement killed nothing; it now runs both under-specified forms and each
 mutation half kills its own subtest. B-059 records the one survivor left standing.
 
-Step 4a is VERIFIED (D-142). `aart-cli marketplace receipt verify` finds an interrupted run's working
+Step 4a is VERIFIED (D-142). `aart-cli consume receipt verify` finds an interrupted run's working
 copy only if the operator already knows which receipt to verify, because the probe filters the run
 root by one receipt's `plan_hash[:16]` -- and being interrupted is usually the reason they stopped
 watching. `aart-cli doctor` is now told nothing and finds it anyway, naming the plan-hash prefix that
@@ -1996,7 +1998,7 @@ Step 1 is `tests/source_sync_command_e2e_test.py`, which drives `aart-cli source
 source whose upstream published an invalid revision, and INV-218 moves to EVIDENCED. Writing it
 found D-132: `could-not-check` -- the health an explicit last-known-good fallback produces -- was
 read as "this source is gone" in three places, so one invalid upstream revision made
-`aart-cli marketplace status` report every installation as `source-unavailable` and made `install` and
+`aart-cli consume status` report every installation as `source-unavailable` and made `install` and
 `update` fail on a plan-construction invariant carrying no remediation. Product Specification
 165.11 settles it.
 
@@ -2191,7 +2193,7 @@ branch protection depends on, was covered by nothing. `tests/aggregate_gate_test
 that script and *runs it under bash* for each combination of `needs.*.result`, which is INV-076
 collecting on its own promise that such logic stays runnable outside GitHub Actions.
 
-The second situation was a real defect. The CI `aart-cli registry init` writes had no aggregate at all:
+The second situation was a real defect. The CI `aart-cli maintain registry init` writes had no aggregate at all:
 `registry-quality` and `registry-quality-private-image`, two container shapes of which one ever
 runs, each a matrix -- so a registry owner protecting `main` had no name that is stable across
 configurations, and naming an arm their deployment skips is worse than useless, because GitHub reads
@@ -2320,7 +2322,7 @@ were verified red against the defect they exist to catch.
 
 **Do not try to remove `consumer/application.py`, `lifecycle/*` or `setup_engine/*`.** This file
 previously said nothing but the wizard reached them; that was wrong. `commands/marketplace.py` — the
-public `aart-cli marketplace install|update|uninstall|setup` — composes `ConsumerApplicationService`
+public `aart-cli consume install|update|uninstall|setup` — composes `ConsumerApplicationService`
 directly and runs the setup queue through it, and `tui_marketplace.py`, which the canonical shell
 imports, takes `LifecycleItem` and `InstallMode` from `lifecycle/model.py` and
 `installation/model.py`. The stack is load-bearing for a public flow. Like `installation/*`, it goes
@@ -2347,13 +2349,13 @@ every existing caller is unchanged.
 asserting the approved registry really does carry the declaration and its recipe; the other three
 record the defect on **both** front ends.
 
-**What it proved corrects D-118 and this file's earlier ordering.** `aart-cli marketplace install` does
+**What it proved corrects D-118 and this file's earlier ordering.** `aart-cli consume install` does
 *not* carry setup for an approved registry coordinate: it reaches `_configured_lifecycle`, which
 calls `complete_configured_installation` — the same seam `io/consumer_actions.py::_execute_installation`
 uses — and reports `session_status: succeeded` with no `setup` key, no diagnostic, and the
 configuration file the recipe declares unwritten. Setup runs only on the legacy path, which
 `_configured_registry_selection` selects by returning `None` for a direct or local source. Nor is
-there an operator recovery: `aart-cli marketplace setup` afterwards refuses with `registry company has
+there an operator recovery: `aart-cli consume setup` afterwards refuses with `registry company has
 invalid root manifests`, because it resolves through the legacy catalogue and a promoted registry
 snapshot carries no root manifests.
 
@@ -2379,7 +2381,7 @@ which durable record the setup engine should resolve an installed artifact from.
 (`.agent-artifacts/manifest.json`), which only `installation/application.py` and
 `lifecycle/application.py` write and which `io/consumer_machine.py` calls the *legacy* store; the
 configured seam writes receipts instead. The deciding measurement was that **a canonical receipt
-could not name the object that was installed**: after `aart-cli marketplace install` of the fixture
+could not name the object that was installed**: after `aart-cli consume install` of the fixture
 Skill, `<data_root>/state/installations/*.json` held the coordinate, `payload_digest`, `root` and
 the deliveries, and no object digest — while `install_state`'s `ArtifactEvidence` carries one. The
 engine needs the object digest to `read_object` at all, so pointing it at the receipt store was not
@@ -2403,7 +2405,7 @@ refusal.
 
 **Landed (D-123): both front ends now name the setup they did not run.**
 `complete_configured_installation` reads the objects it just recorded and carries what they declare
-as `pending_setup`; `aart-cli marketplace install` emits it as an additive `pending_setup` key and
+as `pending_setup`; `aart-cli consume install` emits it as an additive `pending_setup` key and
 renders it, and the persistent shell draws it under screen 11's success. This is what D-122 is
 first spent on — setup is declared on the package manifest, not on anything the plan carries, so
 answering "does this artifact declare setup" means going back to the object the receipt names. The
@@ -2458,7 +2460,7 @@ values from two documents, which is the honest check where the index *is* the pa
    moving a CAS reference as one compensated unit. The canonical adapter writes the same setup
    record and moves the same reference, but its durable pointer belongs on the receipt rather than
    in an install-state manifest. `setup_receipt.locate_setup_record` reads that pointer for
-   `aart-cli marketplace receipt show|verify|undo` and needs a canonical equivalent (follow-up, not
+   `aart-cli consume receipt show|verify|undo` and needs a canonical equivalent (follow-up, not
    blocking the wiring). The receipt-backed equivalent is now B-046.
 
 `io/configured_setup.py` implements both without writing install state. Install/update and the

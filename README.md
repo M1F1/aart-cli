@@ -133,7 +133,7 @@ For a script, or when you already know what you want. Connect the Registry:
 
 ```sh
 cd /path/to/your-project
-aart-cli source add --alias <alias> --kind registry-git --location <registry-url> --ref main --default
+aart-cli consume registry add --alias <alias> --kind git --location <registry-url> --ref main --default
 ```
 
 Find the artifact. `list` prints the whole catalog; `search` is how you find one thing in it. Every
@@ -141,22 +141,22 @@ word must match, so a second word narrows rather than widens, and the coordinate
 one `install` takes:
 
 ```sh
-aart-cli marketplace search <word>
+aart-cli consume search <word>
 ```
 
 Install it. Every mutation is two commands on purpose: the first renders the plan and changes
 nothing, the second finalizes exactly that plan:
 
 ```sh
-aart-cli marketplace install <alias>/<kind>/<name> --profile <harness>
-aart-cli marketplace install <alias>/<kind>/<name> --profile <harness> --yes
+aart-cli consume install <alias>/<kind>/<name> --profile <harness>
+aart-cli consume install <alias>/<kind>/<name> --profile <harness> --yes
 ```
 
 Verify. `status` reports what is installed and whether it still matches the Registry — `current`,
 `update_available`, `removed_upstream`, `source_unavailable` or `local_drift`:
 
 ```sh
-aart-cli marketplace status --profile <harness>
+aart-cli consume status --profile <harness>
 ```
 
 ### One name, spelled two ways

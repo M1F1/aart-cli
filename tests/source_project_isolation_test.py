@@ -83,7 +83,7 @@ class SourceOperationProjectIsolationTest(unittest.TestCase):
     def test_no_source_operation_writes_beneath_the_project(self) -> None:
         with _environment() as env:
             install_code, installed = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(install_code, 0, installed)
             self.assertTrue((env.project / _MANIFEST).is_file())
@@ -98,20 +98,21 @@ class SourceOperationProjectIsolationTest(unittest.TestCase):
 
             operations = (
                 (
-                    "source",
+                    "maintain",
+                    "upstream",
                     "add",
                     "--alias",
                     "mirror",
                     "--kind",
-                    "source-local",
+                    "local",
                     "--location",
                     str(mirror),
                 ),
-                ("source", "list"),
-                ("source", "sync"),
-                ("source", "health"),
-                ("source", "remove", "--alias", "reference"),
-                ("source", "remove", "--alias", "reference", "--yes"),
+                ("maintain", "upstream", "list"),
+                ("maintain", "upstream", "sync"),
+                ("maintain", "upstream", "health"),
+                ("maintain", "upstream", "remove", "--alias", "reference"),
+                ("maintain", "upstream", "remove", "--alias", "reference", "--yes"),
             )
             for operation in operations:
                 code, payload = _source(env, *operation)
@@ -131,7 +132,7 @@ class SourceOperationProjectIsolationTest(unittest.TestCase):
 
         with _environment() as env:
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 _COORDINATE,
                 "--profile",
@@ -146,7 +147,7 @@ class SourceOperationProjectIsolationTest(unittest.TestCase):
             payload_bytes = (link / "SKILL.md").read_bytes()
 
             removed_code, removed = _source(
-                env, "source", "remove", "--alias", "reference", "--yes"
+                env, "maintain", "upstream", "remove", "--alias", "reference", "--yes"
             )
 
             self.assertEqual(removed_code, 0, removed)
@@ -163,26 +164,27 @@ class SourceOperationProjectIsolationTest(unittest.TestCase):
         """A project naming a removed alias reports it, rather than losing the record."""
 
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
             mirror = env.root / "mirror-source"
             shutil.copytree(_FIXTURE, mirror)
             _source(
                 env,
-                "source",
+                "maintain",
+                "upstream",
                 "add",
                 "--alias",
                 "mirror",
                 "--kind",
-                "source-local",
+                "local",
                 "--location",
                 str(mirror),
             )
             manifest_before = (env.project / _MANIFEST).read_bytes()
 
-            _source(env, "source", "remove", "--alias", "reference", "--yes")
+            _source(env, "maintain", "upstream", "remove", "--alias", "reference", "--yes")
 
             self.assertEqual((env.project / _MANIFEST).read_bytes(), manifest_before)
-            code, status = env.run("marketplace", "status", "--profile", "claude")
+            code, status = env.run("consume", "status", "--profile", "claude")
             self.assertEqual(code, 0, status)
             self.assertEqual([item["status"] for item in status["items"]], ["source-unavailable"])
             self.assertEqual(status["items"][0]["key"], f"{_COORDINATE}@1.0.0#claude/project")
@@ -199,16 +201,16 @@ class UninstallAfterSourceRemovalTest(unittest.TestCase):
 
     def test_uninstall_succeeds_after_the_source_it_came_from_is_removed(self) -> None:
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
             installed = env.project / _INSTALLED
             self.assertTrue(installed.exists())
             removed_code, removed = _source(
-                env, "source", "remove", "--alias", "reference", "--yes"
+                env, "maintain", "upstream", "remove", "--alias", "reference", "--yes"
             )
             self.assertEqual(removed_code, 0, removed)
 
             code, payload = env.run(
-                "marketplace", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -220,11 +222,11 @@ class UninstallAfterSourceRemovalTest(unittest.TestCase):
 
         def _uninstalled(remove_source: bool) -> dict[str, tuple[str, ...]]:
             with _environment() as env:
-                env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+                env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
                 if remove_source:
-                    _source(env, "source", "remove", "--alias", "reference", "--yes")
+                    _source(env, "maintain", "upstream", "remove", "--alias", "reference", "--yes")
                 code, payload = env.run(
-                    "marketplace", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
+                    "consume", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
                 )
                 self.assertEqual(code, 0, payload)
                 return _stable_snapshot(env.project)
@@ -235,10 +237,10 @@ class UninstallAfterSourceRemovalTest(unittest.TestCase):
         # Resolving from the manifest must not turn "you never installed this" into "uninstall
         # everything": an empty selection is how a bare `uninstall` selects the whole project.
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "uninstall",
                 "reference/skill/absent",
                 "--profile",

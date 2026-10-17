@@ -48,7 +48,7 @@ An unusable value is refused with a diagnostic rather than silently corrected, b
 would mean writing one job's state into a directory another job also resolved to.
 
 ```sh
-AART_CLI_HOME=/runner/work/aart-state aart-cli marketplace status --profile claude
+AART_CLI_HOME=/runner/work/aart-state aart-cli consume status --profile claude
 ```
 
 That is the mechanism CI and isolated agent jobs use: a private home, without changing `HOME` and

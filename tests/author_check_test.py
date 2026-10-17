@@ -235,7 +235,7 @@ class CollectionTest(unittest.TestCase):
             self.assertEqual(code, ERROR, printed)
             self.assertIn("error collections/data-engineer/aart-cli.json", printed)
             self.assertIn("a Collection is not defined in a source", printed)
-            self.assertIn("aart-cli registry collection", printed)
+            self.assertIn("aart-cli maintain registry collection", printed)
 
 
 class JsonTest(unittest.TestCase):

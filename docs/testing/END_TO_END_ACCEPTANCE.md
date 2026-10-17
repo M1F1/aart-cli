@@ -3,8 +3,8 @@
 ## Purpose
 
 This is the manual test for AART's **command line**. You play two roles in order: a maintainer who
-builds and publishes a Registry with `aart-cli registry ...`, then a consumer who subscribes to it and
-installs from it with `aart-cli source ...` and `aart-cli marketplace ...`.
+builds and publishes a Registry with `aart-cli maintain ...`, then a consumer who subscribes to it and
+installs from it with `aart-cli consume registry ...` and `aart-cli consume ...`.
 
 There are two routes through the same product, and this is one of them:
 
@@ -191,11 +191,11 @@ Open `make manual-test-shell-consumer`. Fresh home, empty project, nothing confi
 ## 6 — Subscribe
 
 ```sh
-python3 -m aart_cli.cli source add --alias manual-registry --kind registry-git \
+python3 -m aart_cli.cli source add --alias manual-registry --kind git \
   --location https://manual.aart.test/registry.git --ref "$REF" --default
 ```
 
-- [ ] Confirm a local path is refused for `--kind registry-git`.
+- [ ] Confirm a local path is refused for `--kind git`.
 - [ ] `source list --json`, then `source health`.
 
 Expected: `source add` validates and snapshots the exact origin before saving, so it needs no

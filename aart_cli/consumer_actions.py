@@ -2917,7 +2917,7 @@ class LocalConsumerActions:
         )
 
     def _prepare_source_removal(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
-        """Review removing one authoring Source: the same unsubscribe as `aart-cli source remove`.
+        """Review removing one authoring Source: the same unsubscribe as `aart-cli maintain upstream remove`.
 
         Removing is how a Source whose origin, branch or kind was entered wrong is corrected:
         removed here, then added again from Add Source (D-391). The port is the Registry one,
@@ -3353,7 +3353,7 @@ class LocalConsumerActions:
     def _prepare_installed_mcp_test(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         """Review the test of installations chosen on Installed, or the one a details screen is.
 
-        Selection is installation-qualified exactly as `aart-cli mcp test` makes it (§170.1,
+        Selection is installation-qualified exactly as `aart-cli consume mcp test` makes it (§170.1,
         INV-254): each key is one installation in one harness, read back from the receipts now.
         A chosen row that is not an MCP is refused by name rather than dropped, because a test
         that quietly covers less than was ticked reads as a pass for what it skipped.

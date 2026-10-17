@@ -234,7 +234,8 @@ def load_configuration(
         return _failure(
             "no-source-configured",
             "this content operation requires at least one enabled source",
-            "run `aart-cli source add --help` to configure one non-interactively, or use Add in the TUI Sources stage, then retry",
+            "run `aart-cli consume registry add --help` to connect a Registry non-interactively, "
+            "or use Add on the TUI Registries view, then retry",
         )
     return Ok(
         LoadedConfiguration(

@@ -59,7 +59,7 @@ class IdentityAgreementTest(unittest.TestCase):
             self.assertFalse((env.source_location / "aart-cli-registry.json").exists())
 
             code, payload = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -73,7 +73,7 @@ class IdentityAgreementTest(unittest.TestCase):
 
             with _environment(source) as env:
                 code, payload = env.run(
-                    "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                    "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
                 )
 
                 self.assertEqual(code, 0, payload)
@@ -89,11 +89,11 @@ class IdentityAgreementTest(unittest.TestCase):
                     _registry_document(_DISAGREEING), encoding="utf-8"
                 )
 
-                code, payload = _source(env, "source", "sync", "--alias", "reference")
+                code, payload = _source(env, "maintain", "upstream", "sync", "--alias", "reference")
 
                 self.assertEqual(code, 1, payload)
-                self.assertFalse(payload["sources"][0]["ok"], payload)
-                diagnostic = self._only_diagnostic(payload["sources"][0])
+                self.assertFalse(payload["upstreams"][0]["ok"], payload)
+                diagnostic = self._only_diagnostic(payload["upstreams"][0])
                 self.assertEqual(diagnostic["code"], "source-invalid")
                 self.assertIn("aart-cli-registry.json", diagnostic["message"])
                 self.assertIn("aart-cli-source.json", diagnostic["message"])
@@ -110,12 +110,13 @@ class IdentityAgreementTest(unittest.TestCase):
 
             code, payload = _source(
                 env,
-                "source",
+                "maintain",
+                "upstream",
                 "add",
                 "--alias",
                 "mirror",
                 "--kind",
-                "source-local",
+                "local",
                 "--location",
                 str(mirror),
             )
@@ -125,8 +126,8 @@ class IdentityAgreementTest(unittest.TestCase):
             self.assertEqual(diagnostic["code"], "source-invalid")
             self.assertIn(_DISAGREEING, diagnostic["message"])
             # A refused subscription is not a subscription: nothing may be left configured.
-            _, listed = _source(env, "source", "list")
-            self.assertNotIn("mirror", [item["alias"] for item in listed["sources"]])
+            _, listed = _source(env, "maintain", "upstream", "list")
+            self.assertNotIn("mirror", [item["alias"] for item in listed["upstreams"]])
 
     def test_rs08_a_registry_marker_that_does_not_parse_is_refused(self) -> None:
         """The skipped check, taken as its own decision.
@@ -144,12 +145,13 @@ class IdentityAgreementTest(unittest.TestCase):
 
             code, payload = _source(
                 env,
-                "source",
+                "maintain",
+                "upstream",
                 "add",
                 "--alias",
                 "mirror",
                 "--kind",
-                "source-local",
+                "local",
                 "--location",
                 str(mirror),
             )
@@ -160,8 +162,8 @@ class IdentityAgreementTest(unittest.TestCase):
             self.assertIn("aart-cli-registry.json", diagnostic["message"])
             self.assertIn("does not parse", diagnostic["message"])
             self.assertTrue(diagnostic["remediation"], diagnostic)
-            _, listed = _source(env, "source", "list")
-            self.assertNotIn("mirror", [item["alias"] for item in listed["sources"]])
+            _, listed = _source(env, "maintain", "upstream", "list")
+            self.assertNotIn("mirror", [item["alias"] for item in listed["upstreams"]])
 
     def test_rs08_a_marker_that_is_not_json_at_all_is_refused(self) -> None:
         with _environment() as env:
@@ -172,12 +174,13 @@ class IdentityAgreementTest(unittest.TestCase):
 
             code, payload = _source(
                 env,
-                "source",
+                "maintain",
+                "upstream",
                 "add",
                 "--alias",
                 "mirror",
                 "--kind",
-                "source-local",
+                "local",
                 "--location",
                 str(mirror),
             )
@@ -194,11 +197,11 @@ class IdentityAgreementTest(unittest.TestCase):
             with _environment(source) as env:
                 (source / "aart-cli-registry.json").write_text("{", encoding="utf-8")
 
-                code, payload = _source(env, "source", "sync", "--alias", "reference")
+                code, payload = _source(env, "maintain", "upstream", "sync", "--alias", "reference")
 
                 self.assertEqual(code, 1, payload)
-                self.assertFalse(payload["sources"][0]["ok"], payload)
-                diagnostic = self._only_diagnostic(payload["sources"][0])
+                self.assertFalse(payload["upstreams"][0]["ok"], payload)
+                diagnostic = self._only_diagnostic(payload["upstreams"][0])
                 self.assertEqual(diagnostic["code"], "source-invalid")
                 self.assertIn("does not parse", diagnostic["message"])
 
@@ -213,7 +216,7 @@ class IdentityAgreementTest(unittest.TestCase):
 
             with _environment(source) as env:
                 code, payload = env.run(
-                    "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                    "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
                 )
 
                 self.assertEqual(code, 0, payload)

@@ -1,4 +1,4 @@
-"""B-038: which installs `aart-cli marketplace install` sends to the canonical registry seam.
+"""B-038: which installs `aart-cli consume install` sends to the canonical registry seam.
 
 The strangler moves one source kind at a time, and the decision that says which is
 `_configured_registry_selection`. Nothing named it, so the route could change -- in either

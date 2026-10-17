@@ -13,7 +13,7 @@ therefore cannot mean "nothing has happened here since". What remembers is the i
 and that is exactly what neither a sync nor a rollback is allowed to touch.
 
 Every scenario here runs over one real temporary machine with one real local source that the test
-republishes into, through `aart-cli source sync`, `aart-cli marketplace status` and `aart-cli marketplace
+republishes into, through `aart-cli source sync`, `aart-cli consume status` and `aart-cli marketplace
 update`. Nothing below the CLI is mocked.
 """
 
@@ -58,15 +58,15 @@ class UpstreamMovementTest(unittest.TestCase):
         """
 
         with _environment_over_a_writable_source() as (env, location):
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
             installed_from = _record(env)
             first = _current_digest(env)
             _payload_file(location).write_text(_SECOND, encoding="utf-8")
 
-            code, payload = _source_json(env, "source", "sync")
+            code, payload = _source_json(env, "maintain", "upstream", "sync")
 
             self.assertEqual(code, 0, payload)
-            self.assertEqual(payload["sources"][0]["disposition"], "published")
+            self.assertEqual(payload["upstreams"][0]["disposition"], "published")
             self.assertNotEqual(_current_digest(env), first)
             # The store moved and the record did not: every field of it, not just the revision,
             # because a rewrite that preserved the revision and changed the origin would be the
@@ -78,13 +78,13 @@ class UpstreamMovementTest(unittest.TestCase):
         """INV-210: a registry change raises a finding; mutating an installation needs a plan."""
 
         with _environment_over_a_writable_source() as (env, location):
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
             placed = env.project / ".claude" / "skills" / "code-review" / "SKILL.md"
             first_bytes = placed.read_bytes()
             _payload_file(location).write_text(_SECOND, encoding="utf-8")
-            _source_json(env, "source", "sync")
+            _source_json(env, "maintain", "upstream", "sync")
 
-            code, status = env.run("marketplace", "status", "--profile", "claude")
+            code, status = env.run("consume", "status", "--profile", "claude")
 
             self.assertEqual(code, 0, status)
             self.assertEqual([item["status"] for item in status["items"]], ["update-available"])
@@ -95,12 +95,12 @@ class UpstreamMovementTest(unittest.TestCase):
         """The counterpart: the record is not frozen, it is only not rewritten behind the operator."""
 
         with _environment_over_a_writable_source() as (env, location):
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
             _payload_file(location).write_text(_SECOND, encoding="utf-8")
-            _source_json(env, "source", "sync")
+            _source_json(env, "maintain", "upstream", "sync")
             second = _current_digest(env)
 
-            code, payload = env.run("marketplace", "update", "--profile", "claude", "--yes")
+            code, payload = env.run("consume", "update", "--profile", "claude", "--yes")
 
             self.assertEqual(code, 0, payload)
             self.assertEqual([item["status"] for item in payload["items"]], ["changed"])
@@ -121,24 +121,24 @@ class UpstreamMovementTest(unittest.TestCase):
         with _environment_over_a_writable_source() as (env, location):
             payload_file = _payload_file(location)
             original = payload_file.read_bytes()
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
             first = _current_digest(env)
             payload_file.write_text(_SECOND, encoding="utf-8")
-            _source_json(env, "source", "sync")
-            env.run("marketplace", "update", "--profile", "claude", "--yes")
+            _source_json(env, "maintain", "upstream", "sync")
+            env.run("consume", "update", "--profile", "claude", "--yes")
 
             payload_file.write_bytes(original)
-            _source_json(env, "source", "sync")
+            _source_json(env, "maintain", "upstream", "sync")
 
             # The store is byte-for-byte back where it started, and this installation is not.
             self.assertEqual(_current_digest(env), first)
-            code, status = env.run("marketplace", "status", "--profile", "claude")
+            code, status = env.run("consume", "status", "--profile", "claude")
             self.assertEqual(code, 0, status)
             self.assertEqual([item["status"] for item in status["items"]], ["update-available"])
             placed = env.project / ".claude" / "skills" / "code-review" / "SKILL.md"
             self.assertEqual(placed.read_text(encoding="utf-8"), _SECOND)
 
-            code, applied = env.run("marketplace", "update", "--profile", "claude", "--yes")
+            code, applied = env.run("consume", "update", "--profile", "claude", "--yes")
 
             self.assertEqual(code, 0, applied)
             self.assertEqual(placed.read_bytes(), original)

@@ -27,6 +27,18 @@ class SourceKind(str, Enum):
     SOURCE_GIT = "source-git"
     SOURCE_LOCAL = "source-local"
 
+    @property
+    def command(self) -> str:
+        """The command family that manages a connection of this kind (§175.2, INV-270).
+
+        Joined from words because it is a prefix rather than a command: every hint built on it
+        is checked whole by `tests.source_remediation_test`.
+        """
+
+        if self in {SourceKind.REGISTRY_GIT, SourceKind.REGISTRY_LOCAL}:
+            return " ".join(("aart-cli", "consume", "registry"))
+        return " ".join(("aart-cli", "maintain", "upstream"))
+
 
 class SyncMode(str, Enum):
     AUTO = "auto"

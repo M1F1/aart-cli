@@ -65,22 +65,20 @@ class WithdrawnArtifactE2ETest(unittest.TestCase):
     def _withdrawn(self, env, location: Path) -> list[str]:
         """Install, then have upstream withdraw the artifact and re-synchronize. Returns files."""
 
-        code, payload = env.run(
-            "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
         before = _placed(env)
         _withdraw(location)
-        synced, report = _source_json(env, "source", "sync")
+        synced, report = _source_json(env, "maintain", "upstream", "sync")
         self.assertEqual(synced, 0, report)
-        self.assertEqual([item["disposition"] for item in report["sources"]], ["published"])
+        self.assertEqual([item["disposition"] for item in report["upstreams"]], ["published"])
         return before
 
     def test_a_withdrawn_artifact_stops_being_offered(self) -> None:
         with _environment_over_a_writable_source() as (env, location):
             self._withdrawn(env, location)
 
-            code, payload = _source_json(env, "marketplace", "list")
+            code, payload = _source_json(env, "consume", "list")
 
             self.assertEqual(code, 0, payload)
             offered = [item["coordinate"] for item in payload["artifacts"]]
@@ -93,7 +91,7 @@ class WithdrawnArtifactE2ETest(unittest.TestCase):
             self._withdrawn(env, location)
 
             code, payload = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertNotEqual(code, 0)
@@ -112,7 +110,7 @@ class WithdrawnArtifactE2ETest(unittest.TestCase):
             before = self._withdrawn(env, location)
 
             self.assertEqual(_placed(env), before)
-            code, payload = env.run("marketplace", "status", "--profile", "claude")
+            code, payload = env.run("consume", "status", "--profile", "claude")
             self.assertEqual(code, 0, payload)
             item = payload["items"][0]
             # Its own word, and an honest one: the artifact is not broken and it is not current.
@@ -147,7 +145,7 @@ class WithdrawnArtifactE2ETest(unittest.TestCase):
             self._withdrawn(env, location)
 
             code, payload = env.run(
-                "marketplace", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)

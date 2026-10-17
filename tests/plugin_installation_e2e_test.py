@@ -52,7 +52,7 @@ class PluginInstallationTest(unittest.TestCase):
         self.settings = self.env.project / "opencode.json"
 
     def _install(self, *extra: str) -> tuple[int, dict]:
-        return self.env.run("marketplace", "install", COORDINATE, "--profile", "opencode", *extra)
+        return self.env.run("consume", "install", COORDINATE, "--profile", "opencode", *extra)
 
     def _document(self) -> dict:
         return json.loads(self.settings.read_text(encoding="utf-8"))
@@ -94,7 +94,7 @@ class PluginInstallationTest(unittest.TestCase):
         self.assertEqual([*EXISTING["plugin"], REFERENCE], self._document()["plugin"])
 
         code, payload = self.env.run(
-            "marketplace", "uninstall", COORDINATE, "--profile", "opencode", "--yes"
+            "consume", "uninstall", COORDINATE, "--profile", "opencode", "--yes"
         )
 
         self.assertEqual(code, 0, payload)
@@ -112,13 +112,13 @@ class PluginInstallationTest(unittest.TestCase):
     def test_a_later_invocation_reports_it_healthy_and_a_removed_entry_as_not(self) -> None:
         self._install("--yes")
 
-        code, payload = self.env.run("marketplace", "status", "--profile", "opencode")
+        code, payload = self.env.run("consume", "status", "--profile", "opencode")
         self.assertEqual(code, 0, payload)
         self.assertEqual([COORDINATE + "@7.0.0"], [item["key"] for item in payload["items"]])
         self.assertEqual("ready", payload["items"][0]["health"])
 
         self.settings.write_text(json.dumps({"plugin": []}) + "\n", encoding="utf-8")
-        code, payload = self.env.run("marketplace", "status", "--profile", "opencode")
+        code, payload = self.env.run("consume", "status", "--profile", "opencode")
 
         self.assertEqual(code, 0, payload)
         self.assertNotEqual("ready", payload["items"][0]["health"])
@@ -130,7 +130,7 @@ class PluginInstallationTest(unittest.TestCase):
         env = _Environment(other)
         env.publish((("superpowers/aart-cli.json", json.dumps(manifest)), *AUTHORED[1:]))
 
-        code, payload = env.run("marketplace", "install", COORDINATE, "--profile", "claude")
+        code, payload = env.run("consume", "install", COORDINATE, "--profile", "claude")
 
         self.assertNotEqual(code, 0, payload)
         self.assertIn("plugin target", json.dumps(payload))

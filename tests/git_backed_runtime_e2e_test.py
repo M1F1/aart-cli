@@ -26,7 +26,7 @@ COORDINATE = "company/mcp/notes"
 
 #: The same server `mcp_stdio_e2e_test` starts, published as an artifact that declares no inputs.
 #:
-#: The artifact declares none deliberately. `aart-cli marketplace install` has no way to answer a
+#: The artifact declares none deliberately. `aart-cli consume install` has no way to answer a
 #: declared input -- the form belongs to the persistent shell -- so an artifact that declares one
 #: cannot be installed through the CLI at all, which the refusal test below pins. Credential and
 #: config delivery into a launched server is `mcp_stdio_e2e_test`'s subject and is not restated
@@ -59,13 +59,13 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             env = _Environment(Path(raw).resolve(), AUTHORED_SERVER)
 
-            sync_code, synchronized = env.run("source", "sync", source_transport=True)
+            sync_code, synchronized = env.run("consume", "registry", "sync", source_transport=True)
 
             self.assertEqual(sync_code, 0, synchronized)
-            self.assertEqual(synchronized["sources"][0]["resolved_revision"], env.head)
+            self.assertEqual(synchronized["registries"][0]["resolved_revision"], env.head)
 
             install_code, installed = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(install_code, 0, installed)
@@ -111,8 +111,8 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as raw:
             env = _Environment(Path(raw).resolve(), AUTHORED_SERVER)
-            env.run("source", "sync", source_transport=True)
-            env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "registry", "sync", source_transport=True)
+            env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
 
             recorded = json.loads((env.project / ".mcp.json").read_text(encoding="utf-8"))
             command = recorded["mcpServers"]["notes-company-project"]["command"]
@@ -137,10 +137,10 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as raw:
             env = _Environment(Path(raw).resolve(), AUTHORED_MCP)
-            env.run("source", "sync", source_transport=True)
+            env.run("consume", "registry", "sync", source_transport=True)
 
             code, payload = env.run(
-                "marketplace", "install", "company/mcp/github", "--profile", "claude", "--yes"
+                "consume", "install", "company/mcp/github", "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 1, payload)
@@ -177,10 +177,8 @@ class GitBackedDoctorE2ETest(unittest.TestCase):
 
     def _installed(self, raw: str):
         env = _Environment(Path(raw).resolve(), AUTHORED_SERVER)
-        env.run("source", "sync", source_transport=True)
-        code, installed = env.run(
-            "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
-        )
+        env.run("consume", "registry", "sync", source_transport=True)
+        code, installed = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, installed)
         runtime = env.project / ".claude/aart-cli/mcp/company/notes"
         self.assertTrue((runtime / "payload").is_dir(), "nothing to damage")
@@ -267,8 +265,8 @@ class GitBackedUninstallE2ETest(unittest.TestCase):
 
     def _installed(self, raw: str):
         env = _Environment(Path(raw).resolve(), AUTHORED_SERVER)
-        env.run("source", "sync", source_transport=True)
-        code, _ = env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
+        env.run("consume", "registry", "sync", source_transport=True)
+        code, _ = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(0, code)
         runtime = env.project / ".claude/aart-cli/mcp/company/notes"
         # It really runs before it is removed, so what follows is about a working installation.
@@ -280,7 +278,7 @@ class GitBackedUninstallE2ETest(unittest.TestCase):
 
     def _uninstall(self, env):
         code, out = env.run(
-            "marketplace",
+            "consume",
             "uninstall",
             COORDINATE,
             "--profile",
@@ -354,10 +352,8 @@ class GitBackedUndoE2ETest(unittest.TestCase):
 
     def _installed(self, raw: str):
         env = _Environment(Path(raw).resolve(), AUTHORED_SERVER)
-        env.run("source", "sync", source_transport=True)
-        code, installed = env.run(
-            "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
-        )
+        env.run("consume", "registry", "sync", source_transport=True)
+        code, installed = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(0, code, installed)
         return env, installed
 
@@ -380,7 +376,7 @@ class GitBackedUndoE2ETest(unittest.TestCase):
             env, _ = self._installed(raw)
             runtime = env.project / ".claude/aart-cli/mcp/company/notes"
 
-            code, refused = env.run("marketplace", "receipt", "undo", COORDINATE)
+            code, refused = env.run("consume", "receipt", "undo", COORDINATE)
 
             self.assertEqual(1, code)
             self.assertFalse(refused["ok"])

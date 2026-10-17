@@ -153,14 +153,14 @@ Then, in a consumer project:
 
 ```sh
 cd /path/to/consumer-project
-aart-cli source add \
+aart-cli consume registry add \
   --alias company \
-  --kind registry-git \
+  --kind git \
   --location https://github.example.com/company/agent-registry.git \
   --ref main \
   --default \
   --json
-aart-cli marketplace list --json
+aart-cli consume list --json
 ```
 
 `source add` acquires, compiles, and validates the exact snapshot before it saves configuration.

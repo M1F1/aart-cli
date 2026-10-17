@@ -1,6 +1,6 @@
 """Run the two-stage smoke over installed MCP owners (§170.2, D-378).
 
-This is the effect boundary both surfaces share: `aart-cli mcp test` and the optional test the TUI
+This is the effect boundary both surfaces share: `aart-cli consume mcp test` and the optional test the TUI
 offers after an installation (§170.4) run exactly this, so the two cannot disagree about what a
 stage means. It reads the receipt, launcher, configuration file and credential presence, starts
 the installed launcher once, and returns typed results. It never writes anything.

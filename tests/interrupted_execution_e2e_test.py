@@ -78,7 +78,7 @@ _RECIPE = {
 }
 
 _SETUP = (
-    "marketplace",
+    "consume",
     "setup",
     _COORDINATE,
     "--profile",
@@ -141,9 +141,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
     def _ran(self, env) -> tuple[int, dict]:
         """Install, then run the custom setup that fails and cannot undo itself."""
 
-        code, payload = env.run(
-            "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
         return env.run(*_SETUP)
 
@@ -189,7 +187,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
             self.assertEqual(len(left), 1, left)
 
             code, payload = env.run(
-                "marketplace", "receipt", "verify", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "verify", _COORDINATE, "--profile", "claude"
             )
 
             # A false claim is a finding, and a finding must not report success to CI.
@@ -201,7 +199,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
             self.assertIn("not removed", claim["detail"])
 
             shown, receipt = env.run(
-                "marketplace", "receipt", "show", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "show", _COORDINATE, "--profile", "claude"
             )
             self.assertEqual(shown, 0, receipt)
             # The claim's subject is the plan it belongs to, and the directory is named for it.
@@ -215,7 +213,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
         A parsed record's steps are frozen recursively into `MappingProxyType`, and the receipt
         projection copied each step shallowly -- so every nested object stayed a proxy and
         `json.dumps` refused it. The custom setup protocol is the one that writes such a step, which
-        made `aart-cli marketplace receipt show --json` end in a `TypeError` traceback for exactly the
+        made `aart-cli consume receipt show --json` end in a `TypeError` traceback for exactly the
         run whose evidence is hardest to reconstruct by hand. Writing this file found it.
         """
 
@@ -223,7 +221,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
             self._ran(env)
 
             code, payload = env.run(
-                "marketplace", "receipt", "show", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "show", _COORDINATE, "--profile", "claude"
             )
 
             self.assertEqual(code, 0, payload)
@@ -244,7 +242,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
             self._ran(env)
             before = _working_copies(env)
 
-            env.run("marketplace", "receipt", "verify", _COORDINATE, "--profile", "claude")
+            env.run("consume", "receipt", "verify", _COORDINATE, "--profile", "claude")
 
             self.assertEqual(_working_copies(env), before)
 
@@ -272,7 +270,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
             self.assertEqual(len(_working_copies(env)), 2, _working_copies(env))
             # Both are reported, so a retry hides neither its predecessor's evidence nor its own.
             code, payload = env.run(
-                "marketplace", "receipt", "verify", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "verify", _COORDINATE, "--profile", "claude"
             )
             self.assertNotEqual(code, 0)
             self.assertIn("2 working copy", _orphan_claim(payload["verification"])["detail"])

@@ -60,7 +60,7 @@ class ResolutionFailureVocabularyTest(unittest.TestCase):
     def test_an_unconfigured_alias_reports_the_subscription_not_the_artifact(self) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace", "install", "ghost/skill/code-review", "--profile", "claude", "--yes"
+                "consume", "install", "ghost/skill/code-review", "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 1)
@@ -68,7 +68,7 @@ class ResolutionFailureVocabularyTest(unittest.TestCase):
             self.assertEqual(diagnostic["code"], "source-unavailable")
             self.assertIn("ghost", diagnostic["message"])
             self.assertIn(
-                "aart-cli source add --alias ghost --kind registry-git --location <url>",
+                "aart-cli consume registry add --alias ghost --kind git --location <url>",
                 diagnostic["remediation"],
             )
             # Uninstall is a valid exit here, and naming it is the whole point: an operator whose
@@ -81,12 +81,14 @@ class ResolutionFailureVocabularyTest(unittest.TestCase):
         with _environment() as env:
             _configure_cold_source(env)
 
-            code, payload = env.run("marketplace", "install", _COLD, "--profile", "claude", "--yes")
+            code, payload = env.run("consume", "install", _COLD, "--profile", "claude", "--yes")
 
             self.assertEqual(code, 1)
             diagnostic = self._diagnostic(payload)
             self.assertEqual(diagnostic["code"], "source-not-synchronized")
-            self.assertEqual(diagnostic["remediation"], ["aart-cli source sync --alias mirror"])
+            self.assertEqual(
+                diagnostic["remediation"], ["aart-cli maintain upstream sync --alias mirror"]
+            )
 
     def test_a_cold_cache_under_offline_says_so_rather_than_blaming_the_name(self) -> None:
         """A cold cache is not an unknown name."""
@@ -95,7 +97,7 @@ class ResolutionFailureVocabularyTest(unittest.TestCase):
             _configure_cold_source(env)
 
             code, payload = env.run(
-                "marketplace", "install", _COLD, "--profile", "claude", "--offline", "--yes"
+                "consume", "install", _COLD, "--profile", "claude", "--offline", "--yes"
             )
 
             self.assertEqual(code, 1)
@@ -107,14 +109,14 @@ class ResolutionFailureVocabularyTest(unittest.TestCase):
     def test_artifact_not_found_survives_for_the_one_case_where_it_is_true(self) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace", "install", "reference/skill/absent", "--profile", "claude", "--yes"
+                "consume", "install", "reference/skill/absent", "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 1)
             diagnostic = self._diagnostic(payload)
             self.assertEqual(diagnostic["code"], "artifact-not-found")
             self.assertEqual(
-                diagnostic["remediation"], ["aart-cli marketplace list --source reference"]
+                diagnostic["remediation"], ["aart-cli consume list --source reference"]
             )
 
     def test_the_four_causes_do_not_share_one_code(self) -> None:
@@ -124,7 +126,7 @@ class ResolutionFailureVocabularyTest(unittest.TestCase):
             _configure_cold_source(env)
             codes = tuple(
                 self._diagnostic(
-                    env.run("marketplace", "install", *argv, "--profile", "claude", "--yes")[1]
+                    env.run("consume", "install", *argv, "--profile", "claude", "--yes")[1]
                 )["code"]
                 for argv in (
                     ("ghost/skill/code-review",),
@@ -147,11 +149,11 @@ class ResolutionFailureVocabularyTest(unittest.TestCase):
             # must not share remediation, or `--offline` becomes invisible.
             self.assertNotEqual(
                 self._diagnostic(
-                    env.run("marketplace", "install", _COLD, "--profile", "claude", "--yes")[1]
+                    env.run("consume", "install", _COLD, "--profile", "claude", "--yes")[1]
                 )["remediation"],
                 self._diagnostic(
                     env.run(
-                        "marketplace", "install", _COLD, "--profile", "claude", "--offline", "--yes"
+                        "consume", "install", _COLD, "--profile", "claude", "--offline", "--yes"
                     )[1]
                 )["remediation"],
             )
@@ -163,7 +165,7 @@ class ResolutionFailureVocabularyTest(unittest.TestCase):
             _configure_cold_source(env)
 
             code, payload = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)

@@ -92,19 +92,21 @@ _REVIEW_FIRST = (
 )
 _INITIALIZE = (
     "point `--source` at a registry checkout, or create one with "
-    "`aart-cli registry init --source-id SLUG --display-name NAME --yes`",
+    "`aart-cli maintain registry init --source-id SLUG --display-name NAME --yes`",
 )
 _CLEAR_PATH = (
     "move or remove whatever occupies that path in the checkout, then run the command again",
 )
 _ALREADY_A_REGISTRY = (
-    "this checkout is already a registry: read it with `aart-cli registry validate`, or "
+    "this checkout is already a registry: read it with `aart-cli maintain registry validate`, or "
     "initialize a different directory by pointing `--source` at it",
 )
-_LIST_PACKAGES = ("`aart-cli registry validate` reports every package this registry holds",)
+_LIST_PACKAGES = (
+    "`aart-cli maintain registry validate` reports every package this registry holds",
+)
 _CANONICAL_ROOTS = (
     "restore the canonical `artifacts/` and `collections/` roots in `aart-cli-source.json`, then "
-    "`aart-cli registry validate`",
+    "`aart-cli maintain registry validate`",
 )
 _SETUP_RECIPE = (
     "add the declared recipe and its `SETUP.md` to the package, or drop the setup declaration from "
@@ -114,7 +116,7 @@ _SETUP_RECIPE = (
 
 _IDENTITIES = (
     "make `registry_id` in `aart-cli-registry.json` and `source_id` in `aart-cli-source.json` the same "
-    "value, then `aart-cli registry validate`",
+    "value, then `aart-cli maintain registry validate`",
 )
 
 
@@ -129,7 +131,7 @@ _SECURITY_EVIDENCE = (
 )
 _SECURITY_REBUILD = (
     "the evidence describes a different registry state: regenerate it against this registry's "
-    "approved content, then `aart-cli registry audit`",
+    "approved content, then `aart-cli maintain registry audit`",
 )
 _SECURITY_RISK = (
     "read the attestation for that object and either correct the package or stop publishing it; "

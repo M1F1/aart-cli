@@ -10992,3 +10992,29 @@ manifests and producing templates is not CLI-only. Choices:
   `allow_direct_sources` is gone. A required alias is satisfied only by an enabled Registry. The
   host and repository allowlists still apply to every Git entry, upstreams included: they are the
   organization's network boundary, not a consumer rule.
+
+## D-443 — The role families route to the existing handlers (CP-32 steps 3, 4 and 6)
+
+- **Parser and routing.** The top level is `consume`, `maintain`, `author`, `doctor`, `upgrade`,
+  `reset`, `security`. `cli._route` is the only code that knows both the public family and the
+  handler behind it: `consume registry` and `maintain upstream` add|list|sync|remove|resubscribe|health
+  reach the connection handler with `Request.source_family`; the other `consume` actions reach the
+  install handler, `consume mcp test` the MCP one, and `maintain upstream scan|adopt|check`,
+  `maintain candidate promote` and `maintain registry …` the Registry handler (`check` is the old
+  `check-upstream`). Handler and `DISPATCH` names stay internal.
+- **`--kind git|local`.** The family supplies the other half; a combined kind is refused by
+  argparse. In JSON a connection's `kind` is `git` or `local`, the entries are `registries` or
+  `upstreams`, and operations are `registry.*` or `upstream.*`. A family never lists, syncs,
+  checks, removes or resubscribes the other family's alias: it refuses it and names the command
+  that owns it. An internal caller (the TUI, first run) passes the family explicitly; the TUI's one
+  removal port derives it from the connection being removed.
+- **Hints.** `SourceKind.command` gives the family prefix for a connection's kind, and every hint
+  about a known connection is built on it. `tests/source_remediation_test.py` parses each hint
+  built on the prefix, since the package scan cannot see an interpolated prefix.
+- **`consume registry sync` and updates.** It ends by pointing at `consume update`, whose review
+  already lists what a newer approved version would replace. §175.2 is worded that way; naming the
+  updatable artifacts in `sync` itself is B-201, because the consumer path computes no installed
+  versus offered comparison today.
+- **Not yet**: `maintain candidate list` (step 5), and INV-269's second half — the consumer catalog
+  still reads upstream snapshots and many e2e fixtures install from one. Step 7 removes that, with
+  the fixtures.

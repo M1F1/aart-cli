@@ -114,6 +114,7 @@ class LocalRegistryPromotionTest(unittest.TestCase):
                 common = ("--source", str(registry), "--checkout", str(author), *_SOURCE)
                 steps = (
                     (
+                        "maintain",
                         "registry",
                         "init",
                         "--source",
@@ -130,19 +131,28 @@ class LocalRegistryPromotionTest(unittest.TestCase):
                     self.assertEqual(code, 0, said)
                 _git(registry, "add", "-A")
                 _git(registry, "commit", "-qm", "init")
-                code, scan = _cli("registry", "scan", *common, "--json")
+                code, scan = _cli("maintain", "upstream", "scan", *common, "--json")
                 self.assertEqual(code, 0, scan)
                 candidate = json.loads(scan)["candidates"][0]["candidate_id"]
                 for step in (
-                    ("registry", "promote", *common, "--candidate", candidate, "--yes"),
-                    ("registry", "publish", "--source", str(registry), "--yes"),
                     (
-                        "source",
+                        "maintain",
+                        "candidate",
+                        "promote",
+                        *common,
+                        "--candidate",
+                        candidate,
+                        "--yes",
+                    ),
+                    ("maintain", "registry", "publish", "--source", str(registry), "--yes"),
+                    (
+                        "consume",
+                        "registry",
                         "add",
                         "--alias",
                         "company",
                         "--kind",
-                        "registry-local",
+                        "local",
                         "--location",
                         str(registry),
                         "--ref",
@@ -150,12 +160,13 @@ class LocalRegistryPromotionTest(unittest.TestCase):
                         "--default" if default else "--no-default",
                     ),
                     (
-                        "source",
+                        "maintain",
+                        "upstream",
                         "add",
                         "--alias",
                         "authors",
                         "--kind",
-                        "source-local",
+                        "local",
                         "--location",
                         str(author),
                     ),
@@ -245,7 +256,7 @@ class LocalRegistryPromotionTest(unittest.TestCase):
             self.assertNotEqual(_git(registry, "rev-parse", "HEAD"), before, walked.last)
 
     def test_a_source_is_removed_from_maintainer_sources_and_added_again(self) -> None:
-        # D-391: a Source entered wrong had no way out of the TUI; `aart-cli source remove` did.
+        # D-391: a Source entered wrong had no way out of the TUI; the CLI's remove did.
         with self._machine() as (home, registry, author):
             self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 4, ENTER, ESCAPE)
             synced = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
@@ -256,9 +267,11 @@ class LocalRegistryPromotionTest(unittest.TestCase):
             self.assertIn("[d] Remove", removed.screen_containing("/ Sources"))
             self.assertIn("Source: authors", review)
             self.assertIn("its Candidates", review)
-            code, listed = _cli("source", "list")
+            code, listed = _cli("maintain", "upstream", "list")
             self.assertEqual(code, 0, listed)
             self.assertNotIn("authors", listed)
+            code, listed = _cli("consume", "registry", "list")
+            self.assertEqual(code, 0, listed)
             self.assertIn("company", listed)
 
             added = self._shell(

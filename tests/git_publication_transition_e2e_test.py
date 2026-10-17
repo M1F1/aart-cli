@@ -138,7 +138,7 @@ class _PublicationLab:
 
     def run(self, *argv: str, source_transport: bool = False):
         arguments = [*argv, "--json"]
-        if argv[:2] == ("marketplace", "install"):
+        if argv[:2] == ("consume", "install"):
             arguments.extend(("--project", str(self.project)))
         output = io.StringIO()
         transport = (
@@ -165,11 +165,11 @@ class GitPublicationTransitionE2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             lab = _PublicationLab(Path(raw).resolve())
 
-            code, synchronized = lab.run("source", "sync", source_transport=True)
+            code, synchronized = lab.run("consume", "registry", "sync", source_transport=True)
             self.assertEqual(code, 0, synchronized)
-            self.assertEqual(synchronized["sources"][0]["resolved_revision"], lab.head)
+            self.assertEqual(synchronized["registries"][0]["resolved_revision"], lab.head)
 
-            code, before = lab.run("marketplace", "list")
+            code, before = lab.run("consume", "list")
 
             self.assertEqual(code, 0, before)
             # The promotion on `main` is what this consumer was configured to read, so it is
@@ -180,12 +180,12 @@ class GitPublicationTransitionE2ETest(unittest.TestCase):
             )
 
             merged = lab.merge_the_review_branch()
-            code, resynchronized = lab.run("source", "sync", source_transport=True)
+            code, resynchronized = lab.run("consume", "registry", "sync", source_transport=True)
 
             self.assertEqual(code, 0, resynchronized)
-            self.assertEqual(resynchronized["sources"][0]["resolved_revision"], merged)
+            self.assertEqual(resynchronized["registries"][0]["resolved_revision"], merged)
 
-            code, after = lab.run("marketplace", "list")
+            code, after = lab.run("consume", "list")
 
             self.assertEqual(code, 0, after)
             self.assertEqual(
@@ -194,7 +194,7 @@ class GitPublicationTransitionE2ETest(unittest.TestCase):
             )
 
             code, installed = lab.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, installed)
@@ -215,10 +215,10 @@ class GitPublicationTransitionE2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             lab = _PublicationLab(Path(raw).resolve())
             delivered = lab.project / ".claude/skills/code-review-company-project/SKILL.md"
-            lab.run("source", "sync", source_transport=True)
+            lab.run("consume", "registry", "sync", source_transport=True)
 
             code, refused = lab.run(
-                "marketplace", "install", f"{COORDINATE}@1.3.0", "--profile", "claude", "--yes"
+                "consume", "install", f"{COORDINATE}@1.3.0", "--profile", "claude", "--yes"
             )
 
             self.assertNotEqual(code, 0, refused)
@@ -227,7 +227,7 @@ class GitPublicationTransitionE2ETest(unittest.TestCase):
             # The version that is on the configured branch installs from the same command, so the
             # refusal above is review not having happened, not the lab being broken.
             code, installed = lab.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, installed)

@@ -63,6 +63,38 @@ Targeted mutations:
 - `upstreams.git` mapped to `REGISTRY_GIT`: the round trip and the upstream-as-default refusal
   turned red.
 
+## Steps 3, 4 and 6 — consume, maintain upstream, maintain registry
+
+Done (D-443). The parser has only the role families; `source`, `marketplace`, `mcp` and the
+top-level `registry` are gone with no aliases, and `--kind` takes `git|local`. Each connection
+family lists, syncs, checks and removes only its own aliases and names the owning command for the
+other's. `consume registry sync` ends with the `consume update` hint (B-201 for naming the
+artifacts). The TUI and first run pass the family explicitly. Every hint in the package and the docs
+names the new commands, through `SourceKind.command` where the connection is known.
+
+Evidence:
+- `tests/source_cli_command_test.py`
+  `test_each_family_lists_and_removes_only_its_own_connections`: with a Registry and an upstream
+  configured, each family lists its own under its own key, and `consume registry remove` of the
+  upstream is refused, naming `maintain upstream`.
+- `tests/registry_cli_test.py` `test_all_registry_actions_map_to_one_command_boundary`: the
+  `maintain registry|candidate|upstream` action sets and the routing to the Registry handler.
+- `tests/source_remediation_test.py`
+  `test_every_hint_built_on_a_connection_family_is_a_command`, with the package-wide scan.
+- `tests/adoption_first_contact_test.py`: the README route and the documented surface parse
+  against the new tree. `tests/local_registry_promotion_e2e_test.py`: the TUI removes an upstream
+  and adds it back.
+- 197 related modules, 2,166 tests: green except `tests/screen_skeleton_test.py` (two Hypothesis
+  properties that fail the same way on the base commit, unrelated). ruff, mypy, tach and docs-check
+  are clean.
+
+Targeted mutation: `_in_family` returning True turned only the family test red among
+`source_cli_command_test`, `local_registry_promotion_e2e_test` and `source_remediation_test`.
+
+Open in later steps: `maintain candidate list` (5); the consumer catalog still reads upstream
+snapshots, so INV-269's "nothing a consumer installs comes from one" is step 7 with the e2e
+fixtures that install from the shared `reference` upstream.
+
 ## Step 11 — reset with backup
 
 Done (D-440), ahead of steps 3–8 at the owner's priority. `aart-cli reset` renames every planned

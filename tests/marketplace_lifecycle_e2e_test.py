@@ -237,7 +237,7 @@ class LifecycleCopyE2ETest(unittest.TestCase):
             )
 
             health_code, health = env.run(
-                "marketplace",
+                "consume",
                 "health",
                 _COLLECTION,
                 "--environment",
@@ -252,7 +252,7 @@ class LifecycleCopyE2ETest(unittest.TestCase):
             self.assertEqual(health["items"][0]["status"], "unsatisfied")
 
             install_code, installed = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(install_code, 0, installed)
@@ -261,7 +261,7 @@ class LifecycleCopyE2ETest(unittest.TestCase):
     def test_collection_install_materializes_every_expanded_member(self) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace", "install", _COLLECTION, "--profile", "claude", "--yes"
+                "consume", "install", _COLLECTION, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -271,7 +271,7 @@ class LifecycleCopyE2ETest(unittest.TestCase):
 
     def test_review_only_install_writes_nothing_to_the_project(self) -> None:
         with _environment() as env:
-            code, payload = env.run("marketplace", "install", _COORDINATE, "--profile", "claude")
+            code, payload = env.run("consume", "install", _COORDINATE, "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertFalse(payload["finalized"])
@@ -281,7 +281,7 @@ class LifecycleCopyE2ETest(unittest.TestCase):
     def test_copy_install_materializes_the_payload_and_is_idempotent(self) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -292,7 +292,7 @@ class LifecycleCopyE2ETest(unittest.TestCase):
             self.assertFalse(installed.is_symlink())
 
             repeat_code, repeat = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(repeat_code, 0, repeat)
@@ -302,7 +302,7 @@ class LifecycleCopyE2ETest(unittest.TestCase):
     def test_managed_symlink_install_produces_a_link_into_the_object_store(self) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 _COORDINATE,
                 "--profile",
@@ -324,7 +324,7 @@ class LifecycleCopyE2ETest(unittest.TestCase):
     def test_user_scope_install_stays_out_of_the_project_tree(self) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 _COORDINATE,
                 "--profile",
@@ -342,10 +342,10 @@ class LifecycleCopyE2ETest(unittest.TestCase):
 class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
     def test_update_on_a_current_installation_is_a_no_op(self) -> None:
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
 
             code, payload = env.run(
-                "marketplace", "update", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "update", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -353,11 +353,11 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
 
     def test_status_reports_the_installed_artifact_without_changing_it(self) -> None:
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
             installed = env.project / ".claude" / "skills" / "code-review" / "SKILL.md"
             before = installed.read_bytes()
 
-            code, payload = env.run("marketplace", "status", "--profile", "claude")
+            code, payload = env.run("consume", "status", "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertEqual(payload["operation"], "marketplace.status")
@@ -367,10 +367,10 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
         # ``--force`` authorizes overwriting an already-installed artifact.  The record it leaves
         # must still be one record: a duplicate would make later status and uninstall ambiguous.
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
 
             code, payload = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--force", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--force", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -381,9 +381,9 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
         # ``update`` without coordinates is the routine operator action.  It must reconcile the
         # whole recorded scope, not silently do nothing because no coordinate was named.
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
 
-            code, payload = env.run("marketplace", "update", "--profile", "claude", "--yes")
+            code, payload = env.run("consume", "update", "--profile", "claude", "--yes")
 
             self.assertEqual(code, 0, payload)
             self.assertEqual(len(payload["items"]), 1, payload)
@@ -393,7 +393,7 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
         # ``--json`` selects a rendering.  An agent reading the plan must be able to trust that
         # asking for it never installs anything the human-readable path would not have.
         with _environment() as env:
-            code, payload = env.run("marketplace", "install", _COORDINATE, "--profile", "claude")
+            code, payload = env.run("consume", "install", _COORDINATE, "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertFalse(payload["finalized"])
@@ -405,9 +405,9 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
         # digest must not move. Freshness still reaches the operator beside the digest, and auto
         # mode refreshes the publication observation for each entry instead of aging it locally.
         with _environment() as env:
-            _, first = env.run("marketplace", "install", _COORDINATE, "--profile", "claude")
+            _, first = env.run("consume", "install", _COORDINATE, "--profile", "claude")
             time.sleep(1.2)
-            _, second = env.run("marketplace", "install", _COORDINATE, "--profile", "claude")
+            _, second = env.run("consume", "install", _COORDINATE, "--profile", "claude")
 
             self.assertEqual(first["review_digest"], second["review_digest"])
             self.assertEqual(first["review"], second["review"])
@@ -430,12 +430,12 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
         # The workflow the review text prescribes: read the digest from a review, then finalize that
         # exact plan in a second command.  A digest that no longer describes the plan must refuse.
         with _environment() as env:
-            _, review = env.run("marketplace", "install", _COORDINATE, "--profile", "claude")
+            _, review = env.run("consume", "install", _COORDINATE, "--profile", "claude")
             reviewed = review["review_digest"]
 
             stale = "sha256:" + "0" * 64
             code, refused = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 _COORDINATE,
                 "--profile",
@@ -458,7 +458,7 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
             self.assertEqual(list(env.project.iterdir()), [], "a refusal writes nothing")
 
             code, applied = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 _COORDINATE,
                 "--profile",
@@ -475,7 +475,7 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
     def test_yes_without_expect_keeps_its_meaning(self) -> None:
         with _environment() as env:
             code, applied = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, applied)
@@ -483,12 +483,12 @@ class LifecycleUpdateStatusUninstallE2ETest(unittest.TestCase):
 
     def test_uninstall_removes_the_installed_payload(self) -> None:
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
             installed = env.project / ".claude" / "skills" / "code-review"
             self.assertTrue(installed.exists())
 
             code, payload = env.run(
-                "marketplace", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -499,7 +499,7 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
     def test_an_unknown_coordinate_reports_a_structured_not_found_diagnostic(self) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace", "install", "reference/skill/absent", "--profile", "claude", "--yes"
+                "consume", "install", "reference/skill/absent", "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 1)
@@ -508,9 +508,7 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
 
     def test_an_unknown_profile_is_rejected_before_anything_is_written(self) -> None:
         with _environment() as env:
-            code, payload = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "nope", "--yes"
-            )
+            code, payload = env.run("consume", "install", _COORDINATE, "--profile", "nope", "--yes")
 
             self.assertEqual(code, 1)
             self.assertFalse(payload["ok"])
@@ -522,7 +520,7 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
         # instead of guessing why an install produced nothing.
         with _environment() as env:
             code, payload = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "opencode", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "opencode", "--yes"
             )
 
             self.assertEqual(code, 1)
@@ -535,12 +533,12 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
         # Reading damaged state must fail closed with a diagnostic rather than tracebacking or,
         # worse, treating the project as if nothing were installed and reinstalling over it.
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
             state = env.project / ".aart-cli" / "manifest.json"
             self.assertTrue(state.exists(), sorted(map(str, env.project.rglob("*"))))
             state.write_text("{ this is not valid json ]", encoding="utf-8")
 
-            code, payload = env.run("marketplace", "status", "--profile", "claude")
+            code, payload = env.run("consume", "status", "--profile", "claude")
 
             self.assertNotEqual(code, 0)
             self.assertFalse(payload["ok"])
@@ -549,7 +547,7 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
     def test_a_malformed_coordinate_reports_the_accepted_grammar(self) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace", "install", "code-review", "--profile", "claude", "--yes"
+                "consume", "install", "code-review", "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 1)
@@ -557,11 +555,9 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
 
     def test_setup_on_an_artifact_that_declares_none_completes_with_an_empty_queue(self) -> None:
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
 
-            code, payload = env.run(
-                "marketplace", "setup", _COORDINATE, "--profile", "claude", "--yes"
-            )
+            code, payload = env.run("consume", "setup", _COORDINATE, "--profile", "claude", "--yes")
 
             self.assertEqual(code, 0, payload)
             self.assertEqual(payload["setup"]["planned"], [])
@@ -569,9 +565,9 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
 
     def test_setup_review_never_executes_and_never_authorizes_implicitly(self) -> None:
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
 
-            code, payload = env.run("marketplace", "setup", _COORDINATE, "--profile", "claude")
+            code, payload = env.run("consume", "setup", _COORDINATE, "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertFalse(payload["finalized"])
@@ -580,7 +576,7 @@ class LifecycleDiagnosticsE2ETest(unittest.TestCase):
     def test_offline_install_from_the_published_snapshot_succeeds(self) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--offline", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--offline", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -609,9 +605,7 @@ class DeclaredSetupE2ETest(unittest.TestCase):
 
     #: Install first. Setup configures what is installed, so there is nothing to configure before.
     def _installed(self, env) -> dict:
-        code, payload = env.run(
-            "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
         self.assertFalse((env.project / _CONFIGURED).exists())
         return payload
@@ -646,7 +640,7 @@ class DeclaredSetupE2ETest(unittest.TestCase):
             self._installed(env)
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "setup",
                 _COORDINATE,
                 "--profile",
@@ -675,7 +669,7 @@ class DeclaredSetupE2ETest(unittest.TestCase):
             self._installed(env)
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "setup",
                 _COORDINATE,
                 "--profile",
@@ -706,7 +700,7 @@ class DeclaredSetupE2ETest(unittest.TestCase):
             self._installed(env)
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "setup",
                 _COORDINATE,
                 "--profile",

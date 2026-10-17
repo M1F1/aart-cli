@@ -1,6 +1,6 @@
 # Registry maintainer commands v1
 
-`aart-cli registry` turns a local Git checkout into a canonical, reviewable AART registry. Ordinary
+`aart-cli maintain registry` turns a local Git checkout into a canonical, reviewable AART registry. Ordinary
 mutations stop after reviewed managed-file writes. The explicit `publish --yes` workflow validates,
 audits, and commits every listed Git change. Only `push` touches a remote, and only a review branch.
 
@@ -19,10 +19,10 @@ audits, and commits every listed Git change. Only `push` touches a remote, and o
 | `test` | reads | Validate the registry at its minimum and/or a supplied latest compatible version |
 | `diff` | reads | Show deterministic canonical-format drift without changing the checkout |
 
-The commands that bring content in — `scan`, `promote`, `adopt` and `check-upstream` — and
-`collection` follow the same
-review-then-`--yes` boundary; `aart-cli registry ACTION --help` states
-each one's inputs.
+The commands that bring content in — `maintain upstream scan|adopt|check` and
+`maintain candidate promote` — and `maintain registry collection` follow the same
+review-then-`--yes` boundary; `aart-cli maintain registry ACTION --help` (or the `upstream` /
+`candidate` equivalent) states each one's inputs.
 
 Mutation requires a writable real directory containing `.git` (a directory or worktree gitfile).
 Managed symlinks and special files are rejected. Writes use exact snapshot and per-file digest
@@ -39,7 +39,7 @@ Start from an empty Git checkout:
 
 ```console
 git init company-registry
-aart-cli registry init --source company-registry \
+aart-cli maintain registry init --source company-registry \
   --source-id company-registry --display-name "Company Registry"
 ```
 
@@ -54,8 +54,8 @@ Artifacts are authored in a separate Source checkout with an explicit `aart-cli.
 and payload. Commit that clean checkout, then use the Registry's Candidate workflow:
 
 ```console
-aart-cli registry scan --help
-aart-cli registry promote --help
+aart-cli maintain upstream scan --help
+aart-cli maintain candidate promote --help
 ```
 
 `scan` compiles only explicit author manifests and never changes the Registry. `promote` re-observes

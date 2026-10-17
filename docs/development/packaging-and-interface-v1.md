@@ -27,11 +27,13 @@ authoring-workspace lock/index is generated.
 
 ```text
 aart-cli author init|check
-aart-cli source add|list|sync|remove|resubscribe|health
-aart-cli marketplace list|search|health|install|update|uninstall|status|setup|receipt
+aart-cli consume registry add|list|sync|remove|resubscribe|health
+aart-cli consume list|search|health|install|update|uninstall|status|setup|receipt|mcp test
 aart-cli doctor
 aart-cli reset [--restore DIR] [--yes]
-aart-cli registry init|collection|scan|promote|adopt|check-upstream|format|validate|lock|build|audit|publish|push|test|diff
+aart-cli maintain upstream add|list|sync|remove|resubscribe|health|scan|adopt|check
+aart-cli maintain candidate promote
+aart-cli maintain registry init|collection|format|validate|lock|build|audit|publish|push|test|diff
 aart-cli security scan|show|verify|analyzers|suites
 aart-cli upgrade --wheel FILE | --source-checkout DIR
 ```

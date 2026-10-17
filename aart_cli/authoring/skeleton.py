@@ -291,7 +291,7 @@ _EXPLANATIONS: dict[str, str] = {
     "exclude": "Payload files to leave out of the package, applied after `include`.",
     "inputs": "Values AART collects from the installer and keeps for this artifact.",
     "python": "How the payload's Python dependencies are resolved at install time.",
-    "smoke_test": "A reviewed read-only MCP tool call used by `aart-cli mcp test --harness <harness>`.",
+    "smoke_test": "A reviewed read-only MCP tool call used by `aart-cli consume mcp test --harness <harness>`.",
     "summary": "One line shown wherever the artifact is listed. Derived from the name if absent.",
 }
 
@@ -443,7 +443,7 @@ def author_skeleton(kind: str, name: str) -> Result[AuthorSkeleton]:
     if kind == COLLECTION_KIND:
         return _error(
             f"{COLLECTION_IN_SOURCE}; create it there with "
-            "`aart-cli registry collection NAME --summary TEXT --include KIND/NAME`"
+            "`aart-cli maintain registry collection NAME --summary TEXT --include KIND/NAME`"
         )
     if kind not in _BLUEPRINTS:
         offered = ", ".join(INIT_KINDS)

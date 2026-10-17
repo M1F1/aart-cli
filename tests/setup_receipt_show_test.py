@@ -35,8 +35,8 @@ RECORD = SetupStateRecord(
     started_at="2026-08-15T09:00:00Z",
     finished_at="2026-08-15T09:00:42Z",
     exit_status=0,
-    retry_command="aart-cli marketplace setup registry-a/mcp/github-docker@1.0.0 --yes",
-    rollback_command="aart-cli marketplace receipt undo registry-a/mcp/github-docker",
+    retry_command="aart-cli consume setup registry-a/mcp/github-docker@1.0.0 --yes",
+    rollback_command="aart-cli consume receipt undo registry-a/mcp/github-docker",
     receipt=(
         {
             "step_id": "build",

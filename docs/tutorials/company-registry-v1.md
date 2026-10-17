@@ -17,12 +17,12 @@ possible when organization policy permits them.
 Maintainers work in an explicit writable registry checkout. Before a PR they run:
 
 ```shell
-aart-cli registry format --source . --check
-aart-cli registry validate --source . --strict --frozen
-aart-cli registry lock --source . --check
-aart-cli registry build --source . --check
-aart-cli registry audit --source .
-aart-cli registry test --source . --compatibility all --latest-version 1.0.0
+aart-cli maintain registry format --source . --check
+aart-cli maintain registry validate --source . --strict --frozen
+aart-cli maintain registry lock --source . --check
+aart-cli maintain registry build --source . --check
+aart-cli maintain registry audit --source .
+aart-cli maintain registry test --source . --compatibility all --latest-version 1.0.0
 ```
 
 Pinned references record the upstream commit and digests without copying the payload; consumers

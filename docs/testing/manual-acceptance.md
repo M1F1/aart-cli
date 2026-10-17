@@ -45,7 +45,7 @@ Each entry records:
       now appears above navigation and points to Registry onboarding. B-080/D-170.
 
 - [ ] **QA-005 — Old user subscriptions look like built-in registries.** The two persisted August
-      subscriptions and their managed snapshots were removed through `aart-cli source remove`; a fresh
+      subscriptions and their managed snapshots were removed through `aart-cli consume registry remove`; a fresh
       public list is empty. B-081.
 
 - [ ] **QA-006 — Registry cannot be added from the TUI.** Screen 21 now provides Add Registry with
@@ -66,7 +66,7 @@ Each entry records:
       to its own Refresh Registry action with a review (21c) that names the ref to be fetched,
       states that a refresh is not an artifact update, and warns that a failed fetch keeps the
       snapshot already held. Execution goes through `sync_configured_sources`, the same transaction
-      as `aart-cli source sync`. B-084/D-179.
+      as `aart-cli consume registry sync`. B-084/D-179.
 
 - [ ] **QA-011 — Canonical installation cannot target OpenCode.**
       Stage: installing the Skill and MCP into the locally installed OpenCode 1.18.29
@@ -194,7 +194,7 @@ Each entry records:
       immutable namespaced provenance (D-189). The read-only check distinguishes unchanged,
       changed, missing, unreachable and invalid manifests, and prepares a new immutable version
       only after an upstream version bump (D-190, 8 tests), reached as `u` Check upstream on
-      screens 46f/46g (D-191). `aart-cli registry adopt` and `aart-cli registry check-upstream` are the
+      screens 46f/46g (D-191). `aart-cli maintain upstream adopt` and `aart-cli maintain upstream check` are the
       machine-complete CLI projection: scan/review/apply phases, `--expect` verified whenever
       given, sorted listings (D-192, 8 tests).
 
@@ -362,7 +362,7 @@ Each entry records:
       Observed: both jobs run the legacy workspace commands. `registry validate` reports a missing
       unversioned `artifact.json` plus stale `aart.lock.json`/`aart.index.json`; `registry lock`,
       `build`, `audit` and `test` fail for the same representation mismatch
-      Evidence: public `source add --kind registry-git` over remote branch `qa/publish-v1` accepts
+      Evidence: public `source add --kind git` over remote branch `qa/publish-v1` accepts
       exact commit `cc7c01d` as healthy, while generated run `34341007222` fails. This is B-057's
       remaining command disagreement reaching the real publication gate, so it is critical now.
       Note: the fix belongs in the generated workflow/template and its public validation command,
@@ -587,7 +587,7 @@ Each entry records:
 - [x] **QA-056 — A promotion cannot be completed from the CLI without fabricating its evidence.**
       **Resolved by D-387 (GitHub #62):** `registry promote` now runs validation and policy per
       Candidate itself, states the digests in its review and has no evidence flags. Original
-      finding follows. Surface: `aart-cli registry promote`. Severity: medium. Observed in code: `registry promote` requires `--validation-report DIGEST` and
+      finding follows. Surface: `aart-cli maintain candidate promote`. Severity: medium. Observed in code: `registry promote` requires `--validation-report DIGEST` and
       `--policy-result DIGEST`, and no CLI command emits either; `validation_report_digest` is
       derived in the application layer and displayed only by the Maintainer screens. An operator
       following a CLI-only route therefore either reads the digests off the TUI, which makes the

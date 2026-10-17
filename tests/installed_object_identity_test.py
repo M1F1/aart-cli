@@ -39,9 +39,7 @@ _INSTALLED = ArtifactCoordinate(
 
 class InstalledObjectIdentityTest(unittest.TestCase):
     def _installed(self, env):
-        code, payload = env.run(
-            "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
         store = LocalReceiptStore(str(pathlib.Path(env.paths.data_root) / "state"))
         record = sole_record(store, _INSTALLED)

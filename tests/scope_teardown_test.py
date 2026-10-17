@@ -225,13 +225,13 @@ class ScopeTeardownEndToEndTest(unittest.TestCase):
             _git(env.project, "commit", "-qm", "initial")
             self.assertEqual(_git(env.project, "status", "--porcelain"), "")
             install_code, installed = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(install_code, 0, installed)
             self.assertNotEqual(_git(env.project, "status", "--porcelain"), "")
 
             code, payload = env.run(
-                "marketplace", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -246,11 +246,11 @@ class ScopeTeardownEndToEndTest(unittest.TestCase):
         # Each uninstall reclaims the directories its own payload emptied; the manifest belongs to
         # the scope, so it survives every uninstall but the last.
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
-            env.run("marketplace", "install", _MEMORY, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _MEMORY, "--profile", "claude", "--yes")
 
             code, payload = env.run(
-                "marketplace", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -258,7 +258,7 @@ class ScopeTeardownEndToEndTest(unittest.TestCase):
             self.assertFalse((env.project / ".claude" / "skills").exists())
 
             last_code, last = env.run(
-                "marketplace", "uninstall", _MEMORY, "--profile", "claude", "--yes"
+                "consume", "uninstall", _MEMORY, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(last_code, 0, last)
@@ -269,7 +269,7 @@ class ScopeTeardownEndToEndTest(unittest.TestCase):
         # uninstall owns there is the manifest and its lock, and those go.
         with _environment() as env:
             install_code, installed = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 _COORDINATE,
                 "--profile",
@@ -283,7 +283,7 @@ class ScopeTeardownEndToEndTest(unittest.TestCase):
             self.assertTrue((state_root / "manifest.json").is_file())
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "uninstall",
                 _COORDINATE,
                 "--profile",

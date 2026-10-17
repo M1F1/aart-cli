@@ -62,7 +62,7 @@ the whole payload arrives, and for one it does not:
 configuration. Two consequences follow. A descriptor whose `command` or `args` names a path inside
 `payload/` names a file no consumer will have. And a document shaped like the harness file it is
 merged into — `{"mcpServers": {…}}` — has no `server` key, so it delivers an empty entry that starts
-nothing. `aart-cli registry audit` reports both; the loader
+nothing. `aart-cli maintain registry audit` reports both; the loader
 accepts what it always accepted.
 
 ## Provenance and collections
@@ -71,7 +71,7 @@ Imported or curated content may include `provenance.json`. It binds the canonica
 credential-free Git URL, a lowercase 40-hex commit, input digest, importer ID/SemVer, options
 digest, and reviewable warnings. Secrets, moving refs, and absolute paths are invalid.
 
-A package `aart-cli registry adopt` or `promote` writes carries such a document, recording the
+A package `aart-cli maintain upstream adopt` or `promote` writes carries such a document, recording the
 repository and commit its manifest was adopted from. No loader, index, or installer treats it
 specially.
 

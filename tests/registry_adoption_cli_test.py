@@ -48,7 +48,8 @@ class RegistryAdoptionCliTest(_Lab):
 
     def _adopt(self) -> dict[str, object]:
         code, payload = self._run(
-            "registry",
+            "maintain",
+            "upstream",
             "adopt",
             "--source",
             str(self.registry),
@@ -67,7 +68,8 @@ class RegistryAdoptionCliTest(_Lab):
         before = _git(self.registry, "status", "--porcelain=v1", "--untracked-files=all")
 
         code, payload = self._run(
-            "registry",
+            "maintain",
+            "upstream",
             "adopt",
             "--source",
             str(self.registry),
@@ -94,7 +96,8 @@ class RegistryAdoptionCliTest(_Lab):
         before = _git(self.registry, "status", "--porcelain=v1", "--untracked-files=all")
 
         code, payload = self._run(
-            "registry",
+            "maintain",
+            "upstream",
             "adopt",
             "--source",
             str(self.registry),
@@ -131,8 +134,9 @@ class RegistryAdoptionCliTest(_Lab):
         before = _git(self.registry, "status", "--porcelain=v1", "--untracked-files=all")
 
         code, payload = self._run(
-            "registry",
-            "check-upstream",
+            "maintain",
+            "upstream",
+            "check",
             "--source",
             str(self.registry),
             self.coordinate,
@@ -159,8 +163,9 @@ class RegistryAdoptionCliTest(_Lab):
         _git(self.author.path, "commit", "-m", "revise brainstorming")
 
         code, review = self._run(
-            "registry",
-            "check-upstream",
+            "maintain",
+            "upstream",
+            "check",
             "--source",
             str(self.registry),
             self.coordinate,
@@ -174,8 +179,9 @@ class RegistryAdoptionCliTest(_Lab):
         self.assertFalse((old.parent / "1.0.1").exists())
 
         code, applied = self._run(
-            "registry",
-            "check-upstream",
+            "maintain",
+            "upstream",
+            "check",
             "--source",
             str(self.registry),
             self.coordinate,
@@ -207,7 +213,8 @@ class RegistryAdoptionCliTest(_Lab):
 
         with mock.patch.object(registry_command, "scan_repository", side_effect=reversed_scan):
             code, payload = self._run(
-                "registry",
+                "maintain",
+                "upstream",
                 "adopt",
                 "--source",
                 str(self.registry),
@@ -230,7 +237,8 @@ class RegistryAdoptionCliTest(_Lab):
         before = _git(self.registry, "status", "--porcelain=v1", "--untracked-files=all")
 
         code, payload = self._run(
-            "registry",
+            "maintain",
+            "upstream",
             "adopt",
             "--source",
             str(self.registry),
@@ -262,8 +270,9 @@ class RegistryAdoptionCliTest(_Lab):
         _git(self.author.path, "commit", "-m", "revise brainstorming")
 
         code, payload = self._run(
-            "registry",
-            "check-upstream",
+            "maintain",
+            "upstream",
+            "check",
             "--source",
             str(self.registry),
             self.coordinate,

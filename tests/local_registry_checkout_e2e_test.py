@@ -140,12 +140,13 @@ class _Checkout:
 
     def add(self, *extra: str):
         return self.run(
-            "source",
+            "consume",
+            "registry",
             "add",
             "--alias",
             ALIAS,
             "--kind",
-            "registry-local",
+            "local",
             "--location",
             str(self.repository),
             "--ref",
@@ -163,12 +164,13 @@ class _Checkout:
         """
 
         return self.run(
-            "source",
+            "consume",
+            "registry",
             "add",
             "--alias",
             alias,
             "--kind",
-            "registry-git",
+            "git",
             "--location",
             REMOTE_LOCATION,
             "--ref",
@@ -207,7 +209,7 @@ class _Checkout:
 
     def run(self, *argv: str, source_transport: bool = False):
         arguments = [*argv, "--json"]
-        if argv[:2] == ("marketplace", "install"):
+        if argv[:2] == ("consume", "install"):
             arguments.extend(("--project", str(self.project)))
         output = io.StringIO()
         transport = (
@@ -276,7 +278,7 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
             code, added = env.add()
 
             self.assertEqual(code, 0, added)
-            self.assertEqual(added["source"]["kind"], "registry-local")
+            self.assertEqual(added["source"]["kind"], "local")
             self.assertEqual(added["source"]["ref"], BRANCH)
             self.assertEqual(added["sync"]["resolved_revision"], env.branch)
             self.assertNotEqual(env.branch, env.main)
@@ -286,7 +288,7 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
         with _checkout() as env:
             self.assertEqual(env.add()[0], 0)
 
-            code, listed = env.run("marketplace", "list")
+            code, listed = env.run("consume", "list")
 
             self.assertEqual(code, 0, listed)
             # 1.3.0 is the candidate branch; 1.2.0 is what `main` holds and what the worktree was
@@ -301,7 +303,7 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
             self.assertEqual(env.add()[0], 0)
 
             code, installed = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 f"{ALIAS}/skill/code-review",
                 "--profile",
@@ -317,7 +319,7 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
             env.untouched(self)
 
     def _offered(self, env) -> list[str]:
-        code, listed = env.run("marketplace", "list")
+        code, listed = env.run("consume", "list")
         self.assertEqual(code, 0, listed)
         return [item["coordinate"] for item in listed["artifacts"]]
 
@@ -328,10 +330,10 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
             successor = env.commit_to_branch(AUTHORED_SKILL_1_4_0)
 
             self.assertNotEqual(successor, before)
-            code, synchronized = env.run("source", "sync", "--alias", ALIAS)
+            code, synchronized = env.run("consume", "registry", "sync", "--alias", ALIAS)
 
             self.assertEqual(code, 0, synchronized)
-            self.assertEqual(synchronized["sources"][0]["resolved_revision"], successor)
+            self.assertEqual(synchronized["registries"][0]["resolved_revision"], successor)
             self.assertEqual(self._offered(env), [f"{ALIAS}/skill/code-review@1.4.0"])
             env.untouched(self)
 
@@ -340,10 +342,10 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
             self.assertEqual(env.add()[0], 0)
             _git(env.repository, "branch", "-D", BRANCH)
 
-            code, synchronized = env.run("source", "sync", "--alias", ALIAS)
+            code, synchronized = env.run("consume", "registry", "sync", "--alias", ALIAS)
 
             self.assertEqual(code, 1, synchronized)
-            self.assertFalse(synchronized["sources"][0]["ok"])
+            self.assertFalse(synchronized["registries"][0]["ok"])
             # The branch is gone, so there is nothing to advance to -- and nothing is lost either.
             self.assertEqual(self._offered(env), [f"{ALIAS}/skill/code-review@1.3.0"])
             env.untouched(self, branches={"main": env.main})
@@ -362,7 +364,7 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
             _git(env.repository, "branch", "-D", BRANCH)
             _git(env.repository, "tag", BRANCH, "main")
 
-            code, synchronized = env.run("source", "sync", "--alias", ALIAS)
+            code, synchronized = env.run("consume", "registry", "sync", "--alias", ALIAS)
 
             self.assertEqual(code, 1, synchronized)
             self.assertEqual(self._offered(env), [f"{ALIAS}/skill/code-review@1.3.0"])
@@ -375,7 +377,7 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
             good = env.branch
             broken = env.commit_to_branch(None, "not a registry")
 
-            code, synchronized = env.run("source", "sync", "--alias", ALIAS)
+            code, synchronized = env.run("consume", "registry", "sync", "--alias", ALIAS)
 
             self.assertEqual(code, 1, synchronized)
             self.assertNotEqual(broken, good)
@@ -404,7 +406,7 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
             self.assertEqual(env.add_remote()[0], 0)
 
             code, installed = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 f"{REMOTE_ALIAS}/skill/code-review",
                 "--profile",
@@ -434,7 +436,7 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
             env.forget_the_default_registry()
 
             code, installed = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 "skill/code-review",
                 "--profile",
@@ -453,7 +455,7 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
         with _checkout() as env:
             self.assertEqual(env.add()[0], 0)
             code, installed = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 f"{ALIAS}/skill/code-review",
                 "--profile",
@@ -462,10 +464,10 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
             )
             self.assertEqual(code, 0, installed)
             env.commit_to_branch(AUTHORED_SKILL_1_4_0)
-            self.assertEqual(env.run("source", "sync", "--alias", ALIAS)[0], 0)
+            self.assertEqual(env.run("consume", "registry", "sync", "--alias", ALIAS)[0], 0)
 
             code, updated = env.run(
-                "marketplace",
+                "consume",
                 "update",
                 f"{ALIAS}/skill/code-review",
                 "--profile",
@@ -496,7 +498,7 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
 
             for alias in (ALIAS, REMOTE_ALIAS):
                 code, installed = env.run(
-                    "marketplace",
+                    "consume",
                     "install",
                     f"{alias}/skill/code-review",
                     "--profile",
@@ -506,7 +508,7 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
                 )
                 self.assertEqual(code, 0, installed)
 
-            code, status = env.run("marketplace", "status", "--profile", "claude")
+            code, status = env.run("consume", "status", "--profile", "claude")
             self.assertEqual(code, 0, status)
             self.assertEqual(
                 sorted(item["key"] for item in status["items"]),
@@ -528,7 +530,7 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
         with _checkout() as env:
             self.assertEqual(env.add()[0], 0)
             code, installed = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 f"{ALIAS}/skill/code-review",
                 "--profile",
@@ -537,9 +539,9 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
             )
             self.assertEqual(code, 0, installed)
 
-            code, listed = env.run("source", "list")
+            code, listed = env.run("consume", "registry", "list")
             self.assertEqual(code, 0, listed)
-            source = listed["sources"][0]
+            source = listed["registries"][0]
             record = json.loads(env.installations()[0].read_text(encoding="utf-8"))
 
             # The installation names the alias and the exact commit it was built from; the alias
@@ -547,7 +549,7 @@ class LocalRegistryCheckoutTest(unittest.TestCase):
             self.assertEqual(record["coordinate"]["source"], ALIAS)
             self.assertEqual(installed["receipt"]["artifacts"][0]["source_revision"], env.branch)
             self.assertEqual(source["alias"], ALIAS)
-            self.assertEqual(source["kind"], "registry-local")
+            self.assertEqual(source["kind"], "local")
             self.assertEqual(source["location"], str(env.repository))
             self.assertEqual(source["ref"], BRANCH)
             self.assertEqual(source["resolved_revision"], env.branch)

@@ -35,7 +35,7 @@ class TestMemoryModeFlag(unittest.TestCase):
             with self.subTest(mode=mode):
                 _, req = _dispatch(
                     [
-                        "marketplace",
+                        "consume",
                         "install",
                         "team/memory/house@1.0.0",
                         "--profile",
@@ -50,7 +50,7 @@ class TestMemoryModeFlag(unittest.TestCase):
     def test_memory_mode_defaults_to_none(self):
         # Absent flag -> None, so the planner applies the "prepend" default.
         _, req = _dispatch(
-            ["marketplace", "install", "team/memory/house@1.0.0", "--profile", "claude"],
+            ["consume", "install", "team/memory/house@1.0.0", "--profile", "claude"],
             command="marketplace",
         )
         self.assertIsNone(req.memory_mode)
@@ -58,9 +58,7 @@ class TestMemoryModeFlag(unittest.TestCase):
     def test_invalid_memory_mode_is_usage_error(self):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit) as ctx:
-                cli.build_parser().parse_args(
-                    ["marketplace", "install", "x", "--memory-mode", "bogus"]
-                )
+                cli.build_parser().parse_args(["consume", "install", "x", "--memory-mode", "bogus"])
         self.assertEqual(ctx.exception.code, 2)
 
 

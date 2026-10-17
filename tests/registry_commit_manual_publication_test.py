@@ -4,7 +4,7 @@ The owner reversed D-228 for the terminal surface. Screen 45 reviews and writes 
 transaction and then says what happens next outside AART: push the Registry branch, get it
 reviewed and merged where the Registry requires that, update the local checkout, and run Registry
 Sync to observe the approved state. No key on any state of screen 45 can prepare or execute a push,
-and the supported `aart-cli registry push` CLI contract is untouched.
+and the supported `aart-cli maintain registry push` CLI contract is untouched.
 """
 
 from __future__ import annotations

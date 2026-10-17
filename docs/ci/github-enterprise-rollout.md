@@ -201,14 +201,14 @@ git clone https://ghe.corp/platform/agent-registry.git && cd agent-registry
 Review first. Every mutating `aart` command prints what it would write and stops:
 
 ```bash
-aart-cli registry init --source . --source-id corp-registry --display-name "Corp Registry"
+aart-cli maintain registry init --source . --source-id corp-registry --display-name "Corp Registry"
 ```
 
 The review lists `.aart-cli-version`, `.github/workflows/aart-cli-registry.yml`, `.gitignore`, `README.md`,
 `aart-cli-registry.json` and `aart-cli-source.json`. When it reads right, finalize:
 
 ```bash
-aart-cli registry init --source . --source-id corp-registry --display-name "Corp Registry" --yes
+aart-cli maintain registry init --source . --source-id corp-registry --display-name "Corp Registry" --yes
 ```
 
 | Option | What it decides |
@@ -226,8 +226,8 @@ will run, and bumping it later is a pull request.
 git add -A
 git commit -m "chore: initialise the registry"
 
-aart-cli registry publish --source .
-aart-cli registry publish --source . --yes -m "chore: publish the empty registry"
+aart-cli maintain registry publish --source .
+aart-cli maintain registry publish --source . --yes -m "chore: publish the empty registry"
 
 git push -u origin main
 git remote set-head origin --auto
@@ -239,7 +239,7 @@ then commits the reviewed changes. It never pushes. The first published Registry
 carry valid derived catalogs, including when it has no approved versions yet.
 
 This first push is the only one you make by hand. `git remote set-head origin --auto` records which
-branch the remote calls default; `aart-cli registry push` reads it to know which branch it must refuse.
+branch the remote calls default; `aart-cli maintain registry push` reads it to know which branch it must refuse.
 Cloning an empty repository leaves it unset.
 
 ### Step 4 — From now on, every change is a pull request
@@ -248,17 +248,17 @@ Cloning an empty repository leaves it unset.
 git switch -c add-code-review
 # Author and commit aart-cli.yaml plus its payload in a separate clean Source checkout.
 # Then inspect the exact scan/promotion inputs for that checkout:
-aart-cli registry scan --help
-aart-cli registry promote --help
-aart-cli registry publish --source . --yes -m "feat: add the code-review skill"
-aart-cli registry push --source . --branch add-code-review
+aart-cli maintain upstream scan --help
+aart-cli maintain candidate promote --help
+aart-cli maintain registry publish --source . --yes -m "feat: add the code-review skill"
+aart-cli maintain registry push --source . --branch add-code-review
 ```
 
 The artifact is authored in its Source repository, not inside the Registry. `scan` compiles its
 explicit manifest into a Candidate and `promote` brings the reviewed Candidate into this checkout.
 Use the Candidate and evidence digests printed by the review flow; neither command invents them.
 
-`aart-cli registry push` refuses the default branch by name, and AART never merges. Open the pull request
+`aart-cli maintain registry push` refuses the default branch by name, and AART never merges. Open the pull request
 on the instance; its CI is what Part 4 makes pass. The generated `README.md` in the registry lists the
 other everyday commands.
 
@@ -335,7 +335,7 @@ Each person installs `aart` as in [Part 2, step 5](#step-5--install-aart-on-your
 adds the registry once:
 
 ```bash
-aart-cli source add --alias company --kind registry-git \
+aart-cli consume registry add --alias company --kind git \
   --location https://ghe.corp/platform/agent-registry.git --ref main --default
 ```
 
@@ -346,8 +346,8 @@ machine's own Git and credential helper; see
 Then run `aart` for the terminal UI, or use the flag form:
 
 ```bash
-aart-cli marketplace list
-aart-cli marketplace install --help
+aart-cli consume list
+aart-cli consume install --help
 ```
 
 ## Troubleshooting
@@ -362,8 +362,8 @@ aart-cli marketplace install --help
 | `no aart_cli package under …` | the registry's fetch route reached something that is not AART: wrong URL, wrong path, or a sign-in page instead of a wheel |
 | `.aart-cli-version pins X but … provided Y` | the route works and disagrees with the pin: a moved tag, an index that resolved another version, or an image with an old AART baked in |
 | `pin X overridden by AART_CLI_REF` | not a failure. Someone set `AART_CLI_REF` to run a branch or tag on purpose, and the run says so |
-| `aart-cli registry push` refuses a branch that is not `main` | the checkout does not know the remote's default branch. Run `git remote set-head origin --auto` |
-| `aart-cli source add` says the URL is not a safe Git location | the location is not `https`, or it carries a user or token. Remove it and let the credential helper supply it |
+| `aart-cli maintain registry push` refuses a branch that is not `main` | the checkout does not know the remote's default branch. Run `git remote set-head origin --auto` |
+| `aart-cli consume registry add` says the URL is not a safe Git location | the location is not `https`, or it carries a user or token. Remove it and let the credential helper supply it |
 
 ## Reference
 
@@ -391,7 +391,7 @@ Read by `.github/workflows/pr-check.yml` and `.github/workflows/release.yml`.
 
 ### Variables a registry reads
 
-Read by the workflows `aart-cli registry init` writes. Those files are managed: `init` refuses to
+Read by the workflows `aart-cli maintain registry init` writes. Those files are managed: `init` refuses to
 overwrite one that was edited by hand, so configure them with variables, not edits.
 
 | Variable | Default | What it does |

@@ -8,16 +8,16 @@ selection, consent, effects, or exit semantics.
 
 ```sh
 # Explicit source refresh
-aart-cli source sync --alias company --json
+aart-cli consume registry sync --alias company --json
 
 # Review, then finalize
-aart-cli marketplace install company/skill/code-review --profile claude --json
-aart-cli marketplace install company/skill/code-review --profile claude --yes --json
+aart-cli consume install company/skill/code-review --profile claude --json
+aart-cli consume install company/skill/code-review --profile claude --yes --json
 
-aart-cli marketplace status --profile claude --json
-aart-cli marketplace update --profile claude --yes --json
-aart-cli marketplace update --profile claude --prune --yes --json
-aart-cli marketplace uninstall company/skill/code-review --profile claude --yes --json
+aart-cli consume status --profile claude --json
+aart-cli consume update --profile claude --yes --json
+aart-cli consume update --profile claude --prune --yes --json
+aart-cli consume uninstall company/skill/code-review --profile claude --yes --json
 ```
 
 An empty `marketplace update` selects every installed artifact in the given profile and scope.
@@ -34,8 +34,8 @@ closure before review; an unavailable or conflicting dependency cannot create a 
 of it:
 
 ```sh
-aart-cli marketplace search review
-aart-cli marketplace search review python --json
+aart-cli consume search review
+aart-cli consume search review python --json
 ```
 
 Every word must match, so a second word narrows the answer rather than widening it. Matching is
@@ -84,13 +84,13 @@ scope, root and harness set. It does not install, update, repair, configure, syn
 To test one exact installed coordinate in this project and harness:
 
 ```sh
-aart-cli mcp test company/mcp/github@1.0.0 --harness opencode --scope project --project "$PWD"
+aart-cli consume mcp test company/mcp/github@1.0.0 --harness opencode --scope project --project "$PWD"
 ```
 
 To test every installed MCP for two user-scope harnesses:
 
 ```sh
-aart-cli mcp test --all --harness opencode,claude --scope user --json
+aart-cli consume mcp test --all --harness opencode,claude --scope user --json
 ```
 
 The report gives each installation two stages. `installation-configuration` checks that the
@@ -119,14 +119,14 @@ how it exited, and one receipt per step. Three actions read that account after t
 
 ```sh
 # What did the run actually do?
-aart-cli marketplace receipt show company/mcp/github --profile claude --json
+aart-cli consume receipt show company/mcp/github --profile claude --json
 
 # Is any of it still true?
-aart-cli marketplace receipt verify company/mcp/github --profile claude
+aart-cli consume receipt verify company/mcp/github --profile claude
 
 # Reverse it — review first, then finalize
-aart-cli marketplace receipt undo company/mcp/github --profile claude
-aart-cli marketplace receipt undo company/mcp/github --profile claude --yes
+aart-cli consume receipt undo company/mcp/github --profile claude
+aart-cli consume receipt undo company/mcp/github --profile claude --yes
 ```
 
 `show` renders the persisted record. `verify` asks this machine whether each receipt's claim still

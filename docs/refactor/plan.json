@@ -1186,12 +1186,12 @@
         {
           "id": "3",
           "title": "consume family: consume registry add|list|sync|remove (sync reports available updates), the marketplace actions, consume mcp test",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "4",
           "title": "maintain upstream add|list|sync|remove|scan|adopt|check",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "5",
@@ -1201,7 +1201,7 @@
         {
           "id": "6",
           "title": "maintain registry init|collection|format|validate|lock|build|audit|diff|test|publish|push",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "7",

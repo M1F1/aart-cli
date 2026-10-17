@@ -149,8 +149,8 @@ class DocumentedCommandSurfaceTest(unittest.TestCase):
         surface = _command_surface()
 
         self.assertGreater(len(surface), 5)
-        self.assertIn("marketplace", surface)
-        self.assertIn("install", surface["marketplace"])
+        self.assertIn("consume", surface)
+        self.assertIn("install", surface["consume"])
 
 
 class QuickStartRouteTest(unittest.TestCase):
@@ -163,7 +163,7 @@ class QuickStartRouteTest(unittest.TestCase):
     """
 
     #: The five steps §1.6 names, as the command that performs each one.
-    ROUTE = ("source add", "marketplace search", "marketplace install", "marketplace status")
+    ROUTE = ("consume registry add", "consume search", "consume install", "consume status")
 
     def _quick_start(self) -> str:
         return _section("Install an artifact")
@@ -188,7 +188,7 @@ class QuickStartRouteTest(unittest.TestCase):
         reader to skip the half where nothing has happened yet."""
 
         quick_start = self._quick_start()
-        reviewed = quick_start.index("aart-cli marketplace install")
+        reviewed = quick_start.index("aart-cli consume install")
         finalized = quick_start.index("--yes")
 
         self.assertLess(reviewed, finalized)
@@ -420,7 +420,7 @@ class RemediationNamesRealCommandsTest(unittest.TestCase):
         sources = list((_ROOT / "aart_cli").rglob("*.py"))
 
         self.assertGreater(len(sources), 100)
-        self.assertIn("uninstall", surface["marketplace"])
+        self.assertIn("uninstall", surface["consume"])
 
 
 class InstallDocumentTest(unittest.TestCase):

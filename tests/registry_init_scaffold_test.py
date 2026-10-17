@@ -90,8 +90,8 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         self.assertIn(".gitignore", files)
         generated_readme = files["README.md"]
         self.assertNotIn(b"registry scaffold", generated_readme)
-        self.assertIn(b"registry scan --help", generated_readme)
-        self.assertIn(b"registry promote --help", generated_readme)
+        self.assertIn(b"maintain upstream scan --help", generated_readme)
+        self.assertIn(b"maintain candidate promote --help", generated_readme)
         ignored = files[".gitignore"].decode("utf-8").splitlines()
         self.assertIn("/.aart-cli/", ignored)
         self.assertIn("/.aart-cli-bak/", ignored)
@@ -101,7 +101,7 @@ class RegistryInitScaffoldTest(unittest.TestCase):
         self.assertIn("/.vibe/", ignored)
         self.assertIn("/.mcp.json", ignored)
         workflow = files[".github/workflows/aart-cli-registry.yml"]
-        self.assertIn(b"registry test", workflow)
+        self.assertIn(b"maintain registry test", workflow)
         self.assertIn(b"minimum", workflow)
         self.assertIn(b"latest", workflow)
         self.assertIn(b"validate --source .", workflow)
@@ -157,7 +157,9 @@ class RegistryInitScaffoldTest(unittest.TestCase):
                 command.removeprefix("aart-cli ").replace("${{ matrix.compatibility }}", "minimum")
             )
             with self.subTest(command=command):
-                self.assertEqual(cli.build_parser().parse_args(argv).command, "registry")
+                self.assertEqual(
+                    cli._to_request(cli.build_parser().parse_args(argv)).command, "registry"
+                )
 
     def test_init_never_overwrites_an_existing_registry_workflow(self) -> None:
         path = parse_relative_path(".github/workflows/aart-cli-registry.yml")
@@ -321,6 +323,7 @@ class GeneratedRegistryReadmeTest(unittest.TestCase):
                     sys.executable,
                     "-m",
                     "aart_cli",
+                    "maintain",
                     "registry",
                     "init",
                     "--source",
@@ -354,6 +357,7 @@ class GeneratedRegistryReadmeTest(unittest.TestCase):
                     sys.executable,
                     "-m",
                     "aart_cli",
+                    "maintain",
                     "registry",
                     "init",
                     "--source",

@@ -97,7 +97,7 @@ def _error(code: DiagnosticCode, message: str, path: str | None = None) -> Err:
 
 _DEPENDENCY_SCOPE_REMEDIATION = (
     "Author the dependency in a source checkout, then bring it into this registry through "
-    "`aart-cli registry scan --help` and `aart-cli registry promote --help`, or copy the upstream content "
+    "`aart-cli maintain upstream scan --help` and `aart-cli maintain candidate promote --help`, or copy the upstream content "
     "into an artifact this registry owns.",
 )
 

@@ -110,8 +110,8 @@ def _record(block_path: str) -> SetupStateRecord:
         started_at="2026-08-15T09:00:00Z",
         finished_at="2026-08-15T09:00:42Z",
         exit_status=0,
-        retry_command=f"aart-cli marketplace setup {COORDINATE}@1.0.0 --yes",
-        rollback_command=f"aart-cli marketplace receipt undo {COORDINATE}",
+        retry_command=f"aart-cli consume setup {COORDINATE}@1.0.0 --yes",
+        rollback_command=f"aart-cli consume receipt undo {COORDINATE}",
         receipt=(
             {
                 "step_id": "shell-block",
@@ -205,7 +205,7 @@ class ReceiptCommandTests(unittest.TestCase):
         return code, output.getvalue()
 
     def test_show_writes_exactly_what_the_flag_mode_renderer_writes(self) -> None:
-        code, text = self._run("marketplace", "receipt", "show", COORDINATE)
+        code, text = self._run("consume", "receipt", "show", COORDINATE)
 
         self.assertEqual(code, 0, text)
         expected = render_receipt_payload(receipt_payload(self.record, location=self.location))
@@ -213,7 +213,7 @@ class ReceiptCommandTests(unittest.TestCase):
         self.assertEqual(written[-len(expected) :], list(expected))
 
     def test_verify_asks_the_filesystem_and_reports_the_block_as_still_true(self) -> None:
-        code, text = self._run("marketplace", "receipt", "verify", COORDINATE)
+        code, text = self._run("consume", "receipt", "verify", COORDINATE)
 
         self.assertEqual(code, 0, text)
         self.assertIn("Verification", text)
@@ -223,7 +223,7 @@ class ReceiptCommandTests(unittest.TestCase):
     def test_verify_sees_an_edited_block_as_false(self) -> None:
         self.block.write_text("# somebody edited this\n", encoding="utf-8")
 
-        code, text = self._run("marketplace", "receipt", "verify", COORDINATE)
+        code, text = self._run("consume", "receipt", "verify", COORDINATE)
 
         self.assertIn("false=1", text)
         self.assertIn("block-present", text)
@@ -231,7 +231,7 @@ class ReceiptCommandTests(unittest.TestCase):
         self.assertNotEqual(code, 0, text)
 
     def test_an_unknown_coordinate_is_refused_with_remediation_not_a_traceback(self) -> None:
-        code, text = self._run("marketplace", "receipt", "show", "mcp/never-installed")
+        code, text = self._run("consume", "receipt", "show", "mcp/never-installed")
 
         self.assertNotEqual(code, 0, text)
         self.assertIn("no installation of mcp/never-installed", text)
@@ -240,14 +240,14 @@ class ReceiptCommandTests(unittest.TestCase):
     def test_undo_reviews_first_and_changes_nothing_without_yes(self) -> None:
         before = self.state_path.read_bytes(), self.block.read_bytes()
 
-        code, text = self._run("marketplace", "receipt", "undo", COORDINATE)
+        code, text = self._run("consume", "receipt", "undo", COORDINATE)
 
         self.assertEqual(code, 0, text)
         self.assertEqual((self.state_path.read_bytes(), self.block.read_bytes()), before)
         self.assertIn("re-run with --yes to apply this exact undo", text)
 
     def test_undo_applied_reverses_the_effect_and_rewrites_the_record(self) -> None:
-        code, text = self._run("marketplace", "receipt", "undo", COORDINATE, "--yes")
+        code, text = self._run("consume", "receipt", "undo", COORDINATE, "--yes")
 
         self.assertEqual(code, 0, text)
         self.assertFalse(self.block.exists(), "the file this run created is removed")
@@ -257,7 +257,7 @@ class ReceiptCommandTests(unittest.TestCase):
     def test_an_unsupported_action_is_refused_by_the_parser_not_by_doing_nothing(self) -> None:
         with self.assertRaises(SystemExit) as raised:
             with contextlib.redirect_stderr(io.StringIO()):
-                self._run("marketplace", "receipt", "explode", COORDINATE)
+                self._run("consume", "receipt", "explode", COORDINATE)
 
         self.assertNotEqual(raised.exception.code, 0)
 
@@ -344,7 +344,7 @@ class CanonicalReceiptAbsenceTests(CanonicalReceiptCommandTests):
     def test_a_configured_installation_with_no_recorded_run_says_exactly_that(self) -> None:
         self._forget_setup_pointer()
 
-        code, text = self._run("marketplace", "receipt", "show", COORDINATE)
+        code, text = self._run("consume", "receipt", "show", COORDINATE)
 
         self.assertNotEqual(code, 0, text)
         self.assertIn("is installed and no setup run has been recorded for it", text)
@@ -355,7 +355,7 @@ class CanonicalReceiptAbsenceTests(CanonicalReceiptCommandTests):
     def test_a_pointer_whose_record_is_gone_is_its_own_refusal(self) -> None:
         self.state_path.unlink()
 
-        code, text = self._run("marketplace", "receipt", "show", COORDINATE)
+        code, text = self._run("consume", "receipt", "show", COORDINATE)
 
         self.assertNotEqual(code, 0, text)
         self.assertIn("points at setup record", text)
@@ -369,11 +369,11 @@ class CanonicalReceiptAbsenceTests(CanonicalReceiptCommandTests):
         false and useless -- it points the operator at a file that is never going to exist.
         """
 
-        code, text = self._run("marketplace", "receipt", "show", "mcp/never-installed")
+        code, text = self._run("consume", "receipt", "show", "mcp/never-installed")
 
         self.assertNotEqual(code, 0, text)
         self.assertIn("no installation of mcp/never-installed in project scope", text)
-        self.assertIn("aart-cli marketplace status", text)
+        self.assertIn("aart-cli consume status", text)
 
     def test_a_record_belonging_to_the_other_scope_is_refused_not_silently_shown(self) -> None:
         """The receipt store partitions nothing by scope, so only the record knows.
@@ -388,14 +388,14 @@ class CanonicalReceiptAbsenceTests(CanonicalReceiptCommandTests):
             encoding="utf-8",
         )
 
-        code, text = self._run("marketplace", "receipt", "show", COORDINATE)
+        code, text = self._run("consume", "receipt", "show", COORDINATE)
 
         self.assertNotEqual(code, 0, text)
         self.assertIn("belongs to user scope, not project", text)
         self.assertIn("--scope user", text)
 
     def test_a_profile_the_receipt_never_served_matches_nothing(self) -> None:
-        code, text = self._run("marketplace", "receipt", "show", COORDINATE, "--profile", "codex")
+        code, text = self._run("consume", "receipt", "show", COORDINATE, "--profile", "codex")
 
         self.assertNotEqual(code, 0, text)
         self.assertIn("no installation of", text)
@@ -425,7 +425,7 @@ class CanonicalReceiptAbsenceTests(CanonicalReceiptCommandTests):
         )
         self.assertIsInstance(rewritten, Ok, getattr(rewritten, "diagnostics", ()))
 
-        code, text = self._run("marketplace", "receipt", "show", COORDINATE)
+        code, text = self._run("consume", "receipt", "show", COORDINATE)
 
         self.assertEqual(code, 0, text)
         self.assertIn(f"mcp/github-docker@{self.record.profile} (project)", text)

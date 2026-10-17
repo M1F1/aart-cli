@@ -391,9 +391,7 @@ def _availability_reason(
         return "source is incompatible with this AART version"
     if display_health is SourceDisplayHealth.INVALID:
         # Synchronizing is what republishes a managed snapshot whose state is unreadable.
-        return (
-            "source state is invalid; run `aart-cli source sync --alias <alias>` before enabling it"
-        )
+        return f"source state is invalid; run `{source.kind.command} sync --alias <alias>` before enabling it"
     if source.is_git and git_location_parts(source.location) is None:
         return "source has an invalid Git origin"
     return ""
@@ -548,9 +546,10 @@ def plan_source_addition(
     if any(existing.alias == source.alias for existing in view.configuration.sources):
         return _error(
             f"source alias is already configured: {source.alias}",
-            f"run `aart-cli source sync --alias {source.alias}` to refresh it, "
-            f"`aart-cli source resubscribe --alias {source.alias}` if its declared identity changed, "
-            f"or `aart-cli source remove --alias {source.alias}` to subscribe to a different origin",
+            f"run `{source.kind.command} sync --alias {source.alias}` to refresh it, "
+            f"`{source.kind.command} resubscribe --alias {source.alias}` if its declared identity "
+            f"changed, or `{source.kind.command} remove --alias {source.alias}` to subscribe to a "
+            "different origin",
             interactive=(
                 f"{source.alias} is already connected here.",
                 "Refresh it from its row on Registries, or choose a different alias for this one.",
@@ -572,9 +571,10 @@ def plan_source_addition(
         held = ", ".join(alias.value for alias in same_origin_and_ref)
         return _error(
             "source origin and ref are already configured as " + held,
-            f"run `aart-cli source sync --alias {same_origin_and_ref[0].value}` to refresh it, "
-            f"`aart-cli source resubscribe --alias {same_origin_and_ref[0].value}` if its declared "
-            f"identity changed, `aart-cli source remove --alias {same_origin_and_ref[0].value}` to "
+            f"run `{source.kind.command} sync --alias {same_origin_and_ref[0].value}` to refresh it, "
+            f"`{source.kind.command} resubscribe --alias {same_origin_and_ref[0].value}` if its "
+            f"declared identity changed, `{source.kind.command} remove --alias "
+            f"{same_origin_and_ref[0].value}` to "
             "free the origin, or add this origin at a different ref",
             interactive=(
                 f"This origin and branch are already connected as {held}.",
@@ -626,7 +626,8 @@ def plan_source_removal(view: SourceStageView, alias: SourceAlias) -> Result[Sou
     if not selected:
         return _error(
             f"no configured source has alias {alias}",
-            "run `aart-cli source list` to see configured aliases",
+            "run `aart-cli consume registry list` or `aart-cli maintain upstream list` to see "
+            "configured aliases",
         )
     if alias in view.policy.required_registries:
         return _error(
@@ -794,7 +795,8 @@ def plan_source_resubscription(
     if not selected:
         return _error(
             f"no configured source has alias {alias}",
-            "run `aart-cli source list` to see configured aliases",
+            "run `aart-cli consume registry list` or `aart-cli maintain upstream list` to see "
+            "configured aliases",
         )
     source = selected[0]
     if not source.enabled:
@@ -852,7 +854,7 @@ def render_source_resubscription_review(request: SourceResubscriptionRequest) ->
         # source-unavailable.
         "  note: installed artifacts are not re-installed; they surface as identity-changed, "
         "update-available, or removed-upstream through the normal reconciliation, and "
-        "`aart-cli marketplace update` in each project rebinds them",
+        "`aart-cli consume update` in each project rebinds them",
     )
 
 

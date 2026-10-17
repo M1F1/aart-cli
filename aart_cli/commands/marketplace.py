@@ -527,7 +527,7 @@ def _selection(request: Request, action: str) -> Result[tuple]:
         return _invalid(
             f"marketplace {action} requires at least one artifact or collection coordinate",
             "pass <source>/<kind>/<name>[@<version>] or <source>/collection/<name>",
-            "run `aart-cli marketplace list --json` to see available coordinates",
+            "run `aart-cli consume list --json` to see available coordinates",
         )
     return parse_artifact_selectors(tuple(request.names))
 

@@ -150,7 +150,7 @@ def _environment(
 class ConfiguredInstallCommandTest(unittest.TestCase):
     def test_review_projects_the_canonical_plan_and_writes_no_target_path(self) -> None:
         with _environment() as env:
-            code, payload = env.run("marketplace", "install", COORDINATE, "--profile", "claude")
+            code, payload = env.run("consume", "install", COORDINATE, "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertFalse(payload["finalized"])
@@ -160,9 +160,7 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
             self.assertEqual(
                 payload["review"]["items"][0]["key"], "company/skill/code-review@1.2.0"
             )
-            text_code, text = env.run_text(
-                "marketplace", "install", COORDINATE, "--profile", "claude"
-            )
+            text_code, text = env.run_text("consume", "install", COORDINATE, "--profile", "claude")
             self.assertEqual(text_code, 0, text)
             self.assertIn(payload["review_digest"], text)
             self.assertEqual(list(env.project.iterdir()), [])
@@ -172,7 +170,7 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
     ) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 COORDINATE,
                 "--profile",
@@ -192,7 +190,7 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
     def test_an_explicit_symlink_mode_is_refused_instead_of_silently_copied(self) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 COORDINATE,
                 "--profile",
@@ -208,10 +206,10 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
 
     def test_confirmed_review_installs_and_records_without_the_legacy_manifest(self) -> None:
         with _environment() as env:
-            _, review = env.run("marketplace", "install", COORDINATE, "--profile", "claude")
+            _, review = env.run("consume", "install", COORDINATE, "--profile", "claude")
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 COORDINATE,
                 "--profile",
@@ -247,12 +245,10 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
 
     def test_a_later_public_status_reads_the_canonical_installation_from_disk(self) -> None:
         with _environment() as env:
-            installed, _ = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
-            )
+            installed, _ = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
             self.assertEqual(installed, 0)
 
-            code, payload = env.run("marketplace", "status", "--profile", "claude")
+            code, payload = env.run("consume", "status", "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["ok"])
@@ -264,7 +260,7 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
 
     def test_public_status_is_empty_before_any_canonical_install(self) -> None:
         with _environment() as env:
-            code, payload = env.run("marketplace", "status", "--profile", "claude")
+            code, payload = env.run("consume", "status", "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["ok"])
@@ -272,15 +268,13 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
 
     def test_public_status_measures_delivery_drift_instead_of_trusting_the_receipt(self) -> None:
         with _environment() as env:
-            installed, _ = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
-            )
+            installed, _ = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
             self.assertEqual(installed, 0)
             delivered = env.project / ".claude/skills/code-review-company-project/SKILL.md"
             delivered.chmod(0o600)
             delivered.write_text("# changed after installation\n", encoding="utf-8")
 
-            code, payload = env.run("marketplace", "status", "--profile", "claude")
+            code, payload = env.run("consume", "status", "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertEqual(payload["items"][0]["status"], "current")
@@ -289,15 +283,13 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
 
     def test_public_status_reports_only_the_requested_installation_scope(self) -> None:
         with _environment() as env:
-            installed, _ = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
-            )
+            installed, _ = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
             self.assertEqual(installed, 0)
 
             user_code, user_payload = env.run(
-                "marketplace", "status", "--profile", "claude", "--scope", "user"
+                "consume", "status", "--profile", "claude", "--scope", "user"
             )
-            project_code, project_payload = env.run("marketplace", "status", "--profile", "claude")
+            project_code, project_payload = env.run("consume", "status", "--profile", "claude")
 
             self.assertEqual(user_code, 0, user_payload)
             self.assertEqual(user_payload["items"], [])

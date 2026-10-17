@@ -307,8 +307,8 @@ def _resolution_failure(
             SOURCE_UNAVAILABLE,
             message,
             remediation=(
-                f"aart-cli source add --alias {alias} --kind registry-git --location <url>",
-                "aart-cli marketplace uninstall, if you are removing what this source installed",
+                f"aart-cli consume registry add --alias {alias} --kind git --location <url>",
+                "aart-cli consume uninstall, if you are removing what this source installed",
             ),
         )
     if all(source.snapshot_digest is None for source in scope):
@@ -319,7 +319,7 @@ def _resolution_failure(
                 f"nothing is cached for {aliases}, and --offline forbids fetching it",
                 remediation=(
                     "re-run without --offline",
-                    f"aart-cli source sync --alias {scope[0].alias}, while connected",
+                    f"{scope[0].kind.command} sync --alias {scope[0].alias}, while connected",
                 ),
                 interactive=(
                     f"Nothing has been downloaded from {aliases} yet, and this session is offline.",
@@ -329,14 +329,14 @@ def _resolution_failure(
         return _error(
             SOURCE_NOT_SYNCHRONIZED,
             f"no snapshot has been synchronized from {aliases}",
-            remediation=(f"aart-cli source sync --alias {scope[0].alias}",),
+            remediation=(f"{scope[0].kind.command} sync --alias {scope[0].alias}",),
             interactive=(
                 f"Nothing has been downloaded from {aliases} yet.",
                 "Refresh that registry from its row on Registries to fetch its approved snapshot.",
             ),
         )
     qualification = "" if query.source is None else f" in source {query.source}"
-    listing = "aart-cli marketplace list" + (
+    listing = "aart-cli consume list" + (
         "" if query.source is None else f" --source {query.source}"
     )
     return _error(

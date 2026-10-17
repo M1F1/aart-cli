@@ -44,7 +44,7 @@ class MemoryModeE2ETest(unittest.TestCase):
 
             with _environment(source) as environment:
                 first, first_payload = environment.run(
-                    "marketplace",
+                    "consume",
                     "install",
                     "reference/memory/house@1.0.0",
                     "--profile",
@@ -52,7 +52,7 @@ class MemoryModeE2ETest(unittest.TestCase):
                     "--yes",
                 )
                 second, second_payload = environment.run(
-                    "marketplace",
+                    "consume",
                     "install",
                     "reference/memory/rules@1.0.0",
                     "--profile",
@@ -67,13 +67,13 @@ class MemoryModeE2ETest(unittest.TestCase):
                 self.assertIn("memory:house", rendered)
                 self.assertIn("memory:rules", rendered)
                 status, status_payload = environment.run(
-                    "marketplace", "status", "--profile", "tabnine"
+                    "consume", "status", "--profile", "tabnine"
                 )
                 self.assertEqual(status, 0, status_payload)
                 self.assertEqual({item["status"] for item in status_payload["items"]}, {"current"})
 
                 removed, removed_payload = environment.run(
-                    "marketplace",
+                    "consume",
                     "uninstall",
                     "reference/memory/house",
                     "--profile",
@@ -86,7 +86,7 @@ class MemoryModeE2ETest(unittest.TestCase):
                 self.assertIn("memory:rules", rendered)
 
                 last, last_payload = environment.run(
-                    "marketplace",
+                    "consume",
                     "uninstall",
                     "reference/memory/rules",
                     "--profile",
@@ -101,7 +101,7 @@ class MemoryModeE2ETest(unittest.TestCase):
             destination = _instruction_file(environment)
 
             code, payload = environment.run(
-                "marketplace", "install", _MEMORY, "--profile", "claude", "--yes"
+                "consume", "install", _MEMORY, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -114,13 +114,13 @@ class MemoryModeE2ETest(unittest.TestCase):
             destination.write_text(original, encoding="utf-8")
 
             refused, diagnostics = environment.run(
-                "marketplace", "install", _MEMORY, "--profile", "claude", "--yes"
+                "consume", "install", _MEMORY, "--profile", "claude", "--yes"
             )
             self.assertNotEqual(refused, 0, diagnostics)
             self.assertEqual(destination.read_text(encoding="utf-8"), original)
 
             code, payload = environment.run(
-                "marketplace", "install", _MEMORY, "--profile", "claude", "--force", "--yes"
+                "consume", "install", _MEMORY, "--profile", "claude", "--force", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -139,7 +139,7 @@ class MemoryModeE2ETest(unittest.TestCase):
             destination.write_text("# Existing\n\nHand-written guidance.\n", encoding="utf-8")
 
             code, payload = environment.run(
-                "marketplace",
+                "consume",
                 "install",
                 _MEMORY,
                 "--profile",
@@ -161,7 +161,7 @@ class MemoryModeE2ETest(unittest.TestCase):
             destination.write_text(original, encoding="utf-8")
 
             code, payload = environment.run(
-                "marketplace",
+                "consume",
                 "install",
                 _MEMORY,
                 "--profile",
@@ -185,7 +185,7 @@ class MemoryModeE2ETest(unittest.TestCase):
             destination.write_text("# Existing\n\nHand-written guidance.\n", encoding="utf-8")
 
             code, payload = environment.run(
-                "marketplace",
+                "consume",
                 "install",
                 _MEMORY,
                 "--profile",
@@ -208,7 +208,7 @@ class MemoryModeE2ETest(unittest.TestCase):
             destination.write_text(original, encoding="utf-8")
 
             code, payload = environment.run(
-                "marketplace",
+                "consume",
                 "install",
                 _MEMORY,
                 "--profile",
@@ -233,7 +233,7 @@ class MemoryModeE2ETest(unittest.TestCase):
             destination.write_text(original, encoding="utf-8")
 
             code, payload = environment.run(
-                "marketplace",
+                "consume",
                 "install",
                 _MEMORY,
                 "--profile",
@@ -258,7 +258,7 @@ class MemoryModeE2ETest(unittest.TestCase):
             original = "# Existing\n\nHand-written guidance.\n"
             destination.write_text(original, encoding="utf-8")
             environment.run(
-                "marketplace",
+                "consume",
                 "install",
                 _MEMORY,
                 "--profile",
@@ -271,7 +271,7 @@ class MemoryModeE2ETest(unittest.TestCase):
             self.assertNotIn("Hand-written guidance.", destination.read_text(encoding="utf-8"))
 
             code, payload = environment.run(
-                "marketplace", "uninstall", _MEMORY, "--profile", "claude", "--yes"
+                "consume", "uninstall", _MEMORY, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -291,7 +291,7 @@ class MemoryModeE2ETest(unittest.TestCase):
             destination.write_text("   \n", encoding="utf-8")
 
             code, payload = environment.run(
-                "marketplace",
+                "consume",
                 "install",
                 _MEMORY,
                 "--profile",
@@ -311,7 +311,7 @@ class MemoryModeE2ETest(unittest.TestCase):
             destination = _instruction_file(environment)
 
             code, payload = environment.run(
-                "marketplace",
+                "consume",
                 "install",
                 _MEMORY,
                 "--profile",

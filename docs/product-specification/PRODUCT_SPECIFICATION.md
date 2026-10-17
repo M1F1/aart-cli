@@ -11316,11 +11316,11 @@ Every role-specific command lives under its role's verb; commands about the whol
 aart-cli stay at the top level.
 
 ```text
-aart-cli consume registry add|list|sync|remove        --kind local|git
+aart-cli consume registry add|list|sync|remove|resubscribe|health   --kind local|git
 aart-cli consume list|search|install|update|uninstall|status|setup|receipt|health
 aart-cli consume mcp test
 
-aart-cli maintain upstream add|list|sync|remove|scan|adopt|check   --kind local|git
+aart-cli maintain upstream add|list|sync|remove|resubscribe|health|scan|adopt|check   --kind local|git
 aart-cli maintain candidate list|promote
 aart-cli maintain registry init|collection|format|validate|lock|build|audit|diff|test|publish|push
 
@@ -11329,9 +11329,10 @@ aart-cli author init|check
 aart-cli doctor|upgrade|reset|security
 ```
 
-- `consume registry sync` refreshes what a Registry offers and then says which installed artifacts
-  have a newer approved version and that `consume update` applies them (§82, §83). `sync` never
-  changes installed artifacts; `update` never changes a Registry.
+- `consume registry sync` refreshes what a Registry offers and then points at `consume update`,
+  whose review lists each installed artifact a newer approved version would replace (§82, §83).
+  `sync` never changes installed artifacts; `update` never changes a Registry. Naming those
+  artifacts in `sync`'s own output is B-201.
 - `maintain upstream sync` discovers Candidates in connected upstreams; `scan` reports Candidates
   in one explicit checkout without changing anything; `adopt` and `check` are today's `registry
   adopt` and `registry check-upstream`. `maintain candidate promote` is today's `registry promote`.

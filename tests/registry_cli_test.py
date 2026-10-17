@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import unittest
 from unittest.mock import patch
 
@@ -10,52 +11,78 @@ from aart_cli.domain.result import Ok
 from aart_cli.model import Request
 from aart_cli.protocol.semver import VersionBounds, parse_semver
 
-_DIFF = "registry diff --source /tmp/registry"
-_FORMAT = "registry format --source /tmp/registry"
+_DIFF = "maintain registry diff --source /tmp/registry"
+_FORMAT = "maintain registry format --source /tmp/registry"
 
 
 class RegistryCliTest(unittest.TestCase):
     def test_all_registry_actions_map_to_one_command_boundary(self) -> None:
+        """§175.2: Registry maintenance is split by what it acts on, behind one handler."""
+
         parser = cli.build_parser()
-        actions = {
-            "init",
-            "collection",
-            "scan",
-            "adopt",
-            "check-upstream",
-            "promote",
-            "format",
-            "publish",
-            "push",
-            "validate",
-            "lock",
-            "build",
-            "audit",
-            "test",
-            "diff",
-        }
-        registry = next(
-            action for action in parser._actions if action.__class__.__name__ == "_SubParsersAction"
-        ).choices["registry"]
-        sub = next(
-            action
-            for action in registry._actions
-            if action.__class__.__name__ == "_SubParsersAction"
+
+        def choices(container, name):
+            sub = next(
+                action
+                for action in container._actions
+                if action.__class__.__name__ == "_SubParsersAction"
+            )
+            return sub.choices[name] if name else set(sub.choices)
+
+        maintain = choices(parser, "maintain")
+        self.assertEqual(
+            choices(choices(maintain, "registry"), None),
+            {
+                "init",
+                "collection",
+                "format",
+                "publish",
+                "push",
+                "validate",
+                "lock",
+                "build",
+                "audit",
+                "test",
+                "diff",
+            },
         )
-        self.assertEqual(set(sub.choices), actions)
+        self.assertEqual(choices(choices(maintain, "candidate"), None), {"promote"})
+        self.assertLessEqual(
+            {"scan", "adopt", "check"}, choices(choices(maintain, "upstream"), None)
+        )
+        routed = {
+            ("upstream", "scan"): "scan",
+            ("upstream", "adopt"): "adopt",
+            ("upstream", "check"): "check-upstream",
+            ("candidate", "promote"): "promote",
+            ("registry", "validate"): "validate",
+        }
+        for (family, action), handler_action in routed.items():
+            with self.subTest(family=family, action=action):
+                command, fields = cli._route(
+                    argparse.Namespace(
+                        command="maintain",
+                        maintain_action=family,
+                        source_action=action,
+                        candidate_action=action,
+                        registry_action=action,
+                    )
+                )
+                self.assertEqual(command, "registry")
+                self.assertEqual(fields.get("registry_action", action), handler_action)
         self.assertIn("registry", cli.DISPATCH)
 
     def test_no_route_writes_content_without_a_source_manifest(self) -> None:
         """§173.9 (D-375): adoption by manifest is the only way content enters a Registry."""
 
         for argv in (
-            ["registry", "vendor", "--source", "/tmp/r", "skill", "x"],
-            ["registry", "vendor-batch", "--source", "/tmp/r", "--manifest", "m.json"],
-            ["registry", "revendor", "--source", "/tmp/r", "skill", "x"],
-            ["registry", "discover", "--source", "/tmp/r"],
-            ["registry", "audit", "--source", "/tmp/r", "--check-upstream"],
+            ["maintain", "registry", "vendor", "--source", "/tmp/r", "skill", "x"],
+            ["maintain", "registry", "vendor-batch", "--source", "/tmp/r", "--manifest", "m.json"],
+            ["maintain", "registry", "revendor", "--source", "/tmp/r", "skill", "x"],
+            ["maintain", "registry", "discover", "--source", "/tmp/r"],
+            ["maintain", "registry", "audit", "--source", "/tmp/r", "--check-upstream"],
         ):
-            with self.subTest(argv=argv[1:3]), self.assertRaises(SystemExit):
+            with self.subTest(argv=argv[2:4]), self.assertRaises(SystemExit):
                 cli.build_parser().parse_args(argv)
         self.assertEqual(
             {item.value for item in CurationAction} & {"vendor", "vendor-batch", "revendor"},
@@ -71,7 +98,7 @@ class RegistryCliTest(unittest.TestCase):
 
         with patch.dict(cli.DISPATCH, {"registry": run}):
             result = cli.main(
-                ["registry", "format", "--source", "/tmp/registry", "--check", "--json"]
+                ["maintain", "registry", "format", "--source", "/tmp/registry", "--check", "--json"]
             )
         self.assertEqual(result, 0)
         self.assertEqual(captured[0].registry_action, "format")
@@ -83,6 +110,7 @@ class RegistryCliTest(unittest.TestCase):
         with self.assertRaises(SystemExit) as raised:
             cli.build_parser().parse_args(
                 [
+                    "maintain",
                     "registry",
                     "init",
                     "--source-id",
@@ -108,18 +136,22 @@ class RegistryCliTest(unittest.TestCase):
         """
 
         with self.assertRaises(SystemExit) as raised:
-            cli.build_parser().parse_args(["registry", "scaffold", "--source", "/tmp/r"])
+            cli.build_parser().parse_args(
+                ["maintain", "registry", "scaffold", "--source", "/tmp/r"]
+            )
         self.assertEqual(raised.exception.code, 2)
         self.assertFalse(hasattr(CurationAction, "SCAFFOLD"))
         self.assertTrue(hasattr(CurationAction, "PUBLISH"))
-        published = cli.build_parser().parse_args(["registry", "publish", "--source", "/tmp/r"])
+        published = cli.build_parser().parse_args(
+            ["maintain", "registry", "publish", "--source", "/tmp/r"]
+        )
         self.assertEqual(published.registry_action, "publish")
 
     def test_the_compatibility_ceiling_defaults_to_the_running_aart(self) -> None:
         # The upper compatibility point is whichever AART is publishing, not a version frozen in
         # the parser.  A default that never moves refuses every registry whose floor rises above
         # it, and proves nothing about today's release for the ones below it.
-        request = cli._to_request(cli.build_parser().parse_args(["registry", "test"]))
+        request = cli._to_request(cli.build_parser().parse_args(["maintain", "registry", "test"]))
 
         self.assertEqual(request.latest_version, __version__)
 
@@ -134,7 +166,7 @@ class RegistryCliTest(unittest.TestCase):
         assert isinstance(running, Ok)
 
         for command in (_DIFF, _FORMAT):
-            with self.subTest(command=command.split()[1]):
+            with self.subTest(command=command.split()[2]):
                 request = cli._to_request(cli.build_parser().parse_args(command.split()))
                 curation = registry_command._curation_request(
                     request, CurationAction(request.registry_action)
@@ -155,7 +187,7 @@ class RegistryCliTest(unittest.TestCase):
         # range says so on `init`, and that is what has to reach the manifest.
         request = cli._to_request(
             cli.build_parser().parse_args(
-                "registry init --source /tmp/registry --source-id company --display-name Company "
+                "maintain registry init --source /tmp/registry --source-id company --display-name Company "
                 "--minimum-version 2.0.0 --maximum-version 4.0.0".split()
             )
         )
@@ -174,7 +206,7 @@ class RegistryCliTest(unittest.TestCase):
         # own, applied to the one action its loop cannot cover.
         request = cli._to_request(
             cli.build_parser().parse_args(
-                "registry init --source /tmp/registry --source-id company "
+                "maintain registry init --source /tmp/registry --source-id company "
                 "--display-name Company".split()
             )
         )

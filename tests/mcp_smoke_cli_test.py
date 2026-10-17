@@ -45,6 +45,7 @@ class McpSmokeCliTest(unittest.TestCase):
         selected = cli._to_request(
             cli.build_parser().parse_args(
                 [
+                    "consume",
                     "mcp",
                     "test",
                     "local/mcp/identity@1.0.0",
@@ -67,7 +68,7 @@ class McpSmokeCliTest(unittest.TestCase):
 
         bulk = cli._to_request(
             cli.build_parser().parse_args(
-                ["mcp", "test", "--all", "--harness", "opencode", "--scope", "user"]
+                ["consume", "mcp", "test", "--all", "--harness", "opencode", "--scope", "user"]
             )
         )
         self.assertTrue(bulk.all_installed)
@@ -77,8 +78,8 @@ class McpSmokeCliTest(unittest.TestCase):
         """D-378: no prompt, no report to grade, and no `mcp report` action to check one."""
 
         for argv in (
-            ["mcp", "test", "--all", "--harness", "claude", "--prompt"],
-            ["mcp", "test", "--all", "--harness", "claude", "--report", "out.json"],
+            ["consume", "mcp", "test", "--all", "--harness", "claude", "--prompt"],
+            ["consume", "mcp", "test", "--all", "--harness", "claude", "--report", "out.json"],
             ["mcp", "report", "out.json"],
         ):
             with self.subTest(argv=argv), contextlib.redirect_stderr(io.StringIO()):
@@ -93,7 +94,7 @@ class McpSmokeCliTest(unittest.TestCase):
             return 17
 
         with patch.dict(cli.DISPATCH, {"mcp": run}):
-            status = cli.main(["mcp", "test", "--all", "--harness", "opencode"])
+            status = cli.main(["consume", "mcp", "test", "--all", "--harness", "opencode"])
         self.assertEqual(status, 17)
         self.assertEqual(seen[0].mcp_action, "test")
 

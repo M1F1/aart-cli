@@ -391,7 +391,7 @@ class OpenCodeSkillInstallationTest(unittest.TestCase):
             source = self._source(pathlib.Path(raw).resolve())
             with _environment(source) as env:
                 code, payload = env.run(
-                    "marketplace",
+                    "consume",
                     "install",
                     "reference/skill/code-review",
                     "--profile",
@@ -415,7 +415,7 @@ class OpenCodeSkillInstallationTest(unittest.TestCase):
             source = self._source(pathlib.Path(raw).resolve())
             with _environment(source) as env:
                 env.run(
-                    "marketplace",
+                    "consume",
                     "install",
                     "reference/skill/code-review",
                     "--profile",

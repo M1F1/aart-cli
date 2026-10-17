@@ -115,7 +115,7 @@ _COLLECTION_SCHEMA = "aart-cli.dev/collection/v1"
 COLLECTION_IN_SOURCE = "a Collection is not defined in a source: the Registry creates it"
 COLLECTION_IN_SOURCE_REMEDIATION = (
     "delete this manifest and create the Collection in the Registry with "
-    "`aart-cli registry collection NAME --summary TEXT --include KIND/NAME`"
+    "`aart-cli maintain registry collection NAME --summary TEXT --include KIND/NAME`"
 )
 _VERSION_IS_THE_REGISTRY_S = (
     "%s is not written in a source manifest: the Registry assigns versions; delete the field"

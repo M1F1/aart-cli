@@ -113,7 +113,7 @@ class InstallStateSchemaTests(unittest.TestCase):
                             "column": None,
                         },
                         "remediation": [
-                            "Reinstall the artifacts you need with: aart-cli marketplace install "
+                            "Reinstall the artifacts you need with: aart-cli consume install "
                             "<coordinate> --profile <name>",
                             "Remove the retired state file and reinstall: this revision is "
                             "not converted at runtime",

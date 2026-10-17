@@ -64,7 +64,7 @@ class TabnineMcpE2ETest(unittest.TestCase):
             source = _source_with_mcp(Path(raw))
             with _environment(source) as environment:
                 project_code, project_payload = environment.run(
-                    "marketplace",
+                    "consume",
                     "install",
                     _COORDINATE,
                     "--profile",
@@ -72,7 +72,7 @@ class TabnineMcpE2ETest(unittest.TestCase):
                     "--yes",
                 )
                 user_code, user_payload = environment.run(
-                    "marketplace",
+                    "consume",
                     "install",
                     _COORDINATE,
                     "--profile",
@@ -99,10 +99,10 @@ class TabnineMcpE2ETest(unittest.TestCase):
                 self.assertFalse((environment.home / ".tabnine/mcp_servers.json").exists())
 
                 project_status, project_status_payload = environment.run(
-                    "marketplace", "status", "--profile", "tabnine"
+                    "consume", "status", "--profile", "tabnine"
                 )
                 user_status, user_status_payload = environment.run(
-                    "marketplace",
+                    "consume",
                     "status",
                     "--profile",
                     "tabnine",
@@ -115,7 +115,7 @@ class TabnineMcpE2ETest(unittest.TestCase):
                 self.assertEqual(user_status_payload["items"][0]["status"], "current")
 
                 removed_project, removed_project_payload = environment.run(
-                    "marketplace",
+                    "consume",
                     "uninstall",
                     _COORDINATE,
                     "--profile",
@@ -127,7 +127,7 @@ class TabnineMcpE2ETest(unittest.TestCase):
                 self.assertTrue(user_file.exists())
 
                 removed_user, removed_user_payload = environment.run(
-                    "marketplace",
+                    "consume",
                     "uninstall",
                     _COORDINATE,
                     "--profile",

@@ -83,7 +83,7 @@ class OfflineCapabilityTest(unittest.TestCase):
             )
 
             code, refused = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--offline", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--offline", "--yes"
             )
 
             self.assertEqual(code, 1, refused)
@@ -91,14 +91,14 @@ class OfflineCapabilityTest(unittest.TestCase):
             self.assertEqual(diagnostic["code"], "source-not-synchronized")
             self.assertIn("--offline forbids fetching it", diagnostic["message"])
             self.assertIn(
-                "aart-cli source sync --alias reference, while connected",
+                "aart-cli maintain upstream sync --alias reference, while connected",
                 diagnostic["remediation"],
             )
 
             # The same command without the flag installs, so the refusal is about the capability
             # rather than about the artifact, the source or the machine.
             code, installed = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(code, 0, installed)
 
@@ -150,7 +150,7 @@ class OfflineCapabilityTest(unittest.TestCase):
                 Path(source_store_paths(env.paths.data_root, source_instance_id(env.source)).root)
             )
             _, metadata = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--offline", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--offline", "--yes"
             )
 
         payload = _uncached_object_refusal()

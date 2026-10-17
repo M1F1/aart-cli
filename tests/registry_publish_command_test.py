@@ -36,6 +36,7 @@ class RegistryPublishCommandTest(unittest.TestCase):
                 _git(root, "config", "user.email", "aart@example.invalid").returncode, 0
             )
             code, output = _run(
+                "maintain",
                 "registry",
                 "init",
                 "--source",
@@ -53,7 +54,7 @@ class RegistryPublishCommandTest(unittest.TestCase):
         self,
     ) -> None:
         with self._registry() as root:
-            code, output = _run("registry", "publish", "--source", str(root), "--json")
+            code, output = _run("maintain", "registry", "publish", "--source", str(root), "--json")
 
             self.assertEqual(code, 0, output)
             result = json.loads(output)
@@ -69,6 +70,7 @@ class RegistryPublishCommandTest(unittest.TestCase):
     def test_finalize_runs_all_gates_commits_once_never_pushes_and_reruns_as_noop(self) -> None:
         with self._registry() as root:
             code, output = _run(
+                "maintain",
                 "registry",
                 "publish",
                 "--source",
@@ -94,7 +96,7 @@ class RegistryPublishCommandTest(unittest.TestCase):
             self.assertEqual(_git(root, "status", "--porcelain").stdout, "")
 
             second_code, second_output = _run(
-                "registry", "publish", "--source", str(root), "--yes", "--json"
+                "maintain", "registry", "publish", "--source", str(root), "--yes", "--json"
             )
             self.assertEqual(second_code, 0, second_output)
             self.assertIsNone(json.loads(second_output)["commit"])
@@ -102,7 +104,9 @@ class RegistryPublishCommandTest(unittest.TestCase):
 
     def test_malformed_collection_stops_before_writes_and_leaves_head_unmoved(self) -> None:
         with self._registry() as root:
-            code, output = _run("registry", "publish", "--source", str(root), "--yes", "--json")
+            code, output = _run(
+                "maintain", "registry", "publish", "--source", str(root), "--yes", "--json"
+            )
             self.assertEqual(code, 0, output)
             head = _git(root, "rev-parse", "HEAD").stdout.strip()
             index_before = (root / "registry/index.json").read_bytes()
@@ -120,7 +124,9 @@ class RegistryPublishCommandTest(unittest.TestCase):
                 )
             )
 
-            failed, failure_output = _run("registry", "publish", "--source", str(root), "--yes")
+            failed, failure_output = _run(
+                "maintain", "registry", "publish", "--source", str(root), "--yes"
+            )
 
             self.assertEqual(failed, 1)
             self.assertIn("selector identity is invalid", failure_output)

@@ -48,12 +48,13 @@ class WorkingTreeSourceEndToEndTest(unittest.TestCase):
             with mock.patch.dict(os.environ, {"AART_CLI_HOME": str(base / "home")}):
                 checked, check_output = _run("author", "check", "--source", str(repository))
                 added, add_output = _run(
-                    "source",
+                    "maintain",
+                    "upstream",
                     "add",
                     "--alias",
                     "authors",
                     "--kind",
-                    "source-local",
+                    "local",
                     "--location",
                     str(repository),
                 )

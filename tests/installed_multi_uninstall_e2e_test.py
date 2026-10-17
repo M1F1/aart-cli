@@ -68,7 +68,7 @@ class InstalledMultiUninstallTest(unittest.TestCase):
 
     def _install(self, env, coordinate: str, *harnesses: str) -> None:
         profiles = (item for harness in harnesses for item in ("--profile", harness))
-        code, installed = env.run("marketplace", "install", coordinate, *profiles, "--yes")
+        code, installed = env.run("consume", "install", coordinate, *profiles, "--yes")
         self.assertEqual(code, 0, installed)
 
     def test_two_ticked_artifacts_are_removed_by_one_confirmation(self) -> None:

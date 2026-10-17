@@ -172,7 +172,7 @@ class DuplicateConnectionSpeaksInteractivelyTest(unittest.TestCase):
         assert isinstance(refused, Err), refused
         self.assertTrue(
             any(
-                "aart-cli source sync" in step
+                "aart-cli consume registry sync" in step
                 for item in refused.diagnostics
                 for step in item.remediation
             ),

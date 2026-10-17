@@ -34,7 +34,9 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
         self.assertEqual(identity["source_id"], _OLD_IDENTITY)
         identity["source_id"] = _NEW_IDENTITY
         document.write_text(json.dumps(identity, indent=2), encoding="utf-8")
-        code, payload = _source(env, "source", "resubscribe", "--alias", "reference", "--yes")
+        code, payload = _source(
+            env, "maintain", "upstream", "resubscribe", "--alias", "reference", "--yes"
+        )
         self.assertEqual(code, 0, payload)
 
     def _writable_source(self, root: Path) -> Path:
@@ -46,10 +48,10 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
         with _environment() as staging:
             source = self._writable_source(staging.root)
             with _environment(source) as env:
-                env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+                env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
                 self._adopt_new_identity(env)
 
-                code, status = env.run("marketplace", "status", "--profile", "claude")
+                code, status = env.run("consume", "status", "--profile", "claude")
 
                 self.assertEqual(code, 0, status)
                 self.assertEqual([item["status"] for item in status["items"]], ["identity-changed"])
@@ -63,7 +65,7 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
         with _environment() as staging:
             source = self._writable_source(staging.root)
             with _environment(source) as env:
-                env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+                env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
                 before = _stable_snapshot(env.project)
                 self.assertIn(str(_MANIFEST), before)
 
@@ -75,11 +77,11 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
         with _environment() as staging:
             source = self._writable_source(staging.root)
             with _environment(source) as env:
-                env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+                env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
                 self._adopt_new_identity(env)
                 before = _stable_snapshot(env.project)
 
-                code, review = env.run("marketplace", "update", "--profile", "claude")
+                code, review = env.run("consume", "update", "--profile", "claude")
 
                 self.assertEqual(code, 0, review)
                 self.assertFalse(review["finalized"])
@@ -91,10 +93,10 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
         with _environment() as staging:
             source = self._writable_source(staging.root)
             with _environment(source) as env:
-                env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+                env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
                 self._adopt_new_identity(env)
 
-                code, applied = env.run("marketplace", "update", "--profile", "claude", "--yes")
+                code, applied = env.run("consume", "update", "--profile", "claude", "--yes")
 
                 self.assertEqual(code, 0, applied)
                 self.assertTrue(applied["finalized"])
@@ -102,7 +104,7 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
                 declared = {record["source"]["declared_id"] for record in manifest["installations"]}
                 self.assertEqual(declared, {_NEW_IDENTITY})
 
-                code, status = env.run("marketplace", "status", "--profile", "claude")
+                code, status = env.run("consume", "status", "--profile", "claude")
                 self.assertEqual(code, 0, status)
                 self.assertEqual([item["status"] for item in status["items"]], ["current"])
                 self.assertTrue((env.project / _INSTALLED / "SKILL.md").is_file())
@@ -113,19 +115,19 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
         with _environment() as staging:
             source = self._writable_source(staging.root)
             with _environment(source) as env:
-                env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+                env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
                 self._adopt_new_identity(env)
-                _, review = env.run("marketplace", "update", "--profile", "claude")
+                _, review = env.run("consume", "update", "--profile", "claude")
                 reviewed = review["review_digest"]
 
                 document = env.source_location / "aart-cli-source.json"
                 identity = json.loads(document.read_text(encoding="utf-8"))
                 identity["source_id"] = "third-reference-source"
                 document.write_text(json.dumps(identity, indent=2), encoding="utf-8")
-                _source(env, "source", "resubscribe", "--alias", "reference", "--yes")
+                _source(env, "maintain", "upstream", "resubscribe", "--alias", "reference", "--yes")
 
                 code, refused = env.run(
-                    "marketplace",
+                    "consume",
                     "update",
                     "--profile",
                     "claude",
@@ -152,10 +154,10 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
         with _environment() as staging:
             source = self._writable_source(staging.root)
             with _environment(source) as env:
-                env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
-                _source(env, "source", "remove", "--alias", "reference", "--yes")
+                env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
+                _source(env, "maintain", "upstream", "remove", "--alias", "reference", "--yes")
 
-                code, status = env.run("marketplace", "status", "--profile", "claude")
+                code, status = env.run("consume", "status", "--profile", "claude")
 
                 self.assertEqual(code, 0, status)
                 self.assertEqual(
@@ -169,7 +171,7 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
         with _environment() as staging:
             source = self._writable_source(staging.root)
             with _environment(source) as env:
-                env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+                env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
                 # A second subscription, so this case stays what it is about: one subscription
                 # gone while another survives. The empty case is covered separately.
                 mirror = self._writable_source(env.root)
@@ -178,18 +180,19 @@ class IdentityChangeReconciliationTest(unittest.TestCase):
                 (mirror / "aart-cli-source.json").write_text(json.dumps(identity), encoding="utf-8")
                 _source(
                     env,
-                    "source",
+                    "maintain",
+                    "upstream",
                     "add",
                     "--alias",
                     "mirror",
                     "--kind",
-                    "source-local",
+                    "local",
                     "--location",
                     str(mirror),
                 )
-                _source(env, "source", "remove", "--alias", "reference", "--yes")
+                _source(env, "maintain", "upstream", "remove", "--alias", "reference", "--yes")
 
-                code, status = env.run("marketplace", "status", "--profile", "claude")
+                code, status = env.run("consume", "status", "--profile", "claude")
 
                 self.assertEqual(code, 0, status)
                 self.assertEqual(

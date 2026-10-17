@@ -41,7 +41,7 @@ class MarketplaceColumnsTest(unittest.TestCase):
     def test_marketplace_and_installed_rows_carry_the_columns(self) -> None:
         with _two_skills() as env:
             code, installed = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(code, 0, installed)
             offers = _rows(env, ConsumerScreen.MARKETPLACE)

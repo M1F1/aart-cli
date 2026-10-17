@@ -89,9 +89,7 @@ class ConfiguredRepairActionTest(unittest.TestCase):
         assert isinstance(completed, Ok), completed
 
     def _installed(self, env) -> None:
-        code, payload = env.run(
-            "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
         self.assertTrue(_delivered(env).exists())
 

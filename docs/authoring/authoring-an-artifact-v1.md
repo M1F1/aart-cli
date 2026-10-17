@@ -27,7 +27,7 @@ ignore them as usual; they are never part of the Source. Outside Git, the whole 
 
 `aart-cli author check` reads the directory the way a Source Sync reads one and puts every `aart-cli.yaml`
 and `aart-cli.json` it finds through the parser *and* the compiler a Registry uses. A manifest that
-passes here parses and compiles to the package `aart-cli registry scan` would accept, and the check
+passes here parses and compiles to the package `aart-cli maintain upstream scan` would accept, and the check
 prints the coordinate it compiled to:
 
 ```
@@ -42,7 +42,7 @@ CP-26.20a now provides the local command and its direct MCP, OpenCode CLI, and C
 final Tabnine CLI acceptance remains pending. Before publishing a new MCP to a public remote
 Registry, the recommended workflow is: commit its canonical package to a branch in your local
 Registry repository, add that local repo and branch as a Registry under its own alias, install the
-artifact through the normal Marketplace/CLI flow, then run `aart-cli mcp test`
+artifact through the normal Marketplace/CLI flow, then run `aart-cli consume mcp test`
 command for the intended harness installations, review all stage results, then publish the tested
 content. After changing and committing the content, synchronize that Registry, update the local
 installation and test again. No separate Candidate Test Install process or remote push is required.

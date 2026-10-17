@@ -378,11 +378,11 @@ class RegistryGatesAreCompleteTest(unittest.TestCase):
     def test_the_template_runs_every_registry_gate(self) -> None:
         template = TEMPLATE_TEXT
         for gate in (
-            "aart-cli registry format --source . --check",
-            "aart-cli registry validate --source .",
-            "aart-cli registry build --source . --check",
-            "aart-cli registry audit --source .",
-            "aart-cli registry test --source . --compatibility",
+            "aart-cli maintain registry format --source . --check",
+            "aart-cli maintain registry validate --source .",
+            "aart-cli maintain registry build --source . --check",
+            "aart-cli maintain registry audit --source .",
+            "aart-cli maintain registry test --source . --compatibility",
         ):
             self.assertIn(gate, template)
 
@@ -1230,7 +1230,7 @@ class TheWorkspaceIsTrustedBeforeTheGatesTest(unittest.TestCase):
             self.assertIn(_TRUST_STEP, body, label)
             self.assertLess(
                 body.index(_TRUST_STEP),
-                body.index("- run: aart-cli registry"),
+                body.index("- run: aart-cli maintain registry"),
                 f"{label}: a gate would read the checkout before git had been told to trust it",
             )
 

@@ -1,6 +1,6 @@
 """Canonical non-interactive lifecycle commands (LIFE02).
 
-These tests pin the agent-facing contract of ``aart-cli marketplace install/update/uninstall/status/
+These tests pin the agent-facing contract of ``aart-cli consume install/update/uninstall/status/
 setup``: JSON first, source-qualified coordinates, and an explicit Review/Finalize boundary that
 replaces the TUI's interactive confirmation instead of removing it.
 """
@@ -215,7 +215,7 @@ class LifecycleParserTests(unittest.TestCase):
         request = cli._to_request(
             cli.build_parser().parse_args(
                 [
-                    "marketplace",
+                    "consume",
                     "install",
                     "team/skill/code-review",
                     "--profile",
@@ -243,7 +243,7 @@ class LifecycleParserTests(unittest.TestCase):
         request = cli._to_request(
             cli.build_parser().parse_args(
                 [
-                    "marketplace",
+                    "consume",
                     "health",
                     "team/collection/starter",
                     "--environment",
@@ -272,7 +272,7 @@ class LifecycleParserTests(unittest.TestCase):
         request = cli._to_request(
             cli.build_parser().parse_args(
                 [
-                    "marketplace",
+                    "consume",
                     "setup",
                     "team/skill/code-review",
                     "--profile",
@@ -294,7 +294,7 @@ class LifecycleParserTests(unittest.TestCase):
     def test_setup_authorizations_default_to_denied(self) -> None:
         request = cli._to_request(
             cli.build_parser().parse_args(
-                ["marketplace", "install", "team/skill/code-review", "--profile", "claude"]
+                ["consume", "install", "team/skill/code-review", "--profile", "claude"]
             )
         )
 
@@ -311,7 +311,7 @@ class ReviewFinalizeBoundaryTests(unittest.TestCase):
 
         code, output = _run(
             [
-                "marketplace",
+                "consume",
                 "install",
                 "team/collection/starter",
                 "--profile",
@@ -328,7 +328,7 @@ class ReviewFinalizeBoundaryTests(unittest.TestCase):
         service = _StubService(review=_review(), outcome=_outcome())
 
         code, output = _run(
-            ["marketplace", "install", "team/skill/code-review", "--profile", "claude", "--json"],
+            ["consume", "install", "team/skill/code-review", "--profile", "claude", "--json"],
             service,
         )
 
@@ -346,7 +346,7 @@ class ReviewFinalizeBoundaryTests(unittest.TestCase):
 
         code, output = _run(
             [
-                "marketplace",
+                "consume",
                 "install",
                 "team/skill/code-review",
                 "--profile",
@@ -368,7 +368,7 @@ class ReviewFinalizeBoundaryTests(unittest.TestCase):
         service = _StubService(review=_review(), outcome=_outcome())
 
         _, output = _run(
-            ["marketplace", "install", "team/skill/code-review", "--profile", "claude"],
+            ["consume", "install", "team/skill/code-review", "--profile", "claude"],
             service,
         )
 
@@ -391,7 +391,7 @@ class ReviewFinalizeBoundaryTests(unittest.TestCase):
 
         code, output = _run(
             [
-                "marketplace",
+                "consume",
                 "install",
                 "team/skill/code-review",
                 "--profile",
@@ -424,7 +424,7 @@ class ReviewFinalizeBoundaryTests(unittest.TestCase):
 
         code, output = _run(
             [
-                "marketplace",
+                "consume",
                 "install",
                 "team/skill/code-review",
                 "--profile",
@@ -447,7 +447,7 @@ class ReviewFinalizeBoundaryTests(unittest.TestCase):
 
         code, output = _run(
             [
-                "marketplace",
+                "consume",
                 "install",
                 "team/skill/code-review",
                 "--profile",
@@ -470,7 +470,7 @@ class LifecycleRequestMappingTests(unittest.TestCase):
 
         _run(
             [
-                "marketplace",
+                "consume",
                 "update",
                 "team/skill/code-review",
                 "--profile",
@@ -498,7 +498,7 @@ class LifecycleRequestMappingTests(unittest.TestCase):
     def test_status_needs_no_coordinates(self) -> None:
         service = _StubService(review=_review("status"), outcome=_outcome("status"))
 
-        code, output = _run(["marketplace", "status", "--profile", "claude", "--json"], service)
+        code, output = _run(["consume", "status", "--profile", "claude", "--json"], service)
 
         self.assertEqual(code, 0)
         self.assertEqual(service.prepared_requests[0].coordinates, ())
@@ -507,7 +507,7 @@ class LifecycleRequestMappingTests(unittest.TestCase):
     def test_update_without_coordinates_targets_recorded_installations(self) -> None:
         service = _StubService(review=_review("update"), outcome=_outcome("update"))
 
-        code, output = _run(["marketplace", "update", "--profile", "claude", "--json"], service)
+        code, output = _run(["consume", "update", "--profile", "claude", "--json"], service)
 
         self.assertEqual(code, 0)
         self.assertEqual(service.prepared_requests[0].action, "update")
@@ -517,7 +517,7 @@ class LifecycleRequestMappingTests(unittest.TestCase):
     def test_install_requires_at_least_one_coordinate(self) -> None:
         service = _StubService(review=_review(), outcome=_outcome())
 
-        code, output = _run(["marketplace", "install", "--profile", "claude", "--json"], service)
+        code, output = _run(["consume", "install", "--profile", "claude", "--json"], service)
 
         self.assertEqual(code, 1)
         self.assertEqual(service.calls, [])
@@ -526,7 +526,7 @@ class LifecycleRequestMappingTests(unittest.TestCase):
     def test_install_requires_at_least_one_profile(self) -> None:
         service = _StubService(review=_review(), outcome=_outcome())
 
-        code, output = _run(["marketplace", "install", "team/skill/code-review", "--json"], service)
+        code, output = _run(["consume", "install", "team/skill/code-review", "--json"], service)
 
         self.assertEqual(code, 1)
         self.assertEqual(service.calls, [])
@@ -536,7 +536,7 @@ class LifecycleRequestMappingTests(unittest.TestCase):
         service = _StubService(review=_review(), outcome=_outcome())
 
         code, output = _run(
-            ["marketplace", "install", "not-a-coordinate", "--profile", "claude", "--json"],
+            ["consume", "install", "not-a-coordinate", "--profile", "claude", "--json"],
             service,
         )
 
@@ -573,7 +573,7 @@ class SetupAuthorizationTests(unittest.TestCase):
 
                 code, output = _run(
                     [
-                        "marketplace",
+                        "consume",
                         action,
                         *names,
                         "--profile",
@@ -595,7 +595,7 @@ class SetupAuthorizationTests(unittest.TestCase):
 
         _run(
             [
-                "marketplace",
+                "consume",
                 "setup",
                 "team/skill/code-review",
                 "--profile",
@@ -613,7 +613,7 @@ class SetupAuthorizationTests(unittest.TestCase):
 
         _run(
             [
-                "marketplace",
+                "consume",
                 "setup",
                 "team/skill/code-review",
                 "--profile",
@@ -644,7 +644,7 @@ class SetupAuthorizationTests(unittest.TestCase):
         )
 
         code, output = _run(
-            ["marketplace", "setup", "team/skill/code-review", "--profile", "claude", "--json"],
+            ["consume", "setup", "team/skill/code-review", "--profile", "claude", "--json"],
             service,
         )
 
@@ -658,7 +658,7 @@ class SetupAuthorizationTests(unittest.TestCase):
         service = _StubService(review=_review(), outcome=_outcome())
 
         code, _output = _run(
-            ["marketplace", "setup", "team/skill/code-review", "--profile", "claude", "--json"],
+            ["consume", "setup", "team/skill/code-review", "--profile", "claude", "--json"],
             service,
         )
 
@@ -688,7 +688,7 @@ class ConfigurationGateTests(unittest.TestCase):
         ):
             code = cli.main(
                 [
-                    "marketplace",
+                    "consume",
                     "install",
                     "team/skill/code-review",
                     "--profile",

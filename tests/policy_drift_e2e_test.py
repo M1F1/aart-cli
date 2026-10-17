@@ -6,7 +6,7 @@ remediation decision rather than a silent mutation of installed state. 165.23 sa
 installations are clearly marked and that their nature keeps being surfaced afterwards.
 
 Both are answered by the same fact about one installation, which is why they are measured together:
-what a machine's policy says about the trust an artifact is installed at. `aart-cli marketplace install`
+what a machine's policy says about the trust an artifact is installed at. `aart-cli consume install`
 already refuses a user-scope install below `minimum_trust_for_user_scope`; the question this file
 asks is what happens to the one that got in before the rule existed, and whether anyone is ever told
 that its source was a mutable local directory rather than a reviewed registry.
@@ -38,7 +38,7 @@ _STRICT: dict[str, object] = {
     "minimum_trust_for_user_scope": "registry-reviewed",
 }
 _INSTALL = (
-    "marketplace",
+    "consume",
     "install",
     _COORDINATE,
     "--profile",
@@ -47,7 +47,7 @@ _INSTALL = (
     "user",
     "--yes",
 )
-_STATUS = ("marketplace", "status", "--scope", "user", "--profile", "claude")
+_STATUS = ("consume", "status", "--scope", "user", "--profile", "claude")
 
 
 @contextmanager
@@ -230,7 +230,7 @@ class DevelopmentInstallVisibilityTest(unittest.TestCase):
                 code, payload = env.run(*_INSTALL)
                 self.assertEqual(code, 0, payload)
             _withdraw(location)
-            synced, report = _source_json(env, "source", "sync")
+            synced, report = _source_json(env, "maintain", "upstream", "sync")
             self.assertEqual(synced, 0, report)
             _write(policy, _STRICT)
 

@@ -199,7 +199,7 @@ def _marker_refusal(message: str, *, detail: str | None = None) -> Diagnostic:
         Severity.ERROR,
         stated if detail is None else f"{stated}: {detail}",
         remediation=(
-            "in the registry, run `aart-cli registry validate` there before republishing",
+            "in the registry, run `aart-cli maintain registry validate` there before republishing",
             f"or remove {_REGISTRY_MARKER} if this source is not a registry",
         ),
     )
@@ -235,7 +235,7 @@ def _identity_disagreement(request: SourceValidationRequest) -> Diagnostic | Non
         remediation=(
             f"in the registry, make source_id in {_SOURCE_MARKER} equal registry_id in "
             f"{_REGISTRY_MARKER}",
-            "then re-run `aart-cli registry validate` there before republishing",
+            "then re-run `aart-cli maintain registry validate` there before republishing",
         ),
     )
 

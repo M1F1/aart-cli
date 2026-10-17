@@ -98,7 +98,7 @@ class ConfigurationApplicationTest(unittest.TestCase):
         self.assertIsInstance(result, Err)
         assert isinstance(result, Err)
         self.assertEqual(result.diagnostics[0].code.value, "no-source-configured")
-        self.assertIn("Sources stage", "\n".join(result.diagnostics[0].remediation))
+        self.assertIn("Registries view", "\n".join(result.diagnostics[0].remediation))
 
     def test_policy_recommendations_shape_first_run_without_forcing_registry(self) -> None:
         paths = _paths()

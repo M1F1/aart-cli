@@ -25,22 +25,22 @@ set repository variables — no file in the registry changes. See
 
 ```sh
 # Create a registry
-aart-cli registry init --source . --source-id company --display-name "Company Registry"
-aart-cli registry init --source . --source-id company --display-name "Company Registry" --yes
+aart-cli maintain registry init --source . --source-id company --display-name "Company Registry"
+aart-cli maintain registry init --source . --source-id company --display-name "Company Registry" --yes
 
 # Author in a separate Source checkout, then scan and promote its reviewed Candidate
-aart-cli registry scan --help
-aart-cli registry promote --help
+aart-cli maintain upstream scan --help
+aart-cli maintain candidate promote --help
 
 # Or adopt artifacts from a repository's manifests without subscribing to it
-aart-cli registry adopt --source . --url https://github.com/acme/prompts.git --ref main
+aart-cli maintain upstream adopt --source . --url https://github.com/acme/prompts.git --ref main
 
 # Review, then finalize lock + build + validate + audit + one commit
-aart-cli registry publish --source .
-aart-cli registry publish --source . --yes
+aart-cli maintain registry publish --source .
+aart-cli maintain registry publish --source . --yes
 
 # Push the commit to a review branch, then open a pull request
-aart-cli registry push --source . --branch add-code-review
+aart-cli maintain registry push --source . --branch add-code-review
 ```
 
 For the complete path, use the [walked company-registry tutorial for Tabnine](../tutorials/company-registry-tabnine-v1.md).
@@ -58,8 +58,8 @@ artifact is an `aart-cli.yaml` (or `aart-cli.json`) beside its payload in an aut
 reads one Git URL and ref without subscribing to it:
 
 ```sh
-aart-cli registry adopt --source . --url https://github.com/acme/prompts.git --ref main
-aart-cli registry adopt --source . --url https://github.com/acme/prompts.git --ref main --artifact skill/code-review@1.0.0 --yes
+aart-cli maintain upstream adopt --source . --url https://github.com/acme/prompts.git --ref main
+aart-cli maintain upstream adopt --source . --url https://github.com/acme/prompts.git --ref main --artifact skill/code-review@1.0.0 --yes
 ```
 
 The first run only reports what the manifests compile to. The second writes the reviewed Registry
@@ -86,8 +86,8 @@ artifacts it installs together, each pinned at an exact approved version. Create
 `registry collection`, or from the Maintainer TUI's Collections view:
 
 ```sh
-aart-cli registry collection starter --source . --summary "Review and lint." --include skill/code-review --include skill/lint-review
-aart-cli registry collection starter --source . --summary "Review and lint." --include skill/code-review --include skill/lint-review --yes
+aart-cli maintain registry collection starter --source . --summary "Review and lint." --include skill/code-review --include skill/lint-review
+aart-cli maintain registry collection starter --source . --summary "Review and lint." --include skill/code-review --include skill/lint-review --yes
 ```
 
 Each `--include` names an artifact this Registry approved, and pins its highest approved version.

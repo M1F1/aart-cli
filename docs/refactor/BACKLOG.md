@@ -4666,3 +4666,11 @@ A replacement adopts an `mcp` manifest and audits the result; not needed for §1
 The Candidate model carries a rejection reason and the Maintainer TUI shows it, but no CLI command
 rejects a Candidate. CP-32 (D-439) gives Candidates their own noun; a `reject` action with a reason
 belongs there once it is wanted. Not required by §175.
+
+## B-201 — `consume registry sync` naming the installed artifacts it makes updatable
+
+§175.2 has `consume registry sync` point at `consume update`, whose review lists what a newer
+approved version would replace. Naming those artifacts in `sync`'s own output needs an installed
+versus offered comparison the consumer path does not compute today: `InstalledInspection
+.update_available` is never set to true anywhere, so the Installed view's Update health is also
+unreachable. Not required by §175; it is the same comparison both would read.

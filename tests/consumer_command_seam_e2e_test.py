@@ -40,11 +40,11 @@ class DurableStatusTest(unittest.TestCase):
     def test_a_later_invocation_names_what_an_earlier_one_installed(self) -> None:
         with _environment() as env:
             installed, _ = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(installed, 0)
 
-            code, payload = env.run("marketplace", "status", "--profile", "claude")
+            code, payload = env.run("consume", "status", "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertEqual([item["status"] for item in payload["items"]], ["current"])
@@ -57,10 +57,10 @@ class DurableStatusTest(unittest.TestCase):
         """Without this the test above would pass over a `status` that always says "current"."""
 
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
-            env.run("marketplace", "uninstall", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "uninstall", _COORDINATE, "--profile", "claude", "--yes")
 
-            code, payload = env.run("marketplace", "status", "--profile", "claude")
+            code, payload = env.run("consume", "status", "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertEqual(payload["items"], [])
@@ -69,7 +69,7 @@ class DurableStatusTest(unittest.TestCase):
         self,
     ) -> None:
         with _environment() as env:
-            code, payload = env.run("marketplace", "status", "--profile", "claude")
+            code, payload = env.run("consume", "status", "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["ok"])
@@ -81,15 +81,15 @@ class MachineOutputTest(unittest.TestCase):
 
     def test_every_seam_answers_in_the_same_envelope(self) -> None:
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
             payloads = {
                 "install": env.run(
-                    "marketplace", "install", _COORDINATE, "--profile", "claude", "--force", "--yes"
+                    "consume", "install", _COORDINATE, "--profile", "claude", "--force", "--yes"
                 )[1],
-                "update": env.run("marketplace", "update", "--profile", "claude", "--yes")[1],
-                "status": env.run("marketplace", "status", "--profile", "claude")[1],
+                "update": env.run("consume", "update", "--profile", "claude", "--yes")[1],
+                "status": env.run("consume", "status", "--profile", "claude")[1],
                 "uninstall": env.run(
-                    "marketplace", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
+                    "consume", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
                 )[1],
             }
 
@@ -105,7 +105,7 @@ class MachineOutputTest(unittest.TestCase):
 
         with _environment() as env:
             code, payload = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -118,7 +118,7 @@ class MachineOutputTest(unittest.TestCase):
         """The review body, not merely its digest: a digest nobody can read is not a review."""
 
         with _environment() as env:
-            code, payload = env.run("marketplace", "install", _COORDINATE, "--profile", "claude")
+            code, payload = env.run("consume", "install", _COORDINATE, "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertIn("review", payload)
@@ -129,7 +129,7 @@ class MachineOutputTest(unittest.TestCase):
     def test_a_refusal_is_reported_in_the_envelope_rather_than_as_a_crash(self) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace", "install", "reference/skill/nothing-here", "--profile", "claude"
+                "consume", "install", "reference/skill/nothing-here", "--profile", "claude"
             )
 
             self.assertNotEqual(code, 0)
@@ -143,16 +143,16 @@ class OnePlanTwoRenderingsTest(unittest.TestCase):
 
     def test_the_text_review_and_the_json_review_carry_one_digest(self) -> None:
         with _environment() as env:
-            _, payload = env.run("marketplace", "install", _COORDINATE, "--profile", "claude")
-            code, text = env.run_text("marketplace", "install", _COORDINATE, "--profile", "claude")
+            _, payload = env.run("consume", "install", _COORDINATE, "--profile", "claude")
+            code, text = env.run_text("consume", "install", _COORDINATE, "--profile", "claude")
 
             self.assertEqual(code, 0, text)
             self.assertIn(payload["review_digest"], text)
 
     def test_neither_rendering_finalizes_without_yes(self) -> None:
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude")
-            env.run_text("marketplace", "install", _COORDINATE, "--profile", "claude")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude")
+            env.run_text("consume", "install", _COORDINATE, "--profile", "claude")
 
             self.assertEqual(list(env.project.iterdir()), [], "a review must write nothing")
 
@@ -162,7 +162,7 @@ class FailClosedReviewTest(unittest.TestCase):
 
     def test_a_review_is_not_finalized_and_leaves_no_installation_record(self) -> None:
         with _environment() as env:
-            code, payload = env.run("marketplace", "install", _COORDINATE, "--profile", "claude")
+            code, payload = env.run("consume", "install", _COORDINATE, "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertFalse(payload["finalized"], payload)
@@ -172,10 +172,10 @@ class FailClosedReviewTest(unittest.TestCase):
         """Consent travels between two commands as a digest, so it has to be in the payload."""
 
         with _environment() as env:
-            _, review = env.run("marketplace", "install", _COORDINATE, "--profile", "claude")
+            _, review = env.run("consume", "install", _COORDINATE, "--profile", "claude")
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 _COORDINATE,
                 "--profile",

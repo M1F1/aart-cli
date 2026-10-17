@@ -456,6 +456,9 @@ class Request:
     reset_restore: Optional[str] = None
     # Canonical configured-source command surface.
     source_action: Optional[str] = None
+    # Which connection family a `source` handler serves: "registry" (`consume registry`) or
+    # "upstream" (`maintain upstream`). Each sees only its own entries (§175.2, INV-269).
+    source_family: Optional[str] = None
     source_alias: Optional[str] = None
     source_kind: Optional[str] = None
     source_location: Optional[str] = None
