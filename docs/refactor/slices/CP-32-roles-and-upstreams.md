@@ -30,6 +30,8 @@ See `docs/refactor/plan.json`, epic CP-32.
 7. Remove `source`, `marketplace`, top-level `registry` and the four kinds.
 8. TUI names and hints.
 12. TUI Author Mode (§175.5, D-441).
+13. Marketplace details under More info; remove its standalone Artifact Details view (§175.6).
+14. Named Marketplace columns with complete values at narrow widths (§175.6).
 9. Documentation.
 11. `reset` backs up and restores (§175.4, D-440); runs before the PR.
 10. Full verification and the PR.
@@ -216,3 +218,14 @@ TESTS="tests/wizard_render_test.py tests/wizard_state_test.py"` initially found 
 explicit reruns of its three mutants timed out (476 killed, 157 survived, 3 timeouts), so its
 claim was additionally checked by the direct targeted mutation above. Other wizard survivors
 are outside this naming slice and recorded in B-207.
+
+
+## Owner addition — Marketplace details and complete labeled columns
+
+Accepted during step 12 (2026-10-17, D-446). §175.6 and INV-273/274 are added, with steps
+13 and 14 after Author Mode and before documentation/final verification. No implementation is
+claimed yet. Step 13 must characterize every detail the old Marketplace Artifact Details view
+shows before removing that route; More info retains the focused offer and browsing state. Step
+14 needs generated-width layout properties that preserve complete headings and values, alongside
+focused real-shell cases for readable rows and cursor behavior. Existing column truncation may
+remain on other screens; this acceptance change is specifically Marketplace.

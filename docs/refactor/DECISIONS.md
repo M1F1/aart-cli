@@ -11072,3 +11072,14 @@ family. The first-use consumer wizard names its connection stage Registries. Scr
 filters out both upstream kinds; its composed-shell acceptance tests remain the evidence for that
 boundary. No configuration, navigation graph, subscription identity or stored Candidate schema
 changes in this step.
+
+
+## D-446 — Marketplace owns artifact details and never truncates its columns (CP-32, owner decision)
+
+The owner requested on 2026-10-17, during step 12, that Marketplace's separate Artifact Details
+view be removed and all of its information be available through Verbose / More info in
+Marketplace. Marketplace columns must be labeled and must not be cut off when space is tight.
+§175.6 and INV-273/274 record the accepted change; CP-32 steps 13 and 14 implement it before
+documentation and final verification. The existing disclosure control remains the one place
+for details; narrow rows wrap or stack labeled fields. Collection previews and Installed details
+are outside this removal.

@@ -11398,3 +11398,30 @@ authoring is under `consume`, `maintain` or `author`; each noun means one thing 
 
 **INV-271 — A reset never destroys state.** `aart-cli reset` moves AART-owned state into a backup
 it names and can restore; it removes nothing.
+
+
+## 175.6 Marketplace holds artifact details and readable columns
+
+Accepted 2026-10-17, on the owner's request (D-446). This narrows §161's standalone Artifact
+Details screen and extends §173.8.
+
+- **Details stay in Marketplace.** The separate Marketplace Artifact Details screen is removed.
+  Every piece of information it provided is available for the artifact under the cursor through
+  Marketplace's existing Verbose / More info control. This includes its artifact contract and
+  input guidance, not only the short description. Browsing these details keeps the selection,
+  search, cursor and install route in Marketplace. Collection preview and Installed details keep
+  their own purposes.
+- **Columns have headings.** Each Marketplace column has a visible heading identifying its
+  meaning, including status, scope, harnesses and unset inputs (§173.8). Headings and cells use
+  the same layout.
+- **Narrow terminals keep the content.** A narrow Marketplace never ellipsizes or drops a
+  heading or a cell value to make the columns fit. It wraps content into additional lines, or
+  stacks labeled fields where columns would be unreadable. Row boundaries and the focused
+  artifact remain clear; nothing requires opening another view to recover a truncated cell.
+
+**INV-273 — Marketplace details stay with the offer.** Everything the retired Artifact Details
+screen showed is available under More info on the focused Marketplace artifact, without losing
+Marketplace state or introducing another details screen.
+
+**INV-274 — Marketplace columns remain named and complete.** Every Marketplace field has a
+visible heading or label, and narrowing the terminal never truncates its heading or value.

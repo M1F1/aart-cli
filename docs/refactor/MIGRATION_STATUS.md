@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-32 scope extended (D-446): Marketplace details and readable columns.**
+The owner removed Marketplace's separate Artifact Details view in favor of More info, and
+requires labeled columns whose complete values remain visible at narrow widths. §175.6 and
+INV-273/274 are accepted; steps 13 and 14 are planned after Author Mode and before the docs
+and final verification. Implementation remains open.
+
 **2026-10-17, CP-32 step 8 (D-445): TUI role names.** Maintainer areas are Upstream
 repositories, Candidates and Registry; upstream forms, sync, Candidate columns and connection
 reviews use the role vocabulary. Consumer empty states and the wizard name Registries, and
