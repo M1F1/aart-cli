@@ -17,7 +17,7 @@ your own registry id; keep the profile.
 
 **What AART does with Git**
 
-Maintainer mutations stop after writing reviewed files. The explicit `registry publish --yes`
+Maintainer mutations stop after writing reviewed files. The explicit `maintain registry publish --yes`
 workflow is the one exception: it runs the publisher gates and creates the listed commit. It never
 pushes. AART also never handles credentials: it runs system Git, so if `git clone` works at your
 prompt, AART works, and if it does not, fix it in Git.
@@ -143,7 +143,7 @@ aart-cli maintain registry collection platform-baseline --source . \
   --include guideline/branch-conventions --yes
 ```
 
-Collections are compiled into the index. `registry lock` validates their selectors before it writes
+Collections are compiled into the index. `maintain registry lock` validates their selectors before it writes
 the lock, so a malformed or hand-written collection is rejected at the first publishing step. A
 consumer can then install the baseline in one command:
 
@@ -152,9 +152,9 @@ aart-cli consume install company/collection/platform-baseline --profile tabnine 
 ```
 ## 4. Write an artifact of your own
 
-Author new material in a separate Source checkout. Add an explicit `aart-cli.yaml` or `aart-cli.json` beside
-the payload, following the [native Source contract](../protocol/native-source-v1.md) and the
-[example MCP Source](../examples/author-source/example-mcp/aart-cli.yaml), then commit the checkout.
+Author new material in a separate upstream checkout. Add an explicit `aart-cli.yaml` or `aart-cli.json` beside
+the payload, following the [native Upstream contract](../protocol/native-source-v1.md) and the
+[example MCP upstream](../examples/author-source/example-mcp/aart-cli.yaml), then commit the checkout.
 From the Registry checkout, scan that exact revision and promote the reviewed Candidate:
 
 ```sh
@@ -162,7 +162,7 @@ aart-cli maintain upstream scan --help
 aart-cli maintain candidate promote --help
 ```
 
-`scan` never changes the Registry. `promote` re-observes the clean pinned Source checkout and writes
+`scan` never changes the Registry. `promote` re-observes the clean pinned upstream checkout and writes
 only the exact Candidate and evidence reviewed by the maintainer. The Registry stores the compiled
 canonical package; it is not the artifact's authoring workspace.
 
@@ -197,7 +197,7 @@ already-clean registry reports that there is nothing to commit.
 
 ## 6. Check it before anyone else sees it
 
-`registry publish` already runs strict compiled validation and the audit before committing. CI
+`maintain registry publish` already runs strict compiled validation and the audit before committing. CI
 should independently verify what history contains:
 
 ```sh
@@ -237,10 +237,10 @@ aart-cli consume registry add \
 ```
 
 ```text
-source added: company; snapshot published; default=yes
+registry added: company; snapshot published; default=yes
 ```
 
-`source add` clones, compiles and validates the whole snapshot before it saves anything, so a broken
+`consume registry add` clones, compiles and validates the whole snapshot before it saves anything, so a broken
 registry fails here rather than halfway through an install.
 
 ```sh
@@ -248,7 +248,7 @@ aart-cli consume list
 ```
 
 ```text
-source company [healthy] registry-git https://ghe.company.example/platform/agent-registry.git
+registry company [healthy] git https://ghe.company.example/platform/agent-registry.git
 company/guideline/branch-conventions@1.0.0 [healthy] How we name and merge branches. origin=https://ghe.company.example/platform/shared-tools.git@3706c2a…:packages/branch-conventions
 company/skill/release-evidence@1.0.0 [healthy] Evidence checklist for a release. origin=https://ghe.company.example/platform/shared-tools.git@3706c2a…:packages/release-evidence
 ```
@@ -268,7 +268,7 @@ Review consumer action
   Scope: project
   Requested mode: copy
   Review digest: sha256:1ea04e2e…
-  Source freshness: company is healthy; origin matched; snapshot published 7s ago
+  Registry freshness: company is healthy; origin matched; snapshot published 7s ago
   - company/skill/release-evidence@1.0.0#tabnine/project
     trust/security: local; unknown (not-scanned)
     digests: manifest=sha256:cf9ac726…; object=sha256:6a944c55…
@@ -331,8 +331,8 @@ aart-cli consume registry sync --alias company                # refresh the snap
 aart-cli consume uninstall company/skill/release-evidence --profile tabnine --yes
 ```
 
-`list` and `status` never fetch. The snapshot only moves when someone runs `source sync` or
-`update`, so a colleague's environment cannot change under them because a maintainer pushed.
+`list` and `status` never fetch. The snapshot only moves when someone runs `consume registry sync`; `consume update`
+changes installed artifacts using that snapshot, so a colleague's environment cannot change under them because a maintainer pushed.
 
 Uninstall removes what it installed and nothing else — walked: after uninstalling the skill,
 `.tabnine/agent/skills/release-evidence/` is gone and `.tabnine/guidelines/branch-conventions.md`,
@@ -342,11 +342,11 @@ installed separately, is untouched.
 
 ## What was verified, and how
 
-Every command in sections 1–8 was executed against a wheel built from this repository and installed
-into a throwaway virtual environment, with a sandboxed `HOME`, on `2026-08-16`. The registry, the
-consumer project and the upstream repository were real Git repositories; nothing was faked,
-patched, or mocked. Sections 3 and 7 describe `registry adopt` and `registry check-upstream`,
-which replaced the walked vendoring commands; their output is not quoted here.
+The original walkthrough was executed against a wheel in a disposable virtual environment on
+2026-08-16, using real local Git repositories. Commands and role names were updated for CP-32 on
+2026-10-17 and checked against the current parser and focused repository tests. This update does
+not claim a new live run against your Enterprise host. Sections 3 and 7 now use
+`maintain upstream adopt` and `maintain upstream check` for manifest-based ingestion.
 
 Two things are **not** verified and are marked where they appear:
 

@@ -1,18 +1,22 @@
 # Tutorial: AART with a company registry
 
-A company registry adds reviewed discovery and policy while direct team/private sources remain
-possible when organization policy permits them.
+A company Registry offers approved versions and Collections. A consumer connects Registries;
+its maintainers connect the author teams' Upstream repositories.
 
-1. Install AART locally and open `aart`.
-2. Add the approved company registry URL in **Sources**. Mark it as the optional default registry if
-   your organization recommends that ranking; default never resolves an identity collision.
-3. Add any permitted team source separately. The marketplace keeps coordinates such as
-   `company/skill/review` and `team/skill/review`; select the qualified row when names collide.
-4. Review the locally derived trust class, registry review/provenance, digest-bound security
-   evidence, compatibility, setup capabilities, scope, mode, and destinations before Finalize.
-5. Preview any default-No redacted report offered separately to the registries that supplied the
-   selected artifacts. User or organization configuration may disable prompts or select one
-   central destination. Reporting failure never changes installation success.
+1. Install AART and open `aart-cli` in your project.
+2. In **Registries**, choose **Add Registry** and enter the approved Git URL and ref, or a local
+   committed Registry checkout. A default Registry never resolves an identity collision.
+3. Open **Marketplace**, search with `/`, and inspect the focused offer with `v` / More info.
+   Its complete details stay in Marketplace. Columns have headings and wrap; narrow windows
+   stack labeled fields. PgUp/PgDn scrolls short windows.
+4. Press `i` to install the focused offer, or mark several with Space first. A Collection opens
+   a member preview with Enter. Review harnesses, inputs, scope and the resulting plan, then confirm.
+5. Use **Installed** for recorded installations, **Updates** after Registry Sync, and the optional
+   **Test installed MCPs** action for its two-stage local smoke test. Unset inputs cannot pass.
+
+Enable Registry Maintainer Mode separately in Settings for **Upstream repositories**,
+**Candidates** and **Registry**. Author Mode is another independent opt-in for Workspace, Check
+and New artifact; it uses `aart-cli author` operations and does not connect an upstream itself.
 
 Maintainers work in an explicit writable registry checkout. Before a PR they run:
 
@@ -29,4 +33,5 @@ Pinned references record the upstream commit and digests without copying the pay
 resolve those packages from the upstream repository. Content enters only by adopting a manifest:
 an upstream that is not yet an AART package gets an `aart-cli.yaml` beside each artifact first
 ([maintaining a registry](../registry/maintaining-a-registry-v1.md#how-content-enters-a-registry)).
-AART never commits or pushes a maintainer checkout automatically.
+Ordinary maintenance stops after reviewed files. Explicit `maintain registry publish --yes`
+creates a local commit; explicit `maintain registry push` pushes only a reviewed non-default branch.

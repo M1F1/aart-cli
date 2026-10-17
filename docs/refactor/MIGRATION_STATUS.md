@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-32 step 9: documentation.** README, authoring/consumer/Registry guides
+and tutorials use the role commands and Registry-only consumer boundary, with Author Mode,
+reset/restore, inline details and complete columns. Forty-one role help routes, eight README/
+traceability contracts and docs-check pass. Broken-link mutation is detected. Next: step 10,
+CI tooling repairs and final PR verification; the full suite remains in CI.
+
 **2026-10-17, CP-32 step 14 (D-450): complete labeled Marketplace columns.** Grid
 cells wrap, narrow rows stack labeled fields, and bounded viewports scroll actions/More info
 with PgUp/PgDn while preserving headings and the footer. Resize and paging do not alter offers,

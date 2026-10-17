@@ -7,7 +7,7 @@ reviewed plan only; `--yes` finalizes that exact plan. `--json` changes only ren
 selection, consent, effects, or exit semantics.
 
 ```sh
-# Explicit source refresh
+# Explicit Registry refresh
 aart-cli consume registry sync --alias company --json
 
 # Review, then finalize
@@ -20,8 +20,8 @@ aart-cli consume update --profile claude --prune --yes --json
 aart-cli consume uninstall company/skill/code-review --profile claude --yes --json
 ```
 
-An empty `marketplace update` selects every installed artifact in the given profile and scope.
-After `source sync`, status distinguishes `current`, `update_available`, `removed_upstream`,
+An empty `consume update` selects every installed artifact in the given profile and scope.
+After `consume registry sync`, status distinguishes `current`, `update_available`, `removed_upstream`,
 `source_unavailable`, and `local_drift`. `--prune` removes only the reviewed items outside the
 authoritative selected set.
 
@@ -57,7 +57,15 @@ Each row in the TUI's Marketplace is the offer, then: `not installed`, `installe
 `update available`; where it is installed (`user`, `2 projects`, or `user + 2 projects`); the
 detected harnesses that can host it, with `✓` on each that holds it; and how many inputs are still
 `AART_NOT_SET`. Installed draws each installation on its own row, with its health, scope, project
-and unset inputs. More info adds the project's directory and the harness.
+and unset inputs. In Installed, More info adds the project's directory and harness.
+
+Marketplace labels its columns Artifact, Status, Scope, Harnesses and Unset. Long values wrap;
+narrow windows use the same labels as stacked fields. PgUp/PgDn scroll content in short windows
+while the headings and navigation footer remain. Arrows move between logical offers regardless
+of how many lines each occupies. `v` shows the focused offer's full provenance, security,
+compatibility, digests and declared input guidance in Marketplace; there is no separate Artifact
+Details screen. Search, cursor and marked offers stay intact. `i` installs marked offers, or the
+focused offer if none is marked. Enter on a Collection still opens its member preview.
 
 ### Default or Custom
 
@@ -65,7 +73,7 @@ After Install, the TUI asks for a path. **Default** takes the harnesses, the sco
 installer from Settings and goes straight to what still needs entering, or to Ready. With no
 harness chosen in Settings, it uses every detected harness that can host the artifact; when the
 chosen ones cannot host it, the harness choice is asked after all. **Custom** asks each choice in
-turn. `marketplace install` names its harnesses with `--profile`, so the CLI has no path choice.
+turn. `consume install` names its harnesses with `--profile`, so the CLI has no path choice.
 
 ## MCP setup and credentials
 
@@ -78,7 +86,7 @@ registry, state, JSON output, or logs. Registries may use safe placeholders such
 
 ### Checking installed MCPs
 
-`mcp test` is a read-only verification command for installations that already exist in one explicit
+`consume mcp test` is a read-only verification command for installations that already exist in one explicit
 scope, root and harness set. It does not install, update, repair, configure, synchronize or publish.
 
 To test one exact installed coordinate in this project and harness:
@@ -94,7 +102,10 @@ aart-cli consume mcp test --all --harness opencode,claude --scope user --json
 ```
 
 The report gives each installation two stages. `installation-configuration` checks that the
-receipt, launcher, configuration file and credential references are usable; when it does not pass,
+receipt, launcher, configuration file and credential references are usable. Missing credentials
+and ordinary or secret `AART_NOT_SET` placeholders yield `NOT CONFIGURED`, the CLI returns
+nonzero, and the server never starts. Providers that cannot be inspected remain `BLOCKED`.
+When installation configuration does not pass,
 `mcp-startup-and-protocol` is `NOT RUN`. `mcp-startup-and-protocol` starts the installed launcher,
 checks the protocol, and makes the one declared call. Its `PASS` does not prove the tool reached
 its external service. A missing declaration, credential or executable is visible and cannot produce
@@ -105,7 +116,7 @@ an aggregate pass. Reports do not retain configuration values, secrets or raw se
 When an install in the interactive application made at least one MCP installation, Success offers
 **Test installed MCPs**. Choosing it shows what will run first: each installation, its declared
 tool and arguments, and that the call reaches the configured service with that installation's
-credentials. Nothing runs until you confirm. The result is the same two stages as `mcp test`.
+credentials. Nothing runs until you confirm. The result is the same two stages as `consume mcp test`.
 Whatever it says, the install, its receipts and its success are unchanged. Declining the offer is a
 complete installation.
 
@@ -168,7 +179,7 @@ applied — so the review reads top to bottom in the order you will watch it hap
 A step whose receipt no longer matches the reviewed plan is reported and skipped, never forced. On
 partial success the record is written back as `rollback_incomplete`.
 
-All three are also reachable from `aart` with no arguments, under **Action → receipt**.
+All three are also reachable from `aart-cli` with no arguments, through **Activity** and its receipt details.
 
 ### One report for the whole machine
 
@@ -182,11 +193,11 @@ aart-cli doctor --json
 ```
 
 One run reports measured drift with the smallest policy-permitted repair plan for each item; offline
-readiness for every enabled source, as three separate answers — cached metadata, cached canonical
+readiness for every enabled Registry, as three separate answers — cached metadata, cached canonical
 payload, cached runtime dependencies — because `--offline` is one flag and those are three different
 reasons it can fail; any working copy an interrupted run left behind; the activity trail and what
 each entry can still undo; credential health and which installations depend on it; and the
-configuration this machine is ignoring, meaning disabled sources and fields your organization's
+configuration this machine is ignoring, meaning disabled Registry subscriptions and fields your organization's
 policy has locked.
 
 Repair follows the same review-then-confirm boundary as everything else, one artifact at a time:
@@ -206,11 +217,16 @@ repairs everything.
 What it cannot repair, it still reports: an artifact whose payload is missing or divergent is named
 with what is wrong, rather than being omitted because no repair for it exists.
 
-## Accepted smoke revision — implementation pending
+## Reset and restore
 
-D-365 revises the behavior above: harnesses without enforceable allowed tools receive direct MCP
-checks only; the excluded harness stage does not fail direct coverage. Eligible harnesses return
-a bounded English JSON assessment (`status`, `summary`, `possible_error`) within 120 seconds.
-The assessment is separate from protocol and service evidence. Default-off `--show-response` will
-permit bounded inspection of the server response in current output, without application persistence.
-These revised behaviors are specified in Product Specification §170 and still need implementation.
+Run `aart-cli reset` when local AART state is invalid, belongs to another version, or should be
+started over. Review the named paths and confirm `RESET AART`, or use `aart-cli reset --yes`.
+AART moves the state by rename into `<application-home>-backups/<UTC timestamp>/` and prints
+the backup directory. For the default home this is `~/.aart-cli-backups/…`; `AART_CLI_HOME`
+selects the corresponding home and sibling backup location. No secret values live in that home.
+
+`aart-cli reset --restore <backup-directory>` backs up the current state first, then moves the
+chosen backup back into the home. Restoring a state another version wrote is for running that
+version; this build does not migrate it. Projects, organization policy and harness files are
+untouched. Installed artifacts remain in their harnesses, but a fresh AART state no longer records
+them. Factory reset is separate from uninstalling artifacts.

@@ -50,7 +50,7 @@ minimum/latest compatibility checks. The workflow has read-only repository permi
 no commit or push step. [Rolling out AART on GitHub Enterprise Server](../ci/github-enterprise-rollout.md)
 lists the variables.
 
-Artifacts are authored in a separate Source checkout with an explicit `aart-cli.yaml` or `aart-cli.json`
+Artifacts are authored in a separate upstream checkout with an explicit `aart-cli.yaml` or `aart-cli.json`
 and payload. Commit that clean checkout, then use the Registry's Candidate workflow:
 
 ```console
@@ -62,7 +62,7 @@ aart-cli maintain candidate promote --help
 the selected Candidates, runs validation and the effective policy for each of them, and states each
 one's validation-report and effective-policy digests in its review. `--yes` writes the canonical
 package with that run as its promotion evidence. No evidence is supplied on the command line.
-The Registry stores that compiled package and provenance; it does not author the Source payload.
+The Registry stores that compiled package and provenance; it does not author the upstream payload.
 
 ## Lock, build, and audit
 

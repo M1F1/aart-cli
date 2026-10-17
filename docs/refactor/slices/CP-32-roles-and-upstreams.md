@@ -363,3 +363,20 @@ viewport overlap, or diagnostic/fallback wording. No test or gate was weakened.
 
 Final related verification: 1510 tests in 152 modules plus frame contracts pass, with the two
 pre-existing B-194 properties excluded. Ruff, mypy, tach and docs-check pass. Full suite stays in CI.
+
+
+## Step 9 — role, authoring and consumer documentation
+
+Done. README, consumer lifecycle, authoring, Registry guides and tutorials use the three role
+families and Upstream/Registry boundary. Author Mode, reset/restore, inline Marketplace details,
+complete columns and paging are documented. The former direct-source tutorial retains its link
+as a local Registry tutorial; it grants no direct upstream consumer route. The obsolete smoke
+proposal is removed in favor of the implemented two-stage/NOT CONFIGURED behavior. The Tabnine
+walkthrough distinguishes its historical live evidence from this command/documentation update.
+
+Verification: all 41 documented role routes accept `--help`; eight README/traceability contracts
+and docs-check pass. Existing INV-023 and INV-065 citations were corrected to current test names,
+and INV-269–274 now link to their implementation evidence. Targeted documentation mutation:
+replacing README's author-guide link with a nonexistent target makes docs-check fail with exactly
+one DOC002 at that link; restoring it passes. No product code changed, so mutmut is not applicable
+to this documentation step. Final CI remains open; its old tooling failures are step 10.
