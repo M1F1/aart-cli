@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-32 step 12 (D-448): Author Mode.** Its independent Settings opt-in adds
+Workspace, Check, full manifest diagnostics and New artifact, through the CLI's reader, checker
+and skeleton writer. Paths stay external/contained, files are never overwritten, and failed
+checks do not retain old green results. 1379 related tests and focused gates pass; projection
+mutation adequacy is 47/47. B-209 records a scoped mutmut cache pitfall and its verified workaround.
+Next: steps 13 and 14, Marketplace details under More info and complete labeled columns.
+
 **2026-10-17, CP-32 step 15 (D-447): unset inputs cannot pass MCP smoke.** A missing
 credential, secret placeholder or ordinary `AART_NOT_SET` yields NOT CONFIGURED and protocol
 NOT RUN. CLI JSON reports `ok: false` and returns nonzero; no server starts. Provider-side

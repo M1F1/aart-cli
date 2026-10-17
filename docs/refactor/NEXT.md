@@ -62,18 +62,16 @@ Registries (INV-269). Step 1 (the specification, with §175.4 reset-with-backup 
 (the configuration split, D-442) are done, and so are step 11, reset with backup (D-440), and steps 3, 4
 and 6, the `consume` / `maintain upstream` / `maintain registry` families (D-443). Step 5, `maintain candidate list`, is done too (B-202 for
 recording Candidates from the CLI). Step 7 is done: a consumer installs only from Registries (D-444; B-203–B-206 for what it
-exposed). Step 8 (TUI names, D-445) and the owner-reported smoke fix in step 15 (D-447) are done. Next are 12 (Author Mode), 13 (Marketplace details under More info), 14 (complete labeled Marketplace columns), 9 and 10.
+exposed). Step 8 (TUI names, D-445) and the owner-reported smoke fix in step 15 (D-447) are done. Step 12 (Author Mode, D-448) is done. Next are 13 (Marketplace details under More info), 14 (complete labeled Marketplace columns), 9 and 10.
 
-**Exact next task: CP-32 step 12 (§175.5, INV-272, D-441).** Add Author Mode, off by
-default and enabled in Settings independently of Registry Maintainer Mode. Remember one normalized
-absolute workspace outside the application home. Its Check and New artifact actions use the same
-manifest checker and skeleton writer as `aart-cli author`; report every manifest and let a person
-open full diagnostics. Re-run Check with one key. Author Mode never connects an upstream or changes
-a Registry. Existing seams: `authoring.check.check_author_manifests`,
-`authoring.skeleton.author_skeleton`, `io.author_workspace.read_author_workspace` /
-`write_author_skeleton`. Keep effects out of projections and the reducer. Tests first, a targeted
-mutation, focused gates, then `handoff-plan done CP-32.12` and commit. After it: 13 and 14 (§175.6, D-446), then 9 and CI on #78
-for step 10. See `slices/CP-32-roles-and-upstreams.md`.
+**Exact next task: CP-32 step 13 (§175.6, INV-273, D-446).** Remove the Marketplace's
+standalone Artifact Details screen and expose every detail it held under More info on the focused
+Marketplace artifact, preserving selection/search/cursor and the install route. Characterize the
+old disclosure before deleting its route. Then step 14: visible column headings and complete
+wrapped values, including narrow terminals (INV-274). Terminal drawing currently wraps at `width`
+and then clips to `width - 1`; correct that boundary as part of preserving full cell content.
+After 13/14: documentation (9) and CI on #78 (10). Full suite stays in CI. See
+`slices/CP-32-roles-and-upstreams.md`; B-209 explains fresh scoped mutation statistics.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).

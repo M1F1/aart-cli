@@ -1221,7 +1221,7 @@
         {
           "id": "12",
           "title": "TUI Author Mode (Settings toggle, off by default): Workspace, Check (author check per manifest) and New artifact (author init) on the same application code as aart-cli author (§175.5, INV-272)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "13",

@@ -15,6 +15,7 @@ from enum import Enum
 from itertools import groupby
 from typing import cast
 
+from aart_cli.application.author_views import normalized_workspace
 from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.configuration_files import configuration_value_problem
 from aart_cli.domain.credentials import (
@@ -281,7 +282,22 @@ class ConsumerScreen(str, Enum):
     RECEIPT_DETAILS = "27-receipt-details"
     SETTINGS = "28-settings"
     DOCTOR = "29-doctor"
+    AUTHOR = "60-author"
+    AUTHOR_WORKSPACE = "61-author-workspace"
+    AUTHOR_CHECK = "62-author-check"
+    AUTHOR_MANIFEST = "63-author-manifest"
+    AUTHOR_INIT = "64-new-artifact"
 
+
+AUTHOR_SCREENS = frozenset(
+    {
+        ConsumerScreen.AUTHOR,
+        ConsumerScreen.AUTHOR_WORKSPACE,
+        ConsumerScreen.AUTHOR_CHECK,
+        ConsumerScreen.AUTHOR_MANIFEST,
+        ConsumerScreen.AUTHOR_INIT,
+    }
+)
 
 ApplicationScreen = ConsumerScreen | MaintainerScreen
 
@@ -2571,6 +2587,15 @@ def _strings(data: dict[str, object], key: str) -> tuple[str, ...]:
 
 
 _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
+    ConsumerScreen.AUTHOR: (
+        ConsumerScreen.AUTHOR_WORKSPACE,
+        ConsumerScreen.AUTHOR_CHECK,
+        ConsumerScreen.AUTHOR_INIT,
+    ),
+    ConsumerScreen.AUTHOR_WORKSPACE: (ConsumerScreen.AUTHOR,),
+    ConsumerScreen.AUTHOR_INIT: (ConsumerScreen.AUTHOR_CHECK,),
+    ConsumerScreen.AUTHOR_CHECK: (ConsumerScreen.AUTHOR_MANIFEST,),
+    ConsumerScreen.AUTHOR_MANIFEST: (),
     ConsumerScreen.DASHBOARD: (
         ConsumerScreen.MARKETPLACE,
         ConsumerScreen.INSTALLED,
@@ -2741,7 +2766,7 @@ def keeps_focus(current: ApplicationScreen, target: ApplicationScreen) -> bool:
 
 
 def navigation_targets(
-    screen: ApplicationScreen, *, maintainer_mode: bool = False
+    screen: ApplicationScreen, *, maintainer_mode: bool = False, author_mode: bool = False
 ) -> tuple[ApplicationScreen, ...]:
     """Accepted forward routes, with the complete Maintainer surface behind its opt-in."""
 
@@ -2749,11 +2774,19 @@ def navigation_targets(
         maintainer_mode, bool
     ):
         raise ValueError("application navigation needs a screen and a mode boundary")
+    if not isinstance(author_mode, bool):
+        raise ValueError("Author Mode must be a boolean")
+    if screen in AUTHOR_SCREENS and not author_mode:
+        return ()
     if isinstance(screen, MaintainerScreen):
         return maintainer_navigation_targets(screen) if maintainer_mode else ()
     targets: tuple[ApplicationScreen, ...] = _NAVIGATION[screen]
-    if screen is ConsumerScreen.DASHBOARD and maintainer_mode:
-        return (*targets, MaintainerScreen.DASHBOARD)
+    if screen is ConsumerScreen.DASHBOARD:
+        return (
+            *targets,
+            *((MaintainerScreen.DASHBOARD,) if maintainer_mode else ()),
+            *((ConsumerScreen.AUTHOR,) if author_mode else ()),
+        )
     return targets
 
 
@@ -2935,6 +2968,8 @@ class ConsumerSettings:
     #: The harnesses the Default install path uses (§173.7). Empty means every detected harness
     #: that can host the artifact.
     default_harnesses: tuple[str, ...] = ()
+    author_mode: bool = False
+    author_workspace: str = ""
 
     def __post_init__(self) -> None:
         if (
@@ -2948,6 +2983,8 @@ class ConsumerSettings:
             or self.default_scope not in {"project", "user"}
             or not isinstance(self.show_updates, bool)
             or not isinstance(self.maintainer_mode, bool)
+            or not isinstance(self.author_mode, bool)
+            or not normalized_workspace(self.author_workspace)
             or self.python_installer not in set(_PYTHON_INSTALLERS)
         ):
             raise ValueError("consumer settings are invalid")
@@ -2979,6 +3016,8 @@ class ConsumerSettings:
             return replace(self, python_installer="uv" if self.python_installer == "pip" else "pip")
         if row == "maintainer-mode":
             return self.with_maintainer_mode(not self.maintainer_mode)
+        if row == "author-mode":
+            return replace(self, author_mode=not self.author_mode)
         harness = default_harness_from_row(row)
         if harness is not None:
             return replace(
@@ -3070,6 +3109,7 @@ SETTING_ROWS: tuple[str, ...] = (
     "python-installer",
     "show-updates",
     "maintainer-mode",
+    "author-mode",
 )
 
 #: Screen 28's rows for the Default path's harnesses, one per detected harness, each on or off.
@@ -3108,6 +3148,7 @@ def setting_rows(harnesses: tuple[str, ...]) -> tuple[str, ...]:
 
 
 SETTING_PURPOSE: dict[str, str] = {
+    "author-mode": "Show Workspace, Check and New artifact for your own Upstream repository.",
     "detail-level": "How much every screen says: Fast hides the per-row explanations, "
     "Verbose shows them.",
     "default-scope": "Where an install lands when nothing asks for somewhere else: "
@@ -3163,6 +3204,8 @@ def settings_to_data(view: ConsumerSettings) -> dict[str, object]:
         "show_updates": view.show_updates,
         "maintainer_mode": view.maintainer_mode,
         "default_harnesses": list(view.default_harnesses),
+        "author_mode": view.author_mode,
+        "author_workspace": view.author_workspace,
     }
 
 
@@ -3183,6 +3226,8 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
         "show_updates",
         "maintainer_mode",
         "default_harnesses",
+        "author_mode",
+        "author_workspace",
     }
     unknown = sorted(set(data) - known)
     if unknown:
@@ -3208,6 +3253,16 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
                 ),
             )
         )
+    author_mode = data.get("author_mode", False)
+    workspace = data.get("author_workspace", "")
+    if not isinstance(author_mode, bool) or not normalized_workspace(workspace):
+        return Err(
+            (
+                _settings_invalid(
+                    "stored Author Mode must be true or false and its workspace a normalized absolute path"
+                ),
+            )
+        )
     harnesses = data.get("default_harnesses", [])
     if (
         not isinstance(harnesses, list)
@@ -3223,6 +3278,8 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
             maintainer,
             cast(str, installer),
             tuple(harnesses),
+            author_mode,
+            cast(str, workspace),
         )
     )
 

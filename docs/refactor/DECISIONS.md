@@ -11103,3 +11103,28 @@ whose declared tool returns a valid non-error result may pass protocol regardles
 other tools or an external service would do. Installation and launcher behavior under §172 are
 unchanged. This defect is CP-32 step 15 on the critical path because without it the existing
 §170 missing-binding result is false; no additional authentication stage is introduced.
+
+
+## D-448 — Author Mode uses the existing author operations through an IO adapter (CP-32 step 12)
+
+Author Mode is an independent, persisted opt-in, off by default. It adds screens 60–64: Author,
+Workspace, Check, manifest diagnostics and New artifact. The existing consumer screen catalog
+contains these additive routes, but both navigation and UI state reject them with Author Mode off;
+Registry Maintainer Mode grants no author authority. Settings stores only the normalized external
+workspace path and mode, not artifact configuration.
+
+`io/author_operations.py` calls the CLI's `read_author_workspace`, `check_author_manifests`,
+`author_skeleton` and `write_author_skeleton`. No rule is reimplemented. Workspace and creation
+destinations are normalized at that IO boundary; a destination stays inside its workspace and
+outside the application home, including symlink resolution and a workspace that contains the home.
+The pure reducer and projections retain no filesystem, terminal or subprocess effects.
+
+Check reads only on request and holds an immutable report for drawing; rerun is one key. A failed
+rerun clears an older report. New artifact creates only absent files through the shared writer,
+checks the workspace, and focuses the newly written manifest even when an earlier one exists.
+If writing succeeded and checking then refuses, the UI says the template was written and gives
+the check refusal; it never says that nothing changed. No subscription or Registry operation runs.
+
+Manifest details keep every error code and message. Recovery uses `Diagnostic.interactive`, or
+command-free remediation with an author-area fallback, honoring the existing no-CLI-in-frames
+contract without changing CLI/JSON diagnostics. Multiline errors become valid terminal lines.

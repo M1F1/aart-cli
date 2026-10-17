@@ -4755,3 +4755,18 @@ and recovery words (`_59`, `_81`, `_89`) preserve this slice's semantic claims.
 Review these on the corresponding next change; this result does not reclassify those independent
 behaviors onto CP-32's active slice. The new classification and no-start claims have dedicated
 red/green, property and targeted-mutation evidence in the slice.
+
+
+## B-209 — Scoped mutmut retargeting can retain another scope's call statistics
+
+Observed during CP-32 step 12: after mutating `io/author_operations.py`, a run scoped to
+`application/author_views.py` produced 47 “no tests” results despite direct projection tests.
+`mutants/mutmut-stats.json` retained the earlier scope's call mapping. A copied uninstrumented
+module can also be classified unmodified from its mtime when the scope changes.
+
+The verified local workaround was to remove only the selected module's generated file, `.meta`
+and `.spans`, plus the generated `mutmut-stats.json`, then rerun the scoped command. The same
+projection scope then killed 44/47; mutation-derived tests for uppercase workspace paths and
+command-free recovery killed the remaining three, yielding 47/47. Existing unrelated mutation
+results were not removed. Teach `scripts/mutants.py` to handle scope changes explicitly in a
+separate tooling slice; do not treat an unexplained “no tests” report as adequacy evidence.

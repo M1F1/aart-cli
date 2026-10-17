@@ -124,6 +124,7 @@ from aart_cli.application.maintainer_views import (
     project_source_sync_result,
     project_source_sync_review,
 )
+from aart_cli.authoring.check import AuthorCheckReport
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.configuration.schema import configured_source_from_input
@@ -167,6 +168,7 @@ from aart_cli.domain.selection import (
     OwnershipReason,
     VersionConstraint,
 )
+from aart_cli.io.author_operations import check_workspace, new_artifact, select_workspace
 from aart_cli.io.configured_configuration_action import (
     PreparedConfiguredConfiguration,
     complete_configured_configuration,
@@ -885,6 +887,7 @@ class LocalConsumerActions:
         self._promotion_result: CandidatePromotionExecutionResult | None = None
         self._mcp_test = mcp_test
         self._after_install: _AfterInstall | None = None
+        self._author_report: AuthorCheckReport | None = None
 
     def observe_progress(self, report: Callable[[RunningInstallationView], None] | None) -> None:
         """Take the screen's progress reporter for one execution, or give it back (None)."""
@@ -1096,6 +1099,7 @@ class LocalConsumerActions:
                 install_unhosted=self._unhosted,
                 mcp_test=mcp_test,
                 harnesses=self._context.host.profiles,
+                author_report=self._author_report,
             )
         )
 
@@ -1104,6 +1108,8 @@ class LocalConsumerActions:
     def handle(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         if not isinstance(command, ConsumerUiCommand) or command.action is None:
             raise ValueError("a consumer action handler needs a typed action command")
+        if command.kind is ConsumerUiCommandKind.RUN_AUTHOR:
+            return self._run_author(command)
         if command.kind is ConsumerUiCommandKind.PREPARE_ACTION:
             return self._prepare(command)
         if command.kind is ConsumerUiCommandKind.EXECUTE_ACTION:
@@ -1111,6 +1117,75 @@ class LocalConsumerActions:
         if command.kind is ConsumerUiCommandKind.ENTER_SECRET:
             return self._enter_secret(command)
         raise ValueError(f"{command.kind.value} is not a consumer action")
+
+    def _run_author(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        def failed(diagnostics: tuple[Diagnostic, ...]) -> ConsumerActionUpdate:
+            return ConsumerActionUpdate(
+                self.source(notice=_refusal(diagnostics)),
+                ConsumerUiEvent(ConsumerUiEventKind.ACTION_FAILED, action=command.action),
+            )
+
+        if not self.settings.author_mode or command.author_draft is None:
+            return ConsumerActionUpdate(
+                self.source(notice=("Enable Author Mode in Settings first.",)),
+                ConsumerUiEvent(ConsumerUiEventKind.ACTION_FAILED, action=command.action),
+            )
+        draft = command.author_draft
+        value = (
+            draft.workspace
+            if command.action is ConsumerActionKind.AUTHOR_WORKSPACE
+            else self.settings.author_workspace
+        )
+        selected = select_workspace(value, application_home=self._data_root)
+        if isinstance(selected, Err):
+            if command.action is ConsumerActionKind.AUTHOR_CHECK:
+                self._author_report = None
+            return failed(selected.diagnostics)
+        root = selected.value
+        if command.action is ConsumerActionKind.AUTHOR_WORKSPACE:
+            self.save_settings(replace(self.settings, author_workspace=root))
+            self._author_report = None
+            return ConsumerActionUpdate(
+                self.source(notice=("Author workspace saved.",)),
+                ConsumerUiEvent(
+                    ConsumerUiEventKind.ACTION_RECORDED, action=command.action, text=root
+                ),
+            )
+        focus = "checked"
+        if command.action is ConsumerActionKind.AUTHOR_INIT:
+            created = new_artifact(
+                root,
+                kind=draft.kind,
+                name=draft.name,
+                into=draft.into,
+                application_home=self._data_root,
+            )
+            if isinstance(created, Err):
+                return failed(created.diagnostics)
+            focus = created.value
+        elif command.action is not ConsumerActionKind.AUTHOR_CHECK:
+            raise ValueError("unknown author operation")
+        checked = check_workspace(root)
+        if isinstance(checked, Err):
+            self._author_report = None
+            if command.action is ConsumerActionKind.AUTHOR_INIT:
+                return ConsumerActionUpdate(
+                    self.source(
+                        notice=(
+                            f"Wrote {focus}. Check could not read the workspace:",
+                            *_refusal(checked.diagnostics),
+                        )
+                    ),
+                    ConsumerUiEvent(
+                        ConsumerUiEventKind.ACTION_RECORDED, action=command.action, text=focus
+                    ),
+                )
+            return failed(checked.diagnostics)
+        self._author_report = checked.value
+        return ConsumerActionUpdate(
+            self.source(),
+            ConsumerUiEvent(ConsumerUiEventKind.ACTION_RECORDED, action=command.action, text=focus),
+        )
 
     def discard_secrets(self) -> None:
         """Forget every value 07b took; the session left the screens that may hold one."""

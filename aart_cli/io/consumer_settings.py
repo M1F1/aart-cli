@@ -2,10 +2,12 @@
 
 A Settings screen whose choices vanish when the terminal closes is not a settings screen, and
 Registry Maintainer Mode in particular has to survive a restart to be an opt-in at all: it is the boundary
-that decides whether Sources, Candidates, Promotion and Publish are reachable.
+that decides whether Upstream repositories, Candidates and Registry are reachable. Author Mode
+has its own opt-in and remembers the author workspace.
 
 These are preferences, not machine state. Nothing here names an artifact, a registry, a credential
-or a path, so this file says nothing about what somebody has installed. It is read strictly --
+or installation owner. The author workspace is a path to external content, not artifact
+configuration, and this file says nothing about what somebody has installed. It is read strictly --
 a stored value AART cannot mean is refused rather than quietly replaced with a default, because
 falling back to Fast after somebody chose Verbose is the frontend deciding for them.
 """

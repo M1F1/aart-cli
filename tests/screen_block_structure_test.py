@@ -191,7 +191,7 @@ class MaintainerDashboardBlockTest(TestCase):
         )
         state = ConsumerUiState(
             ConsumerSession(MaintainerScreen.DASHBOARD),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab/registry",
         )
         state = replace(state, rows=source.rows(state), cursor=0)
@@ -220,7 +220,7 @@ class MaintainerDashboardBlockTest(TestCase):
         source = CanonicalScreenSource(screens())
         state = ConsumerUiState(
             ConsumerSession(MaintainerScreen.DASHBOARD),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
         )
 
         self.assertEqual(source.actions(state), ())
@@ -362,6 +362,7 @@ class SettingsBlockTest(TestCase):
                 "  Show available updates: on",
                 "Advanced",
                 "  Registry Maintainer Mode: on",
+                "  Author Mode: off",
             ),
         )
 
@@ -448,7 +449,7 @@ class RegistryMaintainerBlockTest(TestCase):
         source = CanonicalScreenSource(screens())
         state = ConsumerUiState(
             ConsumerSession(MaintainerScreen.REGISTRY),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab",
         )
         state = replace(state, rows=source.rows(state), cursor=0)
@@ -581,7 +582,7 @@ class MaintainerFormBlockTest(TestCase):
         source = CanonicalScreenSource(screens())
         state = ConsumerUiState(
             ConsumerSession(screen),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab",
         )
         state = replace(state, rows=source.rows(state), cursor=0)
@@ -669,7 +670,7 @@ class RebuildRegistryRowsTest(TestCase):
                 MaintainerScreen.REGISTRY_REBUILD,
                 profile=PresentationProfile.MORE_INFO if verbose else PresentationProfile.LESS_INFO,
             ),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab",
         )
         state = replace(state, rows=source.rows(state), cursor=cursor)
@@ -733,7 +734,7 @@ class ReviewScreenBlockTest(TestCase):
         source = CanonicalScreenSource(screens())
         state = ConsumerUiState(
             ConsumerSession(screen),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab",
             **changes,
         )
@@ -818,7 +819,7 @@ class EveryScreenBlockTest(TestCase):
                 continue
             state = ConsumerUiState(
                 ConsumerSession(screen),
-                settings=ConsumerSettings().with_maintainer_mode(True),
+                settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             )
             state = replace(state, rows=self.source.rows(state), cursor=0)
             if not state.rows:
@@ -842,7 +843,7 @@ class EveryScreenBlockTest(TestCase):
         for screen in (*ConsumerScreen, *MaintainerScreen):
             state = ConsumerUiState(
                 ConsumerSession(screen),
-                settings=ConsumerSettings().with_maintainer_mode(True),
+                settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             )
             state = replace(state, rows=self.source.rows(state), cursor=0)
             if state.rows:
@@ -885,7 +886,7 @@ class NoticeBlockTest(TestCase):
         )
         state = ConsumerUiState(
             ConsumerSession(screen),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab/registry",
         )
         state = replace(state, rows=source.rows(state), cursor=0)
@@ -951,7 +952,7 @@ class BulletedStatusTest(TestCase):
         source = CanonicalScreenSource(screens())
         state = ConsumerUiState(
             ConsumerSession(ConsumerScreen.SETTINGS),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab",
         )
         state = replace(state, rows=source.rows(state), cursor=0)
@@ -970,7 +971,7 @@ class BulletedStatusTest(TestCase):
         )
         state = ConsumerUiState(
             ConsumerSession(MaintainerScreen.DASHBOARD),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab",
         )
         state = replace(state, rows=source.rows(state), cursor=0)
@@ -1001,7 +1002,7 @@ class BulletedStatusTest(TestCase):
         for screen in (*ConsumerScreen, *MaintainerScreen):
             state = ConsumerUiState(
                 ConsumerSession(screen),
-                settings=ConsumerSettings().with_maintainer_mode(True),
+                settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
                 workspace="/lab",
             )
             state = replace(state, rows=source.rows(state), cursor=0)
