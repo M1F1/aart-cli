@@ -4,6 +4,11 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-32 step 10: full CI green, CP-32 done.** After the tooling repair, the full suite
+exposed a `pathlib` import in `application/author_views.py`, an Author-blind layout sweep and four
+tests holding pre-§175 wording; all are fixed. Run 39051724417 passes on 3.10, 3.11 and 3.14.
+Next: merge PR #78.
+
 **2026-10-17, CP-32 step 10 (D-451): CI tooling repaired.** The manual lab uses the role
 commands; the distribution smoke installs from a local Registry through the installed `consume`
 CLI and proves a copied delivery survives environment removal. Human add/remove output and catalog

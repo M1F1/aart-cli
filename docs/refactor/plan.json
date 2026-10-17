@@ -1171,7 +1171,7 @@
     {
       "id": "CP-32",
       "title": "Three roles, three command families: consume, maintain, author; Upstream repositories",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -1246,7 +1246,7 @@
         {
           "id": "10",
           "title": "Full verification and the PR",
-          "status": "in_progress"
+          "status": "done"
         }
       ]
     }

@@ -381,7 +381,7 @@ replacing README's author-guide link with a nonexistent target makes docs-check 
 one DOC002 at that link; restoring it passes. No product code changed, so mutmut is not applicable
 to this documentation step. Final CI remains open; its old tooling failures are step 10.
 
-## Step 10 — Full verification and the PR (in progress)
+## Step 10 — Full verification and the PR (done)
 
 CI run 39034117210 failed on tooling the role split left behind (D-451):
 
@@ -407,4 +407,6 @@ Run 39050227597 then ran all 4953 tests and failed 16, the same on 3.10, 3.11 an
   orientation stage `Upstream repository`, `maintain upstream adopt` in the Registry guide, the
   Add upstream form's `another upstream`, and the `Upstream repositories` footer label.
 
-All seven failing modules pass locally. Remaining: read the next CI run; close the step when green.
+All seven failing modules pass locally. CI run 39051724417 on `111e455` passed the full gates on
+Python 3.10, 3.11 and 3.14 (the private-image job is skipped, as on earlier runs). CP-32 is done;
+merging PR #78 releases it.

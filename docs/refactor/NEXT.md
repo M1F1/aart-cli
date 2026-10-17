@@ -64,12 +64,9 @@ and 6, the `consume` / `maintain upstream` / `maintain registry` families (D-443
 recording Candidates from the CLI). Step 7 is done: a consumer installs only from Registries (D-444; B-203–B-206 for what it
 exposed). Step 8 (TUI names, D-445) and the owner-reported smoke fix in step 15 (D-447) are done. Steps 12 (Author Mode, D-448) and 13 (Marketplace details under More info, D-449) are done. Step 14 (complete labeled Marketplace columns, D-450) is done too. Documentation (9) is done. Next is 10.
 
-**Exact next task: CP-32 step 10 — read PR #78's full CI.** The tooling failures of run
-39034117210 are fixed (D-451): `scripts/manual_test.py` and its lab test use the role commands,
-`scripts/distribution_smoke.py` installs from a local Registry through the installed `consume` CLI,
-and human add/remove output and catalog headers name Registry or Upstream repository. Inspect the
-complete CI matrix on PR #78; fix any failure through scoped red/green tests, never a full local
-suite. When it is green, mark step 10 and CP-32 done. See `slices/CP-32-roles-and-upstreams.md`.
+**CP-32 is done.** Step 10 closed with CI run 39051724417 green on Python 3.10, 3.11 and 3.14
+(D-451 for the tooling repair). Next: the owner merges PR #78; its title sets the release version.
+No further CP is planned in `plan.json`; take the next one from the owner.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).
