@@ -1171,17 +1171,17 @@
     {
       "id": "CP-32",
       "title": "Three roles, three command families: consume, maintain, author; Upstream repositories",
-      "status": "todo",
+      "status": "in_progress",
       "steps": [
         {
           "id": "1",
-          "title": "Specify CP-32: §175 (three roles, three command families, Upstream repository), INV-269, INV-270, D-439",
+          "title": "Specify CP-32: §175 (three roles, three command families, Upstream repository), INV-269, INV-270, D-439; §175.4 reset with backup, INV-271, D-440; §175.5 Author Mode, INV-272, D-441",
           "status": "done"
         },
         {
           "id": "2",
           "title": "Configuration: separate registries and upstreams lists with kind local|git; consumer policy reads registries only; drop the direct-source switch",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "3",
@@ -1214,8 +1214,18 @@
           "status": "todo"
         },
         {
+          "id": "12",
+          "title": "TUI Author Mode (Settings toggle, off by default): Workspace, Check (author check per manifest) and New artifact (author init) on the same application code as aart-cli author (§175.5, INV-272)",
+          "status": "todo"
+        },
+        {
           "id": "9",
           "title": "Documentation: README, tutorials, authoring and Registry guides",
+          "status": "todo"
+        },
+        {
+          "id": "11",
+          "title": "aart-cli reset moves state into <home>-backups/<timestamp>/ with one confirmation or --yes; reset --restore DIR; startup refusals of local state name reset (§175.4, INV-271)",
           "status": "todo"
         },
         {

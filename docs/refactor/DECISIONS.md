@@ -10951,3 +10951,44 @@ non-Registry). The owner chose the names and the shape:
   `check-upstream` move under `upstream` rather than going, because adoption by manifest is the only
   way in (D-437). Candidate rejection on the CLI is not added here (B-200).
 - No aliases or migrators (§169 rules): a CP-26-style break, released pre-1.0.
+
+## D-440 — Reset backs up and starts clean (§175.4, CP-32)
+
+The owner, after the 0.10.0 upgrade needed three migration scripts for local state: one command
+should give a fresh, empty aart-cli with the old state kept. `reset` already planned the right
+targets (`plan_factory_reset`) but deleted them after two confirmations.
+
+- **Rename into a sibling directory**, `<home>-backups/<UTC timestamp>/`: outside the home, so the
+  reset leaves it alone, and normally on the same filesystem, so a move is a rename and nothing is
+  copied. A target on another filesystem is refused rather than copied and deleted.
+- **`--restore DIR`** backs the current state up first, so restoring is itself reversible.
+- **Startup errors name `reset`.** The settings, history and configuration loaders' refusals end
+  with the hint; no reader learns to accept old shapes (no compatibility, §169).
+
+## D-441 — Author Mode: the author family in the TUI (§175.5, CP-32)
+
+The owner: author actions are first-class and need a TUI view like the maintainer's, so checking
+manifests and producing templates is not CLI-only. Choices:
+
+- **Opt-in, like Registry Maintainer Mode** (INV-193's pattern): a Settings toggle, off by default,
+  so a consumer's navigation does not grow.
+- **Three screens**: Workspace (choose the upstream checkout), Check (the `author check` result per
+  manifest) and New artifact (`author init` by kind and name). Nothing beyond what `author` does
+  today; more author actions join both surfaces together.
+- **One implementation**: the screens call the application functions behind `aart-cli author`,
+  which INV-272 holds by comparing their results.
+
+## D-442 — The configuration split keeps one alias space and one domain value (CP-32 step 2)
+
+- `config.json` holds `registries` and `upstreams`, each entry `{alias, enabled, kind: git|local,
+  url|path, ref}`. A local Registry has `path` and its branch as `ref`; a local upstream has `path`
+  and no `ref`. A combined kind such as `registry-git`, or a `sources` key, is refused.
+- **One alias space across both lists**: an alias names one store entry and one command target.
+- **The domain keeps `ConfiguredSource` and `SourceKind`** for now, with `registries` and
+  `upstreams` views on `UserConfiguration`; only the file and the policy change in this step, and
+  later steps rename what users see. Internal names are not a user surface (INV-270 is about
+  commands).
+- **Policy**: `recommended_registries`, `required_registries`, `company_reviewed_registries`;
+  `allow_direct_sources` is gone. A required alias is satisfied only by an enabled Registry. The
+  host and repository allowlists still apply to every Git entry, upstreams included: they are the
+  organization's network boundary, not a consumer rule.

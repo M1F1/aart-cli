@@ -110,9 +110,8 @@ class ConfigurationRequest:
 
 @dataclass(frozen=True, slots=True)
 class FirstRunOptions:
-    recommended_sources: tuple[SourceAlias, ...]
-    required_sources: tuple[SourceAlias, ...]
-    allow_direct_sources: bool
+    recommended_registries: tuple[SourceAlias, ...]
+    required_registries: tuple[SourceAlias, ...]
     allow_no_source: bool
 
 
@@ -194,10 +193,9 @@ def load_configuration(
     if raw_user is None:
         configuration = default_user_configuration()
         first_run = FirstRunOptions(
-            policy.value.recommended_sources,
-            policy.value.required_sources,
-            policy.value.allow_direct_sources is not False,
-            not policy.value.required_sources,
+            policy.value.recommended_registries,
+            policy.value.required_registries,
+            not policy.value.required_registries,
         )
     else:
         parsed_user = parse_user_configuration(raw_user)

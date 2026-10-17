@@ -11348,8 +11348,52 @@ aart-cli doctor|upgrade|reset|security
   areas named as the CLI is: **Upstream repositories** ("Author repositories this Registry takes
   artifacts from"), **Candidates**, and **Registry** (Collections, Validation, Publish).
 
+## 175.4 A clean start that keeps the old state
+
+AART keeps no migrators (§169), so a state written by another version, or one a person broke by
+hand, must never leave aart-cli unusable. `aart-cli reset` therefore moves the AART-owned state out
+of the application home instead of deleting it, and aart-cli starts as on a new machine:
+
+- **Backup, not deletion.** Every target the factory reset plan names moves, by rename, into
+  `<application home>-backups/<UTC timestamp>/` beside the home (`~/.aart-cli-backups/...`, or
+  beside `AART_CLI_HOME`). The command prints that directory. Nothing is copied and nothing is
+  removed; the backup holds no secret values, because the home holds none (§169).
+- **One confirmation.** The step is reversible, so one typed `RESET AART` (or `--yes`) replaces
+  the two confirmations a deletion needed.
+- **Going back.** `aart-cli reset --restore DIR` moves the current state into a new backup first,
+  then moves `DIR`'s contents back into the home. Restoring a state another version wrote is for
+  running that version again; this version does not read it.
+- **Out of the box.** When startup cannot load the local state (an invalid or foreign settings,
+  history or configuration file), the error names `aart-cli reset` as the way to a clean start.
+- Projects, harness files and organization policy are untouched, as before. Artifacts already
+  installed into harnesses stay there; after a reset AART no longer records them.
+
+## 175.5 Author Mode in the TUI
+
+Authoring is a role in its own right, not a CLI-only corner. Like Registry Maintainer Mode, **Author
+Mode** is hidden by default and enabled in Settings (`[ ] Author Mode`); with it on, the TUI adds an
+Author area beside the consumer one, and with it off no author navigation appears.
+
+- **Workspace.** The author picks the directory of their upstream repository once (a normalized
+  absolute path, remembered in AART settings, never inside the application home's content). The
+  area reads it exactly as `author check` does: as Git would commit it (§174).
+- **Check.** Runs `author check` over the workspace and lists every manifest with ok or its
+  diagnostics, the same result the CLI prints; selecting one shows its errors in full. Re-run is
+  one key.
+- **New artifact.** Chooses a kind and a name and writes the template `author init` writes, into
+  the workspace or a chosen subdirectory; nothing existing is replaced, and the screen then shows
+  that manifest's check.
+- The area runs the same application code as `aart-cli author`, so a result never differs between
+  the TUI and the CLI. It never connects the workspace as an upstream and never changes a Registry.
+
 **INV-269 — A consumer reads only Registries.** No consumer command, screen or configuration entry
 connects an upstream, and nothing a consumer installs comes from one.
 
 **INV-270 — The first word names the role.** Every command specific to consuming, maintaining or
 authoring is under `consume`, `maintain` or `author`; each noun means one thing within its family.
+
+**INV-272 — Author Mode is the CLI's author family.** Every author action in the TUI is an
+`aart-cli author` action with the same result; Author Mode is opt-in like Registry Maintainer Mode.
+
+**INV-271 — A reset never destroys state.** `aart-cli reset` moves AART-owned state into a backup
+it names and can restore; it removes nothing.

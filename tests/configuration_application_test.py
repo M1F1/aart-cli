@@ -82,7 +82,6 @@ class ConfigurationApplicationTest(unittest.TestCase):
         self.assertIsNotNone(result.value.first_run)
         assert result.value.first_run is not None
         self.assertTrue(result.value.first_run.allow_no_source)
-        self.assertTrue(result.value.first_run.allow_direct_sources)
         self.assertEqual(
             fake.reads,
             [paths.policy_file, paths.user_config_file],
@@ -105,7 +104,7 @@ class ConfigurationApplicationTest(unittest.TestCase):
         paths = _paths()
         fake = _FakePorts(
             {
-                paths.policy_file: b'{"schema_version":1,"recommended_sources":["company"],"allow_direct_sources":false}',
+                paths.policy_file: b'{"schema_version":1,"recommended_registries":["company"]}',
             }
         )
 
@@ -117,14 +116,15 @@ class ConfigurationApplicationTest(unittest.TestCase):
         self.assertIsInstance(result, Ok)
         assert isinstance(result, Ok)
         assert result.value.first_run is not None
-        self.assertEqual(tuple(map(str, result.value.first_run.recommended_sources)), ("company",))
-        self.assertFalse(result.value.first_run.allow_direct_sources)
+        self.assertEqual(
+            tuple(map(str, result.value.first_run.recommended_registries)), ("company",)
+        )
         self.assertTrue(result.value.first_run.allow_no_source)
 
     def test_required_source_is_presented_on_first_run_but_blocks_content(self) -> None:
         paths = _paths()
         fake = _FakePorts(
-            {paths.policy_file: b'{"schema_version":1,"required_sources":["company"]}'}
+            {paths.policy_file: b'{"schema_version":1,"required_registries":["company"]}'}
         )
 
         local = load_configuration(
@@ -139,7 +139,7 @@ class ConfigurationApplicationTest(unittest.TestCase):
         self.assertIsInstance(local, Ok)
         assert isinstance(local, Ok)
         assert local.value.first_run is not None
-        self.assertEqual(tuple(map(str, local.value.first_run.required_sources)), ("company",))
+        self.assertEqual(tuple(map(str, local.value.first_run.required_registries)), ("company",))
         self.assertFalse(local.value.first_run.allow_no_source)
         self.assertIsInstance(content, Err)
         assert isinstance(content, Err)
@@ -179,7 +179,7 @@ class ConfigurationApplicationTest(unittest.TestCase):
         self.assertIsInstance(loaded, Err)
 
         configuration = parse_user_configuration('{"schema_version":1}')
-        policy = parse_organization_policy('{"schema_version":1,"required_sources":["company"]}')
+        policy = parse_organization_policy('{"schema_version":1,"required_registries":["company"]}')
         assert isinstance(configuration, Ok)
         assert isinstance(policy, Ok)
         fake = _FakePorts({})
@@ -230,7 +230,7 @@ class ConfigurationApplicationTest(unittest.TestCase):
 
     def test_existing_configuration_loads_and_policy_denial_is_propagated(self) -> None:
         paths = _paths()
-        direct = b'{"schema_version":1,"sources":[{"alias":"team","kind":"source-git","url":"https://example.test/team/repo.git","ref":"main","enabled":true}]}'
+        direct = b'{"schema_version":1,"upstreams":[{"alias":"team","kind":"git","url":"https://example.test/team/repo.git","ref":"main","enabled":true}]}'
         loaded = load_configuration(
             ConfigurationRequest(paths, RuntimeOverrides(), content_required=True),
             _FakePorts({paths.user_config_file: direct}).ports(),
@@ -240,7 +240,7 @@ class ConfigurationApplicationTest(unittest.TestCase):
             _FakePorts(
                 {
                     paths.user_config_file: direct,
-                    paths.policy_file: b'{"schema_version":1,"allow_direct_sources":false}',
+                    paths.policy_file: b'{"schema_version":1,"allowed_git_hosts":["git.company.test"]}',
                 }
             ).ports(),
         )
@@ -268,11 +268,11 @@ class ConfigurationApplicationTest(unittest.TestCase):
     def test_partial_required_source_configuration_is_manageable_but_not_content(self) -> None:
         paths = _paths()
         partial = (
-            b'{"schema_version":1,"sources":[{"alias":"company","kind":"registry-git",'
+            b'{"schema_version":1,"registries":[{"alias":"company","kind":"git",'
             b'"url":"https://git.example.test/company/registry.git","ref":"main",'
             b'"enabled":true}],"default_registry":"company"}'
         )
-        policy = b'{"schema_version":1,"required_sources":["company","team"]}'
+        policy = b'{"schema_version":1,"required_registries":["company","team"]}'
         fake = _FakePorts({paths.policy_file: policy, paths.user_config_file: partial})
 
         management = load_configuration(

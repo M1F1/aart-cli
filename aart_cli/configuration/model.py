@@ -64,8 +64,6 @@ class ConfiguredSource:
         This is what the organization policy's host allowlist and repository prefixes are applied
         to, so a local checkout is deliberately not one: it has a filesystem path where a host
         would be, and asking an allowlist about it can only produce a denial that means nothing.
-        What governs a local checkout is `allow_direct_sources`, since content a person can write
-        themselves has not come through the approved remote.
         """
 
         return self.kind in {SourceKind.REGISTRY_GIT, SourceKind.SOURCE_GIT}
@@ -131,6 +129,18 @@ class UserConfiguration:
             raise ValueError("each configured Git source origin and ref pair must be unique")
         object.__setattr__(self, "sources", ordered)
 
+    @property
+    def registries(self) -> tuple[ConfiguredSource, ...]:
+        """The Registries a consumer reads, in alias order (§175.3)."""
+
+        return tuple(source for source in self.sources if source.is_registry)
+
+    @property
+    def upstreams(self) -> tuple[ConfiguredSource, ...]:
+        """The Upstream repositories a Registry maintainer connected, in alias order (§175.3)."""
+
+        return tuple(source for source in self.sources if not source.is_registry)
+
 
 @dataclass(frozen=True, slots=True, order=True)
 class CompanyReviewedSource:
@@ -164,41 +174,41 @@ class CompanyReviewedSource:
 @dataclass(frozen=True, slots=True)
 class OrganizationPolicy:
     schema_version: int
-    recommended_sources: tuple[SourceAlias, ...] = ()
-    required_sources: tuple[SourceAlias, ...] = ()
+    recommended_registries: tuple[SourceAlias, ...] = ()
+    required_registries: tuple[SourceAlias, ...] = ()
     allowed_git_hosts: tuple[str, ...] | None = None
     allowed_repository_prefixes: tuple[str, ...] | None = None
-    allow_direct_sources: bool | None = None
     minimum_trust_for_user_scope: str | None = None
     allowed_setup_capabilities: tuple[Capability, ...] | None = None
     allow_custom_setup_entrypoints: bool | None = None
-    company_reviewed_sources: tuple[CompanyReviewedSource, ...] = ()
+    company_reviewed_registries: tuple[CompanyReviewedSource, ...] = ()
 
     def __post_init__(self) -> None:
         if self.schema_version != 1:
             raise ValueError("organization policy schema version must be 1")
-        for value in (self.allow_direct_sources, self.allow_custom_setup_entrypoints):
-            if value is not None and not isinstance(value, bool):
-                raise ValueError("organization policy switches must be boolean or absent")
+        if self.allow_custom_setup_entrypoints is not None and not isinstance(
+            self.allow_custom_setup_entrypoints, bool
+        ):
+            raise ValueError("organization policy switches must be boolean or absent")
         if (
             self.minimum_trust_for_user_scope is not None
             and self.minimum_trust_for_user_scope not in TRUST_CLASSES
         ):
             raise ValueError("organization policy minimum trust is invalid")
         if not all(
-            isinstance(source, CompanyReviewedSource) for source in self.company_reviewed_sources
+            isinstance(source, CompanyReviewedSource) for source in self.company_reviewed_registries
         ):
             raise ValueError("organization company-reviewed source identities are invalid")
-        recommended = tuple(sorted(set(self.recommended_sources)))
-        required = tuple(sorted(set(self.required_sources)))
+        recommended = tuple(sorted(set(self.recommended_registries)))
+        required = tuple(sorted(set(self.required_registries)))
         if set(recommended) & set(required):
             raise ValueError("recommended and required sources must not overlap")
-        object.__setattr__(self, "recommended_sources", recommended)
-        object.__setattr__(self, "required_sources", required)
-        reviewed = tuple(sorted(set(self.company_reviewed_sources)))
-        if len(reviewed) != len(self.company_reviewed_sources):
+        object.__setattr__(self, "recommended_registries", recommended)
+        object.__setattr__(self, "required_registries", required)
+        reviewed = tuple(sorted(set(self.company_reviewed_registries)))
+        if len(reviewed) != len(self.company_reviewed_registries):
             raise ValueError("company-reviewed source identities must be unique")
-        object.__setattr__(self, "company_reviewed_sources", reviewed)
+        object.__setattr__(self, "company_reviewed_registries", reviewed)
         if self.allowed_git_hosts is not None:
             object.__setattr__(
                 self,

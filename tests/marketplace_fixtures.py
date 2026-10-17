@@ -209,7 +209,7 @@ def effective_configuration(
         None if default_registry is None else SourceAlias(default_registry),
         SyncSettings(),
     )
-    policy = OrganizationPolicy(1, company_reviewed_sources=company_sources)
+    policy = OrganizationPolicy(1, company_reviewed_registries=company_sources)
     effective = apply_configuration(user, RuntimeOverrides(), policy)
     assert isinstance(effective, Ok), effective
     return effective.value

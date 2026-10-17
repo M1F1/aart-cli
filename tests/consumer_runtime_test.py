@@ -105,7 +105,7 @@ class ConsumerRuntimeTest(unittest.TestCase):
                 mock.patch(
                     "aart_cli.consumer.runtime.read_configuration",
                     side_effect=lambda request: (
-                        Ok(b'{"schema_version":1,"required_sources":["company","team"]}')
+                        Ok(b'{"schema_version":1,"required_registries":["company","team"]}')
                         if request.path == paths.policy_file
                         else read_configuration(request)
                     ),

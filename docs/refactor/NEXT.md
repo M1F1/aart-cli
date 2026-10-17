@@ -58,7 +58,9 @@ reads a local author checkout as Git would commit it.
 **Next: CP-32** (§175, D-439), the owner's decision of 2026-10-17. Three role families replace
 `source`, `marketplace` and the top-level `registry`: `consume`, `maintain upstream|candidate|registry`
 and `author`. An author repository is an **Upstream repository**, and a consumer reads only
-Registries (INV-269). Step 1 (the specification) is done; step 2, the configuration split, is next.
+Registries (INV-269). Step 1 (the specification, with §175.4 reset-with-backup and §175.5 Author Mode) and step 2
+(the configuration split, D-442) are done. Step 11, reset with backup, goes next at the owner's
+priority; then steps 3–8, 12, 9 and 10.
 See `slices/CP-32-roles-and-upstreams.md`.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major

@@ -153,7 +153,7 @@ def _trust(
     elif source.kind is SourceKind.SOURCE_GIT:
         trust = TrustClass.DIRECT_SOURCE
         reasons = ("configured direct Git source",)
-    elif approved and company_identity in policy.company_reviewed_sources:
+    elif approved and company_identity in policy.company_reviewed_registries:
         trust = TrustClass.COMPANY_REVIEWED
         reasons = ("approved registry entry", "exact organization source identity")
     elif approved:

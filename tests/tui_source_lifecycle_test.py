@@ -175,7 +175,7 @@ class SourceLifecyclePlanningTests(unittest.TestCase):
 
     def test_an_organization_required_alias_cannot_be_unsubscribed(self) -> None:
         required = _registry("company")
-        policy = OrganizationPolicy(1, required_sources=(SourceAlias("company"),))
+        policy = OrganizationPolicy(1, required_registries=(SourceAlias("company"),))
         view = _view(_configuration(required, default="company"), policy)
 
         refused = plan_source_removal(view, SourceAlias("company"))

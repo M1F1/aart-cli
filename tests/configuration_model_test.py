@@ -52,18 +52,18 @@ class ConfigurationModelTest(unittest.TestCase):
             lambda: UserConfiguration(1, (source, source), None, SyncSettings()),
             lambda: UserConfiguration(1, (first_git, same_origin_same_ref), None, SyncSettings()),
             lambda: OrganizationPolicy(2),
-            lambda: OrganizationPolicy(1, allow_direct_sources="yes"),  # type: ignore[arg-type]
+            lambda: OrganizationPolicy(1, allow_custom_setup_entrypoints="yes"),  # type: ignore[arg-type]
             lambda: OrganizationPolicy(1, minimum_trust_for_user_scope="trusted-by-name"),
             lambda: OrganizationPolicy(1, allowed_setup_capabilities=("keychain",)),  # type: ignore[arg-type]
             lambda: OrganizationPolicy(
                 1,
-                recommended_sources=(SourceAlias("same"),),
-                required_sources=(SourceAlias("same"),),
+                recommended_registries=(SourceAlias("same"),),
+                required_registries=(SourceAlias("same"),),
             ),
-            lambda: OrganizationPolicy(1, company_reviewed_sources=("source",)),  # type: ignore[arg-type]
+            lambda: OrganizationPolicy(1, company_reviewed_registries=("source",)),  # type: ignore[arg-type]
             lambda: OrganizationPolicy(
                 1,
-                company_reviewed_sources=(
+                company_reviewed_registries=(
                     CompanyReviewedSource(SourceId("source"), "example.test", "team/repo"),
                     CompanyReviewedSource(SourceId("source"), "EXAMPLE.TEST", "team/repo.git"),
                 ),

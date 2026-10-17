@@ -15,7 +15,7 @@ class MarketplacePolicySchemaTest(unittest.TestCase):
     def test_exact_company_reviewed_source_identities_are_strict_canonical_policy(self) -> None:
         document = b"""{
           "schema_version": 1,
-          "company_reviewed_sources": [
+          "company_reviewed_registries": [
             {"source_id":"company-registry","git_host":"Git.Company.Example","repository":"agents/company-registry.git"}
           ]
         }"""
@@ -25,7 +25,7 @@ class MarketplacePolicySchemaTest(unittest.TestCase):
         self.assertIsInstance(parsed, Ok)
         assert isinstance(parsed, Ok)
         self.assertEqual(
-            parsed.value.company_reviewed_sources,
+            parsed.value.company_reviewed_registries,
             (
                 CompanyReviewedSource(
                     SourceId("company-registry"),
@@ -41,12 +41,12 @@ class MarketplacePolicySchemaTest(unittest.TestCase):
 
     def test_invalid_or_duplicate_company_reviewed_identities_fail_closed(self) -> None:
         invalid = (
-            '{"schema_version":1,"company_reviewed_sources":{}}',
-            '{"schema_version":1,"company_reviewed_sources":[{}]}',
-            '{"schema_version":1,"company_reviewed_sources":[{"source_id":"Bad_ID","git_host":"example.test","repository":"team/repo"}]}',
-            '{"schema_version":1,"company_reviewed_sources":[{"source_id":"registry","git_host":"https://example.test","repository":"team/repo"}]}',
-            '{"schema_version":1,"company_reviewed_sources":[{"source_id":"registry","git_host":"example.test","repository":"../repo"}]}',
-            '{"schema_version":1,"company_reviewed_sources":[{"source_id":"registry","git_host":"example.test","repository":"team/repo"},{"source_id":"registry","git_host":"EXAMPLE.TEST","repository":"team/repo.git"}]}',
+            '{"schema_version":1,"company_reviewed_registries":{}}',
+            '{"schema_version":1,"company_reviewed_registries":[{}]}',
+            '{"schema_version":1,"company_reviewed_registries":[{"source_id":"Bad_ID","git_host":"example.test","repository":"team/repo"}]}',
+            '{"schema_version":1,"company_reviewed_registries":[{"source_id":"registry","git_host":"https://example.test","repository":"team/repo"}]}',
+            '{"schema_version":1,"company_reviewed_registries":[{"source_id":"registry","git_host":"example.test","repository":"../repo"}]}',
+            '{"schema_version":1,"company_reviewed_registries":[{"source_id":"registry","git_host":"example.test","repository":"team/repo"},{"source_id":"registry","git_host":"EXAMPLE.TEST","repository":"team/repo.git"}]}',
         )
         for document in invalid:
             with self.subTest(document=document):

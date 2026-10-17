@@ -112,7 +112,6 @@ class SourceStageView:
     policy: OrganizationPolicy
     rows: tuple[SourceStageRow, ...]
     allow_no_source: bool
-    allow_direct_sources: bool
     first_run: bool
 
     def __post_init__(self) -> None:
@@ -122,21 +121,21 @@ class SourceStageView:
             raise ValueError("source-stage aliases must be unique")
         if set(aliases) != {source.alias for source in self.configuration.sources}:
             raise ValueError("source-stage rows must represent the exact configuration")
-        if self.allow_no_source != (not self.policy.required_sources):
+        if self.allow_no_source != (not self.policy.required_registries):
             raise ValueError("source-stage no-source option must follow organization policy")
-        if self.allow_direct_sources != (self.policy.allow_direct_sources is not False):
-            raise ValueError("source-stage direct-source option must follow organization policy")
         object.__setattr__(self, "rows", rows)
 
     @property
     def unconfigured_recommended(self) -> tuple[SourceAlias, ...]:
         configured = {row.source.alias for row in self.rows}
-        return tuple(alias for alias in self.policy.recommended_sources if alias not in configured)
+        return tuple(
+            alias for alias in self.policy.recommended_registries if alias not in configured
+        )
 
     @property
     def unconfigured_required(self) -> tuple[SourceAlias, ...]:
         configured = {row.source.alias for row in self.rows}
-        return tuple(alias for alias in self.policy.required_sources if alias not in configured)
+        return tuple(alias for alias in self.policy.required_registries if alias not in configured)
 
 
 def _configuration_operations(
@@ -380,7 +379,7 @@ def _company_reviewed(
     if parts is None:
         return False
     identity = CompanyReviewedSource(health.current.declared_source_id, parts[0], parts[1])
-    return identity in policy.company_reviewed_sources
+    return identity in policy.company_reviewed_registries
 
 
 def _availability_reason(
@@ -388,8 +387,6 @@ def _availability_reason(
     display_health: SourceDisplayHealth,
     policy: OrganizationPolicy,
 ) -> str:
-    if source.kind is not SourceKind.REGISTRY_GIT and policy.allow_direct_sources is False:
-        return "direct sources are disabled by organization policy"
     if display_health is SourceDisplayHealth.INCOMPATIBLE:
         return "source is incompatible with this AART version"
     if display_health is SourceDisplayHealth.INVALID:
@@ -429,8 +426,8 @@ def build_source_stage(
                 _origin(source),
                 display_health,
                 None if health is None else health.age_seconds,
-                source.alias in policy.recommended_sources,
-                source.alias in policy.required_sources,
+                source.alias in policy.recommended_registries,
+                source.alias in policy.required_registries,
                 _company_reviewed(source, health, policy),
                 configuration.default_registry == source.alias,
                 not reason,
@@ -442,8 +439,7 @@ def build_source_stage(
             configuration,
             policy,
             tuple(rows),
-            not policy.required_sources,
-            policy.allow_direct_sources is not False,
+            not policy.required_registries,
             first_run,
         )
     )
@@ -495,7 +491,7 @@ def plan_source_management(
             "; ".join(f"{row.source.alias}: {row.reason}" for row in unavailable),
             "choose a policy-approved compatible source",
         )
-    required = set(view.policy.required_sources)
+    required = set(view.policy.required_registries)
     missing_required = tuple(sorted(required - set(aliases)))
     if missing_required:
         return _error(
@@ -586,8 +582,6 @@ def plan_source_addition(
                 "branch or tag.",
             ),
         )
-    if source.kind is not SourceKind.REGISTRY_GIT and not view.allow_direct_sources:
-        return _error("direct sources are disabled by organization policy")
     if source.is_git and git_location_parts(source.location) is None:
         return _error("source has an invalid Git origin")
     chosen_default = (
@@ -634,7 +628,7 @@ def plan_source_removal(view: SourceStageView, alias: SourceAlias) -> Result[Sou
             f"no configured source has alias {alias}",
             "run `aart-cli source list` to see configured aliases",
         )
-    if alias in view.policy.required_sources:
+    if alias in view.policy.required_registries:
         return _error(
             f"organization policy requires source {alias}",
             "ask the policy owner to drop the requirement before removing this source",
