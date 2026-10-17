@@ -4,6 +4,10 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-31 step 15: verified.** PR #76 (plan and steps 1–14) passes the full quality
+suite on Python 3.10, 3.11 and 3.14. CI found one host-dependent test (uv absent), fixed by pinning
+the dependency managers; B-194 did not reproduce there. Merging PR #76 closes CP-31.
+
 **2026-10-17, CP-31 step 14 (D-437): the vendor family is pruned.** `registry discover`,
 `vendor`, `vendor-batch`, `revendor` and `audit --check-upstream` are removed from the CLI, wizard
 and curation model, with their modules, records, script, tests and tutorials. Adoption by manifest

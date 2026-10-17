@@ -1069,7 +1069,7 @@
     {
       "id": "CP-31",
       "title": "Collections end to end, Registry-owned versions, default/custom install paths, richer Marketplace and Installed views, and pruning",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -1164,7 +1164,7 @@
         {
           "id": "15",
           "title": "Full verification and the PR",
-          "status": "in_progress"
+          "status": "done"
         }
       ]
     }

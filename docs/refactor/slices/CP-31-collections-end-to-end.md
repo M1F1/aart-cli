@@ -436,3 +436,12 @@ existed. Targeted mutation: restoring the `vendor` subparser turns that test red
 registry-related set is green apart from the B-194 findings; the schema freeze is refreshed for the
 protocol doc edit and the step 6 model change. mypy, ruff, tach and docs-check are clean. The
 audit-level MCP delivery test is B-199.
+
+## Step 15 — Verification
+
+PR #76 carries the plan and steps 1–14. Its first CI run found one failure the scoped local runs
+could not: `collection_inputs_tui_e2e_test` drove the review as if the host offered both pip and
+uv, and a runner without uv skips that choice, so one Enter landed on a credential row. Pinning
+`observe_python_installers` to both, as `consumer_application_e2e_test` does, fixed it; pinning
+pip alone reproduces the CI failure exactly. The second run passed on Python 3.10, 3.11 and 3.14
+with the full quality suite. The two B-194 Hypothesis findings did not reproduce in CI.
