@@ -448,6 +448,28 @@ class MonitoredSourceFlowTest(unittest.TestCase):
             )
             self.assertEqual(result.scan.revision, env.author.head)
 
+    def test_candidate_list_shows_what_the_sync_recorded_and_changes_nothing(self) -> None:
+        """§175.2: `maintain candidate list` reads the history Source Sync wrote."""
+
+        with _environment() as env:
+            env.synchronize_registry()
+            self.assertEqual(env.add_author_source()[0], 0)
+            code, empty = env.run("maintain", "candidate", "list")
+            self.assertEqual((code, empty["candidates"]), (0, []), empty)
+
+            result = self._sync(env)
+            history = sorted(Path(env.paths.data_root).rglob("*"))
+            code, listed = env.run("maintain", "candidate", "list")
+
+            self.assertEqual(code, 0, listed)
+            self.assertEqual(listed["operation"], "candidate.list")
+            (candidate,) = listed["candidates"]
+            self.assertEqual(candidate["id"], result.scan.active[0].candidate.id.value)
+            self.assertEqual(candidate["upstream"], "superpowers")
+            self.assertEqual(candidate["revision"], env.author.head)
+            self.assertEqual(candidate["promotion"], "not-promoted")
+            self.assertEqual(sorted(Path(env.paths.data_root).rglob("*")), history)
+
     def test_the_unrelated_files_beside_the_manifest_are_not_artifacts(self) -> None:
         """INV-201: README.md and every other file are evidence of nothing on their own."""
 

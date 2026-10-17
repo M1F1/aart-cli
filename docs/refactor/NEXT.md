@@ -60,8 +60,8 @@ reads a local author checkout as Git would commit it.
 and `author`. An author repository is an **Upstream repository**, and a consumer reads only
 Registries (INV-269). Step 1 (the specification, with §175.4 reset-with-backup and §175.5 Author Mode) and step 2
 (the configuration split, D-442) are done, and so are step 11, reset with backup (D-440), and steps 3, 4
-and 6, the `consume` / `maintain upstream` / `maintain registry` families (D-443). Next are step 5
-(`maintain candidate list`), 7 (the consumer catalog stops reading upstreams, INV-269, with the e2e
+and 6, the `consume` / `maintain upstream` / `maintain registry` families (D-443). Step 5, `maintain candidate list`, is done too (B-202 for
+recording Candidates from the CLI). Next are 7 (the consumer catalog stops reading upstreams, INV-269, with the e2e
 fixtures that install from one), 8 (TUI names), then 12 (Author Mode), 9 and 10.
 See `slices/CP-32-roles-and-upstreams.md`.
 

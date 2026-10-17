@@ -46,7 +46,7 @@ class RegistryCliTest(unittest.TestCase):
                 "diff",
             },
         )
-        self.assertEqual(choices(choices(maintain, "candidate"), None), {"promote"})
+        self.assertEqual(choices(choices(maintain, "candidate"), None), {"list", "promote"})
         self.assertLessEqual(
             {"scan", "adopt", "check"}, choices(choices(maintain, "upstream"), None)
         )
@@ -71,6 +71,10 @@ class RegistryCliTest(unittest.TestCase):
                 self.assertEqual(command, "registry")
                 self.assertEqual(fields.get("registry_action", action), handler_action)
         self.assertIn("registry", cli.DISPATCH)
+        # Listing reads Maintainer views and writes nothing, so it is not a Registry transaction.
+        listed = cli._to_request(cli.build_parser().parse_args(["maintain", "candidate", "list"]))
+        self.assertEqual(listed.command, "candidate")
+        self.assertIn("candidate", cli.DISPATCH)
 
     def test_no_route_writes_content_without_a_source_manifest(self) -> None:
         """§173.9 (D-375): adoption by manifest is the only way content enters a Registry."""

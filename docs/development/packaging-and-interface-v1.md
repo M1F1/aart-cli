@@ -32,7 +32,7 @@ aart-cli consume list|search|health|install|update|uninstall|status|setup|receip
 aart-cli doctor
 aart-cli reset [--restore DIR] [--yes]
 aart-cli maintain upstream add|list|sync|remove|resubscribe|health|scan|adopt|check
-aart-cli maintain candidate promote
+aart-cli maintain candidate list|promote
 aart-cli maintain registry init|collection|format|validate|lock|build|audit|publish|push|test|diff
 aart-cli security scan|show|verify|analyzers|suites
 aart-cli upgrade --wheel FILE | --source-checkout DIR

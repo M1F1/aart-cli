@@ -11015,6 +11015,8 @@ manifests and producing templates is not CLI-only. Choices:
   already lists what a newer approved version would replace. §175.2 is worded that way; naming the
   updatable artifacts in `sync` itself is B-201, because the consumer path computes no installed
   versus offered comparison today.
-- **Not yet**: `maintain candidate list` (step 5), and INV-269's second half — the consumer catalog
+- **`maintain candidate list`** has its own read-only handler over `read_maintainer_views`, not a
+  Registry action: it is no Registry transaction (step 5).
+- **Not yet**: INV-269's second half — the consumer catalog
   still reads upstream snapshots and many e2e fixtures install from one. Step 7 removes that, with
   the fixtures.

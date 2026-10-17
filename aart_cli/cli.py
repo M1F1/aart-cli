@@ -68,6 +68,12 @@ def _run_author(request: Request) -> int:
     return author.run(request)
 
 
+def _run_candidate(request: Request) -> int:
+    from .commands import candidate
+
+    return candidate.run(request)
+
+
 def _run_mcp(request: Request) -> int:
     from .commands import mcp
 
@@ -85,6 +91,7 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "reset": _run_reset,
     "author": _run_author,
     "mcp": _run_mcp,
+    "candidate": _run_candidate,
 }
 
 # Structured results used by interactive frontends. Flag mode retains ``DISPATCH`` and its
@@ -138,6 +145,8 @@ def _route(args: argparse.Namespace) -> tuple[str, dict[str, object]]:
                 }
             return "source", {"source_family": "upstream"}
         if action == "candidate":
+            if args.candidate_action == "list":
+                return "candidate", {}
             return "registry", {"registry_action": args.candidate_action}
         return "registry", {}
     return command, {}

@@ -4674,3 +4674,11 @@ approved version would replace. Naming those artifacts in `sync`'s own output ne
 versus offered comparison the consumer path does not compute today: `InstalledInspection
 .update_available` is never set to true anywhere, so the Installed view's Update health is also
 unreachable. Not required by §175; it is the same comparison both would read.
+
+## B-202 — Recording Candidate history from the command line
+
+`maintain candidate list` (CP-32 step 5) reads the Candidate history Registry Maintainer Mode's
+Source Sync writes (`io/maintainer_sync.py`), and nothing on the command line writes it:
+`maintain upstream sync` refreshes the pinned snapshot and `maintain upstream scan` only reports.
+A scripted maintainer therefore has to open the TUI once per change. Not required by §175, which
+names `candidate list|promote` only; the transaction exists and needs a CLI face.

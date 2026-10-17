@@ -9,7 +9,8 @@ single `source` family with role families and named author repositories Upstream
 INV-269–INV-272 are accepted (with §175.4 reset with backup and §175.5 Author Mode). Step 2 split
 `config.json` into `registries` and `upstreams` (D-442); step 11 made `reset` back up instead of
 delete, with `--restore` (D-440). Steps 3, 4 and 6 replaced the parser with the role families and
-`--kind git|local`, family-filtered connection commands and new hints throughout (D-443).
+`--kind git|local`, family-filtered connection commands and new hints throughout (D-443); step 5 added
+`maintain candidate list`.
 
 **2026-10-17, §174 (D-438): a local author checkout is read as Git would commit it.**
 `source-local`, `author check` and `registry scan` / `promote --checkout` read only the paths

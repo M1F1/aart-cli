@@ -813,6 +813,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_json(p_scan)
 
+    p_candidate_list = candidate_sub.add_parser(
+        "list",
+        help="list the Candidates recorded for the connected Upstream repositories",
+        description=(
+            "List the active Candidates bound to each Upstream repository's pinned snapshot, with "
+            "what the Registry checkout records about their promotion. Changes nothing."
+        ),
+    )
+    p_candidate_list.add_argument(
+        "--source",
+        dest="source_dir",
+        metavar="DIR",
+        help="registry checkout to read promotion records from (default: the project)",
+    )
+    p_candidate_list.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+
     p_candidate_promote = candidate_sub.add_parser(
         "promote",
         help="review or locally promote exact Candidate IDs as one registry transaction",

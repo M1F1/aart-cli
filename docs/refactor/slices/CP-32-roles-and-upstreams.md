@@ -91,9 +91,25 @@ Evidence:
 Targeted mutation: `_in_family` returning True turned only the family test red among
 `source_cli_command_test`, `local_registry_promotion_e2e_test` and `source_remediation_test`.
 
-Open in later steps: `maintain candidate list` (5); the consumer catalog still reads upstream
+Open in later steps: the consumer catalog still reads upstream
 snapshots, so INV-269's "nothing a consumer installs comes from one" is step 7 with the e2e
 fixtures that install from the shared `reference` upstream.
+
+## Step 5 — maintain candidate list|promote
+
+Done. `maintain candidate list [--source DIR] [--json]` (`commands/candidate.py`) prints the active
+Candidates `read_maintainer_views` projects — what Registry Maintainer Mode's Candidates screen reads
+— with ID, state, coordinate and version, Upstream repository, revision, manifest, target Registry
+and promotion record, and writes nothing. `promote` stays with the Registry handler. Only the TUI's
+Source Sync records Candidate history today (B-202), so the empty state says that.
+
+Evidence: `tests/authoring_source_admission_e2e_test.py`
+`test_candidate_list_shows_what_the_sync_recorded_and_changes_nothing`: empty before the Source
+Sync; afterwards exactly the synchronized Candidate, at the author's HEAD, `not-promoted`, with the
+data root byte-for-byte as before the list. `tests/registry_cli_test.py`: `list` routes to its own
+handler. Related modules green; ruff, mypy, tach and docs-check clean.
+
+Targeted mutation: listing no Candidates turned only that e2e test red.
 
 ## Step 11 — reset with backup
 
