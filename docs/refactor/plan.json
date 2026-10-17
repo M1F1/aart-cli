@@ -1129,12 +1129,12 @@
         {
           "id": "8",
           "title": "07 and 07b ask each member's configuration and credentials once per member artifact, with Set later; nothing blocks (§172.3)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "9",
           "title": "Installed, Doctor and uninstall show a Collection with health from its members and keep the ownership graph (INV-186)",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "10",

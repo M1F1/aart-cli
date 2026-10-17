@@ -245,3 +245,29 @@ Targeted mutations:
 - Making 52's `selected` seed nothing turned only the three editor tests that open an existing
   Collection red.
 - Sending `summary=None` from the TUI action turned only the shell e2e red.
+
+## Step 8 — 07 and 07b per member, with Set later (§173.5, §172.3, §172.6)
+
+The step was characterization: the per-artifact form and credentials screen from CP-30 already
+treat a Collection's members as the artifacts they are, so no production code changed. On 07 each
+member's configuration sits under the member's name. On 07b each member's credential is one row
+however many harnesses take it, and one answer, or one Set later, reaches every installation of that
+member. Set later keeps what a field holds, such as a default left in place, and stores
+`AART_NOT_SET` for what is empty, member by member. Ready lists each placeholder, and nothing
+blocks the install.
+
+Evidence:
+- `tests/collection_inputs_tui_e2e_test.py` (1): the real shell installs a Collection of two MCP
+  servers, each with a configuration value and a credential, into claude and opencode. On 07
+  GitHub's default is cleared and Jira's is kept, and Set later is taken on 07 and 07b. The test
+  checks:
+  - each input is drawn once, under its member;
+  - Ready lists `github-org`, `github-token` and `jira-token`, but not the kept `jira-site`;
+  - nothing was prompted;
+  - four placeholders went to the provider;
+  - four configuration files hold `github-org=AART_NOT_SET` and `jira-site=example`;
+  - the install reaches Success.
+
+Targeted mutation: keying 07b's rows by installation (`str(owner)`) instead of by artifact
+(`artifact_answer_key(owner)`) in `ConsumerActionHandler`'s secret projection turned the new test red, along with the two
+existing 07b tests that count prompts per artifact.

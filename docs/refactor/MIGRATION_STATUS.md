@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-31 step 8: a Collection's members are configured once each.**
+- 07 lists each member's configuration under its name. 07b asks each member's credential once for
+  all its installations. Set later stores `AART_NOT_SET` for what is empty, member by member, and
+  Ready lists it. Nothing blocks. This was characterization only, with no production change.
+  Evidence in the slice, Step 8.
+
 **2026-10-16, CP-31 steps 17–19 (D-430–D-432): the Registry owns Collections.**
 - Source-authored Collections are gone: `author init --kind collection`, Sync's Collection
   Candidates and the old screens 51/52 are removed, and a Collection manifest is refused with the
