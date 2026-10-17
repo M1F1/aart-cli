@@ -91,7 +91,7 @@ class FocusedOfferIsDescribedTest(unittest.TestCase):
         described = source.description(state)
 
         self.assertEqual(
-            _labels(described), ("Artifact", "Kind", "Version", "Registry", "Description")
+            _labels(described)[:5], ("Artifact", "Kind", "Version", "Registry", "Description")
         )
         joined = "\n".join(described)
         for value in (focused.identity.name, focused.version, str(focused.source_alias)):
@@ -121,7 +121,7 @@ class FocusedOfferIsDescribedTest(unittest.TestCase):
 
         self.assertTrue(expected)
         self.assertEqual((fast.current_row, again.current_row), (verbose.current_row,) * 2)
-        self.assertFalse(any(line in frame(source, fast) for line in expected))
+        self.assertFalse(any(line in frame(source, fast) for line in expected if line.strip()))
         self.assertEqual(frame(source, again), frame(source, verbose))
         self.assertEqual(
             {command.kind for command in (*fast_commands, *again_commands)},

@@ -11411,9 +11411,11 @@ Details screen and extends §173.8.
 
 - **Details stay in Marketplace.** The separate Marketplace Artifact Details screen is removed.
   Every piece of information it provided is available for the artifact under the cursor through
-  Marketplace's existing Verbose / More info control. This includes its artifact contract and
-  input guidance, not only the short description. Browsing these details keeps the selection,
-  search, cursor and install route in Marketplace. Collection preview and Installed details keep
+  Marketplace's existing Verbose / More info control. This includes its existing provenance,
+  security, harness compatibility, installation status, digest and declared input guidance fields. Browsing these details keeps the selection,
+  search, cursor and install route in Marketplace. Install acts on marked offers, or on the
+  offer under the cursor when nothing is marked, preserving the former single-artifact install
+  without a preliminary tick. Collection preview and Installed details keep
   their own purposes.
 - **Columns have headings.** Each Marketplace column has a visible heading identifying its
   meaning, including status, scope, harnesses and unset inputs (§173.8). Headings and cells use

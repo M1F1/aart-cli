@@ -435,7 +435,7 @@ class ArtifactProjectionTest(unittest.TestCase):
         self.assertEqual(pane[0].strip(), row.key)
         self.assertIn(row.summary, _flat(pane))
         labels = [line.split()[0] for line in pane if line.startswith("    ")]
-        self.assertEqual(labels[:4], ["source", "risk", "harness", "status"])
+        self.assertEqual(labels[:4], ["registry", "risk", "harness", "status"])
         self.assertIn("healthy", _flat(pane))
         self.assertIn("compatible", _flat(pane))
 

@@ -133,11 +133,11 @@ class NestedTitleTest(TestCase):
     def test_a_consumer_view_names_the_list_it_was_opened_from(self) -> None:
         self.assertEqual(
             self._heading(
-                ConsumerScreen.ARTIFACT_DETAILS,
+                ConsumerScreen.COLLECTION_PREVIEW,
                 ConsumerScreen.DASHBOARD,
                 ConsumerScreen.MARKETPLACE,
             ),
-            "AART / Marketplace / Artifact Details",
+            "AART / Marketplace / Collection",
         )
 
     def test_a_screen_that_did_not_run_still_says_so_after_its_trail(self) -> None:

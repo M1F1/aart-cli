@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-32 step 13 (D-449): Marketplace owns artifact details.** More info
+preserves complete approved evidence and declared input guidance, without current answers or
+provider state. The standalone route is gone; search, cursor, selection and single/bulk install
+remain. Targeted evidence-removal mutation turns two tests red; restored focused tests pass.
+Next: complete labeled Marketplace columns (14), documentation (9), CI/PR (10).
+
 **2026-10-17, CP-32 step 12 (D-448): Author Mode.** Its independent Settings opt-in adds
 Workspace, Check, full manifest diagnostics and New artifact, through the CLI's reader, checker
 and skeleton writer. Paths stay external/contained, files are never overwritten, and failed

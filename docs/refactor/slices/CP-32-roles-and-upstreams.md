@@ -304,3 +304,28 @@ where the directory check still refuses a missing workspace. `application/author
 initially appeared untested due to cached scope statistics (B-209); after collecting fresh
 statistics it killed 44/47. Generated uppercase paths and preserved command-free recovery
 then killed **47/47**. No quality gate or Hypothesis health check was suppressed.
+
+
+## Step 13 — complete artifact disclosure stays in Marketplace
+
+Done (D-449). The old Artifact Details screen and route are removed. More info carries its full
+provenance, security, compatibility, installation and digest fields, plus declared input guidance.
+It shows no installation answers or credential provider references/state. Enter on an artifact
+keeps Marketplace unchanged; toggling More info preserves search, cursor and selection. Install
+uses marked offers or the focused offer when none is marked; an empty list does nothing.
+Collection preview and Installed details remain independently navigable.
+
+Red/green: new tests characterize the former complete view and independently assert all four
+full digests, origin and revision. Controls, single/bulk install, empty-list refusal, collections,
+trail and shell expectations were updated to the accepted route. The targeted mutation deleting
+the evidence block makes precisely the two full-evidence/new-view tests fail in the five-test
+module. Restored source and cleared bytecode pass. The direct affected selection passes 82 tests.
+
+Scoped advisory mutation of `tui_marketplace_detail.py` initially killed 48/113; added independent
+input type/required/guidance assertions raised this to 77/113. Remaining field-label findings
+were strengthened with label/value pairs, with cosmetic indentation, equivalent falsy identity
+options and duplicate identity rendering reviewed as outside information-preservation claims.
+B-210 records the unused former wrapper; no fallback view remains. Fresh mutation statistics after the label/value assertions kill 108/113; five remaining mutants
+retain information through indentation, redundant identity or equivalent falsy options, or add
+punctuation to the no-description fallback. The related cross-screen run passes 1479 tests
+in 149 modules plus the frame contracts. Ruff, mypy, tach and docs-check pass.

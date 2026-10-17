@@ -624,7 +624,6 @@ _SEARCHABLE = frozenset(
 _SELECTABLE = frozenset(
     {
         ConsumerScreen.MARKETPLACE,
-        ConsumerScreen.ARTIFACT_DETAILS,
         ConsumerScreen.COLLECTION_PREVIEW,
         ConsumerScreen.COLLECTION_CUSTOMIZE,
         # Several installations ticked here are uninstalled together (D-393).
@@ -1263,11 +1262,7 @@ def _move_column(
 def _toggle_selection(
     state: ConsumerUiState, key: str
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
-    key = key or (
-        state.focus
-        if state.session.screen is ConsumerScreen.ARTIFACT_DETAILS
-        else state.current_row
-    )
+    key = key or state.current_row
     if state.session.screen not in _SELECTABLE or not key:
         return state, ()
     if state.session.screen is ConsumerScreen.CONFIGURATION_TARGETS:
@@ -1421,7 +1416,6 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     ): MaintainerScreen.ADOPTION_REVIEW,
     # Install opens 05p, where the path is chosen (§173.7); Custom goes on to 05.
     (ConsumerActionKind.INSTALL, ConsumerScreen.MARKETPLACE): ConsumerScreen.INSTALL_PATH,
-    (ConsumerActionKind.INSTALL, ConsumerScreen.ARTIFACT_DETAILS): ConsumerScreen.INSTALL_PATH,
     (
         ConsumerActionKind.INSTALL,
         ConsumerScreen.COLLECTION_PREVIEW,
@@ -1529,6 +1523,13 @@ def _request_action(
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
     if action is None:
         return state, ()
+    if (
+        action is ConsumerActionKind.INSTALL
+        and state.session.screen is ConsumerScreen.MARKETPLACE
+        and not state.selection
+        and state.current_row
+    ):
+        state = replace(state, selection=(state.current_row,))
     author_origins = {
         ConsumerActionKind.AUTHOR_WORKSPACE: (ConsumerScreen.AUTHOR_WORKSPACE,),
         ConsumerActionKind.AUTHOR_INIT: (ConsumerScreen.AUTHOR_INIT,),
@@ -2591,7 +2592,6 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _action_binding("r", "Re-run check", ConsumerActionKind.AUTHOR_CHECK),
     ),
     ConsumerScreen.MARKETPLACE: (_action_binding("i", "Install", ConsumerActionKind.INSTALL),),
-    ConsumerScreen.ARTIFACT_DETAILS: (_action_binding("i", "Install", ConsumerActionKind.INSTALL),),
     ConsumerScreen.COLLECTION_PREVIEW: (
         _action_binding("i", "Install", ConsumerActionKind.INSTALL),
     ),
@@ -2943,8 +2943,8 @@ def key_bindings(
         elif state.session.screen in _SELECTABLE and " " not in keys:
             label = (
                 "Deselect"
-                if state.session.screen is ConsumerScreen.ARTIFACT_DETAILS
-                and state.focus in state.selection
+                if state.session.screen is ConsumerScreen.MARKETPLACE
+                and state.current_row in state.selection
                 else "Select"
             )
             bindings.append(KeyBinding("Space", label))
@@ -3424,11 +3424,7 @@ def key_event(
     ):
         return ConsumerUiEvent(ConsumerUiEventKind.MOVE_COLUMN, text=key)
     if key == " ":
-        selected = (
-            state.focus
-            if state.session.screen is ConsumerScreen.ARTIFACT_DETAILS
-            else cursor or state.current_row
-        )
+        selected = cursor or state.current_row
         return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_SELECTION, key=selected)
     if key in ("up", "k"):
         return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")

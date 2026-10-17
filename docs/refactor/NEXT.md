@@ -62,15 +62,14 @@ Registries (INV-269). Step 1 (the specification, with §175.4 reset-with-backup 
 (the configuration split, D-442) are done, and so are step 11, reset with backup (D-440), and steps 3, 4
 and 6, the `consume` / `maintain upstream` / `maintain registry` families (D-443). Step 5, `maintain candidate list`, is done too (B-202 for
 recording Candidates from the CLI). Step 7 is done: a consumer installs only from Registries (D-444; B-203–B-206 for what it
-exposed). Step 8 (TUI names, D-445) and the owner-reported smoke fix in step 15 (D-447) are done. Step 12 (Author Mode, D-448) is done. Next are 13 (Marketplace details under More info), 14 (complete labeled Marketplace columns), 9 and 10.
+exposed). Step 8 (TUI names, D-445) and the owner-reported smoke fix in step 15 (D-447) are done. Steps 12 (Author Mode, D-448) and 13 (Marketplace details under More info, D-449) are done. Next are 14 (complete labeled Marketplace columns), 9 and 10.
 
-**Exact next task: CP-32 step 13 (§175.6, INV-273, D-446).** Remove the Marketplace's
-standalone Artifact Details screen and expose every detail it held under More info on the focused
-Marketplace artifact, preserving selection/search/cursor and the install route. Characterize the
-old disclosure before deleting its route. Then step 14: visible column headings and complete
-wrapped values, including narrow terminals (INV-274). Terminal drawing currently wraps at `width`
-and then clips to `width - 1`; correct that boundary as part of preserving full cell content.
-After 13/14: documentation (9) and CI on #78 (10). Full suite stays in CI. See
+**Exact next task: CP-32 step 14 (§175.6, INV-274, D-446).** Add visible Marketplace
+column headings and preserve complete wrapped values, including narrow terminals. Confirm the terminal boundary with a
+regression test: `wrap_lines` already reserves the last curses column; use its actual usable width
+when choosing a grid or stacked fields. Step 13 removed standalone Artifact Details and moved all its
+information under More info without losing browsing/install state (D-449).
+After 14: documentation (9) and CI on #78 (10). Full suite stays in CI. See
 `slices/CP-32-roles-and-upstreams.md`; B-209 explains fresh scoped mutation statistics.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major

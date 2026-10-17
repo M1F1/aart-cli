@@ -505,7 +505,7 @@ def render_artifact_pane(row: MarketplaceArtifactRow, *, width: int) -> Tuple[st
         field_block(
             (
                 (
-                    "source",
+                    "registry",
                     f"{row.source_alias} ({row.trust}) at {_short_revision(row.source_revision)}, "
                     f"{row.source_health}",
                 ),
@@ -524,11 +524,13 @@ def _detail_section(heading: str, fields: Tuple[Tuple[str, str], ...]) -> Tuple[
     return ("", heading, *field_block(fields, indent=_PANE_INDENT, width=CONTENT_MEASURE))
 
 
-def render_artifact_detail(row: MarketplaceArtifactRow) -> Tuple[str, ...]:
-    """The full record behind ``?``: every stored evidence field as ``label   value`` (D8).
+def render_artifact_detail(
+    row: MarketplaceArtifactRow, *, include_identity: bool = True
+) -> Tuple[str, ...]:
+    """Complete stored evidence for Marketplace's More info region.
 
-    Digests are emitted outside the field block and outside the measure. A wrapped hash cannot be
-    read or copied, so it keeps its own line however narrow the terminal is.
+    Callers may provide identity fields separately. Raw digests remain intact here; the enclosing
+    disclosure can wrap them to the viewport without discarding characters.
     """
 
     security = row.security
@@ -545,10 +547,10 @@ def render_artifact_detail(row: MarketplaceArtifactRow) -> Tuple[str, ...]:
         for item in row.compatibility
     )
     remediation = security.remediation or ("none recorded",)
-    lines = [row.key, *wrap(row.summary, width=CONTENT_MEASURE)]
+    lines = [row.key, *wrap(row.summary, width=CONTENT_MEASURE)] if include_identity else []
     lines.extend(
         _detail_section(
-            "source",
+            "registry",
             (
                 ("alias", str(row.source_alias)),
                 ("origin", row.source_origin),

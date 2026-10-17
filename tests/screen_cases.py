@@ -80,7 +80,6 @@ RECORDED_SCREENS: tuple[ApplicationScreen, ...] = (
     ConsumerScreen.AUTHOR_INIT,
     ConsumerScreen.DASHBOARD,
     ConsumerScreen.MARKETPLACE,
-    ConsumerScreen.ARTIFACT_DETAILS,
     ConsumerScreen.COLLECTION_PREVIEW,
     ConsumerScreen.COLLECTION_CUSTOMIZE,
     ConsumerScreen.INSTALL_PATH,
@@ -223,9 +222,6 @@ def _consumer_cases() -> dict[ConsumerScreen, ScreenCase]:
     marketplace_states = {
         ConsumerScreen.MARKETPLACE: ConsumerUiState(
             ConsumerSession(ConsumerScreen.MARKETPLACE), selection=(artifact,)
-        ),
-        ConsumerScreen.ARTIFACT_DETAILS: ConsumerUiState(
-            ConsumerSession(ConsumerScreen.ARTIFACT_DETAILS), focus=artifact
         ),
         ConsumerScreen.COLLECTION_PREVIEW: ConsumerUiState(
             ConsumerSession(ConsumerScreen.COLLECTION_PREVIEW),

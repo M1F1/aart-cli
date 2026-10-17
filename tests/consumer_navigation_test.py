@@ -98,7 +98,7 @@ class ConsumerNavigationTest(unittest.TestCase):
         session = ConsumerSession(ConsumerScreen.DASHBOARD)
 
         marketplace = session.navigate(ConsumerScreen.MARKETPLACE)
-        detail = marketplace.navigate(ConsumerScreen.ARTIFACT_DETAILS)
+        detail = marketplace.navigate(ConsumerScreen.COLLECTION_PREVIEW)
         verbose = detail.switch_profile(PresentationProfile.MORE_INFO)
 
         self.assertEqual(session.screen, ConsumerScreen.DASHBOARD)

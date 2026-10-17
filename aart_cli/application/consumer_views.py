@@ -226,7 +226,6 @@ class ConsumerScreen(str, Enum):
 
     DASHBOARD = "01-dashboard"
     MARKETPLACE = "02-marketplace"
-    ARTIFACT_DETAILS = "03-artifact-details"
     COLLECTION_PREVIEW = "04-collection"
     COLLECTION_CUSTOMIZE = "04a-customize-collection"
     # 05p chooses the install path after Install (§173.7): Default takes the harnesses, scope and
@@ -2607,11 +2606,9 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
         ConsumerScreen.SETTINGS,
     ),
     ConsumerScreen.MARKETPLACE: (
-        ConsumerScreen.ARTIFACT_DETAILS,
         ConsumerScreen.COLLECTION_PREVIEW,
         ConsumerScreen.INSTALL_PATH,
     ),
-    ConsumerScreen.ARTIFACT_DETAILS: (ConsumerScreen.INSTALL_PATH,),
     ConsumerScreen.COLLECTION_PREVIEW: (
         ConsumerScreen.COLLECTION_CUSTOMIZE,
         ConsumerScreen.INSTALL_PATH,

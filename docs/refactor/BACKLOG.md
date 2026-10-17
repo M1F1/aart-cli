@@ -4770,3 +4770,11 @@ projection scope then killed 44/47; mutation-derived tests for uppercase workspa
 command-free recovery killed the remaining three, yielding 47/47. Existing unrelated mutation
 results were not removed. Teach `scripts/mutants.py` to handle scope changes explicitly in a
 separate tooling slice; do not treat an unexplained “no tests” report as adequacy evidence.
+
+
+## B-210 — Retire the unused compact Marketplace artifact wrapper
+
+CP-32 step 13 removes the last production call to `tui_consumer.render_marketplace_artifact`.
+Tests still characterize that former compact/full wrapper; the complete evidence renderer is
+reused by More info. Remove the unused wrapper and its obsolete compact-pane tests in a cleanup
+slice. It grants no route or fallback authority and is not required by INV-273.

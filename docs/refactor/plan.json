@@ -1226,7 +1226,7 @@
         {
           "id": "13",
           "title": "Marketplace owns artifact details: remove its standalone Artifact Details view and expose every detail under Verbose / More info on the focused Marketplace artifact, preserving browsing and installation state (§175.6, INV-273, D-446)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "14",

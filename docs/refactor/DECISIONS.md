@@ -11128,3 +11128,15 @@ the check refusal; it never says that nothing changed. No subscription or Regist
 Manifest details keep every error code and message. Recovery uses `Diagnostic.interactive`, or
 command-free remediation with an author-area fallback, honoring the existing no-CLI-in-frames
 contract without changing CLI/JSON diagnostics. Multiline errors become valid terminal lines.
+
+
+## D-449 — Marketplace's focused offer owns its complete disclosure (CP-32 step 13)
+
+Remove the standalone Artifact Details route. More info combines the existing complete evidence
+renderer with declared configuration and credential guidance; it never projects current answers,
+provider references or provider state into a public offer. Identity names the complete coordinate.
+Collection preview and Installed details retain their separate navigation.
+
+Enter on an artifact leaves Marketplace unchanged. More info keeps cursor, search and selection.
+Install uses the marked offers, or explicitly selects the focused offer if no offer is marked,
+preserving the former single-artifact route without an extra tick. An empty list requests nothing.

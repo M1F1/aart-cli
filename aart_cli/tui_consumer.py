@@ -217,6 +217,7 @@ from aart_cli.tui_marketplace import (
     project_marketplace_rows,
     render_artifact_detail,
 )
+from aart_cli.tui_marketplace_detail import artifact_disclosure
 
 __all__ = [
     "DETAIL_LEVEL_NAMES",
@@ -3301,14 +3302,7 @@ def marketplace_offer_description(
     """
 
     if isinstance(entry, MarketplaceEntry):
-        row = entry.row
-        fields = (
-            ("Artifact", row.identity.name),
-            ("Kind", _human(row.identity.kind).capitalize()),
-            ("Version", row.version),
-            ("Registry", str(row.source_alias)),
-            ("Description", row.summary.strip() or _NO_APPROVED_DESCRIPTION),
-        )
+        return artifact_disclosure(entry.row, entry.inputs)
     elif isinstance(entry, MarketplaceCollectionEntry):
         offered = entry.collection
         count = len(offered.members)
@@ -3849,7 +3843,7 @@ class CanonicalScreenSource:
         if screen is ConsumerScreen.MARKETPLACE:
             if self._screens.offered_collection(state.current_row) is not None:
                 return ConsumerScreen.COLLECTION_PREVIEW
-            return ConsumerScreen.ARTIFACT_DETAILS if state.current_row else None
+            return None
         if screen is ConsumerScreen.COLLECTION_PREVIEW:
             return ConsumerScreen.COLLECTION_CUSTOMIZE if state.focus else None
         if screen is ConsumerScreen.INSTALLED:
@@ -4300,12 +4294,6 @@ class CanonicalScreenSource:
             # From the session's own settings, not the machine snapshot: the same reason the rows
             # are drawn from `state.settings`.
             return settings_consequence(state.settings)
-        if screen is ConsumerScreen.ARTIFACT_DETAILS and screens.offered(state.focus) is not None:
-            return (
-                "Selected for installation."
-                if state.focus in state.selection
-                else "Not selected for installation.",
-            )
         if screen is ConsumerScreen.CREDENTIAL_ACTION and self.rows(state):
             record = screens.credential(state.focus)
             assert record is not None
@@ -4916,13 +4904,6 @@ class CanonicalScreenSource:
                     status = "installed" if key.partition("@")[0] in held else "not installed"
                     cells.append((key, status))
             return self._list(state, columns(cells, width=CONTENT_MEASURE - _ROW_PREFIX))
-        if screen is ConsumerScreen.ARTIFACT_DETAILS:
-            entry = screens.offered(state.focus)
-            return (
-                ("Nothing is offered here.",)
-                if entry is None
-                else render_marketplace_artifact(entry.row, profile, inputs=entry.inputs)
-            )
         if screen in (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE):
             preview = screens.offered_collection(state.focus)
             if preview is None:
