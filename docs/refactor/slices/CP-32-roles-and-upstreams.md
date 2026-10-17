@@ -397,4 +397,14 @@ CI run 39034117210 failed on tooling the role split left behind (D-451):
   `Upstream repository`. Red first in `source_cli_command_test`, `working_tree_source_e2e_test`
   and `marketplace_projection_test`, then green. 182 related tests across 17 modules pass.
 
-Remaining: push to PR #78 and read the complete CI matrix; close the step when it is green.
+CI run 39050076134 stopped at format-check (`tests/marketplace_columns_e2e_test.py`, reformatted).
+Run 39050227597 then ran all 4953 tests and failed 16, the same on 3.10, 3.11 and 3.14:
+
+- `application/author_views.py` imported `pathlib`, which `application_purity_test` forbids; the
+  workspace check now uses `posixpath`, as `application/factory_reset.py` does.
+- The prompt-layout sweep built Author screens without Author Mode; it now enables both opt-ins.
+- Four tests still held the pre-§175 wording the docs and TUI had already replaced: the README
+  orientation stage `Upstream repository`, `maintain upstream adopt` in the Registry guide, the
+  Add upstream form's `another upstream`, and the `Upstream repositories` footer label.
+
+All seven failing modules pass locally. Remaining: read the next CI run; close the step when green.

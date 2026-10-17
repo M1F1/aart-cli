@@ -17,7 +17,7 @@ _SPELLED = {9: "nine", 10: "ten", 11: "eleven", 12: "twelve"}
 #: Substituted for every `<…>` before a route command is handed to the parser.
 _PLACEHOLDER = "placeholder"
 #: The four things §1.6 says a new user has to be able to tell apart.
-_STAGES = ("Source", "Candidate", "Registry", "Marketplace")
+_STAGES = ("Upstream repository", "Candidate", "Registry", "Marketplace")
 
 
 def _document(relative: str) -> str:
@@ -298,7 +298,7 @@ class OrientationTest(unittest.TestCase):
                 self.assertIn(kind.value, orientation)
 
     def test_the_orientation_names_the_path_an_artifact_travels_in_order(self) -> None:
-        """Source, Candidate, Registry, Marketplace are four different things and a new user who
+        """Upstream repository, Candidate, Registry, Marketplace are four different things and a new user who
         conflates any two of them cannot read a diagnostic that names one of them."""
 
         orientation = _section(self.HEADING)
@@ -550,7 +550,7 @@ class RegistryDocumentTest(unittest.TestCase):
         document = _document("docs/registry/maintaining-a-registry-v1.md")
         for phrase in (
             "Content enters by adopting an author's manifest",
-            "`registry adopt`",
+            "`maintain upstream adopt`",
             "tutorials/company-registry-tabnine-v1.md",
         ):
             with self.subTest(phrase=phrase):

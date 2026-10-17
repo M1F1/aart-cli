@@ -1,7 +1,7 @@
 """Credential-free author form values; filesystem operations belong to the adapter."""
 
+import posixpath
 from dataclasses import dataclass
-from pathlib import PurePath
 
 from aart_cli.authoring.check import ManifestVerdict
 from aart_cli.authoring.skeleton import GENERATED_KINDS
@@ -14,9 +14,9 @@ def normalized_workspace(value: object) -> bool:
         not value
         or (
             not any(character in value for character in "\r\n\x00")
-            and PurePath(value).is_absolute()
-            and str(PurePath(value)) == value
-            and ".." not in PurePath(value).parts
+            and posixpath.isabs(value)
+            and posixpath.normpath(value) == value
+            and ".." not in value.split("/")
         )
     )
 
