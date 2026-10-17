@@ -47,7 +47,7 @@ from aart_cli.tui_marketplace import MarketplaceTarget, project_marketplace_rows
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import OFFERED, _delivered, _drive
 from tests.consumer_marketplace_shell_test import drive, screens
-from tests.consumer_shell_test import ENTER, ESCAPE, SPACE, FakeTerminal, _at
+from tests.consumer_shell_test import ENTER, ESCAPE, INSTALL_CUSTOM, SPACE, FakeTerminal, _at
 from tests.declared_harness_narrowing_test import _reached
 from tests.marketplace_fixtures import (
     artifact,
@@ -228,7 +228,7 @@ class ArtifactDetailsControlTest(unittest.TestCase):
                 env,
                 _at(ConsumerScreen.MARKETPLACE),
                 ENTER,
-                ord("i"),
+                *INSTALL_CUSTOM,
                 SPACE,
                 ENTER,
                 ENTER,
@@ -259,7 +259,7 @@ class ArtifactDetailsControlTest(unittest.TestCase):
                 )
 
         handler = Handler()
-        terminal = FakeTerminal(ord("i"), ord("q"))
+        terminal = FakeTerminal(*INSTALL_CUSTOM, ord("q"))
         finished = run_consumer_shell(
             unavailable,
             terminal,
@@ -416,7 +416,7 @@ class DetailsAgreesWithReviewSelectionE2ETest(unittest.TestCase):
             details, _terminal, handler = _drive(env, _at(ConsumerScreen.MARKETPLACE), ENTER)
             row = handler.source().screens.offered(OFFERED)
             review, terminal, handler = _drive(
-                env, _at(ConsumerScreen.MARKETPLACE), ENTER, ord("i"), actions=handler
+                env, _at(ConsumerScreen.MARKETPLACE), ENTER, *INSTALL_CUSTOM, actions=handler
             )
             delivered = _delivered(env).exists()
         self.assertIs(details.session.screen, ConsumerScreen.ARTIFACT_DETAILS)

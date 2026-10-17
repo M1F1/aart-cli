@@ -91,6 +91,7 @@ __all__ = [
     "InstallSecretView",
     "choose_pair_scope",
     "default_pair_scopes",
+    "settings_pairs",
     "pair_scope_from_key",
     "pair_scope_key",
     "scope_choice_offered",
@@ -132,6 +133,15 @@ __all__ = [
     "ConsumerSettings",
     "SETTING_PURPOSE",
     "SETTING_ROWS",
+    "DEFAULT_HARNESS_ROW_PREFIX",
+    "INSTALL_PATH_CUSTOM",
+    "INSTALL_PATH_DEFAULT",
+    "INSTALL_PATH_PURPOSE",
+    "INSTALL_PATH_ROWS",
+    "default_harness_from_row",
+    "default_harness_row",
+    "setting_purpose",
+    "setting_rows",
     "SUCCESS_CHOICES",
     "McpTestEntryView",
     "McpTestResultView",
@@ -216,6 +226,9 @@ class ConsumerScreen(str, Enum):
     ARTIFACT_DETAILS = "03-artifact-details"
     COLLECTION_PREVIEW = "04-collection"
     COLLECTION_CUSTOMIZE = "04a-customize-collection"
+    # 05p chooses the install path after Install (§173.7): Default takes the harnesses, scope and
+    # Python installer from Settings and skips 05 and 07a; Custom is 05 onwards.
+    INSTALL_PATH = "05p-install-path"
     REVIEW_SELECTION = "05-review-selection"
     AUTOMATIC_INSPECTION = "06-automatic-inspection"
     REQUIRED_INPUTS = "07-required-inputs"
@@ -435,6 +448,24 @@ def default_pairs(targets: tuple[HarnessTargetView, ...]) -> tuple[str, ...]:
         pair_key(artifact, harnesses[0])
         for artifact, harnesses in options.items()
         if len(harnesses) == 1
+    )
+
+
+def settings_pairs(
+    targets: tuple[HarnessTargetView, ...], harnesses: tuple[str, ...]
+) -> tuple[str, ...]:
+    """The pairs the Default path installs (§173.7): each artifact on the Settings harnesses.
+
+    `targets` are the detected harnesses and what each can host, so a Settings harness that is not
+    detected, or cannot host an artifact, gives that artifact nothing. With no harness in Settings,
+    every detected harness that can host an artifact is used.
+    """
+
+    return tuple(
+        pair_key(artifact, target.harness)
+        for target in targets
+        if not harnesses or target.harness in harnesses
+        for artifact in target.artifacts
     )
 
 
@@ -2494,14 +2525,21 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.MARKETPLACE: (
         ConsumerScreen.ARTIFACT_DETAILS,
         ConsumerScreen.COLLECTION_PREVIEW,
-        ConsumerScreen.REVIEW_SELECTION,
+        ConsumerScreen.INSTALL_PATH,
     ),
-    ConsumerScreen.ARTIFACT_DETAILS: (ConsumerScreen.REVIEW_SELECTION,),
+    ConsumerScreen.ARTIFACT_DETAILS: (ConsumerScreen.INSTALL_PATH,),
     ConsumerScreen.COLLECTION_PREVIEW: (
         ConsumerScreen.COLLECTION_CUSTOMIZE,
-        ConsumerScreen.REVIEW_SELECTION,
+        ConsumerScreen.INSTALL_PATH,
     ),
-    ConsumerScreen.COLLECTION_CUSTOMIZE: (ConsumerScreen.REVIEW_SELECTION,),
+    # Custom goes on to 05; Default to whatever still needs deciding (§173.7).
+    ConsumerScreen.INSTALL_PATH: (
+        ConsumerScreen.REVIEW_SELECTION,
+        ConsumerScreen.REQUIRED_INPUTS,
+        ConsumerScreen.INSTALL_CREDENTIALS,
+        ConsumerScreen.READY,
+    ),
+    ConsumerScreen.COLLECTION_CUSTOMIZE: (ConsumerScreen.INSTALL_PATH,),
     ConsumerScreen.REVIEW_SELECTION: (
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.REQUIRED_INPUTS,
@@ -2585,8 +2623,13 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
 _KEEPS_FOCUS: frozenset[tuple[ConsumerScreen, ConsumerScreen]] = frozenset(
     {
         (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE),
-        (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.REVIEW_SELECTION),
-        (ConsumerScreen.COLLECTION_CUSTOMIZE, ConsumerScreen.REVIEW_SELECTION),
+        (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.INSTALL_PATH),
+        (ConsumerScreen.COLLECTION_CUSTOMIZE, ConsumerScreen.INSTALL_PATH),
+        # 05p's rows are the two paths, so what follows it is still about what Install was for.
+        (ConsumerScreen.INSTALL_PATH, ConsumerScreen.REVIEW_SELECTION),
+        (ConsumerScreen.INSTALL_PATH, ConsumerScreen.REQUIRED_INPUTS),
+        (ConsumerScreen.INSTALL_PATH, ConsumerScreen.INSTALL_CREDENTIALS),
+        (ConsumerScreen.INSTALL_PATH, ConsumerScreen.READY),
         # CP-23 task 06: Success is focused on the receipt its operation recorded, so opening the
         # receipt from it opens that one rather than whichever row the cursor was on.
         (ConsumerScreen.SUCCESS, ConsumerScreen.RECEIPT_DETAILS),
@@ -2830,8 +2873,17 @@ class ConsumerSettings:
     #: because every Python that can build an environment already has it, so the preference starts
     #: on the backend that is never the reason an install cannot run (issue #11b).
     python_installer: str = "pip"
+    #: The harnesses the Default install path uses (§173.7). Empty means every detected harness
+    #: that can host the artifact.
+    default_harnesses: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        if (
+            not isinstance(self.default_harnesses, tuple)
+            or any(not _is_harness_name(item) for item in self.default_harnesses)
+            or len(set(self.default_harnesses)) != len(self.default_harnesses)
+        ):
+            raise ValueError("consumer settings are invalid")
         if (
             not isinstance(self.profile, PresentationProfile)
             or self.default_scope not in {"project", "user"}
@@ -2868,6 +2920,16 @@ class ConsumerSettings:
             return replace(self, python_installer="uv" if self.python_installer == "pip" else "pip")
         if row == "maintainer-mode":
             return self.with_maintainer_mode(not self.maintainer_mode)
+        harness = default_harness_from_row(row)
+        if harness is not None:
+            return replace(
+                self,
+                default_harnesses=(
+                    tuple(item for item in self.default_harnesses if item != harness)
+                    if harness in self.default_harnesses
+                    else (*self.default_harnesses, harness)
+                ),
+            )
         raise ValueError(f"no consumer setting is named {row}")
 
 
@@ -2951,6 +3013,41 @@ SETTING_ROWS: tuple[str, ...] = (
     "maintainer-mode",
 )
 
+#: Screen 28's rows for the Default path's harnesses, one per detected harness, each on or off.
+DEFAULT_HARNESS_ROW_PREFIX = "default-harness:"
+
+
+def _is_harness_name(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and all(character.isalnum() or character in "-_." for character in value)
+    )
+
+
+def default_harness_row(harness: str) -> str:
+    if not _is_harness_name(harness):
+        raise ValueError("a default harness row needs a harness name")
+    return f"{DEFAULT_HARNESS_ROW_PREFIX}{harness}"
+
+
+def default_harness_from_row(row: str) -> str | None:
+    if not row.startswith(DEFAULT_HARNESS_ROW_PREFIX):
+        return None
+    harness = row[len(DEFAULT_HARNESS_ROW_PREFIX) :]
+    return harness if _is_harness_name(harness) else None
+
+
+def setting_rows(harnesses: tuple[str, ...]) -> tuple[str, ...]:
+    """Screen 28's rows: the fixed controls, then one Default-path harness row per harness.
+
+    The harness rows come last, under their own heading, so the fixed controls keep their places
+    however many harnesses this machine has.
+    """
+
+    return (*SETTING_ROWS, *(default_harness_row(item) for item in harnesses))
+
+
 SETTING_PURPOSE: dict[str, str] = {
     "detail-level": "How much every screen says: Fast hides the per-row explanations, "
     "Verbose shows them.",
@@ -2971,6 +3068,30 @@ a setting to find out what it did.
 """
 
 
+def setting_purpose(row: str) -> str | None:
+    """What the Settings row under the cursor changes, a Default-path harness row included."""
+
+    harness = default_harness_from_row(row)
+    if harness is not None:
+        return (
+            f"Whether the Default install path installs into {harness} when it is detected and "
+            "can host the artifact. With no harness on, Default uses every one that can."
+        )
+    return SETTING_PURPOSE.get(row)
+
+
+#: Screen 05p's rows (§173.7). Default is first: it is the path that asks least.
+INSTALL_PATH_DEFAULT = "default"
+INSTALL_PATH_CUSTOM = "custom"
+INSTALL_PATH_ROWS: tuple[str, ...] = (INSTALL_PATH_DEFAULT, INSTALL_PATH_CUSTOM)
+INSTALL_PATH_PURPOSE: dict[str, str] = {
+    INSTALL_PATH_DEFAULT: "Installs with the harnesses, scope and Python installer from Settings, "
+    "and asks only what still needs entering.",
+    INSTALL_PATH_CUSTOM: "Chooses the harnesses, the scope and the Python installer for this "
+    "install, then asks what needs entering.",
+}
+
+
 def settings_to_data(view: ConsumerSettings) -> dict[str, object]:
     """One consumer's preferences as plain data. No machine state, and nothing secret."""
 
@@ -2982,6 +3103,7 @@ def settings_to_data(view: ConsumerSettings) -> dict[str, object]:
         "python_installer": view.python_installer,
         "show_updates": view.show_updates,
         "maintainer_mode": view.maintainer_mode,
+        "default_harnesses": list(view.default_harnesses),
     }
 
 
@@ -3001,6 +3123,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
         "python_installer",
         "show_updates",
         "maintainer_mode",
+        "default_harnesses",
     }
     unknown = sorted(set(data) - known)
     if unknown:
@@ -3026,6 +3149,13 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
                 ),
             )
         )
+    harnesses = data.get("default_harnesses", [])
+    if (
+        not isinstance(harnesses, list)
+        or any(not _is_harness_name(item) for item in harnesses)
+        or len(set(harnesses)) != len(harnesses)
+    ):
+        return Err((_settings_invalid("stored default harnesses must be distinct harness names"),))
     return Ok(
         ConsumerSettings(
             PresentationProfile(detail),
@@ -3033,6 +3163,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
             updates,
             maintainer,
             cast(str, installer),
+            tuple(harnesses),
         )
     )
 

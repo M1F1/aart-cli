@@ -31,7 +31,7 @@ from aart_cli.application.consumer_views import (
 from aart_cli.domain.result import Err, Ok
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _INSTALL, ENTER, _actions, _drive
-from tests.consumer_shell_test import RIGHT, SPACE, _at
+from tests.consumer_shell_test import INSTALL_CUSTOM, RIGHT, SPACE, _at
 
 SCOPES = ("project", "user")
 
@@ -282,7 +282,7 @@ class TheReviewScreenShowsTheChoiceTest(unittest.TestCase):
     radio row per artifact×harness pair, picks where each one goes.
     """
 
-    _TO_SCOPE = (SPACE, ord("i"), SPACE, ENTER)
+    _TO_SCOPE = (SPACE, *INSTALL_CUSTOM, SPACE, ENTER)
 
     def test_the_scope_screen_names_both_scopes_the_selection_supports(self) -> None:
         with _environment() as env:
@@ -294,7 +294,9 @@ class TheReviewScreenShowsTheChoiceTest(unittest.TestCase):
 
     def test_the_review_screen_no_longer_asks_the_scope(self) -> None:
         with _environment() as env:
-            _, terminal, _ = _drive(env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"), SPACE)
+            _, terminal, _ = _drive(
+                env, _at(ConsumerScreen.MARKETPLACE), SPACE, *INSTALL_CUSTOM, SPACE
+            )
 
             self.assertNotIn("Install into:", terminal.last)
             self.assertNotIn("(*)", terminal.last)

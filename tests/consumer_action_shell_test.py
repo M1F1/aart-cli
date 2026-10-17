@@ -22,7 +22,7 @@ from aart_cli.tui_consumer import (
 from tests.consumer_install_flow_shell_test import plan_view
 from tests.consumer_install_flow_shell_test import screens as flow_screens
 from tests.consumer_marketplace_shell_test import screens as marketplace_screens
-from tests.consumer_shell_test import ENTER, SPACE, FakeTerminal
+from tests.consumer_shell_test import ENTER, INSTALL_CUSTOM, SPACE, FakeTerminal
 
 PLAN = plan_view()
 SEMANTIC = PLAN.semantic_identity
@@ -84,7 +84,7 @@ class ConsumerActionShellTest(unittest.TestCase):
     def test_preparation_replaces_the_source_before_review_is_drawn(self) -> None:
         source = CanonicalScreenSource(marketplace_screens())
         handler = FakeActionHandler()
-        terminal = FakeTerminal(SPACE, ord("i"), ord("q"), ord("y"))
+        terminal = FakeTerminal(SPACE, *INSTALL_CUSTOM, ord("q"), ord("y"))
         state = ConsumerUiState(ConsumerSession(ConsumerScreen.MARKETPLACE))
 
         finished = run_consumer_shell(source, terminal, state=state, action_handler=handler)
@@ -123,7 +123,7 @@ class ConsumerActionShellTest(unittest.TestCase):
 
     def test_an_action_without_an_injected_handler_fails_closed(self) -> None:
         source = CanonicalScreenSource(marketplace_screens())
-        terminal = FakeTerminal(SPACE, ord("i"))
+        terminal = FakeTerminal(SPACE, *INSTALL_CUSTOM)
         state = ConsumerUiState(ConsumerSession(ConsumerScreen.MARKETPLACE))
 
         with self.assertRaisesRegex(ValueError, "action handler"):
@@ -131,7 +131,7 @@ class ConsumerActionShellTest(unittest.TestCase):
 
     def test_a_handler_cannot_return_another_actions_result(self) -> None:
         source = CanonicalScreenSource(marketplace_screens())
-        terminal = FakeTerminal(SPACE, ord("i"))
+        terminal = FakeTerminal(SPACE, *INSTALL_CUSTOM)
         state = ConsumerUiState(ConsumerSession(ConsumerScreen.MARKETPLACE))
 
         with self.assertRaisesRegex(ValueError, "wrong action update"):

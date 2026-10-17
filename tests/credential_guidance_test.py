@@ -87,7 +87,7 @@ from tests.candidate_validation_test import _bundle
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import _published_registries
 from tests.consumer_application_e2e_test import _actions, _at, _drive
-from tests.consumer_shell_test import DOWN, ENTER, SPACE, UP
+from tests.consumer_shell_test import DOWN, ENTER, INSTALL_CUSTOM, SPACE, UP
 from tests.credential_action_rows_test import _Provider
 from tests.credential_fixtures import credential_url
 
@@ -656,7 +656,7 @@ def _install(*trees, present: CredentialState = CredentialState.ABSENT, keys=Non
         _, terminal, _ = _drive(
             env,
             _at(ConsumerScreen.MARKETPLACE),
-            *(keys or (SPACE, ord("i"), SPACE, ENTER, ENTER, ENTER, UP, ENTER, ENTER)),
+            *(keys or (SPACE, *INSTALL_CUSTOM, SPACE, ENTER, ENTER, ENTER, UP, ENTER, ENTER)),
             actions=actions,
         )
     return terminal, journal, provider
@@ -729,7 +729,19 @@ class SourceToPromptE2ETest(unittest.TestCase):
         terminal, journal, provider = _install(
             _authored("alpha", TOKEN_HELP),
             _authored("beta", MANUAL_HELP),
-            keys=(SPACE, DOWN, SPACE, ord("i"), SPACE, ENTER, ENTER, ENTER, UP, ENTER, ENTER),
+            keys=(
+                SPACE,
+                DOWN,
+                SPACE,
+                *INSTALL_CUSTOM,
+                SPACE,
+                ENTER,
+                ENTER,
+                ENTER,
+                UP,
+                ENTER,
+                ENTER,
+            ),
         )
 
         drawn = _screen_07(terminal)

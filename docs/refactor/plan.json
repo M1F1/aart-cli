@@ -1139,12 +1139,12 @@
         {
           "id": "10",
           "title": "Default or custom install path (#75): the default takes harnesses, scope and Python installer from Settings and goes straight to the inputs or Ready; custom is the 05/07a matrix flow",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "11",
           "title": "Marketplace and Installed columns (#72, #75): installation status, scope with a project count, harnesses, eligible harnesses, inputs still AART_NOT_SET; each installation its own row with its own configuration; detail under More info",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "12",

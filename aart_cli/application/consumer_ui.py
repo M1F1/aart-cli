@@ -22,6 +22,7 @@ from aart_cli.domain.publication import RegistryCommitOrigin, suggested_publicat
 from aart_cli.domain.registry import PromotionMode
 
 from .consumer_views import (
+    INSTALL_PATH_DEFAULT,
     SETTING_ROWS,
     SUCCESS_CHOICES,
     ApplicationScreen,
@@ -29,6 +30,7 @@ from .consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     choose_pair_scope,
+    default_harness_from_row,
     installer_from_row,
     is_screen_identifier,
     keeps_focus,
@@ -533,10 +535,14 @@ class ConsumerUiCommand:
     python_installer: str = ""
     publication_branch: str = ""
     suggested_branch: str = ""
+    #: The install takes the Default path (§173.7): its harnesses come from Settings, and nothing
+    #: 05 or 07a would ask is asked.
+    default_path: bool = False
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiCommandKind)
+            or not isinstance(self.default_path, bool)
             or self.install_scope not in ("", "project", "user")
             or self.python_installer not in ("", "pip", "uv")
             or not _safe_identity(self.publication_branch)
@@ -739,6 +745,9 @@ class ConsumerUiState:
     #: The form was submitted for the harnesses chosen on 05 (D-380). The install then goes
     #: forward from it and 05 no longer offers the harness, until a Back to 05 makes it a choice.
     inputs_submitted: bool = False
+    #: Screen 05p chose the Default path (§173.7): the install goes past 05 and 07a, to 07, 07b or
+    #: Ready, until a Back to 05 makes it Custom.
+    install_default: bool = False
     #: The artifact whose two input sections screen 22a shows. Credential drill-down changes
     #: ``focus`` to a provider reference, so this parent identity is carried separately.
     user_inputs_artifact: str = ""
@@ -778,6 +787,7 @@ class ConsumerUiState:
             or not isinstance(self.config_draft, InstallationConfigDraft)
             or not isinstance(self.config_form_active, bool)
             or not isinstance(self.inputs_submitted, bool)
+            or not isinstance(self.install_default, bool)
             or not isinstance(self.user_inputs_artifact, str)
             or any(character in self.user_inputs_artifact for character in "\r\n")
             or not isinstance(self.configuration_input, str)
@@ -884,6 +894,7 @@ _WORKFLOW_ROUTES: tuple[tuple[ApplicationScreen, ...], ...] = (
     ),
     (
         ConsumerScreen.MARKETPLACE,
+        ConsumerScreen.INSTALL_PATH,
         ConsumerScreen.REVIEW_SELECTION,
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.READY,
@@ -1102,7 +1113,7 @@ def _navigate(
         # #50: 05 -> 07 before any plan exists is the way into the form; once a plan has been
         # reviewed, 07 is its summary instead.
         config_form_active=(
-            state.session.screen is ConsumerScreen.REVIEW_SELECTION
+            state.session.screen in (ConsumerScreen.REVIEW_SELECTION, ConsumerScreen.INSTALL_PATH)
             and screen is ConsumerScreen.REQUIRED_INPUTS
             and state.session.review_digest is None
             and bool(state.config_draft.fields)
@@ -1314,8 +1325,7 @@ def _toggle_selection(
             updated = replace(state, targets=targets, quit_pending=False)
         if state.action is not ConsumerActionKind.INSTALL:
             return updated, ()
-        origin = state.session.history[-1] if state.session.history else None
-        request_focus = "" if origin is ConsumerScreen.MARKETPLACE else state.focus
+        request_focus = "" if _install_origin(state) is ConsumerScreen.MARKETPLACE else state.focus
         return updated, (
             ConsumerUiCommand(
                 ConsumerUiCommandKind.PREPARE_ACTION,
@@ -1385,16 +1395,18 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.REPOSITORY_ADOPT_UPDATE,
         MaintainerScreen.UPSTREAM_CHECK,
     ): MaintainerScreen.ADOPTION_REVIEW,
-    (ConsumerActionKind.INSTALL, ConsumerScreen.MARKETPLACE): ConsumerScreen.REVIEW_SELECTION,
-    (ConsumerActionKind.INSTALL, ConsumerScreen.ARTIFACT_DETAILS): ConsumerScreen.REVIEW_SELECTION,
+    # Install opens 05p, where the path is chosen (§173.7); Custom goes on to 05.
+    (ConsumerActionKind.INSTALL, ConsumerScreen.MARKETPLACE): ConsumerScreen.INSTALL_PATH,
+    (ConsumerActionKind.INSTALL, ConsumerScreen.ARTIFACT_DETAILS): ConsumerScreen.INSTALL_PATH,
     (
         ConsumerActionKind.INSTALL,
         ConsumerScreen.COLLECTION_PREVIEW,
-    ): ConsumerScreen.REVIEW_SELECTION,
+    ): ConsumerScreen.INSTALL_PATH,
     (
         ConsumerActionKind.INSTALL,
         ConsumerScreen.COLLECTION_CUSTOMIZE,
-    ): ConsumerScreen.REVIEW_SELECTION,
+    ): ConsumerScreen.INSTALL_PATH,
+    (ConsumerActionKind.INSTALL, ConsumerScreen.INSTALL_PATH): ConsumerScreen.REVIEW_SELECTION,
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATES): ConsumerScreen.UPDATE_INPUTS,
     (
         ConsumerActionKind.VERIFY_REPAIR,
@@ -1525,8 +1537,13 @@ def _request_action(
         # The form is entered from screen 05 once the harness is chosen (#50) and is not part of
         # its later summary route. Returning to 05 rewinds over the form, so Review -> Required
         # Inputs remains a forward step over the immutable plan rather than back into the form.
+        # The Default path rewinds to 05p instead: it never stood on 05 (§173.7).
         session = replace(
-            state.session.navigate(ConsumerScreen.REVIEW_SELECTION),
+            state.session.navigate(
+                ConsumerScreen.INSTALL_PATH
+                if state.install_default
+                else ConsumerScreen.REVIEW_SELECTION
+            ),
             semantic_identity=None,
             selection_identity=None,
             review_digest=None,
@@ -1552,14 +1569,18 @@ def _request_action(
             python_installer=(
                 state.python_installer if action is ConsumerActionKind.INSTALL else ""
             ),
+            default_path=state.install_default,
         )
         return prepared, (
             command,
-            ConsumerUiCommand(
-                ConsumerUiCommandKind.LOAD_SCREEN,
-                ConsumerScreen.REVIEW_SELECTION,
-            ),
+            ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, session.screen),
         )
+    if (
+        action is ConsumerActionKind.INSTALL
+        and state.session.screen is ConsumerScreen.INSTALL_PATH
+        and state.current_row == INSTALL_PATH_DEFAULT
+    ):
+        return _install_by_default(state)
     target = _ACTION_REVIEW.get((action, state.session.screen))
     focus = (
         state.current_row or state.focus
@@ -1580,9 +1601,14 @@ def _request_action(
         if not state.selection and not (
             action is ConsumerActionKind.INSTALL
             and state.session.screen is not ConsumerScreen.MARKETPLACE
+            and _install_origin(state) is not ConsumerScreen.MARKETPLACE
             and focus
         ):
             return state, ()
+        if target is ConsumerScreen.INSTALL_PATH:
+            # 05p only asks which path; nothing is prepared until one is chosen (§173.7).
+            moved, navigation = _navigate(state, target)
+            return replace(moved, install_default=False, quit_pending=False), navigation
     elif (
         action
         not in (
@@ -1598,7 +1624,7 @@ def _request_action(
     moved, navigation = _navigate(state, target)
     if moved is state:
         return state, ()
-    if state.session.screen is ConsumerScreen.MARKETPLACE:
+    if ConsumerScreen.MARKETPLACE in (state.session.screen, _install_origin(state)):
         focus = ""
     if action is ConsumerActionKind.CONFIGURE:
         focus = state.user_inputs_artifact
@@ -1684,6 +1710,63 @@ def _request_action(
     return prepared, (command, *navigation)
 
 
+def _install_origin(state: ConsumerUiState) -> ApplicationScreen | None:
+    """The screen Install was pressed on, looking past 05p and 05, which only answer it."""
+
+    trail = (*state.session.history, state.session.screen)
+    return next(
+        (
+            item
+            for item in reversed(trail)
+            if item not in (ConsumerScreen.INSTALL_PATH, ConsumerScreen.REVIEW_SELECTION)
+        ),
+        None,
+    )
+
+
+def _install_by_default(
+    state: ConsumerUiState,
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    """05p's Default (§173.7): prepare from Settings, staying on 05p until the answer says where.
+
+    Nothing chosen on an earlier Custom attempt is carried: the harnesses, scopes and installer are
+    the Settings ones, so the request names none of them.
+    """
+
+    if not state.selection and not state.focus:
+        return state, ()
+    session = replace(
+        state.session, semantic_identity=None, selection_identity=None, review_digest=None
+    )
+    prepared = replace(
+        state,
+        session=session,
+        action=ConsumerActionKind.INSTALL,
+        install_default=True,
+        targets=(),
+        pairs=(),
+        pair_scopes=(),
+        entered_secrets=(),
+        harness_column=0,
+        config_draft=InstallationConfigDraft(),
+        config_form_active=False,
+        inputs_submitted=False,
+        install_scope="",
+        python_installer="",
+        quit_pending=False,
+    )
+    focus = "" if _install_origin(state) is ConsumerScreen.MARKETPLACE else state.focus
+    return prepared, (
+        ConsumerUiCommand(
+            ConsumerUiCommandKind.PREPARE_ACTION,
+            action=ConsumerActionKind.INSTALL,
+            selection=state.selection,
+            focus=focus,
+            default_path=True,
+        ),
+    )
+
+
 def _declined_preparation(
     state: ConsumerUiState,
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
@@ -1698,8 +1781,11 @@ def _declined_preparation(
     sent it as a notice with this event.
     """
 
-    cleared = replace(state, action=None, quit_pending=False)
+    cleared = replace(state, action=None, quit_pending=False, install_default=False)
     session = state.session.back()
+    # 05p only chose the path, so a refused install returns past it, to where Install was asked.
+    if session.screen is ConsumerScreen.INSTALL_PATH and state.session.screen is not session.screen:
+        session = session.back()
     if session is state.session:
         return cleared, ()
     return (
@@ -1714,11 +1800,12 @@ def _action_prepared(
     action = event.action
     if action is None or action is not state.action:
         return state, ()
+    on_path = state.install_default and state.session.screen is ConsumerScreen.INSTALL_PATH
     if (
         action is ConsumerActionKind.INSTALL
         and event.pairs
         and not state.pairs
-        and state.session.screen is ConsumerScreen.REVIEW_SELECTION
+        and (state.session.screen is ConsumerScreen.REVIEW_SELECTION or on_path)
     ):
         # §172.2: what the preparation ticked by default is ticked on screen too, so the plan
         # and the matrix agree and Continue can go on without a keypress that changes nothing.
@@ -1731,6 +1818,27 @@ def _action_prepared(
         # §172.5: the adapter merged what 07a chose with each pair's starting scope; that merge is
         # what the plan was prepared for, so it is what 07a shows.
         state = replace(state, pair_scopes=event.pair_scopes)
+    if action is ConsumerActionKind.INSTALL and event.config_draft is not None and on_path:
+        # §173.7: Default goes straight to 07 with the Settings harnesses. When they leave some
+        # artifact without a harness, the choice is the person's after all, so 05 asks it.
+        session = replace(
+            state.session, semantic_identity=None, selection_identity=None, review_digest=None
+        )
+        answered = replace(
+            state,
+            session=session,
+            config_draft=event.config_draft,
+            config_form_active=False,
+            inputs_submitted=False,
+            install_default=bool(event.config_draft.fields),
+            quit_pending=False,
+        )
+        return _navigate(
+            answered,
+            ConsumerScreen.REQUIRED_INPUTS
+            if event.config_draft.fields
+            else ConsumerScreen.REVIEW_SELECTION,
+        )
     if action is ConsumerActionKind.INSTALL and event.config_draft is not None:
         if state.session.screen is not ConsumerScreen.REVIEW_SELECTION:
             return state, ()
@@ -1781,6 +1889,16 @@ def _action_prepared(
         selection_identity=event.selection_identity or None,
         review_digest=event.review_digest,
     )
+    if action is ConsumerActionKind.INSTALL and on_path and event.screen is not None:
+        # §173.7: the Settings plan goes on to 07b or Ready; 05 only if it left a choice open.
+        reviewed = replace(
+            state,
+            session=session,
+            config_form_active=False,
+            install_default=event.screen is not ConsumerScreen.REVIEW_SELECTION,
+            quit_pending=False,
+        )
+        return _navigate(reviewed, event.screen)
     if (
         action is ConsumerActionKind.INSTALL
         and state.inputs_submitted
@@ -2034,6 +2152,7 @@ def _action_recorded(
         config_draft=InstallationConfigDraft(),
         config_form_active=False,
         inputs_submitted=False,
+        install_default=False,
         focus=focus,
         quit_pending=False,
         action=None,
@@ -2282,7 +2401,9 @@ def _reduce(
     if event.kind is ConsumerUiEventKind.TOGGLE_PROFILE:
         return _apply_setting(state, state.settings.toggled("detail-level"))
     if event.kind is ConsumerUiEventKind.TOGGLE_SETTING:
-        if state.session.screen is not ConsumerScreen.SETTINGS or event.key not in SETTING_ROWS:
+        if state.session.screen is not ConsumerScreen.SETTINGS or (
+            event.key not in SETTING_ROWS and default_harness_from_row(event.key) is None
+        ):
             return state, ()
         return _apply_setting(state, state.settings.toggled(event.key))
     if event.kind is ConsumerUiEventKind.TOGGLE_PROMOTION_MODE:
@@ -2912,6 +3033,14 @@ def key_event(
                 text=value,
             )
         return None
+
+    if state.session.screen is ConsumerScreen.INSTALL_PATH and key == "enter":
+        # Either row starts the install; which one is the path (§173.7).
+        return (
+            ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=ConsumerActionKind.INSTALL)
+            if cursor or state.current_row
+            else None
+        )
 
     if (
         state.session.screen is ConsumerScreen.INSTALL_CREDENTIALS

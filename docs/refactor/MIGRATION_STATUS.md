@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-31 step 10 (D-435): the Default and Custom install paths.**
+- Install opens screen 05p, where Default comes first. Default takes the harnesses, scope and
+  Python installer from Settings and goes to 07, 07b or Ready, never drawing 05 or 07a. When no
+  Settings harness can host some artifact, Default falls back to 05. Custom is the §172 flow.
+  Settings stores `default_harnesses`, with one row per measured harness on screen 28. Evidence in
+  the slice, Step 10.
+
 **2026-10-17, CP-31 step 9 (D-433, D-434): installed Collections.**
 - Installed and Doctor draw a Collection with its member installations under it. Doctor names the
   members needing attention. `u` and `marketplace uninstall <collection>` remove the Collection's

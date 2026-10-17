@@ -11219,7 +11219,15 @@ After choosing in the Marketplace and pressing Install, a person chooses the pat
   offered one.
 - **Custom** is the §172 flow: 05, 07, 07a, 07b, Ready.
 
-Settings holds the default harnesses beside the default scope and Python installer.
+The choice is screen **05p Install Path**, between Install and 05, with Default first. It states
+what Default will use. When the Settings harnesses leave some artifact with no harness that can
+host it, Default does not guess: it opens 05 so the person chooses, and the install goes on as
+Custom from there (D-435).
+
+Settings holds the default harnesses beside the default scope and Python installer: screen 28
+draws one on/off row per detected harness, and with none on, Default uses every detected harness
+that can host the artifact. The CLI has no path choice: `marketplace install` names its harnesses
+with `--profile`.
 
 ## 173.8 Marketplace and Installed columns
 

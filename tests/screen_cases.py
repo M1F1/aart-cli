@@ -78,6 +78,7 @@ RECORDED_SCREENS: tuple[ApplicationScreen, ...] = (
     ConsumerScreen.ARTIFACT_DETAILS,
     ConsumerScreen.COLLECTION_PREVIEW,
     ConsumerScreen.COLLECTION_CUSTOMIZE,
+    ConsumerScreen.INSTALL_PATH,
     ConsumerScreen.REVIEW_SELECTION,
     ConsumerScreen.AUTOMATIC_INSPECTION,
     ConsumerScreen.REQUIRED_INPUTS,
@@ -279,6 +280,17 @@ def _consumer_cases() -> dict[ConsumerScreen, ScreenCase]:
     )
     cases[ConsumerScreen.INSTALL_SCOPE] = ScreenCase(
         "07a:two-pairs", scope_source, _reload(scope_source, scope_state, entering=True)
+    )
+
+    # 05p is recorded with a Settings harness, so what Default will use is drawn (§173.7).
+    path_source = CanonicalScreenSource(replace(base, harnesses=("claude", "opencode")))
+    path_state = ConsumerUiState(
+        ConsumerSession(ConsumerScreen.INSTALL_PATH, history=(ConsumerScreen.MARKETPLACE,)),
+        selection=("company/mcp/github@1.0.0",),
+        settings=ConsumerSettings(default_harnesses=("opencode",)),
+    )
+    cases[ConsumerScreen.INSTALL_PATH] = ScreenCase(
+        "05p:settings-harness", path_source, _reload(path_source, path_state, entering=True)
     )
 
     # 07b is recorded with two artifacts, one secret already stored and two to ask, one of which

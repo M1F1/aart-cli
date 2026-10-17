@@ -38,9 +38,9 @@ from aart_cli.application.consumer_ui import (
 from aart_cli.application.consumer_views import (
     ALL_ARTIFACTS,
     ALL_INSTALLATIONS,
+    INSTALL_PATH_PURPOSE,
+    INSTALL_PATH_ROWS,
     PLACEHOLDER_WARNING,
-    SETTING_PURPOSE,
-    SETTING_ROWS,
     SUCCESS_CHOICES,
     SUCCESS_PURPOSE,
     ActivityView,
@@ -69,6 +69,7 @@ from aart_cli.application.consumer_views import (
     RegistryView,
     RemediationView,
     RunningInstallationView,
+    default_harness_row,
     installer_from_row,
     installer_row,
     material_remediations,
@@ -88,6 +89,8 @@ from aart_cli.application.consumer_views import (
     scope_matrix_columns,
     scope_matrix_from_row,
     secrets_to_ask,
+    setting_purpose,
+    setting_rows,
     target_from_row,
     target_row,
     under_collections,
@@ -1497,7 +1500,9 @@ def registry_purpose(view: RegistryView) -> tuple[str, ...]:
     )
 
 
-def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
+def render_settings(
+    view: ConsumerSettings, focus: str = "", harnesses: tuple[str, ...] = ()
+) -> tuple[str, ...]:
     """Screen 28, with the control Enter would move marked.
 
     Every control is binary, so the row says what it is currently set to rather than listing the
@@ -1513,6 +1518,12 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
         "python-installer": f"Python installer: {view.python_installer}",
         "show-updates": f"Show available updates: {'on' if view.show_updates else 'off'}",
         "maintainer-mode": f"Registry Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
+        # §173.7: the harnesses the Default install path uses, one row per detected harness.
+        **{
+            default_harness_row(item): f"Default harness {item}: "
+            f"{'on' if item in view.default_harnesses else 'off'}"
+            for item in harnesses
+        },
     }
     headings = {
         "detail-level": "Experience",
@@ -1523,16 +1534,32 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
     }
     groups: list[tuple[str, ...]] = []
     previous = ""
-    for row in SETTING_ROWS:
+    for row in setting_rows(harnesses):
         drawn = f"{'> ' if row == focus else '  '}{values[row]}"
+        heading = headings.get(row, "Default install harnesses")
         # Rows under the same heading are one group: two controls about installation are two
         # controls, not two sections, and repeating the heading would read as the latter.
-        if headings[row] == previous and groups:
+        if heading == previous and groups:
             groups[-1] = (*groups[-1], drawn)
         else:
-            groups.append((headings[row], drawn))
-        previous = headings[row]
+            groups.append((heading, drawn))
+        previous = heading
     return separate(*groups)
+
+
+def render_install_path(view: ConsumerSettings, harnesses: tuple[str, ...]) -> tuple[str, ...]:
+    """Screen 05p's state: what the Default path will use, read from Settings (§173.7)."""
+
+    if not isinstance(view, ConsumerSettings):
+        raise ValueError("install path rendering needs consumer settings")
+    chosen = tuple(item for item in view.default_harnesses if item in harnesses)
+    return (
+        "Default uses:",
+        "  Harnesses: "
+        + (", ".join(chosen) if chosen else "every detected harness that can host it"),
+        f"  Scope: {view.default_scope.title()}, where offered",
+        f"  Python installer: {view.python_installer}",
+    )
 
 
 def settings_consequence(view: ConsumerSettings) -> tuple[str, ...]:
@@ -2197,10 +2224,13 @@ _FIRST_RUN_LINES: tuple[str, ...] = (
 _TITLES: dict[ApplicationScreen, str] = {ConsumerScreen.MCP_TEST: "Test MCP Installations"}
 
 
-def _after_configuration(plan: ConsumerPlanView) -> ConsumerScreen:
-    """07a once configuration is settled, while some pair may go to two scopes; then 07b."""
+def _after_configuration(plan: ConsumerPlanView, *, default_path: bool = False) -> ConsumerScreen:
+    """07a once configuration is settled, while some pair may go to two scopes; then 07b.
 
-    if scope_choice_offered(plan.scope_offers):
+    The Default path has its scope from Settings, so 07a is never asked on it (§173.7).
+    """
+
+    if not default_path and scope_choice_offered(plan.scope_offers):
         return ConsumerScreen.INSTALL_SCOPE
     return _after_scope(plan)
 
@@ -2883,6 +2913,8 @@ class ConsumerScreens:
     #: The optional test after an install (§170.4): present only when the committed transaction
     #: made at least one MCP installation, and drawn beside Success rather than in it.
     mcp_test: McpTestView | None = None
+    #: The harnesses this machine measured, which Settings offers for the Default path (§173.7).
+    harnesses: tuple[str, ...] = ()
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -3120,6 +3152,7 @@ def screens_from(
     install_targets: tuple[HarnessTargetView, ...] = (),
     install_unhosted: tuple[str, ...] = (),
     mcp_test: McpTestView | None = None,
+    harnesses: tuple[str, ...] = (),
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -3174,6 +3207,7 @@ def screens_from(
         install_targets,
         install_unhosted,
         mcp_test,
+        harnesses,
     )
 
 
@@ -3376,6 +3410,8 @@ class CanonicalScreenSource:
                 for item in self._screens.credentials_for(coordinate)
             )
             return (*configuration_rows, *credential_rows)
+        if screen is ConsumerScreen.INSTALL_PATH:
+            return INSTALL_PATH_ROWS
         if screen is ConsumerScreen.SUCCESS:
             # CP-23 task 06: the choices exist once something ran; before that there is nothing
             # to view, and a row that opens nothing is the gap this replaced.
@@ -3537,7 +3573,7 @@ class CanonicalScreenSource:
         if screen is MaintainerScreen.REPOSITORY_SCAN:
             return ("url", "ref", "scan")
         if screen is ConsumerScreen.SETTINGS:
-            return SETTING_ROWS
+            return setting_rows(self._screens.harnesses)
         return ()
 
     def _offers(self) -> tuple[MarketplaceEntry | MarketplaceCollectionEntry, ...]:
@@ -3808,7 +3844,11 @@ class CanonicalScreenSource:
             return _after_configuration(plan)
         if screen is ConsumerScreen.REQUIRED_INPUTS:
             plan = self._screens.plan
-            return None if plan is None else _after_configuration(plan)
+            return (
+                None
+                if plan is None
+                else _after_configuration(plan, default_path=state.install_default)
+            )
         if screen is ConsumerScreen.INSTALL_SCOPE:
             # Ready reviews the plan prepared for these scopes; a choice still being re-prepared
             # is not that plan yet.
@@ -3904,8 +3944,11 @@ class CanonicalScreenSource:
         """
 
         if state.session.screen is ConsumerScreen.SETTINGS:
-            purpose = SETTING_PURPOSE.get(state.current_row or "")
+            purpose = setting_purpose(state.current_row or "")
             return () if purpose is None else (purpose,)
+        if state.session.screen is ConsumerScreen.INSTALL_PATH:
+            chosen = INSTALL_PATH_PURPOSE.get(state.current_row or "")
+            return () if chosen is None else (chosen,)
         if state.session.screen is ConsumerScreen.USER_INPUT_DETAILS:
             coordinate = state.user_inputs_artifact or state.focus
             return artifact_user_input_purpose(
@@ -4264,6 +4307,8 @@ class CanonicalScreenSource:
                 render_review_selection(screens.plan, state.session.profile),
                 target_status,
             )
+        if screen is ConsumerScreen.INSTALL_PATH:
+            return render_install_path(state.settings, screens.harnesses)
         if screen is ConsumerScreen.SUCCESS and self.rows(state):
             # CP-23 task 06: what happened is the state of the view; the choices are the rows.
             if screens.transaction is not None:
@@ -4487,6 +4532,11 @@ class CanonicalScreenSource:
                 for row in state.rows
             )
         if screen is ConsumerScreen.CREDENTIAL_ACTION and self.rows(state):
+            return tuple(
+                f"{'>' if row == state.current_row else ' '} {row.capitalize()}"
+                for row in state.rows
+            )
+        if screen is ConsumerScreen.INSTALL_PATH:
             return tuple(
                 f"{'>' if row == state.current_row else ' '} {row.capitalize()}"
                 for row in state.rows
@@ -4994,7 +5044,7 @@ class CanonicalScreenSource:
             # A preference belongs to the session, not to the machine snapshot: drawing the
             # composed source's copy would keep showing the old value until something else
             # happened to re-read the machine.
-            return render_settings(state.settings, state.current_row)
+            return render_settings(state.settings, state.current_row, screens.harnesses)
         if screen is ConsumerScreen.DOCTOR:
             if screens.doctor is None:
                 return ("Nothing has been checked yet.",)

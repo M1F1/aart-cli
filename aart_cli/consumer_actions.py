@@ -81,6 +81,7 @@ from aart_cli.application.consumer_views import (
     scope_choice_offered,
     scope_matrix_rows,
     secrets_to_ask,
+    settings_pairs,
     target_choice_problems,
 )
 from aart_cli.application.credential_guidance import (
@@ -470,13 +471,16 @@ def _per_artifact(views: tuple[InputView, ...], artifacts: dict[str, str]) -> tu
     return tuple(projected)
 
 
-def _after_inputs(plan: ConsumerPlanView) -> ConsumerScreen:
+def _after_inputs(plan: ConsumerPlanView, *, default_path: bool = False) -> ConsumerScreen:
     """Where a reviewed install goes once its form was submitted (D-380, §161.5, §172.5).
 
     05 again only while the plan still offers a real choice of backend, then 07a while some pair
-    may go to more than one scope; otherwise Ready.
+    may go to more than one scope; otherwise Ready. The Default path asks neither: Settings has
+    answered both (§173.7), so only the secrets are left.
     """
 
+    if default_path:
+        return ConsumerScreen.INSTALL_CREDENTIALS if secrets_to_ask(plan) else ConsumerScreen.READY
     if plan.installer_choice is not None and plan.installer_choice.is_a_choice:
         return ConsumerScreen.REVIEW_SELECTION
     if scope_choice_offered(plan.scope_offers):
@@ -1091,6 +1095,7 @@ class LocalConsumerActions:
                 install_targets=install_targets,
                 install_unhosted=self._unhosted,
                 mcp_test=mcp_test,
+                harnesses=self._context.host.profiles,
             )
         )
 
@@ -2118,7 +2123,14 @@ class LocalConsumerActions:
         )
         targets, self._unhosted = _grouped_targets(targets, groups, host.profiles)
         # §172.2: until 05 is answered, an artifact only one harness can host has it ticked.
-        pairs = command.pairs or (default_pairs(targets) if not command.targets else ())
+        # §173.7: the Default path takes its harnesses from Settings rather than from 05.
+        pairs = command.pairs or (
+            settings_pairs(targets, context.settings.default_harnesses)
+            if command.default_path
+            else default_pairs(targets)
+            if not command.targets
+            else ()
+        )
         chosen_targets = command.targets or pairs_harnesses(pairs)
         # §172.5: each pair starts on the Settings scope when it may go there and keeps what 07a
         # chose for it; a pair no longer ticked has no scope to keep.
@@ -2395,7 +2407,12 @@ class LocalConsumerActions:
                 semantic_identity=plan.semantic_identity,
                 selection_identity=plan.selection.semantic_identity,
                 review_digest=plan.review_digest,
-                screen=_after_inputs(plan),
+                # A Default plan that left some artifact without a harness goes to 05 for it.
+                screen=(
+                    _after_inputs(plan, default_path=command.default_path)
+                    if chosen or not command.default_path
+                    else ConsumerScreen.REVIEW_SELECTION
+                ),
             ),
         )
 

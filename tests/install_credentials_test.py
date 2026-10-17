@@ -26,7 +26,7 @@ from aart_cli.domain.inputs import SKIPPED_INPUT
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
 from tests.consumer_application_e2e_test import BothBackendsMeasured, _actions, _at, _drive
-from tests.consumer_shell_test import DOWN, ENTER, ESCAPE, RIGHT, SPACE, UP
+from tests.consumer_shell_test import DOWN, ENTER, ESCAPE, INSTALL_CUSTOM, RIGHT, SPACE, UP
 from tests.credential_guidance_test import _Journal
 from tests.install_time_config_form_test import _MemoryCredentialProvider
 
@@ -72,7 +72,7 @@ def _install(*keys, answer: str = TYPED):
             env,
             _at(ConsumerScreen.MARKETPLACE),
             SPACE,
-            ord("i"),
+            *INSTALL_CUSTOM,
             RIGHT,
             SPACE,
             RIGHT,

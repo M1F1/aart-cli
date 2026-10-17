@@ -39,6 +39,8 @@ QUESTION = ord("?")
 UP, DOWN, SPACE = 259, 258, 32
 LEFT, RIGHT = 260, 261
 VERBOSE = ord("v")
+#: Install, then Custom on 05p (§173.7): the §172 flow from 05, as every walk before 05p took it.
+INSTALL_CUSTOM = (ord("i"), DOWN, ENTER)
 TODAY = dt.date(2026, 8, 31)
 
 

@@ -25,7 +25,7 @@ from tests.configured_installation_draft_e2e_test import (
     _published_registries,
 )
 from tests.consumer_application_e2e_test import _actions, _at, _drive
-from tests.consumer_shell_test import BACKSPACE, DOWN, ENTER, RIGHT, SPACE, UP
+from tests.consumer_shell_test import BACKSPACE, DOWN, ENTER, INSTALL_CUSTOM, RIGHT, SPACE, UP
 from tests.credential_guidance_test import _Journal
 from tests.install_credentials_test import _Keeping
 
@@ -79,7 +79,7 @@ class CollectionInputsShellTest(unittest.TestCase):
                 DOWN,
                 DOWN,
                 ENTER,
-                ord("i"),
+                *INSTALL_CUSTOM,
                 # 05: the Collection on claude and opencode.
                 SPACE,
                 RIGHT,

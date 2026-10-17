@@ -312,3 +312,53 @@ Targeted mutations:
 - Disabling the `held` merge in `propose_installation` turned only the two tests red where a member
   is also installed directly (TUI and CLI).
 - Observing a retained member against its removal state turned the same two red.
+
+## Step 10 — The Default and Custom install paths (§173.7, INV-265, D-435)
+
+Install now opens screen **05p Install Path**, which offers Default first and Custom second. 05p
+prepares nothing; it states what Default will use.
+
+Default prepares from Settings while staying on 05p:
+- the harnesses come from `settings_pairs` (the Settings harnesses that are detected and can host
+  each artifact, or every one that can when Settings names none);
+- the scope is the Settings default where offered;
+- the installer is the Settings one;
+- the install then goes to 07 if anything needs entering, then 07b or Ready. 05 and 07a are never
+  drawn, and a submitted 07 rewinds to 05p.
+
+Two cases fall outside that:
+- When the Settings harnesses leave an artifact without a harness, 05 asks, and the install goes on
+  as Custom.
+- A refused preparation returns past 05p, to where Install was asked.
+
+Custom is the §172 flow, unchanged.
+
+Settings stores `default_harnesses` strictly. Screen 28 draws one on/off row per measured harness,
+last, under "Default install harnesses", so the fixed controls keep their places.
+
+Existing shell walks that pressed `i` now press `INSTALL_CUSTOM` (`i`, Down, Enter). The reducer
+tests take Custom through `_request`.
+
+Evidence:
+- `tests/install_path_default_e2e_test.py` (10), through the real shell:
+  - Default installs into the Settings harness only, at the Settings scope, with neither 05 nor
+    07a drawn;
+  - with no Settings harness, Default uses every one that can host the artifact;
+  - a Settings harness that cannot host the artifact leaves the choice to 05;
+  - Custom lands on 05;
+  - Esc on 05p installs nothing;
+  - a Settings harness row toggles and is stored;
+  - the stored list round-trips, and bad values are refused;
+  - Hypothesis properties over `settings_pairs` and the harness toggle.
+- `tests/consumer_ui_actions_test.py`:
+  - Install opens 05p with no preparation;
+  - Default prepares with `default_path` and carries nothing from Custom.
+- `tests/screen_cases.py` records 05p in the frame matrix.
+
+228 affected modules (2428 tests) are green, apart from the two B-194 Hypothesis findings. mypy,
+ruff, tach and docs-check are clean.
+
+Targeted mutation: dropping the Settings filter in `settings_pairs` turned three tests red:
+- the Settings-harness install;
+- the unhostable-harness fallback;
+- the `settings_pairs` property.

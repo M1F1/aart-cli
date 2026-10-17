@@ -17,7 +17,7 @@ from aart_cli.io.receipt_store import LocalReceiptStore
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import RegistryCollection, _published_registries
 from tests.consumer_application_e2e_test import _at, _drive
-from tests.consumer_shell_test import DOWN, ENTER, RIGHT, SPACE
+from tests.consumer_shell_test import DOWN, ENTER, INSTALL_CUSTOM, RIGHT, SPACE
 from tests.installation_harness_choice_test import _AUTHORED_MCP, _AUTHORED_SKILL
 
 STARTER = "company/collection/starter@1.0.0"
@@ -41,7 +41,7 @@ class CollectionInstallShellTest(unittest.TestCase):
             _environment() as env,
         ):
             finished, terminal, _ = _drive(
-                env, _at(ConsumerScreen.MARKETPLACE), *_TO_PREVIEW, ord("i"), *keys
+                env, _at(ConsumerScreen.MARKETPLACE), *_TO_PREVIEW, *INSTALL_CUSTOM, *keys
             )
             stored = LocalReceiptStore(str(env.paths.data_root) + "/state").installations()
             assert isinstance(stored, Ok), getattr(stored, "diagnostics", ())

@@ -10838,3 +10838,26 @@ implementation choices:
   under the first, because a row is an installation. Doctor's Collection line names the members
   needing attention. CLI `doctor` now names installations as the TUI does (`…#harness`), so a
   Collection's members are its rows.
+
+## D-435 — The install path is screen 05p, and Default falls back to 05 rather than guess (CP-31 step 10)
+
+§173.7 has a person choose Default or Custom after Install. The implementation choices:
+
+- **A screen of its own, 05p Install Path**, between Install and 05, with Default first. Install
+  on Marketplace, details, a Collection preview or its customization opens 05p and prepares
+  nothing; the choice is what starts the preparation. 05p's state says what Default will use
+  (Settings harnesses, scope, installer). Custom is the existing flow from 05, unchanged.
+- **Default prepares from Settings and stays on 05p until the answer says where to go**: 07 when
+  configuration is needed, then 07b or Ready. 05 and 07a are never drawn: the harnesses come from
+  `settings_pairs` (Settings harnesses that are detected and can host each artifact, or every one
+  that can when Settings names none), the scope from the Settings default where offered, and the
+  installer from Settings. A submitted 07 on Default rewinds to 05p rather than 05.
+- **When the Settings harnesses leave an artifact unhosted, 05 asks.** The conservative reading of
+  "the Settings harnesses that are detected and can host the artifact": an artifact none of them
+  can host gets no harness, and choosing one for the person would be the frontend deciding. The
+  install then goes on as Custom.
+- **Settings keeps `default_harnesses`**, stored strictly (distinct harness names; anything else is
+  refused, like every other stored preference). Screen 28 draws one on/off row per measured
+  harness under Installation.
+- **The CLI has no path choice.** `marketplace install` already names its harnesses with
+  `--profile`, so Default/Custom is a TUI journey only.

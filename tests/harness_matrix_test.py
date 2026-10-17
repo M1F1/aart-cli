@@ -191,12 +191,12 @@ class EachTickedPairIsInstalledTest(unittest.TestCase):
     def test_an_artifact_only_one_harness_can_host_continues_without_a_tick(self) -> None:
         from tests.configured_install_command_e2e_test import _environment
         from tests.consumer_application_e2e_test import _at, _drive
-        from tests.consumer_shell_test import ENTER, SPACE
+        from tests.consumer_shell_test import ENTER, INSTALL_CUSTOM, SPACE
         from tests.installed_multi_uninstall_e2e_test import LINT_SKILL
 
         with _environment(authored=LINT_SKILL) as env:
             finished, terminal, _ = _drive(
-                env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"), ENTER, ENTER, ENTER
+                env, _at(ConsumerScreen.MARKETPLACE), SPACE, *INSTALL_CUSTOM, ENTER, ENTER, ENTER
             )
 
             self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
@@ -210,7 +210,7 @@ class EachTickedPairIsInstalledTest(unittest.TestCase):
         from tests.configured_install_command_e2e_test import _environment
         from tests.configured_installation_draft_e2e_test import _published_registries
         from tests.consumer_application_e2e_test import _at, _drive
-        from tests.consumer_shell_test import DOWN, ENTER, RIGHT, SPACE
+        from tests.consumer_shell_test import DOWN, ENTER, INSTALL_CUSTOM, RIGHT, SPACE
         from tests.installation_harness_choice_test import _AUTHORED_MCP, _AUTHORED_SKILL
 
         def both(_authored, **keywords):
@@ -226,7 +226,7 @@ class EachTickedPairIsInstalledTest(unittest.TestCase):
                 SPACE,
                 DOWN,
                 SPACE,
-                ord("i"),
+                *INSTALL_CUSTOM,
                 # 05: everything into claude, then on to 07a.
                 SPACE,
                 ENTER,
@@ -256,7 +256,7 @@ class EachTickedPairIsInstalledTest(unittest.TestCase):
         from tests.configured_install_command_e2e_test import _environment
         from tests.configured_installation_draft_e2e_test import _published_registries
         from tests.consumer_application_e2e_test import _at, _drive
-        from tests.consumer_shell_test import DOWN, ENTER, RIGHT, SPACE
+        from tests.consumer_shell_test import DOWN, ENTER, INSTALL_CUSTOM, RIGHT, SPACE
         from tests.installation_harness_choice_test import _AUTHORED_MCP, _AUTHORED_SKILL
 
         def both(_authored, **keywords):
@@ -272,7 +272,7 @@ class EachTickedPairIsInstalledTest(unittest.TestCase):
                 SPACE,
                 DOWN,
                 SPACE,
-                ord("i"),
+                *INSTALL_CUSTOM,
                 # Past "All artifacts" to the MCP's row, claude; then the Skill's row, opencode.
                 DOWN,
                 SPACE,

@@ -26,7 +26,7 @@ from aart_cli.install_state.paths import install_state_paths
 from aart_cli.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AuthoredSetup, _published_registry
-from tests.consumer_shell_test import ENTER, SPACE, FakeTerminal
+from tests.consumer_shell_test import ENTER, INSTALL_CUSTOM, SPACE, FakeTerminal
 from tests.placed_installation_e2e_test import SKILL_BODY, STYLE_BODY
 
 COORDINATE = "company/skill/code-review"
@@ -303,7 +303,7 @@ class ConsumerShellSetupTest(unittest.TestCase):
             self.assertIsInstance(composed, Ok, getattr(composed, "diagnostics", ()))
             assert isinstance(composed, Ok)
             handler = composed.value
-            terminal = FakeTerminal(SPACE, ord("i"), SPACE, ENTER, ENTER, ENTER, ord("y"))
+            terminal = FakeTerminal(SPACE, *INSTALL_CUSTOM, SPACE, ENTER, ENTER, ENTER, ord("y"))
 
             with mock.patch.dict(os.environ, env.xdg, clear=False):
                 finished = run_consumer_shell(
