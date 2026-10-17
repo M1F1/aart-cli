@@ -4653,3 +4653,10 @@ harness at user and at project scope, or in two projects, shares a key. §173.8'
 and count are drawn from the owner's root, which is correct. Filtering Installed to the current
 project (with the others under More info) and adding scope and root to the key touch every
 lifecycle command; neither is needed for §173.8's columns.
+
+## B-199 — `registry audit` reporting MCP delivery on an adopted package
+
+Found: CP-31 step 14 (2026-10-17). The audit-level test that an `mcp` package whose descriptor
+names a payload file, or has no `server`, is reported by `registry audit` built its package with
+`registry vendor`, and went with it. `describe_delivery` and both messages remain covered directly.
+A replacement adopts an `mcp` manifest and audits the result; not needed for §173.

@@ -19,8 +19,8 @@ audits, and commits every listed Git change. Only `push` touches a remote, and o
 | `test` | reads | Validate the registry at its minimum and/or a supplied latest compatible version |
 | `diff` | reads | Show deterministic canonical-format drift without changing the checkout |
 
-The authoring commands that bring content in — `scan`, `promote`, `adopt`, `check-upstream`,
-`discover`, `vendor`, `vendor-batch`, `revendor` and `collection` — follow the same
+The commands that bring content in — `scan`, `promote`, `adopt` and `check-upstream` — and
+`collection` follow the same
 review-then-`--yes` boundary; `aart-cli registry ACTION --help` states
 each one's inputs.
 
@@ -68,8 +68,8 @@ The Registry stores that compiled package and provenance; it does not author the
 
 Approved records under `registry/versions/` retain each version's source/content pins. `lock`
 checks that representation with nothing to resolve; it writes no separate lock file. `build`
-rebuilds `registry/index.json` and `registry/snapshot.json` deterministically. Vendored packages
-live under `artifacts/<kind>/<name>/<version>/`; reference-mode versions use pinned records under
+rebuilds `registry/index.json` and `registry/snapshot.json` deterministically. Self-contained
+versions live under `artifacts/<kind>/<name>/<version>/`; pinned-reference versions use records under
 `references/<kind>/<name>/<version>.json`. Removed authoring-workspace files are refused.
 
 Audit warnings
@@ -84,5 +84,5 @@ unknown risk remains an explicit review warning. The stdlib-only baseline is doc
 ## Other catalog formats
 
 Registry commands accept only the native package contract; other catalog layouts are not
-translated. Re-author the other repository as a native source and bring its reviewed Candidate in
-with `scan` and `promote`, or copy its content in with `vendor`, which records provenance.
+translated. Give the other repository an `aart-cli.yaml` beside each artifact, then bring it in with `adopt`,
+or with `scan` and `promote`.

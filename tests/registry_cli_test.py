@@ -10,11 +10,7 @@ from aart_cli.domain.result import Ok
 from aart_cli.model import Request
 from aart_cli.protocol.semver import VersionBounds, parse_semver
 
-_VENDOR = (
-    "registry vendor --source /tmp/registry mcp atlassian --url https://example.com/up.git "
-    "--path artifacts/mcp/atlassian --artifact-version 1.2.0 --summary One. "
-    "--profile claude --platform darwin"
-)
+_DIFF = "registry diff --source /tmp/registry"
 _FORMAT = "registry format --source /tmp/registry"
 
 
@@ -28,13 +24,9 @@ class RegistryCliTest(unittest.TestCase):
             "adopt",
             "check-upstream",
             "promote",
-            "discover",
             "format",
             "publish",
             "push",
-            "vendor",
-            "vendor-batch",
-            "revendor",
             "validate",
             "lock",
             "build",
@@ -52,6 +44,23 @@ class RegistryCliTest(unittest.TestCase):
         )
         self.assertEqual(set(sub.choices), actions)
         self.assertIn("registry", cli.DISPATCH)
+
+    def test_no_route_writes_content_without_a_source_manifest(self) -> None:
+        """§173.9 (D-375): adoption by manifest is the only way content enters a Registry."""
+
+        for argv in (
+            ["registry", "vendor", "--source", "/tmp/r", "skill", "x"],
+            ["registry", "vendor-batch", "--source", "/tmp/r", "--manifest", "m.json"],
+            ["registry", "revendor", "--source", "/tmp/r", "skill", "x"],
+            ["registry", "discover", "--source", "/tmp/r"],
+            ["registry", "audit", "--source", "/tmp/r", "--check-upstream"],
+        ):
+            with self.subTest(argv=argv[1:3]), self.assertRaises(SystemExit):
+                cli.build_parser().parse_args(argv)
+        self.assertEqual(
+            {item.value for item in CurationAction} & {"vendor", "vendor-batch", "revendor"},
+            set(),
+        )
 
     def test_format_check_and_json_are_preserved_in_request(self) -> None:
         captured: list[Request] = []
@@ -124,7 +133,7 @@ class RegistryCliTest(unittest.TestCase):
         running = parse_semver(__version__)
         assert isinstance(running, Ok)
 
-        for command in (_VENDOR, _FORMAT):
+        for command in (_DIFF, _FORMAT):
             with self.subTest(command=command.split()[1]):
                 request = cli._to_request(cli.build_parser().parse_args(command.split()))
                 curation = registry_command._curation_request(

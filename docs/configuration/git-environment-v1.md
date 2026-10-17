@@ -1,6 +1,6 @@
 # The environment AART gives Git
 
-Every remote AART reaches — a configured source, a promoted native reference, a vendored subtree —
+Every remote AART reaches — a configured source, a promoted native reference, an adopted repository —
 is reached by running system Git. Git authentication is delegated to Git and its configured helpers;
 this is distinct from artifact runtime secrets, which have independent per-installation provider
 items under Product Specification §169. This page states the

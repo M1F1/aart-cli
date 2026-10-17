@@ -32,11 +32,8 @@ aart-cli registry init --source . --source-id company --display-name "Company Re
 aart-cli registry scan --help
 aart-cli registry promote --help
 
-# Or copy foreign content the upstream has not packaged for AART
-aart-cli registry vendor skill code-review --source . \
-  --url https://github.com/acme/prompts.git --ref main --path prompts/code-review \
-  --artifact-version 1.0.0 --summary "Review code." \
-  --profile claude --platform darwin
+# Or adopt artifacts from a repository's manifests without subscribing to it
+aart-cli registry adopt --source . --url https://github.com/acme/prompts.git --ref main
 
 # Review, then finalize lock + build + validate + audit + one commit
 aart-cli registry publish --source .
@@ -46,14 +43,7 @@ aart-cli registry publish --source . --yes
 aart-cli registry push --source . --branch add-code-review
 ```
 
-`vendor` is the foreign-repository path: it copies a file or subtree into this registry, records the
-origin and pinned commit in `provenance.json`, and makes this registry the copy's owner. `revendor`
-compares that copy with upstream and plans an explicit versioned refresh; validation and audit reject
-a copied payload that drifts from its provenance.
-
 For the complete path, use the [walked company-registry tutorial for Tabnine](../tutorials/company-registry-tabnine-v1.md).
-The [vendoring tutorial](../tutorials/vendoring-v1.md) covers provenance and re-vendoring, and
-[porting an MCP server](../tutorials/mcp-servers-into-the-registry.md) covers setup recipes.
 
 An author team whose repository becomes a Source commits one `aart-cli.yaml` beside each artifact. A
 complete MCP example — Python stdio server, `requirements.txt` dependencies, one Keychain secret and

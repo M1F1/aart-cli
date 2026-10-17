@@ -2,41 +2,19 @@
 
 from __future__ import annotations
 
-from collections import Counter
-from dataclasses import dataclass, replace
-
-from aart_cli.application.maintainer import CandidateBundle
 from aart_cli.application.promotion import (
-    PromotionEvidence,
-    load_registry_versions,
-    plan_bulk_promotion,
     read_registry_version_records,
     registry_catalog_entries,
     registry_state_digest,
 )
-from aart_cli.domain.artifacts import (
-    ArtifactFormat,
-    ArtifactKind,
-    ArtifactPackage,
-    Compatibility,
-)
-from aart_cli.domain.artifacts import (
-    Provenance as ArtifactProvenance,
-)
-from aart_cli.domain.candidates import assess_candidate, make_candidate
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import (
-    ArtifactCoordinate,
     ArtifactIdentity,
-    ObjectDigest,
-    SourceAlias,
     SourceId,
 )
-from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.protocol.authoring import CompiledAuthorArtifact, ComplianceLevel
 from aart_cli.protocol.capabilities import Capability
-from aart_cli.protocol.hashing import file_entry, sha256_bytes, tree_digest
+from aart_cli.protocol.hashing import sha256_bytes
 from aart_cli.protocol.json import canonical_json_bytes, parse_json
 from aart_cli.protocol.native_models import (
     ArtifactManifest,
@@ -52,50 +30,29 @@ from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
     SourceSnapshot,
-    compile_native_package,
 )
 from aart_cli.protocol.paths import SafeRelativePath, parse_relative_path
 from aart_cli.protocol.registry_models import (
     RegistryManifest,
-    ReviewRecord,
 )
 from aart_cli.protocol.registry_schema import (
     parse_registry_manifest,
     registry_manifest_to_json,
 )
-from aart_cli.protocol.semver import SemVer, VersionBounds, parse_semver
-from aart_cli.registry_maintenance.model import (
-    NativeAcquirer,
-    NativeReferenceAcquisition,
-    NativeReferenceDisposition,
+from aart_cli.protocol.semver import SemVer, VersionBounds
+from aart_cli.registry_maintenance.delivery import (
+    delivery_reference_message,
+    describe_delivery,
+    mcp_descriptor_message,
 )
 from aart_cli.registry_maintenance.planning import (
     registry_native_content,
 )
-from aart_cli.registry_maintenance.vendoring import (
-    VENDOR_IMPORTER_ID,
-    CopyIntegrity,
-    DeliveryFinding,
-    VendorAssessment,
-    VendoredPackage,
-    VendorOptions,
-    VendorOrigin,
-    assess_vendored_package,
-    copy_integrity_message,
-    delivery_reference_message,
-    describe_delivery,
-    mcp_descriptor_message,
-    project_vendored_package,
-    read_vendor_record,
-    verify_vendored_copy,
-)
 from aart_cli.runtime_contract import EXECUTABLE_VERSION
 from aart_cli.security.application import verify_security_index
 from aart_cli.security.attestation_schema import parse_security_index
-from aart_cli.security.baseline import BASELINE_RULES_DIGEST
 from aart_cli.security.model import InstallationRisk
 from aart_cli.sources.model import source_snapshot_digest
-from aart_cli.sources.subtree import TakenSubtree, take_subtree
 
 from .model import (
     RegistryInitOptions,
@@ -104,8 +61,6 @@ from .model import (
     RegistryQualityReport,
     RegistryWorkspaceChange,
     RegistryWorkspacePlan,
-    VendoredArtifactCheck,
-    VendoredArtifactPlan,
     WorkspaceChangeKind,
     registry_workspace_review_digest,
 )
@@ -147,82 +102,27 @@ _ALREADY_A_REGISTRY = (
     "initialize a different directory by pointing `--source` at it",
 )
 _LIST_PACKAGES = ("`aart-cli registry validate` reports every package this registry holds",)
-_COPY_INTEGRITY = (
-    "the copy on disk no longer matches the record committed beside it: restore it from the last "
-    "commit that agreed with the record before re-vendoring",
-)
 _CANONICAL_ROOTS = (
     "restore the canonical `artifacts/` and `collections/` roots in `aart-cli-source.json`, then "
     "`aart-cli registry validate`",
 )
 _SETUP_RECIPE = (
-    "add the declared recipe and its `SETUP.md` to the package, or drop `--setup-recipe`, then run "
-    "the command again",
+    "add the declared recipe and its `SETUP.md` to the package, or drop the setup declaration from "
+    "its manifest, then adopt the change",
 )
 
 
-def _is_vendored_package(files: dict[str, SnapshotEntry], base: str) -> bool:
-    """Whether the package at `base` records a vendoring, as opposed to being authored in place."""
-
-    provenance = files.get(f"{base}/provenance.json")
-    if provenance is None or provenance.kind is not SnapshotEntryKind.FILE:
-        return False
-    parsed = parse_provenance(provenance.content, path=f"{base}/provenance.json")
-    return isinstance(parsed, Ok) and parsed.value.importer.id == VENDOR_IMPORTER_ID
-
-
-def _existing_package_remediation(
-    files: dict[str, SnapshotEntry],
-    base: str,
-    identity: ArtifactIdentity,
-) -> tuple[str, ...]:
-    """`vendor` is create-only, so say which command is not.
-
-    Upstream moving is the ordinary reason to run `vendor` a second time, and `revendor` is the
-    command that adopts movement — but only for a copy that records where it came from. An authored
-    package has no upstream to re-resolve, so it is told the other thing instead of being sent to a
-    command that would refuse it.
-    """
-
-    version_bases = tuple(
-        raw.removesuffix("/artifact.json")
-        for raw in files
-        if raw.startswith(f"{base}/") and raw.endswith("/artifact.json")
-    )
-    if any(_is_vendored_package(files, version_base) for version_base in version_bases):
-        return (
-            f"to publish newer upstream bytes as another version, run `aart-cli registry revendor "
-            f"{identity.kind} {identity.name} --artifact-version <version>`, which re-resolves the "
-            f"ref this package records; `vendor` creates a package and never replaces one",
-        )
-    return (
-        f"{base} was authored here and records no upstream, so vendor under a name this registry "
-        f"does not use, or remove that package first if you meant to replace it",
-    )
-
-
-_RECORDED_ORIGIN = (
-    "run the command without `--yes` to read the origin and ref recorded with the copy, and take "
-    "the new bytes from that origin",
-)
 _IDENTITIES = (
     "make `registry_id` in `aart-cli-registry.json` and `source_id` in `aart-cli-source.json` the same "
     "value, then `aart-cli registry validate`",
 )
 
 
-_UPSTREAM_UNREACHABLE = (
-    "the origin could not be read, so this is unknown rather than behind: restore access to it and "
-    "run `aart-cli registry audit --check-upstream` again",
-)
 _PROVENANCE = (
-    "a package authored in this registry has no provenance and this stays a warning; a copy taken "
-    "from upstream gets its record from the vendoring that took it",
+    "a package adopted from a source repository gets its provenance from the adoption; a package "
+    "without one stays a warning",
 )
-_DECLARE_LICENSE = (
-    "record the license in the package's `artifact.json`; for a copy, `--license` on the vendoring "
-    "states what this registry publishes",
-)
+_DECLARE_LICENSE = ("declare the license in the artifact's source manifest, then adopt the change",)
 _SECURITY_EVIDENCE = (
     "supply the per-object evidence under `security/index.json`, or accept that the audit reports "
     "installation risk as unassessed",
@@ -237,33 +137,11 @@ _SECURITY_RISK = (
 )
 
 
-def _revendor(identity: ArtifactIdentity) -> tuple[str, ...]:
-    """The next step for a copy that has moved, naming the copy it is about."""
-
-    return (
-        "take the copy again with "
-        f"`aart-cli registry revendor {identity.kind} {identity.name} --artifact-version VERSION "
-        "--yes`, which replaces the bytes this registry ships",
-    )
-
-
 def _delivery(identity: ArtifactIdentity) -> tuple[str, ...]:
-    """The next step for a copy whose shipped shape is wrong, naming the copy it is about."""
+    """The next step for a package whose shipped shape is wrong, naming the package."""
 
     return (
-        f"correct the package this registry ships for {identity}, or take the copy again with "
-        f"`aart-cli registry revendor {identity.kind} {identity.name} --artifact-version VERSION "
-        "--yes`",
-    )
-
-
-def _not_vendored(identity: ArtifactIdentity) -> tuple[str, ...]:
-    """The one next step that names the package it is about, so it can be run as written."""
-
-    return (
-        f"{identity} ships no vendoring record, so there is no copy to move: re-publish it from "
-        "the Source checkout it was authored in — `aart-cli registry scan --help` and "
-        "`aart-cli registry promote --help`",
+        f"correct {identity}'s manifest in its source repository, then adopt or promote the change",
     )
 
 
@@ -583,496 +461,6 @@ def _source_manifest(files: dict[str, SnapshotEntry]) -> Result[SourceManifest]:
     return parsed
 
 
-def _adopted_authored(
-    files: dict[str, SnapshotEntry],
-    base: str,
-) -> tuple[tuple[str, bytes, bool], ...]:
-    """Whatever the maintainer already wrote inside the target package.
-
-    A foreign subtree almost never satisfies its kind's payload contract on its own, and no flag can
-    carry file bytes. So `vendor` adopts the files the maintainer has already placed at the target
-    path — the `payload/mcp.json` wrapper, a `SETUP.md`, a `setup/` recipe — and projects them
-    alongside the taken bytes, where the projection's refusals judge them. `artifact.json` and
-    `provenance.json` are excluded because the projection derives them.
-    """
-
-    prefix = f"{base}/"
-    return tuple(
-        (raw.removeprefix(prefix), item.content, item.executable)
-        for raw, item in sorted(files.items())
-        if raw.startswith(prefix)
-        and item.kind is SnapshotEntryKind.FILE
-        and raw.removeprefix(prefix) not in {"artifact.json", "provenance.json"}
-    )
-
-
-def plan_artifact_vendor(
-    snapshot: SourceSnapshot,
-    acquisition: NativeReferenceAcquisition,
-    options: VendorOptions,
-    *,
-    path: SafeRelativePath,
-    review: ReviewRecord,
-    importer_version: SemVer,
-) -> Result[VendoredArtifactPlan]:
-    """Plan the owned package a reviewed vendoring would write, writing nothing.
-
-    The approved review record is the same gate `plan_native_promotion` applies: a vendoring is the
-    moment foreign bytes become this registry's responsibility, and it does not happen unreviewed.
-    """
-
-    if review.status != "approved":
-        return _error("vendoring requires an approved review record", _REVIEW_FIRST)
-    files = _files(snapshot)
-    if isinstance(files, Err):
-        return files
-    source = _source_manifest(files.value)
-    if isinstance(source, Err):
-        return source
-    root = source.value.artifact_roots[0]
-    identity = options.identity
-    base = f"{root}/{identity.kind}/{identity.name}"
-    # An existing manifest is an existing package: adopting the maintainer's authored wrapper is the
-    # point, so their `payload/` and `setup/` files must not read as one.
-    if any(raw.startswith(f"{base}/") and raw.endswith("/artifact.json") for raw in files.value):
-        return _error(
-            f"artifact package already exists: {identity.kind}/{identity.name}",
-            _existing_package_remediation(files.value, base, identity),
-        )
-    taken = take_subtree(acquisition.snapshot, path)
-    if isinstance(taken, Err):
-        return taken
-    projected = project_vendored_package(
-        taken.value,
-        VendorOrigin(acquisition.url, acquisition.requested_ref, acquisition.resolved_commit),
-        replace(options, authored=_adopted_authored(files.value, f"{base}/{options.version}")),
-        artifact_root=root,
-        importer_version=importer_version,
-    )
-    if isinstance(projected, Err):
-        return projected
-    written = {relative for relative, _content, _executable in projected.value.files}
-    if options.setup_recipe is not None:
-        for required in (
-            f"{projected.value.base}/{options.setup_recipe}",
-            f"{projected.value.base}/SETUP.md",
-        ):
-            if required not in written:
-                return _error(
-                    f"the declared setup recipe requires {required}, which is not present",
-                    _SETUP_RECIPE,
-                )
-    # The assessment runs over the projected object, so the review reports what the baseline found
-    # in the exact bytes this vendoring writes — the maintainer's own wrapper as much as the copied
-    # payload — and the evidence is committed beside the package for the next reader.
-    assessed = assess_vendored_package(projected.value, source_id=source.value.source_id)
-    if isinstance(assessed, Err):
-        return assessed
-    # The authored wrapper in the destination version is only staging input. Promotion sees the canonical
-    # pre-vendor Registry, then owns the immutable version and both derived catalogs.
-    before = SourceSnapshot(
-        snapshot.origin,
-        tuple(entry for entry in snapshot.entries if not str(entry.path).startswith(f"{base}/")),
-    )
-    promoted = _promote_vendor(before, projected.value, assessed.value, acquisition.resolved_commit)
-    if isinstance(promoted, Err):
-        return promoted
-    planned = _plan(
-        RegistryOperation.VENDOR,
-        snapshot,
-        (
-            *promoted.value,
-            (assessed.value.document_path, assessed.value.document, False),
-        ),
-        prune_under=base,
-    )
-    if isinstance(planned, Err):
-        return planned
-    return Ok(
-        VendoredArtifactPlan(
-            planned.value,
-            assessed.value.assessment,
-            projected.value.license,
-            _package_delivery(projected.value),
-        )
-    )
-
-
-def _promote_vendor(
-    snapshot: SourceSnapshot,
-    package: VendoredPackage,
-    assessment: VendorAssessment,
-    revision: str,
-) -> Result[tuple[tuple[str, bytes, bool], ...]]:
-    """Use the approved promotion projection for a reviewed foreign package."""
-
-    files = _files(snapshot)
-    if isinstance(files, Err):
-        return files
-    marker = files.value.get("aart-cli-registry.json")
-    if marker is None or marker.kind is not SnapshotEntryKind.FILE:
-        return _error("registry marker is missing", _INITIALIZE)
-    registry = parse_registry_manifest(marker.content)
-    if isinstance(registry, Err):
-        return registry
-    prefix = f"{package.base}/"
-    entries = tuple(
-        SnapshotEntry(_path(raw.removeprefix(prefix)), SnapshotEntryKind.FILE, content, executable)
-        for raw, content, executable in package.files
-    )
-    native = compile_native_package(entries, expected_identity=package.manifest.identity)
-    if isinstance(native, Err):
-        return native
-    canonical = tree_digest(
-        file_entry(entry.path, entry.content, executable=entry.executable)
-        for entry in entries
-        if str(entry.path) != "provenance.json"
-    )
-    if isinstance(canonical, Err):
-        return canonical
-    identity = package.manifest.identity
-    source_alias = SourceAlias("vendor")
-    artifact = ArtifactPackage(
-        ArtifactCoordinate(source_alias, identity, str(package.manifest.version)),
-        ArtifactKind(identity.kind),
-        ArtifactFormat(package.manifest.payload.format),
-        native.value.payload_digest,
-        ArtifactProvenance(
-            package.provenance.origin.url,
-            revision,
-            str(package.provenance.origin.path),
-            canonical.value,
-            VENDOR_IMPORTER_ID,
-        ),
-        Compatibility(
-            package.manifest.compatibility.platforms,
-            package.manifest.compatibility.profiles,
-        ),
-    )
-    bundle = CandidateBundle(
-        assess_candidate(
-            make_candidate(artifact, canonical.value, SourceAlias(registry.value.registry_id.value))
-        ),
-        CompiledAuthorArtifact(
-            _path("artifact.json"),
-            canonical.value,
-            artifact,
-            native.value,
-            entries,
-            ComplianceLevel.AART_CLI_COMPATIBLE,
-        ),
-    )
-    approved = load_registry_versions(snapshot)
-    if isinstance(approved, Err):
-        return approved
-    plan = plan_bulk_promotion(
-        snapshot,
-        (bundle,),
-        evidence=(
-            (
-                bundle.candidate.id,
-                PromotionEvidence(sha256_bytes(assessment.document), BASELINE_RULES_DIGEST),
-            ),
-        ),
-        approved=approved.value,
-        mode=RegistryContentMode.SELF_CONTAINED,
-    )
-    if isinstance(plan, Err):
-        return plan
-    return Ok(
-        tuple(
-            (str(change.path), change.content, change.executable) for change in plan.value.changes
-        )
-    )
-
-
-def _package_delivery(package: VendoredPackage) -> DeliveryFinding | None:
-    """What a consumer receives from the package this plan would write."""
-
-    prefix = f"{package.base}/"
-    return describe_delivery(
-        package.manifest.identity.kind,
-        {
-            relative.removeprefix(prefix): content
-            for relative, content, _executable in package.files
-            if relative.startswith(f"{prefix}{package.manifest.payload.root}/")
-        },
-    )
-
-
-@dataclass(frozen=True, slots=True)
-class VendoredArtifactOrigin:
-    """What the workspace already knows about one vendored copy, before anything is acquired."""
-
-    base: str
-    url: str
-    ref: str
-    path: SafeRelativePath
-    recorded_commit: str
-    input_digest: ObjectDigest
-    manifest: ArtifactManifest
-    authored: tuple[str, ...]
-
-
-def read_vendored_artifact(
-    snapshot: SourceSnapshot,
-    identity: ArtifactIdentity,
-) -> Result[VendoredArtifactOrigin]:
-    """Read one vendored package's own record of where it came from.
-
-    Separate from planning because the caller has to acquire between the two: the recorded ref is
-    the thing being resolved, and it lives in the package.
-    """
-
-    files = _files(snapshot)
-    if isinstance(files, Err):
-        return files
-    source = _source_manifest(files.value)
-    if isinstance(source, Err):
-        return source
-    # Read the approval identities before validating payload digests. The copy-integrity check
-    # immediately after this read gives a specific refusal for a changed vendored byte, before
-    # re-vendoring contacts the upstream.
-    versions = read_registry_version_records(snapshot)
-    if isinstance(versions, Err):
-        return versions
-    matching = tuple(
-        item
-        for item in versions.value
-        if item.coordinate.artifact == identity and item.mode is RegistryContentMode.SELF_CONTAINED
-    )
-    if not matching:
-        return _error(
-            f"registry has no artifact package {identity.kind}/{identity.name}", _LIST_PACKAGES
-        )
-    ordered_versions: list[tuple[SemVer, str]] = []
-    for item in matching:
-        parsed_version = parse_semver(item.coordinate.version or "")
-        if isinstance(parsed_version, Err):
-            return parsed_version
-        ordered_versions.append((parsed_version.value, item.coordinate.version or ""))
-    latest_version = max(ordered_versions, key=lambda item: item[0])[1]
-    base = f"{source.value.artifact_roots[0]}/{identity.kind}/{identity.name}/{latest_version}"
-    manifest_entry = files.value.get(f"{base}/artifact.json")
-    if manifest_entry is None:
-        return _error(
-            f"registry version has no artifact package: {identity}@{latest_version}", _LIST_PACKAGES
-        )
-    manifest = parse_artifact_manifest(manifest_entry.content, path=f"{base}/artifact.json")
-    if isinstance(manifest, Err):
-        return manifest
-    return read_vendored_package(files.value, base, manifest.value)
-
-
-def read_vendored_package(
-    files: dict[str, SnapshotEntry],
-    base: str,
-    manifest: ArtifactManifest,
-) -> Result[VendoredArtifactOrigin]:
-    """The same read from a package already located, for callers walking every artifact root.
-
-    `registry audit` visits packages by path rather than by identity, and a registry may declare
-    more than one artifact root; resolving the identity again would look only under the first.
-    """
-
-    provenance_entry = files.get(f"{base}/provenance.json")
-    if provenance_entry is None:
-        return _error(
-            f"{manifest.identity} records no provenance, so it was not vendored",
-            _not_vendored(manifest.identity),
-        )
-    provenance = parse_provenance(provenance_entry.content, path=f"{base}/provenance.json")
-    if isinstance(provenance, Err):
-        return provenance
-    record = read_vendor_record(provenance.value)
-    if isinstance(record, Err):
-        return record
-    origin = provenance.value.origin
-    return Ok(
-        VendoredArtifactOrigin(
-            base,
-            origin.url,
-            record.value.ref,
-            origin.path,
-            origin.resolved_commit,
-            origin.input_digest,
-            manifest,
-            record.value.authored,
-        )
-    )
-
-
-def _drift_counts(
-    files: dict[str, SnapshotEntry],
-    vendored: VendoredArtifactOrigin,
-    taken: TakenSubtree,
-) -> tuple[int, int, int]:
-    """Compare upstream's files with the copy's, ignoring what the maintainer wrote themselves.
-
-    Derived documents are excluded because they are projections of these inputs, not evidence of
-    upstream movement: reporting `artifact.json` as changed would count the version bump as drift.
-    """
-
-    authored = {f"{vendored.base}/{relative}" for relative in vendored.authored} | {
-        f"{vendored.base}/artifact.json",
-        f"{vendored.base}/provenance.json",
-    }
-    copied = {
-        raw: entry
-        for raw, entry in files.items()
-        if raw.startswith(f"{vendored.base}/")
-        and entry.kind is SnapshotEntryKind.FILE
-        and raw not in authored
-    }
-    upstream = {
-        f"{vendored.base}/{vendored.manifest.payload.root}/{entry.path}": entry
-        for entry in taken.snapshot.entries
-        if entry.kind is SnapshotEntryKind.FILE
-    }
-    changed = sum(
-        1
-        for raw, entry in upstream.items()
-        if raw in copied
-        and (copied[raw].content != entry.content or copied[raw].executable != entry.executable)
-    )
-    return (
-        len(upstream.keys() - copied.keys()),
-        changed,
-        len(copied.keys() - upstream.keys()),
-    )
-
-
-def plan_artifact_revendor(
-    snapshot: SourceSnapshot,
-    acquisition: NativeReferenceAcquisition,
-    vendored: VendoredArtifactOrigin,
-    *,
-    version: SemVer | None,
-    review: ReviewRecord,
-    importer_version: SemVer,
-) -> Result[VendoredArtifactCheck]:
-    """Re-resolve one vendored copy against upstream and report what that means.
-
-    An `up-to-date` copy is left alone deliberately, including its recorded commit: a ref that has
-    moved over content the subtree does not contain has changed nothing this registry ships, and
-    re-pinning would produce a diff claiming the copy was refreshed when it was not.
-    """
-
-    if review.status != "approved":
-        return _error("re-vendoring requires an approved review record", _REVIEW_FIRST)
-    if acquisition.url != vendored.url or acquisition.requested_ref != vendored.ref:
-        return _error(
-            "the acquisition does not resolve the recorded vendoring instruction", _RECORDED_ORIGIN
-        )
-    files = _files(snapshot)
-    if isinstance(files, Err):
-        return files
-    # The copy against its own record, before upstream is mentioned at all: a copy that is not the
-    # copy cannot be discussed as current or as behind, and re-vendoring it would overwrite a
-    # difference the maintainer has not seen yet.
-    integrity = verify_vendored_copy(
-        files.value,
-        vendored.base,
-        vendored.manifest.payload.root,
-        vendored.authored,
-        vendored.input_digest,
-    )
-    if isinstance(integrity, Err):
-        return integrity
-    if not integrity.value.matches:
-        return _error(
-            copy_integrity_message(vendored.manifest.identity, integrity.value), _COPY_INTEGRITY
-        )
-    taken = take_subtree(acquisition.snapshot, vendored.path)
-    if isinstance(taken, Err):
-        return taken
-    added, changed, removed = _drift_counts(files.value, vendored, taken.value)
-    if taken.value.input_digest == integrity.value.recomputed:
-        return Ok(
-            VendoredArtifactCheck(
-                NativeReferenceDisposition.UP_TO_DATE,
-                acquisition.resolved_commit,
-                vendored.recorded_commit,
-                0,
-                0,
-                0,
-            )
-        )
-    drifted = VendoredArtifactCheck(
-        NativeReferenceDisposition.CHANGED,
-        acquisition.resolved_commit,
-        vendored.recorded_commit,
-        added,
-        changed,
-        removed,
-    )
-    if version is None:
-        # The diff is rendered before the refusal, not instead of it: the maintainer cannot choose
-        # the version the movement deserves without first seeing the movement.
-        return Ok(drifted)
-    manifest = vendored.manifest
-    authored: list[tuple[str, bytes, bool]] = []
-    for relative in vendored.authored:
-        entry = files.value.get(f"{vendored.base}/{relative}")
-        if entry is None or entry.kind is not SnapshotEntryKind.FILE:
-            return _error(
-                f"the authored file recorded with this copy is missing: {relative}", _COPY_INTEGRITY
-            )
-        authored.append((relative, entry.content, entry.executable))
-    options = VendorOptions(
-        manifest.identity,
-        version,
-        manifest.summary,
-        manifest.compatibility.profiles,
-        manifest.compatibility.platforms,
-        manifest.install.scopes,
-        manifest.install.modes,
-        None if manifest.setup is None else manifest.setup.recipe,
-        () if manifest.setup is None else manifest.setup.platforms,
-        tuple(authored),
-        (),
-        # The recorded licence is carried, not re-derived: it is the registry's own statement about
-        # what it publishes, and a re-vendor that silently dropped it would turn every upstream
-        # movement into an unlicensed copy.
-        license=manifest.license,
-    )
-    projected = project_vendored_package(
-        taken.value,
-        VendorOrigin(vendored.url, vendored.ref, acquisition.resolved_commit),
-        options,
-        artifact_root=_path(vendored.base.split("/", 1)[0]),
-        importer_version=importer_version,
-    )
-    if isinstance(projected, Err):
-        return projected
-    source = _source_manifest(files.value)
-    if isinstance(source, Err):
-        return source
-    assessed = assess_vendored_package(projected.value, source_id=source.value.source_id)
-    if isinstance(assessed, Err):
-        return assessed
-    promoted = _promote_vendor(
-        snapshot, projected.value, assessed.value, acquisition.resolved_commit
-    )
-    if isinstance(promoted, Err):
-        return promoted
-    planned = _plan(
-        RegistryOperation.REVENDOR,
-        snapshot,
-        (*promoted.value, (assessed.value.document_path, assessed.value.document, False)),
-    )
-    if isinstance(planned, Err):
-        return planned
-    return Ok(
-        replace(
-            drifted,
-            plan=planned.value,
-            assessment=assessed.value.assessment,
-            delivery=_package_delivery(projected.value),
-        ),
-    )
-
-
 def plan_registry_format(snapshot: SourceSnapshot) -> Result[RegistryWorkspacePlan]:
     files = _files(snapshot)
     if isinstance(files, Err):
@@ -1173,12 +561,6 @@ def validate_registry_workspace(
     registry, source = parsed.value
     files = _files(snapshot)
     assert isinstance(files, Ok)
-    # A package that contradicts its own provenance is malformed, and this is where well-formedness
-    # is decided.  It costs no network: the copy is checked against the record it carries.
-    vendored, unreadable = _vendored_packages(files.value, source)
-    diagnostics.extend(unreadable)
-    for package in vendored:
-        diagnostics.extend(vendored_copy_diagnostics(files.value, package))
     native = registry_native_content(
         snapshot,
         files.value,
@@ -1191,51 +573,18 @@ def validate_registry_workspace(
     return Ok(RegistryQualityReport((RegistryQualityCheck("validate", tuple(diagnostics)),)))
 
 
-def vendored_copy_diagnostics(
-    files: dict[str, SnapshotEntry],
-    vendored: VendoredArtifactOrigin,
-) -> tuple[Diagnostic, ...]:
-    """Check one vendored copy against the origin it records.
-
-    A pure function of the committed snapshot: no network, no store, and the same answer in
-    `validate`, in `audit`, and before a re-vendor. The mismatch is an error rather than a warning
-    because it is a defect in the registry, not a fact about the world like being behind upstream —
-    what this registry publishes is not what it says it publishes.
-    """
-
-    integrity = verify_vendored_copy(
-        files,
-        vendored.base,
-        vendored.manifest.payload.root,
-        vendored.authored,
-        vendored.input_digest,
-    )
-    if isinstance(integrity, Err):
-        return integrity.diagnostics
-    if integrity.value.matches:
-        return ()
-    return (
-        _diagnostic(
-            copy_integrity_message(vendored.manifest.identity, integrity.value), _COPY_INTEGRITY
-        ),
-    )
-
-
 def package_delivery_diagnostics(
     files: dict[str, SnapshotEntry],
     base: str,
     manifest: ArtifactManifest,
-    *,
-    vendored: bool,
 ) -> tuple[Diagnostic, ...]:
     """Report a descriptor that launches a file consumers never receive.
 
     An error rather than a warning: unlike a missing licence, this is not a fact about the world the
     maintainer may accept. It is an artifact that cannot start on any consumer machine.
 
-    It is not tied to the vendoring delivery finding, so an `mcp` package authored in place is
-    checked too. Nothing in the consequence depends on where the bytes came from — the
-    merge writes an empty entry either way — so the check runs for every package the audit walks.
+    Nothing in the consequence depends on where the bytes came from — the merge writes an empty
+    entry either way — so the check runs for every package the audit walks.
 
     The audit is where it runs, not `registry validate`. `validate_registry_workspace` is also the
     consumer's gate on a candidate source, so a new hard failure there makes every registry already
@@ -1260,167 +609,13 @@ def package_delivery_diagnostics(
     if finding.referenced:
         diagnostics.append(
             _diagnostic(
-                delivery_reference_message(identity, finding, vendored=vendored),
+                delivery_reference_message(identity, finding),
                 _delivery(identity),
             )
         )
     if finding.starts_nothing:
-        diagnostics.append(
-            _diagnostic(mcp_descriptor_message(identity, vendored=vendored), _delivery(identity))
-        )
+        diagnostics.append(_diagnostic(mcp_descriptor_message(identity), _delivery(identity)))
     return tuple(diagnostics)
-
-
-def verify_vendored_artifact(
-    snapshot: SourceSnapshot,
-    vendored: VendoredArtifactOrigin,
-) -> Result[CopyIntegrity]:
-    """The same check over a whole workspace, for a caller holding one artifact's record."""
-
-    files = _files(snapshot)
-    if isinstance(files, Err):
-        return files
-    return verify_vendored_copy(
-        files.value,
-        vendored.base,
-        vendored.manifest.payload.root,
-        vendored.authored,
-        vendored.input_digest,
-    )
-
-
-def _shipped_digest(
-    files: dict[str, SnapshotEntry],
-    vendored: VendoredArtifactOrigin,
-) -> ObjectDigest:
-    """The digest of the bytes this registry actually ships.
-
-    Drift is a statement about the copy, not about the record: comparing upstream with
-    `origin.input_digest` answers for a package that may no longer exist. A copy that cannot be
-    reconstructed at all falls back to the recorded value, because that case is already an error in
-    the offline part of the same command and adding a second phrasing of it here would report one
-    defect twice.
-    """
-
-    integrity = verify_vendored_copy(
-        files,
-        vendored.base,
-        vendored.manifest.payload.root,
-        vendored.authored,
-        vendored.input_digest,
-    )
-    return vendored.input_digest if isinstance(integrity, Err) else integrity.value.recomputed
-
-
-def _vendored_packages(
-    files: dict[str, SnapshotEntry],
-    source: SourceManifest,
-) -> tuple[tuple[VendoredArtifactOrigin, ...], tuple[Diagnostic, ...]]:
-    """Every vendored package the snapshot declares, and what refused to be read as one."""
-
-    roots = tuple(f"{root}/" for root in source.artifact_roots)
-    packages: list[VendoredArtifactOrigin] = []
-    diagnostics: list[Diagnostic] = []
-    for path, item in sorted(files.items()):
-        if (
-            item.kind is not SnapshotEntryKind.FILE
-            or not path.endswith("/artifact.json")
-            or not any(path.startswith(root) for root in roots)
-        ):
-            continue
-        base = path.removesuffix("/artifact.json")
-        provenance = files.get(f"{base}/provenance.json")
-        if provenance is None or provenance.kind is not SnapshotEntryKind.FILE:
-            continue
-        parsed = parse_provenance(provenance.content, path=f"{base}/provenance.json")
-        if isinstance(parsed, Err) or parsed.value.importer.id != VENDOR_IMPORTER_ID:
-            # A provenance that does not parse is already reported by the checks that parse it, and
-            # one written by another importer describes a reference, which ships no bytes to verify.
-            continue
-        manifest = parse_artifact_manifest(item.content, path=path)
-        if isinstance(manifest, Err):
-            continue
-        read = read_vendored_package(files, base, manifest.value)
-        if isinstance(read, Err):
-            diagnostics.extend(read.diagnostics)
-            continue
-        packages.append(read.value)
-    return tuple(packages), tuple(diagnostics)
-
-
-def _vendored_upstream_findings(
-    acquirer: NativeAcquirer,
-    files: dict[str, SnapshotEntry],
-    vendored: VendoredArtifactOrigin,
-) -> tuple[NativeReferenceDisposition, tuple[Diagnostic, ...]]:
-    """Report whether one vendored copy still matches upstream, and never guess when it cannot.
-
-    Read-only by construction: it resolves and compares, and no caller can turn the answer into a
-    write. An upstream that cannot be read is reported as unknown rather than as drift, because a
-    maintainer who has lost access to an origin has a different problem from one who is behind it,
-    and neither of them is told their copy is current.
-
-    The disposition comes back with the findings so the audit can say how many copies it compared.
-    It is the same vocabulary `revendor --check` prints, deliberately: one answer about
-    one copy should not have two names depending on which command asked.
-    """
-
-    identity = vendored.manifest.identity
-    shipped = _shipped_digest(files, vendored)
-    acquired = acquirer(vendored.url, vendored.ref)
-    if isinstance(acquired, Err):
-        return NativeReferenceDisposition.UNREACHABLE, (
-            _diagnostic(
-                f"vendored artifact upstream could not be read, so drift is unknown: {identity} "
-                f"({vendored.url} at {vendored.ref})",
-                _UPSTREAM_UNREACHABLE,
-                warning=True,
-            ),
-        )
-    taken = take_subtree(acquired.value.snapshot, vendored.path)
-    if isinstance(taken, Err):
-        return NativeReferenceDisposition.CHANGED, (
-            _diagnostic(
-                f"vendored artifact is behind upstream: {identity} was taken from "
-                f"{vendored.path}, which {vendored.ref} no longer provides",
-                _revendor(identity),
-                warning=True,
-            ),
-        )
-    if taken.value.input_digest == shipped:
-        return NativeReferenceDisposition.UP_TO_DATE, ()
-    return NativeReferenceDisposition.CHANGED, (
-        _diagnostic(
-            f"vendored artifact is behind upstream: {identity} copies {vendored.path} at "
-            f"{vendored.recorded_commit[:12]}, and {vendored.ref} now resolves to "
-            f"{acquired.value.resolved_commit[:12]}",
-            _revendor(identity),
-            warning=True,
-        ),
-    )
-
-
-def _upstream_check_note(dispositions: tuple[NativeReferenceDisposition, ...]) -> Diagnostic:
-    """State that the check ran, including when it had nothing to report.
-
-    Every other outcome of `--check-upstream` prints a line. A registry whose copies are all
-    current printed nothing, and so did a command run without the flag — so an operator reading a
-    CI log could not tell a clean result from a dropped argument. This is the line that separates
-    them, and it is `info` because it is not a finding: nothing here asks anyone to act.
-    """
-
-    if not dispositions:
-        return _note("no vendored artifacts to check against upstream")
-    counted = Counter(dispositions)
-    subject = "1 vendored artifact against its upstream"
-    if len(dispositions) > 1:
-        subject = f"{len(dispositions)} vendored artifacts against their upstreams"
-    return _note(
-        f"checked {subject}: "
-        f"{counted[NativeReferenceDisposition.UP_TO_DATE]} up-to-date, "
-        f"{counted[NativeReferenceDisposition.CHANGED]} changed, "
-        f"{counted[NativeReferenceDisposition.UNREACHABLE]} unreachable"
-    )
 
 
 def audit_registry_workspace(
@@ -1428,15 +623,8 @@ def audit_registry_workspace(
     *,
     executable_version: SemVer,
     available_capabilities: tuple[Capability, ...],
-    upstream_acquirer: NativeAcquirer | None = None,
 ) -> Result[RegistryQualityReport]:
-    """Audit committed registry content, optionally resolving vendored origins.
-
-    `upstream_acquirer` is absent by default, which keeps the audit a pure function of the snapshot:
-    a command that silently reached the network would make every offline run a failure and every CI
-    run dependent on somebody else's uptime. A caller that wants the drift report supplies one, and
-    gets findings that report rather than refuse.
-    """
+    """Audit committed registry content: a pure function of the snapshot, with no network."""
 
     parsed = _registry_inputs(snapshot)
     if isinstance(parsed, Err):
@@ -1445,7 +633,6 @@ def audit_registry_workspace(
     files = _files(snapshot)
     assert isinstance(files, Ok)
     diagnostics: list[Diagnostic] = []
-    upstream_dispositions: list[NativeReferenceDisposition] = []
     native = registry_native_content(
         snapshot,
         files.value,
@@ -1465,8 +652,7 @@ def audit_registry_workspace(
     )
     # `QA-015`: a registry holding nothing has nothing to be partial about. The finding below
     # describes a limit rather than a defect, and on an empty registry the limit is the whole state
-    # of it, so it is reported as a note — what the audit did — exactly as `_upstream_check_note`
-    # reports having no vendored artifacts to check.
+    # of it, so it is reported as a note — what the audit did.
     nothing_to_assess = not owned
     if nothing_to_assess:
         diagnostics.append(
@@ -1480,7 +666,6 @@ def audit_registry_workspace(
         base = path.removesuffix("/artifact.json")
         provenance_path = f"{base}/provenance.json"
         provenance = files.value.get(provenance_path)
-        vendored: VendoredArtifactOrigin | None = None
         if provenance is None:
             diagnostics.append(
                 _diagnostic(
@@ -1497,45 +682,16 @@ def audit_registry_workspace(
             parsed_provenance = parse_provenance(provenance.content, path=provenance_path)
             if isinstance(parsed_provenance, Err):
                 diagnostics.extend(parsed_provenance.diagnostics)
-            elif parsed_provenance.value.importer.id == VENDOR_IMPORTER_ID:
-                # A vendored package's own record of how the copy was made is checked against the
-                # options digest written with it, so a hand-edited `provenance.json` is an audit
-                # failure rather than the silent basis of the next re-vendor.
-                read = read_vendored_package(files.value, base, manifest.value)
-                if isinstance(read, Err):
-                    diagnostics.extend(read.diagnostics)
-                else:
-                    vendored = read.value
-                    # The copy against the record, before anything is said about upstream: a copy
-                    # that is not the copy cannot be discussed as current or behind.
-                    diagnostics.extend(vendored_copy_diagnostics(files.value, vendored))
-        # Outside the vendored branch on purpose: what a consumer receives from an `mcp`
-        # package is a property of the package, and an authored descriptor gets it wrong as easily
-        # as a copied one.
-        diagnostics.extend(
-            package_delivery_diagnostics(
-                files.value, base, manifest.value, vendored=vendored is not None
-            )
-        )
+        # What a consumer receives from an `mcp` package is a property of the package.
+        diagnostics.extend(package_delivery_diagnostics(files.value, base, manifest.value))
         if manifest.value.license is None:
             diagnostics.append(
                 _diagnostic(
-                    # Vendoring redistributes somebody else's work, so the omission is named as
-                    # what it is rather than folded into the generic finding.
-                    f"vendored artifact redistributes upstream bytes with no declared license: "
-                    f"{manifest.value.identity}"
-                    if vendored is not None
-                    else f"owned package has no declared license: {manifest.value.identity}",
+                    f"owned package has no declared license: {manifest.value.identity}",
                     _DECLARE_LICENSE,
                     warning=True,
                 )
             )
-        if vendored is not None and upstream_acquirer is not None:
-            disposition, findings = _vendored_upstream_findings(
-                upstream_acquirer, files.value, vendored
-            )
-            upstream_dispositions.append(disposition)
-            diagnostics.extend(findings)
         if manifest.value.setup is not None:
             recipe = f"{base}/{manifest.value.setup.recipe}"
             recipe_file = files.value.get(recipe)
@@ -1645,10 +801,6 @@ def audit_registry_workspace(
                                         warning=True,
                                     )
                                 )
-    if upstream_acquirer is not None:
-        # Said once, at the end, and only when the caller asked for the check — its absence is what
-        # tells an operator the flag never reached the command.
-        diagnostics.append(_upstream_check_note(tuple(upstream_dispositions)))
     return Ok(RegistryQualityReport((RegistryQualityCheck("audit", tuple(diagnostics)),)))
 
 

@@ -1159,12 +1159,12 @@
         {
           "id": "14",
           "title": "Prune (#73, #53): remove the vendor command family and every other unused legacy feature; adoption by manifest is the only way content enters a Registry (D-375, closes #41)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "15",
           "title": "Full verification and the PR",
-          "status": "todo"
+          "status": "in_progress"
         }
       ]
     }

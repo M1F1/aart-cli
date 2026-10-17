@@ -4,6 +4,11 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-31 step 14 (D-437): the vendor family is pruned.** `registry discover`,
+`vendor`, `vendor-batch`, `revendor` and `audit --check-upstream` are removed from the CLI, wizard
+and curation model, with their modules, records, script, tests and tutorials. Adoption by manifest
+is the only way in; the MCP delivery audit stays. The audit-level delivery test is B-199.
+
 **2026-10-17, CP-31 step 13 (D-376): the content mode is renamed.** `RegistryContentMode =
 SelfContained | PinnedReference`, valued `self-contained` / `pinned-reference`; `promotion_mode`
 became `content_mode` everywhere; spec §80 matches. Remaining `vendored` is the vendor family.

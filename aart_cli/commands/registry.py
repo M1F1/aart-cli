@@ -47,7 +47,6 @@ from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.io.curation_runtime import (
-    default_native_acquirer,
     load_local_curation_service,
 )
 from aart_cli.io.git import GitProcessRequest, run_git_process
@@ -84,7 +83,6 @@ from aart_cli.registry_commands.publication_state import (
     prepare_registry_publication,
     publication_summary,
 )
-from aart_cli.registry_maintenance.discovery import discover_vendor_candidates
 from aart_cli.registry_maintenance.promoted import (
     is_promoted_registry,
     legacy_registry_paths,
@@ -240,43 +238,11 @@ def _emit_curation_finalization(
 
 
 def _curation_request(request: Request, action: CurationAction) -> Result[CurationRequest]:
-    if action in {
-        CurationAction.VENDOR,
-        CurationAction.REVENDOR,
-    } and (request.artifact_kind is None or len(request.names) != 1):
-        return _error(
-            f"{action.value} requires an exact artifact kind and name", _NAME_THE_ARTIFACT
-        )
     try:
         return Ok(
             CurationRequest(
                 action,
                 _root(request),
-                kind=request.artifact_kind,
-                name=request.names[0] if len(request.names) == 1 else None,
-                summary=request.summary,
-                vendor_manifest=(
-                    os.path.abspath(request.vendor_manifest)
-                    if request.vendor_manifest is not None
-                    else None
-                ),
-                # Re-vendoring is the one action where an unstated version is an answer rather
-                # than a gap: it means "tell me what moved, plan nothing".
-                artifact_version=(
-                    request.artifact_version
-                    if action is CurationAction.REVENDOR
-                    else request.artifact_version or "1.0.0"
-                ),
-                artifact_license=request.artifact_license,
-                profiles=request.profiles,
-                platforms=request.registry_platforms,
-                scopes=request.registry_scopes or ("project",),
-                modes=request.registry_modes or ("copy",),
-                url=request.native_url,
-                ref=request.ref or "main",
-                path=request.native_path,
-                setup_recipe=request.setup_recipe,
-                review_policy=request.review_policy or "manual-review-v1",
                 source_id=request.source_id,
                 display_name=request.display_name,
                 # Only `init` declares a compatibility window, and only `init` reads one
@@ -304,8 +270,7 @@ def _run_curation(request: Request, action: CurationAction) -> int:
     review = prepared.value.review
     if request.check:
         _emit_curation_review(request, review)
-        # A failed check counts as drift.  Without this, `revendor --check` against an unreachable
-        # upstream would exit zero for having written nothing, which would read as a current copy.
+        # A failed check counts as drift, so a check that wrote nothing still exits nonzero.
         return (
             _common.OK
             if all(item.status == "unchanged" for item in review.changes)
@@ -404,9 +369,6 @@ def _run_audit(request: Request, workspace: FilesystemRegistryWorkspace) -> int:
         current.value,
         executable_version=_VERSION,
         available_capabilities=_CAPABILITIES,
-        # The audit reads the committed workspace and nothing else unless asked: `--check-upstream`
-        # is what turns it into a command that resolves vendored origins, and it still only reports.
-        upstream_acquirer=default_native_acquirer if request.check_upstream else None,
     )
     if isinstance(checked, Err):
         return _emit_error(request, "audit", checked)
@@ -453,109 +415,6 @@ def _run_test(request: Request, workspace: FilesystemRegistryWorkspace) -> int:
         )
     _emit_report(request, "test", selected)
     return _common.OK if selected.passed else _common.ERROR
-
-
-def _run_discover(request: Request) -> int:
-    """Scan one inert checkout and emit the manifest the batch command consumes."""
-
-    if (
-        request.discovery_checkout is None
-        or request.native_url is None
-        or request.artifact_version is None
-        or not request.profiles
-        or not request.registry_platforms
-    ):
-        return _emit_error(
-            request,
-            "discover",
-            _error(
-                "discover requires checkout, URL, artifact version, profiles, and platforms",
-                _READ_THE_ACTIONS,
-            ),
-        )
-    version = _version(request.artifact_version, "artifact version")
-    if isinstance(version, Err):
-        return _emit_error(request, "discover", version)
-    checkout = os.path.abspath(request.discovery_checkout)
-    try:
-        configured = ConfiguredSource(
-            SourceAlias("registry-discovery"),
-            SourceKind.SOURCE_LOCAL,
-            checkout,
-            None,
-            True,
-        )
-        acquired = read_local_snapshot(
-            LocalSnapshotRequest(
-                source_instance_id(configured),
-                configured.alias,
-                checkout,
-                SnapshotLimits(),
-            )
-        )
-    except ValueError as error:
-        return _emit_error(request, "discover", _error(str(error), _READ_THE_ACTIONS))
-    if isinstance(acquired, Err):
-        return _emit_error(request, "discover", acquired)
-    candidates = discover_vendor_candidates(acquired.value.snapshot)
-    defaults: dict[str, object] = {
-        "artifact_version": str(version.value),
-        "profiles": list(request.profiles),
-        "platforms": list(request.registry_platforms),
-        "scopes": list(request.registry_scopes or ("project",)),
-        "modes": list(request.registry_modes or ("copy",)),
-        "review_policy": request.review_policy or "manual-review-v1",
-    }
-    manifest = {
-        "schema_version": 1,
-        "origin": {"url": request.native_url, "ref": request.ref or "main"},
-        "defaults": defaults,
-        "artifacts": [
-            {
-                "accept": request.discovery_accept_all,
-                "kind": candidate.kind,
-                "name": candidate.name,
-                "path": candidate.path,
-                "summary": f"Discovered {candidate.kind} from {candidate.path}.",
-                "reason": candidate.reason,
-            }
-            for candidate in candidates
-        ],
-    }
-    rendered = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
-    if request.discovery_output is None:
-        print(rendered, end="")
-        return _common.OK
-    output = os.path.abspath(request.discovery_output)
-    try:
-        with open(output, "x", encoding="utf-8") as stream:
-            stream.write(rendered)
-    except OSError as error:
-        return _emit_error(
-            request,
-            "discover",
-            _error(f"cannot create discovery manifest {output}: {error}", _READ_THE_ACTIONS),
-        )
-    if request.json:
-        print(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "ok": True,
-                    "operation": "registry.discover",
-                    "output": output,
-                    "candidates": len(candidates),
-                    "accepted": len(candidates) if request.discovery_accept_all else 0,
-                },
-                indent=2,
-            )
-        )
-    else:
-        print(f"wrote {len(candidates)} candidates to {output}")
-        print(
-            "review each `accept` field, then run `aart-cli registry vendor-batch --manifest FILE`"
-        )
-    return _common.OK
 
 
 def _run_scan(request: Request) -> int:
@@ -1713,16 +1572,8 @@ def run(request: Request) -> int:
         return _run_check_upstream(request)
     if action == "promote":
         return _run_candidate_promotion(request)
-    if action == "discover":
-        return _run_discover(request)
     if action == "format":
         return _run_curation(request, CurationAction.FORMAT)
-    if action == "vendor":
-        return _run_curation(request, CurationAction.VENDOR)
-    if action == "vendor-batch":
-        return _run_curation(request, CurationAction.VENDOR_BATCH)
-    if action == "revendor":
-        return _run_curation(request, CurationAction.REVENDOR)
     if action in {"lock", "build"}:
         return _run_curation(request, CurationAction(action))
     if action == "validate":

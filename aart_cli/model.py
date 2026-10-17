@@ -400,15 +400,9 @@ class Request:
     memory_mode: Optional[MemoryMode] = None
     # Git reference supplied only while adding a configured canonical source.
     ref: Optional[str] = None
-    # Exact native package reference used by registry promotion.  These fields are deliberately
-    # distinct from configured consumer sources: a maintainer reviews an explicit Git package
-    # before its registry entry is allowed to name it.
+    # The Git URL `registry adopt` reads.  Distinct from configured consumer sources: a maintainer
+    # reviews an explicit Git package before its registry entry is allowed to name it.
     native_url: Optional[str] = None
-    native_path: Optional[str] = None
-    # A package-relative setup recipe declared while vendoring, when the maintainer has authored
-    # one beside the copied payload.
-    setup_recipe: Optional[str] = None
-    review_policy: Optional[str] = None
     registry_action: Optional[str] = None
     # Maintainer Source Scan inputs are separate from both the writable registry checkout and
     # consumer source subscriptions. The command observes one clean pinned author checkout and
@@ -420,38 +414,21 @@ class Request:
     promotion_candidate_ids: Tuple[str, ...] = ()
     content_mode: str = "self-contained"
     check: bool = False
-    # Resolve vendored origins during an audit.  Off by default: an audit that reached the network
-    # unasked would fail offline and depend on somebody else's uptime in CI.
-    check_upstream: bool = False
     source_id: Optional[str] = None
     display_name: Optional[str] = None
     # Optional registry-owned GitHub Issues destination advertised by ``registry init``.
     summary: Optional[str] = None
     collection_members: Tuple[str, ...] = ()
-    # Discovery emits, and batch vendoring consumes, one reviewable JSON manifest.  The checkout
-    # is deliberately distinct from the registry source: it is inert foreign input, never a
-    # configured consumer source.
-    discovery_checkout: Optional[str] = None
-    discovery_output: Optional[str] = None
-    discovery_accept_all: bool = False
-    vendor_manifest: Optional[str] = None
     publish_message: Optional[str] = None
     # `D-228`: where a reviewed registry commit is published to.  The branch is required at the
     # surface rather than defaulted, because the one branch AART must never push to is the one
     # a subscriber reads, and a default would be a guess about which that is.
     publication_branch: Optional[str] = None
     publication_remote: str = "origin"
-    artifact_version: Optional[str] = None
-    # The licence the registry records for a vendored copy.  Stated by the maintainer, because a
-    # licence read out of an upstream file is a reading of somebody else's document.
-    artifact_license: Optional[str] = None
     minimum_version: Optional[str] = None
     maximum_version: Optional[str] = None
     latest_version: Optional[str] = None
     compatibility: Optional[str] = None
-    registry_scopes: Tuple[str, ...] = ()
-    registry_modes: Tuple[str, ...] = ()
-    registry_platforms: Tuple[str, ...] = ()
     security_action: Optional[str] = None
     # Which `marketplace receipt` action was asked for.  Kept beside the other per-family
     # action fields rather than reusing one, so an unrelated command cannot select a receipt.

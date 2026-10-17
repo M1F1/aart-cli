@@ -422,3 +422,17 @@ they name the step, not the mode. Every remaining `vendored` in the code is the 
 family, which step 14 removes. This is a mechanical rename, so per D-334 it has no mutation of its
 own. The 33 modules naming the mode (396 tests) and the 228-module affected set are green, apart
 from the B-194 findings. mypy, ruff, tach and docs-check are clean.
+
+## Step 14 — The vendor family is pruned (#73, #53, D-437)
+
+`registry discover`, `vendor`, `vendor-batch`, `revendor` and `audit --check-upstream` are gone
+from the CLI, the wizard and the curation model, with the modules, plans, records, script, tests
+and docs that only they used. Adoption by manifest (`registry adopt`, `scan` + `promote`) is the
+only way content enters. The MCP delivery check moved to `registry_maintenance/delivery.py` and
+still runs in every audit.
+
+Red first: `test_no_route_writes_content_without_a_source_manifest` failed while the parsers
+existed. Targeted mutation: restoring the `vendor` subparser turns that test red. The 3341-test
+registry-related set is green apart from the B-194 findings; the schema freeze is refreshed for the
+protocol doc edit and the step 6 model change. mypy, ruff, tach and docs-check are clean. The
+audit-level MCP delivery test is B-199.

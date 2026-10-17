@@ -2,7 +2,7 @@
 
 ## Canonical package
 
-A vendored Registry package lives at `artifacts/<kind>/<name>/<version>/` and contains
+A self-contained Registry version lives at `artifacts/<kind>/<name>/<version>/` and contains
 `artifact.json` and `payload/`.
 Its manifest defines SemVer, compatibility, installation, optional `setup`, `requires_aart`, and
 `requires`. When it declares setup, `setup/installer.json` must be v2 and `SETUP.md` must be at
@@ -31,7 +31,7 @@ aart-cli source add|list|sync|remove|resubscribe|health
 aart-cli marketplace list|search|health|install|update|uninstall|status|setup|receipt
 aart-cli doctor
 aart-cli reset
-aart-cli registry init|collection|scan|promote|adopt|check-upstream|discover|format|vendor|vendor-batch|revendor|validate|lock|build|audit|publish|push|test|diff
+aart-cli registry init|collection|scan|promote|adopt|check-upstream|format|validate|lock|build|audit|publish|push|test|diff
 aart-cli security scan|show|verify|analyzers|suites
 aart-cli upgrade --wheel FILE | --source-checkout DIR
 ```

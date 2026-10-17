@@ -126,22 +126,19 @@ writes them into its promotion record (D-387, closing `QA-056`). No evidence is 
       states, then repeat with `--yes`. Expected: one validation-report digest per Candidate,
       nothing committed and nothing pushed.
 
-Vendoring is the other CLI route into the Registry. It needs no Candidate because the Registry
-takes ownership of the bytes:
+Adoption is the other CLI route into the Registry. It reads one repository's manifests without
+subscribing to it:
 
 ```sh
-python3 -m aart_cli.cli registry vendor --source . \
-  --url https://manual.aart.test/skill.git --ref "$REF" --path manual-check \
-  --artifact-version 1.0.0 --summary "Disposable manual skill" --license MIT \
-  --profile claude --platform darwin skill manual-check
+python3 -m aart_cli.cli registry adopt --source . --url https://manual.aart.test/skill.git --ref "$REF"
 ```
 
-- [ ] Run it review-only first, read every check it reports, then repeat with `--yes`.
+- [ ] Run it review-only first, read what the manifests compile to, then repeat with
+      `--artifact skill/manual-check@1.0.0 --yes`.
 
-Expected: the review resolves the ref to an exact commit, names the subtree and the target path,
-counts the payload files, and warns plainly that vendoring is not a safety claim and that upstream
-fixes will not reach consumers until it is vendored again. Without `--yes` nothing is written and
-the command says AART will not commit or push.
+Expected: the review resolves the ref to an exact commit and lists each manifest's artifact with
+the version the Registry assigns. Without `--yes` nothing is written and the command says AART will
+not commit or push.
 
 - [ ] Try `--url file:///...` once and confirm it is refused.
 
@@ -275,7 +272,7 @@ These are correct behavior, not findings:
   branch is refused there rather than delegated, and merging is always the reviewer's work through
   `gh` or the forge.
 - `file://` origins are refused; origins must be credential-free HTTPS/SSH.
-- A vendored artifact does not track upstream — the Registry owns the copy until re-vendored.
+- A self-contained artifact does not track upstream: `registry check-upstream` reports what moved, and a new version is adopted explicitly.
 - Security assessments reduce uncertainty and are not safety guarantees.
 - `marketplace install` requires an explicit `--profile`.
 

@@ -62,7 +62,7 @@ the whole payload arrives, and for one it does not:
 configuration. Two consequences follow. A descriptor whose `command` or `args` names a path inside
 `payload/` names a file no consumer will have. And a document shaped like the harness file it is
 merged into — `{"mcpServers": {…}}` — has no `server` key, so it delivers an empty entry that starts
-nothing. Registry curation reports both (`aart-cli registry vendor`, `aart-cli registry audit`); the loader
+nothing. `aart-cli registry audit` reports both; the loader
 accepts what it always accepted.
 
 ## Provenance and collections
@@ -71,20 +71,9 @@ Imported or curated content may include `provenance.json`. It binds the canonica
 credential-free Git URL, a lowercase 40-hex commit, input digest, importer ID/SemVer, options
 digest, and reviewable warnings. Secrets, moving refs, and absolute paths are invalid.
 
-A package produced by `aart-cli registry vendor` is an ordinary package of its declared type that
-carries such a document, with importer ID `registry-vendor-v1`; the copied subtree is its
-`payload/`, and any wrapper the maintainer authored beside it — the `mcp.json` the type requires, a
-`SETUP.md`, a setup recipe — is part of the same package and is reviewed and assessed with it. No
-loader, index, or installer treats it specially, which is why an AART that predates vendoring reads
-it unchanged.
-
-Re-vendoring needs two facts a `provenance.json` does not hold — the ref the copy was taken at, and
-which files the maintainer wrote rather than copied — so the vendoring writes them as the namespaced
-extension `aart.vendor`, an object with a `ref` string and an `authored` array of package-relative
-paths. It is verified against `importer.options_digest`, which already covers URL, ref, and path, so
-an edited record is refused rather than trusted. Namespaced extensions are preserved unchanged by
-every reader that does not understand them, so this adds no protocol revision and no requirement on
-consumers.
+A package `aart-cli registry adopt` or `promote` writes carries such a document, recording the
+repository and commit its manifest was adopted from. No loader, index, or installer treats it
+specially.
 
 Each direct `<collection-root>/<name>.json` file contains a one-line summary, structured artifact
 selectors with optional half-open version bounds, and optional references to other collections.

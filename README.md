@@ -206,10 +206,8 @@ the product's single source of truth, which every document below is written agai
 **The TUI and the CLI** — [TUI walkthrough](docs/testing/TUI_MANUAL_WALKTHROUGH.md) ·
 [CLI walkthrough](docs/testing/END_TO_END_ACCEPTANCE.md)
 
-**Authoring and vendoring** — [writing an artifact](docs/authoring/authoring-an-artifact-v1.md) ·
-[porting an MCP server into the registry](docs/tutorials/mcp-servers-into-the-registry.md) ·
-[vendoring one](docs/tutorials/vendoring-v1.md) ·
-[vendoring the next one](docs/tutorials/vendor-next-mcp-server.md) ·
+**Authoring** — [writing an artifact](docs/authoring/authoring-an-artifact-v1.md) ·
+[an MCP manifest](docs/examples/author-source/example-mcp/aart-cli.yaml) ·
 [setup recipe v2](docs/protocol/setup-recipe-v2.md)
 
 **Maintaining a registry** — [the maintainer's route](docs/registry/maintaining-a-registry-v1.md) ·

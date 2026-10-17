@@ -79,9 +79,7 @@ class CurationModelTest(unittest.TestCase):
         self.assertIn("failed", "\n".join(render_curation_outcome(failed)))
         self.assertIn(
             "no changes were required",
-            "\n".join(
-                render_curation_outcome(CurationOutcome(CurationAction.REVENDOR, "no-op", 0))
-            ),
+            "\n".join(render_curation_outcome(CurationOutcome(CurationAction.FORMAT, "no-op", 0))),
         )
         self.assertIn(
             "completed read-only",

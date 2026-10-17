@@ -129,7 +129,7 @@ depends_on = ["aart_cli.security", "aart_cli.domain", "aart_cli.sources", "aart_
 
 [[modules]]
 path = "aart_cli.registry_maintenance"
-depends_on = ["aart_cli.store", "aart_cli.protocol", "aart_cli.sources", "aart_cli.security", "aart_cli.domain", "aart_cli.application", "aart_cli.configuration"]
+depends_on = ["aart_cli.protocol", "aart_cli.sources", "aart_cli.domain", "aart_cli.application", "aart_cli.configuration"]
 
 [[modules]]
 path = "aart_cli.runtime_contract"

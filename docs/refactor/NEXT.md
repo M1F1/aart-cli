@@ -49,9 +49,10 @@ Custom; Settings keeps default harnesses. **Step 11 is done** (D-436): Marketpla
 rows are a column grid (status, scope with project count, harnesses with `✓`, unset inputs).
 **Step 12 is done**: the Registry and consumer docs. **Step 13 is done**: the content mode is
 `RegistryContentMode = SelfContained | PinnedReference` (#54, D-376), `promote --mode
-self-contained|pinned-reference`. **Next is step 14**: prune the vendor family (`discover`,
-`vendor`, `vendor-batch`, `revendor`, `audit --check-upstream`) and what only it used (#73, #53).
-Step 15 follows.
+self-contained|pinned-reference`. **Step 14 is done** (D-437): `discover`, `vendor`,
+`vendor-batch`, `revendor` and `audit --check-upstream` are gone with what only they used;
+adoption by manifest is the only way in. **Next is step 15**: push, open the one CP-31 PR, let CI
+run the full suite, fix what it finds, merge.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).

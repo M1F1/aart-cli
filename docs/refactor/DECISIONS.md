@@ -10886,3 +10886,25 @@ implementation choices:
 - **D-394's `installed:` note is gone**: the columns say it, and its two tests went with it.
 - Listing other projects' installations, and keying a user-scope and a project-scope installation
   in the same harness apart, are B-198.
+
+## D-437 — Adoption by manifest is the only way in; the vendor family goes whole (CP-31 step 14)
+
+§173 makes adopting an author's manifest the only route by which content enters a Registry, in the
+TUI and the CLI alike. The implementation choices:
+
+- **Removed commands**: `registry discover`, `vendor`, `vendor-batch`, `revendor` and
+  `audit --check-upstream`. argparse refuses each as an unknown choice or argument, with no alias.
+  `CurationAction` loses `VENDOR`, `VENDOR_BATCH` and `REVENDOR`, and `CurationRequest` keeps only
+  the fields `init` and `collection` read. The wizard offers `init` and `collection`.
+- **Removed with them**, because nothing else read them: the vendoring and discovery modules, the
+  subtree acquirer, `scripts/vendor_scan.py`, the vendored-origin records and their integrity and
+  upstream-drift checks, and the vendor plans and their request fields.
+- **Kept**: the MCP delivery check, now in `registry_maintenance/delivery.py`, because `registry
+  audit` applies it to every `mcp` package however it entered; `default_native_acquirer`, which
+  adoption uses; `registry check-upstream`, which compares an adopted version with its repository.
+- **Docs**: the vendoring tutorials and the MCP porting tutorial, which was the vendor procedure
+  around hand-written `artifact.json` and `provenance.json`, are deleted. The MCP manifest example
+  replaces the porting tutorial's link. The Tabnine tutorial adopts manifests and keeps a copy
+  current with `check-upstream`.
+- **Coverage lost**: the audit-level MCP delivery test built its package with `vendor`. The pure
+  check is still held by `tests/registry_mcp_delivery_test.py`; the audit wiring is B-199.

@@ -30,10 +30,7 @@ DEFAULT_MAXIMUM_AART = f"{EXECUTABLE_VERSION.major + 1}.0.0"
 class CurationAction(str, Enum):
     INIT = "init"
     FORMAT = "format"
-    VENDOR = "vendor"
-    VENDOR_BATCH = "vendor-batch"
     PUBLISH = "publish"
-    REVENDOR = "revendor"
     LOCK = "lock"
     BUILD = "build"
     VALIDATE = "validate"
@@ -61,29 +58,6 @@ def _valid_digest(value: object) -> bool:
 class CurationRequest:
     action: CurationAction
     workspace: str
-    kind: str | None = None
-    name: str | None = None
-    summary: str | None = None
-    vendor_manifest: str | None = None
-    # `None` means the maintainer did not state one.  Re-vendoring needs that distinction: upstream
-    # movement without a stated version is reported, never applied, and a default would
-    # silently answer the one question the command exists to ask.
-    artifact_version: str | None = "1.0.0"
-    # The licence the registry records for a vendored copy.  `None` means the maintainer did not
-    # state one, which is not the same as none existing: the taken subtree may settle it.
-    artifact_license: str | None = None
-    profiles: tuple[str, ...] = ()
-    platforms: tuple[str, ...] = ()
-    scopes: tuple[str, ...] = ("project",)
-    modes: tuple[str, ...] = ("copy",)
-    url: str | None = None
-    ref: str = "main"
-    path: str | None = None
-    # A package-relative recipe path, declared only when the maintainer has authored a setup
-    # recipe beside the vendored payload.  It names content, so it is validated as a path fragment
-    # rather than trusted from the flag.
-    setup_recipe: str | None = None
-    review_policy: str = "manual-review-v1"
     source_id: str | None = None
     display_name: str | None = None
     minimum_version: str = DEFAULT_MINIMUM_AART
@@ -94,38 +68,12 @@ class CurationRequest:
             not isinstance(self.action, CurationAction)
             or not os.path.isabs(self.workspace)
             or os.path.normpath(self.workspace) != self.workspace
-            or (self.kind is not None and self.kind not in _KINDS)
-            or (self.name is not None and _SLUG_RE.fullmatch(self.name) is None)
-            or (self.summary is not None and not _one_line(self.summary))
-            or (
-                self.vendor_manifest is not None
-                and (
-                    not os.path.isabs(self.vendor_manifest)
-                    or os.path.normpath(self.vendor_manifest) != self.vendor_manifest
-                )
-            )
-            or any(_SLUG_RE.fullmatch(value) is None for value in self.profiles + self.platforms)
-            or not set(self.scopes) <= _SCOPES
-            or not set(self.modes) <= _MODES
             or any(
                 value is not None and (not value or "\n" in value or "\r" in value)
-                for value in (
-                    self.url,
-                    self.path,
-                    self.artifact_license,
-                    self.setup_recipe,
-                    self.source_id,
-                    self.display_name,
-                )
+                for value in (self.source_id, self.display_name)
             )
-            or not _one_line(self.ref)
-            or not _one_line(self.review_policy)
         ):
             raise ValueError("curation request is invalid")
-        object.__setattr__(self, "profiles", tuple(sorted(set(self.profiles))))
-        object.__setattr__(self, "platforms", tuple(sorted(set(self.platforms))))
-        object.__setattr__(self, "scopes", tuple(sorted(set(self.scopes))))
-        object.__setattr__(self, "modes", tuple(sorted(set(self.modes))))
 
 
 @dataclass(frozen=True, slots=True, order=True)
