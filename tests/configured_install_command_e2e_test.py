@@ -26,7 +26,7 @@ from aart_cli.configuration.model import (
 from aart_cli.configuration.paths import Platform, resolve_config_paths
 from aart_cli.configuration.schema import user_configuration_bytes
 from aart_cli.domain.identifiers import SourceId
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Ok
 from aart_cli.io.source_store import publish_source_snapshot
 from aart_cli.sources.model import (
@@ -50,10 +50,10 @@ class _Environment:
         *,
         authored: tuple[tuple[str, str] | tuple[str, str, bool], ...] = AUTHORED_SKILL,
         setup: AuthoredSetup | None = None,
-        promotion_mode: PromotionMode = PromotionMode.VENDORED,
+        content_mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
     ) -> None:
         self.setup = setup
-        self.promotion_mode = promotion_mode
+        self.content_mode = content_mode
         self.root = root
         self.home = root / "home"
         self.project = root / "project"
@@ -89,7 +89,7 @@ class _Environment:
             source_instance_id(self.source),
             self.source.alias,
             "a" * 40,
-            _published_registry(authored, setup=self.setup, mode=self.promotion_mode),
+            _published_registry(authored, setup=self.setup, mode=self.content_mode),
         )
         assert isinstance(candidate, Ok), candidate
         published = publish_source_snapshot(
@@ -136,14 +136,14 @@ def _environment(
     *,
     authored: tuple[tuple[str, str] | tuple[str, str, bool], ...] = AUTHORED_SKILL,
     setup: AuthoredSetup | None = None,
-    promotion_mode: PromotionMode = PromotionMode.VENDORED,
+    content_mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
 ):
     with tempfile.TemporaryDirectory() as raw:
         yield _Environment(
             pathlib.Path(raw).resolve(),
             authored=authored,
             setup=setup,
-            promotion_mode=promotion_mode,
+            content_mode=content_mode,
         )
 
 

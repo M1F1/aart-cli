@@ -138,3 +138,5 @@ class CollectionManifest:
     artifacts: tuple[ArtifactSelector, ...]
     collections: tuple[str, ...] = ()
     extensions: tuple[tuple[str, JsonValue], ...] = ()
+    #: The version a Registry approved it as; a native source's Collection has none (§173.1).
+    version: str | None = None

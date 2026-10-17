@@ -20,11 +20,12 @@ from aart_cli.domain.credentials import CredentialObservation
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactCoordinate, ObjectDigest
 from aart_cli.domain.inspection import EnvironmentFacts
+from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.reconciliation import CurrentState, DesiredState
 from aart_cli.domain.remediations import Remediation
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.domain.selection import ResolvedSelection
+from aart_cli.domain.selection import OwnershipReason, ResolvedSelection
 
 from .consumer_session import ConsumerFlow, begin_installation, record_installation
 from .execution import (
@@ -126,6 +127,7 @@ def prepare_installation_action(
     resolvers: tuple[CredentialResolutionPort, ...] = (),
     previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
     credential_observations: tuple[CredentialObservation, ...] = (),
+    held: tuple[tuple[InstallationOwner, tuple[OwnershipReason, ...]], ...] = (),
 ) -> Result[PreparedInstallationAction]:
     """Offer and begin one action without mutating the machine.
 
@@ -162,6 +164,7 @@ def prepare_installation_action(
         previous=previous,
         selected_remediations=chosen,
         credential_observations=credential_observations,
+        held=held,
     )
     if isinstance(begun, Err):
         return begun

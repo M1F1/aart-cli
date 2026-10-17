@@ -21,8 +21,6 @@ from aart_cli.application.maintainer_views import (
     project_maintainer_bulk_promotion,
     project_maintainer_candidate_lifecycle,
     project_maintainer_candidates,
-    project_maintainer_collection_candidate,
-    project_maintainer_collection_validation,
     project_maintainer_dashboard,
     project_maintainer_promotion_review,
     project_maintainer_provenance,
@@ -42,7 +40,7 @@ from aart_cli.application.sources import SourceStatusRequest, source_status
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
+from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.protocol.native_tree import SourceSnapshot
 from aart_cli.sources.model import (
@@ -52,7 +50,6 @@ from aart_cli.sources.model import (
 )
 
 from .candidate_store import candidate_history_paths, read_candidate_history
-from .configured_selection import load_configured_approved_marketplace
 from .maintainer_sync import read_approved_registry_state
 from .registry_bootstrap import registry_absent_refusal
 from .registry_promotion import FilesystemPromotionOutput
@@ -135,7 +132,7 @@ def read_maintainer_views(
         try:
             projected.append(project_maintainer_source(configured, health, history.value))
             # Only history that binds the pinned snapshot is Candidate data.  The projection says
-            # so for the Source itself; the collection and validation lists below are fed from
+            # so for the Source itself; the validation lists below are fed from
             # here, so the same rule has to hold for them.
             scanned = history.value
             if scanned is not None and scan_binds_current_pin(configured, health, scanned):
@@ -144,24 +141,6 @@ def read_maintainer_views(
             return _error(f"cannot bind Candidate history for {configured.alias}: {error}")
     sources = tuple(projected)
     try:
-        collection_candidate_records = tuple(
-            candidate for scan in scans for candidate in scan.collection_active
-        )
-        collection_candidates = tuple(
-            project_maintainer_collection_candidate(candidate)
-            for candidate in collection_candidate_records
-        )
-        loaded_marketplace = load_configured_approved_marketplace(
-            effective,
-            data_root=data_root,
-        )
-        approved_marketplace = (
-            None if isinstance(loaded_marketplace, Err) else loaded_marketplace.value
-        )
-        collection_validations = tuple(
-            project_maintainer_collection_validation(candidate, approved_marketplace)
-            for candidate in collection_candidate_records
-        )
         runs = tuple(
             (bundle, validate_candidate(bundle, policy=judged))
             for scan in scans
@@ -288,7 +267,7 @@ def read_maintainer_views(
                 promotion=promotion[bundle.candidate.id.value],
             )
             for bundle, validation in runs
-            for mode in PromotionMode
+            for mode in RegistryContentMode
         )
         promotions = tuple(
             project_maintainer_promotion_review(
@@ -300,7 +279,7 @@ def read_maintainer_views(
                 promotion=promotion[bundle.candidate.id.value],
             )
             for bundle, validation in runs
-            for mode in PromotionMode
+            for mode in RegistryContentMode
         )
         # Screen 46 is about the registries themselves, so it covers every configured one rather
         # than only those some active Candidate happens to target.
@@ -351,8 +330,6 @@ def read_maintainer_views(
                 lifecycles,
                 provenances,
                 version_conflicts,
-                collection_candidates,
-                collection_validations,
                 registry_workspace_present,
                 published_registry,
             )

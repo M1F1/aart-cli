@@ -73,9 +73,9 @@ from aart_cli.domain.reconciliation import (
     ObservedComponent,
 )
 from aart_cli.domain.registry import (
-    PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
+    RegistryContentMode,
 )
 from aart_cli.domain.result import Err, Ok
 from aart_cli.domain.selection import (
@@ -111,7 +111,7 @@ def _resolved(name: str = "github", *, version: str = "1.5.0") -> ResolvedArtifa
             _digest("d"),
             _digest("d"),
             _digest("e"),
-            PromotionMode.VENDORED,
+            RegistryContentMode.SELF_CONTAINED,
             PublicationStage.PUBLISHED,
         ),
         (KIT,),

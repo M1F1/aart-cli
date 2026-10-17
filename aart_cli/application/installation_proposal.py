@@ -47,6 +47,7 @@ from aart_cli.domain.remediations import Remediation
 from aart_cli.domain.requirements import Requirement
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import (
+    OwnershipReason,
     ResolvedArtifact,
     ResolvedSelection,
     artifact_coordinate_sort_key,
@@ -534,6 +535,7 @@ def propose_installation(
     observed: tuple[tuple[ArtifactCoordinate, CurrentState], ...] = (),
     previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
     selected_remediations: tuple[Remediation, ...] = (),
+    held: tuple[tuple[InstallationOwner, tuple[OwnershipReason, ...]], ...] = (),
 ) -> Result[InstallationProposal]:
     """Lower a resolved Selection into the plan a person reviews and the plans that run it.
 
@@ -551,6 +553,10 @@ def propose_installation(
     Each entry is matched to the *installation* it is the previous state of, not to the artifact:
     §169.3 gives one artifact an installation per harness, and updating two of them is two
     transitions that happen to name one coordinate.
+
+    `held` is who already owns each recorded installation. An install adds its own reasons to
+    them rather than replacing them: a Collection installed over an artifact somebody installed
+    directly owns it too, and uninstalling the Collection later must leave it (INV-215).
     """
 
     if any(not isinstance(item, (PlannedInstallation, PlannedPlacement)) for item in installations):
@@ -587,6 +593,7 @@ def propose_installation(
             + ", ".join(sorted(unplanned))
             + ", which is not being installed"
         )
+    owners = dict(held)
     lifecycle: list[LifecyclePlan] = []
     intents: list[ArtifactInstallIntent] = []
     for planned, (_, state) in zip(installations, observed, strict=True):
@@ -609,6 +616,9 @@ def propose_installation(
                 intent = placement_lifecycle_intent(planned)
             else:
                 intent = install_lifecycle_intent(planned)
+            kept = () if planned.owner is None else owners.get(planned.owner, ())
+            if kept:
+                intent = replace(intent, ownership=(*intent.ownership, *kept))
         except ValueError as error:
             return _error(f"{planned.coordinate} cannot be installed: {error}")
         reconciled = plan_lifecycle_intent(intent, state, policy=policy)

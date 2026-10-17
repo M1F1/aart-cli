@@ -30,7 +30,7 @@ from aart_cli.domain.candidates import assess_candidate
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok
 from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
 from aart_cli.sources.model import source_snapshot_digest
@@ -101,7 +101,7 @@ def _prepared(snapshot: SourceSnapshot):
         policy,
         _approved(snapshot),
         snapshot,
-        mode=PromotionMode.VENDORED,
+        mode=RegistryContentMode.SELF_CONTAINED,
     )
 
 

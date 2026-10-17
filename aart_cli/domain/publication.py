@@ -37,6 +37,7 @@ class RegistryCommitOrigin(str, Enum):
     REBUILD_REGISTRY = "rebuild-registry"
     PROMOTE = "promote"
     BULK_PROMOTE = "bulk-promote"
+    DEFINE_COLLECTION = "define-collection"
 
 
 _HEADS_PREFIX = "refs/heads/"
@@ -108,6 +109,7 @@ def suggested_publication_branch(
             RegistryCommitOrigin.INIT_REGISTRY: "init-registry",
             RegistryCommitOrigin.REBUILD_REGISTRY: "rebuild-registry",
             RegistryCommitOrigin.BULK_PROMOTE: "bulk-promote",
+            RegistryCommitOrigin.DEFINE_COLLECTION: "define-collection",
             RegistryCommitOrigin.PROMOTE: f"promote-{subject}" if subject else None,
         }[origin]
     )

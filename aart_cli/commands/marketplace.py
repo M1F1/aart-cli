@@ -79,7 +79,7 @@ from aart_cli.consumer.runtime_requirements import (
 from aart_cli.domain.diagnostics import Diagnostic, Severity, diagnostic_to_data
 from aart_cli.domain.effects import effect_to_data
 from aart_cli.domain.harness import Scope
-from aart_cli.domain.identifiers import ArtifactCoordinate
+from aart_cli.domain.identifiers import ArtifactCoordinate, SourceAlias
 from aart_cli.domain.inputs import SecretInput
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.receipts import ArtifactReceipt
@@ -88,6 +88,9 @@ from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
+    Collection,
+    CollectionCoordinate,
+    OwnershipKind,
     VersionConstraint,
 )
 from aart_cli.io.configured_installation_action import (
@@ -95,6 +98,7 @@ from aart_cli.io.configured_installation_action import (
     complete_configured_installation,
     prepare_configured_installation,
 )
+from aart_cli.io.configured_selection import load_configured_approved_marketplace
 from aart_cli.io.configured_uninstall_action import (
     complete_configured_uninstall,
     prepare_configured_uninstall,
@@ -110,6 +114,7 @@ from aart_cli.model import Request, SetupManualReference
 from aart_cli.protocol.json import canonical_json_bytes
 from aart_cli.protocol.native_schema import parse_artifact_manifest
 from aart_cli.protocol.native_tree import SnapshotEntryKind
+from aart_cli.protocol.semver import parse_semver
 from aart_cli.receipt_service import (
     RECEIPT_ACTIONS,
     apply_undo,
@@ -766,13 +771,17 @@ def _emit(
 
 
 def _configured_registry_selection(
-    selectors: tuple[ArtifactSelector, ...], effective: EffectiveConfiguration
+    selectors: tuple[ArtifactSelector, ...],
+    effective: EffectiveConfiguration,
+    collections: tuple[Collection, ...] = (),
 ) -> ArtifactSelection | None:
     """Return the direct Selection whose source is wholly owned by the new registry seam.
 
-    Collections and direct/local sources stay on the characterized path until their own public
-    replacement evidence exists. An unqualified selector reaches this seam only when the configured
-    default is an approved registry; otherwise choosing a source here would be new product policy.
+    Direct/local sources stay on the characterized path until their own public replacement
+    evidence exists. An unqualified selector reaches this seam only when the configured default is
+    an approved registry; otherwise choosing a source here would be new product policy. A
+    Collection without a version selects the highest one approved, the one its Marketplace row
+    offers (D-428).
     """
 
     registry_aliases = {
@@ -781,7 +790,7 @@ def _configured_registry_selection(
         if source.enabled and source.is_registry
     }
     default = effective.configuration.default_registry
-    if not registry_aliases or any(item.identity.kind == "collection" for item in selectors):
+    if not registry_aliases:
         return None
     if any(
         (item.source is not None and item.source not in registry_aliases)
@@ -798,10 +807,41 @@ def _configured_registry_selection(
                     item.source or default,
                 )
                 for item in selectors
-            )
+                if item.identity.kind != "collection"
+            ),
+            tuple(
+                _collection_coordinate(item, item.source or default, collections)
+                for item in selectors
+                if item.identity.kind == "collection"
+            ),
         )
     except ValueError:
         return None
+
+
+def _collection_coordinate(
+    selector: ArtifactSelector,
+    source: SourceAlias | None,
+    collections: tuple[Collection, ...],
+) -> CollectionCoordinate:
+    """The exact Collection a selector names: its stated version, else the highest approved."""
+
+    if source is None:
+        raise ValueError("a Collection selector needs a registry")
+    if selector.version is not None:
+        return CollectionCoordinate(source, selector.identity.name, selector.version)
+    approved = [
+        item.coordinate
+        for item in collections
+        if item.coordinate.source == source and item.coordinate.name == selector.identity.name
+    ]
+    parsed = [(parse_semver(item.version), item) for item in approved]
+    ranked = [(result.value, item) for result, item in parsed if isinstance(result, Ok)]
+    if not ranked:
+        # Nothing approved by that name: an exact coordinate nobody approved is what the resolver
+        # refuses by name, with `collection-not-found`.
+        return CollectionCoordinate(source, selector.identity.name, "0.0.0")
+    return max(ranked, key=lambda pair: pair[0])[1]
 
 
 def _configured_review_items(prepared) -> list[dict[str, str]]:
@@ -821,7 +861,16 @@ def _configured_install(request: Request, selectors: tuple[ArtifactSelector, ...
     runtime = load_runtime_configuration(request, content_required=True)
     if isinstance(runtime, Err):
         return _emit_error(request, runtime, operation)
-    selection = _configured_registry_selection(selectors, runtime.value.loaded.effective)
+    effective = runtime.value.loaded.effective
+    collections: tuple[Collection, ...] = ()
+    if any(item.identity.kind == "collection" for item in selectors):
+        marketplace = load_configured_approved_marketplace(
+            effective, data_root=runtime.value.paths.data_root
+        )
+        if isinstance(marketplace, Err):
+            return _emit_error(request, marketplace, operation)
+        collections = marketplace.value.collections
+    selection = _configured_registry_selection(selectors, effective, collections)
     if selection is None:
         return None
     return _configured_lifecycle(request, operation, runtime.value, selection)
@@ -1203,12 +1252,40 @@ def _configured_uninstall(request: Request, selectors: tuple[ArtifactSelector, .
     )
     if isinstance(inspected, Err):
         return _emit_error(request, inspected, operation)
-    installed = tuple(
-        item
-        for item in inspected.value.inspections
-        if not selectors
-        or any(_status_matches(selector, item.coordinate) for selector in selectors)
+    collections = tuple(item for item in selectors if item.identity.kind == "collection")
+    if collections and len(collections) != len(selectors):
+        return _emit_error(
+            request,
+            _invalid(
+                "a Collection is uninstalled on its own, not together with artifacts",
+                "uninstall the Collection, then the artifacts, in two commands",
+            ),
+            operation,
+        )
+    # A Collection is the member installations it owns. Uninstalling it gives up only its own
+    # claim on each, so a member something else still owns stays installed (INV-215).
+    release = tuple(
+        dict.fromkeys(
+            reason
+            for item in inspected.value.inspections
+            for reason in item.record.ownership
+            if reason.kind is OwnershipKind.COLLECTION
+            and any(_status_matches(selector, reason.owner) for selector in collections)
+        )
     )
+    if collections:
+        installed = tuple(
+            item
+            for item in inspected.value.inspections
+            if set(release) & set(item.record.ownership)
+        )
+    else:
+        installed = tuple(
+            item
+            for item in inspected.value.inspections
+            if not selectors
+            or any(_status_matches(selector, item.coordinate) for selector in selectors)
+        )
     if not installed:
         return None
 
@@ -1225,6 +1302,7 @@ def _configured_uninstall(request: Request, selectors: tuple[ArtifactSelector, .
         host=host,
         policy=policy,
         credential_providers=credential_providers,
+        release=release or None,
     )
     if isinstance(prepared, Err):
         return _emit_error(request, prepared, operation)

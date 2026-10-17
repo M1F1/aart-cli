@@ -74,12 +74,14 @@ from aart_cli.application.consumer_views import (
     pair_from_key,
     pair_key,
     pair_scope_from_key,
+    pair_scope_key,
     pairs_harnesses,
     project_lifecycle_plan,
     project_running_installation,
     scope_choice_offered,
     scope_matrix_rows,
     secrets_to_ask,
+    settings_pairs,
     target_choice_problems,
 )
 from aart_cli.application.credential_guidance import (
@@ -115,6 +117,7 @@ from aart_cli.application.maintainer_views import (
     MaintainerRepositoryArtifactView,
     MaintainerRepositoryScanView,
     MaintainerViews,
+    parse_collection_row,
     parse_validation_row,
     project_maintainer_registry_commit,
     project_maintainer_registry_validation,
@@ -134,7 +137,12 @@ from aart_cli.domain.credentials import (
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.effects import VerifyCredential
 from aart_cli.domain.harness import Scope
-from aart_cli.domain.identifiers import ArtifactCoordinate, InputId, SourceAlias
+from aart_cli.domain.identifiers import (
+    ArtifactCoordinate,
+    ArtifactIdentity,
+    InputId,
+    SourceAlias,
+)
 from aart_cli.domain.inputs import (
     ConfigInput,
     InputGuidance,
@@ -152,7 +160,13 @@ from aart_cli.domain.python_runtime import PythonInstaller
 from aart_cli.domain.receipts import ArtifactReceipt, InstallationReceipt, InstalledRecord
 from aart_cli.domain.reconciliation import DesiredState
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.domain.selection import ArtifactRequest, ArtifactSelection, VersionConstraint
+from aart_cli.domain.selection import (
+    ArtifactRequest,
+    ArtifactSelection,
+    OwnershipKind,
+    OwnershipReason,
+    VersionConstraint,
+)
 from aart_cli.io.configured_configuration_action import (
     PreparedConfiguredConfiguration,
     complete_configured_configuration,
@@ -186,6 +200,7 @@ from aart_cli.io.maintainer_promotion import (
     complete_configured_candidate_promotion,
     prepare_configured_bulk_promotion,
     prepare_configured_candidate_promotion,
+    prepare_configured_collection,
 )
 from aart_cli.io.maintainer_sync import (
     complete_configured_source_sync,
@@ -374,7 +389,6 @@ def _project_adoption_upstream(check: AdoptionUpstreamCheck) -> MaintainerAdopti
         check.disposition.value,
         check.resolved_commit,
         check.observed_coordinate,
-        check.new_version_required,
         check.proposal is not None,
         check.details,
     )
@@ -457,13 +471,16 @@ def _per_artifact(views: tuple[InputView, ...], artifacts: dict[str, str]) -> tu
     return tuple(projected)
 
 
-def _after_inputs(plan: ConsumerPlanView) -> ConsumerScreen:
+def _after_inputs(plan: ConsumerPlanView, *, default_path: bool = False) -> ConsumerScreen:
     """Where a reviewed install goes once its form was submitted (D-380, §161.5, §172.5).
 
     05 again only while the plan still offers a real choice of backend, then 07a while some pair
-    may go to more than one scope; otherwise Ready.
+    may go to more than one scope; otherwise Ready. The Default path asks neither: Settings has
+    answered both (§173.7), so only the secrets are left.
     """
 
+    if default_path:
+        return ConsumerScreen.INSTALL_CREDENTIALS if secrets_to_ask(plan) else ConsumerScreen.READY
     if plan.installer_choice is not None and plan.installer_choice.is_a_choice:
         return ConsumerScreen.REVIEW_SELECTION
     if scope_choice_offered(plan.scope_offers):
@@ -498,6 +515,73 @@ def _installation_targets(
         for profile in profiles
         if hosted[profile]
     )
+
+
+def _grouped_targets(
+    targets: tuple[HarnessTargetView, ...],
+    groups: dict[str, tuple[str, ...]],
+    profiles: tuple[str, ...],
+) -> tuple[tuple[HarnessTargetView, ...], tuple[str, ...]]:
+    """05's harnesses with each Collection standing as one artifact (§173.5, D-422).
+
+    A harness is offered a Collection only when it hosts every member, and then the Collection
+    replaces its members on that row; the members are never offered one by one. Each harness that
+    cannot host a Collection is said to, naming the first member it cannot host.
+    """
+
+    if not groups:
+        return targets, ()
+    member_of = {member: key for key, members in groups.items() for member in members}
+    hosted = {item.harness: item.artifacts for item in targets}
+    grouped: list[HarnessTargetView] = []
+    unhosted: list[str] = []
+    for profile in profiles:
+        artifacts = hosted.get(profile, ())
+        row: list[str] = []
+        for artifact in artifacts:
+            key = member_of.get(artifact)
+            if key is None:
+                row.append(artifact)
+            elif key not in row and all(member in artifacts for member in groups[key]):
+                row.append(key)
+        for key, members in groups.items():
+            missing = next((member for member in members if member not in artifacts), None)
+            if missing is not None:
+                unhosted.append(f"{profile} is not offered for {key}: it cannot host {missing}.")
+        if row:
+            grouped.append(HarnessTargetView(profile, tuple(row)))
+    return tuple(grouped), tuple(unhosted)
+
+
+def _member_pairs(pairs: tuple[str, ...], groups: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
+    """A Collection×harness choice as the member installations it applies to (§173.5)."""
+
+    expanded: list[str] = []
+    for pair in pairs:
+        parsed = pair_from_key(pair)
+        if parsed is None or parsed[0] not in groups:
+            expanded.append(pair)
+            continue
+        expanded.extend(pair_key(member, parsed[1]) for member in groups[parsed[0]])
+    return tuple(dict.fromkeys(expanded))
+
+
+def _member_pair_scopes(
+    pair_scopes: tuple[str, ...], groups: dict[str, tuple[str, ...]]
+) -> tuple[str, ...]:
+    """The scope chosen for a Collection and harness, given to every member there (§173.5)."""
+
+    expanded: list[str] = []
+    for chosen in pair_scopes:
+        parsed = pair_scope_from_key(chosen)
+        pair = None if parsed is None else pair_from_key(parsed[0])
+        if parsed is None or pair is None or pair[0] not in groups:
+            expanded.append(chosen)
+            continue
+        expanded.extend(
+            pair_scope_key(pair_key(member, pair[1]), parsed[1]) for member in groups[pair[0]]
+        )
+    return tuple(expanded)
 
 
 @dataclass(frozen=True, slots=True)
@@ -758,6 +842,8 @@ class LocalConsumerActions:
         self._machine = context.machine
         self._now = now if now is not None else (lambda: datetime.now(timezone.utc))
         self._pending: _Pending | None = None
+        #: Why 05 offers a harness no Collection of the prepared install (§173.5).
+        self._unhosted: tuple[str, ...] = ()
         self._pending_action: ConsumerActionKind | None = None
         #: The machine the held action was prepared against, so a preference changed between the
         #: review and its confirmation cannot execute a project plan as a user install.
@@ -886,17 +972,27 @@ class LocalConsumerActions:
         )
         return offered.value if isinstance(offered, Ok) else None
 
-    def _pair_scope_offers(self, pairs: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    def _pair_scope_offers(
+        self, pairs: tuple[str, ...], groups: dict[str, tuple[str, ...]] | None = None
+    ) -> tuple[tuple[str, tuple[str, ...]], ...]:
         """Which scopes each ticked pair may go to on this machine (§172.5).
 
         A pair is offered what its artifact declares, less project when this session has no
         project to install into. An artifact this composition holds no row for is offered nothing,
-        so 07a never claims a scope it cannot stand behind.
+        so 07a never claims a scope it cannot stand behind. A Collection is offered only the scopes
+        every member declares (§173.5).
         """
 
         declared = {
             entry.row.key: entry.row.declared_scopes for entry in self._context.offers.artifacts
         }
+        for key, members in (groups or {}).items():
+            if all(member in declared for member in members):
+                declared[key] = tuple(
+                    scope
+                    for scope in ("project", "user")
+                    if all(scope in declared[member] for member in members)
+                )
         project = bool(self._context.host.project_root)
         offers: list[tuple[str, tuple[str, ...]]] = []
         # Sorted, so 07a lists the installations in one order however 05 ticked them.
@@ -997,7 +1093,9 @@ class LocalConsumerActions:
                 ),
                 installation_inputs=installation_inputs,
                 install_targets=install_targets,
+                install_unhosted=self._unhosted,
                 mcp_test=mcp_test,
+                harnesses=self._context.host.profiles,
             )
         )
 
@@ -1171,6 +1269,8 @@ class LocalConsumerActions:
             return self._prepare_candidate_promotion(command)
         if action is ConsumerActionKind.BULK_PROMOTION:
             return self._prepare_bulk_promotion(command)
+        if action is ConsumerActionKind.COLLECTION_DEFINE:
+            return self._prepare_collection_definition(command)
         if action in _CREDENTIAL_INTENTS:
             return self._prepare_credential_action(command)
         if action is ConsumerActionKind.MCP_TEST:
@@ -1688,10 +1788,10 @@ class LocalConsumerActions:
             )
         row = parse_validation_row(command.focus)
         raw_id = command.focus if row is None else row.candidate_id
-        if not raw_id or command.promotion_mode is None:
+        if not raw_id or command.content_mode is None:
             return self._declined(
                 command,
-                _lines("Candidate promotion needs one focused Candidate and promotion mode"),
+                _lines("Candidate promotion needs one focused Candidate and content mode"),
             )
         try:
             candidate_id = CandidateId(raw_id)
@@ -1703,14 +1803,14 @@ class LocalConsumerActions:
             data_root=self._data_root,
             registry_root=self._context.host.project_root,
             policy=self._context.policy,
-            mode=command.promotion_mode,
+            mode=command.content_mode,
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
         shown = (
             None
             if self._context.maintainer is None
-            else self._context.maintainer.registry_diff(raw_id, command.promotion_mode)
+            else self._context.maintainer.registry_diff(raw_id, command.content_mode)
         )
         if (
             shown is None
@@ -1746,10 +1846,10 @@ class LocalConsumerActions:
                 command,
                 _lines("bulk promotion needs the configured durable data root"),
             )
-        if not command.selection or command.promotion_mode is None:
+        if not command.selection or command.content_mode is None:
             return self._declined(
                 command,
-                _lines("bulk promotion needs a selection and a promotion mode"),
+                _lines("bulk promotion needs a selection and a content mode"),
             )
         try:
             selected = tuple(CandidateId(item) for item in command.selection)
@@ -1761,7 +1861,7 @@ class LocalConsumerActions:
             data_root=self._data_root,
             registry_root=self._context.host.project_root,
             policy=self._context.policy,
-            mode=command.promotion_mode,
+            mode=command.content_mode,
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
@@ -1781,6 +1881,60 @@ class LocalConsumerActions:
                 command,
                 _lines("the selection changed after screen 47 was composed; review it again"),
             )
+        self._pending = prepared.value
+        self._pending_action = command.action
+        transaction = prepared.value.transaction
+        self._promotion_transaction = transaction
+        self._promotion_result = None
+        return ConsumerActionUpdate(
+            self.source(
+                promotion_validation=project_maintainer_registry_validation(transaction),
+                promotion_commit=project_maintainer_registry_commit(transaction),
+            ),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=str(prepared.value.review_digest),
+            ),
+        )
+
+    def _prepare_collection_definition(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Screen 52's Collection version, prepared as the transaction 44 and 45 review (D-430)."""
+
+        if self._data_root is None:
+            return self._declined(
+                command, _lines("a Collection needs the configured durable data root")
+            )
+        opened = parse_collection_row(command.focus)
+        draft = command.collection_draft
+        if opened is None or draft is None:
+            return self._declined(command, _lines("a Collection is defined from screen 52"))
+        alias, existing = opened
+        name = existing if existing is not None else draft.name.strip()
+        if not name:
+            return self._declined(command, _lines("a new Collection needs a name"))
+        summary = draft.summary.strip()
+        if not command.selection:
+            return self._declined(command, _lines(f"Collection {name} needs at least one member"))
+        members: list[ArtifactIdentity] = []
+        for row in command.selection:
+            kind, _, member = row.partition("/")
+            try:
+                members.append(ArtifactIdentity(kind, member))  # type: ignore[arg-type]
+            except ValueError as error:
+                return self._declined(command, _lines(str(error)))
+        prepared = prepare_configured_collection(
+            self._context.effective,
+            SourceAlias(alias),
+            name=name,
+            summary=summary or None,
+            members=tuple(members),
+            data_root=self._data_root,
+            registry_root=self._context.host.project_root,
+            policy=self._context.policy,
+        )
+        if isinstance(prepared, Err):
+            return self._declined(command, _refusal(prepared.diagnostics))
         self._pending = prepared.value
         self._pending_action = command.action
         transaction = prepared.value.transaction
@@ -1854,7 +2008,19 @@ class LocalConsumerActions:
         keys = self._targets(command)
         if not keys:
             return self._declined(command, _lines("nothing is selected to install"))
-        offered = self._offered(keys)
+        # A Collection with every member ticked is installed as the Collection (D-422); untick one
+        # and what remains is a custom selection of artifacts (§161.4).
+        collections = {item.key: item for item in self._context.offers.collections}
+        # The focus is the Collection while its preview is open; a later screen re-prepares with
+        # its own row focused, and then the pairs 05 chose for the Collection still name it.
+        named = (parsed[0] for parsed in map(pair_from_key, command.pairs) if parsed is not None)
+        focused = collections.get(command.focus) or next(
+            (collections[key] for key in named if key in collections), None
+        )
+        if focused is not None and set(keys) == set(focused.members):
+            keys = (focused.key,)
+        chosen = tuple(collections[key] for key in keys if key in collections)
+        offered = self._offered(tuple(key for key in keys if key not in collections))
         if isinstance(offered, Err):
             return self._declined(command, _refusal(offered.diagnostics))
         try:
@@ -1866,11 +2032,14 @@ class LocalConsumerActions:
                         entry.row.source_alias,
                     )
                     for entry in offered.value
-                )
+                ),
+                tuple(item.collection.coordinate for item in chosen),
             )
         except ValueError as error:
             return self._declined(command, _lines(f"this selection cannot be installed: {error}"))
-        return self._offer_installation(command, selection)
+        return self._offer_installation(
+            command, selection, groups={item.key: item.members for item in chosen}
+        )
 
     def _prepare_update(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         coordinates = self._targets(command)
@@ -1915,8 +2084,10 @@ class LocalConsumerActions:
         *,
         previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
         previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
+        groups: dict[str, tuple[str, ...]] | None = None,
     ) -> ConsumerActionUpdate:
         context = self._context
+        groups = groups or {}
         if command.action is ConsumerActionKind.INSTALL:
             # A new review is a new set of questions; nothing entered for the last one carries over.
             self._entered_secrets, self._secret_rows = {}, {}
@@ -1950,12 +2121,20 @@ class LocalConsumerActions:
             if command.action is ConsumerActionKind.INSTALL
             else ()
         )
+        targets, self._unhosted = _grouped_targets(targets, groups, host.profiles)
         # §172.2: until 05 is answered, an artifact only one harness can host has it ticked.
-        pairs = command.pairs or (default_pairs(targets) if not command.targets else ())
+        # §173.7: the Default path takes its harnesses from Settings rather than from 05.
+        pairs = command.pairs or (
+            settings_pairs(targets, context.settings.default_harnesses)
+            if command.default_path
+            else default_pairs(targets)
+            if not command.targets
+            else ()
+        )
         chosen_targets = command.targets or pairs_harnesses(pairs)
         # §172.5: each pair starts on the Settings scope when it may go there and keeps what 07a
         # chose for it; a pair no longer ticked has no scope to keep.
-        scope_offers = self._pair_scope_offers(pairs)
+        scope_offers = self._pair_scope_offers(pairs, groups)
         pair_scopes = default_pair_scopes(
             scope_offers,
             command.install_scope or context.settings.default_scope,
@@ -1983,7 +2162,9 @@ class LocalConsumerActions:
                     ),
                 )
             host = replace(host, profiles=chosen_targets)
-            assignments = _assignments(pairs, pair_scopes, host.scope)
+            assignments = _assignments(
+                _member_pairs(pairs, groups), _member_pair_scopes(pair_scopes, groups), host.scope
+            )
             prepared = prepare_configured_installation(
                 context.effective,
                 selection,
@@ -2165,7 +2346,11 @@ class LocalConsumerActions:
                 chosen = chosen_targets
             if chosen:
                 reviewed_host = replace(host, profiles=chosen)
-                assignments = _assignments(pairs, pair_scopes, host.scope)
+                assignments = _assignments(
+                    _member_pairs(pairs, groups),
+                    _member_pair_scopes(pair_scopes, groups),
+                    host.scope,
+                )
                 narrowed = prepare_configured_installation(
                     context.effective,
                     selection,
@@ -2222,7 +2407,12 @@ class LocalConsumerActions:
                 semantic_identity=plan.semantic_identity,
                 selection_identity=plan.selection.semantic_identity,
                 review_digest=plan.review_digest,
-                screen=_after_inputs(plan),
+                # A Default plan that left some artifact without a harness goes to 05 for it.
+                screen=(
+                    _after_inputs(plan, default_path=command.default_path)
+                    if chosen or not command.default_path
+                    else ConsumerScreen.REVIEW_SELECTION
+                ),
             ),
         )
 
@@ -2333,35 +2523,38 @@ class LocalConsumerActions:
         )
 
     def _prepare_uninstall(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
-        collections = {item.collection for item in self.source().screens.installed_collections}
-        if len(self._targets(command)) > 1 and collections.intersection(self._targets(command)):
+        targets = self._targets(command)
+        collections = {
+            item.collection: item for item in self.source().screens.installed_collections
+        }
+        if len(targets) > 1 and collections.keys() & set(targets):
             return self._declined(
                 command,
                 _lines(
-                    "a Collection is uninstalled from its own details, not ticked with artifacts",
-                    "untick the Collection, or open it and uninstall it there",
+                    "a Collection is uninstalled on its own, not ticked with artifacts",
+                    "untick the Collection, or untick everything else",
                 ),
             )
-        inspected = self._inspections(self._targets(command))
+        # A Collection is its member installations, and uninstalling it gives up only its own
+        # claim on each: a member something else still owns stays installed (INV-215).
+        group = collections.get(targets[0]) if len(targets) == 1 else None
+        release = (
+            None
+            if group is None
+            else (OwnershipReason(OwnershipKind.COLLECTION, group.collection),)
+        )
+        inspected = self._inspections(
+            targets if group is None else tuple(item.artifact for item in group.members)
+        )
         if isinstance(inspected, Err):
             return self._declined(command, _refusal(inspected.diagnostics))
-        coordinates = [item.record.coordinate for item in inspected.value]
-        if len(set(coordinates)) != len(coordinates):
-            # A removal is keyed by artifact, so one artifact's installations in two harnesses
-            # cannot share one; said here rather than as the domain's "observed twice" (B-183).
-            return self._declined(
-                command,
-                _lines(
-                    "one artifact installed into two harnesses is uninstalled one harness at a time",
-                    "tick one installation of each artifact",
-                ),
-            )
         host = self._host()
         prepared = prepare_configured_uninstall(
             tuple(item.record for item in inspected.value),
             host=host,
             policy=self._context.policy,
             credential_providers=self._context.credential_providers,
+            release=release,
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))

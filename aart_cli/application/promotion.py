@@ -13,12 +13,20 @@ from enum import Enum
 from typing import Protocol, cast
 
 from aart_cli.application.maintainer import CandidateBundle
+from aart_cli.application.registry_collections import (
+    COLLECTION_PACKAGE_FILE,
+    collection_bumps,
+    collection_package_entries,
+    collection_package_prefix,
+    collection_validation_digest,
+)
 from aart_cli.domain.candidates import (
     CandidateFinding,
     CandidateId,
     CandidateState,
     FindingSeverity,
 )
+from aart_cli.domain.collection_changes import RegistryCollectionChange
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
@@ -29,12 +37,13 @@ from aart_cli.domain.identifiers import (
     source_revision_kind,
 )
 from aart_cli.domain.registry import (
-    PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
+    RegistryContentMode,
     RegistryLifecycle,
     publish_registry_version,
     registry_version_from_candidate,
+    registry_version_from_collection_change,
 )
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.protocol.hashing import (
@@ -154,7 +163,7 @@ class PromotionAudit:
     source_provenance: PromotionSourceProvenance
     validation_report_digest: ObjectDigest
     effective_policy_digest: ObjectDigest
-    mode: PromotionMode
+    mode: RegistryContentMode
     registry_snapshot_before: ObjectDigest
     registry_snapshot_after: ObjectDigest
     warnings: tuple[str, ...] = ()
@@ -174,7 +183,7 @@ class PromotionAudit:
                 )
             )
             or not isinstance(self.source_provenance, PromotionSourceProvenance)
-            or not isinstance(self.mode, PromotionMode)
+            or not isinstance(self.mode, RegistryContentMode)
         ):
             raise ValueError("promotion audit is invalid")
         object.__setattr__(self, "warnings", _safe_lines(self.warnings, "audit warnings"))
@@ -227,7 +236,7 @@ def _review_digest(
     next_workspace_digest: ObjectDigest,
     expected_registry_snapshot: ObjectDigest,
     next_registry_snapshot: ObjectDigest,
-    mode: PromotionMode,
+    mode: RegistryContentMode,
     changes: tuple[PromotionFileChange, ...],
 ) -> ObjectDigest:
     return json_digest(
@@ -309,7 +318,7 @@ class PromotionPlan:
     next_workspace_digest: ObjectDigest
     expected_registry_snapshot: ObjectDigest
     next_registry_snapshot: ObjectDigest
-    mode: PromotionMode
+    mode: RegistryContentMode
     changes: tuple[PromotionFileChange, ...]
     versions: tuple[RegistryArtifactVersion, ...]
     audits: tuple[PromotionAudit, ...]
@@ -330,7 +339,7 @@ class PromotionPlan:
                     self.review_digest,
                 )
             )
-            or not isinstance(self.mode, PromotionMode)
+            or not isinstance(self.mode, RegistryContentMode)
             or not ordered_changes
             or not ordered_versions
             or len({str(item.path) for item in ordered_changes}) != len(ordered_changes)
@@ -338,7 +347,15 @@ class PromotionPlan:
             or len({item.candidate_id for item in ordered_audits}) != len(ordered_audits)
             or {item.candidate_id for item in ordered_versions}
             != {item.candidate_id for item in ordered_audits}
-            or any(item.mode is not self.mode for item in ordered_versions)
+            # A Collection is vendored whatever the transaction's mode (D-427).
+            or any(
+                item.mode is not self.mode
+                and not (
+                    item.coordinate.artifact.kind == "collection"
+                    and item.mode is RegistryContentMode.SELF_CONTAINED
+                )
+                for item in ordered_versions
+            )
             or any(item.mode is not self.mode for item in ordered_audits)
             or any(
                 item.registry_snapshot != self.next_registry_snapshot for item in ordered_versions
@@ -582,7 +599,7 @@ def _reference_content(bundle: CandidateBundle, object_digest: ObjectDigest) -> 
                 ("payload_digest", str(artifact.payload_digest)),
                 ("revision", artifact.provenance.revision),
                 ("source", artifact.provenance.source),
-                ("source_mode", PromotionMode.REFERENCED.value),
+                ("source_mode", RegistryContentMode.PINNED_REFERENCE.value),
             )
         )
     )
@@ -612,7 +629,7 @@ def _audit_content(audit: PromotionAudit) -> bytes:
                 ("candidate_id", audit.candidate_id.value),
                 ("effective_policy_result", str(audit.effective_policy_digest)),
                 ("external_audit_reference", audit.external_audit_reference),
-                ("promotion_mode", audit.mode.value),
+                ("content_mode", audit.mode.value),
                 ("registry_snapshot_after", str(audit.registry_snapshot_after)),
                 ("registry_snapshot_before", str(audit.registry_snapshot_before)),
                 ("source_provenance", source_provenance),
@@ -636,7 +653,7 @@ def _legacy_audit_content(audit: PromotionAudit) -> bytes | None:
                 ("candidate_id", audit.candidate_id.value),
                 ("effective_policy_result", str(audit.effective_policy_digest)),
                 ("external_audit_reference", audit.external_audit_reference),
-                ("promotion_mode", audit.mode.value),
+                ("content_mode", audit.mode.value),
                 ("registry_snapshot_after", str(audit.registry_snapshot_after)),
                 ("registry_snapshot_before", str(audit.registry_snapshot_before)),
                 ("source_revision", audit.source_provenance.git_revision),
@@ -645,6 +662,36 @@ def _legacy_audit_content(audit: PromotionAudit) -> bytes | None:
             )
         )
     )
+
+
+def _invalid_collection_package(
+    files: dict[str, SnapshotEntry], version: RegistryArtifactVersion
+) -> str | None:
+    """Why a published Collection's package does not match its record, or nothing."""
+
+    identity = version.coordinate.artifact
+    assert version.coordinate.version is not None
+    prefix = collection_package_prefix(identity.name, version.coordinate.version)
+    raw_paths = {raw for raw in files if raw.startswith(prefix)}
+    entry = files.get(f"{prefix}{COLLECTION_PACKAGE_FILE}")
+    if (
+        version.mode is not RegistryContentMode.SELF_CONTAINED
+        or raw_paths != {f"{prefix}{COLLECTION_PACKAGE_FILE}"}
+        or entry is None
+        or entry.kind is not SnapshotEntryKind.FILE
+    ):
+        return "published Collection package is incomplete"
+    if sha256_bytes(entry.content) != version.canonical_digest:
+        return "published Collection package digest is invalid"
+    path = parse_relative_path(COLLECTION_PACKAGE_FILE)
+    assert isinstance(path, Ok)
+    stored = make_object_candidate(
+        (SnapshotEntry(path.value, SnapshotEntryKind.FILE, entry.content),),
+        expected_digest=version.object_digest,
+    )
+    if isinstance(stored, Err):
+        return "published Collection object digest is invalid"
+    return None
 
 
 def _version_content(version: RegistryArtifactVersion) -> bytes:
@@ -661,7 +708,7 @@ def _version_content(version: RegistryArtifactVersion) -> bytes:
                 ("name", identity.name),
                 ("object_digest", str(version.object_digest)),
                 ("payload_digest", str(version.payload_digest)),
-                ("promotion_mode", version.mode.value),
+                ("content_mode", version.mode.value),
                 ("publication", version.publication.value),
                 ("registry", version.coordinate.source.value),
                 ("registry_snapshot", str(version.registry_snapshot)),
@@ -700,7 +747,7 @@ def _registry_catalog_content(
                                     ("coordinate", str(item.coordinate)),
                                     ("lifecycle", item.lifecycle.value),
                                     ("object_digest", str(item.object_digest)),
-                                    ("promotion_mode", item.mode.value),
+                                    ("content_mode", item.mode.value),
                                     ("publication", item.publication.value),
                                 )
                             )
@@ -729,29 +776,84 @@ def plan_bulk_promotion(
     *,
     evidence: tuple[tuple[CandidateId, PromotionEvidence], ...],
     approved: tuple[RegistryArtifactVersion, ...],
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
+    collections: tuple[RegistryCollectionChange, ...] = (),
 ) -> Result[PromotionPlan]:
-    """Plan selected candidates as one deterministic registry transaction."""
+    """Plan selected candidates as one deterministic registry transaction.
 
-    if not isinstance(mode, PromotionMode) or not selected:
+    `collections` are Collection versions the Maintainer defined; each needs its evidence like a
+    Candidate. Every Collection whose member gets a newer version here publishes its next version
+    in the same transaction too, with the evidence of the member that moved it (INV-266, D-430).
+    Each Collection version is a package, a version record and an audit record, as an artifact is.
+    """
+
+    if (
+        not isinstance(mode, RegistryContentMode)
+        or not (selected or collections)
+        or any(not isinstance(item, RegistryCollectionChange) for item in collections)
+    ):
         return _error("bulk promotion requires candidates and an explicit valid mode")
     ordered = tuple(sorted(selected, key=lambda item: item.candidate.id.value))
-    candidate_ids = tuple(item.candidate.id for item in ordered)
-    coordinates = tuple(str(item.candidate.artifact.coordinate) for item in ordered)
-    registries = {item.candidate.target_registry for item in ordered}
+    evidence_by_id = dict(evidence)
+    if len(evidence_by_id) != len(evidence) or set(evidence_by_id) != {
+        *(item.candidate.id for item in ordered),
+        *(item.id for item in collections),
+    }:
+        return _error("each selected candidate requires exactly one promotion evidence record")
+    workspace_registry = registry_state_digest(snapshot)
+    if isinstance(workspace_registry, Err):
+        return _error("registry snapshot is invalid")
+    promoted = tuple(
+        registry_version_from_candidate(
+            bundle.candidate,
+            object_digest=bundle.candidate.canonical_digest,
+            registry_snapshot=workspace_registry.value,
+            mode=mode,
+        )
+        for bundle in ordered
+        if bundle.candidate.state in {CandidateState.READY, CandidateState.WARNING}
+    )
+    bumped = collection_bumps(
+        approved, snapshot, promoted, defined=frozenset(item.name for item in collections)
+    )
+    if isinstance(bumped, Err):
+        return bumped
+    for bump in bumped.value:
+        cause = next(
+            bundle.candidate.id
+            for bundle in ordered
+            if any(
+                bundle.candidate.artifact.coordinate.artifact == member.identity
+                for member in bump.members
+            )
+        )
+        evidence_by_id[bump.id] = PromotionEvidence(
+            collection_validation_digest(bump),
+            evidence_by_id[cause].effective_policy_digest,
+        )
+    ordered_collections = tuple(
+        sorted((*collections, *bumped.value), key=lambda item: item.id.value)
+    )
+    candidate_ids = (
+        *(item.candidate.id for item in ordered),
+        *(item.id for item in ordered_collections),
+    )
+    coordinates = (
+        *(str(item.candidate.artifact.coordinate) for item in ordered),
+        *(item.coordinate for item in ordered_collections),
+    )
+    registries = {
+        *(item.candidate.target_registry for item in ordered),
+        *(item.target_registry for item in ordered_collections),
+    }
+    ready = {CandidateState.READY, CandidateState.WARNING}
     if (
         len(set(candidate_ids)) != len(candidate_ids)
         or len(set(coordinates)) != len(coordinates)
         or len(registries) != 1
-        or any(
-            item.candidate.state not in {CandidateState.READY, CandidateState.WARNING}
-            for item in ordered
-        )
+        or any(item.candidate.state not in ready for item in ordered)
     ):
         return _error("bulk promotion selection is duplicated, mixed or not ready")
-    evidence_by_id = dict(evidence)
-    if len(evidence_by_id) != len(evidence) or set(evidence_by_id) != set(candidate_ids):
-        return _error("each selected candidate requires exactly one promotion evidence record")
     # Named `stored` rather than `candidate`: the later loops bind `candidate` to the promotion
     # candidate itself, and reusing the name here would make every one of them a Result.
     object_digests: dict[CandidateId, ObjectDigest] = {}
@@ -762,6 +864,16 @@ def plan_bulk_promotion(
                 f"candidate {bundle.candidate.id} does not form one immutable store object"
             )
         object_digests[bundle.candidate.id] = stored.value.digest
+    collection_entries: dict[CandidateId, tuple[SnapshotEntry, ...]] = {}
+    for collection in ordered_collections:
+        entries = collection_package_entries(collection)
+        if isinstance(entries, Err):
+            return entries
+        stored = make_object_candidate(entries.value)
+        if isinstance(stored, Err):
+            return _error(f"Collection {collection.name} does not form one immutable store object")
+        collection_entries[collection.id] = entries.value
+        object_digests[collection.id] = stored.value.digest
 
     files = _files(snapshot)
     if isinstance(files, Err):
@@ -801,7 +913,7 @@ def plan_bulk_promotion(
         identity = artifact.coordinate.artifact
         version = artifact.coordinate.version
         assert version is not None
-        if mode is PromotionMode.VENDORED:
+        if mode is RegistryContentMode.SELF_CONTAINED:
             prefix = f"artifacts/{identity.kind}/{identity.name}/{version}"
             expected_paths: set[str] = set()
             for entry in bundle.artifact.canonical_entries:
@@ -839,6 +951,33 @@ def plan_bulk_promotion(
                 path.value,
                 _reference_content(bundle, object_digests[candidate.id]),
             )
+            if isinstance(change, Err):
+                return change
+            package_changes.append(change.value)
+
+    for collection in ordered_collections:
+        already = approved_by_coordinate.get(collection.coordinate)
+        if already is not None:
+            suffix = (
+                "already contains this exact candidate"
+                if already.canonical_digest == collection.canonical_digest
+                else "is immutable and contains different content"
+            )
+            return _error(
+                f"published coordinate/version {already.coordinate} {suffix}",
+                code=PROMOTION_IMMUTABLE_CONFLICT,
+            )
+        prefix = collection_package_prefix(collection.name, collection.version)
+        if any(raw.startswith(prefix) for raw in files.value):
+            return _error(
+                f"published coordinate/version path is immutable: {prefix.rstrip('/')}",
+                code=PROMOTION_IMMUTABLE_CONFLICT,
+            )
+        for entry in collection_entries[collection.id]:
+            path = _path(f"{prefix}{entry.path}")
+            if isinstance(path, Err):
+                return path
+            change = _change(files.value, path.value, entry.content)
             if isinstance(change, Err):
                 return change
             package_changes.append(change.value)
@@ -887,6 +1026,42 @@ def plan_bulk_promotion(
             audit_path.value,
             _audit_content(audit),
         )
+        if isinstance(audit_change, Err):
+            return audit_change
+        metadata_changes.append(audit_change.value)
+
+    for collection in ordered_collections:
+        item_evidence = evidence_by_id[collection.id]
+        audits.append(
+            PromotionAudit(
+                collection.id,
+                collection.canonical_digest,
+                # The Registry is a Collection's Source: its audit names the approved state it
+                # was defined from (D-431).
+                PromotionSourceProvenance(
+                    PromotionSourceKind.LOCAL_SNAPSHOT,
+                    local_snapshot_digest=registry_before.value,
+                ),
+                item_evidence.validation_report_digest,
+                item_evidence.effective_policy_digest,
+                mode,
+                registry_before.value,
+                registry_after.value,
+                tuple(sorted(set(item_evidence.warnings))),
+                item_evidence.external_audit_reference,
+            )
+        )
+        versions.append(
+            registry_version_from_collection_change(
+                collection,
+                object_digest=object_digests[collection.id],
+                registry_snapshot=registry_after.value,
+            )
+        )
+        audit_path = _path(f"registry/promotions/{collection.id.value}.json")
+        if isinstance(audit_path, Err):
+            return audit_path
+        audit_change = _change(package_files.value, audit_path.value, _audit_content(audits[-1]))
         if isinstance(audit_change, Err):
             return audit_change
         metadata_changes.append(audit_change.value)
@@ -1184,7 +1359,12 @@ def validate_promoted_registry(
             or version_entry.content != _version_content(version)
         ):
             return _error(f"registry version record is missing or stale: {version.coordinate}")
-        if version.mode is PromotionMode.VENDORED:
+        if identity.kind == "collection":
+            assert version.coordinate.version is not None
+            invalid = _invalid_collection_package(files.value, version)
+            if invalid is not None:
+                return _error(f"{invalid}: {version.coordinate}")
+        elif version.mode is RegistryContentMode.SELF_CONTAINED:
             prefix = f"artifacts/{identity.kind}/{identity.name}/{version.coordinate.version}/"
             canonical_entries = []
             object_entries = []
@@ -1304,7 +1484,7 @@ def _parse_version_record(content: bytes, path: str) -> Result[RegistryArtifactV
             _required_digest(value, "canonical_digest"),
             _required_digest(value, "object_digest"),
             _required_digest(value, "registry_snapshot"),
-            PromotionMode(_required_text(value, "promotion_mode")),
+            RegistryContentMode(_required_text(value, "content_mode")),
             PublicationStage(_required_text(value, "publication")),
             RegistryLifecycle(_required_text(value, "lifecycle")),
             _optional_text(value, "lifecycle_reason"),
@@ -1367,7 +1547,7 @@ def _parse_audit_record(content: bytes, path: str) -> Result[PromotionAudit]:
             source_provenance,
             _required_digest(value, "validation_report_digest"),
             _required_digest(value, "effective_policy_result"),
-            PromotionMode(_required_text(value, "promotion_mode")),
+            RegistryContentMode(_required_text(value, "content_mode")),
             _required_digest(value, "registry_snapshot_before"),
             _required_digest(value, "registry_snapshot_after"),
             cast(tuple[str, ...], warnings.items),

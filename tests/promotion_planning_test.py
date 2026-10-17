@@ -24,7 +24,7 @@ from aart_cli.application.promotion import (
 from aart_cli.domain.candidates import assess_candidate
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
 from aart_cli.domain.registry import (
-    PromotionMode,
+    RegistryContentMode,
     deprecate_registry_version,
     registry_version_from_candidate,
     revoke_registry_version,
@@ -39,6 +39,7 @@ from aart_cli.protocol.native_tree import (
 )
 from aart_cli.protocol.paths import parse_relative_path
 from aart_cli.store.model import make_object_candidate
+from tests.fixture_versions import with_fixture_versions
 
 
 def _digest(character: str) -> ObjectDigest:
@@ -60,13 +61,13 @@ def _ready_bundle(
 ) -> CandidateBundle:
     manifest = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": name, "kind": "mcp", "version": version},
+        "artifact": {"name": name, "kind": "mcp", "x-fixture-version": version},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},
         "launch": {"type": "python", "entrypoint": "server.py"},
     }
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(
             SnapshotOrigin.LOCAL if revision.startswith("local:") else SnapshotOrigin.IMMUTABLE_GIT,
             (
@@ -269,7 +270,7 @@ class PromotionPlanningTest(unittest.TestCase):
         self.assertEqual(planned, reordered)
         assert isinstance(planned, Ok)
         plan = planned.value
-        self.assertEqual(plan.mode, PromotionMode.VENDORED)
+        self.assertEqual(plan.mode, RegistryContentMode.SELF_CONTAINED)
         paths = {str(change.path) for change in plan.changes}
         self.assertIn("artifacts/mcp/github-mcp/1.0.0/artifact.json", paths)
         self.assertIn("artifacts/mcp/github-mcp/1.0.0/payload/server.py", paths)
@@ -444,7 +445,7 @@ class PromotionPlanningTest(unittest.TestCase):
             published.candidate,
             object_digest=make_object_candidate(published.artifact.canonical_entries).value.digest,
             registry_snapshot=_digest("1"),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         planned = plan_bulk_promotion(
@@ -481,7 +482,7 @@ class PromotionPlanningTest(unittest.TestCase):
             (bundle,),
             evidence=_evidence(bundle),
             approved=(),
-            mode=PromotionMode.REFERENCED,
+            mode=RegistryContentMode.PINNED_REFERENCE,
         )
 
         self.assertIsInstance(planned, Ok)
@@ -489,7 +490,7 @@ class PromotionPlanningTest(unittest.TestCase):
         paths = {str(change.path) for change in planned.value.changes}
         self.assertIn("references/mcp/github-mcp/1.0.0.json", paths)
         self.assertFalse(any(path.startswith("artifacts/") for path in paths))
-        self.assertEqual(planned.value.mode, PromotionMode.REFERENCED)
+        self.assertEqual(planned.value.mode, RegistryContentMode.PINNED_REFERENCE)
 
     def test_lifecycle_metadata_changes_without_mutating_immutable_payload(self) -> None:
         bundle = _ready_bundle()

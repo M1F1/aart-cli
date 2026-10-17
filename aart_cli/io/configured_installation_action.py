@@ -48,13 +48,14 @@ from aart_cli.domain.inspection import (
     RemediationCapability,
     RemediationCapabilityKind,
 )
+from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.python_runtime import PythonInstaller
 from aart_cli.domain.receipts import ArtifactReceipt
 from aart_cli.domain.reconciliation import CurrentState, DesiredState
 from aart_cli.domain.remediations import Remediation
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.domain.selection import ArtifactSelection
+from aart_cli.domain.selection import ArtifactSelection, OwnershipReason
 
 from .configured_installation import (
     ConfiguredInstallationDraft,
@@ -241,6 +242,23 @@ class CompletedConfiguredInstallation:
             raise ValueError("a completed configured installation is invalid")
 
 
+def _held_ownership(
+    host: InstallationHost,
+) -> Result[tuple[tuple[InstallationOwner, tuple[OwnershipReason, ...]], ...]]:
+    """Who owns each installation this machine recorded, so an install adds to it (INV-215)."""
+
+    stored = LocalReceiptStore(host.state_root).installations()
+    if isinstance(stored, Err):
+        return stored
+    return Ok(
+        tuple(
+            (item.receipt.owner, item.ownership)
+            for item in stored.value
+            if item.receipt.owner is not None
+        )
+    )
+
+
 def prepare_configured_installation(
     effective: object,
     selection: ArtifactSelection,
@@ -321,6 +339,9 @@ def prepare_configured_installation(
         observed = provider.inspect(reference)
         if isinstance(observed, Ok):
             observations.append(observed.value)
+    held = _held_ownership(host)
+    if isinstance(held, Err):
+        return held
     prepared = prepare_installation_action(
         draft.selection,
         placements.value,
@@ -335,6 +356,7 @@ def prepare_configured_installation(
         resolvers=resolvers,  # type: ignore[arg-type]
         previous=previous,
         credential_observations=tuple(observations),
+        held=held.value,
     )
     if isinstance(prepared, Err):
         return prepared

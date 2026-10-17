@@ -60,13 +60,16 @@ class SelectionMode(str, Enum):
 class CollectionCoordinate:
     source: SourceAlias
     name: str
+    #: The approved version a Registry offers; absent for a native source's Collection.
+    version: str | None = None
 
     def __post_init__(self) -> None:
-        if not self.source.value or not self.name:
+        if not self.source.value or not self.name or self.version == "":
             raise ValueError("collection coordinate must be qualified and non-empty")
 
     def __str__(self) -> str:
-        return f"{self.source}/collection/{self.name}"
+        suffix = "" if self.version is None else f"@{self.version}"
+        return f"{self.source}/collection/{self.name}{suffix}"
 
 
 def _artifact_sort_key(
@@ -553,7 +556,7 @@ def _compile_collections(
     diagnostics: list[Diagnostic] = []
     for source in sources:
         for manifest in source.collections:
-            coordinate = CollectionCoordinate(source.alias, manifest.name)
+            coordinate = CollectionCoordinate(source.alias, manifest.name, manifest.version)
             if coordinate in manifests:
                 diagnostics.append(
                     _diagnostic(

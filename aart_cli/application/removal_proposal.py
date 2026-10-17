@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.effects import Effect, RiskClass
 from aart_cli.domain.identifiers import ArtifactCoordinate, ObjectDigest
+from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.receipts import (
     InstallationReceipt,
@@ -47,6 +48,7 @@ from .intents import LifecyclePlan, plan_lifecycle_intent, uninstall_intent
 __all__ = [
     "REMOVAL_INVALID",
     "PlannedRemoval",
+    "RemovalKey",
     "RemovalProposal",
     "plan_removal",
     "propose_removal",
@@ -54,6 +56,9 @@ __all__ = [
 
 #: A removal was asked for that this machine cannot describe from what it recorded.
 REMOVAL_INVALID = DiagnosticCode("removal-proposal-invalid")
+
+#: One recorded installation: its artifact and the harness, profile and root it was installed for.
+RemovalKey = tuple[ArtifactCoordinate, InstallationOwner | None]
 
 
 def _error(message: str) -> Err:
@@ -90,6 +95,12 @@ class PlannedRemoval:
     @property
     def coordinate(self) -> ArtifactCoordinate:
         return self.record.coordinate
+
+    @property
+    def key(self) -> RemovalKey:
+        """The installation this removal takes out: one artifact in two harnesses is two (§169.3)."""
+
+        return (self.record.coordinate, self.previous.owner)
 
 
 def plan_removal(
@@ -148,8 +159,12 @@ class RemovalProposal:
         if not isinstance(self.policy_digest, ObjectDigest):
             raise ValueError("a removal proposal is invalid")
         ordered = tuple(sorted(self.lifecycle, key=lambda item: str(item.intent.desired.artifact)))
-        if len({item.repair.artifact for item in ordered}) != len(ordered):
-            raise ValueError("a removal proposal plans the same artifact twice")
+        # Keyed by installation, as an installation proposal is (§169.3): removing one artifact from
+        # two harnesses is two installations, and only the same installation twice is a mistake.
+        if len({(item.repair.artifact, item.intent.desired.owner) for item in ordered}) != len(
+            ordered
+        ):
+            raise ValueError("a removal proposal plans the same installation twice")
         object.__setattr__(self, "lifecycle", ordered)
         data: CanonicalValue = {
             "members": [
@@ -179,17 +194,11 @@ class RemovalProposal:
 
         return not self.effects
 
-    def plan_for(self, coordinate: ArtifactCoordinate) -> LifecyclePlan | None:
-        for item in self.lifecycle:
-            if item.repair.artifact == coordinate:
-                return item
-        return None
-
 
 def propose_removal(
     removals: tuple[PlannedRemoval, ...],
     *,
-    observed: tuple[tuple[ArtifactCoordinate, CurrentState], ...],
+    observed: tuple[tuple[RemovalKey, CurrentState], ...],
     policy: EffectivePolicy,
 ) -> Result[RemovalProposal]:
     """Lower recorded installations into the removal a person reviews and the plans that run it.
@@ -205,8 +214,8 @@ def propose_removal(
         return _error("proposing a removal needs an effective policy")
     states = dict(observed)
     if len(states) != len(observed):
-        return _error("an artifact was observed twice")
-    missing = tuple(str(item.coordinate) for item in removals if item.coordinate not in states)
+        return _error("an installation was observed twice")
+    missing = tuple(str(item.coordinate) for item in removals if item.key not in states)
     if missing:
         return _error(
             "nothing was observed for " + ", ".join(sorted(missing)) + "; a removal is planned "
@@ -224,7 +233,7 @@ def propose_removal(
             )
         except ValueError as error:
             return _error(f"{removal.coordinate} cannot be uninstalled: {error}")
-        planned = plan_lifecycle_intent(intent, states[removal.coordinate], policy=policy)
+        planned = plan_lifecycle_intent(intent, states[removal.key], policy=policy)
         if isinstance(planned, Err):
             return planned
         lifecycle.append(planned.value)

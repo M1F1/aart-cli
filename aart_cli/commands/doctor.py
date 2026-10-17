@@ -13,7 +13,7 @@ import sys
 from datetime import datetime, timezone
 
 from aart_cli import command_outcome as _common
-from aart_cli.application.consumer_session import credential_dependants
+from aart_cli.application.consumer_session import credential_dependants, installed_collections
 from aart_cli.application.consumer_views import (
     ActivityView,
     CredentialRecordView,
@@ -481,10 +481,13 @@ def run(request: Request) -> int:
             item.current,
             ownership=item.record.ownership,
             update_available=item.update_available,
+            receipt=item.record.receipt,
+            harness=item.harness,
         )
         for item in inspected.value.inspections
     )
-    view = project_doctor(artifacts)
+    # Named by installation, as the TUI names them, so a Collection's members are its rows (§173.6).
+    view = project_doctor(artifacts, installed_collections(inspected.value.inspections, artifacts))
     policy = EffectivePolicy()
     repairs = []
     for item in inspected.value.inspections:

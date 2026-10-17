@@ -35,6 +35,7 @@ from aart_cli.protocol.authoring import (
 from aart_cli.protocol.native_schema import parse_artifact_manifest
 from tests.authoring_compiler_test import _file, _snapshot
 from tests.authoring_inputs_test import _document, _parsed
+from tests.fixture_versions import with_fixture_versions
 
 
 def _compiled(**overrides: object):
@@ -46,7 +47,7 @@ def _compiled(**overrides: object):
         _file("github/uv.lock", "version = 1\n"),
         _file("github/SKILL.md", "---\nname: review\n---\n"),
     )
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         _snapshot(entry, *payload),
         source_alias=SourceAlias("company"),
         source="https://github.company/company/registry.git",
@@ -126,7 +127,7 @@ class DescribedInstallationTest(unittest.TestCase):
     def test_a_skill_with_nothing_to_start_describes_nothing_to_start(self) -> None:
         description = _authored_description(
             schema="aart-cli.dev/skill/v1",
-            artifact={"name": "review", "kind": "skill", "version": "1.0.0"},
+            artifact={"name": "review", "kind": "skill"},
             payload={"include": ["SKILL.md"]},
             transport=None,
             runtime=None,
@@ -167,7 +168,7 @@ class StoredDescriptionTest(unittest.TestCase):
     def test_a_package_that_declares_nothing_installable_is_read_as_such(self) -> None:
         stored = _stored_description(
             schema="aart-cli.dev/skill/v1",
-            artifact={"name": "review", "kind": "skill", "version": "1.0.0"},
+            artifact={"name": "review", "kind": "skill"},
             payload={"include": ["SKILL.md"]},
             transport=None,
             runtime=None,

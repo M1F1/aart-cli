@@ -18,6 +18,7 @@ from aart_cli.protocol.native_tree import (
     SourceSnapshot,
 )
 from aart_cli.protocol.paths import parse_relative_path
+from tests.fixture_versions import with_fixture_versions
 
 _SOURCE = "https://git.example/authors.git"
 _REVISION = "a" * 40
@@ -29,11 +30,19 @@ def _entry(path: str, content: str) -> SnapshotEntry:
     return SnapshotEntry(parsed.value, SnapshotEntryKind.FILE, content.encode())
 
 
+#: A manifest that is well formed except for this: it writes the version, which only the
+#: Registry assigns (§173.1). Any value, valid SemVer or not, is refused the same way.
+_WELL_FORMED = "well-formed"
+
+
 def _manifest(name: str, version: str) -> str:
+    artifact = {"name": name, "kind": "mcp"}
+    if version != _WELL_FORMED:
+        artifact["version"] = version
     return json.dumps(
         {
             "schema": "aart-cli.dev/mcp/v1",
-            "artifact": {"name": name, "kind": "mcp", "version": version},
+            "artifact": artifact,
             "payload": {"include": ["server.py"]},
             "transport": {"type": "stdio"},
             "runtime": {"type": "python", "version": ">=3.11"},
@@ -52,8 +61,11 @@ def _snapshot(*directories: tuple[str, str]) -> SourceSnapshot:
 
 
 def _compiled(snapshot: SourceSnapshot):
-    return compile_author_manifests(
-        snapshot, source_alias=SourceAlias("authors"), source=_SOURCE, revision=_REVISION
+    return with_fixture_versions(compile_author_manifests)(
+        snapshot,
+        source_alias=SourceAlias("authors"),
+        source=_SOURCE,
+        revision=_REVISION,
     )
 
 
@@ -65,7 +77,7 @@ class _Compiled:
 
 
 class SourcePartialCompilationTest(unittest.TestCase):
-    """`QA-063`: `artifact.version: not-a-version` in one manifest failed the entire Sync.
+    """`QA-063`: one malformed manifest (then `artifact.version: not-a-version`) failed the whole Sync.
 
     `CandidateState.INVALID` exists so that a bad artifact can be reported as a bad Candidate.
     A Source-wide abort spends it: the operator learns that something somewhere is malformed, every
@@ -73,7 +85,7 @@ class SourcePartialCompilationTest(unittest.TestCase):
     """
 
     def test_a_neighbour_of_a_malformed_manifest_still_compiles(self) -> None:
-        compiled = _compiled(_snapshot(("good", "1.0.0"), ("bad", "not-a-version")))
+        compiled = _compiled(_snapshot(("good", _WELL_FORMED), ("bad", "not-a-version")))
 
         self.assertIsInstance(compiled, Ok, getattr(compiled, "diagnostics", ()))
         self.assertEqual(
@@ -84,7 +96,7 @@ class SourcePartialCompilationTest(unittest.TestCase):
     def test_the_malformed_manifest_is_reported_as_a_refusal_that_names_its_path(self) -> None:
         """The operator has to know which file to open; `bad SemVer` alone names nothing."""
 
-        compiled = _compiled(_snapshot(("good", "1.0.0"), ("bad", "not-a-version")))
+        compiled = _compiled(_snapshot(("good", _WELL_FORMED), ("bad", "not-a-version")))
 
         self.assertIsInstance(compiled, Ok, getattr(compiled, "diagnostics", ()))
         self.assertEqual(
@@ -93,7 +105,7 @@ class SourcePartialCompilationTest(unittest.TestCase):
         )
         refusal = _Compiled(compiled.value).refusals[0]
         self.assertTrue(refusal.diagnostics)
-        self.assertIn("not-a-version", refusal.diagnostics[0].message)
+        self.assertIn("artifact.version", refusal.diagnostics[0].message)
 
     def test_a_source_whose_every_manifest_is_malformed_compiles_nothing_and_refuses_each(
         self,
@@ -120,7 +132,7 @@ class SourcePartialCompilationTest(unittest.TestCase):
         unreadable = SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _entry("good/aart-cli.json", _manifest("good-mcp", "1.0.0")),
+                _entry("good/aart-cli.json", _manifest("good-mcp", _WELL_FORMED)),
                 _entry("good/server.py", "print('good')\n"),
                 _entry("odd/aart-cli.json", json.dumps({"artifact": {"name": "odd"}}, indent=2)),
             ),
@@ -138,7 +150,7 @@ class SourcePartialCompilationTest(unittest.TestCase):
         )
 
     def test_a_healthy_source_refuses_nothing(self) -> None:
-        compiled = _compiled(_snapshot(("good", "1.0.0"), ("other", "2.1.0")))
+        compiled = _compiled(_snapshot(("good", _WELL_FORMED), ("other", _WELL_FORMED)))
 
         self.assertIsInstance(compiled, Ok, getattr(compiled, "diagnostics", ()))
         self.assertEqual((), _Compiled(compiled.value).refusals)
@@ -154,8 +166,8 @@ class SourcePartialCompilationTest(unittest.TestCase):
         duplicated = SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (
-                _entry("good/aart-cli.json", _manifest("good-mcp", "1.0.0")),
-                _entry("good/aart-cli.json", _manifest("good-mcp", "1.0.0")),
+                _entry("good/aart-cli.json", _manifest("good-mcp", _WELL_FORMED)),
+                _entry("good/aart-cli.json", _manifest("good-mcp", _WELL_FORMED)),
             ),
         )
 
@@ -172,15 +184,15 @@ class SourcePartialCompilationTest(unittest.TestCase):
         refusal and dropping one silently would be worse than the fault `QA-063` names.
         """
 
-        strict = compile_author_snapshot(
-            _snapshot(("good", "1.0.0"), ("bad", "not-a-version")),
+        strict = with_fixture_versions(compile_author_snapshot)(
+            _snapshot(("good", _WELL_FORMED), ("bad", "not-a-version")),
             source_alias=SourceAlias("authors"),
             source=_SOURCE,
             revision=_REVISION,
         )
 
         self.assertIsInstance(strict, Err)
-        self.assertIn("not-a-version", strict.diagnostics[0].message)
+        self.assertIn("artifact.version", strict.diagnostics[0].message)
 
 
 if __name__ == "__main__":

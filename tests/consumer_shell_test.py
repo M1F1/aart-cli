@@ -39,6 +39,8 @@ QUESTION = ord("?")
 UP, DOWN, SPACE = 259, 258, 32
 LEFT, RIGHT = 260, 261
 VERBOSE = ord("v")
+#: Install, then Custom on 05p (§173.7): the §172 flow from 05, as every walk before 05p took it.
+INSTALL_CUSTOM = (ord("i"), DOWN, ENTER)
 TODAY = dt.date(2026, 8, 31)
 
 
@@ -212,7 +214,7 @@ class ConsumerShellTest(unittest.TestCase):
 
         self.assertEqual(moved.rows, ("public/mcp/github@1.6.0", "public/mcp/jira@2.2.0"))
         self.assertEqual(moved.current_row, "public/mcp/jira@2.2.0")
-        self.assertIn("> [ ] public/mcp/jira@2.2.0  broken", terminal.last)
+        self.assertRegex(terminal.last, r"> \[ \] public/mcp/jira@2\.2\.0\s+broken")
 
     def test_a_filter_narrows_the_rows_the_screen_shows(self):
         state, terminal = drive(

@@ -15,6 +15,7 @@ from typing import get_args
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactIdentity, ArtifactKind, SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.protocol.semver import parse_semver
 
 CONSUMER_INVALID = DiagnosticCode("consumer-invalid")
 
@@ -86,8 +87,10 @@ def parse_artifact_selector(raw: str) -> Result[ArtifactSelector]:
             f"unknown artifact kind {kind!r}",
             "use one of: " + ", ".join(sorted(_SELECTABLE_KINDS)),
         )
-    if kind == "collection" and version is not None:
-        return _invalid(raw, "collections are not versioned; remove the '@<version>' suffix")
+    if kind == "collection" and version is not None and isinstance(parse_semver(version), Err):
+        # A Collection is approved as exact versions (§173.1, D-428); a range would name no one
+        # of them, so only an exact version, or none for the one offered, selects it.
+        return _invalid(raw, "a Collection version must be exact, such as '@1.0.0'")
     return Ok(
         ArtifactSelector(
             ArtifactIdentity(kind, name),  # type: ignore[arg-type]

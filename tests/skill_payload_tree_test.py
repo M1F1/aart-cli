@@ -25,12 +25,12 @@ from aart_cli.domain.result import Err, Ok
 from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.sources.local import read_local_snapshot
 from aart_cli.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
+from tests.fixture_versions import with_fixture_versions
 
 _MANIFEST = """schema: aart-cli.dev/skill/v1
 artifact:
   kind: skill
   name: tree
-  version: 1.0.0
   summary: "A skill with files below its root."
 payload:
   include:
@@ -46,7 +46,7 @@ def _compile(root: Path):
         LocalSnapshotRequest(source_instance_id(configured), alias, str(root), SnapshotLimits())
     )
     assert isinstance(acquired, Ok), getattr(acquired, "diagnostics", ())
-    return compile_author_snapshot(
+    return with_fixture_versions(compile_author_snapshot)(
         acquired.value.snapshot,
         source_alias=alias,
         source="https://git.example.test/authors.git",

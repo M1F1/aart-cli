@@ -24,6 +24,7 @@ from aart_cli.domain.result import Err, Ok
 from aart_cli.protocol.authoring import compile_author_snapshot, package_plugin
 from aart_cli.sources.local import read_local_snapshot
 from aart_cli.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
+from tests.fixture_versions import with_fixture_versions
 
 _MODULE = "export const Plugin = async () => ({});\nexport default Plugin;\n"
 _PLUGIN_FIELD = object()
@@ -32,7 +33,7 @@ _PLUGIN_FIELD = object()
 def _manifest(*, kind: str = "plugin", plugin: object = _PLUGIN_FIELD) -> str:
     document: dict[str, object] = {
         "schema": f"aart-cli.dev/{kind}/v1",
-        "artifact": {"kind": kind, "name": "superpowers", "version": "7.0.0"},
+        "artifact": {"kind": kind, "name": "superpowers"},
         "payload": {"include": ["**"], "exclude": ["aart-cli.json"]},
     }
     if plugin is _PLUGIN_FIELD:
@@ -49,7 +50,7 @@ def _compile(root: Path):
         LocalSnapshotRequest(source_instance_id(configured), alias, str(root), SnapshotLimits())
     )
     assert isinstance(acquired, Ok), getattr(acquired, "diagnostics", ())
-    return compile_author_snapshot(
+    return with_fixture_versions(compile_author_snapshot)(
         acquired.value.snapshot,
         source_alias=alias,
         source="https://git.example.test/authors.git",

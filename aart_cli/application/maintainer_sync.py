@@ -14,6 +14,7 @@ from typing import Callable, cast
 
 from aart_cli.application.candidate_history import serialize_source_scan
 from aart_cli.application.maintainer import SourceScan, reconcile_source_scan
+from aart_cli.application.registry_versions import ApprovedRegistryVersions
 from aart_cli.application.sources import (
     ResolvedSourceSnapshot,
     SourceSyncPorts,
@@ -35,6 +36,7 @@ from aart_cli.domain.serialization import canonical_json_bytes
 from aart_cli.protocol.authoring import CompiledAuthorSource, ManifestRefusal
 from aart_cli.protocol.hashing import sha256_bytes
 from aart_cli.protocol.native_tree import SourceSnapshot
+from aart_cli.protocol.registry_versions import RegistryVersions
 from aart_cli.sources.model import (
     CurrentSource,
     CurrentSourceRequest,
@@ -48,8 +50,9 @@ from aart_cli.sources.model import (
 ReadCandidateHistoryPort = Callable[[SourceStorePaths], Result[SourceScan | None]]
 WriteCandidateHistoryPort = Callable[[SourceStorePaths, SourceScan], Result[None]]
 ReadApprovedRegistryPort = Callable[[SourceAlias], Result["ApprovedRegistryState"]]
+#: The last argument says which version each manifest is: the Registry's count (§173.2).
 CompileAuthorSnapshotPort = Callable[
-    [SourceSnapshot, SourceAlias, str, str], Result[CompiledAuthorSource]
+    [SourceSnapshot, SourceAlias, str, str, RegistryVersions], Result[CompiledAuthorSource]
 ]
 
 SOURCE_SYNC_INVALID = DiagnosticCode("maintainer-source-sync-invalid")
@@ -178,7 +181,7 @@ def _baseline(
             None if current is None else current.candidate.snapshot_digest,
             None if current is None else current.declared_source_id,
             history_digest,
-            (0 if history is None else len(history.active) + len(history.collection_active)),
+            (0 if history is None else len(history.active)),
         )
     )
 
@@ -432,6 +435,7 @@ def execute_source_sync(
         request.source.alias,
         request.source.location,
         pinned.resolved_revision,
+        ApprovedRegistryVersions(prepared.approved.versions, prepared.target_registry),
     )
     if isinstance(compiled, Err):
         return _release(compiled, ports, lease.value)
@@ -442,8 +446,6 @@ def execute_source_sync(
         previous=() if bound_history is None else bound_history.history,
         approved=prepared.approved.versions,
         target_registry=prepared.target_registry,
-        collections=compiled.value.collections,
-        previous_collections=(() if bound_history is None else bound_history.collection_history),
     )
     if isinstance(reconciled, Err):
         return _release(reconciled, ports, lease.value)

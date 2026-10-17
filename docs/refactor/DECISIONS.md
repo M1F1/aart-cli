@@ -10584,3 +10584,327 @@ and Credentials and variables to warn about every value that still is, without r
   the value and in place of "Configured securely" for the credential.
 - Success does not repeat the list. The specification does not ask for it, Ready has just said it,
   and Installed says it from then on.
+
+## D-422 — A Collection installs whole into a harness, or not into it (CP-31, owner decision)
+
+The owner decided on 2026-10-16, while CP-31 was being planned:
+- A Collection is offered for a harness only when that harness can take **every** member. In 05,
+  a Collection×harness cell is tickable only then. At 07a, the scopes offered are the ones where
+  every member has a target. A harness that cannot take one member is not offered for the
+  Collection, and the reason names that member.
+- There is no partial install of a Collection. Somebody who wants only some members installs those
+  artifacts on their own. A Registry may approve a Collection's members as individual artifacts,
+  and the Marketplace offers them beside it.
+- This keeps a Collection's meaning exact (INV-213): installed means all of it, and its health is
+  its members' health (INV-186).
+
+## D-423 — The Registry assigns versions by counting changes, with fixed rollover limits (CP-31, owner decision)
+
+The owner decided on 2026-10-16 how the Registry picks the next version once versions are its job
+(#74):
+- Every approved change raises the **patch**.
+- Patch runs up to **5**. The change after `x.y.5` raises the **minor** and resets patch:
+  `x.(y+1).0`.
+- Minor runs up to **3**. The change after `x.3.5` raises the **major** and resets both:
+  `(x+1).0.0`.
+- Nobody picks major, minor or patch by hand; the version is a count of approved changes.
+- Example: `1.0.0`, `1.0.1` … `1.0.5`, `1.1.0` … `1.3.5`, `2.0.0`.
+- The first approved version of an artifact is `1.0.0` (an implementation choice, recorded here so
+  step 1 can confirm it). A version therefore says how much an artifact changed, not whether a
+  change is breaking. Specification work in CP-31 step 1 states this in §1 terms, and
+  `requires_aart` and Collection member constraints are read against these numbers.
+
+## D-424 — How CP-31 makes versions the Registry's (CP-31 step 1)
+
+Implementation choices for §173.1–§173.2, recorded so the next agent need not re-derive them:
+- **The first version is `1.0.0`**, confirming D-423's proposal. §173.2 states it.
+- **The compiler is told the version; it never reads one.** `compile_author_*` take a pure
+  `RegistryVersions` port (identity and input digest in, SemVer out; D-425 adds dependency resolution). Every caller builds it from the
+  approved versions it already loads: Sync, `registry adopt`, `check-upstream`, `registry scan` and
+  `registry promote`. `author check` has no Registry, so it compiles with `1.0.0` and says nothing
+  about versions.
+- **"Unchanged" means the same input digest** (manifest plus selected payload). It was already
+  what provenance records, it excludes acquisition metadata, and it covers dependency descriptors
+  because they must be in the payload. An unchanged artifact compiles to the version it already
+  has, so it reconciles as promoted, exactly as today.
+- **The number is chosen at Sync, and checked at approval.** A Candidate needs a coordinate for
+  review, so Sync gives it the next number. Promotion already refuses a coordinate that holds
+  different content (`registry-version-immutable`), so two Candidates racing for one number cannot
+  both publish; the loser is offered the next number on the next Sync.
+- **Constraints keep SemVer meaning.** `^1` is `>=1.0.0 <2.0.0`. Nothing in the resolver changes.
+- **No compatibility.** A manifest with `artifact.version` (or a Collection `version`) is refused
+  with a message to delete it. Test fixtures drop the field; their expected versions become what
+  the Registry assigns.
+
+## D-425 — A Collection's members are its dependencies, so it versions by the same rule (CP-31 step 2)
+
+The product owner's rule: a Collection is an artifact, its members are its dependencies, and one
+versioning rule covers both. So the input digest that decides "changed" (D-424) is **the manifest,
+the selected payload and the exact resolved versions of the artifact's artifact dependencies**:
+- **A Collection's digest records each member request with the version it resolves to** in the
+  target Registry, as a canonical `dependencies.json` record. A member's new approved version inside
+  the Collection's constraint changes the digest, so the Collection gets the next Registry version.
+  A version outside the constraint resolves to the same exact version and changes nothing.
+- **Recursive by construction.** A member that is itself a Collection has a version that already
+  follows its members, so a change propagates one approved level at a time, at each Sync.
+- **Resolution is the Registry's, not the Source's.** `RegistryVersions.resolve` answers the
+  highest *published* version the constraint allows in the target Registry (revoked and other
+  registries do not count). A member not approved yet resolves to nothing, and that is recorded.
+- **Python dependency descriptors** (`requirements.txt` and similar) are payload, so they are
+  already in the digest. Nothing extra is needed for them.
+- **`author check` uses `NO_REGISTRY`**: every artifact is `1.0.0`, every member unresolved, and the
+  check prints the identity without a version.
+- **Tests.** The product paths (Sync, `registry scan`/`adopt`/`check-upstream`, `registry promote`)
+  are tested with real `ApprovedRegistryVersions` and assert real numbering (`1.0.0` → `1.0.1`).
+  Tests about something else that were written around particular numbers keep them through a
+  test-only manifest key, `x-fixture-version`, read by `tests/fixture_versions.py`
+  (`with_fixture_versions`). The parser ignores unknown keys, so the key never reaches the product.
+
+## D-426 — `author init --kind collection` (CP-31 step 3)
+
+- **The vocabulary is the protocol's.** `protocol/authoring.py` names `COLLECTION_KIND` and
+  `AUTHORED_KINDS` (every `AuthorKind` plus `collection`); the CLI offers `AUTHORED_KINDS`, and
+  the generator's `INIT_KINDS` is tested equal to it. A Collection is not an `AuthorKind`, because
+  it names artifacts rather than carrying one, so `GENERATED_KINDS` stays the artifact kinds.
+- **Its own generator, verified by the Collection parser.** That parser compiles as it parses, so
+  the check gives it a well-formed placeholder provenance; nothing is published from it.
+- **The example member names an artifact no Registry has** (`skill/example-skill@^1`), so a Sync
+  shows the Collection unsatisfied until the author replaces it, instead of installing an artifact
+  the author never chose. The `#?` lines show a Source-qualified member and one with no constraint.
+- No version and no payload, as §173.1 and §173.3 require.
+
+## D-427 — How a Collection is published and read back (CP-31 step 5)
+
+- **The same three records as an artifact**: a package, a version record of kind `collection`
+  (`registry/versions/collection/<name>/<version>.json`) and an audit record, planned by
+  `plan_bulk_promotion(..., collections=...)` in the same transaction as any artifacts.
+- **The package is one file**, `artifacts/collection/<name>/<version>/collection.json`: the
+  canonical Collection document (`protocol.authoring.collection_document`). Its sha256 is the
+  Candidate's `canonical_digest`, which also stands for the payload digest; members are written in
+  canonical order, so reordering a manifest's list is not a change of the Collection.
+- **Always vendored**, whatever the transaction's mode: the Registry is a Collection's only home,
+  and there is no payload elsewhere to refer to. The plan invariant allows exactly this exception.
+- **Approval resolves members with `RegistryVersions.resolve`**, the resolver the version number
+  uses (D-425): highest published version the constraint allows in the target Registry. A member
+  with no such version makes the Candidate INVALID with `collection-member-unresolved`, naming it.
+  Members from another Registry do not resolve. Harness compatibility across members is the
+  install's concern (D-422, step 7), not approval's.
+- **Read back by `read_registry_collection`**, which refuses bytes that do not match the version
+  record. `validate_promoted_registry` checks the package too, so a Registry whose metadata was
+  rewritten over an unreviewed Collection is unreadable.
+- **Evidence**: the validation digest is each member with the exact version it resolved to.
+
+## D-428 — How the configured Marketplace offers a Collection (CP-31 step 6)
+
+- **One row per approved Collection: its highest approved version.** Artifacts use the same rule
+  (`_current_versions`). The row's coordinate carries that version
+  (`company/collection/<name>@<version>`). The graph's `CollectionCoordinate` and the native
+  `CollectionManifest` gained an optional `version`, which a native Source's Collection leaves
+  absent.
+- **Members are the exact versions their own rows offer.** A Marketplace graph holds one version
+  per artifact, so the Collection offers its members at those versions. If a member's constraint
+  excludes the version its row offers, as when a member moved to `2.0.0` past a Collection's `^1`,
+  the Collection is **declined**: the reason is added to `ConfiguredMarketplace.declined` and the
+  row is not offered. Offering it would install something the Collection never named. A new
+  Collection version is approved through Sync, as for any changed dependency (D-425).
+- **A member another Registry would provide also declines it.** The protocol v1 graph keeps
+  Collections single-source, and approval never resolved such a member anyway (D-427).
+- **Both consumer readers load Collections.** `io/configured_offers.py` (the graph behind
+  `marketplace list` and the TUI) and `io/configured_selection.py` (the approved resolver) both read
+  them with `read_registry_collection`, so each one refuses the same tampered package.
+
+## D-429 — How 05 and 07a carry a Collection as one artifact (CP-31 step 7)
+
+- **The install names the Collection.** `marketplace install <src>/collection/<name>[@x.y.z]`
+  builds `ArtifactSelection(collections=(coordinate,))` on the configured seam. A stated version
+  must be exact; without one, the highest approved version is used, the one its Marketplace row
+  offers (D-428). An unapproved version answers `collection-not-found`. In the TUI, a preview with
+  every member ticked installs the Collection; unticking one makes it a custom selection of
+  artifacts (§161.4). A re-preparation from a later screen recognizes the Collection by the 05
+  pairs that name it, because the focus has moved to that screen's row.
+- **05 groups members after placement measures them.** `_grouped_targets` replaces a
+  Collection's members with the Collection on each harness that hosts every member. Every other
+  harness is listed as "not offered", and the line names the first member it cannot host. The
+  pairs, defaults, problems and plan all stay at the Collection level, and `_member_pairs`
+  expands them only into the transaction's assignments. All or nothing therefore follows from
+  the transaction (INV-213).
+- **07a offers a Collection and harness the scopes every member declares.** The chosen scope is
+  given to every member there (`_member_pair_scopes`). As for single artifacts, this uses the
+  declaration rather than measured targets (B-192).
+- **The Collection rows the TUI offers come from the graph path.** `ConfiguredMarketplace`
+  carries the approved Collections behind its rows. Each member is shown as the exact version its
+  row offers.
+
+## D-430 — The Registry owns Collections, and a member bump bumps them (CP-31, owner decision)
+
+The owner decided on 2026-10-16, after steps 1–7, that a Collection is the Registry maintainer's
+curation, not a Source author's manifest. Product Specification §173.1, §173.3, §173.4 and §173.9
+are amended, and INV-266 is added.
+
+The reasons are recorded because they settle what source-authored Collections got wrong. A source
+Collection was valid only once the Registry had approved its members, so promotion had a forced
+order, and a Source declared something it could not check. A Collection could also not span the
+sources of one Registry.
+
+What changes:
+- **No Source Collection.** `author init --kind collection`, Sync's Collection Candidates and the
+  Collection approval screens 51/52 are removed. `author check` and Sync refuse a Collection
+  manifest and point at `registry collection`. This supersedes D-426 and D-427's Candidate half.
+  D-427's publication half stays: the vendored package, the version record and
+  `read_registry_collection`.
+- **Created in the Registry.** A new Maintainer TUI view creates or changes a Collection. The CLI
+  is `registry collection NAME --summary TEXT --include KIND/NAME …`, the shape the legacy command
+  had, now writing the approved representation. Both go through one reviewed Registry transaction.
+- **Members are identities, and versions pin them.** D-423 counts changes rather than signalling
+  breakage, so a constraint such as `^1` would only stop the bump at the 25th change. Members are
+  therefore `kind/name`, and each Collection version pins each member's exact approved version.
+  This supersedes D-425, under which members were dependencies with constraints.
+- **Automatic bump.** A promotion that approves a member's new version publishes, in the same
+  transaction, each containing Collection's next version (by D-423) with that pin moved. It is
+  shown in the Registry diff and the `registry promote` review.
+- **D-428's decline rule goes away.** A current Collection version always pins its members'
+  current versions (INV-266), so the Marketplace row's members are always the members' own rows.
+- Revoking or deprecating a member does not bump anything yet (B-196).
+
+## D-431 — What a Registry-defined Collection version's approval record says (CP-31 steps 18–19)
+
+A Collection version has no Candidate and no Source, so its promotion audit could not be read from
+one. Each version still needs the same `PromotionAudit` every approved version carries, or registry
+validity would report a published version nobody approved.
+
+- **Provenance is the Registry itself.** `PromotionSourceProvenance(LOCAL_SNAPSHOT,
+  local_snapshot_digest=<registry state before the transaction>)`. The Collection was made from
+  that state, and nothing else is its source.
+- **Evidence names what was checked.** The validation digest is `collection_validation_digest`:
+  the coordinate and every exact member it pins (schema `aart-cli.dev/collection-validation/v2`).
+  The policy digest is the transaction's own policy for a definition, and the causing member's
+  effective policy digest for an automatic bump.
+- **The Candidate id is the canonical digest** of the Collection document, so the audit set of a
+  transaction is its promoted Candidates plus its Collection versions, and both are checked equal.
+- **A Collection defined in the transaction is not bumped by it.** When one transaction both
+  defines a Collection and promotes one of its members, the definition already pins the newest
+  approved member, so no second version is made (`defined` in `collection_bumps`).
+
+## D-432 — The Collections view is screens 51 and 52, reviewed on 44 and 45 (CP-31 step 18)
+
+D-430 asked for a new Maintainer TUI view. The numbers the source-authored Collection screens had
+are reused, because those screens are gone.
+
+- **51 Collections** is reached from screen 46 with `o` (`c` is already Candidates there). Its rows
+  are `<registry>/<name>` for each Collection at its highest version, then `<registry>/+` for a new
+  one, offered only once the Registry approved something. A cursor on 46's own workspace row opens
+  51 for the only configured registry.
+- **52 Collection editor** has a Name row (new only), a Summary row, one row per approved artifact
+  `kind/name` with its highest published version, and Continue. Members are the session selection,
+  so Space ticks them as on every selectable screen; the text rows take every printable key
+  (D-269). An existing Collection opens with its members ticked and its summary drafted.
+- **Continue prepares `COLLECTION_DEFINE`** through `prepare_configured_collection`, which reads
+  the approved state and the checkout, pins each member with `plan_collection_definition`, and
+  builds the same transaction a promotion does (`prepare_collection_transaction`). 44 reviews it and
+  45 commits it locally; the commit origin is `define-collection`, so 46j suggests
+  `aart/define-collection`. An unchanged definition is refused on 52 rather than committed.
+- **Like a promotion, the checkout must be the approved baseline.** A second Collection after an
+  unpublished local commit is refused until the commit is published and synchronized.
+
+## D-433 — "Only manifests adopt" is INV-267 (CP-31 step 9)
+
+Step 1 added INV-266 "Only manifests adopt". D-430 later added "A Collection follows its members"
+under the same number, so §173.10 had two INV-266. All code, tests and plan entries that cite INV-266
+mean the Collection invariant, so that one keeps the number, and "Only manifests adopt" becomes
+INV-267. No other text cited the adoption invariant by number.
+
+## D-434 — An installed Collection is its members' ownership, given up as one removal (CP-31 step 9)
+
+§173.6 says Installed, Doctor and uninstall show an installed Collection as one row with its members
+under it, and uninstalling it keeps a member something else owns (INV-186, INV-215). The
+implementation choices:
+
+- **An install adds ownership, it does not replace it.** `propose_installation` takes `held`, the
+  recorded owners of each installation, and an install's intent adds its reasons to them. Before
+  this, a Collection installed over an artifact installed directly overwrote `direct` with
+  `collection`. A later Collection uninstall would then have removed the direct installation.
+- **A removal is keyed by installation** (`RemovalKey`: coordinate and `InstallationOwner`), as an
+  install is (§169.3). B-183 is promoted and fixed: one artifact ticked in two harnesses, or a
+  Collection installed into two, is one reviewed removal. D-393's "one harness at a time" refusal
+  is gone, and so is the unused `RemovalProposal.plan_for`.
+- **Uninstalling a Collection releases only its claim.** TUI `u` on the Collection row or its
+  details, and `marketplace uninstall <collection coordinate>`, select every installation the
+  Collection owns and pass `release` with that Collection's reason. Each record gives up the
+  released reasons it has. A record that keeps an owner converges on its installed state, so it
+  is measured against that state and is recorded again with the narrowed ownership. A Collection
+  is never uninstalled together with artifacts: the TUI and the CLI both refuse the mix.
+- **One order for Installed and Doctor** (`under_collections`): each Collection, then its member
+  installations indented under it, then the rest. A member of two Collections is drawn once,
+  under the first, because a row is an installation. Doctor's Collection line names the members
+  needing attention. CLI `doctor` now names installations as the TUI does (`…#harness`), so a
+  Collection's members are its rows.
+
+## D-435 — The install path is screen 05p, and Default falls back to 05 rather than guess (CP-31 step 10)
+
+§173.7 has a person choose Default or Custom after Install. The implementation choices:
+
+- **A screen of its own, 05p Install Path**, between Install and 05, with Default first. Install
+  on Marketplace, details, a Collection preview or its customization opens 05p and prepares
+  nothing; the choice is what starts the preparation. 05p's state says what Default will use
+  (Settings harnesses, scope, installer). Custom is the existing flow from 05, unchanged.
+- **Default prepares from Settings and stays on 05p until the answer says where to go**: 07 when
+  configuration is needed, then 07b or Ready. 05 and 07a are never drawn: the harnesses come from
+  `settings_pairs` (Settings harnesses that are detected and can host each artifact, or every one
+  that can when Settings names none), the scope from the Settings default where offered, and the
+  installer from Settings. A submitted 07 on Default rewinds to 05p rather than 05.
+- **When the Settings harnesses leave an artifact unhosted, 05 asks.** The conservative reading of
+  "the Settings harnesses that are detected and can host the artifact": an artifact none of them
+  can host gets no harness, and choosing one for the person would be the frontend deciding. The
+  install then goes on as Custom.
+- **Settings keeps `default_harnesses`**, stored strictly (distinct harness names; anything else is
+  refused, like every other stored preference). Screen 28 draws one on/off row per measured
+  harness under Installation.
+- **The CLI has no path choice.** `marketplace install` already names its harnesses with
+  `--profile`, so Default/Custom is a TUI journey only.
+
+## D-436 — Marketplace and Installed columns share one grid, and the harness facts share a cell (CP-31 step 11)
+
+§173.8 names the columns a Marketplace and an Installed row carry. The implementation choices:
+
+- **One grid per list**, laid out by `tui_layout.columns` over the content measure less the
+  `> [x] ` prefix, so every row's cells start at the same place. The cells are pure projections in
+  `consumer_views`: `marketplace_cells` and `installed_cells`.
+- **Marketplace cells**: the key (alias, kind, name, version); `not installed`, `installed` or
+  `update available` (any installation of any version whose health is `update`); the scope, as
+  `user`, `N projects` or `user + N projects`, where N counts distinct project roots; the
+  harnesses; the inputs still `AART_NOT_SET`, summed over installations because each keeps its own
+  (§169.4).
+- **Installed harnesses and eligible harnesses share one cell**: every detected harness the offer
+  is compatible with, plus every harness that holds it, with `✓` on each that holds it. Two
+  separate lists did not fit the 100-column measure beside a coordinate. Eligible means detected
+  (host profiles) and compatible with the offer.
+- **A Collection offer** draws its key and `installed` / `not installed` only; its members carry
+  the rest on their own rows.
+- **An installation's scope and root come from its owner** (§169.3) when the receipt has one,
+  rather than only from MCP registrations. Installed draws health, scope, the project's directory
+  name and the unset count; More info adds `Project: <root>` and `Harness: <label>`.
+- **D-394's `installed:` note is gone**: the columns say it, and its two tests went with it.
+- Listing other projects' installations, and keying a user-scope and a project-scope installation
+  in the same harness apart, are B-198.
+
+## D-437 — Adoption by manifest is the only way in; the vendor family goes whole (CP-31 step 14)
+
+§173 makes adopting an author's manifest the only route by which content enters a Registry, in the
+TUI and the CLI alike. The implementation choices:
+
+- **Removed commands**: `registry discover`, `vendor`, `vendor-batch`, `revendor` and
+  `audit --check-upstream`. argparse refuses each as an unknown choice or argument, with no alias.
+  `CurationAction` loses `VENDOR`, `VENDOR_BATCH` and `REVENDOR`, and `CurationRequest` keeps only
+  the fields `init` and `collection` read. The wizard offers `init` and `collection`.
+- **Removed with them**, because nothing else read them: the vendoring and discovery modules, the
+  subtree acquirer, `scripts/vendor_scan.py`, the vendored-origin records and their integrity and
+  upstream-drift checks, and the vendor plans and their request fields.
+- **Kept**: the MCP delivery check, now in `registry_maintenance/delivery.py`, because `registry
+  audit` applies it to every `mcp` package however it entered; `default_native_acquirer`, which
+  adoption uses; `registry check-upstream`, which compares an adopted version with its repository.
+- **Docs**: the vendoring tutorials and the MCP porting tutorial, which was the vendor procedure
+  around hand-written `artifact.json` and `provenance.json`, are deleted. The MCP manifest example
+  replaces the porting tutorial's link. The Tabnine tutorial adopts manifests and keeps a copy
+  current with `check-upstream`.
+- **Coverage lost**: the audit-level MCP delivery test built its package with `vendor`. The pure
+  check is still held by `tests/registry_mcp_delivery_test.py`; the audit wiring is B-199.

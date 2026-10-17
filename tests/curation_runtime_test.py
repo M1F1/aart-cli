@@ -137,10 +137,7 @@ class CurationRuntimeTest(unittest.TestCase):
             other = Path(temporary) / "other"
             _git_checkout(root)
             other.mkdir()
-            service = LocalCurationService(
-                str(root),
-                native_acquirer=lambda _url, _ref: _failure(),
-            )
+            service = LocalCurationService(str(root))
             requests = (
                 CurationRequest(CurationAction.INIT, str(root)),
                 CurationRequest(
@@ -164,15 +161,6 @@ class CurationRuntimeTest(unittest.TestCase):
                     display_name="Registry",
                     minimum_version="2.0.0",
                     maximum_version="1.0.0",
-                ),
-                CurationRequest(CurationAction.VENDOR, str(root)),
-                CurationRequest(
-                    CurationAction.VENDOR,
-                    str(root),
-                    kind="skill",
-                    name="demo",
-                    url="http://insecure.example/repo.git",
-                    path="prompts/demo",
                 ),
                 CurationRequest(CurationAction.VALIDATE, str(other)),
             )

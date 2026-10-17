@@ -33,6 +33,7 @@ from aart_cli.store.model import (
     object_store_paths,
 )
 from tests.artifact_installation_e2e_test import MANIFEST, SERVER_SOURCE
+from tests.fixture_versions import with_fixture_versions
 from tests.installation_proposal_test import _resolved
 
 PROFILES = ("tabnine",)
@@ -46,7 +47,7 @@ PROFILES = ("tabnine",)
 #: the tests placed it into several, which is the defect itself written down as a fixture.
 SKILL_MANIFEST = {
     "schema": "aart-cli.dev/skill/v1",
-    "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
+    "artifact": {"name": "code-review", "kind": "skill", "x-fixture-version": "1.2.0"},
     "payload": {"include": ["SKILL.md", "reference.md"]},
 }
 
@@ -76,7 +77,7 @@ class PlacementResolutionTest(unittest.TestCase):
             )
         )
         self.assertIsInstance(acquired, Ok, getattr(acquired, "diagnostics", ()))
-        compiled = compile_author_snapshot(
+        compiled = with_fixture_versions(compile_author_snapshot)(
             acquired.value.snapshot,
             source_alias=alias,
             source="https://github.company/company/servers.git",
@@ -229,7 +230,7 @@ class DeliveredPlacementTest(unittest.TestCase):
             )
         )
         self.assertIsInstance(acquired, Ok, getattr(acquired, "diagnostics", ()))
-        compiled = compile_author_snapshot(
+        compiled = with_fixture_versions(compile_author_snapshot)(
             acquired.value.snapshot,
             source_alias=alias,
             source="https://github.company/company/skills.git",
@@ -355,9 +356,9 @@ class DeliveredPlacementTest(unittest.TestCase):
 def _stored_artifact(package, digest: ObjectDigest):
     from aart_cli.domain.candidates import CandidateId
     from aart_cli.domain.registry import (
-        PromotionMode,
         PublicationStage,
         RegistryArtifactVersion,
+        RegistryContentMode,
     )
     from aart_cli.domain.selection import (
         OwnershipKind,
@@ -375,7 +376,7 @@ def _stored_artifact(package, digest: ObjectDigest):
             digest,
             digest,
             digest,
-            PromotionMode.VENDORED,
+            RegistryContentMode.SELF_CONTAINED,
             PublicationStage.PUBLISHED,
         ),
         (OwnershipReason(OwnershipKind.DIRECT, str(package.coordinate)),),

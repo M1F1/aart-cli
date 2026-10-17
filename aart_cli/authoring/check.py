@@ -24,22 +24,22 @@ from aart_cli.protocol.authoring import (
 )
 from aart_cli.protocol.codes import AUTHOR_TREE_INVALID
 from aart_cli.protocol.native_tree import SourceSnapshot
+from aart_cli.protocol.registry_versions import NO_REGISTRY
 
 
 @dataclass(frozen=True, slots=True)
 class ManifestVerdict:
     """One discovered manifest, what AART said about it, and what it would be promoted as.
 
-    `package` is the coordinate the compiler produced, so an author reading it knows the compile
-    ran rather than only the parse. `checked` is false for a manifest `registry scan` passes over
-    -- a Collection is discovered by the same walk and compiled by a different function -- and
-    saying so is the honest answer, since neither claim in §1.4 was tested against it.
+    `package` is the identity the compiler produced, so an author reading it knows the compile
+    ran rather than only the parse. It carries no version: the Registry assigns that. A
+    Collection manifest is refused by the same compiler Sync uses, saying the Registry creates
+    Collections (§173.1), so no manifest is ever skipped.
     """
 
     path: str
     diagnostics: tuple[Diagnostic, ...]
     package: str | None = None
-    checked: bool = True
 
     @property
     def accepted(self) -> bool:
@@ -91,25 +91,27 @@ def check_author_manifests(
                 ),
             )
         )
+    # No Registry stands behind a check, so every artifact compiles as new (D-424).
     compiled = compile_author_manifests(
-        snapshot, source_alias=source_alias, source=source, revision=revision
+        snapshot,
+        source_alias=source_alias,
+        source=source,
+        revision=revision,
+        versions=NO_REGISTRY,
     )
     if isinstance(compiled, Err):
         return compiled
     artifacts, refusals = compiled.value
     promoted = {
-        str(artifact.manifest_path): f"{artifact.package.coordinate.artifact}"
-        f"@{artifact.package.coordinate.version}"
+        # The identity only: the version is the Registry's to assign at Sync (§173.2), and a check
+        # has no Registry to ask.
+        str(artifact.manifest_path): str(artifact.package.coordinate.artifact)
         for artifact in artifacts
     }
     refused = {str(refusal.manifest_path): refusal.diagnostics for refusal in refusals}
     verdicts: list[ManifestVerdict] = []
     for manifest in discovered.value:
         path = str(manifest.path)
-        if path not in promoted and path not in refused:
-            # The compiler neither compiled it nor refused it, which is how it says "not mine".
-            verdicts.append(ManifestVerdict(path, (), checked=False))
-            continue
         verdicts.append(ManifestVerdict(path, refused.get(path, ()), promoted.get(path)))
     return Ok(AuthorCheckReport(tuple(verdicts)))
 

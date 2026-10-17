@@ -94,143 +94,32 @@ Commit this before going further. It is the point where an empty repository beco
 git add -A && git commit -m "Initialize the company AART registry"
 ```
 
-## 3. Vendor an artifact out of a repository that knows nothing about AART
+## 3. Adopt artifacts from a repository
 
-This is the step that matters for adoption. Your company already has useful material — a prompt
-somebody keeps pasting into Slack, a checklist in a platform-team repo, a monorepo of MCP servers.
-None of it declares `aart-cli-source.json`, and none of its owners want to be told to add one.
+Content enters a registry in one way: by adopting a manifest. Your company already has useful
+material — a prompt somebody keeps pasting into Slack, a checklist in a platform-team repo, a
+monorepo of MCP servers. Give each one an `aart-cli.yaml` beside it in that repository (see
+[writing an artifact](../authoring/authoring-an-artifact-v1.md)), and commit it there. The
+manifest names the artifact and its kind; it carries no version, because the registry assigns
+those.
 
-`registry vendor` copies a subtree of any Git repository into your registry as a package **your
-registry owns**, pinned to the exact commit it was taken from, with a `provenance.json` recording
-where the bytes came from.
-
-Suppose `https://ghe.company.example/platform/shared-tools.git` has a directory
-`packages/release-evidence` holding a `SKILL.md`. Review first:
-
-```sh
-aart-cli registry vendor skill release-evidence --source . \
-  --url https://ghe.company.example/platform/shared-tools.git \
-  --ref main \
-  --path packages/release-evidence \
-  --artifact-version 1.0.0 \
-  --summary "Evidence checklist for a release." \
-  --profile tabnine \
-  --platform darwin \
-  --review-policy manual-review-v1
-```
-
-```text
-  - added: artifacts/skill/release-evidence/artifact.json
-  - added: artifacts/skill/release-evidence/payload/LICENSE
-  - added: artifacts/skill/release-evidence/payload/SKILL.md
-  - added: artifacts/skill/release-evidence/payload/references/verification-checklist.md
-  - added: artifacts/skill/release-evidence/provenance.json
-  - added: security/attestations/3dbd79bb….json
-  - check vendor-assessment: passed
-      installation risk: medium
-      findings: 2
-      install-effect-copy-tree (low): Installation copies a directory tree into a harness destination.
-      review-missing (medium): No registry review decision is attached to this artifact.
-  - check vendor-license: passed
-      discovered: LICENSE: MIT
-      recorded: MIT
-  - check vendor-origin: passed
-      origin: https://ghe.company.example/platform/shared-tools.git
-      ref: main
-      resolved commit: 3706c2a5a679f17a3c3d4979b840fa86bc2a13e5
-      subtree: packages/release-evidence
-      target: artifacts/skill/release-evidence
-      declared version: 1.0.0
-      payload files: 3
-  warning: Vendoring copies upstream bytes into this registry and pins them to a commit; a successful vendor reports what was copied, and is not a safety claim.
-  warning: This registry now owns the copy: upstream fixes do not reach consumers until it is vendored again.
-```
-
-Read the three checks before you finalize. `vendor-license` discovered `MIT` from a `LICENSE` file
-in the subtree; had it found nothing, you would have to state one with `--license`. `vendor-origin`
-is the pin — that resolved commit is what `provenance.json` records, and what a drift check later
-compares against.
-
-Then finalize:
+Then read the repository from your registry checkout. The first run only reports what the
+manifests compile to:
 
 ```sh
-aart-cli registry vendor skill release-evidence --source . \
-  --url https://ghe.company.example/platform/shared-tools.git \
-  --ref main --path packages/release-evidence \
-  --artifact-version 1.0.0 --summary "Evidence checklist for a release." \
-  --profile tabnine --platform darwin --review-policy manual-review-v1 --yes
+aart-cli registry adopt --source . --url https://ghe.company.example/platform/shared-tools.git --ref main
 ```
 
-A guideline works the same way, with `guideline` as the kind:
+Adopt the ones you want, by the coordinates that review printed:
 
 ```sh
-aart-cli registry vendor guideline branch-conventions --source . \
-  --url https://ghe.company.example/platform/shared-tools.git \
-  --ref main --path packages/branch-conventions \
-  --artifact-version 1.0.0 --summary "How we name and merge branches." \
-  --license MIT --profile tabnine --platform darwin --review-policy manual-review-v1 --yes
+aart-cli registry adopt --source . --url https://ghe.company.example/platform/shared-tools.git --ref main --artifact skill/release-evidence@1.0.0 --artifact guideline/branch-conventions@1.0.0 --yes
 ```
 
-### Four things about vendoring that will bite you otherwise
+Each adopted version is a self-contained copy pinned to the commit it was read at, with its
+provenance recorded beside it. The first approved version of an artifact is `1.0.0`; every later
+approved change raises the version by the registry's own count, never by hand.
 
-1. **The URL must be HTTPS or SSH.** A local path or a `file://` URL is refused —
-   `Git source location must be credential-free HTTPS/SSH`. You cannot rehearse this against a
-   repository on your own disk; point it at the real remote.
-2. **`--artifact-version` is yours, not upstream's.** Upstream declares no version AART can trust,
-   so you state the version your registry publishes the copy under. It has nothing to do with any
-   tag upstream may carry.
-3. **You now own the copy.** Upstream fixing a typo changes nothing for your colleagues until you
-   re-vendor. That is the trade: they get bytes that cannot move under them, you get the job of
-   moving them deliberately. Section 7 is how.
-4. **`--profile tabnine` is a declaration, not a filter.** It says this artifact targets Tabnine.
-   List every profile the artifact genuinely supports, comma-separated
-   (`--profile tabnine,claude`); an artifact that does not declare a profile cannot be installed
-   into it.
-
-### When *not* to vendor
-
-If the upstream repository already is an AART native source — it has `aart-cli-source.json` and its
-packages sit at `<root>/<kind>/<name>` — take its reviewed Candidate in with `registry scan` and
-`registry promote` instead of copying bytes by hand. Almost everything in a normal company is not
-a native source, which is why almost everything gets vendored.
-
-## 3a. Vendoring a whole repository's worth of artifacts
-
-Scan a checkout you already have and write the review manifest:
-
-```sh
-aart-cli registry discover \
-  --checkout ../shared-tools \
-  --url https://ghe.company.example/platform/shared-tools.git \
-  --ref main \
-  --artifact-version 1.0.0 \
-  --profile tabnine --platform darwin \
-  --output vendor-candidates.json
-```
-
-Discovery recognises conservative conventional shapes: `SKILL.md` packages, Markdown below
-`guidelines/` or `rules/`, MCP descriptors, hook descriptors, and loose harness-memory documents
-such as `CLAUDE.md` and `AGENTS.md`. Every candidate starts with `"accept": false`. Review names,
-summaries, versions and paths in the JSON and change only the keepers to `true`; discovery itself
-never authors registry content.
-
-Then review the one atomic batch and finalize it:
-
-```sh
-aart-cli registry vendor-batch --source . --manifest vendor-candidates.json
-aart-cli registry vendor-batch --source . --manifest vendor-candidates.json --yes
-```
-
-The command resolves the manifest's URL and ref once, then runs the same provenance, license,
-security and delivery checks as `registry vendor` for every accepted item. Either the whole reviewed
-plan lands or none of it does. A loose Markdown file is a valid subtree, so project memory keeps its
-upstream `provenance.json` and remains visible to `revendor --check`; no copy-and-paste adoption path
-is needed.
-
-Under the Tabnine profile a `memory` artifact installs into project-root `TABNINE.md` inside a
-name-scoped managed block. Differently named memory artifacts can share that file: status checks
-each block independently, and uninstalling one artifact preserves every other managed block.
-Section 8 shows the consumer command.
 ## 3b. Grouping artifacts so a colleague installs them in one command
 
 The word for a group of artifacts is a **collection**. Compose one only from artifacts this registry
@@ -318,36 +207,19 @@ aart-cli registry audit --source .
 
 `--frozen` fails when the committed lock or index does not match authored content. Push the commit,
 open a pull request, and review it like any other repository.
-## 7. Keeping a vendored copy current
+## 7. Keeping an adopted copy current
 
-Ask whether upstream has moved. This writes nothing:
-
-```sh
-aart-cli registry revendor skill release-evidence --source . --check
-```
-
-```text
-      disposition: up-to-date
-      origin: https://ghe.company.example/platform/shared-tools.git
-      ref: main
-      recorded commit: 3706c2a5a679f17a3c3d4979b840fa86bc2a13e5
-      resolved commit: 3706c2a5a679f17a3c3d4979b840fa86bc2a13e5
-      the ref has not moved since this copy was taken
-  warning: Nothing was written; re-vendoring compares upstream and reports.
-```
-
-Three answers are possible: `up-to-date`, `changed`, or `unreachable`. An upstream AART could not
-read is **never** reported as up-to-date, so this is safe to run in a scheduled job.
-
-When it says `changed`, you decide what version the moved copy ships as:
+Ask whether the repository has moved since a version was adopted. Without `--yes` this writes
+nothing:
 
 ```sh
-aart-cli registry revendor skill release-evidence --source . --artifact-version 1.1.0        # review
-aart-cli registry revendor skill release-evidence --source . --artifact-version 1.1.0 --yes
+aart-cli registry check-upstream --source . skill/release-evidence@1.0.0
 ```
 
-Without `--artifact-version` nothing is planned — deliberately. Then publish the reviewed registry
-cycle as in section 5.
+It answers `unchanged`, `changed`, `missing`, `unreachable` or `invalid`. A repository AART could
+not read is never reported as unchanged, so this is safe to run in a scheduled job. When it says
+`changed`, review the new version it would adopt, then run the same command with `--yes`. Then
+publish the reviewed registry cycle as in section 5.
 
 ## 8. The consumer side — what a colleague runs
 
@@ -381,7 +253,7 @@ company/guideline/branch-conventions@1.0.0 [healthy] How we name and merge branc
 company/skill/release-evidence@1.0.0 [healthy] Evidence checklist for a release. origin=https://ghe.company.example/platform/shared-tools.git@3706c2a…:packages/release-evidence
 ```
 
-Every row carries the origin it was vendored from, so a colleague can see where a skill actually
+Every row carries the origin it was adopted from, so a colleague can see where a skill actually
 came from without opening the registry.
 
 Install — review, then finalize:
@@ -473,8 +345,8 @@ installed separately, is untouched.
 Every command in sections 1–8 was executed against a wheel built from this repository and installed
 into a throwaway virtual environment, with a sandboxed `HOME`, on `2026-08-16`. The registry, the
 consumer project and the upstream repository were real Git repositories; nothing was faked,
-patched, or mocked. The vendoring examples were walked against a real public repository over HTTPS,
-with the same command shapes shown above.
+patched, or mocked. Sections 3 and 7 describe `registry adopt` and `registry check-upstream`,
+which replaced the walked vendoring commands; their output is not quoted here.
 
 Two things are **not** verified and are marked where they appear:
 
@@ -488,7 +360,7 @@ Two things are **not** verified and are marked where they appear:
 
 ## Where to read more
 
-- [Vendoring foreign content](vendoring-v1.md) — why vendoring exists, what it guarantees, and what
-  drift detection actually checks.
+- [Maintaining a registry](../registry/maintaining-a-registry-v1.md) — adoption, Registry-owned
+  versions and Collections.
 - [The registry protocol](../protocol/registry-v1.md) — the file formats, if you are automating
   against them.

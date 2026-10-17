@@ -72,7 +72,7 @@ from tests.artifact_installation_test import _facts as _plan_facts
 from tests.artifact_installation_test import _plan
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions, _drive
-from tests.consumer_shell_test import DOWN, SPACE, _at
+from tests.consumer_shell_test import DOWN, INSTALL_CUSTOM, SPACE, _at
 from tests.consumer_views_test import _plan as _view_plan
 
 BACKENDS = ("pip", "uv")
@@ -388,7 +388,9 @@ class TheQuestionThatDoesNotAriseTest(unittest.TestCase):
         """The production composition, over an artifact that needs no Python at all."""
 
         with _environment() as env:
-            finished, terminal, _ = _drive(env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"))
+            finished, terminal, _ = _drive(
+                env, _at(ConsumerScreen.MARKETPLACE), SPACE, *INSTALL_CUSTOM
+            )
 
             self.assertIs(finished.session.screen, ConsumerScreen.REVIEW_SELECTION)
             self.assertFalse([row for row in finished.rows if installer_from_row(row)])
@@ -448,7 +450,7 @@ class TheReviewScreenOffersTheBackendTest(unittest.TestCase):
 
 _DEPENDENT_MANIFEST = {
     "schema": "aart-cli.dev/mcp/v1",
-    "artifact": {"name": "code-review", "kind": "mcp", "version": "1.2.0"},
+    "artifact": {"name": "code-review", "kind": "mcp", "x-fixture-version": "1.2.0"},
     "payload": {"include": ["server.py", "requirements.txt"]},
     "transport": {"type": "stdio"},
     "runtime": {"type": "python", "version": ">=3.10"},
@@ -501,7 +503,7 @@ class ThePreferenceReachesTheRealCompositionTest(unittest.TestCase):
         actions = _actions(env)
         actions.save_settings(replace(actions.settings, python_installer=preference))
         return _drive(
-            env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"), *codes, actions=actions
+            env, _at(ConsumerScreen.MARKETPLACE), SPACE, *INSTALL_CUSTOM, *codes, actions=actions
         )
 
     def test_the_review_offers_both_backends_when_the_machine_has_both(self) -> None:

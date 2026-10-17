@@ -16,20 +16,15 @@ from aart_cli.domain.candidates import (
     mark_source_removed,
     supersede_candidate,
 )
-from aart_cli.domain.collection_candidates import (
-    CollectionCandidate,
-    collection_candidate_id_for,
-)
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import (
-    ArtifactIdentity,
     ObjectDigest,
     SourceAlias,
     is_pinned_source_revision,
 )
 from aart_cli.domain.registry import RegistryArtifactVersion
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.protocol.authoring import CompiledAuthorArtifact, CompiledAuthorCollection
+from aart_cli.protocol.authoring import CompiledAuthorArtifact
 from aart_cli.protocol.hashing import file_entry, tree_digest
 
 SOURCE_SCAN_INVALID = DiagnosticCode("source-scan-invalid")
@@ -62,17 +57,13 @@ class SourceScan:
     active: tuple[CandidateBundle, ...]
     history: tuple[CandidateBundle, ...]
     registry_mutations: tuple[object, ...] = ()
-    collection_active: tuple[CollectionCandidate, ...] = ()
-    collection_history: tuple[CollectionCandidate, ...] = ()
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.source_alias, SourceAlias)
             or not is_pinned_source_revision(self.revision)
-            or self.manifest_count != len(self.active) + len(self.collection_active)
+            or self.manifest_count != len(self.active)
             or self.registry_mutations
-            or any(not isinstance(item, CollectionCandidate) for item in self.collection_active)
-            or any(not isinstance(item, CollectionCandidate) for item in self.collection_history)
         ):
             raise ValueError("source scan must be a non-mutating pinned observation")
 
@@ -140,49 +131,6 @@ def _with_registry_state(
     return assess_candidate(candidate, findings=(finding,))
 
 
-def _approved_collection_for(
-    collection: CompiledAuthorCollection,
-    target_registry: SourceAlias,
-    approved: tuple[RegistryArtifactVersion, ...],
-) -> RegistryArtifactVersion | None:
-    return next(
-        (
-            item
-            for item in approved
-            if item.coordinate.source == target_registry
-            and item.coordinate.artifact == ArtifactIdentity("collection", collection.name)
-            and item.coordinate.version == collection.version
-        ),
-        None,
-    )
-
-
-def _with_collection_registry_state(
-    candidate: CollectionCandidate,
-    approved: RegistryArtifactVersion | None,
-) -> CollectionCandidate:
-    if approved is None:
-        return candidate
-    if (
-        approved.candidate_id == candidate.id
-        and approved.input_digest == candidate.input_digest
-        and approved.canonical_digest == candidate.canonical_digest
-    ):
-        return replace(candidate, state=CandidateState.PROMOTED)
-    return replace(
-        candidate,
-        state=CandidateState.INVALID,
-        findings=(
-            CandidateFinding(
-                "registry-version-immutable",
-                FindingSeverity.ERROR,
-                "Published Collection coordinate/version already contains different "
-                "canonical content",
-            ),
-        ),
-    )
-
-
 def reconcile_source_scan(
     source_alias: SourceAlias,
     revision: str,
@@ -191,8 +139,6 @@ def reconcile_source_scan(
     previous: tuple[CandidateBundle, ...],
     approved: tuple[RegistryArtifactVersion, ...],
     target_registry: SourceAlias,
-    collections: tuple[CompiledAuthorCollection, ...] = (),
-    previous_collections: tuple[CollectionCandidate, ...] = (),
 ) -> Result[SourceScan]:
     """Reconcile candidates only; approved registry state is read-only input."""
 
@@ -210,9 +156,6 @@ def reconcile_source_scan(
             or compiled_artifact.package.provenance.revision != revision
         ):
             return _error("compiled artifacts do not match the scanned source observation")
-    for collection in collections:
-        if collection.source_alias != source_alias or collection.revision != revision:
-            return _error("compiled Collections do not match the scanned source observation")
 
     previous_by_id = {bundle.candidate.id: bundle for bundle in previous}
     if len(previous_by_id) != len(previous):
@@ -307,109 +250,12 @@ def reconcile_source_scan(
         removed = replace(prior, candidate=mark_source_removed(prior.candidate))
         history[prior.candidate.id] = removed
 
-    collection_previous_by_id = {item.id: item for item in previous_collections}
-    if len(collection_previous_by_id) != len(previous_collections):
-        return _error("Collection Candidate history contains duplicate Candidate IDs")
-    collection_current_by_locator: dict[tuple[str, str], CollectionCandidate] = {}
-    for collection_record in previous_collections:
-        if (
-            collection_record.target_registry != target_registry
-            or collection_record.source_alias != source_alias
-            or collection_record.state is CandidateState.SUPERSEDED
-        ):
-            continue
-        locator = (target_registry.value, collection_record.manifest_path)
-        if locator in collection_current_by_locator:
-            return _error(
-                "Collection Candidate history contains multiple current records for one manifest"
-            )
-        collection_current_by_locator[locator] = collection_record
-
-    collection_history = dict(collection_previous_by_id)
-    collection_active: list[CollectionCandidate] = []
-    collection_seen: set[tuple[str, str]] = set()
-    for collection in sorted(collections, key=lambda item: str(item.manifest_path)):
-        locator = (target_registry.value, str(collection.manifest_path))
-        if locator in collection_seen:
-            return _error("source scan contains duplicate Collection manifest boundaries")
-        collection_seen.add(locator)
-        collection_prior = collection_current_by_locator.get(locator)
-        candidate_id = collection_candidate_id_for(
-            collection.source_alias,
-            str(collection.manifest_path),
-            collection.input_digest,
-            target_registry,
-        )
-        approved_version = _approved_collection_for(collection, target_registry, approved)
-        if collection_prior is not None and collection_prior.id == candidate_id:
-            unchanged_collection = collection_prior
-            if collection_prior.state not in _REGISTRY_REFRESH_GUARDED_STATES:
-                unchanged_collection = _with_collection_registry_state(
-                    collection_prior,
-                    approved_version,
-                )
-                collection_history[unchanged_collection.id] = unchanged_collection
-            collection_active.append(unchanged_collection)
-            continue
-        collection_candidate = CollectionCandidate(
-            candidate_id,
-            collection.source_alias,
-            collection.source,
-            collection.revision,
-            str(collection.manifest_path),
-            collection.input_digest,
-            collection.canonical_digest,
-            target_registry,
-            collection.name,
-            collection.version,
-            collection.summary,
-            collection.members,
-            CandidateState.NEW if collection_prior is None else CandidateState.CHANGED,
-            None if collection_prior is None else collection_prior.id,
-        )
-        collection_candidate = _with_collection_registry_state(
-            collection_candidate,
-            approved_version,
-        )
-        if (
-            approved_version is None
-            and collection_prior is None
-            and any(
-                item.coordinate.source == target_registry
-                and item.coordinate.artifact == ArtifactIdentity("collection", collection.name)
-                for item in approved
-            )
-        ):
-            collection_candidate = replace(collection_candidate, state=CandidateState.CHANGED)
-        collection_history[collection_candidate.id] = collection_candidate
-        collection_active.append(collection_candidate)
-        # The same rule as for artifacts: a promoted Collection record states what the registry
-        # published, and this scan does not get to overwrite it (`QA-062`).
-        if collection_prior is not None and collection_prior.state is not CandidateState.PROMOTED:
-            collection_history[collection_prior.id] = replace(
-                collection_prior,
-                state=CandidateState.SUPERSEDED,
-                successor=collection_candidate.id,
-            )
-
-    for locator, collection_prior in collection_current_by_locator.items():
-        if locator in collection_seen:
-            continue
-        collection_history[collection_prior.id] = replace(
-            collection_prior,
-            state=CandidateState.SOURCE_REMOVED,
-            successor=None,
-        )
-
     return Ok(
         SourceScan(
             source_alias,
             revision,
-            len(active) + len(collection_active),
+            len(active),
             tuple(sorted(active, key=lambda item: str(item.artifact.manifest_path))),
             tuple(sorted(history.values(), key=lambda item: item.candidate.id.value)),
-            (),
-            tuple(sorted(collection_active, key=lambda item: item.manifest_path)),
-            tuple(sorted(collection_history.values(), key=lambda item: item.id.value)),
         )
     )

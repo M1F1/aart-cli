@@ -13,6 +13,7 @@ from aart_cli.domain.result import Ok
 from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.sources.local import read_local_snapshot
 from aart_cli.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
+from tests.fixture_versions import with_fixture_versions
 
 
 class AuthorCompilerIntegrationTest(unittest.TestCase):
@@ -24,7 +25,7 @@ class AuthorCompilerIntegrationTest(unittest.TestCase):
             (artifact / "tests").mkdir()
             manifest = {
                 "schema": "aart-cli.dev/mcp/v1",
-                "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
+                "artifact": {"name": "github-mcp", "kind": "mcp"},
                 "payload": {
                     "include": ["server.py", "src/**", "requirements.txt"],
                     "exclude": ["tests/**"],
@@ -54,7 +55,7 @@ class AuthorCompilerIntegrationTest(unittest.TestCase):
             self.assertIsInstance(acquired, Ok)
             assert isinstance(acquired, Ok)
 
-            compiled = compile_author_snapshot(
+            compiled = with_fixture_versions(compile_author_snapshot)(
                 acquired.value.snapshot,
                 source_alias=alias,
                 source="https://git.example/example-mcp-servers.git",

@@ -24,7 +24,7 @@ from aart_cli.configuration.model import (
 )
 from aart_cli.configuration.schema import user_configuration_bytes
 from aart_cli.domain.identifiers import SourceId
-from aart_cli.domain.registry import PromotionMode, deprecate_registry_version
+from aart_cli.domain.registry import RegistryContentMode, deprecate_registry_version
 from aart_cli.domain.result import Ok
 from aart_cli.io.source_store import publish_source_snapshot
 from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
@@ -91,7 +91,7 @@ class DoctorOfflineReadinessE2ETest(unittest.TestCase):
             )
 
     def test_cached_metadata_does_not_claim_missing_canonical_payload(self) -> None:
-        with _environment(promotion_mode=PromotionMode.REFERENCED) as env:
+        with _environment(content_mode=RegistryContentMode.PINNED_REFERENCE) as env:
             code, payload = env.run("doctor")
 
             self.assertEqual(code, 0, payload)
@@ -109,13 +109,13 @@ class DoctorOfflineReadinessE2ETest(unittest.TestCase):
                 AUTHORED_MCP,
                 onto=SourceSnapshot(SnapshotOrigin.LOCAL, ()),
                 revision="b" * 40,
-                mode=PromotionMode.REFERENCED,
+                mode=RegistryContentMode.PINNED_REFERENCE,
             )
             snapshot = _promote_one(
                 AUTHORED_SKILL,
                 onto=snapshot,
                 revision="c" * 40,
-                mode=PromotionMode.VENDORED,
+                mode=RegistryContentMode.SELF_CONTAINED,
             )
             _publish_registry_snapshot(env, snapshot)
 

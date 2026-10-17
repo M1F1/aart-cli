@@ -66,7 +66,7 @@ TODAY = date(2026, 8, 31)
 
 SKILL_MANIFEST = {
     "schema": "aart-cli.dev/skill/v1",
-    "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
+    "artifact": {"name": "code-review", "kind": "skill", "x-fixture-version": "1.2.0"},
     "payload": {"include": ["SKILL.md", "reference/style.md"]},
     "compatibility": {"harnesses": ["claude"]},
 }

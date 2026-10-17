@@ -32,7 +32,7 @@ from aart_cli.domain.installation_owner import (
 )
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.python_runtime import PythonInstaller
-from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
+from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import ArtifactSelection, ResolvedArtifact, ResolvedSelection
 from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind, SourceSnapshot
@@ -237,10 +237,10 @@ def _object_entries(
     snapshot: SourceSnapshot,
     version: RegistryArtifactVersion,
 ) -> Result[tuple[SnapshotEntry, ...]]:
-    if version.mode is not PromotionMode.VENDORED:
+    if version.mode is not RegistryContentMode.SELF_CONTAINED:
         return _error(
             CONFIGURED_INSTALLATION_INVALID,
-            f"referenced approved version {version.coordinate} cannot be materialized from this "
+            f"pinned-reference approved version {version.coordinate} cannot be materialized from this "
             "registry snapshot",
         )
     identity = version.coordinate.artifact

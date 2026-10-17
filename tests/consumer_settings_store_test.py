@@ -69,6 +69,7 @@ class ConsumerSettingsValueTest(unittest.TestCase):
         self.assertEqual(
             sorted(data),
             [
+                "default_harnesses",
                 "default_scope",
                 "detail_level",
                 "maintainer_mode",

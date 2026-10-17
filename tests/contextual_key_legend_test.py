@@ -82,7 +82,9 @@ class ContextualKeyLegendTest(unittest.TestCase):
     def test_each_maintainer_screen_names_its_own_shortcuts(self) -> None:
         expected = {
             MaintainerScreen.SOURCES: ("[a] Add Source", "[s] Sync"),
-            MaintainerScreen.CANDIDATES: ("[f] Filters", "[c] Collections"),
+            MaintainerScreen.CANDIDATES: ("[f] Filters",),
+            # D-430: the Registry owns its Collections, so they are reached from its workspace.
+            MaintainerScreen.REGISTRY: ("[c] Candidates", "[o] Collections"),
             MaintainerScreen.CANDIDATE_DIFF: ("[v] More info",),
             MaintainerScreen.SCAN_RESULT: ("[a] Adopt",),
             MaintainerScreen.ADOPTED_ARTIFACTS: ("[Enter] Check upstream",),

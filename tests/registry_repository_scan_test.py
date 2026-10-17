@@ -30,7 +30,6 @@ from aart_cli.domain.candidates import (
     FindingSeverity,
     assess_candidate,
 )
-from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.result import Err, Ok
 from aart_cli.io.git_acquisition import acquire_git_snapshot
 from aart_cli.io.registry_adoption import (
@@ -48,7 +47,6 @@ SKILL_MANIFEST = """schema: aart-cli.dev/skill/v1
 artifact:
   name: verification-before-completion
   kind: skill
-  version: 1.0.0
 payload:
   include:
     - SKILL.md
@@ -61,7 +59,6 @@ OTHER_MANIFEST = """schema: aart-cli.dev/skill/v1
 artifact:
   name: brainstorming
   kind: skill
-  version: 2.1.0
 payload:
   include:
     - SKILL.md
@@ -174,7 +171,7 @@ class RepositoryScanTest(_Lab):
         self.assertEqual(scan.manifest_count, 2)
         self.assertEqual(
             sorted(item.coordinate for item in scan.artifacts),
-            ["skill/brainstorming@2.1.0", "skill/verification-before-completion@1.0.0"],
+            ["skill/brainstorming@1.0.0", "skill/verification-before-completion@1.0.0"],
         )
 
     def test_a_scan_names_only_the_files_each_manifest_declared(self) -> None:
@@ -230,7 +227,7 @@ class SelectiveAdoptionTest(_Lab):
         assert isinstance(scanned, Ok)
 
         prepared = prepare_adoption(
-            scanned.value, ("skill/brainstorming@2.1.0",), registry_root=str(self.registry)
+            scanned.value, ("skill/brainstorming@1.0.0",), registry_root=str(self.registry)
         )
         self.assertIsInstance(prepared, Ok, prepared)
         assert isinstance(prepared, Ok)
@@ -239,7 +236,7 @@ class SelectiveAdoptionTest(_Lab):
         )
 
         self.assertIsInstance(applied, Ok, applied)
-        adopted = self._package("skill", "brainstorming", "2.1.0")
+        adopted = self._package("skill", "brainstorming", "1.0.0")
         self.assertTrue((adopted / "artifact.json").is_file())
         self.assertFalse(
             self._package("skill", "verification-before-completion", "1.0.0").exists(),
@@ -250,14 +247,14 @@ class SelectiveAdoptionTest(_Lab):
         scanned = self._scan()
         assert isinstance(scanned, Ok)
         prepared = prepare_adoption(
-            scanned.value, ("skill/brainstorming@2.1.0",), registry_root=str(self.registry)
+            scanned.value, ("skill/brainstorming@1.0.0",), registry_root=str(self.registry)
         )
         assert isinstance(prepared, Ok), prepared
         apply_adoption(
             prepared.value, prepared.value.review_digest, registry_root=str(self.registry)
         )
 
-        adopted = self._package("skill", "brainstorming", "2.1.0")
+        adopted = self._package("skill", "brainstorming", "1.0.0")
         copied = sorted(
             str(path.relative_to(adopted)) for path in adopted.rglob("*") if path.is_file()
         )
@@ -271,14 +268,14 @@ class SelectiveAdoptionTest(_Lab):
         scanned = self._scan()
         assert isinstance(scanned, Ok)
         prepared = prepare_adoption(
-            scanned.value, ("skill/brainstorming@2.1.0",), registry_root=str(self.registry)
+            scanned.value, ("skill/brainstorming@1.0.0",), registry_root=str(self.registry)
         )
         assert isinstance(prepared, Ok), prepared
         apply_adoption(
             prepared.value, prepared.value.review_digest, registry_root=str(self.registry)
         )
 
-        adopted = self._package("skill", "brainstorming", "2.1.0")
+        adopted = self._package("skill", "brainstorming", "1.0.0")
         provenance = json.loads((adopted / "provenance.json").read_text(encoding="utf-8"))
         origin = provenance["origin"]
 
@@ -300,14 +297,14 @@ class SelectiveAdoptionTest(_Lab):
 
         prepared = prepare_adoption(
             scanned.value,
-            ("skill/brainstorming@2.1.0", "skill/verification-before-completion@1.0.0"),
+            ("skill/brainstorming@1.0.0", "skill/verification-before-completion@1.0.0"),
             registry_root=str(self.registry),
         )
 
         assert isinstance(prepared, Ok), prepared
         self.assertEqual(
             prepared.value.selected,
-            ("skill/brainstorming@2.1.0", "skill/verification-before-completion@1.0.0"),
+            ("skill/brainstorming@1.0.0", "skill/verification-before-completion@1.0.0"),
         )
         self.assertEqual(prepared.value.commit, self.author.head)
         self.assertTrue(prepared.value.review_digest.startswith("sha256:"))
@@ -324,7 +321,7 @@ class SelectiveAdoptionTest(_Lab):
         before = _git(self.registry, "status", "--porcelain=v1", "--untracked-files=all")
 
         prepared = prepare_adoption(
-            scanned.value, ("skill/brainstorming@2.1.0",), registry_root=str(self.registry)
+            scanned.value, ("skill/brainstorming@1.0.0",), registry_root=str(self.registry)
         )
 
         assert isinstance(prepared, Ok), prepared
@@ -346,7 +343,7 @@ class SelectiveAdoptionTest(_Lab):
         scanned = self._scan()
         assert isinstance(scanned, Ok)
         prepared = prepare_adoption(
-            scanned.value, ("skill/brainstorming@2.1.0",), registry_root=str(self.registry)
+            scanned.value, ("skill/brainstorming@1.0.0",), registry_root=str(self.registry)
         )
         assert isinstance(prepared, Ok), prepared
 
@@ -355,13 +352,13 @@ class SelectiveAdoptionTest(_Lab):
         )
 
         self.assertIsInstance(refused, Err)
-        self.assertFalse(self._package("skill", "brainstorming", "2.1.0").exists())
+        self.assertFalse(self._package("skill", "brainstorming", "1.0.0").exists())
 
 
 class AdoptedUpstreamCheckTest(_Lab):
     """The explicit check follows the recorded ref without turning it into a subscription."""
 
-    coordinate = "skill/brainstorming@2.1.0"
+    coordinate = "skill/brainstorming@1.0.0"
 
     def setUp(self) -> None:
         super().setUp()
@@ -426,83 +423,37 @@ class AdoptedUpstreamCheckTest(_Lab):
         self.assertEqual(checked.value.resolved_commit, moved)
         self.assertNotEqual(checked.value.recorded_commit, moved)
 
-    def test_changed_payload_without_a_new_version_is_not_given_an_overwrite_plan(self) -> None:
+    def test_a_changed_payload_is_proposed_as_the_next_registry_version(self) -> None:
+        """§173.2: the author changes content; the Registry, not the author, picks the number."""
+
         skill = self.author.path / "skills" / "brainstorming" / "SKILL.md"
         skill.write_text("# brainstorming changed\n", encoding="utf-8")
-        self._commit("change payload without version")
+        self._commit("change payload")
 
         checked = self._check()
 
         assert isinstance(checked, Ok), checked
         self.assertEqual(checked.value.disposition, AdoptionUpstreamDisposition.CHANGED)
-        self.assertEqual(checked.value.observed_coordinate, self.coordinate)
-        self.assertTrue(checked.value.new_version_required)
-        self.assertIsNone(checked.value.proposal)
-
-    def test_a_changed_manifest_with_a_new_version_proposes_one_new_immutable_copy(self) -> None:
-        manifest = self.author.path / "skills" / "brainstorming" / "aart-cli.yaml"
-        manifest.write_text(OTHER_MANIFEST.replace("2.1.0", "2.2.0"), encoding="utf-8")
-        skill = self.author.path / "skills" / "brainstorming" / "SKILL.md"
-        skill.write_text("# brainstorming 2.2\n", encoding="utf-8")
-        self._commit("release brainstorming 2.2")
-
-        checked = self._check()
-
-        assert isinstance(checked, Ok), checked
-        self.assertEqual(checked.value.disposition, AdoptionUpstreamDisposition.CHANGED)
-        self.assertEqual(checked.value.observed_coordinate, "skill/brainstorming@2.2.0")
-        self.assertFalse(checked.value.new_version_required)
-        self.assertIsNotNone(checked.value.proposal)
+        self.assertEqual(checked.value.observed_coordinate, "skill/brainstorming@1.0.1")
         assert checked.value.proposal is not None
-        self.assertEqual(checked.value.proposal.selected, ("skill/brainstorming@2.2.0",))
+        self.assertEqual(checked.value.proposal.selected, ("skill/brainstorming@1.0.1",))
         self.assertTrue(
-            any("/2.2.0/" in path for path in checked.value.proposal.changed_paths),
+            any("/1.0.1/" in path for path in checked.value.proposal.changed_paths),
             checked.value.proposal.changed_paths,
         )
 
-    def test_a_removed_manifest_is_missing_not_unreachable(self) -> None:
+    def test_a_changed_manifest_is_proposed_as_the_next_registry_version(self) -> None:
         manifest = self.author.path / "skills" / "brainstorming" / "aart-cli.yaml"
-        manifest.unlink()
-        self._commit("remove brainstorming manifest")
+        manifest.write_text(OTHER_MANIFEST + "    - opencode\n", encoding="utf-8")
+        self._commit("offer brainstorming to opencode")
 
         checked = self._check()
 
         assert isinstance(checked, Ok), checked
-        self.assertEqual(checked.value.disposition, AdoptionUpstreamDisposition.MISSING)
-        self.assertIsNotNone(checked.value.resolved_commit)
-
-    def test_an_upstream_that_cannot_be_read_is_unreachable_not_unchanged(self) -> None:
-        refused = Err(
-            (
-                Diagnostic(
-                    DiagnosticCode("source-unreachable"),
-                    Severity.ERROR,
-                    "the upstream host did not answer",
-                ),
-            )
-        )
-
-        checked = check_adopted_upstream(
-            self.coordinate,
-            registry_root=str(self.registry),
-            acquire=lambda _url, _ref: refused,
-        )
-
-        assert isinstance(checked, Ok), checked
-        self.assertEqual(checked.value.disposition, AdoptionUpstreamDisposition.UNREACHABLE)
-        self.assertIsNone(checked.value.resolved_commit)
-        self.assertIn("did not answer", "\n".join(checked.value.details))
-
-    def test_an_invalid_current_manifest_is_neither_missing_nor_unreachable(self) -> None:
-        manifest = self.author.path / "skills" / "brainstorming" / "aart-cli.yaml"
-        manifest.write_text("schema: aart-cli.dev/skill/v1\npayload: []\n", encoding="utf-8")
-        self._commit("break brainstorming declaration")
-
-        checked = self._check()
-
-        assert isinstance(checked, Ok), checked
-        self.assertEqual(checked.value.disposition, AdoptionUpstreamDisposition.INVALID_MANIFEST)
-        self.assertIsNotNone(checked.value.resolved_commit)
+        self.assertEqual(checked.value.disposition, AdoptionUpstreamDisposition.CHANGED)
+        self.assertEqual(checked.value.observed_coordinate, "skill/brainstorming@1.0.1")
+        assert checked.value.proposal is not None
+        self.assertEqual(checked.value.proposal.selected, ("skill/brainstorming@1.0.1",))
 
 
 class SelectiveAdoptionInvariantTest(_Lab):
@@ -515,7 +466,7 @@ class SelectiveAdoptionInvariantTest(_Lab):
         scanned = self._scan()
         assert isinstance(scanned, Ok)
         first = prepare_adoption(
-            scanned.value, ("skill/brainstorming@2.1.0",), registry_root=str(self.registry)
+            scanned.value, ("skill/brainstorming@1.0.0",), registry_root=str(self.registry)
         )
         assert isinstance(first, Ok), first
         applied = apply_adoption(
@@ -526,7 +477,7 @@ class SelectiveAdoptionInvariantTest(_Lab):
         again = self._scan()
         assert isinstance(again, Ok)
         repeated = prepare_adoption(
-            again.value, ("skill/brainstorming@2.1.0",), registry_root=str(self.registry)
+            again.value, ("skill/brainstorming@1.0.0",), registry_root=str(self.registry)
         )
 
         self.assertIsInstance(repeated, Err, repeated)
@@ -544,7 +495,7 @@ class SelectiveAdoptionInvariantTest(_Lab):
         assert isinstance(scanned, Ok)
         self.assertEqual(scanned.value.registry_alias, "acme-registry")
         prepared = prepare_adoption(
-            scanned.value, ("skill/brainstorming@2.1.0",), registry_root=str(self.registry)
+            scanned.value, ("skill/brainstorming@1.0.0",), registry_root=str(self.registry)
         )
         assert isinstance(prepared, Ok), prepared
         applied = apply_adoption(
@@ -581,16 +532,16 @@ class SelectiveAdoptionInvariantTest(_Lab):
 
         refused = prepare_adoption(
             replace(scan, bundles=broken),
-            ("skill/brainstorming@2.1.0",),
+            ("skill/brainstorming@1.0.0",),
             registry_root=str(self.registry),
         )
 
         self.assertIsInstance(refused, Err, refused)
         assert isinstance(refused, Err)
         self.assertIn(
-            "skill/brainstorming@2.1.0", "\n".join(item.message for item in refused.diagnostics)
+            "skill/brainstorming@1.0.0", "\n".join(item.message for item in refused.diagnostics)
         )
-        self.assertFalse(self._package("skill", "brainstorming", "2.1.0").exists())
+        self.assertFalse(self._package("skill", "brainstorming", "1.0.0").exists())
 
 
 if __name__ == "__main__":

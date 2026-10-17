@@ -41,7 +41,7 @@ from tests.artifact_installation_e2e_test import ORG
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
 from tests.consumer_application_e2e_test import BothBackendsMeasured, _actions, _at, _drive
-from tests.consumer_shell_test import BACKSPACE, ENTER, RIGHT, SPACE, UP, screens
+from tests.consumer_shell_test import BACKSPACE, ENTER, INSTALL_CUSTOM, RIGHT, SPACE, UP, screens
 from tests.credential_fixtures import access_token
 
 
@@ -606,7 +606,7 @@ class InstallTimeConfigPreparationE2ETest(BothBackendsMeasured):
                 env,
                 _at(ConsumerScreen.MARKETPLACE),
                 SPACE,
-                ord("i"),
+                *INSTALL_CUSTOM,
                 # #50: the harnesses first, then one field for the artifact (§172.4).
                 RIGHT,
                 SPACE,
@@ -683,7 +683,7 @@ class InstallTimeConfigPreparationE2ETest(BothBackendsMeasured):
                 env,
                 _at(ConsumerScreen.MARKETPLACE),
                 SPACE,
-                ord("i"),
+                *INSTALL_CUSTOM,
                 RIGHT,
                 SPACE,
                 RIGHT,

@@ -16,6 +16,7 @@ from aart_cli.application.consumer_session import ConsumerMachine
 from aart_cli.application.consumer_ui import (
     ACTION_ANSWER_SCREENS,
     ACTION_REQUEST_SCREENS,
+    COLLECTION_SAVE_ROW,
     CONFIG_CONTINUE_ROW,
     CONFIG_SET_LATER_ROW,
     ConsumerActionKind,
@@ -37,9 +38,9 @@ from aart_cli.application.consumer_ui import (
 from aart_cli.application.consumer_views import (
     ALL_ARTIFACTS,
     ALL_INSTALLATIONS,
+    INSTALL_PATH_PURPOSE,
+    INSTALL_PATH_ROWS,
     PLACEHOLDER_WARNING,
-    SETTING_PURPOSE,
-    SETTING_ROWS,
     SUCCESS_CHOICES,
     SUCCESS_PURPOSE,
     ActivityView,
@@ -68,8 +69,11 @@ from aart_cli.application.consumer_views import (
     RegistryView,
     RemediationView,
     RunningInstallationView,
+    default_harness_row,
+    installed_cells,
     installer_from_row,
     installer_row,
+    marketplace_cells,
     material_remediations,
     matrix_columns,
     matrix_from_row,
@@ -87,8 +91,11 @@ from aart_cli.application.consumer_views import (
     scope_matrix_columns,
     scope_matrix_from_row,
     secrets_to_ask,
+    setting_purpose,
+    setting_rows,
     target_from_row,
     target_row,
+    under_collections,
 )
 from aart_cli.application.credential_guidance import credential_guidance_lines
 from aart_cli.application.installed_setup import DeclaredArtifactSetup
@@ -105,8 +112,7 @@ from aart_cli.application.maintainer_views import (
     MaintainerCandidateFilter,
     MaintainerCandidateLifecycleView,
     MaintainerCandidateView,
-    MaintainerCollectionCandidateView,
-    MaintainerCollectionValidationView,
+    MaintainerCollectionView,
     MaintainerPromotionReviewView,
     MaintainerProvenanceView,
     MaintainerRegistryCommitView,
@@ -121,14 +127,21 @@ from aart_cli.application.maintainer_views import (
     MaintainerValidationView,
     MaintainerVersionConflictView,
     MaintainerViews,
+    collection_row,
     filter_maintainer_candidates,
+    parse_collection_row,
     parse_validation_row,
     project_maintainer_candidate_filters,
 )
 from aart_cli.domain.inputs import SKIPPED_INPUT, is_skipped_value
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.domain.selection import Collection
+from aart_cli.domain.selection import (
+    ArtifactRequest,
+    Collection,
+    CollectionMember,
+    VersionConstraint,
+)
 from aart_cli.tui_layout import (
     CONTENT_MEASURE,
     STAGE_CONFIRMED,
@@ -139,6 +152,7 @@ from aart_cli.tui_layout import (
     action_prompt,
     bulleted,
     cards,
+    columns,
     field_block,
     is_action_prompt,
     list_item,
@@ -154,7 +168,8 @@ from aart_cli.tui_maintainer import (
     maintainer_candidate_detail,
     maintainer_candidate_filter_detail,
     maintainer_candidate_filter_status,
-    maintainer_collection_candidate_detail,
+    maintainer_collection_detail,
+    maintainer_collection_editor_status,
     maintainer_registry_descriptor,
     maintainer_registry_detail,
     maintainer_registry_push_status,
@@ -172,8 +187,8 @@ from aart_cli.tui_maintainer import (
     render_maintainer_candidate_filters,
     render_maintainer_candidate_lifecycle,
     render_maintainer_candidates,
-    render_maintainer_collection_candidates,
-    render_maintainer_collection_validation,
+    render_maintainer_collection_editor,
+    render_maintainer_collections,
     render_maintainer_dashboard,
     render_maintainer_policy_review,
     render_maintainer_promotion_review,
@@ -351,6 +366,8 @@ def _credential_row(view: CredentialRecordView) -> str:
 
 
 _USER_CONFIG_ROW_PREFIX = "configuration:"
+#: The cursor and the tick a list draws before each entry: `> [x] `.
+_ROW_PREFIX = 6
 
 
 def _user_config_row(identifier: str) -> str:
@@ -1021,26 +1038,6 @@ def render_transaction_success(
     return tuple(lines)
 
 
-def _installed_note(key: str, installed: tuple[InstalledArtifactView, ...]) -> str:
-    """Where a Marketplace offer is already installed, after its key (D-394).
-
-    The operator: *"w marketplace chce widziec czy dany artefakt mam juz zainstalowany czy nie"*.
-    The row is otherwise the offer alone (D-385), so this is the one fact added to it: the harnesses
-    holding any version of this artifact, and a health beside one that is not ready. It is read from
-    the installations rather than the offers, because the offers are read once per connection and
-    the installations again after every action.
-    """
-
-    artifact = key.partition("@")[0]
-    held = sorted(
-        (item.harness or "unrecorded harness")
-        + ("" if item.health == "ready" else f" ({_human(item.health)})")
-        for item in installed
-        if item.coordinate.partition("@")[0] == artifact
-    )
-    return "  installed: " + ", ".join(held) if held else ""
-
-
 def render_mcp_test(view: McpTestView | None) -> tuple[str, ...]:
     """Screen 11a: the offer before it runs, and both stages per installation after (§170.4).
 
@@ -1290,6 +1287,11 @@ def render_installed_artifact(
             )
         )
     if profile is PresentationProfile.MORE_INFO:
+        # The row names the project; which directory it is, is detail (§173.8).
+        if view.root and view.scope == "project":
+            lines.append(f"Project: {view.root}")
+        if view.harness:
+            lines.append(f"Harness: {view.harness}")
         lines.append("Ownership:")
         lines.extend(listed(f"{item.kind}: {item.owner}" for item in view.ownership))
         lines.append("Measured drift:")
@@ -1488,7 +1490,9 @@ def registry_purpose(view: RegistryView) -> tuple[str, ...]:
     )
 
 
-def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
+def render_settings(
+    view: ConsumerSettings, focus: str = "", harnesses: tuple[str, ...] = ()
+) -> tuple[str, ...]:
     """Screen 28, with the control Enter would move marked.
 
     Every control is binary, so the row says what it is currently set to rather than listing the
@@ -1504,6 +1508,12 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
         "python-installer": f"Python installer: {view.python_installer}",
         "show-updates": f"Show available updates: {'on' if view.show_updates else 'off'}",
         "maintainer-mode": f"Registry Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
+        # §173.7: the harnesses the Default install path uses, one row per detected harness.
+        **{
+            default_harness_row(item): f"Default harness {item}: "
+            f"{'on' if item in view.default_harnesses else 'off'}"
+            for item in harnesses
+        },
     }
     headings = {
         "detail-level": "Experience",
@@ -1514,16 +1524,32 @@ def render_settings(view: ConsumerSettings, focus: str = "") -> tuple[str, ...]:
     }
     groups: list[tuple[str, ...]] = []
     previous = ""
-    for row in SETTING_ROWS:
+    for row in setting_rows(harnesses):
         drawn = f"{'> ' if row == focus else '  '}{values[row]}"
+        heading = headings.get(row, "Default install harnesses")
         # Rows under the same heading are one group: two controls about installation are two
         # controls, not two sections, and repeating the heading would read as the latter.
-        if headings[row] == previous and groups:
+        if heading == previous and groups:
             groups[-1] = (*groups[-1], drawn)
         else:
-            groups.append((headings[row], drawn))
-        previous = headings[row]
+            groups.append((heading, drawn))
+        previous = heading
     return separate(*groups)
+
+
+def render_install_path(view: ConsumerSettings, harnesses: tuple[str, ...]) -> tuple[str, ...]:
+    """Screen 05p's state: what the Default path will use, read from Settings (§173.7)."""
+
+    if not isinstance(view, ConsumerSettings):
+        raise ValueError("install path rendering needs consumer settings")
+    chosen = tuple(item for item in view.default_harnesses if item in harnesses)
+    return (
+        "Default uses:",
+        "  Harnesses: "
+        + (", ".join(chosen) if chosen else "every detected harness that can host it"),
+        f"  Scope: {view.default_scope.title()}, where offered",
+        f"  Python installer: {view.python_installer}",
+    )
 
 
 def settings_consequence(view: ConsumerSettings) -> tuple[str, ...]:
@@ -1550,14 +1576,29 @@ def doctor_rows(view: DoctorView, *, leaving_out: tuple[str, ...] = ()) -> tuple
     if not isinstance(view, DoctorView):
         raise ValueError("Doctor rendering needs a Doctor view")
     lines: list[str] = []
-    for item in view.artifacts:
-        if item.row in leaving_out:
+    artifacts = {item.row: item for item in view.artifacts}
+    collections = {item.collection: item for item in view.collections}
+    # §173.6: a Collection, its members under it, and the members needing attention named on it.
+    for row, member in under_collections(view.collections, tuple(artifacts)):
+        indent = "  " if member else ""
+        group = collections.get(row)
+        if group is not None:
+            attention = group.members_requiring_attention
+            lines.append(
+                f"{'⚠' if attention else '✓'} {row}"
+                + (f" — needs attention: {', '.join(attention)}" if attention else "")
+            )
             continue
+        if row in leaving_out:
+            continue
+        item = artifacts[row]
         healthy = item.health in {"ready", "update"} and not item.placeholders
-        lines.append(f"{'✓' if healthy else '⚠'} {item.row}")
+        lines.append(f"{indent}{'✓' if healthy else '⚠'} {item.row}")
         if item.health in {"attention", "broken"}:
-            lines.extend(f"  {drift.component}: {_human(drift.kind)}" for drift in item.drift)
-        lines.extend(f"  {name}: {PLACEHOLDER_WARNING}" for name in item.placeholders)
+            lines.extend(
+                f"{indent}  {drift.component}: {_human(drift.kind)}" for drift in item.drift
+            )
+        lines.extend(f"{indent}  {name}: {PLACEHOLDER_WARNING}" for name in item.placeholders)
     return tuple(lines)
 
 
@@ -2137,7 +2178,14 @@ _REGISTRY_REBUILD_INTRO: tuple[str, ...] = (
 )
 """Why a rebuild is offered, and the boundary it stops at (`QA-087`)."""
 
+_COLLECTION_EDITOR_INTRO: tuple[str, ...] = (
+    "A Collection version pins the exact approved version of each member. When a",
+    "member gets a new approved version, the Collection's next version follows it.",
+)
+"""What a Collection version is, and why it moves on its own (D-430)."""
+
 _FORM_PROSE: dict[ConsumerScreen | MaintainerScreen, tuple[str, ...]] = {
+    MaintainerScreen.COLLECTION_EDITOR: _COLLECTION_EDITOR_INTRO,
     ConsumerScreen.REGISTRY_ADD: _REGISTRY_ADD_INTRO,
     MaintainerScreen.SOURCE_ADD: _SOURCE_ADD_INTRO,
     MaintainerScreen.REGISTRY_INIT: _REGISTRY_INIT_INTRO,
@@ -2166,10 +2214,13 @@ _FIRST_RUN_LINES: tuple[str, ...] = (
 _TITLES: dict[ApplicationScreen, str] = {ConsumerScreen.MCP_TEST: "Test MCP Installations"}
 
 
-def _after_configuration(plan: ConsumerPlanView) -> ConsumerScreen:
-    """07a once configuration is settled, while some pair may go to two scopes; then 07b."""
+def _after_configuration(plan: ConsumerPlanView, *, default_path: bool = False) -> ConsumerScreen:
+    """07a once configuration is settled, while some pair may go to two scopes; then 07b.
 
-    if scope_choice_offered(plan.scope_offers):
+    The Default path has its scope from Settings, so 07a is never asked on it (§173.7).
+    """
+
+    if not default_path and scope_choice_offered(plan.scope_offers):
         return ConsumerScreen.INSTALL_SCOPE
     return _after_scope(plan)
 
@@ -2739,12 +2790,14 @@ def _reload(
     text = source.drafted(reloaded) if entering else None
     if text is None:
         return reloaded
-    drafted, _ = reduce_consumer_ui(
-        reloaded,
-        ConsumerUiEvent(
+    event = (
+        ConsumerUiEvent(ConsumerUiEventKind.EDIT_COLLECTION, key="summary", text=text)
+        if reloaded.session.screen is MaintainerScreen.COLLECTION_EDITOR
+        else ConsumerUiEvent(
             ConsumerUiEventKind.EDIT_CONFIGURATION, key=reloaded.configuration_input, text=text
-        ),
+        )
     )
+    drafted, _ = reduce_consumer_ui(reloaded, event)
     return drafted
 
 
@@ -2844,9 +2897,14 @@ class ConsumerScreens:
     #: has no plan until they are answered, and they are answered per harness, so the harness is
     #: chosen from this first (#50).
     install_targets: tuple[HarnessTargetView, ...] = ()
+    #: Why 05 does not offer a harness for a Collection: each line names the first member that
+    #: harness cannot host (§173.5).
+    install_unhosted: tuple[str, ...] = ()
     #: The optional test after an install (§170.4): present only when the committed transaction
     #: made at least one MCP installation, and drawn beside Success rather than in it.
     mcp_test: McpTestView | None = None
+    #: The harnesses this machine measured, which Settings offers for the Default path (§173.7).
+    harnesses: tuple[str, ...] = ()
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -2936,24 +2994,10 @@ class ConsumerScreens:
 
         return None if self.maintainer is None else self.maintainer.version_conflict(candidate_id)
 
-    def collection_candidates(self) -> tuple[MaintainerCollectionCandidateView, ...]:
-        """The already-composed active Collection Candidate rows."""
-
-        if self.maintainer is None or self.maintainer.collection_candidates is None:
-            return ()
-        return self.maintainer.collection_candidates
-
-    def collection_validation(self, candidate_id: str) -> MaintainerCollectionValidationView | None:
-        """The approved-registry resolution for one Collection Candidate."""
-
-        return (
-            None if self.maintainer is None else self.maintainer.collection_validation(candidate_id)
-        )
-
     def promotion(
         self,
         focus: str,
-        mode: PromotionMode = PromotionMode.VENDORED,
+        mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
     ) -> MaintainerPromotionReviewView | None:
         """The promotion review for a focus that is a Candidate ID or one of its check rows."""
 
@@ -2965,7 +3009,7 @@ class ConsumerScreens:
     def registry_diff(
         self,
         focus: str,
-        mode: PromotionMode = PromotionMode.VENDORED,
+        mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
     ) -> MaintainerRegistryDiffView | None:
         """The registry transaction for a focus that is a Candidate ID or a check row."""
 
@@ -3036,9 +3080,9 @@ def read_consumer_offers(
     therefore installable from here; a shell that offered anything wider would be advertising an
     action it has to refuse afterwards.
 
-    Collections do not cross this seam. A canonical Collection is versioned and bound to the
-    registry snapshot it was read from, and nothing downstream carries that version yet, so each is
-    declined by name rather than offered without the version that tells two of them apart (B-031).
+    A Collection is offered when its row is: each member is shown as the exact version its own
+    row offers, which is what installing the Collection resolves it to (D-428), and the install
+    names the Collection itself rather than those members (D-422).
     """
 
     from aart_cli.io.configured_offers import read_configured_marketplace
@@ -3047,10 +3091,24 @@ def read_consumer_offers(
     if isinstance(read, Err):
         return read
     rows = project_marketplace_rows(read.value.catalog, target)
+    approved = {str(item.coordinate): item for item in read.value.collections}
+    collections = []
+    for offered in read.value.catalog.collections:
+        found = approved.get(str(offered.coordinate))
+        if found is None:
+            continue
+        exact = tuple(
+            CollectionMember(
+                ArtifactRequest(member.artifact, VersionConstraint(member.version), member.source)
+            )
+            for member in offered.members
+            if member.version is not None
+        )
+        collections.append(MarketplaceCollectionEntry(replace(found, members=exact)))
     return Ok(
         ConsumerOffers(
             tuple(MarketplaceEntry(row) for row in rows),
-            (),
+            tuple(collections),
             read.value.declined,
             project_registries(read.value.catalog),
         )
@@ -3082,7 +3140,9 @@ def screens_from(
     adoption_upstream: MaintainerAdoptionUpstreamView | None = None,
     installation_inputs: tuple[InputView, ...] = (),
     install_targets: tuple[HarnessTargetView, ...] = (),
+    install_unhosted: tuple[str, ...] = (),
     mcp_test: McpTestView | None = None,
+    harnesses: tuple[str, ...] = (),
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -3135,7 +3195,9 @@ def screens_from(
         machine.configurations,
         running,
         install_targets,
+        install_unhosted,
         mcp_test,
+        harnesses,
     )
 
 
@@ -3338,6 +3400,8 @@ class CanonicalScreenSource:
                 for item in self._screens.credentials_for(coordinate)
             )
             return (*configuration_rows, *credential_rows)
+        if screen is ConsumerScreen.INSTALL_PATH:
+            return INSTALL_PATH_ROWS
         if screen is ConsumerScreen.SUCCESS:
             # CP-23 task 06: the choices exist once something ran; before that there is nothing
             # to view, and a row that opens nothing is the gap this replaced.
@@ -3376,6 +3440,26 @@ class CanonicalScreenSource:
             return (() if workspace is None else (workspace_row,)) + tuple(
                 item.alias for item in self._screens.maintainer_registries()
             )
+        if screen is MaintainerScreen.COLLECTIONS:
+            registry = self._collection_registry(state)
+            if registry is None:
+                return ()
+            new = (collection_row(registry.alias, None),) if registry.approved_artifacts else ()
+            return (
+                *(collection_row(registry.alias, item.name) for item in registry.collections),
+                *new,
+            )
+        if screen is MaintainerScreen.COLLECTION_EDITOR:
+            registry = self._collection_registry(state)
+            opened = parse_collection_row(state.focus)
+            if registry is None or opened is None:
+                return ()
+            return (
+                *(("name",) if opened[1] is None else ()),
+                "summary",
+                *(identity for identity, _version in registry.approved_artifacts),
+                COLLECTION_SAVE_ROW,
+            )
         if screen is MaintainerScreen.REGISTRY_PUSH:
             workspace = self._registry_workspace()
             return (
@@ -3402,8 +3486,6 @@ class CanonicalScreenSource:
             # The row identity is the Candidate ID rather than the artifact name: two Sources may
             # both publish `github-mcp`, and a list keyed by name would open the wrong one.
             return tuple(item.id for item in self._screens.candidates(_candidate_filter(state)))
-        if screen is MaintainerScreen.COLLECTION_CANDIDATES:
-            return tuple(item.candidate_id for item in self._screens.collection_candidates())
         if screen is MaintainerScreen.CANDIDATE_FILTERS:
             # The values on offer come from every composed Candidate rather than from the already
             # narrowed list: a row that vanished the moment it was ticked could never be unticked.
@@ -3426,11 +3508,12 @@ class CanonicalScreenSource:
             preview = self._screens.offered_collection(state.focus)
             return () if preview is None else preview.members
         if screen is ConsumerScreen.INSTALLED:
-            return tuple(
-                item.collection
+            collections = tuple(
+                item
                 for item in self._screens.installed_collections
                 if _matches(query, item.collection, item.health)
-            ) + tuple(
+            )
+            installations = tuple(
                 # The installation, not the artifact: two harnesses are two rows, and rows have to
                 # be distinct or the second one is unreachable (§169.3). The filter still matches
                 # on the coordinate a person would type.
@@ -3438,6 +3521,8 @@ class CanonicalScreenSource:
                 for item in self._screens.installed
                 if _matches(query, item.coordinate, item.health)
             )
+            # §173.6: a Collection, then its members under it.
+            return tuple(row for row, _ in under_collections(collections, installations))
         if screen is ConsumerScreen.UPDATES:
             return tuple(
                 item.coordinate
@@ -3478,7 +3563,7 @@ class CanonicalScreenSource:
         if screen is MaintainerScreen.REPOSITORY_SCAN:
             return ("url", "ref", "scan")
         if screen is ConsumerScreen.SETTINGS:
-            return SETTING_ROWS
+            return setting_rows(self._screens.harnesses)
         return ()
 
     def _offers(self) -> tuple[MarketplaceEntry | MarketplaceCollectionEntry, ...]:
@@ -3505,6 +3590,9 @@ class CanonicalScreenSource:
         for the reader would be a decision the screen has no business making.
         """
 
+        if state.session.screen is MaintainerScreen.COLLECTION_EDITOR:
+            collection = self._opened_collection(state)
+            return None if collection is None else collection.summary
         if state.session.screen is not ConsumerScreen.CONFIGURATION_VALUE:
             return None
         held = {value for _harness, value in self._held(state, state.configuration_targets)}
@@ -3530,6 +3618,9 @@ class CanonicalScreenSource:
 
         if state.session.screen is MaintainerScreen.SCAN_RESULT:
             return ()
+        if state.session.screen is MaintainerScreen.COLLECTION_EDITOR:
+            collection = self._opened_collection(state)
+            return () if collection is None else collection.identities
         if state.session.screen is ConsumerScreen.CONFIGURATION_TARGETS:
             return tuple(
                 item.harness
@@ -3541,6 +3632,29 @@ class CanonicalScreenSource:
             return None
         entry = self._screens.offered_collection(state.focus)
         return None if entry is None else entry.members
+
+    def _collection_registry(self, state: ConsumerUiState) -> MaintainerRegistryView | None:
+        """The registry screens 51 and 52 are about: the one opened from 46, or the only one."""
+
+        registries = self._screens.maintainer_registries()
+        if state.session.screen is MaintainerScreen.COLLECTION_EDITOR:
+            opened = parse_collection_row(state.focus)
+            alias = None if opened is None else opened[0]
+        else:
+            alias = state.focus
+        found = next((item for item in registries if item.alias == alias), None)
+        if found is None and state.session.screen is MaintainerScreen.COLLECTIONS:
+            return registries[0] if len(registries) == 1 else None
+        return found
+
+    def _opened_collection(self, state: ConsumerUiState) -> MaintainerCollectionView | None:
+        """The Collection screen 52 edits, or None for a new one."""
+
+        registry = self._collection_registry(state)
+        opened = parse_collection_row(state.focus)
+        if registry is None or opened is None or opened[1] is None:
+            return None
+        return registry.collection(opened[1])
 
     def _success_choices(self) -> tuple[tuple[ConsumerScreen, str], ...]:
         """Success's rows: the test is offered only for an install that made an MCP (§170.4)."""
@@ -3587,6 +3701,12 @@ class CanonicalScreenSource:
                 ),
                 None,
             )
+        if screen is MaintainerScreen.COLLECTIONS:
+            return (
+                MaintainerScreen.COLLECTION_EDITOR
+                if parse_collection_row(row) is not None
+                else None
+            )
         if screen is MaintainerScreen.REGISTRY:
             # Screen 46's rows are registries; opening one is where its transaction is assembled.
             # The registry this project *publishes* is not one of them: it has no candidates to
@@ -3632,14 +3752,6 @@ class CanonicalScreenSource:
                 if self._screens.version_conflict(state.focus) is not None
                 else None
             )
-        if screen is MaintainerScreen.COLLECTION_CANDIDATES:
-            return (
-                MaintainerScreen.COLLECTION_VALIDATION
-                if self._screens.maintainer is not None
-                and self._screens.maintainer.collection_candidate(row) is not None
-                and self._screens.collection_validation(row) is not None
-                else None
-            )
         if screen is MaintainerScreen.VALIDATION:
             return (
                 MaintainerScreen.VALIDATION_DETAILS
@@ -3660,19 +3772,19 @@ class CanonicalScreenSource:
             # it would write nothing.
             return (
                 MaintainerScreen.PROMOTION_REVIEW
-                if self._screens.promotion(state.focus, state.promotion_mode) is not None
+                if self._screens.promotion(state.focus, state.content_mode) is not None
                 else None
             )
         if screen is MaintainerScreen.PROMOTION_REVIEW:
             return (
                 MaintainerScreen.PROMOTION_MODE
-                if self._screens.promotion(state.focus, state.promotion_mode) is not None
+                if self._screens.promotion(state.focus, state.content_mode) is not None
                 else None
             )
         if screen is MaintainerScreen.PROMOTION_MODE:
             return (
                 MaintainerScreen.REGISTRY_DIFF
-                if self._screens.registry_diff(state.focus, state.promotion_mode) is not None
+                if self._screens.registry_diff(state.focus, state.content_mode) is not None
                 else None
             )
         if screen is MaintainerScreen.REGISTRY_VALIDATION:
@@ -3722,7 +3834,11 @@ class CanonicalScreenSource:
             return _after_configuration(plan)
         if screen is ConsumerScreen.REQUIRED_INPUTS:
             plan = self._screens.plan
-            return None if plan is None else _after_configuration(plan)
+            return (
+                None
+                if plan is None
+                else _after_configuration(plan, default_path=state.install_default)
+            )
         if screen is ConsumerScreen.INSTALL_SCOPE:
             # Ready reviews the plan prepared for these scopes; a choice still being re-prepared
             # is not that plan yet.
@@ -3818,8 +3934,11 @@ class CanonicalScreenSource:
         """
 
         if state.session.screen is ConsumerScreen.SETTINGS:
-            purpose = SETTING_PURPOSE.get(state.current_row or "")
+            purpose = setting_purpose(state.current_row or "")
             return () if purpose is None else (purpose,)
+        if state.session.screen is ConsumerScreen.INSTALL_PATH:
+            chosen = INSTALL_PATH_PURPOSE.get(state.current_row or "")
+            return () if chosen is None else (chosen,)
         if state.session.screen is ConsumerScreen.USER_INPUT_DETAILS:
             coordinate = state.user_inputs_artifact or state.focus
             return artifact_user_input_purpose(
@@ -3844,10 +3963,6 @@ class CanonicalScreenSource:
             )
         if state.session.screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
             return installation_config_purpose(self._screens.installation_inputs, state.current_row)
-        if state.session.screen is MaintainerScreen.COLLECTION_CANDIDATES:
-            return maintainer_collection_candidate_detail(
-                self._screens.collection_candidates(), state.current_row
-            )
         if state.session.screen is MaintainerScreen.VALIDATION:
             validation = self._screens.validation(state.focus)
             return (
@@ -3944,6 +4059,15 @@ class CanonicalScreenSource:
                 maintainer_registry_descriptor(registries, registry_workspace_present=present),
                 () if subscribed is None else maintainer_registry_detail(subscribed),
             )
+        if state.session.screen is MaintainerScreen.COLLECTIONS:
+            collections_of = self._collection_registry(state)
+            opened = parse_collection_row(state.current_row)
+            collection = (
+                None
+                if collections_of is None or opened is None or opened[1] is None
+                else collections_of.collection(opened[1])
+            )
+            return () if collection is None else maintainer_collection_detail(collection)
         if state.session.screen is MaintainerScreen.REGISTRY_REBUILD:
             # The whole-sequence row names its four stages in its own label, so it has nothing
             # left to add here and says nothing rather than repeating itself.
@@ -4031,6 +4155,14 @@ class CanonicalScreenSource:
 
         screen, screens = state.session.screen, self._screens
         prose = self._form_prose(state)
+        if screen is MaintainerScreen.COLLECTION_EDITOR:
+            registry = self._collection_registry(state)
+            return separate(
+                ()
+                if registry is None
+                else maintainer_collection_editor_status(registry, self._opened_collection(state)),
+                prose,
+            )
         if prose:
             return prose
         if screen is MaintainerScreen.REGISTRY_PUSH and self.rows(state):
@@ -4137,10 +4269,11 @@ class CanonicalScreenSource:
             and screens.plan is None
             and screens.install_targets
         ):
-            problems = self._harness_choice_problems(state)
+            problems = (*screens.install_unhosted, *self._harness_choice_problems(state))
             if problems or state.session.profile is not PresentationProfile.MORE_INFO:
                 # The ticked cells are the choice; restating them, and what comes after, is for
-                # More info (D-401). A choice that cannot continue still says why.
+                # More info (D-401). A choice that cannot continue still says why, and so does a
+                # harness a Collection is not offered (§173.5).
                 return problems
             return (
                 *_pairs_summary(state.pairs),
@@ -4153,14 +4286,19 @@ class CanonicalScreenSource:
         ):
             problems = pair_choice_problems(screens.plan.targets, state.pairs)
             target_status = (
-                problems
-                if problems or state.session.profile is not PresentationProfile.MORE_INFO
-                else _pairs_summary(state.pairs)
+                *screens.install_unhosted,
+                *(
+                    problems
+                    if problems or state.session.profile is not PresentationProfile.MORE_INFO
+                    else _pairs_summary(state.pairs)
+                ),
             )
             return separate(
                 render_review_selection(screens.plan, state.session.profile),
                 target_status,
             )
+        if screen is ConsumerScreen.INSTALL_PATH:
+            return render_install_path(state.settings, screens.harnesses)
         if screen is ConsumerScreen.SUCCESS and self.rows(state):
             # CP-23 task 06: what happened is the state of the view; the choices are the rows.
             if screens.transaction is not None:
@@ -4388,6 +4526,11 @@ class CanonicalScreenSource:
                 f"{'>' if row == state.current_row else ' '} {row.capitalize()}"
                 for row in state.rows
             )
+        if screen is ConsumerScreen.INSTALL_PATH:
+            return tuple(
+                f"{'>' if row == state.current_row else ' '} {row.capitalize()}"
+                for row in state.rows
+            )
         if screen is ConsumerScreen.SUCCESS and self.rows(state):
             return tuple(
                 f"{'>' if target.value == state.current_row else ' '} {label}"
@@ -4494,18 +4637,6 @@ class CanonicalScreenSource:
                 if conflict is None
                 else render_maintainer_version_conflict(conflict, profile)
             )
-        if screen is MaintainerScreen.COLLECTION_CANDIDATES:
-            return render_maintainer_collection_candidates(
-                screens.collection_candidates(),
-                cursor=state.current_row,
-            )
-        if screen is MaintainerScreen.COLLECTION_VALIDATION:
-            collection_validation = screens.collection_validation(state.focus)
-            return (
-                ("That Collection Candidate's validation is not available.",)
-                if collection_validation is None
-                else render_maintainer_collection_validation(collection_validation, profile)
-            )
         if screen is MaintainerScreen.CANDIDATE_FILTERS:
             return render_maintainer_candidate_filters(
                 project_maintainer_candidate_filters(
@@ -4536,11 +4667,28 @@ class CanonicalScreenSource:
                 else render_maintainer_policy_review(validation.review, profile)
             )
         if screen is MaintainerScreen.REGISTRY_DIFF:
-            registry_diff = screens.registry_diff(state.focus, state.promotion_mode)
+            registry_diff = screens.registry_diff(state.focus, state.content_mode)
             return (
                 ("That Candidate's registry transaction is not available.",)
                 if registry_diff is None
                 else render_maintainer_registry_diff(registry_diff, profile)
+            )
+        if screen is MaintainerScreen.COLLECTIONS:
+            return render_maintainer_collections(
+                self._collection_registry(state), cursor=state.current_row
+            )
+        if screen is MaintainerScreen.COLLECTION_EDITOR:
+            registry = self._collection_registry(state)
+            if registry is None or not state.rows:
+                return ("Open a Collection from screen 51 first.",)
+            return render_maintainer_collection_editor(
+                registry,
+                self._opened_collection(state),
+                rows=state.rows,
+                cursor=state.current_row,
+                name=state.collection_draft.name,
+                summary=state.collection_draft.summary,
+                selection=state.selection,
             )
         if screen is MaintainerScreen.REGISTRY:
             present = (
@@ -4625,7 +4773,7 @@ class CanonicalScreenSource:
         if screen in (MaintainerScreen.PROMOTION_REVIEW, MaintainerScreen.PROMOTION_MODE):
             # Screen 42 asks which promotion, so it draws the review of the mode currently chosen
             # rather than a separate summary that could drift from what 41 showed.
-            promotion = screens.promotion(state.focus, state.promotion_mode)
+            promotion = screens.promotion(state.focus, state.content_mode)
             return (
                 ("That Candidate's promotion review is not available.",)
                 if promotion is None
@@ -4633,14 +4781,18 @@ class CanonicalScreenSource:
             )
         if screen is ConsumerScreen.MARKETPLACE:
             offered = {item.key: item for item in self._offers()}
-            return self._list(
-                state,
-                tuple(
-                    key + _installed_note(key, screens.installed)
-                    for key in state.rows
-                    if key in offered
-                ),
-            )
+            held = {item.collection.partition("@")[0] for item in screens.installed_collections}
+            cells = []
+            for key in state.rows:
+                entry = offered.get(key)
+                if isinstance(entry, MarketplaceEntry):
+                    hosts = {item.profile for item in entry.row.compatibility if item.compatible}
+                    eligible = tuple(sorted(hosts & set(screens.harnesses)))
+                    cells.append(marketplace_cells(key, screens.installed, eligible))
+                elif entry is not None:
+                    status = "installed" if key.partition("@")[0] in held else "not installed"
+                    cells.append((key, status))
+            return self._list(state, columns(cells, width=CONTENT_MEASURE - _ROW_PREFIX))
         if screen is ConsumerScreen.ARTIFACT_DETAILS:
             entry = screens.offered(state.focus)
             return (
@@ -4658,8 +4810,35 @@ class CanonicalScreenSource:
         if screen in (ConsumerScreen.INSTALLED, ConsumerScreen.UPDATES):
             health = {item.collection: item.health for item in screens.installed_collections}
             health.update({item.row: item.health for item in screens.installed})
+            under = {
+                row
+                for row, member in under_collections(
+                    tuple(
+                        item
+                        for item in screens.installed_collections
+                        if item.collection in state.rows
+                    ),
+                    state.rows,
+                )
+                if member
+            }
+            views = {item.row: item for item in screens.installed}
             return self._list(
-                state, tuple(f"{row}  {_human(health.get(row, 'unknown'))}" for row in state.rows)
+                state,
+                columns(
+                    tuple(
+                        (
+                            f"{'  ' if row in under else ''}{row}",
+                            *(
+                                installed_cells(views[row], _human(health[row]))
+                                if row in views
+                                else (_human(health.get(row, "unknown")),)
+                            ),
+                        )
+                        for row in state.rows
+                    ),
+                    width=CONTENT_MEASURE - _ROW_PREFIX,
+                ),
             )
         if screen is ConsumerScreen.INSTALLED_COLLECTION_DETAILS:
             group = screens.installed_collection(state.focus)
@@ -4870,7 +5049,7 @@ class CanonicalScreenSource:
             # A preference belongs to the session, not to the machine snapshot: drawing the
             # composed source's copy would keep showing the old value until something else
             # happened to re-read the machine.
-            return render_settings(state.settings, state.current_row)
+            return render_settings(state.settings, state.current_row, screens.harnesses)
         if screen is ConsumerScreen.DOCTOR:
             if screens.doctor is None:
                 return ("Nothing has been checked yet.",)
@@ -4894,6 +5073,8 @@ class CanonicalScreenSource:
         return render_ready(plan, profile, entered=state.entered_secrets)
 
     def _list(self, state: ConsumerUiState, entries: tuple[str, ...]) -> tuple[str, ...]:
+        """Each entry after its cursor and tick, which take :data:`_ROW_PREFIX` columns."""
+
         if not entries:
             return ("Nothing here yet.",)
         return tuple(

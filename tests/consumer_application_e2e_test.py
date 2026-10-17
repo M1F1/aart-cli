@@ -43,7 +43,7 @@ from aart_cli.domain.result import Ok
 from aart_cli.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
-from tests.consumer_shell_test import DOWN, ENTER, ESCAPE, SPACE, FakeTerminal
+from tests.consumer_shell_test import DOWN, ENTER, ESCAPE, INSTALL_CUSTOM, SPACE, FakeTerminal
 
 TODAY = dt.date(2026, 9, 1)
 OFFERED = "company/skill/code-review@1.2.0"
@@ -132,7 +132,7 @@ def _drive(env, state: ConsumerUiState, *codes: int, actions=None):
 #: harness, continue and confirm the exact narrowed plan. Fast mode keeps inspection in the plan
 #: but does not stop at a mandatory inspection screen. Harness configuration is routine, so this
 #: fixture does not stop at Remediation (D-258/D-260).
-_INSTALL = (SPACE, ord("i"), SPACE, ENTER, ENTER, ENTER)
+_INSTALL = (SPACE, *INSTALL_CUSTOM, SPACE, ENTER, ENTER, ENTER)
 
 
 class ConsumerApplicationInstallTest(unittest.TestCase):
@@ -144,7 +144,9 @@ class ConsumerApplicationInstallTest(unittest.TestCase):
 
     def test_a_review_names_the_plan_and_leaves_the_machine_alone(self) -> None:
         with _environment() as env:
-            finished, terminal, _ = _drive(env, _at(ConsumerScreen.MARKETPLACE), SPACE, ord("i"))
+            finished, terminal, _ = _drive(
+                env, _at(ConsumerScreen.MARKETPLACE), SPACE, *INSTALL_CUSTOM
+            )
 
             self.assertEqual(finished.session.screen, ConsumerScreen.REVIEW_SELECTION)
             self.assertTrue(finished.session.review_digest)

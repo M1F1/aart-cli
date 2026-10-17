@@ -1619,6 +1619,11 @@ Evidence/links: D-150; D-029; B-029; CP-17 step 4 probe; `aart_cli/application/i
 
 ## B-067 — An approved Collection never reaches the configured Marketplace
 
+**CP-31 progress.** Layers 1–3 are built: promotion (step 5, D-427), the Registry representation
+and read-back (D-427), and the configured projection (step 6, D-428).
+`CollectionsAreReachableTest` replaces `CollectionsAreNotReachableTest`. Layer 4, install planning
+over members, is steps 7–9.
+
 CP-17 step 5 set out to install a Collection through the public chain and found it cannot be done,
 anywhere, for any registry content.
 
@@ -4497,6 +4502,9 @@ review's identity and invariants (`SourceRemovalRequest`), so it is its own slic
 
 ## B-183 — one artifact's installations in two harnesses cannot share one removal
 
+**Classification: PROMOTED TO CRITICAL PATH, then FIXED (CP-31 step 9, D-434, 2026-10-17).** A
+Collection installed into two harnesses is removed as one transaction (§173.6), which needs it.
+
 `propose_removal`, `RemovalProposal.plan_for` and `complete_configured_uninstall` key everything by
 `ArtifactCoordinate`, so ticking `X#claude` and `X#opencode` on Installed ends in "an artifact was
 observed twice". D-393 refuses that in words ("uninstalled one harness at a time"). Update was
@@ -4603,3 +4611,52 @@ refuses it before Ready. That refusal path was not exercised in a test.
 (D-380) depends on the machine. CP-30's drives broke in CI for it. `BothBackendsMeasured` pins the
 drives that failed; other drives through `_environment` may still be host-dependent. Consider
 pinning the measurement in `_environment` itself.
+
+## B-194 — Hypothesis finds a frame whose duplicate key labels lose one
+
+Found: CP-31 step 6 (2026-10-16), with `tui_layout.py` unchanged since #69. Two properties in
+`tests/screen_skeleton_test.py` fail on generated degenerate input. In
+`test_the_keys_stay_on_the_bottom_rows_whatever_the_terminal_gives`, a frame with
+`keys=('0', '0')` at height 3 places `('', '0')`. `test_every_item_is_marked_and_nothing_said_is_lost`
+fails on `block=('0', ' 0')` (`tui_layout.py:456`, `:461`). No real screen has two identical key
+labels, so this is not on the critical path. Either the layout keeps repeated rows or the strategy
+excludes them, stating why. CI can draw the same examples, so it may flake there.
+
+## B-195 — 07a opens on the column 05 left the cursor on
+
+Found: CP-31 step 7 (2026-10-16). `harness_column` is one field of the UI state. After moving to
+the second harness on 05, 07a opens with its cursor on the second scope column (User), so a Space
+there picks User without a Right. This is harmless (the cursor is drawn), but 07a should open on
+its first column. `tests/collection_install_tui_e2e_test.py` relies on the current behaviour, and
+says so.
+
+## B-196 — What a member's revocation or deprecation does to its Collections
+
+D-430 bumps a Collection when a member gets a new approved version. A member version that is
+revoked or deprecated leaves the Collection pinning it, and the install then refuses the revoked
+pin. Deciding whether the Registry should re-pin to the previous approved version, mark the
+Collection, or ask the maintainer is not on CP-31's critical path.
+
+## B-197 — Removing or renaming a Registry Collection
+
+Found: CP-31 step 18 (2026-10-16). Screen 52 and `registry collection` create a Collection and
+publish its next versions; neither removes, deprecates or renames one. A Collection whose members
+are all revoked is left pinning them (see B-196). Not on CP-31's critical path: a maintainer can
+stop changing a Collection, and installs keep resolving its exact pins.
+
+## B-198 — Installed across projects, and user and project installations in one harness
+
+Found: CP-31 step 11 (2026-10-17). Installed reads every receipt in the application home, so it
+lists installations made in other projects, and measures a project-scope MCP registration against
+the current project's root. `installation_key` is `coordinate#label`, so the same artifact in one
+harness at user and at project scope, or in two projects, shares a key. §173.8's project column
+and count are drawn from the owner's root, which is correct. Filtering Installed to the current
+project (with the others under More info) and adding scope and root to the key touch every
+lifecycle command; neither is needed for §173.8's columns.
+
+## B-199 — `registry audit` reporting MCP delivery on an adopted package
+
+Found: CP-31 step 14 (2026-10-17). The audit-level test that an `mcp` package whose descriptor
+names a payload file, or has no `server`, is reported by `registry audit` built its package with
+`registry vendor`, and went with it. `describe_delivery` and both messages remain covered directly.
+A replacement adopts an `mcp` manifest and audits the result; not needed for §173.

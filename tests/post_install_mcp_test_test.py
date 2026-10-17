@@ -34,7 +34,7 @@ from aart_cli.io.receipt_store import LocalReceiptStore
 from aart_cli.tui_consumer import CanonicalScreenSource, _reload, frame, render_mcp_test
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions, _at, _drive
-from tests.consumer_shell_test import DOWN, ENTER, RIGHT, SPACE
+from tests.consumer_shell_test import DOWN, ENTER, INSTALL_CUSTOM, RIGHT, SPACE
 from tests.consumer_shell_test import screens as shell_screens
 from tests.installation_success_actions_test import _success
 from tests.mcp_smoke_stdio_test import SERVER
@@ -45,7 +45,7 @@ _HARNESSES = ["claude", "opencode", "tabnine"]
 def _manifest(smoke: dict | None) -> tuple[tuple[str, str], ...]:
     manifest = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": "dummy", "kind": "mcp", "version": "1.0.0"},
+        "artifact": {"name": "dummy", "kind": "mcp"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.10"},
@@ -60,7 +60,7 @@ def _manifest(smoke: dict | None) -> tuple[tuple[str, str], ...]:
 _DECLARED = {"tool": "read_identity", "read_only": True}
 
 #: Marketplace to Success for one MCP, delivered to opencode only.
-_INSTALL = (SPACE, ord("i"), RIGHT, SPACE, ENTER, ENTER, ENTER)
+_INSTALL = (SPACE, *INSTALL_CUSTOM, RIGHT, SPACE, ENTER, ENTER, ENTER)
 
 #: From Success's first row to the test offer: past Installed and Receipt, then Enter.
 _OPEN_TEST = (DOWN, DOWN, ENTER)

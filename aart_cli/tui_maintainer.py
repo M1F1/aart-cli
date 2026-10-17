@@ -12,8 +12,7 @@ from aart_cli.application.maintainer_views import (
     MaintainerCandidateFilterView,
     MaintainerCandidateLifecycleView,
     MaintainerCandidateView,
-    MaintainerCollectionCandidateView,
-    MaintainerCollectionValidationView,
+    MaintainerCollectionView,
     MaintainerDashboardView,
     MaintainerPolicyReviewView,
     MaintainerPromotionReviewView,
@@ -33,6 +32,7 @@ from aart_cli.application.maintainer_views import (
     MaintainerValidationView,
     MaintainerVersionConflictView,
     MaintainerWorkingTreeState,
+    collection_row,
 )
 from aart_cli.domain.candidates import CandidateState
 from aart_cli.tui_layout import (
@@ -54,9 +54,12 @@ _CANDIDATE_HEADINGS = ("STATUS", "ARTIFACT", "VERSION", "SOURCE")
 _BULK_INDENT = 2
 
 __all__ = [
+    "maintainer_collection_detail",
+    "maintainer_collection_editor_status",
+    "render_maintainer_collection_editor",
+    "render_maintainer_collections",
     "maintainer_registry_detail",
     "maintainer_bulk_promotion_status",
-    "maintainer_collection_candidate_detail",
     "maintainer_validation_check_detail",
     "maintainer_validation_status",
     "maintainer_candidate_filter_detail",
@@ -71,8 +74,6 @@ __all__ = [
     "render_maintainer_candidate_diff",
     "render_maintainer_candidates",
     "maintainer_candidate_detail",
-    "render_maintainer_collection_candidates",
-    "render_maintainer_collection_validation",
     "render_maintainer_source",
     "render_source_sync_result",
     "render_source_sync_review",
@@ -579,80 +580,6 @@ def maintainer_candidate_filter_detail(
     return (f"{option.value}: {option.matching} Candidate(s) would match",)
 
 
-def render_maintainer_collection_candidates(
-    candidates: tuple[MaintainerCollectionCandidateView, ...],
-    *,
-    cursor: str = "",
-) -> tuple[str, ...]:
-    """Screen 51: versioned Collection Candidates, never flattened to imperative steps.
-
-    Where the Candidate under the cursor came from and what it holds is Verbose's description of it
-    (:func:`maintainer_collection_candidate_detail`), so `v` never grows the rows.
-    """
-
-    if (
-        any(not isinstance(item, MaintainerCollectionCandidateView) for item in candidates)
-        or not isinstance(cursor, str)
-        or any(character in cursor for character in "\r\n")
-    ):
-        raise ValueError("Maintainer Collection rendering needs Candidate views and a cursor")
-    if not candidates:
-        return ("No Collection Candidates are available.",)
-    return tuple(
-        f"{'>' if candidate.candidate_id == cursor else ' '} {candidate.coordinate} — "
-        f"{_human(candidate.state.value)} · {_noun(len(candidate.members), 'member')}"
-        for candidate in candidates
-    )
-
-
-def maintainer_collection_candidate_detail(
-    candidates: tuple[MaintainerCollectionCandidateView, ...], cursor: str
-) -> tuple[str, ...]:
-    """The Collection Candidate under the cursor: its source, manifest, identity and members."""
-
-    candidate = next((item for item in candidates if item.candidate_id == cursor), None)
-    if candidate is None:
-        return ()
-    return (
-        f"Source: {candidate.source_alias} · {candidate.source_location}",
-        f"Manifest: {candidate.manifest_path}",
-        f"Candidate: {candidate.candidate_id}",
-        "Members:",
-        *listed(f"{item}" for item in candidate.members),
-    )
-
-
-def render_maintainer_collection_validation(
-    view: MaintainerCollectionValidationView,
-    profile: PresentationProfile,
-) -> tuple[str, ...]:
-    """Screen 52: every declaration beside the approved exact version satisfying it."""
-
-    if not isinstance(view, MaintainerCollectionValidationView) or not isinstance(
-        profile, PresentationProfile
-    ):
-        raise ValueError("Maintainer Collection validation rendering needs a typed view")
-    lines = [
-        f"{view.coordinate} — Collection validation: {_human(view.outcome)}",
-        "Approved target registry snapshot: "
-        + (
-            "unavailable"
-            if view.registry_snapshot is None
-            else _short(view.registry_snapshot, profile)
-        ),
-        "Members:",
-    ]
-    for member in view.members:
-        resolved = member.resolved_coordinate or "not resolved"
-        lines.append(f"  {_human(member.outcome)}  {member.request} → {resolved}")
-        if profile is PresentationProfile.MORE_INFO or member.outcome != "approved":
-            lines.append(f"    {member.detail}")
-    lines.extend(f"Attention: {item}" for item in view.diagnostics)
-    if profile is PresentationProfile.MORE_INFO:
-        lines.append(f"Candidate: {view.candidate_id}")
-    return tuple(lines)
-
-
 def render_maintainer_candidate_diff(
     view: MaintainerCandidateView,
     profile: PresentationProfile,
@@ -834,7 +761,7 @@ def render_maintainer_promotion_review(
     lines = [
         f"{view.artifact}@{view.version} — {_human(view.state.value)}",
         f"Target registry: {view.target_registry}",
-        f"Promotion mode: {view.mode}",
+        f"Content mode: {view.mode}",
         "",
         "Promotion choices:",
     ]
@@ -1458,13 +1385,6 @@ def render_adoption_upstream_check(
                 "Press a to review the exact local Registry transaction.",
             )
         )
-    elif view.disposition == "changed" and view.new_version_required:
-        lines.extend(
-            (
-                "The declared manifest or payload changed at the published version.",
-                "The upstream author must declare a new version before AART can propose a copy.",
-            )
-        )
     elif view.disposition == "missing":
         lines.append("The recorded manifest is no longer present at this branch or tag.")
     elif view.disposition == "unreachable":
@@ -1548,3 +1468,77 @@ def maintainer_bulk_promotion_status(
         if said:
             statements.append((view.target_registry, *said))
     return separate(*statements)
+
+
+def render_maintainer_collections(
+    registry: MaintainerRegistryView | None, *, cursor: str
+) -> tuple[str, ...]:
+    """Screen 51: the registry's Collections, each at its highest version, then a new one."""
+
+    if registry is None:
+        return ("Choose a registry on screen 46 first.",)
+    marker = {True: ">", False: " "}
+    grid = columns(
+        tuple(
+            (
+                f"{marker[cursor == collection_row(registry.alias, item.name)]} {item.name}",
+                item.version,
+                f"{len(item.members)} member{'s' if len(item.members) != 1 else ''}",
+                item.summary,
+            )
+            for item in registry.collections
+        ),
+        width=CONTENT_MEASURE,
+    )
+    if not registry.approved_artifacts:
+        return (*grid, "Nothing is approved here yet, so there is nothing to collect.")
+    return (*grid, f"{marker[cursor == collection_row(registry.alias, None)]} New Collection")
+
+
+def maintainer_collection_detail(collection: MaintainerCollectionView) -> tuple[str, ...]:
+    """The Collection under screen 51's cursor: the exact versions it pins."""
+
+    return (
+        f"{collection.name} {collection.version} pins:",
+        *(f"  {item}" for item in collection.members),
+    )
+
+
+def render_maintainer_collection_editor(
+    registry: MaintainerRegistryView,
+    collection: MaintainerCollectionView | None,
+    *,
+    rows: tuple[str, ...],
+    cursor: str,
+    name: str,
+    summary: str,
+    selection: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Screen 52: one Collection's name, summary and members, one line per row."""
+
+    versions = dict(registry.approved_artifacts)
+    lines: list[str] = []
+    for row in rows:
+        mark = ">" if row == cursor else " "
+        if row == "name":
+            lines.append(f"{mark} Name: {name or '<type a name like starter>'}")
+        elif row == "summary":
+            lines.append(f"{mark} Summary: {summary or '<type what it is for>'}")
+        elif row == "save":
+            lines.append(f"{mark} Continue: review the next version")
+        else:
+            ticked = "[x]" if row in selection else "[ ]"
+            lines.append(f"{mark} {ticked} {row}  {versions.get(row, '')}".rstrip())
+    return tuple(lines)
+
+
+def maintainer_collection_editor_status(
+    registry: MaintainerRegistryView, collection: MaintainerCollectionView | None
+) -> tuple[str, ...]:
+    """Which Collection screen 52 edits, and where its next version is written."""
+
+    return (
+        f"New Collection in {registry.alias}"
+        if collection is None
+        else f"{collection.name} {collection.version} in {registry.alias}",
+    )

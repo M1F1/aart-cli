@@ -26,7 +26,7 @@ from aart_cli.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AuthoredSetup
 from tests.configured_setup_gap_test import AUTHORED, CONFIGURED, COORDINATE, RECIPE
-from tests.consumer_shell_test import ENTER, SPACE, FakeTerminal
+from tests.consumer_shell_test import ENTER, INSTALL_CUSTOM, SPACE, FakeTerminal
 from tests.receipt_store_test import sole_record
 
 TODAY = dt.date(2026, 9, 1)
@@ -120,7 +120,7 @@ class ConsumerShellReportTest(unittest.TestCase):
             self.assertIsInstance(composed, Ok, getattr(composed, "diagnostics", ()))
             assert isinstance(composed, Ok)
             handler = composed.value
-            terminal = FakeTerminal(SPACE, ord("i"), SPACE, ENTER, ENTER, ENTER, ord("n"))
+            terminal = FakeTerminal(SPACE, *INSTALL_CUSTOM, SPACE, ENTER, ENTER, ENTER, ord("n"))
 
             with mock.patch.dict(os.environ, env.xdg, clear=False):
                 finished = run_consumer_shell(

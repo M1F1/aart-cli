@@ -8,11 +8,10 @@ probes, so a probe that imported `cli` closed an import cycle (B-186).
 from __future__ import annotations
 
 import argparse
-from typing import get_args
 
 from . import __version__
 from .curation.model import DEFAULT_MAXIMUM_AART, DEFAULT_MINIMUM_AART
-from .protocol.authoring import AuthorKind
+from .protocol.authoring import AUTHORED_KINDS
 
 _ARTIFACT_TYPES = ("skill", "guideline", "mcp", "hook", "memory")
 _INSTALL_SCOPES = ("project", "user")
@@ -695,15 +694,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_collection = registry_sub.add_parser(
         "collection",
-        help="author a collection from artifacts this registry already holds",
+        help="define or change a Collection of artifacts this registry approved",
     )
     _add_registry_source(p_collection)
     p_collection.add_argument("names", nargs=1, metavar="NAME")
     p_collection.add_argument(
         "--summary",
-        required=True,
         metavar="TEXT",
-        help="one-line collection description",
+        help="one-line Collection description (required for a new Collection)",
     )
     p_collection.add_argument(
         "--include",
@@ -711,7 +709,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         dest="collection_members",
         metavar="KIND/NAME",
-        help="artifact already held by this registry (repeatable)",
+        help="approved artifact, pinned at its highest approved version (repeatable)",
     )
     _add_registry_finalize(p_collection)
     _add_json(p_collection)
@@ -810,10 +808,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_candidate_promote.add_argument(
         "--mode",
-        choices=("vendored", "referenced"),
-        default="vendored",
-        dest="promotion_mode",
-        help="enterprise default vendored, or explicit weaker referenced mode",
+        choices=("self-contained", "pinned-reference"),
+        default="self-contained",
+        dest="content_mode",
+        help="content mode: self-contained (enterprise default) or the weaker pinned-reference",
     )
     _add_registry_finalize(p_candidate_promote)
     _add_json(p_candidate_promote)
@@ -884,224 +882,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_json(p_check_adoption)
 
-    p_discover = registry_sub.add_parser(
-        "discover",
-        help="scan a foreign checkout and emit a reviewable vendoring manifest",
-        description=(
-            "Recognize conservative conventional shapes in an inert local checkout. The output "
-            "is a vendor-batch manifest: candidates are rejected by default so discovery never "
-            "turns a guess into registry content. Edit each accept field, then review the one "
-            "atomic `registry vendor-batch` plan."
-        ),
-    )
-    p_discover.add_argument(
-        "--checkout",
-        required=True,
-        dest="discovery_checkout",
-        metavar="DIR",
-        help="foreign repository checkout to scan without following symlinks",
-    )
-    p_discover.add_argument(
-        "--url", dest="native_url", required=True, metavar="URL", help="credential-free Git URL"
-    )
-    p_discover.add_argument(
-        "--ref", default="main", metavar="REF", help="Git ref the later vendoring resolves"
-    )
-    p_discover.add_argument(
-        "--artifact-version",
-        default="1.0.0",
-        metavar="VERSION",
-        help="version proposed for every candidate (default: 1.0.0)",
-    )
-    p_discover.add_argument(
-        "--profile",
-        action="append",
-        required=True,
-        metavar="P[,P...]",
-        help="target harness profile(s); comma-separated or repeated",
-    )
-    p_discover.add_argument(
-        "--platform",
-        action="append",
-        required=True,
-        metavar="PLATFORM",
-        help="supported platform (repeatable)",
-    )
-    p_discover.add_argument(
-        "--install-scope",
-        action="append",
-        choices=_INSTALL_SCOPES,
-        dest="registry_scopes",
-        default=[],
-        help="supported install scope (repeatable; default: project)",
-    )
-    p_discover.add_argument(
-        "--install-mode",
-        action="append",
-        choices=("copy", "symlink"),
-        dest="registry_modes",
-        default=[],
-        help="supported install mode (repeatable; default: copy)",
-    )
-    p_discover.add_argument(
-        "--review-policy",
-        default="manual-review-v1",
-        metavar="POLICY",
-        help="approved review policy identifier (default: manual-review-v1)",
-    )
-    p_discover.add_argument(
-        "--accept-all",
-        action="store_true",
-        dest="discovery_accept_all",
-        help="mark every candidate accepted in the manifest; the batch still requires review",
-    )
-    p_discover.add_argument(
-        "--output",
-        dest="discovery_output",
-        metavar="FILE",
-        help="write the manifest to a new file instead of standard output",
-    )
-
     p_format = registry_sub.add_parser("format", help="canonicalize registry JSON files")
     _add_registry_source(p_format)
     _add_check(p_format)
     _add_registry_finalize(p_format)
     _add_json(p_format)
-
-    p_vendor = registry_sub.add_parser(
-        "vendor",
-        help="copy a foreign subtree in: this registry ships the bytes and owns the version",
-        description=(
-            "Copy a subtree of any Git repository into this registry as an owned package pinned "
-            "to a resolved commit, with provenance recording where the bytes came from. The "
-            "upstream needs no AART markers. This registry then owns the copy: it declares the "
-            "version, and upstream fixes reach consumers only when it is vendored again. A "
-            "successful vendor reports what was copied; it is not a safety claim. A "
-            "repository containing a symlink anywhere cannot be acquired, and a symlink inside "
-            "the subtree is refused."
-        ),
-    )
-    _add_registry_source(p_vendor)
-    p_vendor.add_argument("artifact_kind", choices=_ARTIFACT_TYPES, metavar="KIND")
-    p_vendor.add_argument("names", nargs=1, metavar="NAME")
-    p_vendor.add_argument(
-        "--url", dest="native_url", required=True, metavar="URL", help="credential-free Git URL"
-    )
-    p_vendor.add_argument(
-        "--ref", default="main", metavar="REF", help="Git ref to resolve (default: main)"
-    )
-    p_vendor.add_argument(
-        "--path",
-        dest="native_path",
-        required=True,
-        metavar="DIR",
-        help="subtree to copy, relative to the repository root",
-    )
-    p_vendor.add_argument(
-        # Upstream declares no version AART can trust, and deriving one would be a guess presented
-        # as a fact.  The registry owns the version, so the maintainer states it.
-        "--artifact-version",
-        required=True,
-        metavar="VERSION",
-        help="version this registry publishes the copy under",
-    )
-    p_vendor.add_argument(
-        "--summary", required=True, metavar="TEXT", help="one-line artifact description"
-    )
-    p_vendor.add_argument(
-        # Discovery fills the silence; it never overrules the maintainer.  AART reads an upstream
-        # licence file, it does not adjudicate the grant, so the registry states what it publishes.
-        "--license",
-        dest="artifact_license",
-        metavar="SPDX",
-        help="license this registry records for the copy (default: read from the taken subtree)",
-    )
-    p_vendor.add_argument(
-        "--profile",
-        action="append",
-        required=True,
-        metavar="P[,P...]",
-        help="target harness profile(s); comma-separated or repeated",
-    )
-    p_vendor.add_argument(
-        "--platform",
-        action="append",
-        required=True,
-        metavar="PLATFORM",
-        help="supported platform (repeatable)",
-    )
-    p_vendor.add_argument(
-        "--install-scope",
-        action="append",
-        choices=_INSTALL_SCOPES,
-        dest="registry_scopes",
-        default=[],
-        help="supported install scope (repeatable; default: project)",
-    )
-    p_vendor.add_argument(
-        "--install-mode",
-        action="append",
-        choices=("copy", "symlink"),
-        dest="registry_modes",
-        default=[],
-        help="supported install mode (repeatable; default: copy)",
-    )
-    p_vendor.add_argument(
-        "--setup-recipe",
-        metavar="PATH",
-        help="package-relative setup recipe you have already authored beside the payload",
-    )
-    p_vendor.add_argument(
-        "--review-policy",
-        default="manual-review-v1",
-        metavar="POLICY",
-        help="approved review policy identifier (default: manual-review-v1)",
-    )
-    _add_registry_finalize(p_vendor)
-    _add_json(p_vendor)
-
-    p_vendor_batch = registry_sub.add_parser(
-        "vendor-batch",
-        help="vendor accepted manifest candidates in one acquisition and one atomic review",
-    )
-    _add_registry_source(p_vendor_batch)
-    p_vendor_batch.add_argument(
-        "--manifest",
-        required=True,
-        dest="vendor_manifest",
-        metavar="FILE",
-        help="reviewed discovery/vendor manifest whose accepted artifacts to vendor",
-    )
-    _add_registry_finalize(p_vendor_batch)
-    _add_json(p_vendor_batch)
-
-    p_revendor = registry_sub.add_parser(
-        "revendor",
-        help="re-resolve one vendored copy's upstream and report, or apply what moved",
-        description=(
-            "Re-resolve the ref this artifact was vendored at and compare the subtree with the "
-            "copy this registry ships. Reports up-to-date, changed, or unreachable; an upstream "
-            "that cannot be read is never reported as up-to-date. Upstream declares no version "
-            "AART can trust, so applying a change requires the version you state for it."
-        ),
-    )
-    _add_registry_source(p_revendor)
-    p_revendor.add_argument("artifact_kind", choices=_ARTIFACT_TYPES, metavar="KIND")
-    p_revendor.add_argument("names", nargs=1, metavar="NAME")
-    p_revendor.add_argument(
-        "--artifact-version",
-        metavar="VERSION",
-        help="version this registry publishes the moved copy under; without it, nothing is planned",
-    )
-    p_revendor.add_argument(
-        "--review-policy",
-        default="manual-review-v1",
-        metavar="POLICY",
-        help="approved review policy identifier (default: manual-review-v1)",
-    )
-    _add_check(p_revendor)
-    _add_registry_finalize(p_revendor)
-    _add_json(p_revendor)
 
     p_validate = registry_sub.add_parser("validate", help="validate registry protocol content")
     _add_registry_source(p_validate)
@@ -1121,14 +906,6 @@ def build_parser() -> argparse.ArgumentParser:
         "audit", help="audit review, provenance, setup, and available security metadata"
     )
     _add_registry_source(p_audit)
-    p_audit.add_argument(
-        "--check-upstream",
-        action="store_true",
-        help=(
-            "resolve each vendored artifact's origin and report the ones behind upstream; "
-            "unreachable origins are reported as unknown, and neither finding fails the audit"
-        ),
-    )
     _add_json(p_audit)
 
     p_publish = registry_sub.add_parser(
@@ -1318,8 +1095,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--kind",
         dest="artifact_kind",
         required=True,
-        # The vocabulary is the parser's own, so a kind it gains appears here without an edit.
-        choices=sorted(get_args(AuthorKind)),
+        # The parser's own vocabulary. A Collection is in it only to be refused with where the
+        # Registry makes one (D-430).
+        choices=AUTHORED_KINDS,
         help="what kind of artifact to start",
     )
     p_author_init.add_argument(

@@ -49,7 +49,7 @@ from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.candidates import CandidateState
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias, source_revision_kind
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok
 from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.protocol.native_tree import (
@@ -64,6 +64,7 @@ from aart_cli.tui_maintainer import (
     render_maintainer_promotion_review,
     render_maintainer_registry_diff,
 )
+from tests.fixture_versions import with_fixture_versions
 from tests.marketplace_fixtures import configured_source, source_state
 
 _ARGV_SECRET = {
@@ -97,7 +98,7 @@ def _digest(character: str) -> ObjectDigest:
 def _scan(*, inputs: list[dict[str, object]] | None = None, revision: str = "a" * 40):
     manifest: dict[str, object] = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
+        "artifact": {"name": "github-mcp", "kind": "mcp"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},
@@ -105,7 +106,7 @@ def _scan(*, inputs: list[dict[str, object]] | None = None, revision: str = "a" 
     }
     if inputs is not None:
         manifest["inputs"] = inputs
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT
             if source_revision_kind(revision) == "git"
@@ -156,7 +157,7 @@ def _prepared(
     *,
     inputs: list[dict[str, object]] | None = None,
     policy: EffectivePolicy | None = None,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
     approved: ApprovedRegistryState | None = None,
     revision: str = "a" * 40,
 ):
@@ -269,8 +270,8 @@ class PreparePromotionTest(unittest.TestCase):
     def test_the_review_digest_covers_the_mode_and_the_registry_baseline(self) -> None:
         """Confirming a review must not apply a different transaction than the one reviewed."""
 
-        vendored = _prepared(mode=PromotionMode.VENDORED)
-        referenced = _prepared(mode=PromotionMode.REFERENCED)
+        vendored = _prepared(mode=RegistryContentMode.SELF_CONTAINED)
+        referenced = _prepared(mode=RegistryContentMode.PINNED_REFERENCE)
         moved = _prepared(
             approved=ApprovedRegistryState(SourceAlias("company"), "b" * 40, _digest("c"), ())
         )
@@ -287,7 +288,7 @@ class PreparePromotionTest(unittest.TestCase):
             validate_candidate(other, policy=EffectivePolicy()),
             EffectivePolicy(),
             _approved(),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         assert isinstance(prepared, Err), prepared
@@ -305,7 +306,7 @@ class PromotionReviewProjectionTest(unittest.TestCase):
             validate_candidate(bundle, policy=policy),
             policy,
             _approved(),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         self.assertTrue(view.confirmable)
@@ -324,7 +325,7 @@ class PromotionReviewProjectionTest(unittest.TestCase):
             validate_candidate(bundle, policy=policy),
             policy,
             _approved(),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         self.assertFalse(view.confirmable)
@@ -339,7 +340,7 @@ class PromotionReviewProjectionTest(unittest.TestCase):
             validate_candidate(bundle, policy=EffectivePolicy()),
             EffectivePolicy(),
             None,
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         self.assertFalse(view.confirmable)
@@ -354,13 +355,13 @@ class PromotionReviewRenderingTest(unittest.TestCase):
             validate_candidate(bundle, policy=EffectivePolicy()),
             EffectivePolicy(),
             _approved(),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         drawn = "\n".join(render_maintainer_promotion_review(view, PresentationProfile.MORE_INFO))
 
         self.assertIn("company", drawn)
-        self.assertIn("vendored", drawn)
+        self.assertIn("self-contained", drawn)
         self.assertIn("Review digest:", drawn)
 
     def test_a_refusal_is_drawn_instead_of_a_confirmable_review(self) -> None:
@@ -371,7 +372,7 @@ class PromotionReviewRenderingTest(unittest.TestCase):
             validate_candidate(bundle, policy=policy),
             policy,
             _approved(),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         drawn = "\n".join(render_maintainer_promotion_review(view, PresentationProfile.LESS_INFO))
@@ -400,7 +401,7 @@ class PromotionShellTest(unittest.TestCase):
                     validate_candidate(item, policy=policy),
                     policy,
                     _approved(),
-                    mode=PromotionMode.VENDORED,
+                    mode=RegistryContentMode.SELF_CONTAINED,
                 )
                 for item in scan.active
             ),
@@ -495,7 +496,7 @@ class PromotionPlanTest(unittest.TestCase):
         paths = {str(change.path) for change in planned.value.changes}
         self.assertIn("registry/index.json", paths)
         self.assertIn("artifacts/mcp/github-mcp/1.0.0/artifact.json", paths)
-        self.assertIs(planned.value.mode, PromotionMode.VENDORED)
+        self.assertIs(planned.value.mode, RegistryContentMode.SELF_CONTAINED)
 
     def test_the_plan_carries_the_evidence_the_review_bound(self) -> None:
         """The audit record must name the run that approved it, not a fresh one."""
@@ -530,8 +531,8 @@ class PromotionPlanTest(unittest.TestCase):
         self.assertEqual(provenance.local_snapshot_digest.value, "1" * 64)
 
     def test_a_different_mode_plans_a_different_transaction(self) -> None:
-        vendored = _prepared(mode=PromotionMode.VENDORED)
-        referenced = _prepared(mode=PromotionMode.REFERENCED)
+        vendored = _prepared(mode=RegistryContentMode.SELF_CONTAINED)
+        referenced = _prepared(mode=RegistryContentMode.PINNED_REFERENCE)
         assert isinstance(vendored, Ok) and isinstance(referenced, Ok)
 
         first = plan_candidate_promotion(vendored.value, _registry())
@@ -551,7 +552,7 @@ class RegistryDiffProjectionTest(unittest.TestCase):
             EffectivePolicy(),
             _approved(),
             _registry(),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         self.assertTrue(view.plannable)
@@ -570,7 +571,7 @@ class RegistryDiffProjectionTest(unittest.TestCase):
             policy,
             _approved(),
             _registry(),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         self.assertFalse(view.plannable)
@@ -585,7 +586,7 @@ class RegistryDiffProjectionTest(unittest.TestCase):
             EffectivePolicy(),
             _approved(),
             _registry(),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         self.assertTrue(view.plannable)
@@ -601,7 +602,7 @@ class RegistryDiffProjectionTest(unittest.TestCase):
             EffectivePolicy(),
             _approved(),
             None,
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         self.assertFalse(view.plannable)
@@ -615,7 +616,7 @@ class RegistryDiffProjectionTest(unittest.TestCase):
             EffectivePolicy(),
             _approved(),
             _registry(),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         drawn = "\n".join(render_maintainer_registry_diff(view, PresentationProfile.MORE_INFO))
@@ -626,7 +627,7 @@ class RegistryDiffProjectionTest(unittest.TestCase):
 
 
 class PromotionModeStateTest(unittest.TestCase):
-    """The promotion mode is typed state the shell holds, not something a screen recomputes.
+    """The content mode is typed state the shell holds, not something a screen recomputes.
 
     Both modes are composed once, so choosing one selects an already-projected review rather than
     projecting a new one while drawing.
@@ -654,7 +655,7 @@ class PromotionModeStateTest(unittest.TestCase):
                     mode=mode,
                 )
                 for item in scan.active
-                for mode in PromotionMode
+                for mode in RegistryContentMode
             ),
         )
         self.source = CanonicalScreenSource(
@@ -672,7 +673,7 @@ class PromotionModeStateTest(unittest.TestCase):
         )
 
     def test_both_modes_are_composed_so_neither_is_projected_while_drawing(self) -> None:
-        for mode in PromotionMode:
+        for mode in RegistryContentMode:
             with self.subTest(mode=mode):
                 review = self.views.promotion(self.candidate, mode)
                 assert review is not None
@@ -692,21 +693,21 @@ class PromotionModeStateTest(unittest.TestCase):
                     self.source,
                     self._on(
                         MaintainerScreen.PROMOTION_REVIEW,
-                        promotion_mode=PromotionMode.REFERENCED,
+                        content_mode=RegistryContentMode.PINNED_REFERENCE,
                     ),
                     entering=True,
                 ),
             )
         )
 
-        self.assertIn("Promotion mode: vendored", vendored)
-        self.assertIn("Promotion mode: referenced", referenced)
+        self.assertIn("Content mode: self-contained", vendored)
+        self.assertIn("Content mode: pinned-reference", referenced)
         self.assertNotEqual(vendored, referenced)
 
     def test_both_choices_explain_ownership_payload_and_upstream_before_confirmation(self) -> None:
         for selected, selected_label, other_label in (
-            (PromotionMode.VENDORED, "Vendored", "Referenced"),
-            (PromotionMode.REFERENCED, "Referenced", "Vendored"),
+            (RegistryContentMode.SELF_CONTAINED, "Self-contained", "Pinned reference"),
+            (RegistryContentMode.PINNED_REFERENCE, "Pinned reference", "Self-contained"),
         ):
             with self.subTest(selected=selected):
                 drawn = "\n".join(
@@ -716,7 +717,7 @@ class PromotionModeStateTest(unittest.TestCase):
                             self.source,
                             self._on(
                                 MaintainerScreen.PROMOTION_MODE,
-                                promotion_mode=selected,
+                                content_mode=selected,
                             ),
                             entering=True,
                         ),
@@ -725,7 +726,7 @@ class PromotionModeStateTest(unittest.TestCase):
 
                 selected_suffix = (
                     " (enterprise default) — selected"
-                    if selected is PromotionMode.VENDORED
+                    if selected is RegistryContentMode.SELF_CONTAINED
                     else " — selected"
                 )
                 self.assertIn(f"● {selected_label}{selected_suffix}", drawn)
@@ -736,12 +737,12 @@ class PromotionModeStateTest(unittest.TestCase):
                 self.assertIn("depend on upstream remaining available", drawn)
 
     def test_the_projected_choices_come_from_the_typed_mode_distinction(self) -> None:
-        review = self.views.promotion(self.candidate, PromotionMode.VENDORED)
+        review = self.views.promotion(self.candidate, RegistryContentMode.SELF_CONTAINED)
         assert review is not None
 
         self.assertEqual(
             tuple(choice.mode for choice in review.mode_choices),
-            tuple(PromotionMode),
+            tuple(RegistryContentMode),
         )
         self.assertEqual(
             [choice.selected for choice in review.mode_choices],
@@ -766,9 +767,9 @@ class PromotionModeStateTest(unittest.TestCase):
             state, ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROMOTION_MODE)
         )
 
-        self.assertIs(toggled.promotion_mode, PromotionMode.REFERENCED)
-        before = self.views.promotion(self.candidate, state.promotion_mode)
-        after = self.views.promotion(self.candidate, toggled.promotion_mode)
+        self.assertIs(toggled.content_mode, RegistryContentMode.PINNED_REFERENCE)
+        before = self.views.promotion(self.candidate, state.content_mode)
+        after = self.views.promotion(self.candidate, toggled.content_mode)
         assert before is not None and after is not None
         self.assertNotEqual(before.review_digest, after.review_digest)
 

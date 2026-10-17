@@ -11,6 +11,7 @@ from typing import cast
 
 from aart_cli.application.installation_inputs import OwnedInputSource
 from aart_cli.application.maintainer import reconcile_source_scan
+from aart_cli.application.maintainer_promotion import effective_policy_digest
 from aart_cli.application.promotion import (
     PromotionEvidence,
     load_registry_versions,
@@ -19,6 +20,11 @@ from aart_cli.application.promotion import (
     project_lifecycle_update,
     project_promotion,
 )
+from aart_cli.application.registry_collections import (
+    collection_validation_digest,
+    plan_collection_definition,
+)
+from aart_cli.application.registry_versions import ApprovedRegistryVersions
 from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.candidates import CandidateId, assess_candidate
 from aart_cli.domain.credentials import CredentialProviderRef, CredentialReference
@@ -26,6 +32,7 @@ from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
     ArtifactIdentity,
+    ArtifactKind,
     SourceAlias,
     SourceId,
 )
@@ -35,7 +42,11 @@ from aart_cli.domain.installation_owner import (
     installation_owner,
 )
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode, publish_registry_version
+from aart_cli.domain.registry import (
+    RegistryArtifactVersion,
+    RegistryContentMode,
+    publish_registry_version,
+)
 from aart_cli.domain.result import Ok
 from aart_cli.domain.selection import (
     ArtifactRequest,
@@ -45,7 +56,10 @@ from aart_cli.domain.selection import (
 from aart_cli.io.configured_installation import prepare_configured_installation_draft
 from aart_cli.io.object_store import read_object
 from aart_cli.io.source_store import publish_source_snapshot
-from aart_cli.protocol.authoring import CompiledAuthorArtifact, compile_author_snapshot
+from aart_cli.protocol.authoring import (
+    CompiledAuthorArtifact,
+    compile_author_source,
+)
 from aart_cli.protocol.json import canonical_json_bytes
 from aart_cli.protocol.native_tree import (
     SnapshotEntry,
@@ -64,6 +78,7 @@ from aart_cli.sources.model import (
 )
 from aart_cli.store.model import ObjectReadRequest, object_store_paths
 from tests.artifact_installation_e2e_test import MANIFEST, ORG, SERVER_SOURCE, TOKEN
+from tests.fixture_versions import fixture_versions
 from tests.marketplace_fixtures import configured_source, effective_configuration
 from tests.promotion_planning_test import _evidence
 
@@ -141,13 +156,69 @@ def _packaged(path: str, content: bytes) -> SnapshotEntry:
     return SnapshotEntry(parsed.value, SnapshotEntryKind.FILE, content)
 
 
+@dataclasses.dataclass(frozen=True)
+class RegistryCollection:
+    """A Collection the Registry Maintainer defines from what the Registry approved (D-430).
+
+    It stands where an author tree would in the fixtures below, so a Registry is built in the order
+    a Maintainer builds one: members first, then the Collection naming them.
+    """
+
+    name: str
+    summary: str
+    members: tuple[str, ...]
+
+
+def _define_collection(
+    collection: RegistryCollection,
+    *,
+    onto: SourceSnapshot,
+    approved: tuple[RegistryArtifactVersion, ...],
+) -> SourceSnapshot:
+    defined = plan_collection_definition(
+        approved,
+        onto,
+        target_registry=SourceAlias("company"),
+        name=collection.name,
+        summary=collection.summary,
+        members=tuple(
+            ArtifactIdentity(*cast(tuple[ArtifactKind, str], tuple(item.split("/", 1))))
+            for item in collection.members
+        ),
+    )
+    assert isinstance(defined, Ok) and defined.value is not None, defined
+    change = defined.value
+    promoted = plan_bulk_promotion(
+        onto,
+        (),
+        evidence=(
+            (
+                change.id,
+                PromotionEvidence(
+                    collection_validation_digest(change),
+                    effective_policy_digest(EffectivePolicy()),
+                ),
+            ),
+        ),
+        approved=approved,
+        collections=(change,),
+    )
+    assert isinstance(promoted, Ok), promoted
+    projected = project_promotion(onto, promoted.value)
+    assert isinstance(projected, Ok), projected
+    return SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, projected.value.entries)
+
+
+Authored = tuple[tuple[str, str] | tuple[str, str, bool], ...] | RegistryCollection
+
+
 def _promote_one_locally(
-    authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    authored: Authored,
     *,
     onto: SourceSnapshot,
     revision: str,
     setup: AuthoredSetup | None = None,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
 ) -> SourceSnapshot:
     """One author tree through one real promotion transaction onto `onto`, and no further.
 
@@ -158,17 +229,22 @@ def _promote_one_locally(
 
     approved = load_registry_versions(onto)
     assert isinstance(approved, Ok), approved
-    compiled = compile_author_snapshot(
-        SourceSnapshot(
-            SnapshotOrigin.IMMUTABLE_GIT,
-            tuple(_authored(item) for item in authored),
-        ),
+    if isinstance(authored, RegistryCollection):
+        return _define_collection(authored, onto=onto, approved=approved.value)
+    tree = SourceSnapshot(
+        SnapshotOrigin.IMMUTABLE_GIT,
+        tuple(_authored(item) for item in authored),
+    )
+    registry = ApprovedRegistryVersions(approved.value, SourceAlias("company"))
+    compiled = compile_author_source(
+        tree,
         source_alias=SourceAlias("authors"),
         source="https://git.example/servers.git",
         revision=revision,
+        versions=dataclasses.replace(fixture_versions(tree), registry=registry),
     )
     assert isinstance(compiled, Ok), compiled
-    artifacts = compiled.value
+    artifacts = compiled.value.artifacts
     if setup is not None:
         artifacts = tuple(_with_setup(artifact, setup) for artifact in artifacts)
     scanned = reconcile_source_scan(
@@ -197,12 +273,12 @@ def _promote_one_locally(
 
 
 def _promote_one(
-    authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    authored: Authored,
     *,
     onto: SourceSnapshot,
     revision: str,
     setup: AuthoredSetup | None = None,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
 ) -> SourceSnapshot:
     """One author tree promoted onto `onto`, then recorded as published.
 
@@ -224,9 +300,9 @@ def _promote_one(
 
 
 def _promoted_local_registries(
-    *authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    *authored: Authored,
     setup: AuthoredSetup | None = None,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
 ) -> SourceSnapshot:
     """Several author trees promoted into one registry, stopping where a maintainer stops."""
 
@@ -243,9 +319,9 @@ def _promoted_local_registries(
 
 
 def _published_registries(
-    *authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    *authored: Authored,
     setup: AuthoredSetup | None = None,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
 ) -> SourceSnapshot:
     """Several author trees taken to a published registry, one promotion transaction each.
 
@@ -270,7 +346,7 @@ def _published_registry(
     authored: tuple[tuple[str, str] | tuple[str, str, bool], ...] = AUTHORED_MCP,
     *,
     setup: AuthoredSetup | None = None,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
 ) -> SourceSnapshot:
     """Take an author's files all the way to a published registry snapshot.
 

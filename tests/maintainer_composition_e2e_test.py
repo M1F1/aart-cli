@@ -28,6 +28,7 @@ from aart_cli.application.promotion import (
     load_registry_versions,
     validate_promoted_registry,
 )
+from aart_cli.application.registry_collections import read_registry_collection
 from aart_cli.configuration.model import (
     ConfiguredSource,
     SourceKind,
@@ -37,7 +38,7 @@ from aart_cli.configuration.model import (
 from aart_cli.configuration.schema import user_configuration_bytes
 from aart_cli.domain.candidates import assess_candidate
 from aart_cli.domain.identifiers import SourceAlias, SourceId
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Ok
 from aart_cli.io.candidate_store import (
     candidate_history_paths,
@@ -47,7 +48,7 @@ from aart_cli.io.candidate_store import (
 from aart_cli.io.consumer_settings import write_consumer_settings
 from aart_cli.io.registry_promotion import FilesystemPromotionOutput
 from aart_cli.io.source_store import publish_source_snapshot, read_current_source
-from aart_cli.protocol.authoring import compile_author_snapshot, compile_author_source
+from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
@@ -69,6 +70,7 @@ from tests.candidate_history_test import _ready_scan
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions
 from tests.consumer_shell_test import DOWN, ENTER, FakeTerminal
+from tests.fixture_versions import with_fixture_versions
 from tests.maintainer_composition_test import _snapshot
 from tests.marketplace_fixtures import configured_source
 
@@ -110,7 +112,7 @@ def _two_ready_candidates():
     for name in ("github-mcp", "jira-mcp"):
         manifest = {
             "schema": "aart-cli.dev/mcp/v1",
-            "artifact": {"name": name, "kind": "mcp", "version": "1.0.0"},
+            "artifact": {"name": name, "kind": "mcp"},
             "payload": {"include": ["server.py"]},
             "transport": {"type": "stdio"},
             "runtime": {"type": "python", "version": ">=3.11"},
@@ -127,7 +129,7 @@ def _two_ready_candidates():
             )
         )
         entries.append(SnapshotEntry(parsed_payload.value, SnapshotEntryKind.FILE, b"print('x')\n"))
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),
         source_alias=SourceAlias("authors"),
         source="https://git.example/authors.git",
@@ -153,63 +155,6 @@ def _two_ready_candidates():
         active=ready,
         history=tuple(sorted(ready, key=lambda item: item.candidate.id.value)),
     )
-
-
-def _collection_scan():
-    """One Source Scan carrying an artifact Candidate and a versioned Collection Candidate.
-
-    Both come out of one compile of one authored tree, because "Collections are candidates too":
-    a Collection that only existed in a fixture would prove nothing about the scan the shell reads.
-    """
-
-    manifest = {
-        "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.0.0"},
-        "payload": {"include": ["server.py"]},
-        "transport": {"type": "stdio"},
-        "runtime": {"type": "python", "version": ">=3.11"},
-        "launch": {"type": "python", "entrypoint": "server.py"},
-    }
-    collection = {
-        "schema": "aart-cli.dev/collection/v1",
-        "name": "data-engineer",
-        "version": "2.1.0",
-        "summary": "Approved data engineering tools.",
-        # The member the approved registry in this environment actually publishes, so screen 52
-        # resolves it rather than reporting it unpublished.
-        "artifacts": ["company/skill/code-review@^1"],
-    }
-    entries = []
-    for path, payload in (
-        ("github-mcp/aart-cli.json", json.dumps(manifest, sort_keys=True)),
-        ("collections/data-engineer/aart-cli.json", json.dumps(collection, sort_keys=True)),
-    ):
-        parsed = parse_relative_path(path)
-        assert isinstance(parsed, Ok)
-        entries.append(SnapshotEntry(parsed.value, SnapshotEntryKind.FILE, payload.encode()))
-    parsed_payload = parse_relative_path("github-mcp/server.py")
-    assert isinstance(parsed_payload, Ok)
-    entries.append(SnapshotEntry(parsed_payload.value, SnapshotEntryKind.FILE, b"print('x')\n"))
-    # The production Source Sync compiles through `compile_author_source`, which is the boundary
-    # that carries Collections; `compile_author_snapshot` returns artifacts only.
-    compiled = compile_author_source(
-        SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),
-        source_alias=SourceAlias("authors"),
-        source="https://git.example/authors.git",
-        revision="a" * 40,
-    )
-    assert isinstance(compiled, Ok), compiled
-    scanned = reconcile_source_scan(
-        SourceAlias("authors"),
-        "a" * 40,
-        compiled.value.artifacts,
-        previous=(),
-        approved=(),
-        target_registry=SourceAlias("company"),
-        collections=compiled.value.collections,
-    )
-    assert isinstance(scanned, Ok), scanned
-    return scanned.value
 
 
 class MaintainerProductionCompositionTest(unittest.TestCase):
@@ -333,7 +278,6 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                         "artifact": {
                             "name": "github",
                             "kind": "mcp",
-                            "version": "1.0.0",
                         },
                         "payload": {"include": ["server.py"]},
                         "transport": {"type": "stdio"},
@@ -639,7 +583,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             expected = scan.active[0].candidate
             self.assertIs(finished.session.screen, MaintainerScreen.PROMOTION_MODE)
             # Choosing a mode is a different promotion to confirm, not a relabelled one.
-            self.assertIs(finished.promotion_mode, PromotionMode.REFERENCED)
+            self.assertIs(finished.content_mode, RegistryContentMode.PINNED_REFERENCE)
             # Screen 40 was entered from a check row rather than from a bare Candidate ID, which is
             # the whole reason the row identity is a parsed pair and not a split string.
             entered = parse_validation_row(finished.focus)
@@ -660,14 +604,14 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
 
             promotion = terminal.screen_containing("/ Promotion Review")
             self.assertIn("Target registry: company", promotion)
-            self.assertIn("Promotion mode: vendored", promotion)
+            self.assertIn("Content mode: self-contained", promotion)
             # This walk reaches a confirmable review against the registry this machine actually
             # synchronized, rather than the refusal an unsynchronized one would show.
             self.assertIn("Review digest:", promotion)
             self.assertNotIn("cannot be promoted", promotion)
             self.assertIn("Validation report:", promotion)
 
-            chosen = terminal.screen_containing("Promotion mode: referenced")
+            chosen = terminal.screen_containing("Content mode: pinned-reference")
             self.assertIn("Review digest:", chosen)
             self.assertNotEqual(
                 _digest_line(promotion), _digest_line(chosen), "mode must change the review"
@@ -925,7 +869,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 diffs = [
                     item for item in views.registry_diffs or () if item.candidate_id == promoted_id
                 ]
-                self.assertEqual(len(reviews), len(PromotionMode))
+                self.assertEqual(len(reviews), len(RegistryContentMode))
                 self.assertFalse(any(item.confirmable for item in reviews))
                 self.assertFalse(any(item.plannable for item in diffs))
                 self.assertTrue(
@@ -935,92 +879,6 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                     self.assertNotIn(promoted_id, {item.candidate_id for item in bulk.candidates})
             self.assertEqual(restarted.candidates, refreshed.candidates)
             self.assertEqual(restarted.promotions, refreshed.promotions)
-
-    def test_a_collection_candidate_is_reached_and_resolved_through_the_real_shell(self) -> None:
-        """Screens 51-52 over one real installation: `c` from the Candidate list, then Enter."""
-
-        with _environment() as env:
-            authors = configured_source("authors", SourceKind.SOURCE_GIT)
-            pathlib.Path(env.paths.user_config_file).write_bytes(
-                user_configuration_bytes(
-                    UserConfiguration(1, (env.source, authors), env.source.alias, SyncSettings())
-                )
-            )
-            author_paths = source_store_paths(
-                env.paths.data_root,
-                source_instance_id(authors),
-            )
-            source_candidate = make_source_candidate(
-                source_instance_id(authors),
-                authors.alias,
-                "a" * 40,
-                _snapshot(),
-            )
-            assert isinstance(source_candidate, Ok)
-            self.assertIsInstance(
-                publish_source_snapshot(
-                    SourcePublishCommand(
-                        author_paths,
-                        ValidatedSourceCandidate(
-                            source_candidate.value,
-                            SourceId("author-source"),
-                        ),
-                        int(time.time()),
-                    )
-                ),
-                Ok,
-            )
-            scan = _collection_scan()
-            self.assertIsInstance(
-                write_candidate_history(candidate_history_paths(author_paths), scan),
-                Ok,
-            )
-            self.assertIsInstance(
-                write_consumer_settings(
-                    ConsumerSettings().with_maintainer_mode(True),
-                    data_root=env.paths.data_root,
-                ),
-                Ok,
-            )
-
-            handler = _actions(env)
-            composed = handler.source().screens.maintainer
-            assert composed is not None
-            # The Collection reached composition from the same durable scan as the artifact
-            # Candidate, without being conflated with it.
-            self.assertEqual(len(composed.collection_candidates or ()), 1)
-            self.assertEqual(len(composed.candidates or ()), 1)
-
-            # Dashboard -> maintainer dashboard -> candidates (35) -> `c` (51) -> Enter (52).
-            terminal = FakeTerminal(
-                *(DOWN for _ in range(8)),
-                ENTER,
-                DOWN,
-                ENTER,
-                ord("c"),
-                ENTER,
-            )
-            finished = run_consumer_shell(
-                handler.source(),
-                terminal,
-                state=opening_state(handler.settings),
-                action_handler=handler,
-                settings_writer=handler.save_settings,
-            )
-
-            self.assertIs(
-                finished.session.screen,
-                MaintainerScreen.COLLECTION_VALIDATION,
-                terminal.last,
-            )
-            listed = terminal.screen_containing("/ Collection Candidates")
-            self.assertIn("data-engineer", listed)
-            self.assertIn("2.1.0", listed)
-            validated = terminal.screen_containing("/ Collection Validation")
-            # The member resolves to the version this registry actually approved, and screen 52
-            # says which one rather than only that it is satisfiable.
-            self.assertIn("skill/code-review", validated)
-            self.assertIn("1.2.0", validated)
 
     def test_bulk_promotion_writes_both_candidates_in_one_commit(self) -> None:
         """Screen 47 selects two Candidates and they reach the registry as one transaction."""
@@ -1151,6 +1009,97 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 validate_promoted_registry(persisted.value, versions.value),
                 Ok,
             )
+
+    def test_a_collection_defined_on_52_is_committed_as_one_registry_transaction(self) -> None:
+        """D-430: 46 → 51 → 52 names approved members, and 44 → 45 commits the version."""
+
+        with _environment() as env:
+            original_paths = source_store_paths(
+                env.paths.data_root,
+                source_instance_id(env.source),
+            )
+            original = read_current_source(CurrentSourceRequest(original_paths, env.source.alias))
+            assert isinstance(original, Ok) and original.value is not None
+            registry_root = env.project
+            _materialize(registry_root, original.value.candidate.snapshot)
+            subprocess.run(
+                ("git", "init", "-b", "main", str(registry_root)),
+                check=True,
+                capture_output=True,
+            )
+            _git(registry_root, "config", "user.name", "AART Test")
+            _git(registry_root, "config", "user.email", "aart@example.invalid")
+            _git(registry_root, "add", "-A")
+            _git(registry_root, "commit", "-m", "Initial approved registry")
+            self.assertIsInstance(
+                write_consumer_settings(
+                    ConsumerSettings().with_maintainer_mode(True),
+                    data_root=env.paths.data_root,
+                ),
+                Ok,
+            )
+            handler = _actions(env)
+            registry = handler.source().screens.maintainer_registries()[0]
+            self.assertEqual(registry.approved_artifacts, (("skill/code-review", "1.2.0"),))
+            self.assertEqual(registry.collections, ())
+
+            # Dashboard → maintainer dashboard → registry (46) → Collections (51) → New (52):
+            # name, summary, tick the one approved artifact, Continue → 44 → 45 → commit.
+            terminal = FakeTerminal(
+                *(DOWN for _ in range(8)),
+                ENTER,
+                DOWN,
+                DOWN,
+                ENTER,
+                ord("o"),
+                ENTER,
+                *(ord(character) for character in "starter"),
+                DOWN,
+                *(ord(character) for character in "Review kit."),
+                DOWN,
+                ord(" "),
+                DOWN,
+                ENTER,
+                ENTER,
+                ENTER,
+            )
+            finished = run_consumer_shell(
+                handler.source(),
+                terminal,
+                state=opening_state(handler.settings),
+                action_handler=handler,
+                settings_writer=handler.save_settings,
+            )
+
+            self.assertIs(finished.session.screen, MaintainerScreen.REGISTRY_COMMIT, terminal.last)
+            self.assertIn(
+                "[ ] skill/code-review  1.2.0",
+                terminal.screen_containing("new Collection in company"),
+            )
+            self.assertIn(
+                "Name: starter", terminal.screen_containing("[x] skill/code-review  1.2.0")
+            )
+            self.assertIn("collection/starter@1.0.0 → company", terminal.last)
+            self.assertIn("Publish collection/starter@1.0.0 to company", terminal.last)
+            self.assertIn("Approved registry state written locally", terminal.last)
+            self.assertEqual(int(_git(registry_root, "rev-list", "--count", "HEAD")), 2)
+            self.assertEqual(_git(registry_root, "status", "--porcelain=v1"), "")
+
+            persisted = FilesystemPromotionOutput(str(registry_root)).current()
+            assert isinstance(persisted, Ok), persisted
+            versions = load_registry_versions(persisted.value)
+            assert isinstance(versions, Ok), versions
+            (record,) = (
+                item for item in versions.value if item.coordinate.artifact.kind == "collection"
+            )
+            read = read_registry_collection(persisted.value, record)
+            assert isinstance(read, Ok), read
+            self.assertEqual(read.value.summary, "Review kit.")
+            self.assertEqual(
+                tuple(str(item.request) for item in read.value.members),
+                ("skill/code-review@1.2.0",),
+            )
+            self.assertIsInstance(validate_promoted_registry(persisted.value, versions.value), Ok)
 
 
 if __name__ == "__main__":

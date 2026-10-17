@@ -33,7 +33,7 @@ COORDINATE = "company/mcp/notes"
 #: here; what this file adds is that the chain in front of the runtime produces a runtime that runs.
 MANIFEST = {
     "schema": "aart-cli.dev/mcp/v1",
-    "artifact": {"name": "notes", "kind": "mcp", "version": "1.0.0"},
+    "artifact": {"name": "notes", "kind": "mcp"},
     "payload": {"include": ["server.py", "requirements.txt"]},
     "transport": {"type": "stdio"},
     "runtime": {"type": "python", "version": ">=3.10"},

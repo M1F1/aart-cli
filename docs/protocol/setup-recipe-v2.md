@@ -256,8 +256,8 @@ above.
 
 ## A worked artifact
 
-An `mcp` package whose payload is partly vendored from a foreign repository (`server.py`,
-`requirements.txt`) and partly authored beside it (`Dockerfile`, `mcp.json`), needing a locally built
+An `mcp` package whose payload holds an upstream server (`server.py`, `requirements.txt`) and the
+files that package it (`Dockerfile`, `mcp.json`), needing a locally built
 image, a corporate CA, and an API token:
 
 ```json

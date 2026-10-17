@@ -47,6 +47,7 @@ from aart_cli.store.model import (
 )
 from tests.artifact_installation_e2e_test import MANIFEST, SERVER_SOURCE
 from tests.artifact_placement_resolution_test import SKILL_MANIFEST, _stored_artifact
+from tests.fixture_versions import with_fixture_versions
 
 #: Declares no harnesses on purpose. This file is about the difference between a request and a
 #: capability set; an artifact's own `compatibility.harnesses` is a separate narrowing, held by
@@ -54,7 +55,7 @@ from tests.artifact_placement_resolution_test import SKILL_MANIFEST, _stored_art
 #: assertion below depend on two rules at once and say which of them failed for neither.
 MEMORY_MANIFEST = {
     "schema": "aart-cli.dev/memory/v1",
-    "artifact": {"name": "house-rules", "kind": "memory", "version": "1.0.0"},
+    "artifact": {"name": "house-rules", "kind": "memory"},
     "payload": {"include": ["house.md"]},
 }
 
@@ -114,7 +115,7 @@ class _PlacementFixture(unittest.TestCase):
             )
         )
         self.assertIsInstance(acquired, Ok, getattr(acquired, "diagnostics", ()))
-        compiled = compile_author_snapshot(
+        compiled = with_fixture_versions(compile_author_snapshot)(
             acquired.value.snapshot,
             source_alias=alias,
             source="https://github.company/company/artifacts.git",

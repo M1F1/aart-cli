@@ -36,12 +36,14 @@ from aart_cli.application.promotion import (
     project_promotion,
     validate_promoted_registry,
 )
+from aart_cli.application.registry_collections import collection_validation_digest
 from aart_cli.configuration.policy import redact_text
 from aart_cli.domain.candidates import CandidateId, CandidateState, assess_candidate
+from aart_cli.domain.collection_changes import RegistryCollectionChange
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import SourceAlias, source_revision_kind
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
+from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.serialization import canonical_json_bytes
 from aart_cli.protocol.hashing import sha256_bytes
@@ -67,6 +69,7 @@ __all__ = [
     "effective_policy_digest",
     "prepare_candidate_promotion",
     "prepare_candidate_promotion_transaction",
+    "prepare_collection_transaction",
     "promotion_commit_subject",
     "promotion_evidence",
     "validation_report_digest",
@@ -301,7 +304,7 @@ class PreparedCandidatePromotion:
     validation: CandidateValidation
     policy: EffectivePolicy
     approved: ApprovedRegistryState
-    mode: PromotionMode
+    mode: RegistryContentMode
     evidence: PromotionEvidence
     review_digest: ObjectDigest = field(init=False)
 
@@ -312,7 +315,7 @@ class PreparedCandidatePromotion:
             or not isinstance(self.validation, CandidateValidation)
             or not isinstance(self.policy, EffectivePolicy)
             or not isinstance(self.approved, ApprovedRegistryState)
-            or not isinstance(self.mode, PromotionMode)
+            or not isinstance(self.mode, RegistryContentMode)
             or not isinstance(self.evidence, PromotionEvidence)
             or self.validation.candidate_id != self.candidate.candidate.id
             or self.observed.candidate.id != self.candidate.candidate.id
@@ -369,7 +372,7 @@ def prepare_candidate_promotion(
     policy: EffectivePolicy,
     approved: ApprovedRegistryState,
     *,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
 ) -> Result[PreparedCandidatePromotion]:
     """Bind one reviewed Candidate into a confirmable promotion, or say why it cannot be one."""
 
@@ -378,7 +381,7 @@ def prepare_candidate_promotion(
         or not isinstance(validation, CandidateValidation)
         or not isinstance(policy, EffectivePolicy)
         or not isinstance(approved, ApprovedRegistryState)
-        or not isinstance(mode, PromotionMode)
+        or not isinstance(mode, RegistryContentMode)
     ):
         return _error("preparing a promotion needs a Candidate, its run, a policy and a baseline")
     candidate = bundle.candidate
@@ -454,6 +457,10 @@ def plan_candidate_promotion(
 def plan_promotion_transaction(
     promotions: tuple[PreparedCandidatePromotion, ...],
     registry_snapshot: SourceSnapshot,
+    *,
+    collections: tuple[RegistryCollectionChange, ...] = (),
+    baseline: ApprovedRegistryState | None = None,
+    policy: EffectivePolicy | None = None,
 ) -> Result[PromotionPlan]:
     """Plan every reviewed promotion as one transaction, writing nothing.
 
@@ -465,27 +472,39 @@ def plan_promotion_transaction(
 
     if not isinstance(promotions, tuple) or not isinstance(registry_snapshot, SourceSnapshot):
         return _error("planning a promotion needs reviewed promotions and a registry workspace")
-    if not promotions or any(
+    if not (promotions or collections) or any(
         not isinstance(item, PreparedCandidatePromotion) for item in promotions
     ):
         return _error("planning a promotion transaction needs at least one reviewed promotion")
-    first = promotions[0]
+    if promotions:
+        first = promotions[0]
+        baseline, policy, mode = first.approved, first.policy, first.mode
+    elif not isinstance(baseline, ApprovedRegistryState) or not isinstance(policy, EffectivePolicy):
+        return _error("a Collection transaction needs its approved baseline and policy")
+    else:
+        mode = RegistryContentMode.SELF_CONTAINED
     if any(
-        item.mode is not first.mode
-        or item.approved != first.approved
-        or item.policy != first.policy
+        item.mode is not mode or item.approved != baseline or item.policy != policy
         for item in promotions
     ):
         return _error(
             "a promotion transaction must share one mode, policy and approved baseline",
             "review the selection again against one registry",
         )
+    policy_digest = effective_policy_digest(policy)
     return plan_bulk_promotion(
         registry_snapshot,
         tuple(item.candidate for item in promotions),
-        evidence=tuple((item.candidate.candidate.id, item.evidence) for item in promotions),
-        approved=first.approved.versions,
-        mode=first.mode,
+        evidence=(
+            *((item.candidate.candidate.id, item.evidence) for item in promotions),
+            *(
+                (item.id, PromotionEvidence(collection_validation_digest(item), policy_digest))
+                for item in collections
+            ),
+        ),
+        approved=baseline.versions,
+        mode=mode,
+        collections=collections,
     )
 
 
@@ -498,12 +517,33 @@ class PreparedCandidatePromotionTransaction:
     projected: SourceSnapshot
     registry_snapshot: ObjectDigest
     approved_version_count: int
+    #: Collection versions the Maintainer defined in this transaction (D-430). A Collection a
+    #: promoted member bumps is in the plan only: the plan derives it (INV-266).
+    collections: tuple[RegistryCollectionChange, ...] = ()
+    #: The baseline and policy a transaction with no Candidate is reviewed against; with
+    #: Candidates they are the Candidates' own.
+    baseline: ApprovedRegistryState | None = None
+    policy: EffectivePolicy | None = None
 
     def __post_init__(self) -> None:
+        collection_ids = {
+            item.candidate_id
+            for item in self.plan.versions
+            if str(item.coordinate.artifact.kind) == "collection"
+        }
         if (
             not isinstance(self.promotions, tuple)
-            or not self.promotions
+            or not isinstance(self.collections, tuple)
+            or not (self.promotions or self.collections)
             or any(not isinstance(item, PreparedCandidatePromotion) for item in self.promotions)
+            or any(not isinstance(item, RegistryCollectionChange) for item in self.collections)
+            or (
+                not self.promotions
+                and (
+                    not isinstance(self.baseline, ApprovedRegistryState)
+                    or not isinstance(self.policy, EffectivePolicy)
+                )
+            )
             or not isinstance(self.plan, PromotionPlan)
             or not isinstance(self.projected, SourceSnapshot)
             or not isinstance(self.registry_snapshot, ObjectDigest)
@@ -515,8 +555,9 @@ class PreparedCandidatePromotionTransaction:
             # The plan and the review must be about the same Candidates, exactly: a plan carrying
             # one the review never saw is a promotion nobody approved.
             or {item.candidate_id for item in self.plan.audits}
-            != {item.candidate.candidate.id for item in self.promotions}
-            or len(self.plan.audits) != len(self.promotions)
+            != {item.candidate.candidate.id for item in self.promotions} | collection_ids
+            or len(self.plan.audits) != len(self.promotions) + len(collection_ids)
+            or not {item.id for item in self.collections} <= collection_ids
         ):
             raise ValueError("prepared Candidate promotion transaction is invalid")
         object.__setattr__(
@@ -535,13 +576,28 @@ class PreparedCandidatePromotionTransaction:
     def target_registry(self) -> SourceAlias:
         """One transaction, one registry — enforced when the transaction was planned."""
 
-        return self.promotions[0].target_registry
+        if self.promotions:
+            return self.promotions[0].target_registry
+        return self.collections[0].target_registry
+
+    @property
+    def approved_baseline(self) -> ApprovedRegistryState:
+        """The approved Registry state the whole transaction was reviewed against."""
+
+        if self.promotions:
+            return self.promotions[0].approved
+        assert self.baseline is not None
+        return self.baseline
 
 
 def _project_and_validate(
     promotions: tuple[PreparedCandidatePromotion, ...],
     plan: PromotionPlan,
     workspace: SourceSnapshot,
+    *,
+    collections: tuple[RegistryCollectionChange, ...] = (),
+    baseline: ApprovedRegistryState | None = None,
+    policy: EffectivePolicy | None = None,
 ) -> Result[PreparedCandidatePromotionTransaction]:
     projected = project_promotion(workspace, plan)
     if isinstance(projected, Err):
@@ -566,6 +622,9 @@ def _project_and_validate(
                 projected.value,
                 validated.value,
                 len(versions.value),
+                collections,
+                None if promotions else baseline,
+                None if promotions else policy,
             )
         )
     except ValueError as error:
@@ -579,7 +638,7 @@ def prepare_candidate_promotion_transaction(
     approved: ApprovedRegistryState,
     registry_workspace: SourceSnapshot,
     *,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
     baseline_mismatch: RegistryBaselineMismatch = RegistryBaselineMismatch.UNKNOWN,
 ) -> Result[PreparedCandidatePromotionTransaction]:
     """Plan and validate the exact inert registry state screens 43–45 will review.
@@ -605,7 +664,7 @@ def prepare_promotion_transaction(
     approved: ApprovedRegistryState,
     registry_workspace: SourceSnapshot,
     *,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
     baseline_mismatch: RegistryBaselineMismatch = RegistryBaselineMismatch.UNKNOWN,
 ) -> Result[PreparedCandidatePromotionTransaction]:
     """Plan and validate the exact inert registry state one transaction would leave behind.
@@ -654,6 +713,49 @@ def prepare_promotion_transaction(
     if isinstance(planned, Err):
         return planned
     return _project_and_validate(tuple(promotions), planned.value, registry_workspace)
+
+
+def prepare_collection_transaction(
+    change: RegistryCollectionChange,
+    policy: EffectivePolicy,
+    approved: ApprovedRegistryState,
+    registry_workspace: SourceSnapshot,
+    *,
+    baseline_mismatch: RegistryBaselineMismatch = RegistryBaselineMismatch.UNKNOWN,
+) -> Result[PreparedCandidatePromotionTransaction]:
+    """Plan and validate one Collection version the Maintainer defined, for screens 43–45 (D-430).
+
+    The same reviewed transaction as a promotion: the workspace must be the approved baseline, and
+    what would be written is projected and validated before anything is.
+    """
+
+    if (
+        not isinstance(change, RegistryCollectionChange)
+        or not isinstance(policy, EffectivePolicy)
+        or not isinstance(approved, ApprovedRegistryState)
+        or not isinstance(registry_workspace, SourceSnapshot)
+    ):
+        return _error(
+            "preparing a Collection needs its change, a policy, a baseline and a workspace"
+        )
+    workspace_digest = source_snapshot_digest(registry_workspace)
+    if isinstance(workspace_digest, Err):
+        return workspace_digest
+    if workspace_digest.value != approved.snapshot_digest:
+        return _registry_baseline_error(baseline_mismatch)
+    planned = plan_promotion_transaction(
+        (), registry_workspace, collections=(change,), baseline=approved, policy=policy
+    )
+    if isinstance(planned, Err):
+        return planned
+    return _project_and_validate(
+        (),
+        planned.value,
+        registry_workspace,
+        collections=(change,),
+        baseline=approved,
+        policy=policy,
+    )
 
 
 ReadCandidatePort = Callable[[CandidateId], Result[CandidateBundle]]
@@ -720,6 +822,12 @@ def promotion_commit_subject(prepared: PreparedCandidatePromotionTransaction) ->
 
     if not isinstance(prepared, PreparedCandidatePromotionTransaction):
         raise ValueError("promotion commit subject needs a prepared transaction")
+    if not prepared.promotions and len(prepared.collections) == 1:
+        (collection,) = prepared.collections
+        return (
+            f"Publish collection/{collection.name}@{collection.version} "
+            f"to {prepared.target_registry}"
+        )
     if len(prepared.promotions) == 1:
         candidate = prepared.promotions[0].candidate.candidate
         return (
@@ -797,11 +905,10 @@ def execute_candidate_promotion(
 
     # Every Candidate the transaction carries is rechecked, not only the first: a bulk promotion
     # that re-observed one of its members would write the other members on stale evidence.
-    baseline = prepared.promotions[0]
     current_approved = ports.read_approved(prepared.target_registry)
     if isinstance(current_approved, Err):
         return current_approved
-    if current_approved.value != baseline.approved:
+    if current_approved.value != prepared.approved_baseline:
         return _error(
             "approved registry baseline changed after promotion review",
             "review promotion again against the current approved registry",
@@ -837,7 +944,13 @@ def execute_candidate_promotion(
     current_workspace = ports.output.current()
     if isinstance(current_workspace, Err):
         return current_workspace
-    replanned = plan_promotion_transaction(tuple(current_promotions), current_workspace.value)
+    replanned = plan_promotion_transaction(
+        tuple(current_promotions),
+        current_workspace.value,
+        collections=prepared.collections,
+        baseline=prepared.baseline,
+        policy=prepared.policy,
+    )
     if isinstance(replanned, Err):
         return replanned
     if replanned.value.review_digest != prepared.plan.review_digest:
@@ -849,6 +962,9 @@ def execute_candidate_promotion(
         tuple(current_promotions),
         replanned.value,
         current_workspace.value,
+        collections=prepared.collections,
+        baseline=prepared.baseline,
+        policy=prepared.policy,
     )
     if isinstance(revalidated, Err):
         return revalidated

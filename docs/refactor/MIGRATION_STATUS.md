@@ -4,6 +4,81 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-31 step 15: verified.** PR #76 (plan and steps 1–14) passes the full quality
+suite on Python 3.10, 3.11 and 3.14. CI found one host-dependent test (uv absent), fixed by pinning
+the dependency managers; B-194 did not reproduce there. Merging PR #76 closes CP-31.
+
+**2026-10-17, CP-31 step 14 (D-437): the vendor family is pruned.** `registry discover`,
+`vendor`, `vendor-batch`, `revendor` and `audit --check-upstream` are removed from the CLI, wizard
+and curation model, with their modules, records, script, tests and tutorials. Adoption by manifest
+is the only way in; the MCP delivery audit stays. The audit-level delivery test is B-199.
+
+**2026-10-17, CP-31 step 13 (D-376): the content mode is renamed.** `RegistryContentMode =
+SelfContained | PinnedReference`, valued `self-contained` / `pinned-reference`; `promotion_mode`
+became `content_mode` everywhere; spec §80 matches. Remaining `vendored` is the vendor family.
+
+**2026-10-17, CP-31 steps 11–12 (D-436): Marketplace and Installed columns, and the docs.**
+Marketplace rows show status, scope with a project count, the harnesses (eligible, with `✓` where
+installed) and unset inputs on one grid; Installed rows add scope and project, and More info the
+project directory and harness. An installation's scope and root come from its owner. The Registry
+docs cover adoption, Registry-owned versions and Collections; the consumer docs cover the columns
+and the Default/Custom path. Cross-project Installed and the user/project key collision are B-198.
+
+**2026-10-17, CP-31 step 10 (D-435): the Default and Custom install paths.**
+- Install opens screen 05p, where Default comes first. Default takes the harnesses, scope and
+  Python installer from Settings and goes to 07, 07b or Ready, never drawing 05 or 07a. When no
+  Settings harness can host some artifact, Default falls back to 05. Custom is the §172 flow.
+  Settings stores `default_harnesses`, with one row per measured harness on screen 28. Evidence in
+  the slice, Step 10.
+
+**2026-10-17, CP-31 step 9 (D-433, D-434): installed Collections.**
+- Installed and Doctor draw a Collection with its member installations under it. Doctor names the
+  members needing attention. `u` and `marketplace uninstall <collection>` remove the Collection's
+  member installations in one review, and keep a member also owned directly (INV-215). An install
+  now adds ownership instead of replacing it. A removal is keyed by installation (B-183 fixed).
+  "Only manifests adopt" is renumbered INV-267. Evidence in the slice, Step 9.
+
+**2026-10-17, CP-31 step 8: a Collection's members are configured once each.**
+- 07 lists each member's configuration under its name. 07b asks each member's credential once for
+  all its installations. Set later stores `AART_NOT_SET` for what is empty, member by member, and
+  Ready lists it. Nothing blocks. This was characterization only, with no production change.
+  Evidence in the slice, Step 8.
+
+**2026-10-16, CP-31 steps 17–19 (D-430–D-432): the Registry owns Collections.**
+- Source-authored Collections are gone: `author init --kind collection`, Sync's Collection
+  Candidates and the old screens 51/52 are removed, and a Collection manifest is refused with the
+  command that replaces it. `registry collection` and the TUI screens 51 (Collections) and 52
+  (editor) define a version from approved artifacts, reviewed on 44 and committed on 45. A promotion
+  that approves a member's new version publishes each containing Collection's next version in the
+  same transaction. Evidence in the slice, Steps 17–19.
+
+**2026-10-16, CP-31 step 7 (D-429): a Collection installs as one artifact.**
+- CLI and TUI install the Collection itself. 05 offers a harness only when it hosts every member
+  and names the first member it cannot host; 07a's scope applies to every member. Evidence in the
+  slice, Step 7.
+
+**2026-10-16, CP-31 step 6 (D-428): the Marketplace offers approved Collections.**
+- One row per approved Collection at its highest version, with members at the exact versions their
+  rows offer. Declined when a member moved past its constraint. Evidence in the slice, Step 6.
+
+**2026-10-16, CP-31 step 5 (D-427): promotion publishes Collections.**
+- A Collection Candidate is approved in the TUI (51 → 52 → 43–45) or with `registry promote`. It
+  is written as a vendored package with a version record and an audit, refused while a member is
+  unapproved, and read back by the Registry. Evidence in the slice, Step 5.
+
+**2026-10-16, CP-31 step 4: `author check` judges Collections.**
+- The Collection parser Sync uses gives the verdict; nothing is reported as skipped.
+
+**2026-10-16, CP-31 step 3 (D-426): `author init --kind collection`.**
+- Writes a versionless Collection manifest the Collection parser accepts. Evidence in the slice.
+
+**2026-10-16, CP-31 step 2 (D-424, D-425): the Registry owns versions.**
+- Source manifests carry no version; a written one is refused. Sync, `registry scan`/`adopt`/
+  `check-upstream` and `registry promote` number each change from approved state (patch to 5,
+  minor to 3, then major; first `1.0.0`). A Collection's digest includes its members' resolved
+  versions, so it versions like any artifact with dependencies.
+- Evidence and targeted mutations: `slices/CP-31-collections-end-to-end.md`, Step 2.
+
 **2026-10-16, CP-30 step 10: CP-30 is complete.**
 - PR #69 carries CP-30 plus #66, #67 and #68, merged in so one release holds all four. The
   conflicts were appended decisions and #68's `LESS_INFO`/`MORE_INFO` rename, applied to the

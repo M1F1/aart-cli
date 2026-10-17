@@ -30,6 +30,7 @@ from aart_cli.protocol.authoring import (
     parse_author_manifest,
 )
 from tests.authoring_compiler_test import _file, _snapshot
+from tests.fixture_versions import with_fixture_versions
 
 TOKEN = {
     "id": "github-token",
@@ -61,7 +62,7 @@ HOST = {
 def _document(**overrides: object) -> dict[str, object]:
     document: dict[str, object] = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": "github-mcp", "kind": "mcp", "version": "1.4.0"},
+        "artifact": {"name": "github-mcp", "kind": "mcp", "x-fixture-version": "1.4.0"},
         "payload": {"include": ["server.py", "requirements.txt"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},
@@ -230,7 +231,7 @@ class DeclaredDependencyTest(unittest.TestCase):
         and uninstallable tomorrow.
         """
 
-        compiled = compile_author_snapshot(
+        compiled = with_fixture_versions(compile_author_snapshot)(
             _snapshot(
                 _file("github/aart-cli.json", json.dumps(_document(), sort_keys=True)),
                 _file("github/server.py", "print()\n"),
@@ -246,7 +247,7 @@ class DeclaredDependencyTest(unittest.TestCase):
 
 class CompiledDeclarationTest(unittest.TestCase):
     def compile(self, **overrides: object):
-        compiled = compile_author_snapshot(
+        compiled = with_fixture_versions(compile_author_snapshot)(
             _snapshot(
                 _file("github/aart-cli.json", json.dumps(_document(**overrides), sort_keys=True)),
                 _file("github/server.py", "print()\n"),

@@ -1,4 +1,8 @@
-"""Versioned Collection authoring uses the same explicit manifest discovery boundary."""
+"""A Source defines no Collection: the Registry creates it (§173.1, §173.3, D-430).
+
+A Collection manifest in a Source is refused by name, and the artifacts beside it still compile.
+The refusal says where a Collection is made instead.
+"""
 
 from __future__ import annotations
 
@@ -6,26 +10,40 @@ import json
 import unittest
 
 from aart_cli.domain.identifiers import SourceAlias
-from aart_cli.domain.result import Err, Ok
-from aart_cli.protocol.authoring import compile_author_snapshot, compile_author_source
+from aart_cli.domain.result import Ok
+from aart_cli.protocol.authoring import (
+    COLLECTION_IN_SOURCE,
+    COLLECTION_IN_SOURCE_REMEDIATION,
+    compile_author_snapshot,
+    compile_author_source,
+)
 from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
 from tests.authoring_compiler_test import _file, _json_manifest
+from tests.fixture_versions import with_fixture_versions
+
+_COLLECTION = {
+    "schema": "aart-cli.dev/collection/v1",
+    "name": "data-engineer",
+    "summary": "Approved data engineering tools.",
+    "artifacts": ["mcp/github@^2"],
+}
 
 
-def _collection(*, version: str | None = "2.1.0") -> dict[str, object]:
-    document: dict[str, object] = {
-        "schema": "aart-cli.dev/collection/v1",
-        "name": "data-engineer",
-        "summary": "Approved data engineering tools.",
-        "artifacts": ["company/mcp/github@^2", "company/skill/code-review@^1"],
-    }
-    if version is not None:
-        document["version"] = version
-    return document
+def _snapshot(*extra) -> SourceSnapshot:
+    return SourceSnapshot(
+        SnapshotOrigin.IMMUTABLE_GIT,
+        (
+            _json_manifest("github/aart-cli.json"),
+            _file("github/server.py", "print('x')\n"),
+            _file("github/src/client.py", "client\n"),
+            _file("github/requirements.txt", "dependency\n"),
+            *extra,
+        ),
+    )
 
 
 def _compile(snapshot: SourceSnapshot):
-    return compile_author_source(
+    return with_fixture_versions(compile_author_source)(
         snapshot,
         source_alias=SourceAlias("authors"),
         source="https://git.example/authors.git",
@@ -33,72 +51,33 @@ def _compile(snapshot: SourceSnapshot):
     )
 
 
-class AuthoringCollectionCompilerTest(unittest.TestCase):
-    def test_one_source_compiles_artifacts_and_versioned_collections_without_conflating_them(
-        self,
-    ) -> None:
-        snapshot = SourceSnapshot(
-            SnapshotOrigin.IMMUTABLE_GIT,
-            (
-                _json_manifest("github/aart-cli.json"),
-                _file("github/server.py", "print('x')\n"),
-                _file("github/src/client.py", "client\n"),
-                _file("github/requirements.txt", "dependency\n"),
-                _file("collections/data-engineer/aart-cli.json", json.dumps(_collection())),
-            ),
-        )
+class CollectionInSourceTest(unittest.TestCase):
+    def test_a_collection_manifest_is_refused_and_the_artifacts_still_compile(self) -> None:
+        manifest = _file("collections/data-engineer/aart-cli.json", json.dumps(_COLLECTION))
 
-        compiled = _compile(snapshot)
-        artifacts_only = compile_author_snapshot(
-            snapshot,
+        compiled = _compile(_snapshot(manifest))
+        alone = _compile(_snapshot())
+
+        assert isinstance(compiled, Ok) and isinstance(alone, Ok), (compiled, alone)
+        self.assertEqual(compiled.value.artifacts, alone.value.artifacts)
+        (refusal,) = compiled.value.refusals
+        self.assertEqual(str(refusal.manifest_path), "collections/data-engineer/aart-cli.json")
+        (diagnostic,) = refusal.diagnostics
+        self.assertEqual(diagnostic.message, COLLECTION_IN_SOURCE)
+        self.assertEqual(diagnostic.remediation, (COLLECTION_IN_SOURCE_REMEDIATION,))
+        self.assertIn("aart-cli registry collection", COLLECTION_IN_SOURCE_REMEDIATION)
+
+    def test_the_artifact_only_compiler_refuses_it_too(self) -> None:
+        manifest = _file("collections/data-engineer/aart-cli.json", json.dumps(_COLLECTION))
+
+        compiled = with_fixture_versions(compile_author_snapshot)(
+            _snapshot(manifest),
             source_alias=SourceAlias("authors"),
             source="https://git.example/authors.git",
             revision="a" * 40,
         )
 
-        self.assertIsInstance(compiled, Ok)
-        self.assertIsInstance(artifacts_only, Ok)
-        assert isinstance(compiled, Ok) and isinstance(artifacts_only, Ok)
-        self.assertEqual(len(compiled.value.artifacts), 1)
-        self.assertEqual(compiled.value.artifacts, artifacts_only.value)
-        self.assertEqual(len(compiled.value.collections), 1)
-        collection = compiled.value.collections[0]
-        self.assertEqual(collection.name, "data-engineer")
-        self.assertEqual(collection.version, "2.1.0")
-        self.assertEqual(
-            tuple(str(item) for item in collection.members),
-            ("company/mcp/github@^2", "company/skill/code-review@^1"),
-        )
-        self.assertEqual(str(collection.manifest_path), "collections/data-engineer/aart-cli.json")
-
-    def test_collection_version_is_required_and_semver(self) -> None:
-        for version in (None, "latest"):
-            with self.subTest(version=version):
-                snapshot = SourceSnapshot(
-                    SnapshotOrigin.IMMUTABLE_GIT,
-                    (
-                        _file(
-                            "collections/data-engineer/aart-cli.json",
-                            json.dumps(_collection(version=version)),
-                        ),
-                    ),
-                )
-
-                compiled = _compile(snapshot)
-
-                self.assertIsInstance(compiled, Err)
-                assert isinstance(compiled, Err)
-                self.assertIn("version", compiled.diagnostics[0].message.lower())
-
-    def test_collection_compilation_is_deterministic_under_snapshot_order(self) -> None:
-        first = _file("collections/first/aart-cli.json", json.dumps(_collection()))
-        second_document = _collection(version="3.0.0") | {"name": "second"}
-        second = _file("collections/second/aart-cli.json", json.dumps(second_document))
-
-        left = _compile(SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, (second, first)))
-        right = _compile(SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, (first, second)))
-
-        self.assertEqual(left, right)
+        self.assertNotIsInstance(compiled, Ok)
 
 
 if __name__ == "__main__":

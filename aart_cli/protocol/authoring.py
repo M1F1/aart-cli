@@ -10,7 +10,7 @@ import posixpath
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Iterable, Literal, cast
+from typing import Callable, Iterable, Literal, cast, get_args
 
 from aart_cli.domain.artifacts import (
     ArtifactFormat,
@@ -60,7 +60,11 @@ from aart_cli.domain.python_runtime import (
     spec_descriptor_path,
 )
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.domain.selection import ArtifactRequest, VersionConstraint
+from aart_cli.domain.selection import (
+    ArtifactRequest,
+    VersionConstraint,
+    artifact_request_sort_key,
+)
 
 from .codes import AUTHOR_MANIFEST_INVALID, AUTHOR_PAYLOAD_INVALID, AUTHOR_TREE_INVALID
 from .hashing import directory_entry, file_entry, sha256_bytes, tree_digest
@@ -90,13 +94,32 @@ from .native_tree import (
     compile_native_package,
 )
 from .paths import SafeRelativePath, parse_relative_path
-from .semver import SemVer, parse_semver
+from .registry_versions import RegistryVersions
+from .semver import SemVer
 from .yaml import parse_yaml
 
 AuthorKind = Literal["skill", "guideline", "mcp", "hook", "memory", "plugin"]
 
+#: A Collection manifest names artifacts rather than carrying one, so it is not an `AuthorKind`;
+#: it is still something an author writes (§173.3).
+COLLECTION_KIND = "collection"
+
+#: Every kind of manifest an author writes: each artifact kind, and a Collection.
+AUTHORED_KINDS: tuple[str, ...] = tuple(sorted((*get_args(AuthorKind), COLLECTION_KIND)))
+
 _MANIFEST_NAMES = frozenset({"aart-cli.json", "aart-cli.yaml"})
 _COLLECTION_SCHEMA = "aart-cli.dev/collection/v1"
+#: A source manifest says what an artifact is, never which version: the Registry counts approved
+#: changes and assigns the number (§173.1, D-423).
+#: A Collection manifest found in a source (§173.1, D-430).
+COLLECTION_IN_SOURCE = "a Collection is not defined in a source: the Registry creates it"
+COLLECTION_IN_SOURCE_REMEDIATION = (
+    "delete this manifest and create the Collection in the Registry with "
+    "`aart-cli registry collection NAME --summary TEXT --include KIND/NAME`"
+)
+_VERSION_IS_THE_REGISTRY_S = (
+    "%s is not written in a source manifest: the Registry assigns versions; delete the field"
+)
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _KIND_BY_VALUE: dict[AuthorKind, ArtifactKind] = {
     "skill": ArtifactKind.SKILL,
@@ -154,7 +177,6 @@ class AuthorManifest:
     schema: str
     name: str
     kind: AuthorKind
-    version: SemVer
     summary: str
     includes: tuple[str, ...]
     excludes: tuple[str, ...]
@@ -186,39 +208,6 @@ class CompiledAuthorArtifact:
 
 
 @dataclass(frozen=True, slots=True)
-class CompiledAuthorCollection:
-    """One explicit versioned Collection declaration compiled from an authoring Source."""
-
-    manifest_path: SafeRelativePath
-    input_digest: ObjectDigest
-    canonical_digest: ObjectDigest
-    source_alias: SourceAlias
-    source: str
-    revision: str
-    name: str
-    version: str
-    summary: str
-    members: tuple[ArtifactRequest, ...]
-
-    def __post_init__(self) -> None:
-        if (
-            not isinstance(self.manifest_path, SafeRelativePath)
-            or not isinstance(self.input_digest, ObjectDigest)
-            or not isinstance(self.canonical_digest, ObjectDigest)
-            or not isinstance(self.source_alias, SourceAlias)
-            or not self.source_alias.value
-            or not self.source
-            or source_revision_kind(self.revision) is None
-            or not self.name
-            or not self.version
-            or not self.summary
-            or not self.members
-            or any(not isinstance(item, ArtifactRequest) for item in self.members)
-        ):
-            raise ValueError("compiled author Collection is invalid")
-
-
-@dataclass(frozen=True, slots=True)
 class ManifestRefusal:
     """One manifest this Source contains and could not compile, and why (`QA-063`).
 
@@ -238,17 +227,14 @@ class ManifestRefusal:
 
 @dataclass(frozen=True, slots=True)
 class CompiledAuthorSource:
-    """The two Candidate kinds one explicit authoring snapshot compiled, and what it refused."""
+    """The artifacts one explicit authoring snapshot compiled, and what it refused."""
 
     artifacts: tuple[CompiledAuthorArtifact, ...] = ()
-    collections: tuple[CompiledAuthorCollection, ...] = ()
     refusals: tuple[ManifestRefusal, ...] = ()
 
     def __post_init__(self) -> None:
-        if (
-            any(not isinstance(item, CompiledAuthorArtifact) for item in self.artifacts)
-            or any(not isinstance(item, CompiledAuthorCollection) for item in self.collections)
-            or any(not isinstance(item, ManifestRefusal) for item in self.refusals)
+        if any(not isinstance(item, CompiledAuthorArtifact) for item in self.artifacts) or any(
+            not isinstance(item, ManifestRefusal) for item in self.refusals
         ):
             raise ValueError("compiled author Source is invalid")
 
@@ -1526,104 +1512,35 @@ def _collection_request(raw: str, *, path: str) -> Result[ArtifactRequest]:
         return _error(AUTHOR_MANIFEST_INVALID, str(error), path=path)
 
 
-def parse_author_collection_manifest(
-    manifest: DiscoveredAuthorManifest,
-    *,
-    source_alias: SourceAlias,
-    source: str,
-    revision: str,
-) -> Result[CompiledAuthorCollection]:
-    """Compile the accepted versioned Collection authoring shape into declarative constraints."""
+def parse_collection_member(raw: str, *, path: str) -> Result[ArtifactRequest]:
+    """One Collection member, `[source/]kind/name[@constraint]`, as the Collection parser reads it.
 
-    raw_path = str(manifest.path)
-    document = _parse_document(manifest)
-    if isinstance(document, Err):
-        return document
-    root = _fields(
-        document.value,
-        required=frozenset({"schema", "name", "version", "artifacts"}),
-        optional=frozenset({"summary"}),
-        path=raw_path,
-        label="Collection author manifest",
-    )
-    if isinstance(root, Err):
-        return root
-    schema = _string(root.value["schema"], "schema", path=raw_path)
-    name = _string(root.value["name"], "name", path=raw_path)
-    version = _string(root.value["version"], "version", path=raw_path)
-    for parsed in (schema, name, version):
-        if isinstance(parsed, Err):
-            return parsed
-    assert isinstance(schema, Ok) and isinstance(name, Ok) and isinstance(version, Ok)
-    if schema.value != _COLLECTION_SCHEMA:
-        return _error(
-            AUTHOR_MANIFEST_INVALID,
-            f"schema must be {_COLLECTION_SCHEMA!r} for a Collection",
-            path=raw_path,
-        )
-    if _SLUG_RE.fullmatch(name.value) is None:
-        return _error(
-            AUTHOR_MANIFEST_INVALID, "Collection name must be a lowercase slug", path=raw_path
-        )
-    parsed_version = parse_semver(
-        version.value,
-        location=SourceLocation(path=raw_path, pointer="/version"),
-    )
-    if isinstance(parsed_version, Err):
-        return _error(AUTHOR_MANIFEST_INVALID, "Collection version must be SemVer", path=raw_path)
-    summary = name.value.replace("-", " ").capitalize()
-    if "summary" in root.value:
-        parsed_summary = _string(root.value["summary"], "summary", path=raw_path)
-        if isinstance(parsed_summary, Err):
-            return parsed_summary
-        summary = parsed_summary.value
-    raw_members = _strings(
-        root.value["artifacts"],
-        "artifacts",
-        path=raw_path,
-        allow_empty=False,
-    )
-    if isinstance(raw_members, Err):
-        return raw_members
-    members: list[ArtifactRequest] = []
-    for raw in raw_members.value:
-        request_result = _collection_request(raw, path=raw_path)
-        if isinstance(request_result, Err):
-            return request_result
-        members.append(request_result.value)
-    input_digest = _input_digest(manifest, ())
-    if isinstance(input_digest, Err):
-        return input_digest
-    canonical_digest = sha256_bytes(
-        canonical_json_bytes(
-            JsonObject(
-                (
-                    ("artifacts", JsonArray(tuple(str(item) for item in members))),
-                    ("name", name.value),
-                    ("schema", _COLLECTION_SCHEMA),
-                    ("summary", summary),
-                    ("version", version.value),
-                )
-            )
+    Public because a published Collection is read back from the Registry with the same grammar it
+    was authored in.
+    """
+
+    return _collection_request(raw, path=path)
+
+
+def collection_document(
+    name: str, summary: str, version: str, members: tuple[ArtifactRequest, ...]
+) -> JsonObject:
+    """The canonical Collection: what its `canonical_digest` hashes and the Registry stores.
+
+    Members are a set, so they are written in their canonical order: reordering the manifest's
+    list is not a change of the Collection.
+    """
+
+    ordered = tuple(sorted(set(members), key=artifact_request_sort_key))
+    return JsonObject(
+        (
+            ("artifacts", JsonArray(tuple(str(item) for item in ordered))),
+            ("name", name),
+            ("schema", _COLLECTION_SCHEMA),
+            ("summary", summary),
+            ("version", version),
         )
     )
-    try:
-        return Ok(
-            CompiledAuthorCollection(
-                manifest.path,
-                input_digest.value,
-                canonical_digest,
-                source_alias,
-                source,
-                revision,
-                name.value,
-                version.value,
-                summary,
-                tuple(members),
-            )
-        )
-    except ValueError as error:
-        return _error(AUTHOR_MANIFEST_INVALID, str(error), path=raw_path)
 
 
 def _validate_pattern(raw: str, *, path: str) -> Result[str]:
@@ -1750,9 +1667,13 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
     artifact_object = _object(root["artifact"], "artifact", path=raw_path)
     if isinstance(artifact_object, Err):
         return artifact_object
+    if artifact_object.value.get("version") is not None:
+        return _error(
+            AUTHOR_MANIFEST_INVALID, _VERSION_IS_THE_REGISTRY_S % "artifact.version", path=raw_path
+        )
     artifact_fields = _fields(
         artifact_object.value,
-        required=frozenset({"name", "kind", "version"}),
+        required=frozenset({"name", "kind"}),
         optional=frozenset({"summary"}),
         path=raw_path,
         label="artifact",
@@ -1763,11 +1684,10 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
     raw_artifact = artifact_fields.value
     name = _string(raw_artifact["name"], "artifact.name", path=raw_path)
     kind = _string(raw_artifact["kind"], "artifact.kind", path=raw_path)
-    version = _string(raw_artifact["version"], "artifact.version", path=raw_path)
-    for parsed in (name, kind, version):
+    for parsed in (name, kind):
         if isinstance(parsed, Err):
             return parsed
-    assert isinstance(name, Ok) and isinstance(kind, Ok) and isinstance(version, Ok)
+    assert isinstance(name, Ok) and isinstance(kind, Ok)
     if _SLUG_RE.fullmatch(name.value) is None:
         return _error(
             AUTHOR_MANIFEST_INVALID,
@@ -1785,16 +1705,6 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
         return _error(
             AUTHOR_MANIFEST_INVALID,
             f"schema must be 'aart-cli.dev/{author_kind}/v1' for artifact.kind {author_kind!r}",
-            path=raw_path,
-        )
-    parsed_version = parse_semver(
-        version.value,
-        location=SourceLocation(path=raw_path, pointer="/artifact/version"),
-    )
-    if isinstance(parsed_version, Err):
-        return _error(
-            AUTHOR_MANIFEST_INVALID,
-            parsed_version.diagnostics[0].message,
             path=raw_path,
         )
     summary = name.value.replace("-", " ").capitalize()
@@ -2047,7 +1957,6 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
             schema_result.value,
             name.value,
             author_kind,
-            parsed_version.value,
             summary,
             includes.value,
             excludes.value,
@@ -2167,11 +2076,21 @@ def _selected_payload(
 def _input_digest(
     source_manifest: DiscoveredAuthorManifest,
     selected: tuple[tuple[str, SnapshotEntry], ...],
+    *,
+    dependencies: tuple[tuple[str, str | None], ...] = (),
 ) -> Result[ObjectDigest]:
+    """The digest a version is compared on: the manifest, its selected payload and the exact
+    version each artifact dependency resolves to (§173.2, D-425)."""
+
     manifest_name = source_manifest.path.parts[-1]
     logical_manifest = parse_relative_path(f"manifest/{manifest_name}")
     assert isinstance(logical_manifest, Ok)
     records = [file_entry(logical_manifest.value, source_manifest.content)]
+    if dependencies:
+        logical_dependencies = parse_relative_path("dependencies.json")
+        assert isinstance(logical_dependencies, Ok)
+        resolved = JsonArray(tuple(JsonArray((request, exact)) for request, exact in dependencies))
+        records.append(file_entry(logical_dependencies.value, canonical_json_bytes(resolved)))
     for relative, entry in selected:
         path = parse_relative_path(f"{PACKAGE_PAYLOAD_DIRECTORY}/{relative}")
         assert isinstance(path, Ok)
@@ -2241,10 +2160,13 @@ def _compile_one(
     source: str,
     revision: str,
     provenance_extensions: tuple[tuple[str, JsonValue], ...],
+    versions: RegistryVersions,
 ) -> Result[CompiledAuthorArtifact]:
     digest = _input_digest(source_manifest, selected)
     if isinstance(digest, Err):
         return digest
+    identity = ArtifactIdentity(cast(IdentityKind, manifest.kind), manifest.name)
+    version = versions.version(identity, digest.value)
     shipped = {relative for relative, _entry in selected}
     for needed in _declared_payload_files(manifest):
         if needed not in shipped:
@@ -2264,8 +2186,8 @@ def _compile_one(
     payload_root = SafeRelativePath(("payload",))
     native_manifest = ArtifactManifest(
         1,
-        ArtifactIdentity(cast(IdentityKind, manifest.kind), manifest.name),
-        manifest.version,
+        identity,
+        version,
         manifest.summary,
         PayloadSpec(payload_root, PAYLOAD_FORMAT_BY_TYPE[native_kind]),
         CompatibilitySpec(manifest.harnesses, manifest.platforms),
@@ -2323,8 +2245,8 @@ def _compile_one(
     package = ArtifactPackage(
         ArtifactCoordinate(
             source_alias,
-            ArtifactIdentity(cast(IdentityKind, manifest.kind), manifest.name),
-            str(manifest.version),
+            identity,
+            str(version),
         ),
         domain_kind,
         ArtifactFormat(PAYLOAD_FORMAT_BY_TYPE[native_kind]),
@@ -2358,6 +2280,7 @@ def compile_author_manifests(
     source_alias: SourceAlias,
     source: str,
     revision: str,
+    versions: RegistryVersions,
     provenance_extensions: tuple[tuple[str, JsonValue], ...] = (),
 ) -> Result[tuple[tuple[CompiledAuthorArtifact, ...], tuple[ManifestRefusal, ...]]]:
     """Compile every explicit authoring manifest in one acquired source, each on its own merits.
@@ -2406,6 +2329,7 @@ def compile_author_manifests(
             source=source,
             revision=revision,
             provenance_extensions=provenance_extensions,
+            versions=versions,
         )
         if outcome is None:
             continue
@@ -2430,11 +2354,12 @@ def _compile_manifest(
     source: str,
     revision: str,
     provenance_extensions: tuple[tuple[str, JsonValue], ...],
+    versions: RegistryVersions,
 ) -> CompiledAuthorArtifact | ManifestRefusal | None:
     """One manifest's own answer: the artifact, why it was refused, or None where it is not one.
 
-    A Collection manifest is discovered by the same walk and compiled by a different function, so
-    it is neither compiled nor refused here -- it is simply not this function's manifest.
+    A Collection manifest is refused: a Collection belongs to the Registry, which creates it from
+    approved artifacts (§173.3, D-430).
     """
 
     def refused(diagnostics: tuple[Diagnostic, ...]) -> ManifestRefusal:
@@ -2444,7 +2369,17 @@ def _compile_manifest(
     if isinstance(schema, Err):
         return refused(schema.diagnostics)
     if schema.value == _COLLECTION_SCHEMA:
-        return None
+        return refused(
+            (
+                Diagnostic(
+                    AUTHOR_MANIFEST_INVALID,
+                    Severity.ERROR,
+                    COLLECTION_IN_SOURCE,
+                    SourceLocation(path=str(item.path)),
+                    remediation=(COLLECTION_IN_SOURCE_REMEDIATION,),
+                ),
+            )
+        )
     manifest = parse_author_manifest(item)
     if isinstance(manifest, Err):
         return refused(manifest.diagnostics)
@@ -2459,6 +2394,7 @@ def _compile_manifest(
         source=source,
         revision=revision,
         provenance_extensions=provenance_extensions,
+        versions=versions,
     )
     return refused(artifact.diagnostics) if isinstance(artifact, Err) else artifact.value
 
@@ -2469,6 +2405,7 @@ def compile_author_snapshot(
     source_alias: SourceAlias,
     source: str,
     revision: str,
+    versions: RegistryVersions,
     provenance_extensions: tuple[tuple[str, JsonValue], ...] = (),
 ) -> Result[tuple[CompiledAuthorArtifact, ...]]:
     """The same compilation, refused whole if any manifest in it refused.
@@ -2484,6 +2421,7 @@ def compile_author_snapshot(
         source_alias=source_alias,
         source=source,
         revision=revision,
+        versions=versions,
         provenance_extensions=provenance_extensions,
     )
     if isinstance(compiled, Err):
@@ -2494,60 +2432,15 @@ def compile_author_snapshot(
     return Ok(artifacts)
 
 
-def compile_author_collections(
-    snapshot: SourceSnapshot,
-    *,
-    source_alias: SourceAlias,
-    source: str,
-    revision: str,
-) -> Result[tuple[CompiledAuthorCollection, ...]]:
-    """Compile only explicit Collection manifests from one already-acquired Source snapshot."""
-
-    if (
-        not isinstance(source_alias, SourceAlias)
-        or not source_alias.value
-        or not source
-        or source_revision_kind(revision) is None
-    ):
-        return _error(
-            AUTHOR_TREE_INVALID,
-            "Collection compilation requires a source alias, location and immutable pin",
-        )
-    discovered = discover_author_manifests(snapshot)
-    if isinstance(discovered, Err):
-        return discovered
-    compiled = []
-    diagnostics: list[Diagnostic] = []
-    for item in discovered.value:
-        schema = _document_schema(item)
-        if isinstance(schema, Err):
-            diagnostics.extend(schema.diagnostics)
-            continue
-        if schema.value != _COLLECTION_SCHEMA:
-            continue
-        collection = parse_author_collection_manifest(
-            item,
-            source_alias=source_alias,
-            source=source,
-            revision=revision,
-        )
-        if isinstance(collection, Err):
-            diagnostics.extend(collection.diagnostics)
-        else:
-            compiled.append(collection.value)
-    if diagnostics:
-        return Err(tuple(diagnostics))
-    return Ok(tuple(sorted(compiled, key=lambda item: str(item.manifest_path))))
-
-
 def compile_author_source(
     snapshot: SourceSnapshot,
     *,
     source_alias: SourceAlias,
     source: str,
     revision: str,
+    versions: RegistryVersions,
 ) -> Result[CompiledAuthorSource]:
-    """Compile artifact and Collection Candidate inputs through one Source boundary.
+    """Compile artifact Candidate inputs through one Source boundary.
 
     This is the watching boundary, so it takes the per-manifest answer: a manifest that will not
     compile is carried as a refusal beside the artifacts that did, rather than taking the whole
@@ -2561,19 +2454,12 @@ def compile_author_source(
         source_alias=source_alias,
         source=source,
         revision=revision,
+        versions=versions,
     )
     if isinstance(artifacts, Err):
         return artifacts
     compiled, refusals = artifacts.value
-    collections = compile_author_collections(
-        snapshot,
-        source_alias=source_alias,
-        source=source,
-        revision=revision,
-    )
-    if isinstance(collections, Err):
-        return collections
     try:
-        return Ok(CompiledAuthorSource(compiled, collections.value, refusals))
+        return Ok(CompiledAuthorSource(compiled, refusals))
     except ValueError as error:
         return _error(AUTHOR_MANIFEST_INVALID, str(error))

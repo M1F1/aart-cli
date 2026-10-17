@@ -7,14 +7,11 @@ from dataclasses import dataclass
 from enum import Enum
 
 from aart_cli.domain.diagnostics import Diagnostic, Severity, sort_diagnostics
-from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest
+from aart_cli.domain.identifiers import ObjectDigest
 from aart_cli.protocol.hashing import json_digest, sha256_bytes
 from aart_cli.protocol.json import JsonArray, JsonObject
 from aart_cli.protocol.paths import SafeRelativePath
 from aart_cli.protocol.semver import SemVer
-from aart_cli.registry_maintenance.model import NativeReferenceDisposition
-from aart_cli.registry_maintenance.vendoring import DeliveryFinding, LicenseFinding
-from aart_cli.security.model import SecurityAssessment
 
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -44,13 +41,7 @@ class RegistryOperation(str, Enum):
     LOCK = "lock"
     BUILD = "build"
     MIGRATE = "migrate"
-    # Vendoring writes payload bytes under `artifacts/`; a mutation plan carries JSON records.
-    # So a vendor is a workspace operation rather than a mutation, even though the two read as
-    # siblings at the command line.
-    VENDOR = "vendor"
-    VENDOR_BATCH = "vendor-batch"
     PUBLISH = "publish"
-    REVENDOR = "revendor"
     CANDIDATE_PROMOTION = "candidate-promotion"
 
 
@@ -58,9 +49,7 @@ class WorkspaceChangeKind(str, Enum):
     ADDED = "added"
     CHANGED = "changed"
     UNCHANGED = "unchanged"
-    # Only re-vendoring produces this: upstream deleted a file the registry copied, and keeping it
-    # would leave a package that is quietly no longer the thing that was vendored.  Every other
-    # registry operation writes a fixed set of derived documents and has nothing to remove.
+    # A plan removing a managed file, such as a retired workspace document.
     REMOVED = "removed"
 
 
@@ -80,23 +69,6 @@ class RegistryInitOptions:
             or not self.minimum_aart < self.maximum_aart_exclusive
         ):
             raise ValueError("registry init options are invalid")
-
-
-@dataclass(frozen=True, slots=True)
-class CollectionAuthorOptions:
-    name: str
-    summary: str
-    members: tuple[ArtifactIdentity, ...]
-
-    def __post_init__(self) -> None:
-        if (
-            _SLUG_RE.fullmatch(self.name) is None
-            or not _one_safe_line(self.summary)
-            or not self.members
-            or any(not isinstance(member, ArtifactIdentity) for member in self.members)
-        ):
-            raise ValueError("collection author options are invalid")
-        object.__setattr__(self, "members", tuple(sorted(set(self.members), key=str)))
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -243,72 +215,6 @@ class RegistryWorkspacePlan:
     @property
     def changed_paths(self) -> int:
         return sum(item.kind is not WorkspaceChangeKind.UNCHANGED for item in self.changes)
-
-
-@dataclass(frozen=True, slots=True)
-class VendoredArtifactPlan:
-    """A vendoring plan and the assessment of the exact bytes it would write.
-
-    They travel together because the review presents both, and recomputing the assessment at render
-    time would let the two drift: the maintainer would approve a digest covering one thing while
-    reading another.
-    """
-
-    plan: RegistryWorkspacePlan
-    assessment: SecurityAssessment
-    license: LicenseFinding
-    # Absent for every type whose payload reaches the consumer whole, which is four of the five.
-    delivery: DeliveryFinding | None = None
-
-    def __post_init__(self) -> None:
-        if (
-            not isinstance(self.plan, RegistryWorkspacePlan)
-            or not isinstance(self.assessment, SecurityAssessment)
-            or not isinstance(self.license, LicenseFinding)
-            or (self.delivery is not None and not isinstance(self.delivery, DeliveryFinding))
-        ):
-            raise ValueError("vendored artifact plan is invalid")
-
-
-@dataclass(frozen=True, slots=True)
-class VendoredArtifactCheck:
-    """What re-resolving one vendored artifact's upstream found.
-
-    The plan is present only when upstream moved *and* the maintainer supplied the version that
-    movement deserves. `up-to-date` has nothing to write, and `unreachable` must never
-    be able to write: a maintainer who lost access to an upstream is told that, not that their copy
-    is current.
-    """
-
-    disposition: NativeReferenceDisposition
-    resolved_commit: str | None
-    recorded_commit: str
-    added: int
-    changed: int
-    removed: int
-    plan: RegistryWorkspacePlan | None = None
-    assessment: SecurityAssessment | None = None
-    delivery: DeliveryFinding | None = None
-
-    def __post_init__(self) -> None:
-        if (
-            not isinstance(self.disposition, NativeReferenceDisposition)
-            or not isinstance(self.recorded_commit, str)
-            or any(
-                not isinstance(value, int) or isinstance(value, bool) or value < 0
-                for value in (self.added, self.changed, self.removed)
-            )
-            or (self.plan is not None and not isinstance(self.plan, RegistryWorkspacePlan))
-            or (self.assessment is not None and not isinstance(self.assessment, SecurityAssessment))
-            or (self.plan is None) != (self.assessment is None)
-        ):
-            raise ValueError("vendored artifact check is invalid")
-        if self.disposition is not NativeReferenceDisposition.CHANGED and self.plan is not None:
-            raise ValueError("only a changed upstream may carry a plan")
-        if self.disposition is NativeReferenceDisposition.UNREACHABLE and (
-            self.resolved_commit is not None
-        ):
-            raise ValueError("an unreachable upstream resolved no commit")
 
 
 @dataclass(frozen=True, slots=True)

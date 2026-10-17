@@ -15,7 +15,14 @@ from aart_cli.application.consumer_ui import (
     key_event,
     reduce_consumer_ui,
 )
-from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession, target_row
+from aart_cli.application.consumer_views import (
+    INSTALL_PATH_CUSTOM,
+    INSTALL_PATH_DEFAULT,
+    INSTALL_PATH_ROWS,
+    ConsumerScreen,
+    ConsumerSession,
+    target_row,
+)
 from aart_cli.application.maintainer_views import MaintainerScreen
 
 ARTIFACT = "public/mcp/github@1.6.0"
@@ -26,11 +33,17 @@ REVIEW = "sha256:" + "c" * 64
 RECORDED_AT = "2026-08-31T16:04:00+00:00"
 
 
-def _request(state: ConsumerUiState, action: ConsumerActionKind) -> tuple[ConsumerUiState, tuple]:
-    return reduce_consumer_ui(
-        state,
-        ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=action),
-    )
+def _request(
+    state: ConsumerUiState, action: ConsumerActionKind, path: str = INSTALL_PATH_CUSTOM
+) -> tuple[ConsumerUiState, tuple]:
+    """Request the action; an Install then takes `path` on 05p (§173.7), Custom unless told."""
+
+    event = ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=action)
+    moved, commands = reduce_consumer_ui(state, event)
+    if moved.session.screen is not ConsumerScreen.INSTALL_PATH:
+        return moved, commands
+    chosen = replace(moved, rows=INSTALL_PATH_ROWS, cursor=INSTALL_PATH_ROWS.index(path))
+    return reduce_consumer_ui(chosen, event)
 
 
 class ConsumerInstallActionTest(unittest.TestCase):
@@ -48,7 +61,7 @@ class ConsumerInstallActionTest(unittest.TestCase):
             ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=ConsumerActionKind.INSTALL),
         )
         assert event is not None
-        review, commands = reduce_consumer_ui(state, event)
+        review, commands = _request(state, ConsumerActionKind.INSTALL)
 
         self.assertEqual(review.session.screen, ConsumerScreen.REVIEW_SELECTION)
         self.assertIs(review.action, ConsumerActionKind.INSTALL)
@@ -69,6 +82,38 @@ class ConsumerInstallActionTest(unittest.TestCase):
         )
         self.assertEqual(toggled.targets, ("claude",))
         self.assertEqual(reprepared[0].focus, "")
+
+    def test_install_opens_05p_and_prepares_nothing_until_a_path_is_chosen(self) -> None:
+        state = ConsumerUiState(
+            ConsumerSession(ConsumerScreen.MARKETPLACE), selection=(ARTIFACT,), rows=(ARTIFACT,)
+        )
+
+        path, commands = reduce_consumer_ui(
+            state,
+            ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=ConsumerActionKind.INSTALL),
+        )
+
+        self.assertIs(path.session.screen, ConsumerScreen.INSTALL_PATH)
+        self.assertEqual([item.kind for item in commands], [ConsumerUiCommandKind.LOAD_SCREEN])
+
+    def test_default_prepares_from_settings_and_stays_on_05p(self) -> None:
+        state = ConsumerUiState(
+            ConsumerSession(ConsumerScreen.ARTIFACT_DETAILS),
+            focus=ARTIFACT,
+            targets=("tabnine",),
+            pairs=(f"{ARTIFACT}\ttabnine",),
+        )
+
+        chosen, commands = _request(state, ConsumerActionKind.INSTALL, INSTALL_PATH_DEFAULT)
+
+        self.assertIs(chosen.session.screen, ConsumerScreen.INSTALL_PATH)
+        self.assertTrue(chosen.install_default)
+        (command,) = commands
+        self.assertIs(command.kind, ConsumerUiCommandKind.PREPARE_ACTION)
+        self.assertTrue(command.default_path)
+        self.assertEqual(command.focus, ARTIFACT)
+        # Nothing an earlier Custom attempt chose is carried: Settings answers it.
+        self.assertEqual((command.targets, command.pairs, chosen.pairs), ((), (), ()))
 
     def test_install_without_a_selection_is_not_a_request(self) -> None:
         state = ConsumerUiState(

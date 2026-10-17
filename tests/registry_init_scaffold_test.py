@@ -6,10 +6,8 @@ import unittest
 
 from aart_cli import cli
 from aart_cli.curation.model import DEFAULT_MAXIMUM_AART, DEFAULT_MINIMUM_AART
-from aart_cli.domain.identifiers import ArtifactIdentity
 from aart_cli.domain.result import Err, Ok
 from aart_cli.protocol.capabilities import Capability
-from aart_cli.protocol.native_schema import parse_collection_manifest
 from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
@@ -20,22 +18,15 @@ from aart_cli.protocol.paths import parse_relative_path
 from aart_cli.protocol.registry_schema import parse_registry_manifest
 from aart_cli.protocol.semver import SemVer, parse_semver
 from aart_cli.registry_commands.model import (
-    CollectionAuthorOptions,
     RegistryInitOptions,
 )
 from aart_cli.registry_commands.planning import (
-    plan_registry_collection,
     plan_registry_init,
     project_registry_workspace_plan,
     validate_registry_workspace,
 )
 from aart_cli.registry_commands.templates import REGISTRY_CI_WORKFLOW
 from aart_cli.runtime_contract import EXECUTABLE_VERSION
-from tests.registry_maintenance_fixtures import (
-    approved_registry_snapshot,
-    replace_snapshot_file,
-    snapshot_file,
-)
 
 
 def _semver(text: str) -> SemVer:
@@ -45,62 +36,6 @@ def _semver(text: str) -> SemVer:
 
 
 class RegistryInitScaffoldTest(unittest.TestCase):
-    def test_collection_authoring_uses_only_artifacts_the_registry_holds(self) -> None:
-        # `CP-26.5`: an owned package is a *version* under `artifacts/<kind>/<name>/<version>/`,
-        # written by the promotion the maintainer runs. The unversioned package this test used to
-        # assemble by hand is the retired authoring workspace, which maintenance now refuses by name.
-        registry = approved_registry_snapshot()
-        source = json.loads(snapshot_file(registry, "aart-cli-source.json"))
-        source["collection_roots"] = ["collections"]
-        with_artifact = replace_snapshot_file(
-            registry, "aart-cli-source.json", json.dumps(source).encode()
-        )
-
-        authored = plan_registry_collection(
-            with_artifact,
-            CollectionAuthorOptions(
-                "baseline",
-                "Company baseline.",
-                (ArtifactIdentity("mcp", "github-mcp"),),
-            ),
-            executable_version=SemVer(1, 0, 0),
-            available_capabilities=(
-                Capability("artifact-manifest-v1"),
-                Capability("lockfile-v1"),
-                Capability("registry-entry-v1"),
-            ),
-        )
-
-        self.assertIsInstance(authored, Ok)
-        assert isinstance(authored, Ok)
-        complete = project_registry_workspace_plan(with_artifact, authored.value)
-        assert isinstance(complete, Ok)
-        collection = next(
-            item for item in complete.value.entries if str(item.path) == "collections/baseline.json"
-        )
-        parsed = parse_collection_manifest(collection.content)
-        assert isinstance(parsed, Ok)
-        self.assertEqual(
-            tuple(selector.identity for selector in parsed.value.artifacts),
-            (ArtifactIdentity("mcp", "github-mcp"),),
-        )
-
-        missing = plan_registry_collection(
-            with_artifact,
-            CollectionAuthorOptions(
-                "missing",
-                "Invalid member.",
-                (ArtifactIdentity("skill", "absent"),),
-            ),
-            executable_version=SemVer(1, 0, 0),
-            available_capabilities=(
-                Capability("artifact-manifest-v1"),
-                Capability("lockfile-v1"),
-                Capability("registry-entry-v1"),
-            ),
-        )
-        self.assertIsInstance(missing, Err)
-
     def test_registry_init_contains_no_withdrawn_reporting_apparatus(self) -> None:
         """CP-25.06: the GitHub Issue and Pages implementation is no longer scaffolded."""
 
@@ -275,42 +210,6 @@ class RegistryInitScaffoldTest(unittest.TestCase):
                 SemVer(2, 0, 0),
             )
 
-    def test_registry_commands_reject_custom_roots_the_workspace_adapter_cannot_manage(
-        self,
-    ) -> None:
-        empty = SourceSnapshot(SnapshotOrigin.LOCAL, ())
-        initialized = plan_registry_init(
-            empty,
-            RegistryInitOptions(
-                "company-registry",
-                "Company Registry",
-                SemVer(1, 0, 0),
-                SemVer(2, 0, 0),
-            ),
-        )
-        assert isinstance(initialized, Ok)
-        registry = project_registry_workspace_plan(empty, initialized.value)
-        assert isinstance(registry, Ok)
-        marker = next(
-            item.content
-            for item in registry.value.entries
-            if str(item.path) == "aart-cli-source.json"
-        ).replace(b'"artifact_roots":["artifacts"]', b'"artifact_roots":["packages"]')
-        unsupported = replace_snapshot_file(registry.value, "aart-cli-source.json", marker)
-
-        planned = plan_registry_collection(
-            unsupported,
-            CollectionAuthorOptions(
-                "demo",
-                "A canonical demo collection.",
-                (ArtifactIdentity("skill", "demo"),),
-            ),
-            executable_version=SemVer(1, 0, 0),
-            available_capabilities=(),
-        )
-
-        self.assertIsInstance(planned, Err)
-
 
 if __name__ == "__main__":
     unittest.main()
@@ -371,8 +270,6 @@ class GeneratedRegistryReadmeTest(unittest.TestCase):
 
     def test_the_pin_falls_inside_the_window_the_marker_declares(self):
         """A pin outside `requires_aart` would be a registry contradicting itself on day one."""
-
-        import json
 
         changes = self._init()
         window = json.loads(changes["aart-cli-registry.json"])["requires_aart"]

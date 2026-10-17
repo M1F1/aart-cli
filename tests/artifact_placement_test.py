@@ -40,9 +40,9 @@ from aart_cli.domain.python_runtime import RequirementsFile
 from aart_cli.domain.receipts import ArtifactDelivery
 from aart_cli.domain.reconciliation import Component
 from aart_cli.domain.registry import (
-    PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
+    RegistryContentMode,
 )
 from aart_cli.domain.requirements import HarnessRequirement
 from aart_cli.domain.result import Err, Ok
@@ -68,7 +68,7 @@ def _resolved(kind: str = "skill", name: str = "code-review") -> ResolvedArtifac
             _digest("d"),
             _digest("d"),
             _digest("e"),
-            PromotionMode.VENDORED,
+            RegistryContentMode.SELF_CONTAINED,
             PublicationStage.PUBLISHED,
         ),
         (KIT,),

@@ -33,7 +33,7 @@ from aart_cli.tui_consumer import CanonicalScreenSource, screens_from
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
 from tests.consumer_application_e2e_test import BothBackendsMeasured, _actions, _drive
-from tests.consumer_shell_test import ENTER, RIGHT, SPACE, UP, _at
+from tests.consumer_shell_test import ENTER, INSTALL_CUSTOM, RIGHT, SPACE, UP, _at
 from tests.consumer_views_test import _plan as _view_plan
 from tests.install_time_config_form_test import _MemoryCredentialProvider, _state
 
@@ -82,7 +82,7 @@ class TheFormGoesForwardE2ETest(BothBackendsMeasured):
                 env,
                 _at(ConsumerScreen.MARKETPLACE),
                 SPACE,
-                ord("i"),
+                *INSTALL_CUSTOM,
                 RIGHT,
                 SPACE,
                 RIGHT,

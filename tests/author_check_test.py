@@ -58,21 +58,16 @@ def _manifest(root: Path) -> Path:
 
 
 def _write_collection(directory: Path) -> None:
-    """A Collection manifest: discovered by the same walk, compiled by a different function."""
+    """A Collection manifest, which a Source may not carry."""
 
+    document = {
+        "schema": "aart-cli.dev/collection/v1",
+        "name": "data-engineer",
+        "summary": "Approved data engineering tools.",
+        "artifacts": ["company/mcp/github@^2"],
+    }
     directory.mkdir(parents=True)
-    (directory / "aart-cli.json").write_text(
-        json.dumps(
-            {
-                "schema": "aart-cli.dev/collection/v1",
-                "name": "data-engineer",
-                "version": "2.1.0",
-                "summary": "Approved data engineering tools.",
-                "artifacts": ["company/mcp/github@^2"],
-            }
-        ),
-        encoding="utf-8",
-    )
+    (directory / "aart-cli.json").write_text(json.dumps(document), encoding="utf-8")
 
 
 class AcceptanceTest(unittest.TestCase):
@@ -218,29 +213,29 @@ class PromotionTest(unittest.TestCase):
             self.assertIn("outside the declared payload", printed)
 
     def test_the_coordinate_a_manifest_compiles_to_is_what_the_check_reports(self) -> None:
-        """An author who reads `mcp/github-mcp@0.1.0` knows the compile ran, not just the parse."""
+        """An author who reads `mcp/github-mcp` knows the compile ran, not just the parse."""
 
         with _workspace() as root:
             code, printed = _check(root)
 
             self.assertEqual(code, OK)
-            self.assertIn(f"mcp/{_NAME}@0.1.0", printed)
+            # The identity and nothing after it: no version a Registry never assigned.
+            self.assertIn(f"  ->  mcp/{_NAME}\n", printed)
 
-    def test_a_collection_manifest_is_not_judged_as_a_broken_artifact(self) -> None:
-        """`registry scan` compiles artifacts and passes over Collections, so this check must too.
 
-        Parsing one as an artifact reports "missing required field 'artifact'" about a file that is
-        correct -- §1.4's stricter-is-no-better failure, in the form an author would actually hit.
-        """
+class CollectionTest(unittest.TestCase):
+    """§173.1, D-430: a Source defines no Collection, so a Collection manifest is an error."""
 
+    def test_a_collection_manifest_is_an_error_naming_where_collections_are_made(self) -> None:
         with _workspace() as root:
             _write_collection(root / "collections" / "data-engineer")
 
             code, printed = _check(root)
 
-            self.assertEqual(code, OK)
-            self.assertIn("data-engineer/aart-cli.json", printed)
-            self.assertNotIn("missing required field", printed)
+            self.assertEqual(code, ERROR, printed)
+            self.assertIn("error collections/data-engineer/aart-cli.json", printed)
+            self.assertIn("a Collection is not defined in a source", printed)
+            self.assertIn("aart-cli registry collection", printed)
 
 
 class JsonTest(unittest.TestCase):
@@ -277,22 +272,7 @@ class JsonTest(unittest.TestCase):
             (entry,) = json.loads(printed)["manifests"]
 
             self.assertEqual(code, OK)
-            self.assertEqual(entry["package"], f"mcp/{_NAME}@0.1.0")
-
-    def test_a_manifest_this_check_does_not_compile_says_so_rather_than_claiming_a_package(
-        self,
-    ) -> None:
-        with _workspace() as root:
-            _write_collection(root / "collections" / "data-engineer")
-
-            report = json.loads(_check(root, as_json=True)[1])
-            entry = next(
-                item for item in report["manifests"] if item["path"].endswith("aart-cli.json")
-            )
-
-            self.assertIs(entry["ok"], True)
-            self.assertIs(entry["checked"], False)
-            self.assertIsNone(entry["package"])
+            self.assertEqual(entry["package"], f"mcp/{_NAME}")
 
 
 def _enabled_inputs(text: str) -> str:

@@ -22,7 +22,7 @@ from aart_cli.application.maintainer_promotion import (
 from aart_cli.application.maintainer_sync import ApprovedRegistryState
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok
 from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.protocol.native_tree import (
@@ -33,6 +33,7 @@ from aart_cli.protocol.native_tree import (
 )
 from aart_cli.protocol.paths import parse_relative_path
 from aart_cli.sources.model import source_snapshot_digest
+from tests.fixture_versions import with_fixture_versions
 
 
 def _entry(path: str, content: str) -> SnapshotEntry:
@@ -50,7 +51,7 @@ def _scan(names, *, registry: str = "company"):
     for name in names:
         manifest = {
             "schema": "aart-cli.dev/mcp/v1",
-            "artifact": {"name": name, "kind": "mcp", "version": "1.0.0"},
+            "artifact": {"name": name, "kind": "mcp"},
             "payload": {"include": ["server.py"]},
             "transport": {"type": "stdio"},
             "runtime": {"type": "python", "version": ">=3.11"},
@@ -58,7 +59,7 @@ def _scan(names, *, registry: str = "company"):
         }
         entries.append(_entry(f"{name}/aart-cli.json", json.dumps(manifest, sort_keys=True)))
         entries.append(_entry(f"{name}/server.py", "print('x')\n"))
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),
         source_alias=SourceAlias("authors"),
         source="https://git.example/authors.git",
@@ -96,7 +97,7 @@ def _prepared(bundle: CandidateBundle, approved: ApprovedRegistryState):
         validate_candidate(bundle, policy=policy),
         policy,
         approved,
-        mode=PromotionMode.VENDORED,
+        mode=RegistryContentMode.SELF_CONTAINED,
     )
     assert isinstance(prepared, Ok), prepared
     return prepared.value
@@ -157,7 +158,7 @@ class BulkTransactionPrepareTest(unittest.TestCase):
             self.policy,
             self.approved,
             _workspace(),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
     def test_a_prepared_transaction_carries_every_promotion_it_would_apply(self) -> None:
@@ -187,7 +188,7 @@ class BulkTransactionPrepareTest(unittest.TestCase):
             self.policy,
             self.approved,
             moved,
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         self.assertIsInstance(prepared, Err)

@@ -52,7 +52,6 @@ REQUIRED_RELEASE_DOCS = (
     "CHANGELOG.md",
     "docs/tutorials/direct-source-v1.md",
     "docs/tutorials/company-registry-v1.md",
-    "docs/tutorials/vendoring-v1.md",
 )
 RELEASE_CHECKS = (
     "repository",

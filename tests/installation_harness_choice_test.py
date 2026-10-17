@@ -38,14 +38,14 @@ from aart_cli.io.receipt_store import LocalReceiptStore
 from aart_cli.tui_consumer import CanonicalScreenSource, frame, render_ready, screens_from
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions, _at, _drive
-from tests.consumer_shell_test import ENTER, RIGHT, SPACE
+from tests.consumer_shell_test import ENTER, INSTALL_CUSTOM, RIGHT, SPACE
 from tests.consumer_views_test import _plan
 from tests.frame_contract import key_violations
 
 _COMPATIBLE = ["claude", "opencode", "tabnine"]
 _SKILL_MANIFEST = {
     "schema": "aart-cli.dev/skill/v1",
-    "artifact": {"name": "code-review", "kind": "skill", "version": "1.2.0"},
+    "artifact": {"name": "code-review", "kind": "skill", "x-fixture-version": "1.2.0"},
     "payload": {"include": ["SKILL.md"]},
     "compatibility": {"harnesses": _COMPATIBLE},
 }
@@ -55,7 +55,7 @@ _AUTHORED_SKILL = (
 )
 _MCP_MANIFEST = {
     "schema": "aart-cli.dev/mcp/v1",
-    "artifact": {"name": "dummy", "kind": "mcp", "version": "1.0.0"},
+    "artifact": {"name": "dummy", "kind": "mcp"},
     "payload": {"include": ["server.py"]},
     "transport": {"type": "stdio"},
     "runtime": {"type": "python", "version": ">=3.10"},
@@ -286,7 +286,7 @@ class ChosenHarnessDeliveryE2ETest(unittest.TestCase):
             env,
             _at(ConsumerScreen.MARKETPLACE),
             SPACE,
-            ord("i"),
+            *INSTALL_CUSTOM,
             *((RIGHT,) * offset),
             SPACE,
             ENTER,
@@ -323,7 +323,7 @@ class ChosenHarnessDeliveryE2ETest(unittest.TestCase):
                 env,
                 _at(ConsumerScreen.MARKETPLACE),
                 SPACE,
-                ord("i"),
+                *INSTALL_CUSTOM,
                 RIGHT,
                 SPACE,
                 RIGHT,

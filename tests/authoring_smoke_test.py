@@ -19,6 +19,7 @@ from aart_cli.protocol.native_tree import (
     SourceSnapshot,
 )
 from aart_cli.protocol.paths import parse_relative_path
+from tests.fixture_versions import with_fixture_versions
 
 
 def _path(value: str):
@@ -32,7 +33,6 @@ def _manifest(smoke: str, *, inputs: str = "") -> bytes:
 artifact:
   kind: mcp
   name: identity
-  version: 1.0.0
 payload:
   include:
     - server.py
@@ -73,7 +73,7 @@ class AuthoringSmokeDeclarationTest(unittest.TestCase):
                 ),
             ),
         )
-        compiled = compile_author_snapshot(
+        compiled = with_fixture_versions(compile_author_snapshot)(
             snapshot,
             source_alias=SourceAlias("local"),
             source="https://example.invalid/identity.git",

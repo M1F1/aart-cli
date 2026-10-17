@@ -546,16 +546,18 @@ class ReleaseDocumentTest(unittest.TestCase):
 
 
 class RegistryDocumentTest(unittest.TestCase):
-    def test_registry_entrance_names_vendoring_and_links_the_walked_tutorial(self) -> None:
+    def test_registry_entrance_names_adoption_and_links_the_walked_tutorial(self) -> None:
         document = _document("docs/registry/maintaining-a-registry-v1.md")
         for phrase in (
-            "`vendor` is the foreign-repository path",
-            "`provenance.json`",
-            "`revendor`",
+            "Content enters by adopting an author's manifest",
+            "`registry adopt`",
             "tutorials/company-registry-tabnine-v1.md",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, document)
+        for retired in ("`vendor`", "`revendor`", "vendor-batch"):
+            with self.subTest(retired=retired):
+                self.assertNotIn(retired, document)
 
 
 class CollectionVocabularyTest(unittest.TestCase):

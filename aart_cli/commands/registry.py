@@ -6,17 +6,24 @@ import json
 import os
 import re
 import subprocess
+from typing import cast, get_args
 
 from aart_cli import command_outcome as _common
 from aart_cli.application.candidate_validation import validate_candidate
 from aart_cli.application.maintainer import CandidateBundle, reconcile_source_scan
-from aart_cli.application.maintainer_promotion import promotion_evidence
+from aart_cli.application.maintainer_promotion import effective_policy_digest, promotion_evidence
 from aart_cli.application.promotion import (
     PromotionEvidence,
+    PromotionPlan,
     finalize_promotion,
     load_registry_versions,
     plan_bulk_promotion,
 )
+from aart_cli.application.registry_collections import (
+    collection_validation_digest,
+    plan_collection_definition,
+)
+from aart_cli.application.registry_versions import ApprovedRegistryVersions
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.curation.model import (
     DEFAULT_MAXIMUM_AART,
@@ -35,12 +42,11 @@ from aart_cli.domain.diagnostics import (
     Severity,
     diagnostic_to_data,
 )
-from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.identifiers import ArtifactIdentity, ArtifactKind, SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
+from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.io.curation_runtime import (
-    default_native_acquirer,
     load_local_curation_service,
 )
 from aart_cli.io.git import GitProcessRequest, run_git_process
@@ -77,7 +83,6 @@ from aart_cli.registry_commands.publication_state import (
     prepare_registry_publication,
     publication_summary,
 )
-from aart_cli.registry_maintenance.discovery import discover_vendor_candidates
 from aart_cli.registry_maintenance.promoted import (
     is_promoted_registry,
     legacy_registry_paths,
@@ -233,46 +238,11 @@ def _emit_curation_finalization(
 
 
 def _curation_request(request: Request, action: CurationAction) -> Result[CurationRequest]:
-    if action in {
-        CurationAction.VENDOR,
-        CurationAction.REVENDOR,
-    } and (request.artifact_kind is None or len(request.names) != 1):
-        return _error(
-            f"{action.value} requires an exact artifact kind and name", _NAME_THE_ARTIFACT
-        )
-    if action is CurationAction.COLLECTION and len(request.names) != 1:
-        return _error("collection requires an exact collection name", _NAME_THE_ARTIFACT)
     try:
         return Ok(
             CurationRequest(
                 action,
                 _root(request),
-                kind=request.artifact_kind,
-                name=request.names[0] if len(request.names) == 1 else None,
-                summary=request.summary,
-                members=request.collection_members,
-                vendor_manifest=(
-                    os.path.abspath(request.vendor_manifest)
-                    if request.vendor_manifest is not None
-                    else None
-                ),
-                # Re-vendoring is the one action where an unstated version is an answer rather
-                # than a gap: it means "tell me what moved, plan nothing".
-                artifact_version=(
-                    request.artifact_version
-                    if action is CurationAction.REVENDOR
-                    else request.artifact_version or "1.0.0"
-                ),
-                artifact_license=request.artifact_license,
-                profiles=request.profiles,
-                platforms=request.registry_platforms,
-                scopes=request.registry_scopes or ("project",),
-                modes=request.registry_modes or ("copy",),
-                url=request.native_url,
-                ref=request.ref or "main",
-                path=request.native_path,
-                setup_recipe=request.setup_recipe,
-                review_policy=request.review_policy or "manual-review-v1",
                 source_id=request.source_id,
                 display_name=request.display_name,
                 # Only `init` declares a compatibility window, and only `init` reads one
@@ -300,8 +270,7 @@ def _run_curation(request: Request, action: CurationAction) -> int:
     review = prepared.value.review
     if request.check:
         _emit_curation_review(request, review)
-        # A failed check counts as drift.  Without this, `revendor --check` against an unreachable
-        # upstream would exit zero for having written nothing, which would read as a current copy.
+        # A failed check counts as drift, so a check that wrote nothing still exits nonzero.
         return (
             _common.OK
             if all(item.status == "unchanged" for item in review.changes)
@@ -400,9 +369,6 @@ def _run_audit(request: Request, workspace: FilesystemRegistryWorkspace) -> int:
         current.value,
         executable_version=_VERSION,
         available_capabilities=_CAPABILITIES,
-        # The audit reads the committed workspace and nothing else unless asked: `--check-upstream`
-        # is what turns it into a command that resolves vendored origins, and it still only reports.
-        upstream_acquirer=default_native_acquirer if request.check_upstream else None,
     )
     if isinstance(checked, Err):
         return _emit_error(request, "audit", checked)
@@ -449,109 +415,6 @@ def _run_test(request: Request, workspace: FilesystemRegistryWorkspace) -> int:
         )
     _emit_report(request, "test", selected)
     return _common.OK if selected.passed else _common.ERROR
-
-
-def _run_discover(request: Request) -> int:
-    """Scan one inert checkout and emit the manifest the batch command consumes."""
-
-    if (
-        request.discovery_checkout is None
-        or request.native_url is None
-        or request.artifact_version is None
-        or not request.profiles
-        or not request.registry_platforms
-    ):
-        return _emit_error(
-            request,
-            "discover",
-            _error(
-                "discover requires checkout, URL, artifact version, profiles, and platforms",
-                _READ_THE_ACTIONS,
-            ),
-        )
-    version = _version(request.artifact_version, "artifact version")
-    if isinstance(version, Err):
-        return _emit_error(request, "discover", version)
-    checkout = os.path.abspath(request.discovery_checkout)
-    try:
-        configured = ConfiguredSource(
-            SourceAlias("registry-discovery"),
-            SourceKind.SOURCE_LOCAL,
-            checkout,
-            None,
-            True,
-        )
-        acquired = read_local_snapshot(
-            LocalSnapshotRequest(
-                source_instance_id(configured),
-                configured.alias,
-                checkout,
-                SnapshotLimits(),
-            )
-        )
-    except ValueError as error:
-        return _emit_error(request, "discover", _error(str(error), _READ_THE_ACTIONS))
-    if isinstance(acquired, Err):
-        return _emit_error(request, "discover", acquired)
-    candidates = discover_vendor_candidates(acquired.value.snapshot)
-    defaults: dict[str, object] = {
-        "artifact_version": str(version.value),
-        "profiles": list(request.profiles),
-        "platforms": list(request.registry_platforms),
-        "scopes": list(request.registry_scopes or ("project",)),
-        "modes": list(request.registry_modes or ("copy",)),
-        "review_policy": request.review_policy or "manual-review-v1",
-    }
-    manifest = {
-        "schema_version": 1,
-        "origin": {"url": request.native_url, "ref": request.ref or "main"},
-        "defaults": defaults,
-        "artifacts": [
-            {
-                "accept": request.discovery_accept_all,
-                "kind": candidate.kind,
-                "name": candidate.name,
-                "path": candidate.path,
-                "summary": f"Discovered {candidate.kind} from {candidate.path}.",
-                "reason": candidate.reason,
-            }
-            for candidate in candidates
-        ],
-    }
-    rendered = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
-    if request.discovery_output is None:
-        print(rendered, end="")
-        return _common.OK
-    output = os.path.abspath(request.discovery_output)
-    try:
-        with open(output, "x", encoding="utf-8") as stream:
-            stream.write(rendered)
-    except OSError as error:
-        return _emit_error(
-            request,
-            "discover",
-            _error(f"cannot create discovery manifest {output}: {error}", _READ_THE_ACTIONS),
-        )
-    if request.json:
-        print(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "ok": True,
-                    "operation": "registry.discover",
-                    "output": output,
-                    "candidates": len(candidates),
-                    "accepted": len(candidates) if request.discovery_accept_all else 0,
-                },
-                indent=2,
-            )
-        )
-    else:
-        print(f"wrote {len(candidates)} candidates to {output}")
-        print(
-            "review each `accept` field, then run `aart-cli registry vendor-batch --manifest FILE`"
-        )
-    return _common.OK
 
 
 def _run_scan(request: Request) -> int:
@@ -627,14 +490,6 @@ def _run_scan(request: Request) -> int:
     if isinstance(acquired, Err):
         return _emit_error(request, "scan", acquired)
     pinned_revision = revision.stdout.strip()
-    compiled = compile_author_snapshot(
-        acquired.value.snapshot,
-        source_alias=source_alias,
-        source=request.candidate_source_url,
-        revision=pinned_revision,
-    )
-    if isinstance(compiled, Err):
-        return _emit_error(request, "scan", compiled)
     approved: tuple[RegistryArtifactVersion, ...] = ()
     if request.source_dir is not None:
         registry_snapshot = FilesystemRegistryWorkspace(_root(request)).snapshot()
@@ -644,6 +499,15 @@ def _run_scan(request: Request) -> int:
         if isinstance(loaded_versions, Err):
             return _emit_error(request, "scan", loaded_versions)
         approved = loaded_versions.value
+    compiled = compile_author_snapshot(
+        acquired.value.snapshot,
+        source_alias=source_alias,
+        source=request.candidate_source_url,
+        revision=pinned_revision,
+        versions=ApprovedRegistryVersions(approved, target_registry),
+    )
+    if isinstance(compiled, Err):
+        return _emit_error(request, "scan", compiled)
     scanned = reconcile_source_scan(
         source_alias,
         pinned_revision,
@@ -727,12 +591,12 @@ def _run_candidate_promotion(request: Request) -> int:
             _error("candidate promotion aliases, URL or IDs are invalid", _READ_THE_ACTIONS),
         )
     try:
-        mode = PromotionMode(request.promotion_mode)
+        mode = RegistryContentMode(request.content_mode)
     except ValueError:
         return _emit_error(
             request,
             "promote",
-            _error("promotion mode must be vendored or referenced", _READ_THE_ACTIONS),
+            _error("content mode must be self-contained or pinned-reference", _READ_THE_ACTIONS),
         )
     output = FilesystemPromotionOutput(_root(request))
     registry_snapshot = output.current()
@@ -787,6 +651,7 @@ def _run_candidate_promotion(request: Request) -> int:
         source_alias=source_alias,
         source=request.candidate_source_url,
         revision=pinned_revision,
+        versions=ApprovedRegistryVersions(approved.value, target_registry),
     )
     if isinstance(compiled, Err):
         return _emit_error(request, "promote", compiled)
@@ -886,6 +751,7 @@ def _run_candidate_promotion(request: Request) -> int:
                         "mode": plan.mode.value,
                         "review_digest": str(plan.review_digest),
                         "evidence": stated_evidence,
+                        "collections": _collection_versions(plan),
                         "registry_snapshot_before": str(plan.expected_registry_snapshot),
                         "registry_snapshot_after": str(plan.next_registry_snapshot),
                         "changes": changes,
@@ -904,6 +770,8 @@ def _run_candidate_promotion(request: Request) -> int:
                 print(f"    effective policy:  {stated['effective_policy_digest']}")
                 for warning in stated["warnings"]:
                     print(f"    warning: {warning}")
+            for coordinate in _collection_versions(plan):
+                print(f"  {coordinate}  next Collection version: a member moved")
             for item in changes:
                 print(f"  {item['status']:>7}  {item['path']}")
             print("Reviewed only. Re-run with --yes to promote locally; no commit or push.")
@@ -935,6 +803,171 @@ def _run_candidate_promotion(request: Request) -> int:
         print(
             f"Promoted {len(selected)} Candidate(s) locally ({applied.value.changed_paths} paths)."
         )
+        print("Not committed. Not pushed. Canonical-branch publication remains external.")
+    return _common.OK
+
+
+def _collection_versions(plan: PromotionPlan) -> list[str]:
+    """The Collection versions a planned transaction publishes, a promoted member's bumps included."""
+
+    return sorted(
+        str(item.coordinate)
+        for item in plan.versions
+        if str(item.coordinate.artifact.kind) == "collection"
+    )
+
+
+def _collection_member(raw: str) -> ArtifactIdentity | None:
+    kind, _, name = raw.partition("/")
+    if kind not in get_args(ArtifactKind) or kind == "collection" or not name:
+        return None
+    try:
+        return ArtifactIdentity(cast(ArtifactKind, kind), name)
+    except ValueError:
+        return None
+
+
+def _run_collection(request: Request) -> int:
+    """Define a Collection from approved artifacts as one reviewed Registry transaction (D-430)."""
+
+    (name,) = request.names
+    members = tuple(_collection_member(raw) for raw in request.collection_members)
+    if any(item is None for item in members):
+        return _emit_error(
+            request,
+            "collection",
+            _error(
+                "each --include must name an artifact as KIND/NAME",
+                ("name approved artifacts, for example `--include mcp/notes`",),
+            ),
+        )
+    output = FilesystemPromotionOutput(_root(request))
+    registry_snapshot = output.current()
+    if isinstance(registry_snapshot, Err):
+        return _emit_error(request, "collection", registry_snapshot)
+    approved = load_registry_versions(registry_snapshot.value)
+    if isinstance(approved, Err):
+        return _emit_error(request, "collection", approved)
+    registries = {item.coordinate.source for item in approved.value}
+    if len(registries) != 1:
+        return _emit_error(
+            request,
+            "collection",
+            _error(
+                "a Collection is made of artifacts this Registry approved, and it has none",
+                ("approve its members first; see `aart-cli registry promote --help`",),
+            ),
+        )
+    (target_registry,) = registries
+    defined = plan_collection_definition(
+        approved.value,
+        registry_snapshot.value,
+        target_registry=target_registry,
+        name=name,
+        summary=request.summary,
+        members=tuple(item for item in members if item is not None),
+    )
+    if isinstance(defined, Err):
+        return _emit_error(request, "collection", defined)
+    if defined.value is None:
+        if request.json:
+            print(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "ok": True,
+                        "operation": "registry.collection",
+                        "phase": "unchanged",
+                        "applied": False,
+                        "collection": name,
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            print(f"Collection {name} already has these members and summary; nothing to publish.")
+        return _common.OK
+    change = defined.value
+    policy = EffectivePolicy()
+    planned = plan_bulk_promotion(
+        registry_snapshot.value,
+        (),
+        evidence=(
+            (
+                change.id,
+                PromotionEvidence(
+                    collection_validation_digest(change), effective_policy_digest(policy)
+                ),
+            ),
+        ),
+        approved=approved.value,
+        collections=(change,),
+    )
+    if isinstance(planned, Err):
+        return _emit_error(request, "collection", planned)
+    plan = planned.value
+    changes = [
+        {"path": str(item.path), "status": item.kind.value}
+        for item in plan.changes
+        if item.kind.value != "unchanged"
+    ]
+    if not request.yes:
+        if request.json:
+            print(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "ok": True,
+                        "operation": "registry.collection",
+                        "phase": "review",
+                        "applied": False,
+                        "collection": change.coordinate,
+                        "summary": change.summary,
+                        "members": [str(item) for item in change.members],
+                        "review_digest": str(plan.review_digest),
+                        "registry_snapshot_before": str(plan.expected_registry_snapshot),
+                        "registry_snapshot_after": str(plan.next_registry_snapshot),
+                        "changes": changes,
+                        "commit": False,
+                        "push": False,
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            print(f"Collection review: {change.coordinate}")
+            print(f"  {change.summary}")
+            for member in change.members:
+                print(f"  member {member}")
+            print(f"review digest: {plan.review_digest}")
+            for item in changes:
+                print(f"  {item['status']:>7}  {item['path']}")
+            print("Reviewed only. Re-run with --yes to publish locally; no commit or push.")
+        return _common.OK
+    applied = finalize_promotion(plan, plan.review_digest, output=output)
+    if isinstance(applied, Err):
+        return _emit_error(request, "collection", applied)
+    if request.json:
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "ok": True,
+                    "operation": "registry.collection",
+                    "phase": "published-local",
+                    "applied": True,
+                    "collection": change.coordinate,
+                    "review_digest": str(applied.value.review_digest),
+                    "registry_snapshot": str(applied.value.registry_snapshot),
+                    "changed_paths": applied.value.changed_paths,
+                    "commit": False,
+                    "push": False,
+                },
+                indent=2,
+            )
+        )
+    else:
+        print(f"Published {change.coordinate} locally ({applied.value.changed_paths} paths).")
         print("Not committed. Not pushed. Canonical-branch publication remains external.")
     return _common.OK
 
@@ -1316,7 +1349,6 @@ def _upstream_check_data(check: AdoptionUpstreamCheck, *, applied: bool) -> dict
         "disposition": check.disposition.value,
         "observed_coordinate": check.observed_coordinate,
         "observed_input_digest": check.observed_input_digest,
-        "new_version_required": check.new_version_required,
         "details": list(check.details),
         "applied": applied,
         "proposal": (None if check.proposal is None else _prepared_adoption_data(check.proposal)),
@@ -1329,10 +1361,6 @@ def _print_upstream_check(check: AdoptionUpstreamCheck, *, applied: bool) -> Non
     print(f"  adopted at {check.recorded_commit}; now {check.resolved_commit or 'unresolved'}")
     for detail in check.details:
         print(f"  {detail}")
-    if check.new_version_required:
-        # The published coordinate is immutable (INV-203). Upstream moved without releasing, so
-        # there is nothing to propose: the authors have to version the change themselves.
-        print("  upstream changed without a new version; the published copy stays as it is")
     if check.proposal is not None:
         _print_adoption(check.proposal, applied=applied)
 
@@ -1535,7 +1563,7 @@ def run(request: Request) -> int:
     if action == "init":
         return _run_curation(request, CurationAction.INIT)
     if action == "collection":
-        return _run_curation(request, CurationAction.COLLECTION)
+        return _run_collection(request)
     if action == "scan":
         return _run_scan(request)
     if action == "adopt":
@@ -1544,16 +1572,8 @@ def run(request: Request) -> int:
         return _run_check_upstream(request)
     if action == "promote":
         return _run_candidate_promotion(request)
-    if action == "discover":
-        return _run_discover(request)
     if action == "format":
         return _run_curation(request, CurationAction.FORMAT)
-    if action == "vendor":
-        return _run_curation(request, CurationAction.VENDOR)
-    if action == "vendor-batch":
-        return _run_curation(request, CurationAction.VENDOR_BATCH)
-    if action == "revendor":
-        return _run_curation(request, CurationAction.REVENDOR)
     if action in {"lock", "build"}:
         return _run_curation(request, CurationAction(action))
     if action == "validate":

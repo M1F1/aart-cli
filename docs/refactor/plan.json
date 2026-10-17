@@ -1065,6 +1065,108 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-31",
+      "title": "Collections end to end, Registry-owned versions, default/custom install paths, richer Marketplace and Installed views, and pruning",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Specify CP-31: Collections end to end (B-067, D-422), Registry-owned versions (#74), the default and custom install paths (#75), the Marketplace and Installed columns (#72), and pruning (#73)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Registry-owned versions (#74): source manifests carry no version; Sync detects changes in manifest, payload and dependencies; the Maintainer sees the changed artifacts and the Registry assigns the next version on approval",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "author init --kind collection writes aart-cli.yaml with every accepted field and one line of explanation each",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "author check parses Collection manifests with the Sync parser and reports ok/error instead of skip; correct the 'registry scan compiles artifacts only' message",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Promotion publishes an approved Collection Candidate as a Registry version of kind collection, and the Registry reads it back as a Collection (B-067 layers 1-2)",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "The configured Marketplace offers approved Collections instead of skipping them (B-067 layer 3)",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "05 and 07a treat a Collection as one artifact: a harness is offered only when it takes every member, and a scope only where every member has a target (D-422); one choice per Collection×harness pair, applied to every member",
+          "status": "done"
+        },
+        {
+          "id": "16",
+          "title": "Specify Registry-owned Collections (D-430): amend §173.1/§173.3/§173.4/§173.9 and add INV-266",
+          "status": "done"
+        },
+        {
+          "id": "17",
+          "title": "Remove source-authored Collections: author init --kind collection, Sync Collection Candidates, screens 51/52 and promote of Collection Candidates; author check and Sync refuse a Collection manifest and point at registry collection",
+          "status": "done"
+        },
+        {
+          "id": "18",
+          "title": "registry collection NAME --summary --include KIND/NAME and the Maintainer TUI Collections view create or change a Collection through one reviewed Registry transaction; each version pins exact approved members",
+          "status": "done"
+        },
+        {
+          "id": "19",
+          "title": "Automatic bump: a promotion that approves a member's new version publishes the next version of every Collection naming it in the same transaction, shown in the Registry diff and the promote review (INV-266)",
+          "status": "done"
+        },
+        {
+          "id": "8",
+          "title": "07 and 07b ask each member's configuration and credentials once per member artifact, with Set later; nothing blocks (§172.3)",
+          "status": "done"
+        },
+        {
+          "id": "9",
+          "title": "Installed, Doctor and uninstall show a Collection with health from its members and keep the ownership graph (INV-186)",
+          "status": "done"
+        },
+        {
+          "id": "10",
+          "title": "Default or custom install path (#75): the default takes harnesses, scope and Python installer from Settings and goes straight to the inputs or Ready; custom is the 05/07a matrix flow",
+          "status": "done"
+        },
+        {
+          "id": "11",
+          "title": "Marketplace and Installed columns (#72, #75): installation status, scope with a project count, harnesses, eligible harnesses, inputs still AART_NOT_SET; each installation its own row with its own configuration; detail under More info",
+          "status": "done"
+        },
+        {
+          "id": "12",
+          "title": "Document Registry-owned Collections (creating one, automatic bumps), Registry-owned versions, and how a Registry adopts and offers content",
+          "status": "done"
+        },
+        {
+          "id": "13",
+          "title": "Rename the content mode: RegistryContentMode = SelfContained | PinnedReference (#54, D-376)",
+          "status": "done"
+        },
+        {
+          "id": "14",
+          "title": "Prune (#73, #53): remove the vendor command family and every other unused legacy feature; adoption by manifest is the only way content enters a Registry (D-375, closes #41)",
+          "status": "done"
+        },
+        {
+          "id": "15",
+          "title": "Full verification and the PR",
+          "status": "done"
+        }
+      ]
     }
   ]
 }

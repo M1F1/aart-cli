@@ -14,7 +14,7 @@ import io
 import os
 import tempfile
 import unittest
-from contextlib import contextmanager, redirect_stdout
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import replace
 from pathlib import Path
 from unittest import mock
@@ -185,6 +185,26 @@ class RefusalTest(unittest.TestCase):
 
             self.assertEqual(code, ERROR)
             self.assertEqual(_tree(root), set())
+
+    def test_a_collection_is_refused_with_where_the_registry_makes_it(self) -> None:
+        """§173.1, D-430: a Source defines no Collection, so there is no skeleton to write."""
+
+        with _workspace() as root:
+            said = io.StringIO()
+            with redirect_stderr(said), redirect_stdout(said):
+                code = run(
+                    Request(
+                        command="author",
+                        author_action="init",
+                        artifact_kind="collection",
+                        author_name=_NAME,
+                        author_into=str(root),
+                    )
+                )
+
+            self.assertEqual(code, ERROR)
+            self.assertEqual(_tree(root), set())
+            self.assertIn("create it there with `aart-cli registry collection", said.getvalue())
 
     def test_every_kind_this_build_generates_writes_a_workspace(self) -> None:
         for kind in GENERATED_KINDS:

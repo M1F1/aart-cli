@@ -52,6 +52,7 @@ from aart_cli.protocol.native_tree import (
 )
 from aart_cli.protocol.paths import parse_relative_path
 from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from tests.fixture_versions import with_fixture_versions
 from tests.marketplace_fixtures import configured_source, source_state
 
 #: A secret bound to argv compiles and then fails the secret-metadata check, which is what makes it
@@ -81,7 +82,7 @@ def _digest(character: str) -> ObjectDigest:
 def _manifest(name: str, *, inputs: list[dict[str, object]] | None = None) -> dict[str, object]:
     manifest: dict[str, object] = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": name, "kind": "mcp", "version": "1.0.0"},
+        "artifact": {"name": name, "kind": "mcp"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},
@@ -98,7 +99,7 @@ def _scan(names, *, registry: str = "company", flawed: frozenset[str] = frozense
         manifest = _manifest(name, inputs=[_ARGV_SECRET] if name in flawed else None)
         entries.append(_entry(f"{name}/aart-cli.json", json.dumps(manifest, sort_keys=True)))
         entries.append(_entry(f"{name}/server.py", "print('x')\n"))
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),
         source_alias=SourceAlias("authors"),
         source="https://git.example/authors.git",

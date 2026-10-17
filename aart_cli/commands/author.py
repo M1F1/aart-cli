@@ -65,14 +65,7 @@ def _run_init(request: Request) -> int:
     return OK
 
 
-#: A manifest AART discovered and `registry scan` passes over. Saying nothing about it would read
-#: as a pass it never got.
-_NOT_AN_ARTIFACT = "not an artifact manifest: `registry scan` compiles artifacts only"
-
-
 def _label(verdict: ManifestVerdict) -> str:
-    if not verdict.checked:
-        return "skip "
     return "ok   " if verdict.accepted else "error"
 
 
@@ -89,7 +82,6 @@ def _check_data(report: AuthorCheckReport) -> dict[str, object]:
             {
                 "path": verdict.path,
                 "ok": verdict.accepted,
-                "checked": verdict.checked,
                 "package": verdict.package,
                 "diagnostics": [diagnostic_to_data(item) for item in verdict.diagnostics],
             }
@@ -118,17 +110,12 @@ def _run_check(request: Request) -> int:
         return OK if report.accepted else ERROR
     for verdict in report.verdicts:
         print(f"{_label(verdict)} {verdict.path}{_promoted(verdict)}")
-        if not verdict.checked:
-            print(f"        {_NOT_AN_ARTIFACT}")
         for diagnostic in verdict.diagnostics:
             print(f"        {diagnostic.message}")
             for remediation in diagnostic.remediation:
                 print(f"        {remediation}")
     if report.accepted:
-        print(
-            f"{sum(1 for verdict in report.verdicts if verdict.checked)} manifest(s) would be "
-            f"promoted as written."
-        )
+        print(f"{len(report.verdicts)} manifest(s) would be promoted as written.")
         return OK
     return ERROR
 

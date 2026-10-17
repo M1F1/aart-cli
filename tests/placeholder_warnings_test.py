@@ -21,10 +21,10 @@ from aart_cli.domain.result import Ok
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
 from tests.consumer_application_e2e_test import BothBackendsMeasured, _actions, _at, _drive
-from tests.consumer_shell_test import BACKSPACE, DOWN, ENTER, RIGHT, SPACE, UP
+from tests.consumer_shell_test import BACKSPACE, DOWN, ENTER, INSTALL_CUSTOM, RIGHT, SPACE, UP
 from tests.install_credentials_test import _Keeping
 
-_TO_FORM = (SPACE, ord("i"), RIGHT, SPACE, RIGHT, SPACE, ENTER)
+_TO_FORM = (SPACE, *INSTALL_CUSTOM, RIGHT, SPACE, RIGHT, SPACE, ENTER)
 #: 07: the declared default cleared, then Set later; 07a passed; 07b: Set later.
 _SKIP_ALL = (*_TO_FORM, *((BACKSPACE,) * len("acme")), UP, ENTER, ENTER, ENTER, UP, ENTER)
 #: 07 answered; 07a passed; 07b: the credential entered, then Continue.

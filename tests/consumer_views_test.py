@@ -58,9 +58,9 @@ from aart_cli.domain.plans import (
     PlannedRemediation,
 )
 from aart_cli.domain.registry import (
-    PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
+    RegistryContentMode,
 )
 from aart_cli.domain.remediations import ConfigureCredential
 from aart_cli.domain.requirements import (
@@ -105,7 +105,7 @@ def _resolved(*, ownership: OwnershipReason) -> ResolvedArtifact:
         _digest("c"),
         _digest("c"),
         _digest("d"),
-        PromotionMode.VENDORED,
+        RegistryContentMode.SELF_CONTAINED,
         PublicationStage.PUBLISHED,
     )
     return ResolvedArtifact(version, (ownership,))

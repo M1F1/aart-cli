@@ -19,9 +19,10 @@ from enum import Enum
 from aart_cli.domain.configuration_files import configuration_value_problem
 from aart_cli.domain.inputs import SKIPPED_INPUT, InputValidation, validate_config_value
 from aart_cli.domain.publication import RegistryCommitOrigin, suggested_publication_branch
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 
 from .consumer_views import (
+    INSTALL_PATH_DEFAULT,
     SETTING_ROWS,
     SUCCESS_CHOICES,
     ApplicationScreen,
@@ -29,6 +30,7 @@ from .consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     choose_pair_scope,
+    default_harness_from_row,
     installer_from_row,
     is_screen_identifier,
     keeps_focus,
@@ -65,6 +67,8 @@ __all__ = [
     "KeyBinding",
     "RegistryDraft",
     "RegistryInitDraft",
+    "CollectionDraft",
+    "COLLECTION_SAVE_ROW",
     "RepositoryScanDraft",
     "SourceDraft",
     "WorkflowProgressStep",
@@ -88,6 +92,8 @@ class ConsumerActionKind(str, Enum):
     SOURCE_SYNC = "source-sync"
     CANDIDATE_PROMOTION = "candidate-promotion"
     BULK_PROMOTION = "bulk-promotion"
+    #: Screen 52's answer: one Collection version defined in the Registry (D-430).
+    COLLECTION_DEFINE = "collection-define"
     REGISTRY_ADD = "registry-add"
     REGISTRY_SYNC = "registry-sync"
     REGISTRY_REMOVE = "registry-remove"
@@ -137,6 +143,7 @@ class ConsumerUiEventKind(str, Enum):
     EDIT_REGISTRY = "edit-registry"
     EDIT_SOURCE = "edit-source"
     EDIT_REGISTRY_INIT = "edit-registry-init"
+    EDIT_COLLECTION = "edit-collection"
     EDIT_REPOSITORY_SCAN = "edit-repository-scan"
     EDIT_PUBLICATION_BRANCH = "edit-publication-branch"
     EDIT_INSTALL_CONFIG = "edit-install-config"
@@ -383,6 +390,25 @@ class RegistryInitDraft:
 
 
 @dataclass(frozen=True, slots=True)
+class CollectionDraft:
+    """Screen 52's text: a new Collection's name, and the summary any Collection carries.
+
+    The members are the session's ticked rows, so Space is the same key it is on every other
+    selectable screen. An existing Collection's name is the row it was opened from, not text.
+    """
+
+    name: str = ""
+    summary: str = ""
+
+    def __post_init__(self) -> None:
+        if any(
+            not isinstance(value, str) or any(char in value for char in "\r\n")
+            for value in (self.name, self.summary)
+        ):
+            raise ValueError("collection draft is invalid")
+
+
+@dataclass(frozen=True, slots=True)
 class RepositoryScanDraft:
     """The credential-free remote identity read once for artifact-scoped adoption."""
 
@@ -486,11 +512,12 @@ class ConsumerUiCommand:
     selection: tuple[str, ...] = ()
     focus: str = ""
     review_digest: str = ""
-    promotion_mode: PromotionMode | None = None
+    content_mode: RegistryContentMode | None = None
     registry_draft: RegistryDraft | None = None
     source_draft: SourceDraft | None = None
     registry_init_draft: RegistryInitDraft | None = None
     repository_scan_draft: RepositoryScanDraft | None = None
+    collection_draft: CollectionDraft | None = None
     targets: tuple[str, ...] = ()
     #: The artifact×harness pairs ticked on screen 05's matrix (§172.2), as `pair_key` strings.
     #: `targets` stays the harnesses they go into, so a plan is still prepared for those hosts.
@@ -508,10 +535,14 @@ class ConsumerUiCommand:
     python_installer: str = ""
     publication_branch: str = ""
     suggested_branch: str = ""
+    #: The install takes the Default path (§173.7): its harnesses come from Settings, and nothing
+    #: 05 or 07a would ask is asked.
+    default_path: bool = False
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiCommandKind)
+            or not isinstance(self.default_path, bool)
             or self.install_scope not in ("", "project", "user")
             or self.python_installer not in ("", "pip", "uv")
             or not _safe_identity(self.publication_branch)
@@ -530,8 +561,8 @@ class ConsumerUiCommand:
             or any(character in self.focus for character in "\r\n")
             or not _safe_identity(self.review_digest)
             or (
-                self.promotion_mode is not None
-                and not isinstance(self.promotion_mode, PromotionMode)
+                self.content_mode is not None
+                and not isinstance(self.content_mode, RegistryContentMode)
             )
             or (
                 self.registry_draft is not None
@@ -545,6 +576,10 @@ class ConsumerUiCommand:
             or (
                 self.repository_scan_draft is not None
                 and not isinstance(self.repository_scan_draft, RepositoryScanDraft)
+            )
+            or (
+                self.collection_draft is not None
+                and not isinstance(self.collection_draft, CollectionDraft)
             )
         ):
             raise ValueError("consumer UI command is invalid")
@@ -592,6 +627,8 @@ _SELECTABLE = frozenset(
         # Screen 47 assembles one registry transaction, so selecting rows is what it is for.
         MaintainerScreen.BULK_PROMOTION,
         MaintainerScreen.SCAN_RESULT,
+        # Screen 52's members are ticked the same way; its text rows are the form's own.
+        MaintainerScreen.COLLECTION_EDITOR,
     }
 )
 
@@ -670,7 +707,7 @@ class ConsumerUiState:
     candidate_filter: MaintainerCandidateFilter = MaintainerCandidateFilter()
     #: Which promotion the Maintainer is reviewing. Screen 42 chooses it; screens 41 and 43 obey
     #: it. Both modes are composed, so this selects a projection rather than causing one.
-    promotion_mode: PromotionMode = PromotionMode.VENDORED
+    content_mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED
     registry_draft: RegistryDraft = RegistryDraft()
     source_draft: SourceDraft = SourceDraft()
     registry_init_draft: RegistryInitDraft = RegistryInitDraft()
@@ -684,6 +721,7 @@ class ConsumerUiState:
     registry_commit_origin: RegistryCommitOrigin | None = None
     registry_commit_subject: str = ""
     repository_scan_draft: RepositoryScanDraft = RepositoryScanDraft()
+    collection_draft: CollectionDraft = CollectionDraft()
     #: The directory this session was launched from, already written for a reader. It is context
     #: for every screen -- an install and a Registry edit land relative to it -- so it is carried
     #: on the state rather than fetched where it is drawn, which keeps the frame off the
@@ -707,6 +745,9 @@ class ConsumerUiState:
     #: The form was submitted for the harnesses chosen on 05 (D-380). The install then goes
     #: forward from it and 05 no longer offers the harness, until a Back to 05 makes it a choice.
     inputs_submitted: bool = False
+    #: Screen 05p chose the Default path (§173.7): the install goes past 05 and 07a, to 07, 07b or
+    #: Ready, until a Back to 05 makes it Custom.
+    install_default: bool = False
     #: The artifact whose two input sections screen 22a shows. Credential drill-down changes
     #: ``focus`` to a provider reference, so this parent identity is carried separately.
     user_inputs_artifact: str = ""
@@ -746,6 +787,7 @@ class ConsumerUiState:
             or not isinstance(self.config_draft, InstallationConfigDraft)
             or not isinstance(self.config_form_active, bool)
             or not isinstance(self.inputs_submitted, bool)
+            or not isinstance(self.install_default, bool)
             or not isinstance(self.user_inputs_artifact, str)
             or any(character in self.user_inputs_artifact for character in "\r\n")
             or not isinstance(self.configuration_input, str)
@@ -772,6 +814,7 @@ class ConsumerUiState:
             or not isinstance(self.registry_init_draft, RegistryInitDraft)
             or not isinstance(self.registry_commit_applied, bool)
             or not isinstance(self.repository_scan_draft, RepositoryScanDraft)
+            or not isinstance(self.collection_draft, CollectionDraft)
         ):
             raise ValueError("consumer UI state is invalid")
         if self.session.profile is not self.settings.profile:
@@ -812,6 +855,13 @@ _WORKFLOW_ROUTES: tuple[tuple[ApplicationScreen, ...], ...] = (
         MaintainerScreen.REGISTRY_COMMIT,
     ),
     (
+        MaintainerScreen.REGISTRY,
+        MaintainerScreen.COLLECTIONS,
+        MaintainerScreen.COLLECTION_EDITOR,
+        MaintainerScreen.REGISTRY_VALIDATION,
+        MaintainerScreen.REGISTRY_COMMIT,
+    ),
+    (
         MaintainerScreen.SOURCES,
         MaintainerScreen.SOURCE_ADD,
         MaintainerScreen.SOURCE_ADD_REVIEW,
@@ -844,6 +894,7 @@ _WORKFLOW_ROUTES: tuple[tuple[ApplicationScreen, ...], ...] = (
     ),
     (
         ConsumerScreen.MARKETPLACE,
+        ConsumerScreen.INSTALL_PATH,
         ConsumerScreen.REVIEW_SELECTION,
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.READY,
@@ -1005,6 +1056,10 @@ _FORM_DRAFTS: dict[ApplicationScreen, Callable[[ConsumerUiState], ConsumerUiStat
     MaintainerScreen.REPOSITORY_SCAN: lambda state: replace(
         state, repository_scan_draft=RepositoryScanDraft()
     ),
+    # The members a Collection opens with are seeded as the editor is entered.
+    MaintainerScreen.COLLECTION_EDITOR: lambda state: replace(
+        state, collection_draft=CollectionDraft(), selection=()
+    ),
 }
 
 
@@ -1058,7 +1113,7 @@ def _navigate(
         # #50: 05 -> 07 before any plan exists is the way into the form; once a plan has been
         # reviewed, 07 is its summary instead.
         config_form_active=(
-            state.session.screen is ConsumerScreen.REVIEW_SELECTION
+            state.session.screen in (ConsumerScreen.REVIEW_SELECTION, ConsumerScreen.INSTALL_PATH)
             and screen is ConsumerScreen.REQUIRED_INPUTS
             and state.session.review_digest is None
             and bool(state.config_draft.fields)
@@ -1270,8 +1325,7 @@ def _toggle_selection(
             updated = replace(state, targets=targets, quit_pending=False)
         if state.action is not ConsumerActionKind.INSTALL:
             return updated, ()
-        origin = state.session.history[-1] if state.session.history else None
-        request_focus = "" if origin is ConsumerScreen.MARKETPLACE else state.focus
+        request_focus = "" if _install_origin(state) is ConsumerScreen.MARKETPLACE else state.focus
         return updated, (
             ConsumerUiCommand(
                 ConsumerUiCommandKind.PREPARE_ACTION,
@@ -1292,6 +1346,15 @@ def _toggle_selection(
         selected = (*state.selection, key)
     return replace(state, selection=selected, quit_pending=False), ()
 
+
+#: The actions reviewed on screen 44 and committed on 45 as one local Registry transaction.
+_REGISTRY_TRANSACTIONS = frozenset(
+    {
+        ConsumerActionKind.CANDIDATE_PROMOTION,
+        ConsumerActionKind.BULK_PROMOTION,
+        ConsumerActionKind.COLLECTION_DEFINE,
+    }
+)
 
 _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationScreen] = {
     (ConsumerActionKind.REGISTRY_ADD, ConsumerScreen.REGISTRY_ADD): ConsumerScreen.REGISTRY_REVIEW,
@@ -1332,16 +1395,18 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerActionKind.REPOSITORY_ADOPT_UPDATE,
         MaintainerScreen.UPSTREAM_CHECK,
     ): MaintainerScreen.ADOPTION_REVIEW,
-    (ConsumerActionKind.INSTALL, ConsumerScreen.MARKETPLACE): ConsumerScreen.REVIEW_SELECTION,
-    (ConsumerActionKind.INSTALL, ConsumerScreen.ARTIFACT_DETAILS): ConsumerScreen.REVIEW_SELECTION,
+    # Install opens 05p, where the path is chosen (§173.7); Custom goes on to 05.
+    (ConsumerActionKind.INSTALL, ConsumerScreen.MARKETPLACE): ConsumerScreen.INSTALL_PATH,
+    (ConsumerActionKind.INSTALL, ConsumerScreen.ARTIFACT_DETAILS): ConsumerScreen.INSTALL_PATH,
     (
         ConsumerActionKind.INSTALL,
         ConsumerScreen.COLLECTION_PREVIEW,
-    ): ConsumerScreen.REVIEW_SELECTION,
+    ): ConsumerScreen.INSTALL_PATH,
     (
         ConsumerActionKind.INSTALL,
         ConsumerScreen.COLLECTION_CUSTOMIZE,
-    ): ConsumerScreen.REVIEW_SELECTION,
+    ): ConsumerScreen.INSTALL_PATH,
+    (ConsumerActionKind.INSTALL, ConsumerScreen.INSTALL_PATH): ConsumerScreen.REVIEW_SELECTION,
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATES): ConsumerScreen.UPDATE_INPUTS,
     (
         ConsumerActionKind.VERIFY_REPAIR,
@@ -1371,6 +1436,11 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     (
         ConsumerActionKind.BULK_PROMOTION,
         MaintainerScreen.BULK_PROMOTION,
+    ): MaintainerScreen.REGISTRY_VALIDATION,
+    # Screen 52's Collection version is the same kind of Registry transaction, reviewed alike.
+    (
+        ConsumerActionKind.COLLECTION_DEFINE,
+        MaintainerScreen.COLLECTION_EDITOR,
     ): MaintainerScreen.REGISTRY_VALIDATION,
     # CP-23 task 12: screen 24's rows are the actions, and each opens 24a about the same reference.
     (
@@ -1467,8 +1537,13 @@ def _request_action(
         # The form is entered from screen 05 once the harness is chosen (#50) and is not part of
         # its later summary route. Returning to 05 rewinds over the form, so Review -> Required
         # Inputs remains a forward step over the immutable plan rather than back into the form.
+        # The Default path rewinds to 05p instead: it never stood on 05 (§173.7).
         session = replace(
-            state.session.navigate(ConsumerScreen.REVIEW_SELECTION),
+            state.session.navigate(
+                ConsumerScreen.INSTALL_PATH
+                if state.install_default
+                else ConsumerScreen.REVIEW_SELECTION
+            ),
             semantic_identity=None,
             selection_identity=None,
             review_digest=None,
@@ -1494,14 +1569,18 @@ def _request_action(
             python_installer=(
                 state.python_installer if action is ConsumerActionKind.INSTALL else ""
             ),
+            default_path=state.install_default,
         )
         return prepared, (
             command,
-            ConsumerUiCommand(
-                ConsumerUiCommandKind.LOAD_SCREEN,
-                ConsumerScreen.REVIEW_SELECTION,
-            ),
+            ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, session.screen),
         )
+    if (
+        action is ConsumerActionKind.INSTALL
+        and state.session.screen is ConsumerScreen.INSTALL_PATH
+        and state.current_row == INSTALL_PATH_DEFAULT
+    ):
+        return _install_by_default(state)
     target = _ACTION_REVIEW.get((action, state.session.screen))
     focus = (
         state.current_row or state.focus
@@ -1522,9 +1601,14 @@ def _request_action(
         if not state.selection and not (
             action is ConsumerActionKind.INSTALL
             and state.session.screen is not ConsumerScreen.MARKETPLACE
+            and _install_origin(state) is not ConsumerScreen.MARKETPLACE
             and focus
         ):
             return state, ()
+        if target is ConsumerScreen.INSTALL_PATH:
+            # 05p only asks which path; nothing is prepared until one is chosen (§173.7).
+            moved, navigation = _navigate(state, target)
+            return replace(moved, install_default=False, quit_pending=False), navigation
     elif (
         action
         not in (
@@ -1540,7 +1624,7 @@ def _request_action(
     moved, navigation = _navigate(state, target)
     if moved is state:
         return state, ()
-    if state.session.screen is ConsumerScreen.MARKETPLACE:
+    if ConsumerScreen.MARKETPLACE in (state.session.screen, _install_origin(state)):
         focus = ""
     if action is ConsumerActionKind.CONFIGURE:
         focus = state.user_inputs_artifact
@@ -1552,9 +1636,7 @@ def _request_action(
         ),
         quit_pending=False,
         registry_commit_applied=(
-            False
-            if action in (ConsumerActionKind.CANDIDATE_PROMOTION, ConsumerActionKind.BULK_PROMOTION)
-            else moved.registry_commit_applied
+            False if action in _REGISTRY_TRANSACTIONS else moved.registry_commit_applied
         ),
     )
     selection = state.selection
@@ -1588,8 +1670,8 @@ def _request_action(
         pairs=state.pairs if action is ConsumerActionKind.INSTALL else (),
         pair_scopes=state.pair_scopes if action is ConsumerActionKind.INSTALL else (),
         focus=focus,
-        promotion_mode=(
-            state.promotion_mode
+        content_mode=(
+            state.content_mode
             if action in (ConsumerActionKind.CANDIDATE_PROMOTION, ConsumerActionKind.BULK_PROMOTION)
             else None
         ),
@@ -1602,6 +1684,9 @@ def _request_action(
         ),
         repository_scan_draft=(
             state.repository_scan_draft if action is ConsumerActionKind.REPOSITORY_SCAN else None
+        ),
+        collection_draft=(
+            state.collection_draft if action is ConsumerActionKind.COLLECTION_DEFINE else None
         ),
         install_scope=(state.install_scope if action is ConsumerActionKind.INSTALL else ""),
         python_installer=(state.python_installer if action is ConsumerActionKind.INSTALL else ""),
@@ -1625,6 +1710,63 @@ def _request_action(
     return prepared, (command, *navigation)
 
 
+def _install_origin(state: ConsumerUiState) -> ApplicationScreen | None:
+    """The screen Install was pressed on, looking past 05p and 05, which only answer it."""
+
+    trail = (*state.session.history, state.session.screen)
+    return next(
+        (
+            item
+            for item in reversed(trail)
+            if item not in (ConsumerScreen.INSTALL_PATH, ConsumerScreen.REVIEW_SELECTION)
+        ),
+        None,
+    )
+
+
+def _install_by_default(
+    state: ConsumerUiState,
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    """05p's Default (§173.7): prepare from Settings, staying on 05p until the answer says where.
+
+    Nothing chosen on an earlier Custom attempt is carried: the harnesses, scopes and installer are
+    the Settings ones, so the request names none of them.
+    """
+
+    if not state.selection and not state.focus:
+        return state, ()
+    session = replace(
+        state.session, semantic_identity=None, selection_identity=None, review_digest=None
+    )
+    prepared = replace(
+        state,
+        session=session,
+        action=ConsumerActionKind.INSTALL,
+        install_default=True,
+        targets=(),
+        pairs=(),
+        pair_scopes=(),
+        entered_secrets=(),
+        harness_column=0,
+        config_draft=InstallationConfigDraft(),
+        config_form_active=False,
+        inputs_submitted=False,
+        install_scope="",
+        python_installer="",
+        quit_pending=False,
+    )
+    focus = "" if _install_origin(state) is ConsumerScreen.MARKETPLACE else state.focus
+    return prepared, (
+        ConsumerUiCommand(
+            ConsumerUiCommandKind.PREPARE_ACTION,
+            action=ConsumerActionKind.INSTALL,
+            selection=state.selection,
+            focus=focus,
+            default_path=True,
+        ),
+    )
+
+
 def _declined_preparation(
     state: ConsumerUiState,
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
@@ -1639,8 +1781,11 @@ def _declined_preparation(
     sent it as a notice with this event.
     """
 
-    cleared = replace(state, action=None, quit_pending=False)
+    cleared = replace(state, action=None, quit_pending=False, install_default=False)
     session = state.session.back()
+    # 05p only chose the path, so a refused install returns past it, to where Install was asked.
+    if session.screen is ConsumerScreen.INSTALL_PATH and state.session.screen is not session.screen:
+        session = session.back()
     if session is state.session:
         return cleared, ()
     return (
@@ -1655,11 +1800,12 @@ def _action_prepared(
     action = event.action
     if action is None or action is not state.action:
         return state, ()
+    on_path = state.install_default and state.session.screen is ConsumerScreen.INSTALL_PATH
     if (
         action is ConsumerActionKind.INSTALL
         and event.pairs
         and not state.pairs
-        and state.session.screen is ConsumerScreen.REVIEW_SELECTION
+        and (state.session.screen is ConsumerScreen.REVIEW_SELECTION or on_path)
     ):
         # §172.2: what the preparation ticked by default is ticked on screen too, so the plan
         # and the matrix agree and Continue can go on without a keypress that changes nothing.
@@ -1672,6 +1818,27 @@ def _action_prepared(
         # §172.5: the adapter merged what 07a chose with each pair's starting scope; that merge is
         # what the plan was prepared for, so it is what 07a shows.
         state = replace(state, pair_scopes=event.pair_scopes)
+    if action is ConsumerActionKind.INSTALL and event.config_draft is not None and on_path:
+        # §173.7: Default goes straight to 07 with the Settings harnesses. When they leave some
+        # artifact without a harness, the choice is the person's after all, so 05 asks it.
+        session = replace(
+            state.session, semantic_identity=None, selection_identity=None, review_digest=None
+        )
+        answered = replace(
+            state,
+            session=session,
+            config_draft=event.config_draft,
+            config_form_active=False,
+            inputs_submitted=False,
+            install_default=bool(event.config_draft.fields),
+            quit_pending=False,
+        )
+        return _navigate(
+            answered,
+            ConsumerScreen.REQUIRED_INPUTS
+            if event.config_draft.fields
+            else ConsumerScreen.REVIEW_SELECTION,
+        )
     if action is ConsumerActionKind.INSTALL and event.config_draft is not None:
         if state.session.screen is not ConsumerScreen.REVIEW_SELECTION:
             return state, ()
@@ -1722,6 +1889,16 @@ def _action_prepared(
         selection_identity=event.selection_identity or None,
         review_digest=event.review_digest,
     )
+    if action is ConsumerActionKind.INSTALL and on_path and event.screen is not None:
+        # §173.7: the Settings plan goes on to 07b or Ready; 05 only if it left a choice open.
+        reviewed = replace(
+            state,
+            session=session,
+            config_form_active=False,
+            install_default=event.screen is not ConsumerScreen.REVIEW_SELECTION,
+            quit_pending=False,
+        )
+        return _navigate(reviewed, event.screen)
     if (
         action is ConsumerActionKind.INSTALL
         and state.inputs_submitted
@@ -1770,6 +1947,10 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
     ): None,
     (
         ConsumerActionKind.BULK_PROMOTION,
+        MaintainerScreen.REGISTRY_COMMIT,
+    ): None,
+    (
+        ConsumerActionKind.COLLECTION_DEFINE,
         MaintainerScreen.REGISTRY_COMMIT,
     ): None,
     (ConsumerActionKind.CREDENTIAL_REPLACE, ConsumerScreen.CREDENTIAL_REVIEW): None,
@@ -1929,6 +2110,7 @@ def _action_recorded(
         ConsumerActionKind.REGISTRY_REBUILD: RegistryCommitOrigin.REBUILD_REGISTRY,
         ConsumerActionKind.CANDIDATE_PROMOTION: RegistryCommitOrigin.PROMOTE,
         ConsumerActionKind.BULK_PROMOTION: RegistryCommitOrigin.BULK_PROMOTE,
+        ConsumerActionKind.COLLECTION_DEFINE: RegistryCommitOrigin.DEFINE_COLLECTION,
     }
     commit_origin = origins.get(action, state.registry_commit_origin)
     commit_subject = (
@@ -1939,7 +2121,7 @@ def _action_recorded(
         else state.registry_commit_subject
     )
     if (
-        action in (ConsumerActionKind.CANDIDATE_PROMOTION, ConsumerActionKind.BULK_PROMOTION)
+        action in _REGISTRY_TRANSACTIONS
         and state.session.screen is MaintainerScreen.REGISTRY_COMMIT
     ):
         return replace(
@@ -1970,6 +2152,7 @@ def _action_recorded(
         config_draft=InstallationConfigDraft(),
         config_form_active=False,
         inputs_submitted=False,
+        install_default=False,
         focus=focus,
         quit_pending=False,
         action=None,
@@ -2193,6 +2376,17 @@ def _reduce(
         else:
             return state, ()
         return replace(state, registry_init_draft=init_draft, quit_pending=False), ()
+    if event.kind is ConsumerUiEventKind.EDIT_COLLECTION:
+        if state.session.screen is not MaintainerScreen.COLLECTION_EDITOR:
+            return state, ()
+        collection_draft = state.collection_draft
+        if event.key == "name":
+            collection_draft = replace(collection_draft, name=event.text)
+        elif event.key == "summary":
+            collection_draft = replace(collection_draft, summary=event.text)
+        else:
+            return state, ()
+        return replace(state, collection_draft=collection_draft, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.EDIT_REPOSITORY_SCAN:
         if state.session.screen is not MaintainerScreen.REPOSITORY_SCAN:
             return state, ()
@@ -2207,18 +2401,20 @@ def _reduce(
     if event.kind is ConsumerUiEventKind.TOGGLE_PROFILE:
         return _apply_setting(state, state.settings.toggled("detail-level"))
     if event.kind is ConsumerUiEventKind.TOGGLE_SETTING:
-        if state.session.screen is not ConsumerScreen.SETTINGS or event.key not in SETTING_ROWS:
+        if state.session.screen is not ConsumerScreen.SETTINGS or (
+            event.key not in SETTING_ROWS and default_harness_from_row(event.key) is None
+        ):
             return state, ()
         return _apply_setting(state, state.settings.toggled(event.key))
     if event.kind is ConsumerUiEventKind.TOGGLE_PROMOTION_MODE:
         if state.session.screen is not MaintainerScreen.PROMOTION_MODE:
             return state, ()
         chosen = (
-            PromotionMode.REFERENCED
-            if state.promotion_mode is PromotionMode.VENDORED
-            else PromotionMode.VENDORED
+            RegistryContentMode.PINNED_REFERENCE
+            if state.content_mode is RegistryContentMode.SELF_CONTAINED
+            else RegistryContentMode.SELF_CONTAINED
         )
-        return replace(state, promotion_mode=chosen, quit_pending=False), ()
+        return replace(state, content_mode=chosen, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.TOGGLE_CANDIDATE_FILTER:
         # Screen 53's rows are facet values, so a row is parsed back into the typed facet it
         # addresses rather than being pulled apart here. A row nothing can be made of changes
@@ -2341,7 +2537,6 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     ),
     MaintainerScreen.CANDIDATES: (
         _navigate_binding("f", "Filters", MaintainerScreen.CANDIDATE_FILTERS),
-        _navigate_binding("c", "Collections", MaintainerScreen.COLLECTION_CANDIDATES),
     ),
     MaintainerScreen.CANDIDATE_DETAILS: (
         _navigate_binding("d", "Diff", MaintainerScreen.CANDIDATE_DIFF),
@@ -2364,6 +2559,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _navigate_binding("s", "Scan Repository", MaintainerScreen.REPOSITORY_SCAN),
         _navigate_binding("u", "Check upstream", MaintainerScreen.ADOPTED_ARTIFACTS),
         _action_binding("p", "Push", ConsumerActionKind.REGISTRY_PUSH),
+        _navigate_binding("o", "Collections", MaintainerScreen.COLLECTIONS),
     ),
     # The end of a Source journey. Enter is bound here rather than left to the generic rule
     # because a result screen has nothing to open, and an Enter that does nothing is how somebody
@@ -2412,6 +2608,7 @@ _FORM_TEXT_ROWS: dict[ApplicationScreen, frozenset[str]] = {
     ConsumerScreen.REGISTRY_ADD: frozenset({"alias", "url", "ref"}),
     MaintainerScreen.SOURCE_ADD: frozenset({"alias", "location", "ref"}),
     MaintainerScreen.REGISTRY_INIT: frozenset({"id", "name"}),
+    MaintainerScreen.COLLECTION_EDITOR: frozenset({"name", "summary"}),
     MaintainerScreen.REPOSITORY_SCAN: frozenset({"url", "ref"}),
     MaintainerScreen.REGISTRY_PUSH: frozenset({"branch"}),
 }
@@ -2436,6 +2633,19 @@ def _form_text_rows(state: ConsumerUiState) -> frozenset[str] | None:
             else None
         )
     return _FORM_TEXT_ROWS.get(screen)
+
+
+#: Screen 52's submit row. Every row between the text fields and this one is a member.
+COLLECTION_SAVE_ROW = "save"
+
+
+def _collection_member_row(state: ConsumerUiState) -> bool:
+    return state.session.screen is MaintainerScreen.COLLECTION_EDITOR and state.current_row not in {
+        "",
+        "name",
+        "summary",
+        COLLECTION_SAVE_ROW,
+    }
 
 
 def typing_text(state: ConsumerUiState) -> bool:
@@ -2614,6 +2824,10 @@ def key_bindings(
         toggling = state.current_row == _FORM_TOGGLE_ROWS.get(state.session.screen)
         if toggling and acts(" "):
             bindings.append(KeyBinding("Space", _FORM_TOGGLE_LABELS[state.session.screen]))
+        elif _collection_member_row(state) and acts(" "):
+            toggling = True
+            label = "Leave out" if state.current_row in state.selection else "Include"
+            bindings.append(KeyBinding("Space", label))
         if acts("enter"):
             label = "Next" if typing or toggling else "Continue"
             if state.current_row == CONFIG_SET_LATER_ROW:
@@ -2820,6 +3034,14 @@ def key_event(
             )
         return None
 
+    if state.session.screen is ConsumerScreen.INSTALL_PATH and key == "enter":
+        # Either row starts the install; which one is the path (§173.7).
+        return (
+            ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=ConsumerActionKind.INSTALL)
+            if cursor or state.current_row
+            else None
+        )
+
     if (
         state.session.screen is ConsumerScreen.INSTALL_CREDENTIALS
         and key == "enter"
@@ -2904,6 +3126,33 @@ def key_event(
         if row in values and key.isprintable():
             text = key if len(key) > 1 else values[row] + key
             return ConsumerUiEvent(ConsumerUiEventKind.EDIT_REGISTRY_INIT, key=row, text=text)
+        return None
+
+    if state.session.screen is MaintainerScreen.COLLECTION_EDITOR:
+        row = cursor or state.current_row
+        values = {"name": state.collection_draft.name, "summary": state.collection_draft.summary}
+        if key == "escape":
+            return ConsumerUiEvent(ConsumerUiEventKind.BACK)
+        if key == "up":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
+        if key == "down":
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if key == " " and row not in values and row != COLLECTION_SAVE_ROW:
+            return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_SELECTION, key=row)
+        if key == "enter":
+            if row == COLLECTION_SAVE_ROW:
+                return ConsumerUiEvent(
+                    ConsumerUiEventKind.REQUEST_ACTION,
+                    action=ConsumerActionKind.COLLECTION_DEFINE,
+                )
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if row in values and key == "backspace":
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_COLLECTION, key=row, text=values[row][:-1]
+            )
+        if row in values and key.isprintable():
+            text = key if len(key) > 1 else values[row] + key
+            return ConsumerUiEvent(ConsumerUiEventKind.EDIT_COLLECTION, key=row, text=text)
         return None
 
     if state.session.screen is MaintainerScreen.REPOSITORY_SCAN:

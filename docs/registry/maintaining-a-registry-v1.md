@@ -32,11 +32,8 @@ aart-cli registry init --source . --source-id company --display-name "Company Re
 aart-cli registry scan --help
 aart-cli registry promote --help
 
-# Or copy foreign content the upstream has not packaged for AART
-aart-cli registry vendor skill code-review --source . \
-  --url https://github.com/acme/prompts.git --ref main --path prompts/code-review \
-  --artifact-version 1.0.0 --summary "Review code." \
-  --profile claude --platform darwin
+# Or adopt artifacts from a repository's manifests without subscribing to it
+aart-cli registry adopt --source . --url https://github.com/acme/prompts.git --ref main
 
 # Review, then finalize lock + build + validate + audit + one commit
 aart-cli registry publish --source .
@@ -46,16 +43,60 @@ aart-cli registry publish --source . --yes
 aart-cli registry push --source . --branch add-code-review
 ```
 
-`vendor` is the foreign-repository path: it copies a file or subtree into this registry, records the
-origin and pinned commit in `provenance.json`, and makes this registry the copy's owner. `revendor`
-compares that copy with upstream and plans an explicit versioned refresh; validation and audit reject
-a copied payload that drifts from its provenance.
-
 For the complete path, use the [walked company-registry tutorial for Tabnine](../tutorials/company-registry-tabnine-v1.md).
-The [vendoring tutorial](../tutorials/vendoring-v1.md) covers provenance and re-vendoring, and
-[porting an MCP server](../tutorials/mcp-servers-into-the-registry.md) covers setup recipes.
 
 An author team whose repository becomes a Source commits one `aart-cli.yaml` beside each artifact. A
 complete MCP example — Python stdio server, `requirements.txt` dependencies, one Keychain secret and
 one per-harness setting — is [docs/examples/author-source/example-mcp/aart-cli.yaml](../examples/author-source/example-mcp/aart-cli.yaml),
 held to what AART accepts by `tests/author_manifest_example_test.py`.
+
+## How content enters a Registry
+
+A Registry never defines an artifact. Content enters by adopting an author's manifest: each
+artifact is an `aart-cli.yaml` (or `aart-cli.json`) beside its payload in an author checkout.
+`registry scan` and `registry promote` take Candidates from a subscribed Source. `registry adopt`
+reads one Git URL and ref without subscribing to it:
+
+```sh
+aart-cli registry adopt --source . --url https://github.com/acme/prompts.git --ref main
+aart-cli registry adopt --source . --url https://github.com/acme/prompts.git --ref main --artifact skill/code-review@1.0.0 --yes
+```
+
+The first run only reports what the manifests compile to. The second writes the reviewed Registry
+copy, which `registry publish` then commits. The Marketplace offers what the Registry approved:
+nothing an author checkout holds is offered until a maintainer adopts or promotes it.
+
+## Versions belong to the Registry
+
+No manifest carries a version. The Registry counts approved changes and assigns the next version
+itself:
+
+- the first approved version is `1.0.0`;
+- every approved change raises the patch, up to `x.y.5`;
+- the change after `x.y.5` raises the minor (`x.(y+1).0`), up to `x.3.5`;
+- the change after `x.3.5` raises the major (`(x+1).0.0`).
+
+An unchanged manifest and payload never produce a new version: Sync and adoption reconcile them as
+already approved. A version says how much an artifact changed, not whether it broke anything.
+
+## Collections
+
+A Collection is Registry curation, not an artifact: a name, a one-line summary, and the approved
+artifacts it installs together, each pinned at an exact approved version. Create or change one with
+`registry collection`, or from the Maintainer TUI's Collections view:
+
+```sh
+aart-cli registry collection starter --source . --summary "Review and lint." --include skill/code-review --include skill/lint-review
+aart-cli registry collection starter --source . --summary "Review and lint." --include skill/code-review --include skill/lint-review --yes
+```
+
+Each `--include` names an artifact this Registry approved, and pins its highest approved version.
+The first run reviews the change; `--yes` writes it as one Registry transaction.
+
+Collections bump themselves. When a promotion or adoption approves a member's new version, the same
+transaction publishes the next version of every Collection naming it, pinned to the new member
+version. The Registry diff and the promote review list each bumped Collection.
+
+A person installs a Collection whole from the Marketplace, or customizes which members to take.
+Installed shows it as one row with its member installations under it, and uninstalling it removes
+the member installations it owns. A member also installed directly stays.

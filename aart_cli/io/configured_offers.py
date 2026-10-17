@@ -20,24 +20,28 @@ from __future__ import annotations
 import dataclasses
 import time
 
+from aart_cli.application.marketplace_resolution import version_constraint_allows
 from aart_cli.application.promotion import (
     load_configured_registry_versions,
     load_registry_promotions,
 )
+from aart_cli.application.registry_collections import read_registry_collection
 from aart_cli.application.sources import SourceStatusRequest, source_status
 from aart_cli.compiler.graph import GraphSource, compile_marketplace_graph
 from aart_cli.configuration.model import ConfiguredSource
 from aart_cli.configuration.policy import EffectiveConfiguration
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from aart_cli.domain.identifiers import ArtifactIdentity
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias
 from aart_cli.domain.registry import (
-    PromotionMode,
     RegistryArtifactVersion,
+    RegistryContentMode,
     RegistryLifecycle,
 )
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.domain.selection import Collection
 from aart_cli.marketplace.catalog import build_marketplace
 from aart_cli.marketplace.model import MarketplaceCatalog, MarketplaceSourceState
+from aart_cli.protocol.native_models import ArtifactSelector, CollectionManifest
 from aart_cli.protocol.native_tree import SourceSnapshot, compile_native_package
 from aart_cli.protocol.paths import SafeRelativePath
 from aart_cli.protocol.registry_index import index_artifact_from_package
@@ -74,6 +78,9 @@ class ConfiguredMarketplace:
 
     catalog: MarketplaceCatalog
     declined: tuple[str, ...] = ()
+    #: The approved Collections behind the catalog's Collection rows, as the Registry published
+    #: them, so an install names the Collection itself rather than its members (D-422).
+    collections: tuple[Collection, ...] = ()
 
 
 def _error(message: str) -> Err:
@@ -85,18 +92,17 @@ def _declined(version: RegistryArtifactVersion) -> str | None:
 
     A referenced version has no verified content in this snapshot; a revoked one was withdrawn; a
     deprecated one carries a warning the row has nowhere to render yet, and offering it silently
-    would be the Fast projection hiding material risk (B-037).  Collections are versioned and
-    nothing downstream carries that version yet (B-031).
+    would be the Fast projection hiding material risk (B-037).
 
     Publication is not one of these reasons: everything reachable here was read from the branch
     this consumer configured, which is what published means (INV-242, D-207).
     """
 
     coordinate = version.coordinate
-    if coordinate.artifact.kind == "collection":
-        return f"{coordinate}: a Collection is offered by version, and nothing here carries one yet"
-    if version.mode is not PromotionMode.VENDORED:
-        return f"{coordinate}: referenced, so this registry snapshot holds no verified content"
+    if version.mode is not RegistryContentMode.SELF_CONTAINED:
+        return (
+            f"{coordinate}: pinned-reference, so this registry snapshot holds no verified content"
+        )
     if version.lifecycle is RegistryLifecycle.REVOKED:
         return f"{coordinate}: revoked by the registry"
     if version.lifecycle is RegistryLifecycle.DEPRECATED:
@@ -152,8 +158,11 @@ def _package_entries(snapshot: SourceSnapshot, prefix: tuple[str, ...]):
 def project_configured_registry(
     configured: ConfiguredSource,
     current: CurrentSource,
-) -> Result[tuple[GraphSource, tuple[str, ...]]]:
-    """Every artifact this registry currently offers, compiled from what it published."""
+) -> Result[tuple[GraphSource, tuple[str, ...], tuple[Collection, ...]]]:
+    """Every artifact this registry currently offers, compiled from what it published.
+
+    The approved Collections a row is offered for come third, as the Registry published them.
+    """
 
     snapshot = current.candidate.snapshot
     loaded = load_configured_registry_versions(snapshot, configured.alias)
@@ -166,10 +175,18 @@ def project_configured_registry(
     selected = _current_versions(str(configured.alias), loaded.value)
     if isinstance(selected, Err):
         return selected
-    offered, declined = selected.value
+    offered, declined_versions = selected.value
+    declined = list(declined_versions)
     artifacts = []
+    collections: list[Collection] = []
     for version in offered:
         identity = version.coordinate.artifact
+        if identity.kind == "collection":
+            published = read_registry_collection(snapshot, version)
+            if isinstance(published, Err):
+                return published
+            collections.append(published.value)
+            continue
         prefix = ("artifacts", identity.kind, identity.name, str(version.coordinate.version))
         entries = _package_entries(snapshot, prefix)
         if not any(str(entry.path) == "artifact.json" for entry in entries):
@@ -208,12 +225,75 @@ def project_configured_registry(
                 review=ReviewRecord("approved", str(audit.effective_policy_digest)),
             )
         )
+    manifests: list[CollectionManifest] = []
+    rows: list[Collection] = []
+    for collection in collections:
+        manifest = _offered_collection(configured.alias, collection, offered)
+        if isinstance(manifest, str):
+            declined.append(manifest)
+        else:
+            manifests.append(manifest)
+            rows.append(collection)
     return Ok(
         (
-            GraphSource(configured.alias, current.declared_source_id, (), tuple(artifacts)),
-            declined,
+            GraphSource(
+                configured.alias,
+                current.declared_source_id,
+                (),
+                tuple(artifacts),
+                tuple(manifests),
+            ),
+            tuple(sorted(set(declined))),
+            tuple(rows),
         )
     )
+
+
+def _offered_collection(
+    alias: SourceAlias,
+    collection: Collection,
+    offered: tuple[RegistryArtifactVersion, ...],
+) -> CollectionManifest | str:
+    """The approved Collection as one Marketplace row, or why it cannot be one (§173.4).
+
+    A row installs the version each member's row offers, so each member's constraint has to allow
+    exactly that version. A member another Registry would have to provide, or whose offered version
+    its constraint excludes, declines the Collection rather than installing something it never
+    named.
+    """
+
+    current = {
+        item.coordinate.artifact: item.coordinate.version
+        for item in offered
+        if item.coordinate.artifact.kind != "collection"
+    }
+    selectors: list[ArtifactSelector] = []
+    for member in collection.members:
+        request = member.request
+        version = current.get(request.identity)
+        if (
+            (request.source is not None and request.source != alias)
+            or version is None
+            or not version_constraint_allows(request.version, _semver(version))
+        ):
+            return (
+                f"{collection.coordinate}: member {request} has no offered version in {alias} "
+                "its constraint allows"
+            )
+        selectors.append(ArtifactSelector(request.identity))
+    return CollectionManifest(
+        1,
+        collection.coordinate.name,
+        collection.summary,
+        tuple(selectors),
+        version=collection.coordinate.version,
+    )
+
+
+def _semver(raw: str) -> SemVer:
+    parsed = parse_semver(raw)
+    assert isinstance(parsed, Ok), raw
+    return parsed.value
 
 
 def read_configured_marketplace(
@@ -235,6 +315,7 @@ def read_configured_marketplace(
     states: list[MarketplaceSourceState] = []
     graph_sources: list[GraphSource] = []
     declined: list[str] = []
+    approved: list[Collection] = []
     for order, configured in enumerate(
         source for source in effective.configuration.sources if source.enabled
     ):
@@ -255,6 +336,7 @@ def read_configured_marketplace(
             return projected
         graph_sources.append(projected.value[0])
         declined.extend(projected.value[1])
+        approved.extend(projected.value[2])
     graph = compile_marketplace_graph(
         tuple(graph_sources), available_capabilities=EXECUTABLE_CAPABILITIES
     )
@@ -263,4 +345,4 @@ def read_configured_marketplace(
     catalog = build_marketplace(graph.value, effective, tuple(states))
     if isinstance(catalog, Err):
         return catalog
-    return Ok(ConfiguredMarketplace(catalog.value, tuple(sorted(set(declined)))))
+    return Ok(ConfiguredMarketplace(catalog.value, tuple(sorted(set(declined))), tuple(approved)))

@@ -21,6 +21,7 @@ from aart_cli.protocol.authoring import (
     parse_author_manifest,
 )
 from tests.authoring_compiler_test import _file, _snapshot
+from tests.fixture_versions import with_fixture_versions
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE = ROOT / "docs/examples/author-source/example-mcp/aart-cli.yaml"
@@ -47,9 +48,7 @@ class AuthorManifestExampleTest(unittest.TestCase):
         manifest = self._parsed()
 
         self.assertEqual(manifest.schema, "aart-cli.dev/mcp/v1")
-        self.assertEqual(
-            (manifest.kind, manifest.name, str(manifest.version)), ("mcp", "example-mcp", "1.0.0")
-        )
+        self.assertEqual((manifest.kind, manifest.name), ("mcp", "example-mcp"))
         self.assertEqual(manifest.transport, "stdio")
         self.assertEqual(manifest.runtime, "python")
         self.assertEqual(manifest.contract.entrypoint, "server.py")
@@ -72,7 +71,7 @@ class AuthorManifestExampleTest(unittest.TestCase):
         self.assertEqual(base_url.default, "https://api.example.com")
 
     def test_example_compiles_beside_the_files_it_names(self) -> None:
-        compiled = compile_author_snapshot(
+        compiled = with_fixture_versions(compile_author_snapshot)(
             _example_snapshot(),
             source_alias=SourceAlias("example"),
             source="https://example.test/example-mcp.git",
@@ -83,7 +82,7 @@ class AuthorManifestExampleTest(unittest.TestCase):
         self.assertEqual(len(compiled.value), 1)
 
     def test_example_is_refused_without_the_dependency_file_it_points_at(self) -> None:
-        compiled = compile_author_snapshot(
+        compiled = with_fixture_versions(compile_author_snapshot)(
             _snapshot(
                 _file("example-mcp/aart-cli.yaml", EXAMPLE.read_bytes()),
                 _file("example-mcp/server.py", "print()\n"),

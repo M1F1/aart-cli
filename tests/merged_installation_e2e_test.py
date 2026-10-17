@@ -23,7 +23,7 @@ from tests.configured_install_command_e2e_test import _Environment
 
 MEMORY_MANIFEST = {
     "schema": "aart-cli.dev/memory/v1",
-    "artifact": {"name": "house-style", "kind": "memory", "version": "1.2.0"},
+    "artifact": {"name": "house-style", "kind": "memory", "x-fixture-version": "1.2.0"},
     "payload": {"include": ["MEMORY.md"]},
     "compatibility": {"harnesses": ["claude"]},
 }

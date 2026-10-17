@@ -38,6 +38,7 @@ from aart_cli.protocol.paths import parse_relative_path
 from aart_cli.protocol.yaml import _plain_safe, emit_yaml, parse_yaml
 from tests.authoring_compiler_test import _file, _snapshot
 from tests.authoring_field_surface import parser_field_surface
+from tests.fixture_versions import with_fixture_versions
 
 _NAME = "github-mcp"
 
@@ -150,7 +151,7 @@ class CompilationTest(unittest.TestCase):
             _file(f"{root}/{file.path}", file.content.encode(), executable=file.executable)
             for file in skeleton.payload
         )
-        compiled = compile_author_snapshot(
+        compiled = with_fixture_versions(compile_author_snapshot)(
             _snapshot(*files),
             source_alias=SourceAlias("example"),
             source="https://example.invalid/skeleton.git",
@@ -193,9 +194,6 @@ class AntiDriftTest(unittest.TestCase):
             missing = sorted(
                 name
                 for site in parser_field_surface()
-                # A collection manifest is a different document with a different generator; step
-                # 12 gives it its own skeleton and its own half of this oracle.
-                if site.owner != "parse_author_collection_manifest"
                 for name in (*site.required, *site.optional)
                 if name not in _keys(skeleton.manifest)
             )

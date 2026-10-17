@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .publication import REGISTRY_PUBLICATION_GATES
 
-#: Anchored to the root, every one: a vendored payload may carry the same names -- an OpenCode
+#: Anchored to the root, every one: an artifact's payload may carry the same names -- an OpenCode
 #: plugin ships `.opencode/plugins/` -- and an unanchored entry makes git drop them from
 #: `artifacts/`, which the published content digest then refuses.
 REGISTRY_GITIGNORE = b"""/.aart-cli/
@@ -398,13 +398,11 @@ to finalize. AART never pushes.
 aart-cli registry scan --help
 aart-cli registry promote --help
 
-# Copy content an upstream never packaged, recording where it came from
-aart-cli registry vendor skill code-review --source . \\
-  --url https://github.com/acme/prompts.git --ref main --path prompts/code-review \\
-  --artifact-version 1.0.0 --summary "Review code." --profile claude --platform darwin
+# Adopt artifacts from a repository's manifests without subscribing to it
+aart-cli registry adopt --source . --url https://github.com/acme/prompts.git --ref main
 
-# See what moved upstream since a vendored copy was taken
-aart-cli registry revendor skill code-review --source .
+# Create or change a Collection of approved artifacts
+aart-cli registry collection --help
 
 # Build, validate, audit, and commit - review first, then finalize
 aart-cli registry publish --source .

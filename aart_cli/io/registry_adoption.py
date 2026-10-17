@@ -48,11 +48,12 @@ from aart_cli.application.promotion import (
     plan_bulk_promotion,
     validate_promoted_registry,
 )
+from aart_cli.application.registry_versions import ApprovedRegistryVersions
 from aart_cli.domain.candidates import CandidateState
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
+from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.io.curation_runtime import default_native_acquirer
 from aart_cli.io.registry_promotion import FilesystemPromotionOutput
@@ -170,7 +171,6 @@ class AdoptionUpstreamCheck:
     resolved_commit: str | None
     observed_coordinate: str | None = None
     observed_input_digest: str | None = None
-    new_version_required: bool = False
     details: tuple[str, ...] = ()
     proposal: PreparedAdoption | None = field(default=None, repr=False, compare=False)
 
@@ -314,7 +314,7 @@ def list_adopted_artifacts(*, registry_root: str) -> Result[tuple[AdoptedArtifac
     }
     adopted = []
     for version in versions.value:
-        if version.mode is not PromotionMode.VENDORED:
+        if version.mode is not RegistryContentMode.SELF_CONTAINED:
             continue
         record = _adoption_record(version, files)
         if isinstance(record, Err):
@@ -358,6 +358,7 @@ def scan_repository(
         source_alias=_scan_alias(url),
         source=url,
         revision=acquired.value.resolved_commit,
+        versions=ApprovedRegistryVersions(approved.value, alias.value),
         provenance_extensions=((REPOSITORY_ADOPTION_RECORD, JsonObject((("ref", ref),))),),
     )
     if isinstance(compiled, Err):
@@ -467,11 +468,21 @@ def check_adopted_upstream(
         )
     if acquired.value.url != adopted.url or acquired.value.requested_ref != adopted.ref:
         return _error("the upstream acquisition does not match the adopted URL and ref")
+    alias = _registry_alias(registry_root)
+    if isinstance(alias, Err):
+        return alias
+    workspace = FilesystemRegistryWorkspace(registry_root).snapshot()
+    if isinstance(workspace, Err):
+        return workspace
+    approved = load_registry_versions(workspace.value)
+    if isinstance(approved, Err):
+        return approved
     compiled = compile_author_snapshot(
         acquired.value.snapshot,
         source_alias=_scan_alias(adopted.url),
         source=adopted.url,
         revision=acquired.value.resolved_commit,
+        versions=ApprovedRegistryVersions(approved.value, alias.value),
         provenance_extensions=((REPOSITORY_ADOPTION_RECORD, JsonObject((("ref", adopted.ref),))),),
     )
     if isinstance(compiled, Err):
@@ -508,36 +519,31 @@ def check_adopted_upstream(
             )
         )
 
-    new_version_required = observed_coordinate == adopted.coordinate
+    # A changed upstream is the next Registry version, never a rewrite of the adopted one (§173.2).
     proposal = None
-    if not new_version_required:
-        rescanned = scan_repository(
-            url=adopted.url,
-            ref=adopted.ref,
+    rescanned = scan_repository(
+        url=adopted.url,
+        ref=adopted.ref,
+        registry_root=registry_root,
+        acquire=lambda _url, _ref: acquired,
+        policy=policy,
+    )
+    if isinstance(rescanned, Err):
+        return rescanned
+    scanned = next(
+        (item for item in rescanned.value.artifacts if item.manifest_path == adopted.manifest_path),
+        None,
+    )
+    if scanned is not None and scanned.adoptable:
+        prepared = prepare_adoption(
+            rescanned.value,
+            (scanned.coordinate,),
             registry_root=registry_root,
-            acquire=lambda _url, _ref: acquired,
             policy=policy,
         )
-        if isinstance(rescanned, Err):
-            return rescanned
-        scanned = next(
-            (
-                item
-                for item in rescanned.value.artifacts
-                if item.manifest_path == adopted.manifest_path
-            ),
-            None,
-        )
-        if scanned is not None and scanned.adoptable:
-            prepared = prepare_adoption(
-                rescanned.value,
-                (scanned.coordinate,),
-                registry_root=registry_root,
-                policy=policy,
-            )
-            if isinstance(prepared, Err):
-                return prepared
-            proposal = prepared.value
+        if isinstance(prepared, Err):
+            return prepared
+        proposal = prepared.value
     return Ok(
         AdoptionUpstreamCheck(
             adopted,
@@ -545,7 +551,6 @@ def check_adopted_upstream(
             acquired.value.resolved_commit,
             observed_coordinate,
             str(observed.input_digest),
-            new_version_required,
             proposal=proposal,
         )
     )
@@ -607,7 +612,7 @@ def prepare_adoption(
         bundles,
         evidence=tuple(evidence),
         approved=approved.value,
-        mode=PromotionMode.VENDORED,
+        mode=RegistryContentMode.SELF_CONTAINED,
     )
     if isinstance(planned, Err):
         return planned

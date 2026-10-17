@@ -13,6 +13,7 @@ from aart_cli.protocol.native_tree import (
     SourceSnapshot,
 )
 from aart_cli.protocol.paths import parse_relative_path
+from tests.fixture_versions import with_fixture_versions
 
 NATIVE_FIXTURE = Path("tests/fixtures/protocol/native-source-v1")
 
@@ -191,7 +192,7 @@ def approved_registry_snapshot(
     for name in names:
         manifest = {
             "schema": "aart-cli.dev/mcp/v1",
-            "artifact": {"name": name, "kind": "mcp", "version": version},
+            "artifact": {"name": name, "kind": "mcp", "x-fixture-version": version},
             "payload": {"include": ["server.py"]},
             "transport": {"type": "stdio"},
             "runtime": {"type": "python", "version": ">=3.11"},
@@ -200,7 +201,7 @@ def approved_registry_snapshot(
         entries.append(_file(f"{name}/aart-cli.json", json.dumps(manifest).encode()))
         entries.append(_file(f"{name}/server.py", f"print('{name}')\n".encode()))
     revision = "a" * 40
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),
         source_alias=SourceAlias("authors"),
         source="https://git.example/servers.git",

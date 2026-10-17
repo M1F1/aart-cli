@@ -244,7 +244,7 @@ class MaintainerReviewsSeparateTheirPromptTest(unittest.TestCase):
                 ),
             ),
             target_registry="registry",
-            mode="vendored",
+            mode="self-contained",
             transaction_digest="4" * 64,
             registry_snapshot_before="5" * 64,
             registry_snapshot_after="6" * 64,

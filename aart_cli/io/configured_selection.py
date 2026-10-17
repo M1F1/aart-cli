@@ -17,14 +17,16 @@ from aart_cli.application.marketplace_resolution import (
     resolve_selection,
 )
 from aart_cli.application.promotion import load_configured_registry_versions
+from aart_cli.application.registry_collections import read_registry_collection
 from aart_cli.configuration.policy import EffectiveConfiguration
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import SourceAlias
-from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
+from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import (
     ArtifactRequest,
     ArtifactSelection,
+    Collection,
     ResolvedSelection,
     VersionConstraint,
 )
@@ -78,9 +80,9 @@ def _approved_artifact(
     snapshot: SourceSnapshot,
     version: RegistryArtifactVersion,
 ) -> Result[ApprovedMarketplaceArtifact]:
-    if version.mode is not PromotionMode.VENDORED:
+    if version.mode is not RegistryContentMode.SELF_CONTAINED:
         return _error(
-            f"configured approved version {version.coordinate} is referenced; its verified "
+            f"configured approved version {version.coordinate} is a pinned reference; its verified "
             "dependency manifest is not available in this registry snapshot"
         )
     path, entry = _manifest_entry(snapshot, version)
@@ -122,10 +124,17 @@ def _approved_snapshot(
     if len(registry_snapshots) != 1:
         return _error(f"configured registry {alias} has inconsistent approved version identity")
     artifacts: list[ApprovedMarketplaceArtifact] = []
+    collections: list[Collection] = []
     for version in versions:
         # Publication is not a test here: this snapshot is the branch the consumer configured, and
         # that is what published means (INV-242, D-207).
         if version.coordinate.artifact.kind == "collection":
+            # A Collection is offered as the document the Registry approved; its members resolve
+            # against this same snapshot when it is selected (§173.3, D-427).
+            collection = read_registry_collection(snapshot, version)
+            if isinstance(collection, Err):
+                return collection
+            collections.append(collection.value)
             continue
         artifact = _approved_artifact(snapshot, version)
         if isinstance(artifact, Err):
@@ -138,6 +147,7 @@ def _approved_snapshot(
                 next(iter(registry_snapshots)),
                 RegistryTrust.REGISTRY_REVIEWED,
                 tuple(artifacts),
+                collections=tuple(collections),
                 resolved_revision=resolved_revision,
             )
         )

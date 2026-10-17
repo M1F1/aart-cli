@@ -47,6 +47,7 @@ from aart_cli.protocol.native_tree import (
 )
 from aart_cli.protocol.paths import parse_relative_path
 from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
+from tests.fixture_versions import with_fixture_versions
 from tests.marketplace_fixtures import configured_source, source_state
 
 
@@ -61,13 +62,13 @@ def _compiled(*, alias: str, revision: str, version: str, server: str):
 
     manifest = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": "github-mcp", "kind": "mcp", "version": version},
+        "artifact": {"name": "github-mcp", "kind": "mcp", "x-fixture-version": version},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},
         "launch": {"type": "python", "entrypoint": "server.py"},
     }
-    compiled = compile_author_snapshot(
+    compiled = with_fixture_versions(compile_author_snapshot)(
         SourceSnapshot(
             SnapshotOrigin.IMMUTABLE_GIT,
             (

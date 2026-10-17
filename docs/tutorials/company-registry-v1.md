@@ -25,8 +25,8 @@ aart-cli registry audit --source .
 aart-cli registry test --source . --compatibility all --latest-version 1.0.0
 ```
 
-Native references pin upstream commit/digests without copying payload; consumers resolve those
-packages from the upstream repository. Foreign content — an upstream that is not an AART package, or
-one your consumers must not reach — is copied into the registry as a package it owns, with
-provenance recording the origin: see [the vendoring tutorial](vendoring-v1.md). AART never commits or
-pushes a maintainer checkout automatically.
+Pinned references record the upstream commit and digests without copying the payload; consumers
+resolve those packages from the upstream repository. Content enters only by adopting a manifest:
+an upstream that is not yet an AART package gets an `aart-cli.yaml` beside each artifact first
+([maintaining a registry](../registry/maintaining-a-registry-v1.md#how-content-enters-a-registry)).
+AART never commits or pushes a maintainer checkout automatically.

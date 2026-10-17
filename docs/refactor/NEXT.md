@@ -1,5 +1,62 @@
 # AART Refactor — Next Work
 
+## Where the work is (2026-10-16, after 0.9.0)
+
+**CP-30 is released as 0.9.0** (#69, which also carried #66–#68). Next is **CP-31**, the owner's
+order, with fifteen steps in `plan.json`:
+- **Collections end to end.** Today a Collection cannot reach a consumer on the configured path.
+  `author init` has no `collection` kind, and `author check` skips a Collection manifest, although
+  Sync compiles it (`parse_author_collection_manifest`). An approved Collection Candidate is never
+  promoted, and `io/configured_selection.py` skips kind `collection`. So the Marketplace lists no
+  Collections whatever was approved, and installing one answers `collection-not-found`. This is
+  B-067, now on the critical path; `CollectionsAreNotReachableTest` pins the gap. An owner's
+  Collection in an Enterprise source repo was not detected for these reasons.
+- **The install flow, as the owner asked.** A Collection is one artifact for 05's harness choice
+  and 07a's scope, applied to every member. Configuration and credentials are asked once per member
+  artifact, and may be skipped with Set later, as for any artifact (§172.3).
+- **Registry-owned versions (#74).** A source manifest carries no version. Sync detects what
+  changed (manifest, payload, dependencies such as requirements), the Maintainer sees those
+  artifacts, and the Registry assigns the next version on approval. This precedes the Collection
+  template, so Collections are authored without a version too.
+- **Default or custom install path (#75)**, and **Marketplace and Installed columns (#72)**:
+  status, scope with a project count, harnesses, eligible harnesses, inputs still `AART_NOT_SET`.
+- **At the end of CP-31**: rename the content mode (#54), then prune (#73), including the vendor
+  command family (#53, closes #41).
+
+**Step 2 is done** (D-424, D-425): manifests are versionless and the Registry numbers each
+approved change; a Collection's members count as its dependencies. **Step 3 is done** (D-426):
+`author init --kind collection`. **Step 4 is done**: `author check` judges a Collection with the
+Collection parser and never skips one. **Step 5 is done** (D-427): promotion publishes Collections from
+the TUI (screens 51 → 52 → 43–45) and from `registry promote`, and the Registry reads them back.
+**Step 6 is done** (D-428): the configured
+Marketplace offers each approved Collection at its highest version, members exact.
+**Step 7 is done** (D-429): the CLI and TUI install a Collection as one artifact on 05/07a.
+
+**Owner decision (2026-10-16): the Registry owns Collections.** A Collection is no longer authored
+in a Source. The Registry maintainer creates and maintains it in a new TUI view and a new CLI
+command, from artifacts the Registry already approved. Its version bumps automatically when a
+promotion bumps one of its members, which happens after a Source change is synchronized. The
+specification is amended (D-430, INV-266, plan step 16).
+
+**Steps 17–19 are done** (D-431, D-432): source-authored Collections are removed;
+`registry collection` and the TUI screens 51/52 define a Collection version, reviewed on 44 and
+committed on 45; and a promotion that approves a member's new version publishes the containing
+Collections' next versions in the same transaction. **Step 8 is done** (characterization only): 07
+and 07b ask each member's configuration and credentials once per member artifact, with Set later.
+**Step 9 is done** (D-434): Installed, Doctor and uninstall for Collections. **Step 10 is done**
+(D-435): screen 05p chooses Default (Settings harnesses, scope and installer; no 05 or 07a) or
+Custom; Settings keeps default harnesses. **Step 11 is done** (D-436): Marketplace and Installed
+rows are a column grid (status, scope with project count, harnesses with `✓`, unset inputs).
+**Step 12 is done**: the Registry and consumer docs. **Step 13 is done**: the content mode is
+`RegistryContentMode = SelfContained | PinnedReference` (#54, D-376), `promote --mode
+self-contained|pinned-reference`. **Step 14 is done** (D-437): `discover`, `vendor`,
+`vendor-batch`, `revendor` and `audit --check-upstream` are gone with what only they used;
+adoption by manifest is the only way in. **Step 15 is done**: PR #76 passed the full suite on
+Python 3.10, 3.11 and 3.14; merging it closes CP-31.
+
+The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
+(`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).
+
 ## Where the work is (2026-10-16)
 
 **CP-29 is merged and released as 0.8.0. The active work is CP-30, the per-artifact install flow:
@@ -39,7 +96,7 @@ Step 10 is done. #66, #67 and #68 were merged into #69 so one release (0.9.0) ca
 their conflicts were the appended decisions and #68's profile rename, which the CP-30 code now
 uses (`LESS_INFO`/`MORE_INFO`). The full `pr-check` ran on #69. **CP-30 is complete.**
 
-Next: the owner's squash merge of #69, then Release Please's release PR. After that CP-31 renames
+Next: the owner's squash merge of #69, then Release Please's release PR. After that CP-32 renames
 the promotion modes (#54) and removes the vendor family (#53, closes #41).
 
 ## CP-29 (2026-10-15)

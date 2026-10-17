@@ -49,9 +49,9 @@ from aart_cli.domain.inspection import (
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.reconciliation import ComponentState
 from aart_cli.domain.registry import (
-    PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
+    RegistryContentMode,
 )
 from aart_cli.domain.result import Ok
 from aart_cli.domain.selection import (
@@ -82,6 +82,7 @@ from aart_cli.store.model import (
     make_object_candidate,
     object_store_paths,
 )
+from tests.fixture_versions import with_fixture_versions
 from tests.mcp_stdio_e2e_test import SERVER_SOURCE, _FileProvider, speak
 
 TOKEN = InputId("github-token")
@@ -90,7 +91,7 @@ KIT = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/data-scientis
 
 MANIFEST = {
     "schema": "aart-cli.dev/mcp/v1",
-    "artifact": {"name": "github", "kind": "mcp", "version": "1.5.0"},
+    "artifact": {"name": "github", "kind": "mcp", "x-fixture-version": "1.5.0"},
     "payload": {"include": ["server.py", "requirements.txt"]},
     "transport": {"type": "stdio"},
     "runtime": {"type": "python", "version": ">=3.10"},
@@ -159,7 +160,7 @@ class CodexMcpInstallationTest(unittest.TestCase):
             )
         )
         self.assertIsInstance(acquired, Ok, getattr(acquired, "diagnostics", ()))
-        compiled = compile_author_snapshot(
+        compiled = with_fixture_versions(compile_author_snapshot)(
             acquired.value.snapshot,
             source_alias=alias,
             source="https://github.company/company/servers.git",
@@ -196,7 +197,7 @@ class CodexMcpInstallationTest(unittest.TestCase):
                 digest,
                 self.object_digest,
                 digest,
-                PromotionMode.VENDORED,
+                RegistryContentMode.SELF_CONTAINED,
                 PublicationStage.PUBLISHED,
             ),
             (KIT,),

@@ -322,6 +322,13 @@ class _ResolutionState:
     edges: dict[ArtifactIdentity, frozenset[ArtifactIdentity]]
 
 
+def version_constraint_allows(constraint: VersionConstraint, version: SemVer) -> bool:
+    """Whether `version` satisfies `constraint`; an unparseable constraint allows nothing."""
+
+    parsed = _parse_constraint(constraint)
+    return isinstance(parsed, Ok) and parsed.value.allows(version)
+
+
 def _constraint_diagnostic(
     identity: ArtifactIdentity,
     requirements: tuple[_Requirement, ...],

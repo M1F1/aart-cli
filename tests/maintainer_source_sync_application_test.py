@@ -12,12 +12,13 @@ from aart_cli.application.maintainer_sync import (
     execute_source_sync,
     prepare_source_sync,
 )
+from aart_cli.application.registry_versions import ApprovedRegistryVersions
 from aart_cli.application.sources import SourceSyncPorts, SourceSyncRequest
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias, SourceId
 from aart_cli.domain.result import Err, Ok
-from aart_cli.protocol.authoring import compile_author_source
+from aart_cli.protocol.authoring import COLLECTION_IN_SOURCE, compile_author_source
 from aart_cli.protocol.capabilities import parse_capability
 from aart_cli.protocol.native_tree import (
     SnapshotEntry,
@@ -54,7 +55,7 @@ def _entry(path: str, content: str) -> SnapshotEntry:
 def _snapshot() -> SourceSnapshot:
     manifest = {
         "schema": "aart-cli.dev/mcp/v1",
-        "artifact": {"name": "github", "kind": "mcp", "version": "1.0.0"},
+        "artifact": {"name": "github", "kind": "mcp"},
         "payload": {"include": ["server.py"]},
         "transport": {"type": "stdio"},
         "runtime": {"type": "python", "version": ">=3.11"},
@@ -73,7 +74,6 @@ def _collection_snapshot() -> SourceSnapshot:
     manifest = {
         "schema": "aart-cli.dev/collection/v1",
         "name": "data-engineer",
-        "version": "2.1.0",
         "summary": "Approved data engineering tools.",
         "artifacts": ["company/mcp/github@^1"],
     }
@@ -218,8 +218,9 @@ class _Ports:
             return _failure("wrong registry")
         return Ok(self.approved)
 
-    def compile(self, snapshot, source_alias, source, revision):
+    def compile(self, snapshot, source_alias, source, revision, versions):
         self.events.append("compile")
+        self.versions = versions
         if self.fail_compile:
             return _failure("compile failed")
         return compile_author_source(
@@ -227,6 +228,7 @@ class _Ports:
             source_alias=source_alias,
             source=source,
             revision=revision,
+            versions=versions,
         )
 
     def ports(self) -> MaintainerSourceSyncPorts:
@@ -261,6 +263,21 @@ class MaintainerSourceSyncApplicationTest(unittest.TestCase):
         self.assertEqual(prepared.value.source_alias, SourceAlias("authors"))
         self.assertEqual(prepared.value.target_registry, SourceAlias("company"))
         self.assertIsNone(prepared.value.baseline.revision)
+
+    def test_the_sync_numbers_each_manifest_from_the_registry_it_was_reviewed_against(self) -> None:
+        """§173.2: Sync asks the Registry for versions, from the approved state it reviewed."""
+
+        ports = _Ports()
+        prepared = _unwrap(prepare_source_sync(_request(), None, None, ports.approved))
+
+        result = execute_source_sync(prepared, prepared.review_digest, ports.ports())
+
+        self.assertIsInstance(result, Ok, result)
+        self.assertEqual(
+            ports.versions,
+            ApprovedRegistryVersions(ports.approved.versions, ports.approved.alias),
+        )
+        self.assertEqual(result.value.scan.active[0].candidate.artifact.coordinate.version, "1.0.0")
 
     def test_confirmed_sync_compiles_reconciles_publishes_and_reads_back_under_one_lease(
         self,
@@ -297,18 +314,20 @@ class MaintainerSourceSyncApplicationTest(unittest.TestCase):
             ],
         )
 
-    def test_confirmed_sync_compiles_and_persists_a_collection_candidate(self) -> None:
+    def test_sync_refuses_a_collection_manifest_and_names_where_collections_are_made(self) -> None:
+        """§173.1, D-430: a Source defines no Collection; the Registry creates it."""
+
         ports = _Ports()
         ports.candidate = _candidate_for(_collection_snapshot())
         prepared = _unwrap(prepare_source_sync(_request(), None, None, ports.approved))
 
         result = execute_source_sync(prepared, prepared.review_digest, ports.ports())
 
-        self.assertIsInstance(result, Ok)
-        assert isinstance(result, Ok)
+        assert isinstance(result, Ok), result
         self.assertEqual(result.value.scan.active, ())
-        self.assertEqual(len(result.value.scan.collection_active), 1)
-        self.assertEqual(result.value.scan.collection_active[0].version, "2.1.0")
+        (refusal,) = result.value.refusals
+        self.assertEqual(str(refusal.manifest_path), "collections/data-engineer/aart-cli.json")
+        self.assertEqual(refusal.diagnostics[0].message, COLLECTION_IN_SOURCE)
         self.assertEqual(result.value.scan.registry_mutations, ())
 
     def test_wrong_review_or_changed_registry_refuses_before_source_mutation(self) -> None:

@@ -29,7 +29,7 @@ from aart_cli.application.promotion import (
 )
 from aart_cli.configuration.model import SourceKind
 from aart_cli.domain.identifiers import SourceId
-from aart_cli.domain.registry import PromotionMode, RegistryLifecycle
+from aart_cli.domain.registry import RegistryContentMode, RegistryLifecycle
 from aart_cli.domain.result import Ok
 from aart_cli.io.source_store import publish_source_snapshot
 from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
@@ -65,7 +65,10 @@ APPROVED = "company/skill/code-review@1.2.0"
 def _at_version(version: str):
     """The same authored Skill, released again at a later version."""
 
-    manifest = {**SKILL_MANIFEST, "artifact": {**SKILL_MANIFEST["artifact"], "version": version}}
+    manifest = {
+        **SKILL_MANIFEST,
+        "artifact": {**SKILL_MANIFEST["artifact"], "x-fixture-version": version},
+    }
     return tuple(
         (path, json.dumps(manifest)) if path.endswith("aart-cli.json") else (path, content)
         for path, content in AUTHORED_SKILL
@@ -206,7 +209,7 @@ class ComposedMarketplaceTest(unittest.TestCase):
 
         self._publish(
             self.registry,
-            _published_registry(AUTHORED_SKILL, mode=PromotionMode.REFERENCED),
+            _published_registry(AUTHORED_SKILL, mode=RegistryContentMode.PINNED_REFERENCE),
             "company-registry",
         )
 
@@ -215,7 +218,7 @@ class ComposedMarketplaceTest(unittest.TestCase):
         self.assertEqual(offers.artifacts, ())
         self.assertEqual(
             offers.declined,
-            (f"{APPROVED}: referenced, so this registry snapshot holds no verified content",),
+            (f"{APPROVED}: pinned-reference, so this registry snapshot holds no verified content",),
         )
 
     def test_a_row_stands_for_the_highest_approved_version_of_its_identity(self) -> None:

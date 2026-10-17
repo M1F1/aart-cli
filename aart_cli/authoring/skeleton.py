@@ -28,7 +28,12 @@ from dataclasses import dataclass
 
 from aart_cli.domain.diagnostics import Diagnostic, Severity
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.protocol.authoring import DiscoveredAuthorManifest, parse_author_manifest
+from aart_cli.protocol.authoring import (
+    COLLECTION_IN_SOURCE,
+    COLLECTION_KIND,
+    DiscoveredAuthorManifest,
+    parse_author_manifest,
+)
 from aart_cli.protocol.codes import AUTHOR_MANIFEST_INVALID
 from aart_cli.protocol.json import JsonArray, JsonObject, JsonValue
 from aart_cli.protocol.paths import parse_relative_path
@@ -135,7 +140,6 @@ def _mcp_blueprint(name: str) -> _Blueprint:
                 ("kind", "mcp"),
                 ("name", name),
                 ("summary", f"{_humanized(name)} MCP server."),
-                ("version", "0.1.0"),
             ),
         ),
         (
@@ -387,7 +391,7 @@ def _anchored(
 
     Keys are written in one order, so a disabled block sits above the first live key that sorts
     after it. One that sorts after every live key in its mapping -- `artifact.summary` after
-    `version` -- has no such key, and closes the block instead.
+    `name` -- has no such key, and closes the block instead.
     """
 
     comments: dict[str, tuple[str, ...]] = {}
@@ -436,8 +440,13 @@ def author_skeleton(kind: str, name: str) -> Result[AuthorSkeleton]:
     because the author's first `aart-cli author check` would blame their own edits for it.
     """
 
+    if kind == COLLECTION_KIND:
+        return _error(
+            f"{COLLECTION_IN_SOURCE}; create it there with "
+            "`aart-cli registry collection NAME --summary TEXT --include KIND/NAME`"
+        )
     if kind not in _BLUEPRINTS:
-        offered = ", ".join(GENERATED_KINDS)
+        offered = ", ".join(INIT_KINDS)
         return _error(f"this build generates no {kind!r} skeleton yet; it generates {offered}")
     blueprint = _BLUEPRINTS[kind](name)
     full = blueprint.document
@@ -510,7 +519,6 @@ def _skill_blueprint(name: str) -> _Blueprint:
                 ("kind", "skill"),
                 ("name", name),
                 ("summary", f"{_humanized(name)} skill."),
-                ("version", "0.1.0"),
             ),
         ),
         (
@@ -652,7 +660,6 @@ def _document_blueprint(
                     ("kind", kind),
                     ("name", name),
                     ("summary", summary),
-                    ("version", "0.1.0"),
                 ),
             ),
             (
@@ -747,7 +754,6 @@ def _hook_blueprint(name: str) -> _Blueprint:
                     ("kind", "hook"),
                     ("name", name),
                     ("summary", f"{_humanized(name)} hook."),
-                    ("version", "0.1.0"),
                 ),
             ),
             (
@@ -875,7 +881,6 @@ def _plugin_blueprint(name: str) -> _Blueprint:
                     ("kind", "plugin"),
                     ("name", name),
                     ("summary", f"{_humanized(name)} plugin."),
-                    ("version", "0.1.0"),
                 ),
             ),
             (
@@ -924,6 +929,10 @@ _BLUEPRINTS: dict[str, Callable[[str], _Blueprint]] = {
 }
 
 GENERATED_KINDS = tuple(sorted(_BLUEPRINTS))
+
+#: What `aart-cli author init --kind` offers: every artifact kind. A Collection is the Registry's
+#: (§173.3, D-430), so it is refused with where to create one instead.
+INIT_KINDS: tuple[str, ...] = GENERATED_KINDS
 
 
 def _verified(manifest: str) -> Result[None]:

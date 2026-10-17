@@ -41,19 +41,19 @@ class CurationModelTest(unittest.TestCase):
     def test_review_and_outcome_render_exact_evidence_and_follow_up(self) -> None:
         digest = ObjectDigest("sha256", "a" * 64)
         review = CurationReview(
-            action=CurationAction.COLLECTION,
+            action=CurationAction.INIT,
             workspace="/tmp/registry",
             mutating=True,
             review_digest=digest,
             snapshot_digest=ObjectDigest("sha256", "b" * 64),
-            changes=(CurationChange("collections/demo.json", "added"),),
+            changes=(CurationChange("aart-cli-source.json", "added"),),
             checks=(CurationCheck("registry", True),),
             warnings=("Review generated starter content.",),
             follow_up_commands=("aart-cli registry validate --source /tmp/registry --strict",),
         )
         rendered = "\n".join(render_curation_review(review))
-        self.assertIn("collection", rendered)
-        self.assertIn("collections/demo.json", rendered)
+        self.assertIn("init", rendered)
+        self.assertIn("aart-cli-source.json", rendered)
         self.assertIn(str(digest), rendered)
         self.assertIn(
             "AART will not commit or push; review the working-tree diff afterward.", rendered
@@ -61,7 +61,7 @@ class CurationModelTest(unittest.TestCase):
         self.assertNotIn("Finalizing publish", rendered)
 
         outcome = CurationOutcome(
-            action=CurationAction.COLLECTION,
+            action=CurationAction.INIT,
             status="succeeded",
             changed_paths=1,
             follow_up_commands=review.follow_up_commands,
@@ -79,9 +79,7 @@ class CurationModelTest(unittest.TestCase):
         self.assertIn("failed", "\n".join(render_curation_outcome(failed)))
         self.assertIn(
             "no changes were required",
-            "\n".join(
-                render_curation_outcome(CurationOutcome(CurationAction.REVENDOR, "no-op", 0))
-            ),
+            "\n".join(render_curation_outcome(CurationOutcome(CurationAction.FORMAT, "no-op", 0))),
         )
         self.assertIn(
             "completed read-only",

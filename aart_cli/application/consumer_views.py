@@ -85,12 +85,15 @@ from .maintainer_views import MaintainerScreen, maintainer_navigation_targets
 from .removal_proposal import RemovalProposal
 
 __all__ = [
+    "installed_cells",
+    "marketplace_cells",
     "ALL_ARTIFACTS",
     "ALL_INSTALLATIONS",
     "PLACEHOLDER_WARNING",
     "InstallSecretView",
     "choose_pair_scope",
     "default_pair_scopes",
+    "settings_pairs",
     "pair_scope_from_key",
     "pair_scope_key",
     "scope_choice_offered",
@@ -132,6 +135,15 @@ __all__ = [
     "ConsumerSettings",
     "SETTING_PURPOSE",
     "SETTING_ROWS",
+    "DEFAULT_HARNESS_ROW_PREFIX",
+    "INSTALL_PATH_CUSTOM",
+    "INSTALL_PATH_DEFAULT",
+    "INSTALL_PATH_PURPOSE",
+    "INSTALL_PATH_ROWS",
+    "default_harness_from_row",
+    "default_harness_row",
+    "setting_purpose",
+    "setting_rows",
     "SUCCESS_CHOICES",
     "McpTestEntryView",
     "McpTestResultView",
@@ -143,6 +155,7 @@ __all__ = [
     "EffectView",
     "InstalledArtifactView",
     "InstalledCollectionView",
+    "under_collections",
     "InputView",
     "LifecycleDriftView",
     "LifecycleOutcomeView",
@@ -215,6 +228,9 @@ class ConsumerScreen(str, Enum):
     ARTIFACT_DETAILS = "03-artifact-details"
     COLLECTION_PREVIEW = "04-collection"
     COLLECTION_CUSTOMIZE = "04a-customize-collection"
+    # 05p chooses the install path after Install (§173.7): Default takes the harnesses, scope and
+    # Python installer from Settings and skips 05 and 07a; Custom is 05 onwards.
+    INSTALL_PATH = "05p-install-path"
     REVIEW_SELECTION = "05-review-selection"
     AUTOMATIC_INSPECTION = "06-automatic-inspection"
     REQUIRED_INPUTS = "07-required-inputs"
@@ -434,6 +450,24 @@ def default_pairs(targets: tuple[HarnessTargetView, ...]) -> tuple[str, ...]:
         pair_key(artifact, harnesses[0])
         for artifact, harnesses in options.items()
         if len(harnesses) == 1
+    )
+
+
+def settings_pairs(
+    targets: tuple[HarnessTargetView, ...], harnesses: tuple[str, ...]
+) -> tuple[str, ...]:
+    """The pairs the Default path installs (§173.7): each artifact on the Settings harnesses.
+
+    `targets` are the detected harnesses and what each can host, so a Settings harness that is not
+    detected, or cannot host an artifact, gives that artifact nothing. With no harness in Settings,
+    every detected harness that can host an artifact is used.
+    """
+
+    return tuple(
+        pair_key(artifact, target.harness)
+        for target in targets
+        if not harnesses or target.harness in harnesses
+        for artifact in target.artifacts
     )
 
 
@@ -1516,6 +1550,9 @@ class InstalledArtifactView:
     #: The inputs this installation still holds as `AART_NOT_SET`, ordinary and secret alike
     #: (§172.3). Filled where the machine is assembled, which is where both are known.
     placeholders: tuple[str, ...] = ()
+    #: The concrete root this installation was made into (§169.3): the project directory for a
+    #: project-scope installation. Empty where the record names no owner.
+    root: str = ""
 
     @property
     def row(self) -> str:
@@ -1650,6 +1687,7 @@ def project_installed_artifact(
     ):
         raise ValueError("installed artifact projection received invalid ownership or credentials")
     health = installation_health(desired, current, update_available=update_available)
+    owner = None if receipt is None else receipt.owner
     actions = ["details", "verify", "configure", "uninstall"]
     if health.value == "update":
         actions.insert(2, "update")
@@ -1663,9 +1701,62 @@ def project_installed_artifact(
         tuple(actions),
         credentials,
         _installed_paths(receipt, current),
-        _recorded_scope(receipt),
+        _recorded_scope(receipt) if owner is None else owner.scope.value,
         harness,
+        root="" if owner is None else owner.root,
     )
+
+
+def _counted(count: int, noun: str) -> str:
+    return f"{count} {noun}{'' if count == 1 else 's'}" if count else ""
+
+
+def marketplace_cells(
+    key: str, installed: tuple[InstalledArtifactView, ...], eligible: tuple[str, ...]
+) -> tuple[str, ...]:
+    """One Marketplace row's columns (§173.8), read off the installations of any version.
+
+    The offer, then: installed or not or with an update available; the scopes it is installed in,
+    with how many projects; the harnesses, each detected one that could host it and a `✓` on each
+    that holds it; and the inputs still `AART_NOT_SET`, summed over installations because each
+    keeps its own (§169.4). The two harness facts share one column so a row fits the measure.
+    """
+
+    artifact = key.partition("@")[0]
+    held = tuple(item for item in installed if item.coordinate.partition("@")[0] == artifact)
+    if not held:
+        status = "not installed"
+    elif any(item.health == "update" for item in held):
+        status = "update available"
+    else:
+        status = "installed"
+    projects = _counted(
+        len({item.root for item in held if item.scope == "project" and item.root}), "project"
+    )
+    user = any(item.scope == "user" for item in held)
+    holding = {item.harness for item in held if item.harness}
+    unset = sum(len(item.placeholders) for item in held)
+    return (
+        key,
+        status,
+        " + ".join(part for part in ("user" if user else "", projects) if part),
+        ", ".join(
+            f"{harness} ✓" if harness in holding else harness
+            for harness in sorted(holding | set(eligible))
+        ),
+        f"{unset} not set" if unset else "",
+    )
+
+
+def installed_cells(view: InstalledArtifactView, health: str) -> tuple[str, ...]:
+    """One Installed row's columns after its key (§173.8): health, scope, project, unset inputs.
+
+    The project is the root's last name; the whole path is detail, under More info.
+    """
+
+    project = view.root.rstrip("/").rpartition("/")[2] if view.scope == "project" else ""
+    unset = len(view.placeholders)
+    return (health, view.scope, project, f"{unset} not set" if unset else "")
 
 
 def project_unadopted_installation(coordinate: str) -> InstalledArtifactView:
@@ -1719,6 +1810,29 @@ def project_installed_collection(
         tuple(item.artifact for item in projected.members_requiring_attention),
         ("details", "verify", "update", "uninstall"),
     )
+
+
+def under_collections(
+    collections: tuple[InstalledCollectionView, ...], installations: tuple[str, ...]
+) -> tuple[tuple[str, bool], ...]:
+    """Each Collection, then its member installations under it, then every other installation.
+
+    Installed and Doctor share this order (§173.6). Each pair is a row and whether it is drawn under
+    a Collection. A member of two Collections is drawn once, under the first, because a row is an
+    installation and two rows for one would leave the second unreachable.
+    """
+
+    present = set(installations)
+    placed: set[str] = set()
+    ordered: list[tuple[str, bool]] = []
+    for collection in collections:
+        ordered.append((collection.collection, False))
+        for member in collection.members:
+            if member.artifact in present and member.artifact not in placed:
+                placed.add(member.artifact)
+                ordered.append((member.artifact, True))
+    ordered.extend((row, False) for row in installations if row not in placed)
+    return tuple(ordered)
 
 
 @dataclass(frozen=True, slots=True)
@@ -2470,14 +2584,21 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.MARKETPLACE: (
         ConsumerScreen.ARTIFACT_DETAILS,
         ConsumerScreen.COLLECTION_PREVIEW,
-        ConsumerScreen.REVIEW_SELECTION,
+        ConsumerScreen.INSTALL_PATH,
     ),
-    ConsumerScreen.ARTIFACT_DETAILS: (ConsumerScreen.REVIEW_SELECTION,),
+    ConsumerScreen.ARTIFACT_DETAILS: (ConsumerScreen.INSTALL_PATH,),
     ConsumerScreen.COLLECTION_PREVIEW: (
         ConsumerScreen.COLLECTION_CUSTOMIZE,
-        ConsumerScreen.REVIEW_SELECTION,
+        ConsumerScreen.INSTALL_PATH,
     ),
-    ConsumerScreen.COLLECTION_CUSTOMIZE: (ConsumerScreen.REVIEW_SELECTION,),
+    # Custom goes on to 05; Default to whatever still needs deciding (§173.7).
+    ConsumerScreen.INSTALL_PATH: (
+        ConsumerScreen.REVIEW_SELECTION,
+        ConsumerScreen.REQUIRED_INPUTS,
+        ConsumerScreen.INSTALL_CREDENTIALS,
+        ConsumerScreen.READY,
+    ),
+    ConsumerScreen.COLLECTION_CUSTOMIZE: (ConsumerScreen.INSTALL_PATH,),
     ConsumerScreen.REVIEW_SELECTION: (
         ConsumerScreen.AUTOMATIC_INSPECTION,
         ConsumerScreen.REQUIRED_INPUTS,
@@ -2561,8 +2682,13 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
 _KEEPS_FOCUS: frozenset[tuple[ConsumerScreen, ConsumerScreen]] = frozenset(
     {
         (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE),
-        (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.REVIEW_SELECTION),
-        (ConsumerScreen.COLLECTION_CUSTOMIZE, ConsumerScreen.REVIEW_SELECTION),
+        (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.INSTALL_PATH),
+        (ConsumerScreen.COLLECTION_CUSTOMIZE, ConsumerScreen.INSTALL_PATH),
+        # 05p's rows are the two paths, so what follows it is still about what Install was for.
+        (ConsumerScreen.INSTALL_PATH, ConsumerScreen.REVIEW_SELECTION),
+        (ConsumerScreen.INSTALL_PATH, ConsumerScreen.REQUIRED_INPUTS),
+        (ConsumerScreen.INSTALL_PATH, ConsumerScreen.INSTALL_CREDENTIALS),
+        (ConsumerScreen.INSTALL_PATH, ConsumerScreen.READY),
         # CP-23 task 06: Success is focused on the receipt its operation recorded, so opening the
         # receipt from it opens that one rather than whichever row the cursor was on.
         (ConsumerScreen.SUCCESS, ConsumerScreen.RECEIPT_DETAILS),
@@ -2806,8 +2932,17 @@ class ConsumerSettings:
     #: because every Python that can build an environment already has it, so the preference starts
     #: on the backend that is never the reason an install cannot run (issue #11b).
     python_installer: str = "pip"
+    #: The harnesses the Default install path uses (§173.7). Empty means every detected harness
+    #: that can host the artifact.
+    default_harnesses: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        if (
+            not isinstance(self.default_harnesses, tuple)
+            or any(not _is_harness_name(item) for item in self.default_harnesses)
+            or len(set(self.default_harnesses)) != len(self.default_harnesses)
+        ):
+            raise ValueError("consumer settings are invalid")
         if (
             not isinstance(self.profile, PresentationProfile)
             or self.default_scope not in {"project", "user"}
@@ -2844,6 +2979,16 @@ class ConsumerSettings:
             return replace(self, python_installer="uv" if self.python_installer == "pip" else "pip")
         if row == "maintainer-mode":
             return self.with_maintainer_mode(not self.maintainer_mode)
+        harness = default_harness_from_row(row)
+        if harness is not None:
+            return replace(
+                self,
+                default_harnesses=(
+                    tuple(item for item in self.default_harnesses if item != harness)
+                    if harness in self.default_harnesses
+                    else (*self.default_harnesses, harness)
+                ),
+            )
         raise ValueError(f"no consumer setting is named {row}")
 
 
@@ -2927,6 +3072,41 @@ SETTING_ROWS: tuple[str, ...] = (
     "maintainer-mode",
 )
 
+#: Screen 28's rows for the Default path's harnesses, one per detected harness, each on or off.
+DEFAULT_HARNESS_ROW_PREFIX = "default-harness:"
+
+
+def _is_harness_name(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and all(character.isalnum() or character in "-_." for character in value)
+    )
+
+
+def default_harness_row(harness: str) -> str:
+    if not _is_harness_name(harness):
+        raise ValueError("a default harness row needs a harness name")
+    return f"{DEFAULT_HARNESS_ROW_PREFIX}{harness}"
+
+
+def default_harness_from_row(row: str) -> str | None:
+    if not row.startswith(DEFAULT_HARNESS_ROW_PREFIX):
+        return None
+    harness = row[len(DEFAULT_HARNESS_ROW_PREFIX) :]
+    return harness if _is_harness_name(harness) else None
+
+
+def setting_rows(harnesses: tuple[str, ...]) -> tuple[str, ...]:
+    """Screen 28's rows: the fixed controls, then one Default-path harness row per harness.
+
+    The harness rows come last, under their own heading, so the fixed controls keep their places
+    however many harnesses this machine has.
+    """
+
+    return (*SETTING_ROWS, *(default_harness_row(item) for item in harnesses))
+
+
 SETTING_PURPOSE: dict[str, str] = {
     "detail-level": "How much every screen says: Fast hides the per-row explanations, "
     "Verbose shows them.",
@@ -2947,6 +3127,30 @@ a setting to find out what it did.
 """
 
 
+def setting_purpose(row: str) -> str | None:
+    """What the Settings row under the cursor changes, a Default-path harness row included."""
+
+    harness = default_harness_from_row(row)
+    if harness is not None:
+        return (
+            f"Whether the Default install path installs into {harness} when it is detected and "
+            "can host the artifact. With no harness on, Default uses every one that can."
+        )
+    return SETTING_PURPOSE.get(row)
+
+
+#: Screen 05p's rows (§173.7). Default is first: it is the path that asks least.
+INSTALL_PATH_DEFAULT = "default"
+INSTALL_PATH_CUSTOM = "custom"
+INSTALL_PATH_ROWS: tuple[str, ...] = (INSTALL_PATH_DEFAULT, INSTALL_PATH_CUSTOM)
+INSTALL_PATH_PURPOSE: dict[str, str] = {
+    INSTALL_PATH_DEFAULT: "Installs with the harnesses, scope and Python installer from Settings, "
+    "and asks only what still needs entering.",
+    INSTALL_PATH_CUSTOM: "Chooses the harnesses, the scope and the Python installer for this "
+    "install, then asks what needs entering.",
+}
+
+
 def settings_to_data(view: ConsumerSettings) -> dict[str, object]:
     """One consumer's preferences as plain data. No machine state, and nothing secret."""
 
@@ -2958,6 +3162,7 @@ def settings_to_data(view: ConsumerSettings) -> dict[str, object]:
         "python_installer": view.python_installer,
         "show_updates": view.show_updates,
         "maintainer_mode": view.maintainer_mode,
+        "default_harnesses": list(view.default_harnesses),
     }
 
 
@@ -2977,6 +3182,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
         "python_installer",
         "show_updates",
         "maintainer_mode",
+        "default_harnesses",
     }
     unknown = sorted(set(data) - known)
     if unknown:
@@ -3002,6 +3208,13 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
                 ),
             )
         )
+    harnesses = data.get("default_harnesses", [])
+    if (
+        not isinstance(harnesses, list)
+        or any(not _is_harness_name(item) for item in harnesses)
+        or len(set(harnesses)) != len(harnesses)
+    ):
+        return Err((_settings_invalid("stored default harnesses must be distinct harness names"),))
     return Ok(
         ConsumerSettings(
             PresentationProfile(detail),
@@ -3009,6 +3222,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
             updates,
             maintainer,
             cast(str, installer),
+            tuple(harnesses),
         )
     )
 
@@ -3123,11 +3337,17 @@ class DoctorView:
     repairable_issues: tuple[str, ...]
     actions: tuple[str, ...]
     artifacts: tuple[InstalledArtifactView, ...] = ()
+    collections: tuple[InstalledCollectionView, ...] = ()
 
 
-def project_doctor(artifacts: tuple[InstalledArtifactView, ...]) -> DoctorView:
+def project_doctor(
+    artifacts: tuple[InstalledArtifactView, ...],
+    collections: tuple[InstalledCollectionView, ...] = (),
+) -> DoctorView:
     if any(not isinstance(item, InstalledArtifactView) for item in artifacts):
         raise ValueError("Doctor projection needs installed artifact views")
+    if any(not isinstance(item, InstalledCollectionView) for item in collections):
+        raise ValueError("Doctor projection needs installed Collection views")
     # An issue is an installation, as Installed and repair address it: one artifact installed into
     # two harnesses is two issues, and keyed by coordinate they were one row twice (§169.3).
     issues = tuple(item.row for item in artifacts if item.health in {"attention", "broken"})
@@ -3144,6 +3364,7 @@ def project_doctor(artifacts: tuple[InstalledArtifactView, ...]) -> DoctorView:
         repairable,
         actions,
         artifacts,
+        collections,
     )
 
 

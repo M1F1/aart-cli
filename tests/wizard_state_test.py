@@ -94,11 +94,11 @@ class WizardStageGraphTests(unittest.TestCase):
         base = select(initial_session(), "role", "maintainer")
 
         health = select(base, "maintainer_action", "health")
-        vendor = select(base, "maintainer_action", "vendor")
+        collection = select(base, "maintainer_action", "collection")
         user = select(base, "maintainer_action", "user")
 
         self.assertEqual(stages_for(health)[-2:], ("maintainer_action", "review"))
-        self.assertIn("native_details", stages_for(vendor))
+        self.assertIn("native_details", stages_for(collection))
         self.assertIn("profiles", stages_for(user))
 
     def test_default_maintainer_checkout_skips_sources_and_back_returns_to_role(self):

@@ -16,15 +16,17 @@ from aart_cli.application.maintainer_promotion import (
     RegistryBaselineMismatch,
     execute_candidate_promotion,
     prepare_candidate_promotion_transaction,
+    prepare_collection_transaction,
     prepare_promotion_transaction,
 )
+from aart_cli.application.registry_collections import plan_collection_definition
 from aart_cli.configuration.model import ConfiguredSource, git_origin_key
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.domain.candidates import CandidateId
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.io.git import GitProcessRequest, run_git_process
 from aart_cli.sources.model import (
@@ -294,7 +296,7 @@ def prepare_configured_candidate_promotion(
     data_root: str,
     registry_root: str,
     policy: EffectivePolicy,
-    mode: PromotionMode,
+    mode: RegistryContentMode,
 ) -> Result[PreparedConfiguredCandidatePromotion]:
     """Re-observe and pre-validate the exact local registry transaction to confirm."""
 
@@ -302,7 +304,7 @@ def prepare_configured_candidate_promotion(
         not isinstance(effective, EffectiveConfiguration)
         or not isinstance(candidate_id, CandidateId)
         or not isinstance(policy, EffectivePolicy)
-        or not isinstance(mode, PromotionMode)
+        or not isinstance(mode, RegistryContentMode)
         or not os.path.isabs(data_root)
         or os.path.normpath(data_root) != data_root
     ):
@@ -349,7 +351,7 @@ def prepare_configured_bulk_promotion(
     data_root: str,
     registry_root: str,
     policy: EffectivePolicy,
-    mode: PromotionMode,
+    mode: RegistryContentMode,
 ) -> Result[PreparedConfiguredCandidatePromotion]:
     """Re-observe and pre-validate one local registry transaction for a whole selection.
 
@@ -363,7 +365,7 @@ def prepare_configured_bulk_promotion(
         or not candidate_ids
         or any(not isinstance(item, CandidateId) for item in candidate_ids)
         or not isinstance(policy, EffectivePolicy)
-        or not isinstance(mode, PromotionMode)
+        or not isinstance(mode, RegistryContentMode)
         or not os.path.isabs(data_root)
         or os.path.normpath(data_root) != data_root
     ):
@@ -402,6 +404,73 @@ def prepare_configured_bulk_promotion(
         approved.value,
         workspace.value,
         mode=mode,
+        baseline_mismatch=_baseline_context(root.value, registry, approved.value, workspace.value),
+    )
+    if isinstance(transaction, Err):
+        return transaction
+    try:
+        return Ok(PreparedConfiguredCandidatePromotion(transaction.value, root.value, data_root))
+    except ValueError as error:
+        return _error(str(error))
+
+
+def prepare_configured_collection(
+    effective: EffectiveConfiguration,
+    target: SourceAlias,
+    *,
+    name: str,
+    summary: str | None,
+    members: tuple[ArtifactIdentity, ...],
+    data_root: str,
+    registry_root: str,
+    policy: EffectivePolicy,
+) -> Result[PreparedConfiguredCandidatePromotion]:
+    """Re-observe the registry and prepare one Collection version as a reviewed transaction.
+
+    Screen 52's answer, reviewed and committed on 44 and 45 like a promotion (D-430). Each member
+    is pinned to what the checkout -- which must be the approved baseline -- holds right now.
+    """
+
+    if (
+        not isinstance(effective, EffectiveConfiguration)
+        or not isinstance(target, SourceAlias)
+        or not isinstance(policy, EffectivePolicy)
+        or not os.path.isabs(data_root)
+        or os.path.normpath(data_root) != data_root
+    ):
+        return _error("preparing a Collection needs typed configuration and local state")
+    registry = _configured_registry(effective, target)
+    if registry is None:
+        return _error(f"target registry {target} is not configured and enabled")
+    root = _registry_root(registry_root, registry)
+    if isinstance(root, Err):
+        return root
+    approved = read_approved_registry_state(effective, target, data_root=data_root)
+    if isinstance(approved, Err):
+        return approved
+    workspace = FilesystemPromotionOutput(root.value).current()
+    if isinstance(workspace, Err):
+        return workspace
+    defined = plan_collection_definition(
+        approved.value.versions,
+        workspace.value,
+        target_registry=target,
+        name=name,
+        summary=summary,
+        members=members,
+    )
+    if isinstance(defined, Err):
+        return defined
+    if defined.value is None:
+        return _error(
+            f"Collection {name} already has these members and summary; nothing to publish",
+            "change its members or summary and review it again",
+        )
+    transaction = prepare_collection_transaction(
+        defined.value,
+        policy,
+        approved.value,
+        workspace.value,
         baseline_mismatch=_baseline_context(root.value, registry, approved.value, workspace.value),
     )
     if isinstance(transaction, Err):
@@ -471,5 +540,6 @@ __all__ = [
     "commit_candidate_promotion",
     "prepare_configured_bulk_promotion",
     "prepare_configured_candidate_promotion",
+    "prepare_configured_collection",
     "read_configured_candidate",
 ]

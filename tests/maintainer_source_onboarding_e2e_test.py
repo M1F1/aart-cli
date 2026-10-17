@@ -19,6 +19,7 @@ from aart_cli.application.consumer_ui import (
 )
 from aart_cli.application.consumer_views import ConsumerSession
 from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.domain.candidates import CandidateState
 from aart_cli.domain.result import Ok
 from aart_cli.io.candidate_store import candidate_history_paths, read_candidate_history
 from aart_cli.io.source_store import read_current_source
@@ -154,9 +155,11 @@ class MaintainerSourceOnboardingTest(unittest.TestCase):
             )
             self.assertEqual(read_candidate_history(candidate_history_paths(other_paths)), Ok(None))
 
-            for version in (None, "1.1.0"):
-                if version is not None:
-                    manifest.write_text(SKILL_MANIFEST.replace("1.0.0", version), encoding="utf-8")
+            # Unchanged, then changed. Nothing is approved yet, so the change is still the first
+            # version the Registry would publish, offered as a changed Candidate (§173.2).
+            for changed in (False, True):
+                if changed:
+                    manifest.write_text(SKILL_MANIFEST + "    - opencode\n", encoding="utf-8")
                 repeated = FakeTerminal(ENTER, ord("s"), ENTER)
                 synced = run_consumer_shell(
                     handler.source(),
@@ -170,13 +173,12 @@ class MaintainerSourceOnboardingTest(unittest.TestCase):
                 self.assertIsInstance(refreshed, Ok)
                 assert isinstance(refreshed, Ok) and refreshed.value is not None
                 self.assertEqual(len(refreshed.value.active), 1)
-                if version is None:
+                if not changed:
                     self.assertEqual(refreshed, history)
                 else:
-                    self.assertEqual(
-                        str(refreshed.value.active[0].candidate.artifact.coordinate.version),
-                        version,
-                    )
+                    candidate = refreshed.value.active[0].candidate
+                    self.assertEqual(candidate.state, CandidateState.CHANGED)
+                    self.assertEqual(candidate.artifact.coordinate.version, "1.0.0")
                 self.assertEqual(read_current_source(registry_request), registry_before)
             self.assertFalse(any(Path(env.project).iterdir()))
 

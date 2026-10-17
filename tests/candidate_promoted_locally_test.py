@@ -44,7 +44,7 @@ from aart_cli.application.promotion import (
 from aart_cli.domain.candidates import CandidateState, assess_candidate
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok
 from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
 from aart_cli.sources.model import source_snapshot_digest
@@ -298,7 +298,7 @@ class NoRecordedCandidateIsOfferedAgainTest(unittest.TestCase):
         self.approved = _approved(_EMPTY)
 
     def test_review_and_diff_refuse_in_every_mode_and_name_the_way_on(self) -> None:
-        for mode in PromotionMode:
+        for mode in RegistryContentMode:
             with self.subTest(mode=mode):
                 review = project_maintainer_promotion_review(
                     self.bundle,
@@ -331,7 +331,7 @@ class NoRecordedCandidateIsOfferedAgainTest(unittest.TestCase):
             self.validation,
             _POLICY,
             self.approved,
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
             promotion=CandidatePromotionRecord.PROMOTED,
         )
 
@@ -340,7 +340,11 @@ class NoRecordedCandidateIsOfferedAgainTest(unittest.TestCase):
 
     def test_an_unrecorded_candidate_is_still_offered(self) -> None:
         review = project_maintainer_promotion_review(
-            self.bundle, self.validation, _POLICY, self.approved, mode=PromotionMode.VENDORED
+            self.bundle,
+            self.validation,
+            _POLICY,
+            self.approved,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
         diff = project_maintainer_registry_diff(
             self.bundle,
@@ -348,7 +352,7 @@ class NoRecordedCandidateIsOfferedAgainTest(unittest.TestCase):
             _POLICY,
             self.approved,
             _EMPTY,
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         self.assertTrue(review.confirmable, review.refusals)
