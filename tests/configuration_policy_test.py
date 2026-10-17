@@ -41,7 +41,7 @@ class ConfigurationPolicyTest(unittest.TestCase):
         user = _config(
             """{
               "schema_version":1,
-              "sources":[{"alias":"company","kind":"registry-git","url":"https://github.company.example/agents/registry.git","ref":"main","enabled":true}],
+              "registries":[{"alias":"company","kind":"git","url":"https://github.company.example/agents/registry.git","ref":"main","enabled":true}],
               "sync":{"mode":"auto","max_age_seconds":900}
             }"""
         )
@@ -70,27 +70,28 @@ class ConfigurationPolicyTest(unittest.TestCase):
         self.assertEqual(result.value.configuration.sync.max_age_seconds, 10)
         self.assertEqual(result.value.locked_fields, ())
 
-    def test_policy_checks_direct_sources_hosts_prefixes_and_required_aliases(self) -> None:
+    def test_policy_checks_hosts_prefixes_and_required_registries(self) -> None:
         direct = _config(
             """{
               "schema_version":1,
-              "sources":[{"alias":"team","kind":"source-git","url":"https://github.com/team/repo.git","ref":"main","enabled":true}]
+              "upstreams":[{"alias":"team","kind":"git","url":"https://github.com/team/repo.git","ref":"main","enabled":true}]
             }"""
         )
         registry = _config(
             """{
               "schema_version":1,
-              "sources":[{"alias":"company","kind":"registry-git","url":"https://github.company.example/other/registry.git","ref":"main","enabled":true}]
+              "registries":[{"alias":"company","kind":"git","url":"https://github.company.example/other/registry.git","ref":"main","enabled":true}]
             }"""
         )
         cases = (
-            (direct, _policy('{"schema_version":1,"allow_direct_sources":false}')),
             (
                 direct,
                 _policy('{"schema_version":1,"allowed_git_hosts":["github.company.example"]}'),
             ),
             (registry, _policy('{"schema_version":1,"allowed_repository_prefixes":["agents/"]}')),
-            (registry, _policy('{"schema_version":1,"required_sources":["missing"]}')),
+            (registry, _policy('{"schema_version":1,"required_registries":["missing"]}')),
+            # An upstream of the same alias is not the Registry the organization requires.
+            (direct, _policy('{"schema_version":1,"required_registries":["team"]}')),
         )
 
         for config, policy in cases:
@@ -102,18 +103,20 @@ class ConfigurationPolicyTest(unittest.TestCase):
                     all(item.code.value == "source-policy-denied" for item in result.diagnostics)
                 )
 
-    def test_source_management_can_stage_required_sources_without_authorizing_content(self) -> None:
+    def test_source_management_can_stage_required_registries_without_authorizing_content(
+        self,
+    ) -> None:
         company_only = _config(
             """{
               "schema_version":1,
-              "sources":[{"alias":"company","kind":"registry-git","url":"https://git.company.example/agents/company.git","ref":"main","enabled":true}],
+              "registries":[{"alias":"company","kind":"git","url":"https://git.company.example/agents/company.git","ref":"main","enabled":true}],
               "default_registry":"company"
             }"""
         )
         policy = _policy(
             """{
               "schema_version":1,
-              "required_sources":["company","team"],
+              "required_registries":["company","team"],
               "allowed_git_hosts":["git.company.example"],
               "allowed_repository_prefixes":["agents/"]
             }"""
@@ -126,18 +129,6 @@ class ConfigurationPolicyTest(unittest.TestCase):
         self.assertIsInstance(management, Ok)
         assert isinstance(content, Err)
         self.assertEqual(content.diagnostics[0].code.value, "source-policy-denied")
-
-        forbidden_direct = _config(
-            """{
-              "schema_version":1,
-              "sources":[{"alias":"external","kind":"source-git","url":"https://git.company.example/agents/external.git","ref":"main","enabled":true}]
-            }"""
-        )
-        direct_denied = apply_configuration_for_source_management(
-            forbidden_direct,
-            _policy('{"schema_version":1,"allow_direct_sources":false}'),
-        )
-        self.assertIsInstance(direct_denied, Err)
 
     def test_diagnostics_are_redacted(self) -> None:
         self.assertEqual(
@@ -156,7 +147,7 @@ class ConfigurationPolicyTest(unittest.TestCase):
         base = _config(
             """{
               "schema_version":1,
-              "sources":[{"alias":"company","kind":"registry-git","url":"https://example.test/team/registry.git","ref":"main","enabled":true}]
+              "registries":[{"alias":"company","kind":"git","url":"https://example.test/team/registry.git","ref":"main","enabled":true}]
             }"""
         )
         invalid_runtime = (
@@ -180,17 +171,17 @@ class ConfigurationPolicyTest(unittest.TestCase):
         denied = apply_configuration(
             direct,
             RuntimeOverrides(),
-            _policy('{"schema_version":1,"allow_direct_sources":false}'),
+            _policy('{"schema_version":1,"allowed_git_hosts":["example.test"]}'),
         )
         self.assertIsInstance(denied, Err)
         assert isinstance(denied, Err)
-        self.assertGreaterEqual(len(denied.diagnostics), 3)
+        self.assertEqual(len(denied.diagnostics), 1)
 
     def test_allowed_constraints_succeed(self) -> None:
         configuration = _config(
             """{
               "schema_version":1,
-              "sources":[{"alias":"private","kind":"registry-git","url":"https://git.company.test/team/registry.git","ref":"main","enabled":true}]
+              "registries":[{"alias":"private","kind":"git","url":"https://git.company.test/team/registry.git","ref":"main","enabled":true}]
             }"""
         )
         policy = _policy(

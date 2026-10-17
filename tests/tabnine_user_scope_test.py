@@ -21,9 +21,7 @@ _INSTALL = ("--profile", "tabnine", "--scope", "user", "--yes")
 class TabnineUserScopeE2ETest(unittest.TestCase):
     def test_a_skill_goes_into_tabnines_user_skills_directory(self) -> None:
         with _environment(authored=_AUTHORED_SKILL) as env:
-            code, payload = env.run(
-                "marketplace", "install", "company/skill/code-review", *_INSTALL
-            )
+            code, payload = env.run("consume", "install", "company/skill/code-review", *_INSTALL)
 
             self.assertEqual(code, 0, payload)
             skill = env.home / ".tabnine/agent/skills/code-review-company-user/SKILL.md"
@@ -32,7 +30,7 @@ class TabnineUserScopeE2ETest(unittest.TestCase):
 
     def test_an_mcp_is_registered_in_tabnines_user_settings(self) -> None:
         with _environment(authored=_AUTHORED_MCP) as env:
-            code, payload = env.run("marketplace", "install", "company/mcp/dummy", *_INSTALL)
+            code, payload = env.run("consume", "install", "company/mcp/dummy", *_INSTALL)
 
             self.assertEqual(code, 0, payload)
             settings = env.home / ".tabnine/agent/settings.json"

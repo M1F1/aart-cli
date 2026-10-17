@@ -64,9 +64,7 @@ def _delivered(env) -> pathlib.Path:
 
 class ConfiguredUpdateCommandTest(unittest.TestCase):
     def _installed(self, env) -> None:
-        code, payload = env.run(
-            "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
         self.assertEqual(_delivered(env).read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
 
@@ -74,7 +72,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
         self,
     ) -> None:
         with _environment() as env:
-            code, payload = env.run("marketplace", "update", COORDINATE, "--profile", "claude")
+            code, payload = env.run("consume", "update", COORDINATE, "--profile", "claude")
 
             # Whatever the characterized path answers, it must not have installed anything: an
             # artifact nobody installed cannot be updated, and quietly installing it under this
@@ -86,9 +84,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self._installed(env)
             before = _delivered(env).stat().st_mtime_ns
 
-            code, payload = env.run(
-                "marketplace", "update", COORDINATE, "--profile", "claude", "--yes"
-            )
+            code, payload = env.run("consume", "update", COORDINATE, "--profile", "claude", "--yes")
 
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["ok"])
@@ -104,7 +100,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self._installed(env)
             env.publish(AUTHORED_SKILL_1_3_0)
 
-            code, payload = env.run("marketplace", "update", COORDINATE, "--profile", "claude")
+            code, payload = env.run("consume", "update", COORDINATE, "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertFalse(payload["finalized"])
@@ -120,10 +116,10 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
         with _environment() as env:
             self._installed(env)
             env.publish(AUTHORED_SKILL_1_3_0)
-            _, review = env.run("marketplace", "update", COORDINATE, "--profile", "claude")
+            _, review = env.run("consume", "update", COORDINATE, "--profile", "claude")
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "update",
                 COORDINATE,
                 "--profile",
@@ -140,7 +136,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
                 _delivered(env).read_text(encoding="utf-8"), as_delivered(UPDATED_SKILL_BODY)
             )
 
-            status_code, status = env.run("marketplace", "status", "--profile", "claude")
+            status_code, status = env.run("consume", "status", "--profile", "claude")
             self.assertEqual(status_code, 0, status)
             self.assertEqual(
                 [item["key"] for item in status["items"]], ["company/skill/code-review@1.3.0"]
@@ -152,7 +148,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             env.publish(AUTHORED_SKILL_1_3_0)
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "update",
                 COORDINATE,
                 "--profile",
@@ -174,9 +170,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self._installed(env)
             env.publish(AUTHORED_SKILL_1_1_0)
 
-            code, payload = env.run(
-                "marketplace", "update", COORDINATE, "--profile", "claude", "--yes"
-            )
+            code, payload = env.run("consume", "update", COORDINATE, "--profile", "claude", "--yes")
 
             self.assertNotEqual(code, 0)
             self.assertFalse(payload["ok"])
@@ -194,7 +188,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
 
         with _environment(authored=AUTHORED_FOR_TWO_1_2_0) as env:
             code, installed = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 COORDINATE,
                 "--profile",
@@ -215,7 +209,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             env.publish(AUTHORED_FOR_TWO_1_3_0)
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "update",
                 COORDINATE,
                 "--profile",
@@ -241,7 +235,7 @@ class ConfiguredUpdateCommandTest(unittest.TestCase):
             self._installed(env)
             env.publish(AUTHORED_SKILL_1_3_0)
 
-            code, payload = env.run("marketplace", "update", "--profile", "claude", "--yes")
+            code, payload = env.run("consume", "update", "--profile", "claude", "--yes")
 
             self.assertEqual(code, 0, payload)
             self.assertTrue(payload["finalized"])

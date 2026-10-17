@@ -23,7 +23,6 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import shutil
 import subprocess
 import tempfile
 import unittest
@@ -34,7 +33,8 @@ from aart_cli.application.maintainer_promotion import effective_policy_digest
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.protocol.hashing import sha256_bytes
 from tests.maintainer_scan_cli_test import _author_checkout, _git
-from tests.marketplace_lifecycle_e2e_test import _FIXTURE, _Environment
+from tests.marketplace_lifecycle_e2e_test import _Environment
+from tests.reference_registry import write_reference_registry
 from tests.source_sync_command_e2e_test import _source_json
 
 #: The coordinate the author checkout offers and the published registry has never heard of.
@@ -116,7 +116,7 @@ class PromotionPublicationBoundaryE2ETest(unittest.TestCase):
             _git(checkout, "init", "-q")
             _git(checkout, "config", "user.name", "AART Test")
             _git(checkout, "config", "user.email", "aart@example.invalid")
-            shutil.copytree(_FIXTURE, published)
+            write_reference_registry(published)
             environment = _Environment(machine, published)
             common = [
                 "--source",
@@ -130,14 +130,15 @@ class PromotionPublicationBoundaryE2ETest(unittest.TestCase):
                 "--target-registry",
                 "company",
             ]
-            code, scan = _cli("registry", "scan", *common, "--json")
+            code, scan = _cli("maintain", "upstream", "scan", *common, "--json")
             self.assertEqual(code, 0, scan)
             candidate = scan["candidates"][0]["candidate_id"]
             yield environment, checkout, published, author, common, candidate
 
     def _promote(self, common, candidate, *extra: str):
         return _cli(
-            "registry",
+            "maintain",
+            "candidate",
             "promote",
             *common,
             "--candidate",
@@ -191,14 +192,14 @@ class PromotionPublicationBoundaryE2ETest(unittest.TestCase):
         """
 
         with self._workshop() as (env, _checkout, _published, _author, common, candidate):
-            code, before = _source_json(env, "marketplace", "list")
+            code, before = _source_json(env, "consume", "list")
             self.assertEqual(code, 0, before)
             offered = [item["coordinate"] for item in before["artifacts"]]
 
             self.assertEqual(self._promote(common, candidate, "--yes")[0], 0)
-            synced, report = _source_json(env, "source", "sync")
+            synced, report = _source_json(env, "consume", "registry", "sync")
             self.assertEqual(synced, 0, report)
-            code, after = _source_json(env, "marketplace", "list")
+            code, after = _source_json(env, "consume", "list")
 
             self.assertEqual(code, 0, after)
             self.assertEqual([item["coordinate"] for item in after["artifacts"]], offered)
@@ -209,11 +210,9 @@ class PromotionPublicationBoundaryE2ETest(unittest.TestCase):
 
         with self._workshop() as (env, _checkout, _published, _author, common, candidate):
             self.assertEqual(self._promote(common, candidate, "--yes")[0], 0)
-            self.assertEqual(_source_json(env, "source", "sync")[0], 0)
+            self.assertEqual(_source_json(env, "consume", "registry", "sync")[0], 0)
 
-            code, payload = env.run(
-                "marketplace", "install", _PROMOTED, "--profile", "claude", "--yes"
-            )
+            code, payload = env.run("consume", "install", _PROMOTED, "--profile", "claude", "--yes")
 
             self.assertNotEqual(code, 0)
             self.assertEqual(payload["diagnostics"][0]["code"], "artifact-not-found")
@@ -240,7 +239,8 @@ class PromotionPublicationBoundaryE2ETest(unittest.TestCase):
             before = _tree_digest(checkout)
 
             code, payload = _cli(
-                "registry",
+                "maintain",
+                "candidate",
                 "promote",
                 *common,
                 "--candidate",
@@ -280,15 +280,17 @@ class PromotionPublicationBoundaryE2ETest(unittest.TestCase):
             common,
             _candidate,
         ):
-            code, scan = _cli("registry", "scan", *common, "--json")
+            code, scan = _cli("maintain", "upstream", "scan", *common, "--json")
             self.assertEqual(code, 0, scan)
             candidates = [item["candidate_id"] for item in scan["candidates"]]
             self.assertEqual(len(candidates), 2)
             selected = [argument for item in candidates for argument in ("--candidate", item)]
 
-            code, review = _cli("registry", "promote", *common, *selected, "--json")
+            code, review = _cli("maintain", "candidate", "promote", *common, *selected, "--json")
             self.assertEqual(code, 0, review)
-            code, promoted = _cli("registry", "promote", *common, *selected, "--json", "--yes")
+            code, promoted = _cli(
+                "maintain", "candidate", "promote", *common, *selected, "--json", "--yes"
+            )
             self.assertEqual(code, 0, promoted)
 
             reviewed = {

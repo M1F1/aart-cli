@@ -274,59 +274,87 @@ def validate_configured_source(source: ConfiguredSource) -> Result[ConfiguredSou
     )
 
 
-def _source(value: JsonValue) -> Result[ConfiguredSource]:
-    object_result = _object(value, CONFIG_INVALID, "source")
+#: Each configuration list and the kind each of its `kind` values names (§175.3). The family is
+#: the list an entry is in, so the four combined kinds never appear in a file.
+_FAMILIES: dict[str, dict[str, SourceKind]] = {
+    "registries": {"git": SourceKind.REGISTRY_GIT, "local": SourceKind.REGISTRY_LOCAL},
+    "upstreams": {"git": SourceKind.SOURCE_GIT, "local": SourceKind.SOURCE_LOCAL},
+}
+_FAMILY_LABELS = {"registries": "registry", "upstreams": "upstream"}
+
+
+def _source(value: JsonValue, family: str) -> Result[ConfiguredSource]:
+    label = _FAMILY_LABELS[family]
+    object_result = _object(value, CONFIG_INVALID, label)
     if isinstance(object_result, Err):
         return object_result
     base = dict(object_result.value.entries)
-    kind_result = _enum(base.get("kind"), SourceKind, CONFIG_INVALID, "source kind")
-    if isinstance(kind_result, Err):
-        return kind_result
-    local = kind_result.value is SourceKind.SOURCE_LOCAL
+    transport = _string(base.get("kind"), CONFIG_INVALID, f"{label} kind")
+    if isinstance(transport, Err):
+        return transport
+    kind = _FAMILIES[family].get(transport.value)
+    if kind is None:
+        return _error(CONFIG_INVALID, f"{label} kind must be git or local")
+    local = transport.value == "local"
+    required = {"alias", "kind", "path" if local else "url", "enabled"}
+    if kind is SourceKind.REGISTRY_LOCAL:
+        required.add("ref")
     fields = _validated(
         object_result.value,
         CONFIG_INVALID,
-        required=frozenset({"alias", "kind", "path" if local else "url", "enabled"}),
+        required=frozenset(required),
         optional=frozenset() if local else frozenset({"ref"}),
     )
     if isinstance(fields, Err):
         return fields
-    alias = _alias(fields.value["alias"], CONFIG_INVALID, "source alias")
-    enabled = _boolean(fields.value["enabled"], CONFIG_INVALID, "source enabled")
+    alias = _alias(fields.value["alias"], CONFIG_INVALID, f"{label} alias")
+    enabled = _boolean(fields.value["enabled"], CONFIG_INVALID, f"{label} enabled")
     if isinstance(alias, Err):
         return alias
     if isinstance(enabled, Err):
         return enabled
-    if local:
-        location = _string(fields.value["path"], CONFIG_INVALID, "source path")
-        if isinstance(location, Err):
-            return location
-        return validate_configured_source(
-            ConfiguredSource(alias.value, kind_result.value, location.value, None, enabled.value)
-        )
-    location = _string(fields.value["url"], CONFIG_INVALID, "source URL")
-    ref = _string(fields.value.get("ref", "main"), CONFIG_INVALID, "source ref")
+    location = _string(
+        fields.value["path" if local else "url"],
+        CONFIG_INVALID,
+        f"{label} {'path' if local else 'URL'}",
+    )
     if isinstance(location, Err):
         return location
-    if isinstance(ref, Err):
-        return ref
+    ref: str | None = None
+    if kind is not SourceKind.SOURCE_LOCAL:
+        parsed_ref = _string(fields.value.get("ref", "main"), CONFIG_INVALID, f"{label} ref")
+        if isinstance(parsed_ref, Err):
+            return parsed_ref
+        ref = parsed_ref.value
     return validate_configured_source(
-        ConfiguredSource(alias.value, kind_result.value, location.value, ref.value, enabled.value)
+        ConfiguredSource(alias.value, kind, location.value, ref, enabled.value)
     )
 
 
-def _sources(value: JsonValue) -> Result[tuple[ConfiguredSource, ...]]:
+def _family(value: JsonValue, family: str) -> Result[tuple[ConfiguredSource, ...]]:
     if not isinstance(value, JsonArray):
-        return _error(CONFIG_INVALID, "sources must be an array")
+        return _error(CONFIG_INVALID, f"{family} must be an array")
     sources: list[ConfiguredSource] = []
     for item in value.items:
-        result = _source(item)
+        result = _source(item, family)
         if isinstance(result, Err):
             return result
         sources.append(result.value)
+    return Ok(tuple(sources))
+
+
+def _sources(registries: JsonValue, upstreams: JsonValue) -> Result[tuple[ConfiguredSource, ...]]:
+    parsed_registries = _family(registries, "registries")
+    if isinstance(parsed_registries, Err):
+        return parsed_registries
+    parsed_upstreams = _family(upstreams, "upstreams")
+    if isinstance(parsed_upstreams, Err):
+        return parsed_upstreams
+    sources = (*parsed_registries.value, *parsed_upstreams.value)
     aliases = tuple(source.alias for source in sources)
     if len(set(aliases)) != len(aliases):
-        return _error(CONFIG_INVALID, "source aliases must be unique")
+        # One alias names one store entry and one command target, whichever list it is in.
+        return _error(CONFIG_INVALID, "registry and upstream aliases must be unique")
     git_origins = tuple(
         (*git_origin_key(source.kind, source.location), source.ref or "")
         for source in sources
@@ -335,9 +363,9 @@ def _sources(value: JsonValue) -> Result[tuple[ConfiguredSource, ...]]:
     if len(set(git_origins)) != len(git_origins):
         return _error(
             CONFIG_INVALID,
-            "each Git source origin and ref pair must be unique",
+            "each Git origin and ref pair must be unique",
         )
-    return Ok(tuple(sources))
+    return Ok(sources)
 
 
 def _sync(value: JsonValue) -> Result[SyncSettings]:
@@ -419,7 +447,7 @@ def parse_user_configuration(data: bytes | str) -> Result[UserConfiguration]:
         document.value,
         CONFIG_INVALID,
         required=frozenset({"schema_version"}),
-        optional=frozenset({"sources", "default_registry", "sync", "reporting"}),
+        optional=frozenset({"registries", "upstreams", "default_registry", "sync", "reporting"}),
     )
     if isinstance(fields, Err):
         return fields
@@ -428,7 +456,10 @@ def parse_user_configuration(data: bytes | str) -> Result[UserConfiguration]:
         return version
     if version.value != 1:
         return _error(CONFIG_INVALID, f"unsupported schema_version {version.value}")
-    sources = _sources(fields.value.get("sources", JsonArray(())))
+    sources = _sources(
+        fields.value.get("registries", JsonArray(())),
+        fields.value.get("upstreams", JsonArray(())),
+    )
     sync = _sync(fields.value.get("sync", JsonObject(())))
     reporting = _ignored_reporting(fields.value.get("reporting", JsonObject(())), CONFIG_INVALID)
     if isinstance(sources, Err):
@@ -454,23 +485,32 @@ def parse_user_configuration(data: bytes | str) -> Result[UserConfiguration]:
 
 
 def _source_json(source: ConfiguredSource) -> JsonObject:
+    local = source.kind in {SourceKind.REGISTRY_LOCAL, SourceKind.SOURCE_LOCAL}
     entries: list[tuple[str, JsonValue]] = [
         ("alias", source.alias.value),
         ("enabled", source.enabled),
-        ("kind", source.kind.value),
+        ("kind", "local" if local else "git"),
     ]
-    if source.kind is SourceKind.SOURCE_LOCAL:
+    if local:
         entries.append(("path", source.location))
-    else:
-        assert source.ref is not None
-        entries.extend((("ref", source.ref), ("url", source.location)))
+    if source.ref is not None:
+        entries.append(("ref", source.ref))
+    if not local:
+        entries.append(("url", source.location))
     return JsonObject(tuple(entries))
 
 
 def user_configuration_bytes(configuration: UserConfiguration) -> bytes:
     entries: list[tuple[str, JsonValue]] = [
         ("schema_version", 1),
-        ("sources", JsonArray(tuple(_source_json(source) for source in configuration.sources))),
+        (
+            "registries",
+            JsonArray(tuple(_source_json(source) for source in configuration.registries)),
+        ),
+        (
+            "upstreams",
+            JsonArray(tuple(_source_json(source) for source in configuration.upstreams)),
+        ),
         (
             "sync",
             JsonObject(
@@ -538,9 +578,9 @@ def _company_reviewed_source(value: JsonValue) -> Result[CompanyReviewedSource]:
         return _error(POLICY_INVALID, str(error))
 
 
-def _company_reviewed_sources(value: JsonValue) -> Result[tuple[CompanyReviewedSource, ...]]:
+def _company_reviewed_registries(value: JsonValue) -> Result[tuple[CompanyReviewedSource, ...]]:
     if not isinstance(value, JsonArray):
-        return _error(POLICY_INVALID, "company_reviewed_sources must be an array")
+        return _error(POLICY_INVALID, "company_reviewed_registries must be an array")
     sources: list[CompanyReviewedSource] = []
     for item in value.items:
         parsed = _company_reviewed_source(item)
@@ -549,7 +589,7 @@ def _company_reviewed_sources(value: JsonValue) -> Result[tuple[CompanyReviewedS
         sources.append(parsed.value)
     ordered = tuple(sorted(set(sources)))
     if len(ordered) != len(sources):
-        return _error(POLICY_INVALID, "company_reviewed_sources must not contain duplicates")
+        return _error(POLICY_INVALID, "company_reviewed_registries must not contain duplicates")
     return Ok(ordered)
 
 
@@ -563,15 +603,14 @@ def parse_organization_policy(data: bytes | str) -> Result[OrganizationPolicy]:
         required=frozenset({"schema_version"}),
         optional=frozenset(
             {
-                "recommended_sources",
-                "required_sources",
+                "recommended_registries",
+                "required_registries",
                 "allowed_git_hosts",
                 "allowed_repository_prefixes",
-                "allow_direct_sources",
                 "minimum_trust_for_user_scope",
                 "allowed_setup_capabilities",
                 "allow_custom_setup_entrypoints",
-                "company_reviewed_sources",
+                "company_reviewed_registries",
                 "reporting",
             }
         ),
@@ -584,12 +623,14 @@ def parse_organization_policy(data: bytes | str) -> Result[OrganizationPolicy]:
     if version.value != 1:
         return _error(POLICY_INVALID, f"unsupported schema_version {version.value}")
     recommended = _alias_array(
-        fields.value.get("recommended_sources", JsonArray(())),
+        fields.value.get("recommended_registries", JsonArray(())),
         POLICY_INVALID,
-        "recommended_sources",
+        "recommended_registries",
     )
     required = _alias_array(
-        fields.value.get("required_sources", JsonArray(())), POLICY_INVALID, "required_sources"
+        fields.value.get("required_registries", JsonArray(())),
+        POLICY_INVALID,
+        "required_registries",
     )
     hosts = _optional_strings(
         fields.value, "allowed_git_hosts", lambda raw: bool(_HOST_RE.fullmatch(raw))
@@ -612,22 +653,14 @@ def parse_organization_policy(data: bytes | str) -> Result[OrganizationPolicy]:
         return hosts
     if isinstance(prefixes, Err):
         return prefixes
-    allow_direct: bool | None = None
     allow_custom: bool | None = None
     minimum_trust: str | None = None
     capabilities: tuple[Capability, ...] | None = None
-    company_sources = _company_reviewed_sources(
-        fields.value.get("company_reviewed_sources", JsonArray(()))
+    company_sources = _company_reviewed_registries(
+        fields.value.get("company_reviewed_registries", JsonArray(()))
     )
     if isinstance(company_sources, Err):
         return company_sources
-    if "allow_direct_sources" in fields.value:
-        parsed_direct = _boolean(
-            fields.value["allow_direct_sources"], POLICY_INVALID, "allow_direct_sources"
-        )
-        if isinstance(parsed_direct, Err):
-            return parsed_direct
-        allow_direct = parsed_direct.value
     if "allow_custom_setup_entrypoints" in fields.value:
         parsed_custom = _boolean(
             fields.value["allow_custom_setup_entrypoints"],
@@ -675,7 +708,6 @@ def parse_organization_policy(data: bytes | str) -> Result[OrganizationPolicy]:
                 required.value,
                 hosts.value,
                 prefixes.value,
-                allow_direct,
                 minimum_trust,
                 capabilities,
                 allow_custom,
@@ -689,7 +721,7 @@ def parse_organization_policy(data: bytes | str) -> Result[OrganizationPolicy]:
 def organization_policy_bytes(policy: OrganizationPolicy) -> bytes:
     entries: list[tuple[str, JsonValue]] = [
         (
-            "company_reviewed_sources",
+            "company_reviewed_registries",
             JsonArray(
                 tuple(
                     JsonObject(
@@ -699,15 +731,18 @@ def organization_policy_bytes(policy: OrganizationPolicy) -> bytes:
                             ("source_id", source.source_id.value),
                         )
                     )
-                    for source in policy.company_reviewed_sources
+                    for source in policy.company_reviewed_registries
                 )
             ),
         ),
         (
-            "recommended_sources",
-            JsonArray(tuple(item.value for item in policy.recommended_sources)),
+            "recommended_registries",
+            JsonArray(tuple(item.value for item in policy.recommended_registries)),
         ),
-        ("required_sources", JsonArray(tuple(item.value for item in policy.required_sources))),
+        (
+            "required_registries",
+            JsonArray(tuple(item.value for item in policy.required_registries)),
+        ),
         ("schema_version", 1),
     ]
     optional_arrays = (
@@ -719,7 +754,6 @@ def organization_policy_bytes(policy: OrganizationPolicy) -> bytes:
         if values is not None:
             entries.append((name, JsonArray(tuple(str(item) for item in values))))
     for name, value in (
-        ("allow_direct_sources", policy.allow_direct_sources),
         ("minimum_trust_for_user_scope", policy.minimum_trust_for_user_scope),
         ("allow_custom_setup_entrypoints", policy.allow_custom_setup_entrypoints),
     ):

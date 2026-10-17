@@ -112,14 +112,14 @@ class DeclaredSetupFixtureTest(unittest.TestCase):
     "refused for the platform before the effect this asserts on is reached",
 )
 class ConfiguredInstallCommandSetupTest(unittest.TestCase):
-    """`aart-cli marketplace install`, for a coordinate the configured registry approved."""
+    """`aart-cli consume install`, for a coordinate the configured registry approved."""
 
     def test_an_artifact_that_declares_setup_is_configured_after_explicit_effect_approval(
         self,
     ) -> None:
         with _declaring_setup() as env:
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 COORDINATE,
                 "--profile",
@@ -141,10 +141,10 @@ class ConfiguredInstallCommandSetupTest(unittest.TestCase):
     def test_the_setup_command_recovers_a_configured_install_that_declined_setup(self) -> None:
 
         with _declaring_setup() as env:
-            env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "setup",
                 COORDINATE,
                 "--profile",
@@ -170,7 +170,7 @@ class ConfiguredReceiptVerbsTest(unittest.TestCase):
     B-044 made the run happen; this is the other half of it being real. A setup run nobody can
     show, verify or undo is one the operator has to take on faith and cannot roll back, and until
     the receipt-backed locator existed that was exactly the state a configured install left behind:
-    the effect on disk, the record under the data root, and `aart-cli marketplace receipt show`
+    the effect on disk, the record under the data root, and `aart-cli consume receipt show`
     answering that this scope has no installation state.
 
     Nothing here is a fixture. The install is the public command, the receipt is the one it wrote,
@@ -180,7 +180,7 @@ class ConfiguredReceiptVerbsTest(unittest.TestCase):
 
     def _installed(self, env):
         code, payload = env.run(
-            "marketplace",
+            "consume",
             "install",
             COORDINATE,
             "--profile",
@@ -208,7 +208,7 @@ class ConfiguredReceiptVerbsTest(unittest.TestCase):
         with _declaring_setup() as env:
             self._installed(env)
 
-            code, text = env.run_text("marketplace", "receipt", "show", COORDINATE)
+            code, text = env.run_text("consume", "receipt", "show", COORDINATE)
 
             self.assertEqual(code, 0, text)
             self.assertIn("Setup receipt", text)
@@ -219,13 +219,13 @@ class ConfiguredReceiptVerbsTest(unittest.TestCase):
         with _declaring_setup() as env:
             self._installed(env)
 
-            code, text = env.run_text("marketplace", "receipt", "verify", COORDINATE)
+            code, text = env.run_text("consume", "receipt", "verify", COORDINATE)
 
             self.assertEqual(code, 0, text)
             self.assertIn("false=0", text)
 
             (env.project / CONFIGURED).unlink()
-            code, text = env.run_text("marketplace", "receipt", "verify", COORDINATE)
+            code, text = env.run_text("consume", "receipt", "verify", COORDINATE)
 
             # A claim that is no longer true is a finding, and a finding must not report success.
             self.assertNotEqual(code, 0, text)
@@ -236,14 +236,14 @@ class ConfiguredReceiptVerbsTest(unittest.TestCase):
             self._installed(env)
             self.assertTrue((env.project / CONFIGURED).exists())
 
-            code, text = env.run_text("marketplace", "receipt", "undo", COORDINATE)
+            code, text = env.run_text("consume", "receipt", "undo", COORDINATE)
             self.assertEqual(code, 0, text)
             self.assertIn("re-run with --yes to apply this exact undo", text)
             self.assertTrue(
                 (env.project / CONFIGURED).exists(), "a review must not change anything"
             )
 
-            code, text = env.run_text("marketplace", "receipt", "undo", COORDINATE, "--yes")
+            code, text = env.run_text("consume", "receipt", "undo", COORDINATE, "--yes")
 
             self.assertEqual(code, 0, text)
             self.assertFalse((env.project / CONFIGURED).exists())
@@ -261,12 +261,12 @@ class ConfiguredReceiptVerbsTest(unittest.TestCase):
 
         with _declaring_setup() as env:
             code, payload = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(code, 0, payload)
             self.assertFalse((env.project / CONFIGURED).exists())
 
-            code, text = env.run_text("marketplace", "receipt", "show", COORDINATE)
+            code, text = env.run_text("consume", "receipt", "show", COORDINATE)
 
             self.assertEqual(code, 0, text)
             self.assertIn("status          cancelled", text)
@@ -277,9 +277,9 @@ class ConfiguredReceiptVerbsTest(unittest.TestCase):
         """A cancelled run licenses no claim, and reporting one would be the worst outcome here."""
 
         with _declaring_setup() as env:
-            env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
 
-            code, text = env.run_text("marketplace", "receipt", "verify", COORDINATE)
+            code, text = env.run_text("consume", "receipt", "verify", COORDINATE)
 
             self.assertEqual(code, 0, text)
             self.assertIn("false=0", text)

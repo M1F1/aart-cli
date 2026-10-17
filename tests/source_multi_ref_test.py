@@ -56,18 +56,18 @@ class MultiRefSchemaTests(unittest.TestCase):
             {
                 "reporting": {"mode": "disabled"},
                 "schema_version": 1,
-                "sources": [
+                "upstreams": [
                     {
                         "alias": "a",
                         "enabled": True,
-                        "kind": "source-git",
+                        "kind": "git",
                         "ref": "main",
                         "url": ORIGIN,
                     },
                     {
                         "alias": "b",
                         "enabled": True,
-                        "kind": "source-git",
+                        "kind": "git",
                         "ref": "main",
                         "url": "git@git.example:team/artifacts",
                     },

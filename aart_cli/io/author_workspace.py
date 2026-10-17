@@ -23,10 +23,10 @@ from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.domain.diagnostics import Diagnostic, Severity
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.io.working_tree import read_working_tree
 from aart_cli.protocol.codes import AUTHOR_MANIFEST_UNWRITABLE
 from aart_cli.protocol.native_tree import SourceSnapshot
 from aart_cli.protocol.paths import parse_relative_path
-from aart_cli.sources.local import read_local_snapshot
 from aart_cli.sources.model import (
     LocalSnapshotRequest,
     SnapshotLimits,
@@ -176,9 +176,9 @@ def read_author_workspace(root: str) -> Result[AuthorWorkspaceRead]:
     """The author's directory, read exactly as a Source Sync would read it.
 
     `aart-cli author check` has to answer with the verdict `registry scan` will later issue, and half
-    of that verdict is what was in the tree at all. So this is `read_local_snapshot` -- the same
-    bounded, symlink-refusing, special-file-refusing reader -- rather than a second walk with its
-    own idea of what a file is. The Source identity it wants is inert here: nothing is configured
+    of that verdict is what was in the tree at all. So this is `read_working_tree` -- the Source
+    Sync's own reader: what Git would commit, through the same bounded, symlink-refusing,
+    special-file-refusing walk -- rather than a second walk with its own idea of what a file is. The Source identity it wants is inert here: nothing is configured
     and nothing is persisted.
     """
 
@@ -194,7 +194,7 @@ def read_author_workspace(root: str) -> Result[AuthorWorkspaceRead]:
         )
     except ValueError as error:  # pragma: no cover - an absolute path is always accepted
         return _error(f"{root} cannot be read as an authoring workspace: {error}")
-    acquired = read_local_snapshot(request)
+    acquired = read_working_tree(request)
     if isinstance(acquired, Err):
         return acquired
     candidate = acquired.value

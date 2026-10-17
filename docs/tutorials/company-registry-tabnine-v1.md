@@ -1,6 +1,6 @@
 # Standing up your first company registry, for Tabnine
 
-From an empty Git repository to a colleague running `aart-cli marketplace install` and finding the
+From an empty Git repository to a colleague running `aart-cli consume install` and finding the
 skill in their `.tabnine/` directory. Every command below was executed before this document was
 written; the outputs quoted are real. Where something was not walked, it says so.
 
@@ -17,7 +17,7 @@ your own registry id; keep the profile.
 
 **What AART does with Git**
 
-Maintainer mutations stop after writing reviewed files. The explicit `registry publish --yes`
+Maintainer mutations stop after writing reviewed files. The explicit `maintain registry publish --yes`
 workflow is the one exception: it runs the publisher gates and creates the listed commit. It never
 pushes. AART also never handles credentials: it runs system Git, so if `git clone` works at your
 prompt, AART works, and if it does not, fix it in Git.
@@ -40,7 +40,7 @@ mkdir agent-registry && cd agent-registry
 git init -b main .
 ```
 
-**The directory must be a Git checkout before the next step.** Run `aart-cli registry init` anywhere
+**The directory must be a Git checkout before the next step.** Run `aart-cli maintain registry init` anywhere
 else and it refuses:
 
 ```text
@@ -53,7 +53,7 @@ Every mutating AART command runs twice: once to show you what it would do, once 
 it. Look at the first output before you type the second.
 
 ```sh
-aart-cli registry init --source . --source-id company --display-name "Company AART Registry"
+aart-cli maintain registry init --source . --source-id company --display-name "Company AART Registry"
 ```
 
 ```text
@@ -69,7 +69,7 @@ Review canonical Maintainer action: init
 ```
 
 ```sh
-aart-cli registry init --source . --source-id company --display-name "Company AART Registry" --yes
+aart-cli maintain registry init --source . --source-id company --display-name "Company AART Registry" --yes
 ```
 
 `--source-id` is the identity every artifact coordinate starts with — your colleagues will type
@@ -107,13 +107,13 @@ Then read the repository from your registry checkout. The first run only reports
 manifests compile to:
 
 ```sh
-aart-cli registry adopt --source . --url https://ghe.company.example/platform/shared-tools.git --ref main
+aart-cli maintain upstream adopt --source . --url https://ghe.company.example/platform/shared-tools.git --ref main
 ```
 
 Adopt the ones you want, by the coordinates that review printed:
 
 ```sh
-aart-cli registry adopt --source . --url https://ghe.company.example/platform/shared-tools.git --ref main --artifact skill/release-evidence@1.0.0 --artifact guideline/branch-conventions@1.0.0 --yes
+aart-cli maintain upstream adopt --source . --url https://ghe.company.example/platform/shared-tools.git --ref main --artifact skill/release-evidence@1.0.0 --artifact guideline/branch-conventions@1.0.0 --yes
 ```
 
 Each adopted version is a self-contained copy pinned to the commit it was read at, with its
@@ -126,7 +126,7 @@ The word for a group of artifacts is a **collection**. Compose one only from art
 already holds:
 
 ```sh
-aart-cli registry collection platform-baseline --source . \
+aart-cli maintain registry collection platform-baseline --source . \
   --summary "What every platform-team repository starts with." \
   --include skill/release-evidence \
   --include guideline/branch-conventions
@@ -137,32 +137,32 @@ digest with `--yes`, or use the Maintainer TUI's **Author collection** flow for 
 summary, and member selection. Both interfaces refuse unknown members before writing anything.
 
 ```sh
-aart-cli registry collection platform-baseline --source . \
+aart-cli maintain registry collection platform-baseline --source . \
   --summary "What every platform-team repository starts with." \
   --include skill/release-evidence \
   --include guideline/branch-conventions --yes
 ```
 
-Collections are compiled into the index. `registry lock` validates their selectors before it writes
+Collections are compiled into the index. `maintain registry lock` validates their selectors before it writes
 the lock, so a malformed or hand-written collection is rejected at the first publishing step. A
 consumer can then install the baseline in one command:
 
 ```sh
-aart-cli marketplace install company/collection/platform-baseline --profile tabnine --yes
+aart-cli consume install company/collection/platform-baseline --profile tabnine --yes
 ```
 ## 4. Write an artifact of your own
 
-Author new material in a separate Source checkout. Add an explicit `aart-cli.yaml` or `aart-cli.json` beside
-the payload, following the [native Source contract](../protocol/native-source-v1.md) and the
-[example MCP Source](../examples/author-source/example-mcp/aart-cli.yaml), then commit the checkout.
+Author new material in a separate upstream checkout. Add an explicit `aart-cli.yaml` or `aart-cli.json` beside
+the payload, following the [native Upstream contract](../protocol/native-source-v1.md) and the
+[example MCP upstream](../examples/author-source/example-mcp/aart-cli.yaml), then commit the checkout.
 From the Registry checkout, scan that exact revision and promote the reviewed Candidate:
 
 ```sh
-aart-cli registry scan --help
-aart-cli registry promote --help
+aart-cli maintain upstream scan --help
+aart-cli maintain candidate promote --help
 ```
 
-`scan` never changes the Registry. `promote` re-observes the clean pinned Source checkout and writes
+`scan` never changes the Registry. `promote` re-observes the clean pinned upstream checkout and writes
 only the exact Candidate and evidence reviewed by the maintainer. The Registry stores the compiled
 canonical package; it is not the artifact's authoring workspace.
 
@@ -172,13 +172,13 @@ Publishing is one command. First review the exact generated files, publisher che
 and every path Git would include:
 
 ```sh
-aart-cli registry publish --source .
+aart-cli maintain registry publish --source .
 ```
 
 Then finalize the reviewed cycle:
 
 ```sh
-aart-cli registry publish --source . --yes
+aart-cli maintain registry publish --source . --yes
 ```
 
 The command prepares the shared publication gates, rebuilds `registry/index.json` and
@@ -197,12 +197,12 @@ already-clean registry reports that there is nothing to commit.
 
 ## 6. Check it before anyone else sees it
 
-`registry publish` already runs strict compiled validation and the audit before committing. CI
+`maintain registry publish` already runs strict compiled validation and the audit before committing. CI
 should independently verify what history contains:
 
 ```sh
-aart-cli registry validate --source . --strict --frozen
-aart-cli registry audit --source .
+aart-cli maintain registry validate --source . --strict --frozen
+aart-cli maintain registry audit --source .
 ```
 
 `--frozen` fails when the committed lock or index does not match authored content. Push the commit,
@@ -213,7 +213,7 @@ Ask whether the repository has moved since a version was adopted. Without `--yes
 nothing:
 
 ```sh
-aart-cli registry check-upstream --source . skill/release-evidence@1.0.0
+aart-cli maintain upstream check --source . skill/release-evidence@1.0.0
 ```
 
 It answers `unchanged`, `changed`, `missing`, `unreachable` or `invalid`. A repository AART could
@@ -228,27 +228,27 @@ They need AART installed and nothing else. In their project:
 ```sh
 cd ~/work/some-project
 
-aart-cli source add \
+aart-cli consume registry add \
   --alias company \
-  --kind registry-git \
+  --kind git \
   --location https://ghe.company.example/platform/agent-registry.git \
   --ref main \
   --default
 ```
 
 ```text
-source added: company; snapshot published; default=yes
+registry added: company; snapshot published; default=yes
 ```
 
-`source add` clones, compiles and validates the whole snapshot before it saves anything, so a broken
+`consume registry add` clones, compiles and validates the whole snapshot before it saves anything, so a broken
 registry fails here rather than halfway through an install.
 
 ```sh
-aart-cli marketplace list
+aart-cli consume list
 ```
 
 ```text
-source company [healthy] registry-git https://ghe.company.example/platform/agent-registry.git
+registry company [healthy] git https://ghe.company.example/platform/agent-registry.git
 company/guideline/branch-conventions@1.0.0 [healthy] How we name and merge branches. origin=https://ghe.company.example/platform/shared-tools.git@3706c2a…:packages/branch-conventions
 company/skill/release-evidence@1.0.0 [healthy] Evidence checklist for a release. origin=https://ghe.company.example/platform/shared-tools.git@3706c2a…:packages/release-evidence
 ```
@@ -259,7 +259,7 @@ came from without opening the registry.
 Install — review, then finalize:
 
 ```sh
-aart-cli marketplace install company/skill/release-evidence --profile tabnine
+aart-cli consume install company/skill/release-evidence --profile tabnine
 ```
 
 ```text
@@ -268,7 +268,7 @@ Review consumer action
   Scope: project
   Requested mode: copy
   Review digest: sha256:1ea04e2e…
-  Source freshness: company is healthy; origin matched; snapshot published 7s ago
+  Registry freshness: company is healthy; origin matched; snapshot published 7s ago
   - company/skill/release-evidence@1.0.0#tabnine/project
     trust/security: local; unknown (not-scanned)
     digests: manifest=sha256:cf9ac726…; object=sha256:6a944c55…
@@ -277,8 +277,8 @@ Reviewed only; re-run with --yes to apply this exact plan.
 ```
 
 ```sh
-aart-cli marketplace install company/skill/release-evidence --profile tabnine --yes
-aart-cli marketplace install company/guideline/branch-conventions --profile tabnine --yes
+aart-cli consume install company/skill/release-evidence --profile tabnine --yes
+aart-cli consume install company/guideline/branch-conventions --profile tabnine --yes
 ```
 
 ### Where the files land for Tabnine
@@ -325,14 +325,14 @@ runtime/startup problem and this file-target repair does not claim to fix it.
 ### Day-to-day
 
 ```sh
-aart-cli marketplace status --profile tabnine          # what is installed, and is it current
-aart-cli marketplace update --profile tabnine --yes    # pull newer versions from the registry
-aart-cli source sync --alias company                   # refresh the snapshot explicitly
-aart-cli marketplace uninstall company/skill/release-evidence --profile tabnine --yes
+aart-cli consume status --profile tabnine          # what is installed, and is it current
+aart-cli consume update --profile tabnine --yes    # pull newer versions from the registry
+aart-cli consume registry sync --alias company                # refresh the snapshot explicitly
+aart-cli consume uninstall company/skill/release-evidence --profile tabnine --yes
 ```
 
-`list` and `status` never fetch. The snapshot only moves when someone runs `source sync` or
-`update`, so a colleague's environment cannot change under them because a maintainer pushed.
+`list` and `status` never fetch. The snapshot only moves when someone runs `consume registry sync`; `consume update`
+changes installed artifacts using that snapshot, so a colleague's environment cannot change under them because a maintainer pushed.
 
 Uninstall removes what it installed and nothing else — walked: after uninstalling the skill,
 `.tabnine/agent/skills/release-evidence/` is gone and `.tabnine/guidelines/branch-conventions.md`,
@@ -342,11 +342,11 @@ installed separately, is untouched.
 
 ## What was verified, and how
 
-Every command in sections 1–8 was executed against a wheel built from this repository and installed
-into a throwaway virtual environment, with a sandboxed `HOME`, on `2026-08-16`. The registry, the
-consumer project and the upstream repository were real Git repositories; nothing was faked,
-patched, or mocked. Sections 3 and 7 describe `registry adopt` and `registry check-upstream`,
-which replaced the walked vendoring commands; their output is not quoted here.
+The original walkthrough was executed against a wheel in a disposable virtual environment on
+2026-08-16, using real local Git repositories. Commands and role names were updated for CP-32 on
+2026-10-17 and checked against the current parser and focused repository tests. This update does
+not claim a new live run against your Enterprise host. Sections 3 and 7 now use
+`maintain upstream adopt` and `maintain upstream check` for manifest-based ingestion.
 
 Two things are **not** verified and are marked where they appear:
 

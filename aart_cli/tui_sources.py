@@ -112,7 +112,6 @@ class SourceStageView:
     policy: OrganizationPolicy
     rows: tuple[SourceStageRow, ...]
     allow_no_source: bool
-    allow_direct_sources: bool
     first_run: bool
 
     def __post_init__(self) -> None:
@@ -122,21 +121,21 @@ class SourceStageView:
             raise ValueError("source-stage aliases must be unique")
         if set(aliases) != {source.alias for source in self.configuration.sources}:
             raise ValueError("source-stage rows must represent the exact configuration")
-        if self.allow_no_source != (not self.policy.required_sources):
+        if self.allow_no_source != (not self.policy.required_registries):
             raise ValueError("source-stage no-source option must follow organization policy")
-        if self.allow_direct_sources != (self.policy.allow_direct_sources is not False):
-            raise ValueError("source-stage direct-source option must follow organization policy")
         object.__setattr__(self, "rows", rows)
 
     @property
     def unconfigured_recommended(self) -> tuple[SourceAlias, ...]:
         configured = {row.source.alias for row in self.rows}
-        return tuple(alias for alias in self.policy.recommended_sources if alias not in configured)
+        return tuple(
+            alias for alias in self.policy.recommended_registries if alias not in configured
+        )
 
     @property
     def unconfigured_required(self) -> tuple[SourceAlias, ...]:
         configured = {row.source.alias for row in self.rows}
-        return tuple(alias for alias in self.policy.required_sources if alias not in configured)
+        return tuple(alias for alias in self.policy.required_registries if alias not in configured)
 
 
 def _configuration_operations(
@@ -380,7 +379,7 @@ def _company_reviewed(
     if parts is None:
         return False
     identity = CompanyReviewedSource(health.current.declared_source_id, parts[0], parts[1])
-    return identity in policy.company_reviewed_sources
+    return identity in policy.company_reviewed_registries
 
 
 def _availability_reason(
@@ -388,15 +387,11 @@ def _availability_reason(
     display_health: SourceDisplayHealth,
     policy: OrganizationPolicy,
 ) -> str:
-    if source.kind is not SourceKind.REGISTRY_GIT and policy.allow_direct_sources is False:
-        return "direct sources are disabled by organization policy"
     if display_health is SourceDisplayHealth.INCOMPATIBLE:
         return "source is incompatible with this AART version"
     if display_health is SourceDisplayHealth.INVALID:
         # Synchronizing is what republishes a managed snapshot whose state is unreadable.
-        return (
-            "source state is invalid; run `aart-cli source sync --alias <alias>` before enabling it"
-        )
+        return f"source state is invalid; run `{source.kind.command} sync --alias <alias>` before enabling it"
     if source.is_git and git_location_parts(source.location) is None:
         return "source has an invalid Git origin"
     return ""
@@ -429,8 +424,8 @@ def build_source_stage(
                 _origin(source),
                 display_health,
                 None if health is None else health.age_seconds,
-                source.alias in policy.recommended_sources,
-                source.alias in policy.required_sources,
+                source.alias in policy.recommended_registries,
+                source.alias in policy.required_registries,
                 _company_reviewed(source, health, policy),
                 configuration.default_registry == source.alias,
                 not reason,
@@ -442,8 +437,7 @@ def build_source_stage(
             configuration,
             policy,
             tuple(rows),
-            not policy.required_sources,
-            policy.allow_direct_sources is not False,
+            not policy.required_registries,
             first_run,
         )
     )
@@ -495,7 +489,7 @@ def plan_source_management(
             "; ".join(f"{row.source.alias}: {row.reason}" for row in unavailable),
             "choose a policy-approved compatible source",
         )
-    required = set(view.policy.required_sources)
+    required = set(view.policy.required_registries)
     missing_required = tuple(sorted(required - set(aliases)))
     if missing_required:
         return _error(
@@ -552,9 +546,10 @@ def plan_source_addition(
     if any(existing.alias == source.alias for existing in view.configuration.sources):
         return _error(
             f"source alias is already configured: {source.alias}",
-            f"run `aart-cli source sync --alias {source.alias}` to refresh it, "
-            f"`aart-cli source resubscribe --alias {source.alias}` if its declared identity changed, "
-            f"or `aart-cli source remove --alias {source.alias}` to subscribe to a different origin",
+            f"run `{source.kind.command} sync --alias {source.alias}` to refresh it, "
+            f"`{source.kind.command} resubscribe --alias {source.alias}` if its declared identity "
+            f"changed, or `{source.kind.command} remove --alias {source.alias}` to subscribe to a "
+            "different origin",
             interactive=(
                 f"{source.alias} is already connected here.",
                 "Refresh it from its row on Registries, or choose a different alias for this one.",
@@ -576,9 +571,10 @@ def plan_source_addition(
         held = ", ".join(alias.value for alias in same_origin_and_ref)
         return _error(
             "source origin and ref are already configured as " + held,
-            f"run `aart-cli source sync --alias {same_origin_and_ref[0].value}` to refresh it, "
-            f"`aart-cli source resubscribe --alias {same_origin_and_ref[0].value}` if its declared "
-            f"identity changed, `aart-cli source remove --alias {same_origin_and_ref[0].value}` to "
+            f"run `{source.kind.command} sync --alias {same_origin_and_ref[0].value}` to refresh it, "
+            f"`{source.kind.command} resubscribe --alias {same_origin_and_ref[0].value}` if its "
+            f"declared identity changed, `{source.kind.command} remove --alias "
+            f"{same_origin_and_ref[0].value}` to "
             "free the origin, or add this origin at a different ref",
             interactive=(
                 f"This origin and branch are already connected as {held}.",
@@ -586,8 +582,6 @@ def plan_source_addition(
                 "branch or tag.",
             ),
         )
-    if source.kind is not SourceKind.REGISTRY_GIT and not view.allow_direct_sources:
-        return _error("direct sources are disabled by organization policy")
     if source.is_git and git_location_parts(source.location) is None:
         return _error("source has an invalid Git origin")
     chosen_default = (
@@ -632,9 +626,10 @@ def plan_source_removal(view: SourceStageView, alias: SourceAlias) -> Result[Sou
     if not selected:
         return _error(
             f"no configured source has alias {alias}",
-            "run `aart-cli source list` to see configured aliases",
+            "run `aart-cli consume registry list` or `aart-cli maintain upstream list` to see "
+            "configured aliases",
         )
-    if alias in view.policy.required_sources:
+    if alias in view.policy.required_registries:
         return _error(
             f"organization policy requires source {alias}",
             "ask the policy owner to drop the requirement before removing this source",
@@ -673,8 +668,8 @@ def _source_kind(source: ConfiguredSource) -> str:
     if source.kind is SourceKind.REGISTRY_LOCAL:
         return "local registry checkout"
     if source.kind is SourceKind.SOURCE_GIT:
-        return "direct Git source"
-    return "mutable local source"
+        return "Git upstream"
+    return "local upstream"
 
 
 def render_source_row(row: SourceStageRow) -> str:
@@ -705,27 +700,29 @@ def render_source_stage(view: SourceStageView) -> tuple[str, ...]:
     """Render source setup guidance and rows shared by text and curses frontends."""
 
     heading = (
-        "Choose enabled artifact sources. Registries are optional unless organization policy "
+        "Choose enabled Registries. Registries are optional unless organization policy "
         "marks one as required."
     )
     lines: tuple[str, ...] = (heading,)
     if not view.rows:
-        lines += ("No sources are configured. In the Sources stage, choose Add to configure one.",)
+        lines += (
+            "No registries are configured. In Registries, choose Add Registry to configure one.",
+        )
     if view.unconfigured_recommended:
         lines += (
-            "Organization-recommended source aliases still need configuration: "
+            "Organization-recommended Registry aliases still need configuration: "
             + ", ".join(alias.value for alias in view.unconfigured_recommended),
         )
     if view.unconfigured_required:
         lines += (
-            "Organization-required source aliases still need configuration: "
+            "Organization-required Registry aliases still need configuration: "
             + ", ".join(alias.value for alias in view.unconfigured_required),
         )
     lines += tuple(render_source_row(row) for row in view.rows)
     if view.allow_no_source:
-        lines += ("Continue without sources — exit cleanly without installing artifacts.",)
+        lines += ("Continue without Registries — exit cleanly without installing artifacts.",)
     else:
-        lines += ("Organization policy requires the listed required source(s).",)
+        lines += ("Organization policy requires the listed required Registries.",)
     return lines
 
 
@@ -737,11 +734,11 @@ def render_source_addition_review(request: SourceAdditionRequest) -> tuple[str, 
     ref = "" if source.ref is None else f"; ref: {source.ref}"
     default = "; becomes the default registry" if request.make_default else ""
     return (
-        "Source setup review:",
+        f"{'Registry' if source.is_registry else 'Upstream'} setup review:",
         f"  alias: {source.alias}",
         f"  kind: {_source_kind(source)}",
         f"  origin: {origin}{ref}",
-        "  next: download and validate one immutable source snapshot, then save this source",
+        "  next: download and validate one immutable snapshot, then save this connection",
         f"  effect: enable {source.alias}{default}",
     )
 
@@ -756,7 +753,7 @@ def render_source_sync_review(row: SourceStageRow) -> tuple[str, ...]:
     source = row.source
     ref = "" if source.ref is None else f"; ref: {source.ref}"
     return (
-        "Source sync review:",
+        f"{'Registry' if source.is_registry else 'Upstream'} sync review:",
         f"  alias: {source.alias}",
         f"  kind: {_source_kind(source)}",
         f"  origin: {row.origin}{ref}",
@@ -800,13 +797,14 @@ def plan_source_resubscription(
     if not selected:
         return _error(
             f"no configured source has alias {alias}",
-            "run `aart-cli source list` to see configured aliases",
+            "run `aart-cli consume registry list` or `aart-cli maintain upstream list` to see "
+            "configured aliases",
         )
     source = selected[0]
     if not source.enabled:
         return _error(
             f"source {alias} is disabled",
-            f"enable {alias} in the TUI Sources stage before adopting a new identity",
+            f"enable {alias} in its Registry or Upstream repositories screen before adopting a new identity",
         )
     return Ok(source)
 
@@ -843,7 +841,7 @@ def render_source_resubscription_review(request: SourceResubscriptionRequest) ->
     ref = "" if source.ref is None else f"; ref: {source.ref}"
     transition = request.transition
     return (
-        "Source resubscription review:",
+        f"{'Registry' if source.is_registry else 'Upstream'} resubscription review:",
         f"  alias: {source.alias}",
         f"  kind: {_source_kind(source)}",
         f"  origin: {_origin(source)}{ref}",
@@ -858,7 +856,7 @@ def render_source_resubscription_review(request: SourceResubscriptionRequest) ->
         # source-unavailable.
         "  note: installed artifacts are not re-installed; they surface as identity-changed, "
         "update-available, or removed-upstream through the normal reconciliation, and "
-        "`aart-cli marketplace update` in each project rebinds them",
+        "`aart-cli consume update` in each project rebinds them",
     )
 
 
@@ -868,12 +866,12 @@ def render_source_removal_review(request: SourceRemovalRequest) -> tuple[str, ..
     source = request.source
     ref = "" if source.ref is None else f"; ref: {source.ref}"
     default = (
-        ("  effect: clear the default registry; no source becomes default in its place",)
+        ("  effect: clear the default registry; no registry becomes default in its place",)
         if request.cleared_default
         else ()
     )
     return (
-        "Source removal review:",
+        f"{'Registry' if source.is_registry else 'Upstream'} removal review:",
         f"  alias: {source.alias}",
         f"  kind: {_source_kind(source)}",
         f"  origin: {_origin(source)}{ref}",
@@ -881,6 +879,6 @@ def render_source_removal_review(request: SourceRemovalRequest) -> tuple[str, ..
         *default,
         "  keeps: every installed artifact and every file in every project",
         "  note: AART cannot see installation records in other project directories; a project "
-        "still naming this alias reports an unconfigured source until it is re-added or "
+        "still naming this alias reports an unconfigured Registry until it is re-added or "
         "uninstalled",
     )

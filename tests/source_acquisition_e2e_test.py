@@ -159,7 +159,7 @@ class SourceIdentityChangeRecoveryTest(unittest.TestCase):
             assert isinstance(refused, Err)
             self.assertIn("declared source identity", refused.diagnostics[0].message)
             self.assertIn(
-                "aart-cli source resubscribe --alias registry",
+                "aart-cli maintain upstream resubscribe --alias registry",
                 refused.diagnostics[0].remediation[0],
             )
 
@@ -268,7 +268,8 @@ class SourceIdentityChangeRecoveryTest(unittest.TestCase):
             assert isinstance(refused, Err)
             self.assertIn("already subscribed to", refused.diagnostics[0].message)
             self.assertIn(
-                "aart-cli source sync --alias registry", refused.diagnostics[0].remediation[0]
+                "aart-cli maintain upstream sync --alias registry",
+                refused.diagnostics[0].remediation[0],
             )
 
 

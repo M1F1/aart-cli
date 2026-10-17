@@ -1,4 +1,4 @@
-"""Reviewed Source Sync through one Source lease and explicit persistence ports.
+"""Reviewed Upstream sync through one Source lease and explicit persistence ports.
 
 Preparation is a pure observation: it binds configured Source identity, the current published
 snapshot, durable Candidate history and one approved target-registry snapshot into a review digest.
@@ -82,7 +82,7 @@ def _valid_digest(value: ObjectDigest) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class ApprovedRegistryState:
-    """Exact approved registry observation Source Sync may compare Candidates against."""
+    """Exact approved registry observation Upstream sync may compare Candidates against."""
 
     alias: SourceAlias
     revision: str
@@ -135,7 +135,7 @@ class SourceSyncBaseline:
             or isinstance(self.candidate_count, bool)
             or self.candidate_count < 0
         ):
-            raise ValueError("Source Sync baseline is invalid")
+            raise ValueError("Upstream sync baseline is invalid")
 
 
 def _bound_history(
@@ -257,7 +257,7 @@ class PreparedSourceSync:
             or not isinstance(self.baseline, SourceSyncBaseline)
             or not isinstance(self.approved, ApprovedRegistryState)
         ):
-            raise ValueError("prepared Source Sync is invalid")
+            raise ValueError("prepared Upstream sync is invalid")
         object.__setattr__(
             self,
             "review_digest",
@@ -293,7 +293,7 @@ class SourceSyncExecutionResult:
             or self.scan.source_alias != self.source.current.candidate.alias
             or self.scan.revision != self.source.current.candidate.resolved_revision
         ):
-            raise ValueError("Source Sync execution result is inconsistent")
+            raise ValueError("Upstream sync execution result is inconsistent")
 
 
 @dataclass(frozen=True, slots=True)
@@ -316,9 +316,9 @@ def prepare_source_sync(
     if not isinstance(request, SourceSyncRequest) or not isinstance(
         approved, ApprovedRegistryState
     ):
-        return _error("preparing Source Sync needs typed Source and registry observations")
+        return _error("preparing Upstream sync needs typed Source and registry observations")
     if request.source.is_registry:
-        return _error("Source Sync screens act on authoring Sources, not registries")
+        return _error("Upstream sync screens act on authoring Sources, not registries")
     if not request.source.enabled:
         return _error("disabled authoring Source cannot be synchronized")
     if current is not None and (
@@ -353,24 +353,24 @@ def execute_source_sync(
     reviewed_digest: ObjectDigest,
     ports: MaintainerSourceSyncPorts,
 ) -> Result[SourceSyncExecutionResult]:
-    """Apply exactly one reviewed Source Sync and publish no registry mutation."""
+    """Apply exactly one reviewed Upstream sync and publish no registry mutation."""
 
     if (
         not isinstance(prepared, PreparedSourceSync)
         or not isinstance(reviewed_digest, ObjectDigest)
         or not isinstance(ports, MaintainerSourceSyncPorts)
     ):
-        return _error("executing Source Sync needs a prepared review and typed ports")
+        return _error("executing Upstream sync needs a prepared review and typed ports")
     if reviewed_digest != prepared.review_digest:
-        return _error("confirmed Source Sync review does not match the prepared review")
+        return _error("confirmed Upstream sync review does not match the prepared review")
 
     current_registry = ports.read_approved(prepared.target_registry)
     if isinstance(current_registry, Err):
         return current_registry
     if current_registry.value != prepared.approved:
         return _error(
-            "approved target registry changed after Source Sync review",
-            "review Source Sync again against the current registry snapshot",
+            "approved target registry changed after Upstream sync review",
+            "review Upstream sync again against the current registry snapshot",
         )
 
     request = prepared.request
@@ -409,8 +409,8 @@ def execute_source_sync(
     if observed.value != prepared.baseline:
         return _release(
             _error(
-                "configured Source or Candidate history changed after Source Sync review",
-                "review Source Sync again against the current Source state",
+                "configured Source or Candidate history changed after Upstream sync review",
+                "review Upstream sync again against the current Source state",
             ),
             ports,
             lease.value,
@@ -451,7 +451,7 @@ def execute_source_sync(
         return _release(reconciled, ports, lease.value)
     if reconciled.value.registry_mutations:
         return _release(
-            _error("Source Sync attempted to produce registry mutations"), ports, lease.value
+            _error("Upstream sync attempted to produce registry mutations"), ports, lease.value
         )
     if retained is not None:
         synchronized = retained
@@ -470,7 +470,7 @@ def execute_source_sync(
         return _release(readback, ports, lease.value)
     if readback.value != reconciled.value:
         return _release(
-            _error("persisted Candidate history does not match Source Sync result"),
+            _error("persisted Candidate history does not match Upstream sync result"),
             ports,
             lease.value,
         )

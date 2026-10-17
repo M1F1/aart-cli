@@ -32,7 +32,7 @@ security/attestations/<attestation-sha256>.json
 
 The canonical index binds each document path and byte digest to its full cache key. Every
 registry-CI attestation also names the registry source ID, exact registry-inputs digest, and
-resolved revision. `aart-cli registry audit` verifies those bindings against the canonical approved Registry catalogs and version records, requires
+resolved revision. `aart-cli maintain registry audit` verifies those bindings against the canonical approved Registry catalogs and version records, requires
 evidence coverage for every compiled object, rejects evidence for unknown objects, rejects critical
 installation risk, and reports high or unknown risk for explicit review.
 

@@ -134,7 +134,7 @@ class CollectionRowsTest(unittest.TestCase):
 
         described = compose_frame(self.source, at).described
 
-        self.assertEqual(described[0].split(), ["Artifact", "review"])
+        self.assertEqual(described[0].split(), ["Artifact", "company/skill/review@1.0.0"])
 
 
 class UserInputRowsTest(unittest.TestCase):

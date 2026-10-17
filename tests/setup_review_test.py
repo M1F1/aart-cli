@@ -25,7 +25,7 @@ from aart_cli.tui_layout import CONTENT_MEASURE
 from tests.credential_fixtures import assignment
 from tests.setup_fixtures import recipe
 
-RETRY = "aart-cli marketplace setup mcp/atlassian --profile tabnine --scope project"
+RETRY = "aart-cli consume setup mcp/atlassian --profile tabnine --scope project"
 
 
 def installer(**changes: object):
@@ -401,7 +401,9 @@ class SetupBoundaryTests(unittest.TestCase):
         self.assertEqual(render_run_summary(()), ())
 
 
-_RETRY = "aart-cli marketplace setup mcp/alation --profile claude --scope user --yes --approve-setup-effects"
+_RETRY = (
+    "aart-cli consume setup mcp/alation --profile claude --scope user --yes --approve-setup-effects"
+)
 
 _ROWS = (
     {

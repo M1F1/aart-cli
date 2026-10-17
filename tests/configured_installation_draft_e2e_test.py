@@ -122,6 +122,8 @@ class AuthoredSetup:
     recipe: dict
     #: The package-root document a person follows when the recipe cannot be run for them.
     manual: str = "Configure it by hand.\n"
+    #: Anything else the recipe names beside it, such as a custom entrypoint: path, text, executable.
+    files: tuple[tuple[str, str, bool], ...] = ()
 
 
 def _with_setup(artifact: CompiledAuthorArtifact, setup: AuthoredSetup) -> CompiledAuthorArtifact:
@@ -140,6 +142,8 @@ def _with_setup(artifact: CompiledAuthorArtifact, setup: AuthoredSetup) -> Compi
         "setup/installer.json", canonical_json_bytes(setup.recipe)
     )
     entries["SETUP.md"] = _packaged("SETUP.md", setup.manual.encode())
+    for path, text, executable in setup.files:
+        entries[path] = _packaged(path, text.encode(), executable)
     canonical = tuple(entries[key] for key in sorted(entries))
     native = compile_native_package(
         canonical, expected_identity=artifact.package.coordinate.artifact
@@ -148,12 +152,12 @@ def _with_setup(artifact: CompiledAuthorArtifact, setup: AuthoredSetup) -> Compi
     return dataclasses.replace(artifact, canonical_entries=canonical, native_package=native.value)
 
 
-def _packaged(path: str, content: bytes) -> SnapshotEntry:
+def _packaged(path: str, content: bytes, executable: bool = False) -> SnapshotEntry:
     """One file as a packager writes it into the compiled tree."""
 
     parsed = parse_relative_path(path)
     assert isinstance(parsed, Ok), parsed
-    return SnapshotEntry(parsed.value, SnapshotEntryKind.FILE, content)
+    return SnapshotEntry(parsed.value, SnapshotEntryKind.FILE, content, executable)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -174,11 +178,12 @@ def _define_collection(
     *,
     onto: SourceSnapshot,
     approved: tuple[RegistryArtifactVersion, ...],
+    registry_alias: str = "company",
 ) -> SourceSnapshot:
     defined = plan_collection_definition(
         approved,
         onto,
-        target_registry=SourceAlias("company"),
+        target_registry=SourceAlias(registry_alias),
         name=collection.name,
         summary=collection.summary,
         members=tuple(
@@ -219,6 +224,7 @@ def _promote_one_locally(
     revision: str,
     setup: AuthoredSetup | None = None,
     mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
+    registry_alias: str = "company",
 ) -> SourceSnapshot:
     """One author tree through one real promotion transaction onto `onto`, and no further.
 
@@ -230,12 +236,14 @@ def _promote_one_locally(
     approved = load_registry_versions(onto)
     assert isinstance(approved, Ok), approved
     if isinstance(authored, RegistryCollection):
-        return _define_collection(authored, onto=onto, approved=approved.value)
+        return _define_collection(
+            authored, onto=onto, approved=approved.value, registry_alias=registry_alias
+        )
     tree = SourceSnapshot(
         SnapshotOrigin.IMMUTABLE_GIT,
         tuple(_authored(item) for item in authored),
     )
-    registry = ApprovedRegistryVersions(approved.value, SourceAlias("company"))
+    registry = ApprovedRegistryVersions(approved.value, SourceAlias(registry_alias))
     compiled = compile_author_source(
         tree,
         source_alias=SourceAlias("authors"),
@@ -253,7 +261,7 @@ def _promote_one_locally(
         artifacts,
         previous=(),
         approved=approved.value,
-        target_registry=SourceAlias("company"),
+        target_registry=SourceAlias(registry_alias),
     )
     assert isinstance(scanned, Ok), scanned
     bundle = scanned.value.active[0]
@@ -279,6 +287,7 @@ def _promote_one(
     revision: str,
     setup: AuthoredSetup | None = None,
     mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
+    registry_alias: str = "company",
 ) -> SourceSnapshot:
     """One author tree promoted onto `onto`, then recorded as published.
 
@@ -288,7 +297,14 @@ def _promote_one(
     not use this shortcut.
     """
 
-    projected = _promote_one_locally(authored, onto=onto, revision=revision, setup=setup, mode=mode)
+    projected = _promote_one_locally(
+        authored,
+        onto=onto,
+        revision=revision,
+        setup=setup,
+        mode=mode,
+        registry_alias=registry_alias,
+    )
     reloaded = load_registry_versions(projected)
     assert isinstance(reloaded, Ok), reloaded
     after = tuple(publish_registry_version(item, item.registry_snapshot) for item in reloaded.value)
@@ -303,6 +319,7 @@ def _promoted_local_registries(
     *authored: Authored,
     setup: AuthoredSetup | None = None,
     mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
+    registry_alias: str = "company",
 ) -> SourceSnapshot:
     """Several author trees promoted into one registry, stopping where a maintainer stops."""
 
@@ -314,6 +331,7 @@ def _promoted_local_registries(
             revision=f"{index:x}" * 40,
             setup=setup,
             mode=mode,
+            registry_alias=registry_alias,
         )
     return snapshot
 
@@ -322,6 +340,7 @@ def _published_registries(
     *authored: Authored,
     setup: AuthoredSetup | None = None,
     mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
+    registry_alias: str = "company",
 ) -> SourceSnapshot:
     """Several author trees taken to a published registry, one promotion transaction each.
 
@@ -338,6 +357,7 @@ def _published_registries(
             revision=f"{index:x}" * 40,
             setup=setup,
             mode=mode,
+            registry_alias=registry_alias,
         )
     return snapshot
 

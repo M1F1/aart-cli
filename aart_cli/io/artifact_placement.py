@@ -91,7 +91,7 @@ _MERGED_KINDS = frozenset({ArtifactKind.MEMORY})
 def _skippable(profile: str, *, requested: bool) -> bool:
     """Whether a harness with no measured target for this artifact may be left out of the plan.
 
-    `aart-cli marketplace install` refuses without `--profile`, so a profile that reaches it was typed
+    `aart-cli consume install` refuses without `--profile`, so a profile that reaches it was typed
     by somebody, and dropping one would leave the harness they asked for with nothing to read and
     no way to start a server. The persistent shell names no profiles: it installs into every
     harness whose tables this build measured, which is a capability set rather than a request, and

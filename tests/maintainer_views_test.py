@@ -212,7 +212,7 @@ class MaintainerRenderingTest(unittest.TestCase):
             )
         )
 
-        self.assertIn("Sources: 1", dashboard)
+        self.assertIn("Upstream repositories: 1", dashboard)
         self.assertIn("Candidates: 1", dashboard)
         self.assertIn("Ready for promotion: 1", dashboard)
         self.assertIn("> authors", sources)
@@ -254,8 +254,11 @@ class MaintainerRenderingTest(unittest.TestCase):
             entering=True,
         )
 
-        self.assertIn("sources: 1", "\n".join(frame(source, dashboard)))
-        self.assertNotIn("not available yet", "\n".join(frame(source, dashboard)))
+        self.assertIn("upstream repositories: 1", "\n".join(frame(source, dashboard)))
+        drawn = "\n".join(frame(source, dashboard))
+        self.assertNotIn("not available yet", drawn)
+        self.assertIn("> Upstream repositories\n  Candidates\n  Registry", drawn)
+        self.assertNotIn("Sources", drawn)
 
         sources = _reload(
             source,
@@ -266,6 +269,10 @@ class MaintainerRenderingTest(unittest.TestCase):
             entering=True,
         )
         self.assertEqual(sources.rows, ("authors",))
+        drawn = "\n".join(frame(source, sources))
+        self.assertIn("author repositories this Registry takes artifacts from", drawn)
+        self.assertIn("[a] Add upstream", drawn)
+        self.assertNotIn("Source", drawn)
         self.assertIn("> authors", "\n".join(frame(source, sources)))
         details = _reload(
             source,

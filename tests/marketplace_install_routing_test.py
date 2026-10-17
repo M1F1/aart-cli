@@ -1,4 +1,4 @@
-"""B-038: which installs `aart-cli marketplace install` sends to the canonical registry seam.
+"""B-038: which installs `aart-cli consume install` sends to the canonical registry seam.
 
 The strangler moves one source kind at a time, and the decision that says which is
 `_configured_registry_selection`. Nothing named it, so the route could change -- in either
@@ -44,22 +44,25 @@ class ConfiguredRoutingTest(unittest.TestCase):
         self.assertEqual(selection.artifacts[0].source, SourceAlias("company"))
 
     def test_an_unqualified_coordinate_follows_the_configured_default_registry(self) -> None:
-        """Choosing a source here would be new product policy, so only a default can decide."""
+        """A default binds the Registry; without one the resolver decides among Registries (D-444)."""
 
         effective = effective_configuration((REGISTRY,), default_registry="company")
 
-        self.assertIsNotNone(_configured_registry_selection((_selector(None),), effective))
-        self.assertIsNone(
-            _configured_registry_selection((_selector(None),), effective_configuration((REGISTRY,)))
+        bound = _configured_registry_selection((_selector(None),), effective)
+        unbound = _configured_registry_selection(
+            (_selector(None),), effective_configuration((REGISTRY,))
         )
 
-    def test_a_direct_source_coordinate_stays_on_the_characterized_path(self) -> None:
-        """The residue B-038 names, and the reason it is not a one-line change.
+        assert bound is not None and unbound is not None
+        self.assertEqual([item.source for item in bound.artifacts], [REGISTRY.alias])
+        # Left for the resolver, which installs the one Registry offering it or names them all.
+        self.assertEqual([item.source for item in unbound.artifacts], [None])
 
-        `tests/marketplace_lifecycle_e2e_test.py` installs, updates, symlinks and uninstalls
-        against a real synchronized `SOURCE_LOCAL` source through this command. Every one of those
-        goes down the legacy path because of this `None`, so the route is load-bearing today
-        whatever is eventually decided about it.
+    def test_a_direct_source_coordinate_stays_on_the_characterized_path(self) -> None:
+        """An Upstream repository is never the seam's to resolve: a consumer reads only Registries.
+
+        The `None` sends the command to `_outside_registries`, which refuses it as an Upstream
+        repository (INV-269, D-444).
         """
 
         for source in (FEED, UPSTREAM):

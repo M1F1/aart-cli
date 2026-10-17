@@ -41,7 +41,7 @@ def _loaded(*, first_run: bool, sources: tuple[ConfiguredSource, ...] = ()) -> L
     return LoadedConfiguration(
         configuration,
         EffectiveConfiguration(configuration, OrganizationPolicy(1), ()),
-        FirstRunOptions((), (), True, True) if first_run else None,
+        FirstRunOptions((), (), True) if first_run else None,
         None,
         (),
     )

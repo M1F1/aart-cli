@@ -40,7 +40,7 @@ def _installed():
         with _environment() as env:
             for coordinate, harnesses in ((MCP, ("opencode", "claude")), (SKILL, ("claude",))):
                 profiles = [item for harness in harnesses for item in ("--profile", harness)]
-                code, said = env.run("marketplace", "install", coordinate, *profiles, "--yes")
+                code, said = env.run("consume", "install", coordinate, *profiles, "--yes")
                 assert code == 0, said
             yield env
 

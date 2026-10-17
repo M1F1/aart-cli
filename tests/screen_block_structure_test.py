@@ -191,7 +191,7 @@ class MaintainerDashboardBlockTest(TestCase):
         )
         state = ConsumerUiState(
             ConsumerSession(MaintainerScreen.DASHBOARD),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab/registry",
         )
         state = replace(state, rows=source.rows(state), cursor=0)
@@ -210,7 +210,7 @@ class MaintainerDashboardBlockTest(TestCase):
         blocks = _blocks(self._frame())
         overview = _statements(blocks[2])
 
-        self.assertEqual(overview[0], "sources: 0")
+        self.assertEqual(overview[0], "upstream repositories: 0")
         self.assertNotIn("Maintainer overview", overview)
         self.assertFalse([line for line in overview if line.startswith("> ")])
 
@@ -220,7 +220,7 @@ class MaintainerDashboardBlockTest(TestCase):
         source = CanonicalScreenSource(screens())
         state = ConsumerUiState(
             ConsumerSession(MaintainerScreen.DASHBOARD),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
         )
 
         self.assertEqual(source.actions(state), ())
@@ -261,9 +261,9 @@ class RegistriesBlockTest(TestCase):
         self.assertEqual(
             _statements(blocks[2]),
             (
-                "connect an approved Git registry by URL. Local authoring Sources belong in "
+                "connect an approved Git registry by URL. Upstream repositories belong in "
                 "Registry Maintainer Mode.",
-                "no sources are configured.",
+                "no registries are configured.",
                 "marketplace needs an approved registry before it can offer tools.",
                 "choose Add Registry above to connect the first one.",
             ),
@@ -305,10 +305,10 @@ class RegistriesBlockTest(TestCase):
     def test_the_empty_state_guidance_is_gone_once_something_is_connected(self) -> None:
         blocks = _blocks(self._frame(connected=True))
 
-        self.assertNotIn("No sources are configured.", _statements(blocks[2]))
+        self.assertNotIn("No registries are configured.", _statements(blocks[2]))
         self.assertEqual(
             _statements(blocks[2])[0],
-            "connect an approved Git registry by URL. Local authoring Sources belong in "
+            "connect an approved Git registry by URL. Upstream repositories belong in "
             "Registry Maintainer Mode.",
         )
 
@@ -362,6 +362,7 @@ class SettingsBlockTest(TestCase):
                 "  Show available updates: on",
                 "Advanced",
                 "  Registry Maintainer Mode: on",
+                "  Author Mode: off",
             ),
         )
 
@@ -374,7 +375,7 @@ class SettingsBlockTest(TestCase):
         )
         self.assertEqual(
             _statements(off[2]),
-            ("Registry Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",),
+            ("Registry Maintainer Mode off hides Upstream repositories, Candidates and Registry.",),
         )
 
 
@@ -448,7 +449,7 @@ class RegistryMaintainerBlockTest(TestCase):
         source = CanonicalScreenSource(screens())
         state = ConsumerUiState(
             ConsumerSession(MaintainerScreen.REGISTRY),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab",
         )
         state = replace(state, rows=source.rows(state), cursor=0)
@@ -581,7 +582,7 @@ class MaintainerFormBlockTest(TestCase):
         source = CanonicalScreenSource(screens())
         state = ConsumerUiState(
             ConsumerSession(screen),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab",
         )
         state = replace(state, rows=source.rows(state), cursor=0)
@@ -669,7 +670,7 @@ class RebuildRegistryRowsTest(TestCase):
                 MaintainerScreen.REGISTRY_REBUILD,
                 profile=PresentationProfile.MORE_INFO if verbose else PresentationProfile.LESS_INFO,
             ),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab",
         )
         state = replace(state, rows=source.rows(state), cursor=cursor)
@@ -733,7 +734,7 @@ class ReviewScreenBlockTest(TestCase):
         source = CanonicalScreenSource(screens())
         state = ConsumerUiState(
             ConsumerSession(screen),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab",
             **changes,
         )
@@ -818,7 +819,7 @@ class EveryScreenBlockTest(TestCase):
                 continue
             state = ConsumerUiState(
                 ConsumerSession(screen),
-                settings=ConsumerSettings().with_maintainer_mode(True),
+                settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             )
             state = replace(state, rows=self.source.rows(state), cursor=0)
             if not state.rows:
@@ -842,7 +843,7 @@ class EveryScreenBlockTest(TestCase):
         for screen in (*ConsumerScreen, *MaintainerScreen):
             state = ConsumerUiState(
                 ConsumerSession(screen),
-                settings=ConsumerSettings().with_maintainer_mode(True),
+                settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             )
             state = replace(state, rows=self.source.rows(state), cursor=0)
             if state.rows:
@@ -885,7 +886,7 @@ class NoticeBlockTest(TestCase):
         )
         state = ConsumerUiState(
             ConsumerSession(screen),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab/registry",
         )
         state = replace(state, rows=source.rows(state), cursor=0)
@@ -951,7 +952,7 @@ class BulletedStatusTest(TestCase):
         source = CanonicalScreenSource(screens())
         state = ConsumerUiState(
             ConsumerSession(ConsumerScreen.SETTINGS),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab",
         )
         state = replace(state, rows=source.rows(state), cursor=0)
@@ -970,7 +971,7 @@ class BulletedStatusTest(TestCase):
         )
         state = ConsumerUiState(
             ConsumerSession(MaintainerScreen.DASHBOARD),
-            settings=ConsumerSettings().with_maintainer_mode(True),
+            settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
             workspace="/lab",
         )
         state = replace(state, rows=source.rows(state), cursor=0)
@@ -980,7 +981,7 @@ class BulletedStatusTest(TestCase):
             blocks[2],
             (
                 "",
-                "- sources: 0",
+                "- upstream repositories: 0",
                 "",
                 "- candidates: 0",
                 "",
@@ -1001,7 +1002,7 @@ class BulletedStatusTest(TestCase):
         for screen in (*ConsumerScreen, *MaintainerScreen):
             state = ConsumerUiState(
                 ConsumerSession(screen),
-                settings=ConsumerSettings().with_maintainer_mode(True),
+                settings=ConsumerSettings(author_mode=True).with_maintainer_mode(True),
                 workspace="/lab",
             )
             state = replace(state, rows=source.rows(state), cursor=0)

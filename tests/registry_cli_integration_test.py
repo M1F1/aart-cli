@@ -45,6 +45,7 @@ class RegistryCliIntegrationTest(unittest.TestCase):
             _git(root, "init", "-q")
 
             code, output = _run(
+                "maintain",
                 "registry",
                 "init",
                 "--source",
@@ -69,29 +70,43 @@ class RegistryCliIntegrationTest(unittest.TestCase):
                 ("audit",),
                 ("diff",),
             ):
-                code, output = _run("registry", *arguments, "--source", str(root), "--json")
+                code, output = _run(
+                    "maintain", "registry", *arguments, "--source", str(root), "--json"
+                )
                 self.assertEqual(code, 0, output)
                 self.assertEqual(_tree_bytes(root), before_reads)
 
-            code, output = _run("registry", "lock", "--source", str(root), "--check", "--json")
+            code, output = _run(
+                "maintain", "registry", "lock", "--source", str(root), "--check", "--json"
+            )
             self.assertEqual(code, 0, output)
             self.assertFalse((root / "aart.lock.json").exists())
-            self.assertEqual(_run("registry", "lock", "--source", str(root), "--yes")[0], 0)
+            self.assertEqual(
+                _run("maintain", "registry", "lock", "--source", str(root), "--yes")[0], 0
+            )
 
-            code, output = _run("registry", "build", "--source", str(root), "--check", "--json")
+            code, output = _run(
+                "maintain", "registry", "build", "--source", str(root), "--check", "--json"
+            )
             self.assertEqual(code, 1, output)
             self.assertFalse((root / "aart.index.json").exists())
-            self.assertEqual(_run("registry", "build", "--source", str(root), "--yes")[0], 0)
+            self.assertEqual(
+                _run("maintain", "registry", "build", "--source", str(root), "--yes")[0], 0
+            )
             self.assertTrue((root / "registry/index.json").is_file())
             self.assertTrue((root / "registry/snapshot.json").is_file())
 
             marker = root / "aart-cli-registry.json"
             marker.write_text("{ " + marker.read_text(encoding="utf-8")[1:], encoding="utf-8")
             noncanonical = marker.read_bytes()
-            code, output = _run("registry", "format", "--source", str(root), "--check", "--json")
+            code, output = _run(
+                "maintain", "registry", "format", "--source", str(root), "--check", "--json"
+            )
             self.assertEqual(code, 1, output)
             self.assertEqual(marker.read_bytes(), noncanonical)
-            self.assertEqual(_run("registry", "format", "--source", str(root), "--yes")[0], 0)
+            self.assertEqual(
+                _run("maintain", "registry", "format", "--source", str(root), "--yes")[0], 0
+            )
             self.assertNotEqual(marker.read_bytes(), noncanonical)
 
     def test_a_confirmed_init_states_each_warning_once_on_the_human_path(self) -> None:
@@ -110,6 +125,7 @@ class RegistryCliIntegrationTest(unittest.TestCase):
             _git(root, "init", "-q")
 
             code, output = _run(
+                "maintain",
                 "registry",
                 "init",
                 "--source",
@@ -144,6 +160,7 @@ class RegistryCliIntegrationTest(unittest.TestCase):
             _git(root, "init", "-q")
             self.assertEqual(
                 _run(
+                    "maintain",
                     "registry",
                     "init",
                     "--source",
@@ -162,7 +179,9 @@ class RegistryCliIntegrationTest(unittest.TestCase):
 
             before = _tree_bytes(root)
             for arguments in (("validate",), ("audit",)):
-                code, output = _run("registry", *arguments, "--source", str(root), "--json")
+                code, output = _run(
+                    "maintain", "registry", *arguments, "--source", str(root), "--json"
+                )
                 self.assertNotEqual(code, 0, output)
                 self.assertIn("retired authoring-workspace", output)
                 self.assertIn("aart.lock.json", output)

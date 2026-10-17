@@ -1,4 +1,4 @@
-"""Concrete configured composition for reviewed Maintainer Source Sync."""
+"""Concrete configured composition for reviewed Maintainer Upstream sync."""
 
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ def read_approved_registry_state(
     if current.value is None:
         return _error(
             f"target registry {alias} has no synchronized approved snapshot",
-            f"synchronize registry {alias} before reviewing Source Sync",
+            f"synchronize registry {alias} before reviewing Upstream sync",
         )
     versions = load_registry_versions(current.value.candidate.snapshot)
     if isinstance(versions, Err):
@@ -139,7 +139,7 @@ def _target_registry(effective: EffectiveConfiguration) -> SourceAlias | None:
     """The configured default registry, or the only enabled one when none is the default.
 
     Disconnecting the default Registry clears the default and names no replacement, and nothing
-    else can name one for a Registry that is already connected, so Source Sync refused for good
+    else can name one for a Registry that is already connected, so Upstream sync refused for good
     with one Registry plainly in place (D-390). A single enabled Registry is not a choice.
     """
 
@@ -165,14 +165,16 @@ def prepare_configured_source_sync(
     if not isinstance(effective, EffectiveConfiguration) or not isinstance(
         source_alias, SourceAlias
     ):
-        return _error("preparing configured Source Sync needs effective configuration and an alias")
+        return _error(
+            "preparing configured Upstream sync needs effective configuration and an alias"
+        )
     source = _configured(effective, source_alias)
     if source is None or source.is_registry:
         return _error(f"authoring Source {source_alias} is not configured and enabled")
     target = _target_registry(effective)
     if target is None:
         return _error(
-            "Source Sync needs a default target registry: "
+            "Upstream sync needs a default target registry: "
             + (
                 "no Registry is connected"
                 if not _enabled_registries(effective)
@@ -217,10 +219,10 @@ def complete_configured_source_sync(
     *,
     reviewed_digest: ObjectDigest,
 ) -> Result[SourceSyncExecutionResult]:
-    """Execute the reviewed Source Sync through real source and Candidate stores."""
+    """Execute the reviewed Upstream sync through real source and Candidate stores."""
 
     if not isinstance(effective, EffectiveConfiguration):
-        return _error("completing configured Source Sync needs effective configuration")
+        return _error("completing configured Upstream sync needs effective configuration")
 
     def read_history(paths):
         return read_candidate_history(candidate_history_paths(paths))

@@ -130,9 +130,9 @@ class FollowUpCommandTest(unittest.TestCase):
         self.assertEqual(
             commands,
             (
-                "aart-cli registry validate --source /tmp/registry",
-                "aart-cli registry build --source /tmp/registry",
-                "aart-cli registry audit --source /tmp/registry",
+                "aart-cli maintain registry validate --source /tmp/registry",
+                "aart-cli maintain registry build --source /tmp/registry",
+                "aart-cli maintain registry audit --source /tmp/registry",
             ),
         )
 
@@ -153,8 +153,8 @@ class FollowUpCommandTest(unittest.TestCase):
         self.assertEqual(
             commands,
             (
-                "aart-cli registry validate --source /tmp/registry",
-                "aart-cli registry audit --source /tmp/registry",
+                "aart-cli maintain registry validate --source /tmp/registry",
+                "aart-cli maintain registry audit --source /tmp/registry",
             ),
         )
 

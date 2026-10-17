@@ -196,7 +196,7 @@ class CurationRuntimeTest(unittest.TestCase):
                 initialized.value.review.warnings,
             )
             self.assertIn(
-                f"aart-cli registry validate --source {root}",
+                f"aart-cli maintain registry validate --source {root}",
                 initialized.value.review.follow_up_commands,
             )
             self.assertFalse(

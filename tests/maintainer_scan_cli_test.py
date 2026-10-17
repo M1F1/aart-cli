@@ -49,7 +49,8 @@ class MaintainerScanCliTest(unittest.TestCase):
         request = cli._to_request(
             cli.build_parser().parse_args(
                 [
-                    "registry",
+                    "maintain",
+                    "upstream",
                     "scan",
                     "--checkout",
                     "/tmp/authors",
@@ -84,7 +85,8 @@ class MaintainerScanCliTest(unittest.TestCase):
             with contextlib.redirect_stdout(output):
                 status = cli.main(
                     [
-                        "registry",
+                        "maintain",
+                        "upstream",
                         "scan",
                         "--checkout",
                         str(root),
@@ -123,7 +125,8 @@ class MaintainerScanCliTest(unittest.TestCase):
             with contextlib.redirect_stdout(output):
                 status = cli.main(
                     [
-                        "registry",
+                        "maintain",
+                        "upstream",
                         "scan",
                         "--checkout",
                         str(root),
@@ -164,11 +167,12 @@ class MaintainerScanCliTest(unittest.TestCase):
                 "company",
             ]
             with contextlib.redirect_stdout(scan_output):
-                scan_status = cli.main(["registry", "scan", *common, "--json"])
+                scan_status = cli.main(["maintain", "upstream", "scan", *common, "--json"])
             self.assertEqual(scan_status, 0)
             candidate_id = json.loads(scan_output.getvalue())["candidates"][0]["candidate_id"]
             promote = [
-                "registry",
+                "maintain",
+                "candidate",
                 "promote",
                 *common,
                 "--candidate",
@@ -210,7 +214,7 @@ class MaintainerScanCliTest(unittest.TestCase):
             self.assertIn("?? artifacts/", status)
             rescanned_output = io.StringIO()
             with contextlib.redirect_stdout(rescanned_output):
-                rescanned_status = cli.main(["registry", "scan", *common, "--json"])
+                rescanned_status = cli.main(["maintain", "upstream", "scan", *common, "--json"])
             self.assertEqual(rescanned_status, 0)
             self.assertEqual(
                 json.loads(rescanned_output.getvalue())["candidates"][0]["state"],

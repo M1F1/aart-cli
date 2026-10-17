@@ -113,8 +113,11 @@ AART / Dashboard
 ```
 
 Press **Enter** on **Marketplace**. That is the catalog your organization approved: press `/` and
-keep typing to narrow it, then open an artifact to install it. Every mutation shows you the plan
-first and changes nothing until you confirm it.
+keep typing to narrow it. More info (`v`) shows the focused artifact's complete details in
+Marketplace. Press `i` to install the focused offer, or Space to mark several before Install.
+Collections open a member preview with Enter. Labeled columns wrap instead of cutting values;
+small terminal windows use stacked fields and PgUp/PgDn scrolling. Installation shows its plan
+before you confirm it.
 
 **If you see `SETUP REQUIRED` instead**, your copy was not built with a Registry, which is true of
 every public build. Open **Registries**, choose **Add Registry**, and give it the address your
@@ -133,7 +136,7 @@ For a script, or when you already know what you want. Connect the Registry:
 
 ```sh
 cd /path/to/your-project
-aart-cli source add --alias <alias> --kind registry-git --location <registry-url> --ref main --default
+aart-cli consume registry add --alias <alias> --kind git --location <registry-url> --ref main --default
 ```
 
 Find the artifact. `list` prints the whole catalog; `search` is how you find one thing in it. Every
@@ -141,22 +144,22 @@ word must match, so a second word narrows rather than widens, and the coordinate
 one `install` takes:
 
 ```sh
-aart-cli marketplace search <word>
+aart-cli consume search <word>
 ```
 
 Install it. Every mutation is two commands on purpose: the first renders the plan and changes
 nothing, the second finalizes exactly that plan:
 
 ```sh
-aart-cli marketplace install <alias>/<kind>/<name> --profile <harness>
-aart-cli marketplace install <alias>/<kind>/<name> --profile <harness> --yes
+aart-cli consume install <alias>/<kind>/<name> --profile <harness>
+aart-cli consume install <alias>/<kind>/<name> --profile <harness> --yes
 ```
 
 Verify. `status` reports what is installed and whether it still matches the Registry — `current`,
 `update_available`, `removed_upstream`, `source_unavailable` or `local_drift`:
 
 ```sh
-aart-cli marketplace status --profile <harness>
+aart-cli consume status --profile <harness>
 ```
 
 ### One name, spelled two ways
@@ -172,13 +175,13 @@ A package manager for agent artifacts -- the things an agent is configured with,
 code it edits. It installs **skills**, **guidelines**, **MCP** servers, **hooks**, **memory** and
 OpenCode **plugins** into a harness, from a catalog somebody in your organization has reviewed.
 
-An artifact reaches you through four places that are deliberately not one place. A **Source** is a
+An artifact reaches you through four places that are deliberately not one place. An **Upstream repository** is a
 repository an author writes in. Scanning one produces **Candidates**: compiled and validated, not
 yet approved. A maintainer promotes a Candidate into the **Registry**, the approved and immutable
 catalog. **Marketplace** is your view across every registry you have connected -- one, or several
 at once -- and it is what you search, what you install from, and what `status` later compares your
 machine against. An artifact keeps the alias of the registry it came from, so the same name in two
-registries stays two different things. No Source installs anything directly, and
+registries stays two different things. No upstream installs anything directly, and
 nothing enters the Registry without a maintainer putting it there.
 
 On your side of that line AART is a Registry client, which acquires and validates a whole snapshot
@@ -187,8 +190,21 @@ applies nothing until you accept it; and an installer, which writes the harness'
 and can reverse what it wrote. The same compiler runs at both ends, so a catalog cannot publish a
 document its consumers would have to work around.
 
-One product, one interface: `source`, `marketplace` and `registry`. Input outside the contract is
-rejected with a diagnostic; there are no compatibility flags and no silent fallbacks.
+The first command word names the role: `consume`, `maintain upstream|candidate|registry`, or
+`author`. Consumers connect only Registries, through `consume registry`; maintainers connect
+author repositories through `maintain upstream`. The former `source`, `marketplace` and top-level
+`registry` commands have been removed.
+
+The TUI starts with consumer navigation. In Settings, enable **Author Mode** for Workspace,
+Check and New artifact, or **Registry Maintainer Mode** for Upstream repositories, Candidates
+and Registry. These are separate preferences, off by default. Author Mode uses the same checker
+and template writer as `aart-cli author`; it never subscribes the workspace or changes a Registry.
+
+If local state is invalid or belongs to another version, `aart-cli reset` offers a fresh start.
+It moves AART-owned state to a named sibling backup directory after one confirmation; `--yes`
+confirms noninteractively. `aart-cli reset --restore <backup-directory>` first backs up current
+state and then restores that backup. Harness files and projects stay in place. See the
+[consumer guide](docs/using/consumer-lifecycle-v1.md#reset-and-restore) for the exact boundary.
 
 ## Documentation
 
@@ -199,7 +215,7 @@ the product's single source of truth, which every document below is written agai
 [the consumer lifecycle](docs/using/consumer-lifecycle-v1.md) ·
 [where AART keeps what it owns](docs/configuration/application-home-v1.md) ·
 [with a company registry](docs/tutorials/company-registry-v1.md) ·
-[with direct sources only](docs/tutorials/direct-source-v1.md) ·
+[with a local Registry](docs/tutorials/direct-source-v1.md) ·
 [the environment AART gives Git](docs/configuration/git-environment-v1.md) ·
 [advisory runtime requirements](docs/marketplace/runtime-requirements-v1.md)
 

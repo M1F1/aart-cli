@@ -90,6 +90,12 @@ class MarketplaceProjectionTest(unittest.TestCase):
         self.assertFalse(item["aart_compatible"])
         self.assertIn("installation is disabled", item["compatibility_notice"])
         self.assertIn("trust_evidence_digest", item)
+        # Each connection is named by its role (§175), never as a "source".
+        headers = rendered.splitlines()[: len(catalog.value.sources)]
+        self.assertEqual(
+            [line.split(" [")[0] for line in headers],
+            ["Registry registry", "Upstream repository missing"],
+        )
         self.assertIn("registry/skill/atlassian@1.0.0", rendered)
         self.assertIn("registry-reviewed", rendered)
         self.assertIn("sha256:" + "3" * 64, rendered)

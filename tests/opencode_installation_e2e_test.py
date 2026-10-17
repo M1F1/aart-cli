@@ -91,8 +91,15 @@ from aart_cli.store.model import (
     object_store_paths,
 )
 from tests.fixture_versions import with_fixture_versions
-from tests.marketplace_lifecycle_e2e_test import _FIXTURE, _environment
+from tests.marketplace_lifecycle_e2e_test import _environment
 from tests.mcp_stdio_e2e_test import SERVER_SOURCE, _FileProvider, speak
+from tests.reference_registry import (
+    ESSENTIALS,
+    memory,
+    reference_snapshot,
+    skill,
+    write_reference_registry,
+)
 
 TOKEN = InputId("github-token")
 ORG = InputId("github-org")
@@ -376,22 +383,19 @@ class OpenCodeSkillInstallationTest(unittest.TestCase):
     """The public command, asked for OpenCode, over a real source and a real project tree."""
 
     def _source(self, root: pathlib.Path) -> pathlib.Path:
-        """The reference source, with its Skill declaring OpenCode as well."""
+        """The reference Registry, with its Skill declaring OpenCode as well."""
 
-        location = root / "source"
-        shutil.copytree(_FIXTURE, location)
-        manifest_path = location / "artifacts/skill/code-review/artifact.json"
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        manifest["compatibility"]["profiles"] = ["claude", "opencode"]
-        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        return location
+        return write_reference_registry(
+            root / "registry",
+            reference_snapshot(skill(harnesses=("claude", "opencode")), memory(), ESSENTIALS),
+        )
 
     def test_a_skill_declaring_opencode_installs_where_opencode_reads_it(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             source = self._source(pathlib.Path(raw).resolve())
             with _environment(source) as env:
                 code, payload = env.run(
-                    "marketplace",
+                    "consume",
                     "install",
                     "reference/skill/code-review",
                     "--profile",
@@ -401,7 +405,9 @@ class OpenCodeSkillInstallationTest(unittest.TestCase):
 
                 self.assertEqual(0, code, payload)
                 installed = env.project / delivery_destination(
-                    delivery_target("opencode", Scope.PROJECT, ArtifactKind.SKILL), "code-review"
+                    delivery_target("opencode", Scope.PROJECT, ArtifactKind.SKILL),
+                    # A Registry placement names its Registry and scope (§169).
+                    "code-review-reference-project",
                 )
                 self.assertTrue(
                     (installed / "SKILL.md").exists(),
@@ -415,7 +421,7 @@ class OpenCodeSkillInstallationTest(unittest.TestCase):
             source = self._source(pathlib.Path(raw).resolve())
             with _environment(source) as env:
                 env.run(
-                    "marketplace",
+                    "consume",
                     "install",
                     "reference/skill/code-review",
                     "--profile",

@@ -1,4 +1,4 @@
-"""CP-14 Source Sync is one reviewed, leased, non-promoting application transaction."""
+"""CP-14 Upstream sync is one reviewed, leased, non-promoting application transaction."""
 
 from __future__ import annotations
 
@@ -183,7 +183,7 @@ class _Ports:
         return Ok(self.candidate)
 
     def acquire_git(self, _request):
-        raise AssertionError("local Source Sync cannot acquire Git")
+        raise AssertionError("local Upstream sync cannot acquire Git")
 
     def validate(self, request):
         self.events.append("validate")
@@ -208,7 +208,7 @@ class _Ports:
         if not self.leased:
             raise AssertionError("Candidate history escaped the Source lease")
         if scan.registry_mutations:
-            raise AssertionError("Source Sync attempted a registry mutation")
+            raise AssertionError("Upstream sync attempted a registry mutation")
         self.history = scan
         return Ok(None)
 

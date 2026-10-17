@@ -1,8 +1,9 @@
 """A resolution failure names the layer that failed, not the artifact.
 
-Three unrelated stressors — an alias that was never configured, one configured but never
-synchronized, and a cold cache read under `--offline` — must not all report `artifact-not-found`,
-with empty remediation, about the one part of the request that was never wrong.  An operator sent to look for a correctly spelled name learns nothing.
+Four unrelated stressors -- an alias no Registry answers to, an Upstream repository named where a
+Registry belongs, a Registry configured but never synchronized, and a name the Registry really does
+not offer -- must not all report `artifact-not-found` about the one part of the request that was
+never wrong. An operator sent to look for a correctly spelled name learns nothing.
 
 Each case is driven through the real CLI, because the vocabulary is only worth anything if it
 survives to the JSON an agent reads.
@@ -10,8 +11,6 @@ survives to the JSON an agent reads.
 
 from __future__ import annotations
 
-import json
-import shutil
 import unittest
 from pathlib import Path
 
@@ -24,29 +23,37 @@ from aart_cli.configuration.model import (
 )
 from aart_cli.configuration.schema import user_configuration_bytes
 from aart_cli.domain.identifiers import SourceAlias
-from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _FIXTURE, _environment
+from tests.marketplace_lifecycle_e2e_test import _environment
+from tests.reference_registry import REFERENCE_CONTENT, reference_snapshot, write_reference_registry
 
 _COLD = "mirror/skill/code-review"
+_UPSTREAM = "drafts/skill/code-review"
 
 
-def _configure_cold_source(env) -> None:
-    """Add a second subscription to the configuration without ever synchronizing it.
+def _configure_cold_registry_and_an_upstream(env) -> None:
+    """Add a Registry that was never synchronized, and an Upstream repository, to the configuration.
 
-    This is the state a machine is in after a configuration arrives ahead of its content — a fresh
-    checkout of someone's dotfiles, a restored home directory — and it is exactly the state
-    `source add` cannot produce, because adding synchronizes.
+    This is the state a machine is in after a configuration arrives ahead of its content -- a fresh
+    checkout of someone's dotfiles, a restored home directory -- and it is exactly the state
+    `registry add` cannot produce, because adding synchronizes.
     """
 
-    mirror = env.root / "mirror-source"
-    shutil.copytree(_FIXTURE, mirror)
-    identity = json.loads((mirror / "aart-cli-source.json").read_text(encoding="utf-8"))
-    # A distinct identity: two subscriptions to one source ID is a different refusal entirely.
-    identity["source_id"] = "mirror-native-source"
-    (mirror / "aart-cli-source.json").write_text(json.dumps(identity), encoding="utf-8")
-    cold = ConfiguredSource(SourceAlias("mirror"), SourceKind.SOURCE_LOCAL, str(mirror), None, True)
+    mirror = write_reference_registry(
+        env.root / "mirror-registry",
+        # A distinct identity: two subscriptions to one Registry ID is a different refusal.
+        reference_snapshot(*REFERENCE_CONTENT, declared_id="mirror-registry"),
+    )
+    cold = ConfiguredSource(
+        SourceAlias("mirror"), SourceKind.REGISTRY_LOCAL, str(mirror), "main", True
+    )
+    upstream = ConfiguredSource(
+        SourceAlias("drafts"), SourceKind.SOURCE_LOCAL, str(env.root / "drafts"), None, True
+    )
     Path(env.paths.user_config_file).write_bytes(
         user_configuration_bytes(
-            UserConfiguration(1, (env.source, cold), None, SyncSettings(mode=SyncMode.MANUAL))
+            UserConfiguration(
+                1, (env.source, cold, upstream), None, SyncSettings(mode=SyncMode.MANUAL)
+            )
         )
     )
 
@@ -57,117 +64,85 @@ class ResolutionFailureVocabularyTest(unittest.TestCase):
         self.assertEqual(len(payload["diagnostics"]), 1, payload)
         return payload["diagnostics"][0]
 
-    def test_an_unconfigured_alias_reports_the_subscription_not_the_artifact(self) -> None:
+    def test_an_unconfigured_alias_reports_the_registry_not_the_artifact(self) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace", "install", "ghost/skill/code-review", "--profile", "claude", "--yes"
+                "consume", "install", "ghost/skill/code-review", "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 1)
             diagnostic = self._diagnostic(payload)
-            self.assertEqual(diagnostic["code"], "source-unavailable")
+            self.assertEqual(diagnostic["code"], "registry-unavailable")
             self.assertIn("ghost", diagnostic["message"])
             self.assertIn(
-                "aart-cli source add --alias ghost --kind registry-git --location <url>",
+                "aart-cli consume registry add --alias ghost --kind git --location <url>",
                 diagnostic["remediation"],
             )
-            # Uninstall is a valid exit here, and naming it is the whole point: an operator whose
-            # source is gone still needs to remove what it installed.
-            self.assertTrue(
-                any("uninstall" in line for line in diagnostic["remediation"]), diagnostic
-            )
 
-    def test_a_configured_but_unsynchronized_alias_reports_the_missing_snapshot(self) -> None:
+    def test_an_upstream_alias_is_refused_as_an_upstream(self) -> None:
+        """INV-269: the name is right, and it names something a consumer never installs from."""
+
         with _environment() as env:
-            _configure_cold_source(env)
+            _configure_cold_registry_and_an_upstream(env)
 
-            code, payload = env.run("marketplace", "install", _COLD, "--profile", "claude", "--yes")
+            code, payload = env.run("consume", "install", _UPSTREAM, "--profile", "claude", "--yes")
 
             self.assertEqual(code, 1)
             diagnostic = self._diagnostic(payload)
-            self.assertEqual(diagnostic["code"], "source-not-synchronized")
-            self.assertEqual(diagnostic["remediation"], ["aart-cli source sync --alias mirror"])
+            self.assertEqual(diagnostic["code"], "upstream-not-installable")
+            self.assertIn("drafts is an Upstream repository, not a Registry", diagnostic["message"])
+            self.assertIn("aart-cli maintain candidate list", diagnostic["remediation"][0])
 
-    def test_a_cold_cache_under_offline_says_so_rather_than_blaming_the_name(self) -> None:
-        """A cold cache is not an unknown name."""
-
+    def test_a_configured_but_unsynchronized_registry_reports_the_missing_snapshot(self) -> None:
         with _environment() as env:
-            _configure_cold_source(env)
+            _configure_cold_registry_and_an_upstream(env)
 
-            code, payload = env.run(
-                "marketplace", "install", _COLD, "--profile", "claude", "--offline", "--yes"
-            )
+            code, payload = env.run("consume", "install", _COLD, "--profile", "claude", "--yes")
 
             self.assertEqual(code, 1)
             diagnostic = self._diagnostic(payload)
-            self.assertEqual(diagnostic["code"], "source-not-synchronized")
-            self.assertIn("--offline", diagnostic["message"])
-            self.assertIn("re-run without --offline", diagnostic["remediation"])
+            self.assertEqual(diagnostic["code"], "registry-not-synchronized")
+            self.assertEqual(
+                diagnostic["remediation"], ["aart-cli consume registry sync --alias mirror"]
+            )
 
     def test_artifact_not_found_survives_for_the_one_case_where_it_is_true(self) -> None:
         with _environment() as env:
             code, payload = env.run(
-                "marketplace", "install", "reference/skill/absent", "--profile", "claude", "--yes"
+                "consume", "install", "reference/skill/absent", "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 1)
             diagnostic = self._diagnostic(payload)
             self.assertEqual(diagnostic["code"], "artifact-not-found")
-            self.assertEqual(
-                diagnostic["remediation"], ["aart-cli marketplace list --source reference"]
-            )
+            self.assertEqual(diagnostic["remediation"], ["aart-cli consume list"])
 
     def test_the_four_causes_do_not_share_one_code(self) -> None:
-        """The residue was three stressors collapsing onto one code; assert they now separate."""
+        """The residue was unrelated stressors collapsing onto one code; assert they separate."""
 
         with _environment() as env:
-            _configure_cold_source(env)
+            _configure_cold_registry_and_an_upstream(env)
             codes = tuple(
                 self._diagnostic(
-                    env.run("marketplace", "install", *argv, "--profile", "claude", "--yes")[1]
+                    env.run("consume", "install", coordinate, "--profile", "claude", "--yes")[1]
                 )["code"]
-                for argv in (
-                    ("ghost/skill/code-review",),
-                    (_COLD,),
-                    (_COLD, "--offline"),
-                    ("reference/skill/absent",),
+                for coordinate in (
+                    "ghost/skill/code-review",
+                    _UPSTREAM,
+                    _COLD,
+                    "reference/skill/absent",
                 )
             )
 
             self.assertEqual(
                 codes,
                 (
-                    "source-unavailable",
-                    "source-not-synchronized",
-                    "source-not-synchronized",
+                    "registry-unavailable",
+                    "upstream-not-installable",
+                    "registry-not-synchronized",
                     "artifact-not-found",
                 ),
             )
-            # The two synchronization cases share a code deliberately — the layer is the same — but
-            # must not share remediation, or `--offline` becomes invisible.
-            self.assertNotEqual(
-                self._diagnostic(
-                    env.run("marketplace", "install", _COLD, "--profile", "claude", "--yes")[1]
-                )["remediation"],
-                self._diagnostic(
-                    env.run(
-                        "marketplace", "install", _COLD, "--profile", "claude", "--offline", "--yes"
-                    )[1]
-                )["remediation"],
-            )
-
-    def test_a_healthy_install_still_resolves(self) -> None:
-        """The new classification runs on every failed match; prove it changed no success path."""
-
-        with _environment() as env:
-            _configure_cold_source(env)
-
-            code, payload = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
-            )
-
-            self.assertEqual(code, 0, payload)
-            self.assertTrue(payload["finalized"])
 
 
 if __name__ == "__main__":

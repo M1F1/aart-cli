@@ -40,7 +40,7 @@ class RegistryPublicationReadinessTest(unittest.TestCase):
                 continue
             for command in gate.commands:
                 expected = (
-                    "aart-cli registry test --source . --compatibility ${{ matrix.compatibility }}"
+                    "aart-cli maintain registry test --source . --compatibility ${{ matrix.compatibility }}"
                     if gate.name == "compatibility"
                     else command
                 )
@@ -65,7 +65,7 @@ class RegistryPublicationReadinessTest(unittest.TestCase):
             for command in gate.commands:
                 with self.subTest(command=command):
                     self.assertNotIn(command, workflow)
-        self.assertNotIn("aart-cli registry lock", workflow)
+        self.assertNotIn("aart-cli maintain registry lock", workflow)
 
     def test_canonical_outputs_make_every_gate_green_and_leave_no_build_change(self) -> None:
         original = empty_registry_snapshot()

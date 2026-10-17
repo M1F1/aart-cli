@@ -34,14 +34,28 @@ def _rows(env, screen: ConsumerScreen) -> list[str]:
         source = _actions(env).source()
         empty = ConsumerUiState(ConsumerSession(screen))
         state = ConsumerUiState(ConsumerSession(screen), rows=source.rows(empty))
-        return [line for line in frame(source, state) if "[ ]" in line]
+        if screen is not ConsumerScreen.MARKETPLACE:
+            return [line for line in frame(source, state) if "[ ]" in line]
+        lines = source.actions(state)
+        starts = [
+            lines[0].index(label) for label in ("Artifact", "Status", "Scope", "Harnesses", "Unset")
+        ]
+        rows = []
+        for line in lines[1:]:
+            if "[ ]" in line:
+                rows.append(["" for _ in starts])
+            if line.strip() and rows:
+                for i, start in enumerate(starts):
+                    end = starts[i + 1] if i < 4 else len(line)
+                    rows[-1][i] += " " + line[start:end].strip()
+        return ["  ".join(cell.strip() for cell in row).rstrip() for row in rows]
 
 
 class MarketplaceColumnsTest(unittest.TestCase):
     def test_marketplace_and_installed_rows_carry_the_columns(self) -> None:
         with _two_skills() as env:
             code, installed = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(code, 0, installed)
             offers = _rows(env, ConsumerScreen.MARKETPLACE)
@@ -61,11 +75,8 @@ class MarketplaceColumnsTest(unittest.TestCase):
         self.assertIn("#claude", row)
         self.assertIn("project", row)
         self.assertIn(project, row)
-        self.assertEqual(
-            held.index("installed"),
-            other.index("not installed"),
-            "the columns are not one grid",
-        )
+        # Header alignment and lossless wrapping are held across generated widths in
+        # marketplace_readable_rows_test; here the installed facts come from real receipts.
 
 
 def _view(coordinate, harness, health="ready", scope="project", root="/p/a", unset=()):

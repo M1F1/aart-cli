@@ -1,4 +1,4 @@
-"""Strict canonical serialization for durable Source Scan and Candidate history.
+"""Strict canonical serialization for durable Upstream scan and Candidate history.
 
 Candidate lifecycle metadata is small, while each compiled artifact is already a canonical object
 tree.  The index therefore references content-addressed ``ObjectCandidate`` envelopes instead of
@@ -249,13 +249,13 @@ def _validate_scan(scan: SourceScan) -> str | None:
     if any(
         bundle.candidate.artifact.provenance.revision != scan.revision for bundle in scan.active
     ):
-        return "active Candidate history does not bind the Source Scan revision"
+        return "active Candidate history does not bind the Upstream scan revision"
     return None
 
 
 def serialize_source_scan(scan: SourceScan) -> Result[SerializedSourceScan]:
     if not isinstance(scan, SourceScan):
-        return _error("Candidate history serialization needs a Source Scan")
+        return _error("Candidate history serialization needs a Upstream scan")
     invalid = _validate_scan(scan)
     if invalid is not None:
         return _error(invalid)
@@ -476,12 +476,12 @@ def parse_source_scan(
         if len(set(active_ids)) != len(active_ids) or any(item not in by_id for item in active_ids):
             raise ValueError("Candidate history active IDs are duplicated or missing")
         active = tuple(by_id[item] for item in active_ids)
-        source_alias = SourceAlias(_text(data["source_alias"], "Source Scan alias"))
-        revision = _text(data["revision"], "Source Scan revision")
+        source_alias = SourceAlias(_text(data["source_alias"], "Upstream scan alias"))
+        revision = _text(data["revision"], "Upstream scan revision")
         if any(bundle.candidate.artifact.coordinate.source != source_alias for bundle in history):
             raise ValueError("Candidate history contains another Source alias")
         if any(bundle.candidate.artifact.provenance.revision != revision for bundle in active):
-            raise ValueError("active Candidate history does not bind the Source Scan revision")
+            raise ValueError("active Candidate history does not bind the Upstream scan revision")
         scan = SourceScan(
             source_alias,
             revision,

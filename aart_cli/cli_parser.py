@@ -64,16 +64,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
 
-    sub.add_parser(
+    p = sub.add_parser(
         "reset",
         formatter_class=_HELP_FORMATTER,
-        help="restore AART's per-user application state to factory defaults",
+        help="start aart-cli clean, keeping the old state in a backup",
         description=(
-            "Remove only AART-owned per-user configuration, managed source snapshots, receipts, "
-            "settings and caches after two exact typed confirmations. Projects, harness files, "
-            "organization policy and credentials owned by other applications are not removed."
+            "Move AART-owned per-user configuration, managed snapshots, receipts, settings and "
+            "caches into <application home>-backups/<UTC timestamp>/ and start as on a new "
+            "machine. Nothing is deleted. Projects, harness files, organization policy and "
+            "credentials owned by other applications are not touched."
         ),
     )
+    p.add_argument(
+        "--restore",
+        dest="reset_restore",
+        metavar="DIR",
+        help="bring a backup back, after backing up the current state",
+    )
+    p.add_argument("--yes", action="store_true", help="skip the typed confirmation")
 
     # doctor ------------------------------------------------------------------ #
     p = sub.add_parser(
@@ -139,173 +147,224 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true", help="print the pip invocation; install nothing"
     )
 
-    # source ------------------------------------------------------------------ #
+    # consume / maintain ------------------------------------------------------ #
+    # Three role families (§175.2, INV-270): the first word says whose command it is.
     p = sub.add_parser(
-        "source",
+        "consume",
         formatter_class=_HELP_FORMATTER,
-        help="add and inspect configured canonical source origins",
+        help="connect Registries and install, update and inspect their artifacts",
         description=(
-            "Manage configured registry/direct/local origins for the canonical marketplace. "
-            "`source add` validates and snapshots the exact source before saving it, so it is "
-            "safe for non-interactive agent use."
+            "Everything a consumer does: connect Registries, synchronize them, and install, update, "
+            "inspect, set up and test the artifacts they approve. A consumer reads Registries "
+            "only; an Upstream repository is the maintainer's."
         ),
     )
-    source_sub = p.add_subparsers(dest="source_action", metavar="ACTION", required=True)
-    p_add_source = source_sub.add_parser(
-        "add",
-        help="synchronize, validate, then persist one source origin",
-        description=(
-            "Parse one exact source, validate a fresh immutable snapshot, then atomically save "
-            "the source configuration. No interactive confirmation is required because all "
-            "origin/default choices are explicit command arguments."
-        ),
-    )
-    p_add_source.add_argument(
-        "--alias", dest="source_alias", required=True, metavar="ALIAS", help="source alias slug"
-    )
-    p_add_source.add_argument(
-        "--kind",
-        dest="source_kind",
-        choices=("registry-git", "registry-local", "source-git", "source-local"),
-        required=True,
-        help="registry-git, registry-local, source-git, or source-local",
-    )
-    p_add_source.add_argument(
-        "--location",
-        dest="source_location",
-        required=True,
-        metavar="URL_OR_PATH",
-        help="credential-free Git URL, or a normalized absolute local path",
-    )
-    p_add_source.add_argument(
-        "--ref",
-        metavar="REF",
-        help=(
-            "Git ref: defaults to main for registry-git and source-git, required as the selected "
-            "branch for registry-local, not valid for source-local"
-        ),
-    )
-    source_default = p_add_source.add_mutually_exclusive_group()
-    source_default.add_argument(
-        "--default",
-        dest="source_make_default",
-        action="store_const",
-        const=True,
-        help="make this registry the default registry",
-    )
-    source_default.add_argument(
-        "--no-default",
-        dest="source_make_default",
-        action="store_const",
-        const=False,
-        help="preserve the current default registry",
-    )
-    _add_json(p_add_source)
-
-    p_source_list = source_sub.add_parser(
-        "list",
-        help="show configured origins and managed snapshot health",
-    )
-    _add_json(p_source_list)
-
-    def _add_alias(p: argparse.ArgumentParser, help_text: str) -> None:
-        p.add_argument("--alias", dest="source_alias", metavar="ALIAS", help=help_text)
-
-    p_source_sync = source_sub.add_parser(
-        "sync",
+    consume_sub = p.add_subparsers(dest="consume_action", metavar="ACTION", required=True)
+    p = sub.add_parser(
+        "maintain",
         formatter_class=_HELP_FORMATTER,
-        help="refresh managed snapshots for configured sources",
+        help="keep a Registry: its Upstream repositories, Candidates and published versions",
         description=(
-            "Re-synchronize already-configured sources. This never adds, renames, removes, or "
-            "re-identifies a source, and never changes policy defaults - use it instead of "
-            "re-adding an existing alias."
+            "Everything a Registry maintainer does: connect the Upstream repositories authors "
+            "keep, discover and promote their Candidates, and validate and publish the Registry."
         ),
     )
-    _add_alias(p_source_sync, "synchronize only this alias (default: every enabled source)")
-    _add_json(p_source_sync)
+    maintain_sub = p.add_subparsers(dest="maintain_action", metavar="ACTION", required=True)
 
-    p_source_remove = source_sub.add_parser(
-        "remove",
-        formatter_class=_HELP_FORMATTER,
-        help="forget one configured source and delete its managed snapshot",
-        description=(
-            "End one subscription: drop the configuration entry, clear the default registry if it "
-            "named this alias, and delete the managed snapshot so the origin is free to be added "
-            "again. No installed artifact and no file in any project is touched."
-        ),
-    )
-    p_source_remove.add_argument(
-        "--alias",
-        dest="source_alias",
-        required=True,
-        metavar="ALIAS",
-        help="configured source alias to remove",
-    )
-    p_source_remove.add_argument(
-        "--yes",
-        action="store_true",
-        help="finalize the reviewed removal (without this the command only reviews)",
-    )
-    _add_json(p_source_remove)
+    def _add_connection_family(family_sub: argparse._SubParsersAction, noun: str) -> None:
+        """`add|list|sync|remove|resubscribe|health` for Registries or Upstream repositories."""
 
-    p_source_resubscribe = source_sub.add_parser(
-        "resubscribe",
-        formatter_class=_HELP_FORMATTER,
-        help="adopt a changed declared identity at an unchanged origin and ref",
-        description=(
-            "Adopt the identity an already-configured origin now declares, keeping the alias, "
-            "kind, location, ref, and default-registry flag. Without --yes it prints both "
-            "identities and changes nothing; --yes adopts exactly the reviewed transition and "
-            "refuses if the origin moved again in between. Use `source sync` when the identity "
-            "did not change."
-        ),
-    )
-    p_source_resubscribe.add_argument(
-        "--alias",
-        dest="source_alias",
-        required=True,
-        metavar="ALIAS",
-        help="configured source alias whose declared identity changed",
-    )
-    p_source_resubscribe.add_argument(
-        "--yes",
-        action="store_true",
-        help="adopt the reviewed identity change (without this the command only reviews)",
-    )
-    p_source_resubscribe.add_argument(
-        "--expect",
-        metavar="FROM:TO",
-        help=(
-            "adopt only this exact identity change, written as the two declared source IDs; "
-            "otherwise refuse and show the transition that is actually offered"
-        ),
-    )
-    _add_json(p_source_resubscribe)
+        p_add_source = family_sub.add_parser(
+            "add",
+            help=f"synchronize, validate, then connect one {noun}",
+            description=(
+                f"Parse one exact {noun}, validate a fresh immutable snapshot, then atomically "
+                "save it to the configuration. No interactive confirmation is required because "
+                "every origin choice is an explicit command argument."
+            ),
+        )
+        p_add_source.add_argument(
+            "--alias",
+            dest="source_alias",
+            required=True,
+            metavar="ALIAS",
+            help=f"{noun} alias slug",
+        )
+        p_add_source.add_argument(
+            "--kind",
+            dest="source_kind",
+            choices=("git", "local"),
+            required=True,
+            help="git (a remote Git URL) or local (a repository on this machine)",
+        )
+        p_add_source.add_argument(
+            "--location",
+            dest="source_location",
+            required=True,
+            metavar="URL_OR_PATH",
+            help="credential-free Git URL, or a normalized absolute local path",
+        )
+        p_add_source.add_argument(
+            "--ref",
+            metavar="REF",
+            help=(
+                "Git ref: defaults to main for git; for a local Registry the branch to read, "
+                "required; not valid for a local upstream"
+            ),
+        )
+        if noun != "Registry":
+            _add_json(p_add_source)
+        else:
+            source_default = p_add_source.add_mutually_exclusive_group()
+            source_default.add_argument(
+                "--default",
+                dest="source_make_default",
+                action="store_const",
+                const=True,
+                help="make this the default Registry",
+            )
+            source_default.add_argument(
+                "--no-default",
+                dest="source_make_default",
+                action="store_const",
+                const=False,
+                help="preserve the current default Registry",
+            )
+            _add_json(p_add_source)
 
-    p_source_health = source_sub.add_parser(
-        "health",
+        p_source_list = family_sub.add_parser(
+            "list",
+            help=f"show connected {noun} entries and managed snapshot health",
+        )
+        _add_json(p_source_list)
+
+        def _add_alias(p: argparse.ArgumentParser, help_text: str) -> None:
+            p.add_argument("--alias", dest="source_alias", metavar="ALIAS", help=help_text)
+
+        p_source_sync = family_sub.add_parser(
+            "sync",
+            formatter_class=_HELP_FORMATTER,
+            help=f"refresh the managed snapshot of each connected {noun}",
+            description=(
+                f"Re-synchronize already-connected {noun} entries. This never adds, renames, "
+                "removes or re-identifies one, and never changes policy defaults - use it "
+                "instead of re-adding an existing alias."
+                + (
+                    " Afterwards it says which installed artifacts have a newer approved version; "
+                    "`aart-cli consume update` applies them."
+                    if noun == "Registry"
+                    else ""
+                )
+            ),
+        )
+        _add_alias(p_source_sync, "synchronize only this alias (default: every enabled one)")
+        _add_json(p_source_sync)
+
+        p_source_remove = family_sub.add_parser(
+            "remove",
+            formatter_class=_HELP_FORMATTER,
+            help=f"forget one connected {noun} and delete its managed snapshot",
+            description=(
+                "Drop the configuration entry, clear the default Registry if it named this alias, "
+                "and delete the managed snapshot so the origin is free to be added again. No "
+                "installed artifact and no file in any project is touched."
+            ),
+        )
+        p_source_remove.add_argument(
+            "--alias",
+            dest="source_alias",
+            required=True,
+            metavar="ALIAS",
+            help=f"connected {noun} alias to remove",
+        )
+        p_source_remove.add_argument(
+            "--yes",
+            action="store_true",
+            help="finalize the reviewed removal (without this the command only reviews)",
+        )
+        _add_json(p_source_remove)
+
+        p_source_resubscribe = family_sub.add_parser(
+            "resubscribe",
+            formatter_class=_HELP_FORMATTER,
+            help="adopt a changed declared identity at an unchanged origin and ref",
+            description=(
+                "Adopt the identity an already-configured origin now declares, keeping the alias, "
+                "kind, location, ref, and default-registry flag. Without --yes it prints both "
+                "identities and changes nothing; --yes adopts exactly the reviewed transition and "
+                "refuses if the origin moved again in between. Use `sync` when the identity did "
+                "not change."
+            ),
+        )
+        p_source_resubscribe.add_argument(
+            "--alias",
+            dest="source_alias",
+            required=True,
+            metavar="ALIAS",
+            help=f"connected {noun} alias whose declared identity changed",
+        )
+        p_source_resubscribe.add_argument(
+            "--yes",
+            action="store_true",
+            help="adopt the reviewed identity change (without this the command only reviews)",
+        )
+        p_source_resubscribe.add_argument(
+            "--expect",
+            metavar="FROM:TO",
+            help=(
+                "adopt only this exact identity change, written as the two declared IDs; "
+                "otherwise refuse and show the transition that is actually offered"
+            ),
+        )
+        _add_json(p_source_resubscribe)
+
+        p_source_health = family_sub.add_parser(
+            "health",
+            formatter_class=_HELP_FORMATTER,
+            help=f"report managed snapshot health for each connected {noun}",
+            description=(
+                "Read-only health: pointer presence, resolved revision, and snapshot age against "
+                "the configured freshness window. Exits non-zero if an enabled one is not healthy."
+            ),
+        )
+        _add_alias(p_source_health, "report only this alias (default: every connected one)")
+        _add_json(p_source_health)
+
+    p = consume_sub.add_parser(
+        "registry",
         formatter_class=_HELP_FORMATTER,
-        help="report managed snapshot health for configured sources",
+        help="connect, synchronize and inspect the Registries this machine installs from",
         description=(
-            "Read-only per-source health: pointer presence, resolved revision, and snapshot age "
-            "against the configured freshness window. Exits non-zero if an enabled source is not "
-            "healthy."
+            "Connect a Registry, synchronize what it offers, and see which installed artifacts "
+            "have a newer approved version. `registry add` validates and snapshots the exact "
+            "Registry before saving it, so it is safe for non-interactive agent use."
         ),
     )
-    _add_alias(p_source_health, "report only this alias (default: every configured source)")
-    _add_json(p_source_health)
+    _add_connection_family(
+        p.add_subparsers(dest="source_action", metavar="ACTION", required=True), "Registry"
+    )
+    p = maintain_sub.add_parser(
+        "upstream",
+        formatter_class=_HELP_FORMATTER,
+        help="connect the Upstream repositories authors keep, and discover their Candidates",
+        description=(
+            "An Upstream repository is a repository its authors keep, from which this Registry "
+            "takes artifacts. Connect one, synchronize it to discover Candidates, scan an explicit "
+            "checkout, or adopt and check manifests by URL."
+        ),
+    )
+    upstream_sub = p.add_subparsers(dest="source_action", metavar="ACTION", required=True)
+    _add_connection_family(upstream_sub, "upstream")
+    p = maintain_sub.add_parser(
+        "candidate",
+        formatter_class=_HELP_FORMATTER,
+        help="review and promote the Candidates upstreams offer",
+    )
+    candidate_sub = p.add_subparsers(dest="candidate_action", metavar="ACTION", required=True)
 
     # marketplace ------------------------------------------------------------- #
-    p = sub.add_parser(
-        "marketplace",
-        formatter_class=_HELP_FORMATTER,
-        help="browse the configured canonical marketplace",
-        description=(
-            "Read the local, already-validated configured source snapshots as one canonical "
-            "marketplace. This is the one agent-facing consumer command family."
-        ),
-    )
-    marketplace_sub = p.add_subparsers(dest="marketplace_action", metavar="ACTION", required=True)
+    # The Marketplace actions are the consumer family itself: `consume install`, `consume list`.
+    marketplace_sub = consume_sub
     p_marketplace_list = marketplace_sub.add_parser(
         "list",
         help="emit all canonical marketplace sources and artifacts",
@@ -373,8 +432,6 @@ def build_parser() -> argparse.ArgumentParser:
         *,
         coordinates: str,
         prune: bool = False,
-        placement: bool = True,
-        memory_mode: bool = False,
     ) -> argparse.ArgumentParser:
         """Declare one canonical lifecycle action over configured sources.
 
@@ -402,24 +459,6 @@ def build_parser() -> argparse.ArgumentParser:
         _add_profile(lifecycle)
         _add_project(lifecycle)
         _add_scope(lifecycle)
-        if placement:
-            lifecycle.add_argument(
-                "--mode",
-                dest="install_mode",
-                choices=("copy", "symlink"),
-                default=None,
-                help="install placement mode (default: copy)",
-            )
-        if memory_mode:
-            lifecycle.add_argument(
-                "--memory-mode",
-                dest="memory_mode",
-                choices=("replace", "prepend", "append", "skip"),
-                default=None,
-                help=(
-                    "how a memory artifact meets an existing instruction file (default: prepend)"
-                ),
-            )
         lifecycle.add_argument(
             "--offline",
             action="store_true",
@@ -456,7 +495,6 @@ def build_parser() -> argparse.ArgumentParser:
         "install",
         "install configured-source artifacts for the selected harness profiles",
         coordinates="artifact or collection coordinate(s) to install",
-        memory_mode=True,
     )
     p_marketplace_update = _add_lifecycle(
         "update",
@@ -468,19 +506,16 @@ def build_parser() -> argparse.ArgumentParser:
         "uninstall",
         "remove installed artifacts recorded for the selected profiles",
         coordinates="artifact or collection coordinate(s) to remove",
-        placement=False,
     )
     _add_lifecycle(
         "status",
         "report installed artifact state against the configured sources",
         coordinates="artifact or collection coordinate(s) to inspect; omit for all installed",
-        placement=False,
     )
     p_marketplace_setup = _add_lifecycle(
         "setup",
         "run declared post-install setup for installed artifacts",
         coordinates="artifact or collection coordinate(s) whose setup should run",
-        placement=False,
     )
 
     def _add_setup_controls(parser: argparse.ArgumentParser) -> None:
@@ -504,7 +539,7 @@ def build_parser() -> argparse.ArgumentParser:
         _add_setup_controls(setup_capable)
 
     # installed MCP verification --------------------------------------------- #
-    p = sub.add_parser(
+    p = consume_sub.add_parser(
         "mcp",
         formatter_class=_HELP_FORMATTER,
         help="verify declared read-only operations of already installed MCPs",
@@ -631,7 +666,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json(p_receipt_undo)
 
     # registry ---------------------------------------------------------------- #
-    p = sub.add_parser(
+    p = maintain_sub.add_parser(
         "registry",
         formatter_class=_HELP_FORMATTER,
         help="initialize, compile, and audit an AART registry",
@@ -714,12 +749,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_registry_finalize(p_collection)
     _add_json(p_collection)
 
-    p_scan = registry_sub.add_parser(
+    p_scan = upstream_sub.add_parser(
         "scan",
         help="discover native Candidates in one pinned author checkout",
         description=(
             "Read a clean Git author checkout at its exact HEAD, compile only explicit aart-cli.json "
-            "or aart-cli.yaml manifests, and report Candidate state. Source Scan never changes the "
+            "or aart-cli.yaml manifests, and report Candidate state. Upstream scan never changes the "
             "target registry and never promotes a Candidate."
         ),
     )
@@ -754,7 +789,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_json(p_scan)
 
-    p_candidate_promote = registry_sub.add_parser(
+    p_candidate_list = candidate_sub.add_parser(
+        "list",
+        help="list the Candidates recorded for the connected Upstream repositories",
+        description=(
+            "List the active Candidates bound to each Upstream repository's pinned snapshot, with "
+            "what the Registry checkout records about their promotion. Changes nothing."
+        ),
+    )
+    p_candidate_list.add_argument(
+        "--source",
+        dest="source_dir",
+        metavar="DIR",
+        help="registry checkout to read promotion records from (default: the project)",
+    )
+    p_candidate_list.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+
+    p_candidate_promote = candidate_sub.add_parser(
         "promote",
         help="review or locally promote exact Candidate IDs as one registry transaction",
         description=(
@@ -816,7 +867,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_registry_finalize(p_candidate_promote)
     _add_json(p_candidate_promote)
 
-    p_adopt = registry_sub.add_parser(
+    p_adopt = upstream_sub.add_parser(
         "adopt",
         help="scan explicit manifests and adopt selected artifacts without subscribing",
         description=(
@@ -856,8 +907,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_json(p_adopt)
 
-    p_check_adoption = registry_sub.add_parser(
-        "check-upstream",
+    p_check_adoption = upstream_sub.add_parser(
+        "check",
         help="compare one adopted artifact with its recorded upstream branch or tag",
         description=(
             "Read one repository-adopted Registry package, resolve its recorded branch or tag, "
@@ -1118,7 +1169,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=_HELP_FORMATTER,
         help="parse every aart-cli.yaml/aart-cli.json under a directory",
         description=(
-            "Read the directory the way a Source Sync reads one and put every manifest it "
+            "Read the directory the way a Upstream sync reads one and put every manifest it "
             "finds through the parser a Registry uses. The verdict is the parser's, so a "
             "manifest that passes here is one `registry scan` will accept."
         ),

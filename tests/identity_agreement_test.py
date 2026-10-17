@@ -6,7 +6,8 @@ every consumer path too, because it is the value the entire subscription model p
 
 This applies the one-way adaptation rule: a consumer does not soften a rule the
 publisher's tooling already enforces. The agreement is checked at acquisition, whenever a
-snapshot carries both documents, on the direct/local path as well as the registry path.
+snapshot carries both documents: on `consume registry sync` for a Registry, and on `maintain
+upstream add` for an Upstream repository that carries a Registry marker it should not.
 """
 
 from __future__ import annotations
@@ -17,7 +18,9 @@ import unittest
 from pathlib import Path
 
 from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _FIXTURE, _environment
+from tests.reference_registry import commit
 from tests.source_project_isolation_test import _source
+from tests.source_sync_command_e2e_test import _environment_over_a_writable_source
 
 _DECLARED = "reference-native-source"
 _DISAGREEING = "some-other-identity"
@@ -52,56 +55,70 @@ class IdentityAgreementTest(unittest.TestCase):
         shutil.copytree(_FIXTURE, copy)
         return copy
 
-    def test_a_source_publishing_only_aart_source_json_is_unaffected(self) -> None:
-        """The check must not turn every ordinary native source into a registry."""
+    def _upstream_add(self, env, location: Path):
+        return _source(
+            env,
+            "maintain",
+            "upstream",
+            "add",
+            "--alias",
+            "mirror",
+            "--kind",
+            "local",
+            "--location",
+            str(location),
+        )
+
+    def test_an_upstream_publishing_only_aart_source_json_is_unaffected(self) -> None:
+        """The check must not turn every ordinary native Upstream repository into a registry."""
 
         with _environment() as env:
-            self.assertFalse((env.source_location / "aart-cli-registry.json").exists())
+            mirror = self._source_copy(env.root, "plain-mirror")
+            self.assertFalse((mirror / "aart-cli-registry.json").exists())
 
-            code, payload = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
-            )
+            code, payload = self._upstream_add(env, mirror)
 
             self.assertEqual(code, 0, payload)
 
     def test_agreeing_identity_documents_are_accepted(self) -> None:
-        with _environment() as staging:
-            source = self._source_copy(staging.root, "agreeing-source")
-            (source / "aart-cli-registry.json").write_text(
-                _registry_document(_DECLARED), encoding="utf-8"
+        """The reference Registry carries both documents, and they agree."""
+
+        with _environment() as env:
+            markers = [
+                json.loads((env.source_location / name).read_text(encoding="utf-8"))
+                for name in ("aart-cli-registry.json", "aart-cli-source.json")
+            ]
+            self.assertEqual(markers[0]["registry_id"], markers[1]["source_id"])
+
+            code, payload = env.run(
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
 
-            with _environment(source) as env:
-                code, payload = env.run(
-                    "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
-                )
+            self.assertEqual(code, 0, payload)
 
-                self.assertEqual(code, 0, payload)
+    def test_registry_sync_refuses_disagreeing_identity_documents(self) -> None:
+        with _environment_over_a_writable_source() as (env, location):
+            # Synchronized once while the documents agreed, so the refusal below is the sync
+            # itself and not a first-acquisition failure.
+            marker = location / "aart-cli-registry.json"
+            document = json.loads(marker.read_text(encoding="utf-8"))
+            document["registry_id"] = _DISAGREEING
+            marker.write_text(json.dumps(document), encoding="utf-8")
+            commit(location)
 
-    def test_source_sync_refuses_disagreeing_identity_documents(self) -> None:
-        with _environment() as staging:
-            source = self._source_copy(staging.root, "disagreeing-source")
+            code, payload = _source(env, "consume", "registry", "sync", "--alias", "reference")
 
-            with _environment(source) as env:
-                # Synchronized once while the documents agreed, so the refusal below is the sync
-                # itself and not a first-acquisition failure.
-                (source / "aart-cli-registry.json").write_text(
-                    _registry_document(_DISAGREEING), encoding="utf-8"
-                )
+            self.assertEqual(code, 1, payload)
+            self.assertFalse(payload["registries"][0]["ok"], payload)
+            diagnostic = self._only_diagnostic(payload["registries"][0])
+            self.assertEqual(diagnostic["code"], "source-invalid")
+            self.assertIn("aart-cli-registry.json", diagnostic["message"])
+            self.assertIn("aart-cli-source.json", diagnostic["message"])
+            self.assertIn(_DECLARED, diagnostic["message"])
+            self.assertIn(_DISAGREEING, diagnostic["message"])
+            self.assertTrue(diagnostic["remediation"], diagnostic)
 
-                code, payload = _source(env, "source", "sync", "--alias", "reference")
-
-                self.assertEqual(code, 1, payload)
-                self.assertFalse(payload["sources"][0]["ok"], payload)
-                diagnostic = self._only_diagnostic(payload["sources"][0])
-                self.assertEqual(diagnostic["code"], "source-invalid")
-                self.assertIn("aart-cli-registry.json", diagnostic["message"])
-                self.assertIn("aart-cli-source.json", diagnostic["message"])
-                self.assertIn(_DECLARED, diagnostic["message"])
-                self.assertIn(_DISAGREEING, diagnostic["message"])
-                self.assertTrue(diagnostic["remediation"], diagnostic)
-
-    def test_source_add_refuses_disagreeing_identity_documents(self) -> None:
+    def test_upstream_add_refuses_disagreeing_identity_documents(self) -> None:
         with _environment() as env:
             mirror = self._source_copy(env.root, "disagreeing-mirror")
             (mirror / "aart-cli-registry.json").write_text(
@@ -110,12 +127,13 @@ class IdentityAgreementTest(unittest.TestCase):
 
             code, payload = _source(
                 env,
-                "source",
+                "maintain",
+                "upstream",
                 "add",
                 "--alias",
                 "mirror",
                 "--kind",
-                "source-local",
+                "local",
                 "--location",
                 str(mirror),
             )
@@ -125,8 +143,8 @@ class IdentityAgreementTest(unittest.TestCase):
             self.assertEqual(diagnostic["code"], "source-invalid")
             self.assertIn(_DISAGREEING, diagnostic["message"])
             # A refused subscription is not a subscription: nothing may be left configured.
-            _, listed = _source(env, "source", "list")
-            self.assertNotIn("mirror", [item["alias"] for item in listed["sources"]])
+            _, listed = _source(env, "maintain", "upstream", "list")
+            self.assertNotIn("mirror", [item["alias"] for item in listed["upstreams"]])
 
     def test_rs08_a_registry_marker_that_does_not_parse_is_refused(self) -> None:
         """The skipped check, taken as its own decision.
@@ -144,12 +162,13 @@ class IdentityAgreementTest(unittest.TestCase):
 
             code, payload = _source(
                 env,
-                "source",
+                "maintain",
+                "upstream",
                 "add",
                 "--alias",
                 "mirror",
                 "--kind",
-                "source-local",
+                "local",
                 "--location",
                 str(mirror),
             )
@@ -160,8 +179,8 @@ class IdentityAgreementTest(unittest.TestCase):
             self.assertIn("aart-cli-registry.json", diagnostic["message"])
             self.assertIn("does not parse", diagnostic["message"])
             self.assertTrue(diagnostic["remediation"], diagnostic)
-            _, listed = _source(env, "source", "list")
-            self.assertNotIn("mirror", [item["alias"] for item in listed["sources"]])
+            _, listed = _source(env, "maintain", "upstream", "list")
+            self.assertNotIn("mirror", [item["alias"] for item in listed["upstreams"]])
 
     def test_rs08_a_marker_that_is_not_json_at_all_is_refused(self) -> None:
         with _environment() as env:
@@ -172,12 +191,13 @@ class IdentityAgreementTest(unittest.TestCase):
 
             code, payload = _source(
                 env,
-                "source",
+                "maintain",
+                "upstream",
                 "add",
                 "--alias",
                 "mirror",
                 "--kind",
-                "source-local",
+                "local",
                 "--location",
                 str(mirror),
             )
@@ -188,35 +208,18 @@ class IdentityAgreementTest(unittest.TestCase):
     def test_rs08_a_marker_broken_after_subscription_is_refused_by_sync(self) -> None:
         """The subscription is re-validated on every sync, so the gap closes on both paths."""
 
-        with _environment() as staging:
-            source = self._source_copy(staging.root, "breaking-marker-source")
+        with _environment_over_a_writable_source() as (env, location):
+            (location / "aart-cli-registry.json").write_text("{", encoding="utf-8")
+            commit(location)
 
-            with _environment(source) as env:
-                (source / "aart-cli-registry.json").write_text("{", encoding="utf-8")
+            code, payload = _source(env, "consume", "registry", "sync", "--alias", "reference")
 
-                code, payload = _source(env, "source", "sync", "--alias", "reference")
-
-                self.assertEqual(code, 1, payload)
-                self.assertFalse(payload["sources"][0]["ok"], payload)
-                diagnostic = self._only_diagnostic(payload["sources"][0])
-                self.assertEqual(diagnostic["code"], "source-invalid")
-                self.assertIn("does not parse", diagnostic["message"])
-
-    def test_rs08_a_parseable_marker_that_agrees_is_still_accepted(self) -> None:
-        """The new refusal must not be a second way to reject a healthy registry."""
-
-        with _environment() as staging:
-            source = self._source_copy(staging.root, "still-fine-source")
-            (source / "aart-cli-registry.json").write_text(
-                _registry_document(_DECLARED), encoding="utf-8"
-            )
-
-            with _environment(source) as env:
-                code, payload = env.run(
-                    "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
-                )
-
-                self.assertEqual(code, 0, payload)
+            self.assertEqual(code, 1, payload)
+            self.assertFalse(payload["registries"][0]["ok"], payload)
+            diagnostic = self._only_diagnostic(payload["registries"][0])
+            self.assertEqual(diagnostic["code"], "protocol-json-invalid")
+            self.assertEqual(diagnostic["location"]["path"], "aart-cli-registry.json")
+            self.assertIn("last synchronized snapshot", diagnostic["remediation"][0])
 
     def _only_diagnostic(self, payload) -> dict:
         diagnostics = payload["diagnostics"]

@@ -11,7 +11,6 @@ from aart_cli.domain.result import Err, Ok, Result
 from ..redaction import redact_text
 from .model import (
     OrganizationPolicy,
-    SourceKind,
     SyncMode,
     SyncSettings,
     UserConfiguration,
@@ -48,21 +47,17 @@ def _policy_diagnostics(
     configuration: UserConfiguration,
     policy: OrganizationPolicy,
     *,
-    allow_missing_required_sources: bool = False,
+    allow_missing_required_registries: bool = False,
 ) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
     enabled = {source.alias: source for source in configuration.sources if source.enabled}
-    if not allow_missing_required_sources:
-        for required in policy.required_sources:
-            if required not in enabled:
+    if not allow_missing_required_registries:
+        for required in policy.required_registries:
+            if required not in enabled or not enabled[required].is_registry:
                 diagnostics.append(
-                    _denied(f"required source {required} is not configured and enabled")
+                    _denied(f"required registry {required} is not configured and enabled")
                 )
     for source in enabled.values():
-        if policy.allow_direct_sources is False and source.kind is not SourceKind.REGISTRY_GIT:
-            diagnostics.append(
-                _denied(f"direct source {source.alias} is denied by organization policy")
-            )
         if not source.is_git:
             continue
         location = git_location_parts(source.location)
@@ -84,7 +79,7 @@ def _apply_configuration(
     overrides: RuntimeOverrides,
     policy: OrganizationPolicy,
     *,
-    allow_missing_required_sources: bool,
+    allow_missing_required_registries: bool,
 ) -> Result[EffectiveConfiguration]:
     """Apply precedence and policy, with a narrowly scoped source-onboarding exception."""
 
@@ -116,7 +111,7 @@ def _apply_configuration(
     diagnostics = _policy_diagnostics(
         effective,
         policy,
-        allow_missing_required_sources=allow_missing_required_sources,
+        allow_missing_required_registries=allow_missing_required_registries,
     )
     if diagnostics:
         return Err(diagnostics)
@@ -134,7 +129,7 @@ def apply_configuration(
         user,
         overrides,
         policy,
-        allow_missing_required_sources=False,
+        allow_missing_required_registries=False,
     )
 
 
@@ -148,7 +143,7 @@ def apply_configuration_for_source_management(
     Organizations may require several source aliases.  A user must be able to synchronize and
     persist each allowed alias one at a time, but the ordinary content configuration path remains
     fail-closed until all required aliases are enabled.  This helper bypasses *only* that missing
-    alias check; all origin, direct-source, reporting, and default-registry constraints remain in
+    alias check; all origin, reporting, and default-registry constraints remain in
     force.
     """
 
@@ -156,5 +151,5 @@ def apply_configuration_for_source_management(
         user,
         RuntimeOverrides() if overrides is None else overrides,
         policy,
-        allow_missing_required_sources=True,
+        allow_missing_required_registries=True,
     )

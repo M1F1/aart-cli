@@ -10908,3 +10908,276 @@ TUI and the CLI alike. The implementation choices:
   current with `check-upstream`.
 - **Coverage lost**: the audit-level MCP delivery test built its package with `vendor`. The pure
   check is still held by `tests/registry_mcp_delivery_test.py`; the audit wiring is B-199.
+
+## D-438 — A local author checkout is read as Git would commit it (§174)
+
+Found in enterprise use of 0.10.0: an author repository read as `source-local` stopped on
+`local source symlinks are forbidden: .venv/bin/python`. The reader walks the whole directory and
+refuses symlinks; every Python project keeps an ignored `.venv/` whose interpreter is one. The owner
+asked that AART work on local repositories out of the box, with no conditions on the author.
+
+- **The path set comes from Git**: `git ls-files -z --cached --others --exclude-standard`, run from
+  the checkout through `run_git_process` (allowlisted environment, no hooks). Untracked files that
+  are not ignored stay in, so a manifest the author has not yet `git add`ed is still seen; a tracked
+  file deleted from the working tree is gone. Contents always come from the working tree, which is
+  what `source-local` has always meant.
+- **The reader is unchanged otherwise.** `LocalSnapshotRequest.include` narrows the walk to those
+  paths and the directories leading to them; every included file is still opened non-following
+  and bounded, so a committed symlink is still refused. A gitlink (submodule) is skipped.
+- **Only author directories narrow**: the `source-local` Sync port, `author check`, and `registry
+  scan` / `promote --checkout`. AART's managed snapshots, which are not Git work trees, keep the
+  whole-tree read. Outside Git, or when Git is unavailable or the listing is not UTF-8, the
+  directory is read whole, as before.
+- `.gitignore` alone was not parsed by AART: Git's own rules (nested files, `info/exclude`,
+  `core.excludesFile`) are the author's rules, and reimplementing them would diverge.
+
+## D-439 — Three roles, three command families; "Source" becomes Upstream repository (§175, CP-32)
+
+Found while helping the owner in enterprise use of 0.10.0: `aart-cli source` configures both
+Registries and author repositories, `source list` shows them together, and a consumer could add an
+author repository although nothing it offers is installable (`configured_offers.py` skips every
+non-Registry). The owner chose the names and the shape:
+
+- **Upstream repository / `upstream`** for an author repository. "Upstream" says which way artifacts
+  flow and is already the spec's word (`check-upstream`); the author is in the definition, not the
+  name, so the TUI heading and the command stay short.
+- **`consume`, `maintain`, `author`** as role verbs, each with nouns: `consume registry`,
+  `maintain upstream|candidate|registry`. `registry` appears in two families and means the
+  consumer's subscription in one and the maintainer's checkout in the other; the verb settles it.
+- **`sync` vs `update`**: `consume registry sync` fetches a Registry's state and reports available
+  updates; `consume update` changes installed artifacts. A `registry update` would read as changing
+  the Registry.
+- `scan` stays beside `upstream sync` (one explicit checkout, report-only); `adopt` and
+  `check-upstream` move under `upstream` rather than going, because adoption by manifest is the only
+  way in (D-437). Candidate rejection on the CLI is not added here (B-200).
+- No aliases or migrators (§169 rules): a CP-26-style break, released pre-1.0.
+
+## D-440 — Reset backs up and starts clean (§175.4, CP-32)
+
+The owner, after the 0.10.0 upgrade needed three migration scripts for local state: one command
+should give a fresh, empty aart-cli with the old state kept. `reset` already planned the right
+targets (`plan_factory_reset`) but deleted them after two confirmations.
+
+- **Rename into a sibling directory**, `<home>-backups/<UTC timestamp>/`: outside the home, so the
+  reset leaves it alone, and normally on the same filesystem, so a move is a rename and nothing is
+  copied. A target on another filesystem is refused rather than copied and deleted.
+- **`--restore DIR`** backs the current state up first, so restoring is itself reversible.
+- **Startup errors name `reset`.** The settings, history and configuration loaders' refusals end
+  with the hint; no reader learns to accept old shapes (no compatibility, §169).
+
+## D-441 — Author Mode: the author family in the TUI (§175.5, CP-32)
+
+The owner: author actions are first-class and need a TUI view like the maintainer's, so checking
+manifests and producing templates is not CLI-only. Choices:
+
+- **Opt-in, like Registry Maintainer Mode** (INV-193's pattern): a Settings toggle, off by default,
+  so a consumer's navigation does not grow.
+- **Three screens**: Workspace (choose the upstream checkout), Check (the `author check` result per
+  manifest) and New artifact (`author init` by kind and name). Nothing beyond what `author` does
+  today; more author actions join both surfaces together.
+- **One implementation**: the screens call the application functions behind `aart-cli author`,
+  which INV-272 holds by comparing their results.
+
+## D-442 — The configuration split keeps one alias space and one domain value (CP-32 step 2)
+
+- `config.json` holds `registries` and `upstreams`, each entry `{alias, enabled, kind: git|local,
+  url|path, ref}`. A local Registry has `path` and its branch as `ref`; a local upstream has `path`
+  and no `ref`. A combined kind such as `registry-git`, or a `sources` key, is refused.
+- **One alias space across both lists**: an alias names one store entry and one command target.
+- **The domain keeps `ConfiguredSource` and `SourceKind`** for now, with `registries` and
+  `upstreams` views on `UserConfiguration`; only the file and the policy change in this step, and
+  later steps rename what users see. Internal names are not a user surface (INV-270 is about
+  commands).
+- **Policy**: `recommended_registries`, `required_registries`, `company_reviewed_registries`;
+  `allow_direct_sources` is gone. A required alias is satisfied only by an enabled Registry. The
+  host and repository allowlists still apply to every Git entry, upstreams included: they are the
+  organization's network boundary, not a consumer rule.
+
+## D-443 — The role families route to the existing handlers (CP-32 steps 3, 4 and 6)
+
+- **Parser and routing.** The top level is `consume`, `maintain`, `author`, `doctor`, `upgrade`,
+  `reset`, `security`. `cli._route` is the only code that knows both the public family and the
+  handler behind it: `consume registry` and `maintain upstream` add|list|sync|remove|resubscribe|health
+  reach the connection handler with `Request.source_family`; the other `consume` actions reach the
+  install handler, `consume mcp test` the MCP one, and `maintain upstream scan|adopt|check`,
+  `maintain candidate promote` and `maintain registry …` the Registry handler (`check` is the old
+  `check-upstream`). Handler and `DISPATCH` names stay internal.
+- **`--kind git|local`.** The family supplies the other half; a combined kind is refused by
+  argparse. In JSON a connection's `kind` is `git` or `local`, the entries are `registries` or
+  `upstreams`, and operations are `registry.*` or `upstream.*`. A family never lists, syncs,
+  checks, removes or resubscribes the other family's alias: it refuses it and names the command
+  that owns it. An internal caller (the TUI, first run) passes the family explicitly; the TUI's one
+  removal port derives it from the connection being removed.
+- **Hints.** `SourceKind.command` gives the family prefix for a connection's kind, and every hint
+  about a known connection is built on it. `tests/source_remediation_test.py` parses each hint
+  built on the prefix, since the package scan cannot see an interpolated prefix.
+- **`consume registry sync` and updates.** It ends by pointing at `consume update`, whose review
+  already lists what a newer approved version would replace. §175.2 is worded that way; naming the
+  updatable artifacts in `sync` itself is B-201, because the consumer path computes no installed
+  versus offered comparison today.
+- **`maintain candidate list`** has its own read-only handler over `read_maintainer_views`, not a
+  Registry action: it is no Registry transaction (step 5).
+- **Not yet**: INV-269's second half — the consumer catalog
+  still reads upstream snapshots and many e2e fixtures install from one. Step 7 removes that, with
+  the fixtures.
+
+## D-444 — A consumer installs only from Registries (CP-32 step 7)
+
+- **Lifecycle.** `consume install|update|uninstall|status|setup` run the configured Registry seam
+  only. When it declines, `_outside_registries` names why, each with its own code:
+  `registry-unavailable` (no Registry connected, or the alias names none),
+  `upstream-not-installable` (the alias is an Upstream repository; the Maintainer promotes its
+  Candidates), `consumer-invalid` (an unqualified name and no default Registry) and
+  `installation-not-found` (nothing installed matches). Uninstall plans from the installation
+  records, so it never answers with a Registry refusal.
+- **`registry-not-synchronized`.** Installing reads the last synchronized snapshot and never
+  fetches. When no Registry in a Selection's scope has a snapshot, `resolve_configured_selection`
+  says so and names `consume registry sync --alias <alias>`, rather than `artifact-not-found`.
+  `--offline` changes nothing here, so there is one message, not two. A name no Registry approves
+  stays `artifact-not-found` and now points at `aart-cli consume list`.
+- **An unqualified name** takes the default Registry when one is set. Without a default it is left
+  for the resolver, which installs from the one Registry that offers it, or names every coordinate
+  when more than one does. Before INV-269 the seam declined such a name for the legacy catalog to
+  choose; nothing else is left to choose now. A Collection still names its Registry.
+- **`--mode` and `--memory-mode` are removed.** A Registry installs a copy, and a memory is always
+  a managed block in the harness instruction file, so neither flag had anything left to choose.
+- **Local Registry setup evidence.** A `registry-local` installation records its checkout path, which
+  is normalized and absolute, at a commit of its branch. It is not refused as a Git URL.
+- **A refused Registry revision** keeps the last synchronized snapshot. Its remediation says so, and
+  names `maintain registry validate` and `consume registry sync`.
+- **The consumer runtime** projects nothing from an Upstream repository, and the native
+  materialization helpers are deleted.
+- **Tests.** The e2e fixtures connect a real Git-backed `registry-local` (`tests/reference_registry.py`)
+  holding the former reference content, promoted through the real pipeline. Tests whose subject
+  exists only on the retired native consumer path are deleted rather than ported:
+  - symlink placement, runtime health, setup review duplicates and the manifest-backed
+    `policy_drift_e2e_test`;
+  - in `consumer_runtime_test`, native materialization;
+  - in `identity_change_reconciliation_test`, the record rebinding. A Registry record binds the
+    alias, not the declared identity, so an identity change strands nothing.
+
+  Status gaps that this exposed go to B-205, and leftover files to B-204.
+
+
+## D-445 — TUI role names change at presentation boundaries (CP-32 step 8)
+
+§175.3's Maintainer areas are **Upstream repositories**, **Candidates** and **Registry**.
+Screen 31 always explains “Author repositories this Registry takes artifacts from”; its add,
+remove, detail and sync screens use upstream names. Candidates identify an Upstream, while
+Marketplace descriptions identify a Registry. Connection kinds shown to a person are `git` or
+`local`; the four internal `SourceKind` values and existing screen ids remain internal (D-443).
+
+The shared connection review renderers choose Registry or Upstream from the reviewed connection's
+family. The first-use consumer wizard names its connection stage Registries. Screen 21 already
+filters out both upstream kinds; its composed-shell acceptance tests remain the evidence for that
+boundary. No configuration, navigation graph, subscription identity or stored Candidate schema
+changes in this step.
+
+
+## D-446 — Marketplace owns artifact details and never truncates its columns (CP-32, owner decision)
+
+The owner requested on 2026-10-17, during step 12, that Marketplace's separate Artifact Details
+view be removed and all of its information be available through Verbose / More info in
+Marketplace. Marketplace columns must be labeled and must not be cut off when space is tight.
+§175.6 and INV-273/274 record the accepted change; CP-32 steps 13 and 14 implement it before
+documentation and final verification. The existing disclosure control remains the one place
+for details; narrow rows wrap or stack labeled fields. Collection previews and Installed details
+are outside this removal.
+
+
+## D-447 — Unset MCP inputs cannot pass installation-configuration smoke (CP-32 step 15)
+
+The owner's report (2026-10-17) exposed a false PASS: the Keychain adapter correctly reports
+`CredentialObservation.placeholder`, but `_configuration_values` only checked `PRESENT`.
+Ordinary `AART_NOT_SET` values were likewise passed through as configured.
+
+§170.1 already requires missing local bindings to be NOT CONFIGURED. §170.2 now states the
+placeholder case explicitly. A missing credential or either kind of placeholder yields
+`NOT CONFIGURED` and protocol `NOT RUN`, never starting the server; unavailable providers and
+invalid/unknown credential observations remain BLOCKED. Secret values are never read: the
+provider's existing placeholder flag is sufficient. The typed configuration failure carries its
+stage outcome rather than classifying diagnostic text.
+
+The test still makes no claim of authenticated service access (§170.2). A configured server
+whose declared tool returns a valid non-error result may pass protocol regardless of what its
+other tools or an external service would do. Installation and launcher behavior under §172 are
+unchanged. This defect is CP-32 step 15 on the critical path because without it the existing
+§170 missing-binding result is false; no additional authentication stage is introduced.
+
+
+## D-448 — Author Mode uses the existing author operations through an IO adapter (CP-32 step 12)
+
+Author Mode is an independent, persisted opt-in, off by default. It adds screens 60–64: Author,
+Workspace, Check, manifest diagnostics and New artifact. The existing consumer screen catalog
+contains these additive routes, but both navigation and UI state reject them with Author Mode off;
+Registry Maintainer Mode grants no author authority. Settings stores only the normalized external
+workspace path and mode, not artifact configuration.
+
+`io/author_operations.py` calls the CLI's `read_author_workspace`, `check_author_manifests`,
+`author_skeleton` and `write_author_skeleton`. No rule is reimplemented. Workspace and creation
+destinations are normalized at that IO boundary; a destination stays inside its workspace and
+outside the application home, including symlink resolution and a workspace that contains the home.
+The pure reducer and projections retain no filesystem, terminal or subprocess effects.
+
+Check reads only on request and holds an immutable report for drawing; rerun is one key. A failed
+rerun clears an older report. New artifact creates only absent files through the shared writer,
+checks the workspace, and focuses the newly written manifest even when an earlier one exists.
+If writing succeeded and checking then refuses, the UI says the template was written and gives
+the check refusal; it never says that nothing changed. No subscription or Registry operation runs.
+
+Manifest details keep every error code and message. Recovery uses `Diagnostic.interactive`, or
+command-free remediation with an author-area fallback, honoring the existing no-CLI-in-frames
+contract without changing CLI/JSON diagnostics. Multiline errors become valid terminal lines.
+
+
+## D-449 — Marketplace's focused offer owns its complete disclosure (CP-32 step 13)
+
+Remove the standalone Artifact Details route. More info combines the existing complete evidence
+renderer with declared configuration and credential guidance; it never projects current answers,
+provider references or provider state into a public offer. Identity names the complete coordinate.
+Collection preview and Installed details retain their separate navigation.
+
+Enter on an artifact leaves Marketplace unchanged. More info keeps cursor, search and selection.
+Install uses the marked offers, or explicitly selects the focused offer if no offer is marked,
+preserving the former single-artifact route without an extra tick. An empty list requests nothing.
+
+
+## D-450 — Marketplace wraps complete cells and pages its viewport (CP-32 step 14)
+
+The Marketplace alone replaces the truncating column helper. Artifact, Status, Scope, Harnesses
+and Unset share a grid with wrapped cells when it fits; below 67 usable columns each logical row
+has the same labeled fields stacked. No ellipsis substitutes for content. Collections share the
+headings, with absent facts left empty or explicitly marked in stacked mode.
+
+The shell samples usable terminal width and height outside projections. These transient dimensions
+never become preferences. Resizing chooses the grid or stacked layout again without changing row
+identity, selection or search. Existing `wrap_lines` already reserves curses's last column; no
+terminal clipping fix is needed, as a last-character regression test confirms.
+
+Wrapping increases height. Marketplace therefore pages its actions and More info with PgUp/PgDn,
+keeping headings, frame context, status and the footer. Each press scrolls one physical line so
+small windows never skip lines. Moving/filtering/toggling detail follows the focused logical row;
+a requested offset is clamped before the next key, so PageUp works immediately after the end.
+This is transient presentation state and causes no operation or persistent write.
+
+
+## D-451 — The distribution smoke installs from a local Registry, by copy (CP-32 step 10)
+
+`scripts/distribution_smoke.py` connected `native-source-v1` as a `source-local` and installed it
+through `load_local_consumer_service`, with a managed symlink as the evidence that state outlives the
+Python environment. D-444 removed that native consumer path (INV-269), and the promotion pipeline
+compiles every authored artifact as `("copy",)` (`protocol/authoring.py`); `consume install` has no
+mode flag. No Registry artifact can be installed by symlink, and the specification promises none.
+
+The smoke keeps its claims: editable and wheel origins, zero runtime dependencies, offline upgrade
+dry-run, and an installation that survives deleting the environment that made it. The orchestrator
+publishes the shared reference content through `tests.reference_registry` into a Git-backed
+`registry-local`; the phases sync it and run the installed `aart-cli consume install|status|
+uninstall` as subprocesses of the environment under test. Survival is a Tabnine delivery whose tree
+still matches the digest its installation record attests, outside both environments. Making the
+survival comparison always fail turns `distribution_e2e_test` red.
+
+`scripts/manual_test.py` uses `maintain registry init`. The lab test connects the Registry with
+`consume registry add` and the skill repository with `maintain upstream add`. Human add/remove
+output and catalog headers name a connection "Registry" or "Upstream repository" (§175), never
+"source"; only a Registry reports `default=`.

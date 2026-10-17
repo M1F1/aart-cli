@@ -16,12 +16,15 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import Enum
 
+from aart_cli.authoring.skeleton import GENERATED_KINDS
 from aart_cli.domain.configuration_files import configuration_value_problem
 from aart_cli.domain.inputs import SKIPPED_INPUT, InputValidation, validate_config_value
 from aart_cli.domain.publication import RegistryCommitOrigin, suggested_publication_branch
 from aart_cli.domain.registry import RegistryContentMode
 
+from .author_views import AuthorDraft
 from .consumer_views import (
+    AUTHOR_SCREENS,
     INSTALL_PATH_DEFAULT,
     SETTING_ROWS,
     SUCCESS_CHOICES,
@@ -114,9 +117,13 @@ class ConsumerActionKind(str, Enum):
     #: The optional test of a committed install's MCP installations (§170.4). It reads and starts
     #: what was installed and records nothing, so it is never part of the install it follows.
     MCP_TEST = "mcp-test"
+    AUTHOR_WORKSPACE = "author-workspace"
+    AUTHOR_CHECK = "author-check"
+    AUTHOR_INIT = "author-init"
 
 
 class ConsumerUiEventKind(str, Enum):
+    SCROLL_MARKETPLACE = "scroll-marketplace"
     NAVIGATE = "navigate"
     BACK = "back"
     MOVE = "move"
@@ -140,6 +147,7 @@ class ConsumerUiEventKind(str, Enum):
     CONFIRM_ACTION = "confirm-action"
     ACTION_RECORDED = "action-recorded"
     ACTION_FAILED = "action-failed"
+    EDIT_AUTHOR = "edit-author"
     EDIT_REGISTRY = "edit-registry"
     EDIT_SOURCE = "edit-source"
     EDIT_REGISTRY_INIT = "edit-registry-init"
@@ -424,6 +432,7 @@ class RepositoryScanDraft:
 
 
 class ConsumerUiCommandKind(str, Enum):
+    RUN_AUTHOR = "run-author"
     LOAD_SCREEN = "load-screen"
     CONFIRM_QUIT = "confirm-quit"
     EXIT = "exit"
@@ -513,6 +522,7 @@ class ConsumerUiCommand:
     focus: str = ""
     review_digest: str = ""
     content_mode: RegistryContentMode | None = None
+    author_draft: AuthorDraft | None = None
     registry_draft: RegistryDraft | None = None
     source_draft: SourceDraft | None = None
     registry_init_draft: RegistryInitDraft | None = None
@@ -542,6 +552,7 @@ class ConsumerUiCommand:
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiCommandKind)
+            or (self.author_draft is not None and not isinstance(self.author_draft, AuthorDraft))
             or not isinstance(self.default_path, bool)
             or self.install_scope not in ("", "project", "user")
             or self.python_installer not in ("", "pip", "uv")
@@ -614,7 +625,6 @@ _SEARCHABLE = frozenset(
 _SELECTABLE = frozenset(
     {
         ConsumerScreen.MARKETPLACE,
-        ConsumerScreen.ARTIFACT_DETAILS,
         ConsumerScreen.COLLECTION_PREVIEW,
         ConsumerScreen.COLLECTION_CUSTOMIZE,
         # Several installations ticked here are uninstalled together (D-393).
@@ -686,6 +696,10 @@ class ConsumerUiState:
     search: str = ""
     rows: tuple[str, ...] = ()
     cursor: int = 0
+    #: Usable terminal columns, sampled by the shell; never persisted as a preference.
+    viewport_columns: int = 100
+    viewport_rows: int = 0
+    marketplace_scroll: int = -1
     focus: str = ""
     searching: bool = False
     help_visible: bool = False
@@ -708,6 +722,7 @@ class ConsumerUiState:
     #: Which promotion the Maintainer is reviewing. Screen 42 chooses it; screens 41 and 43 obey
     #: it. Both modes are composed, so this selects a projection rather than causing one.
     content_mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED
+    author_draft: AuthorDraft = AuthorDraft()
     registry_draft: RegistryDraft = RegistryDraft()
     source_draft: SourceDraft = SourceDraft()
     registry_init_draft: RegistryInitDraft = RegistryInitDraft()
@@ -770,6 +785,15 @@ class ConsumerUiState:
             )
             or not _safe_identity(self.registry_commit_subject)
             or not _rows_valid(self.rows)
+            or not isinstance(self.viewport_columns, int)
+            or isinstance(self.viewport_columns, bool)
+            or self.viewport_columns < 1
+            or not isinstance(self.viewport_rows, int)
+            or isinstance(self.viewport_rows, bool)
+            or self.viewport_rows < 0
+            or not isinstance(self.marketplace_scroll, int)
+            or isinstance(self.marketplace_scroll, bool)
+            or self.marketplace_scroll < -1
             or not isinstance(self.cursor, int)
             or isinstance(self.cursor, bool)
             or not 0 <= self.cursor < max(len(self.rows), 1)
@@ -819,6 +843,12 @@ class ConsumerUiState:
             raise ValueError("consumer UI state is invalid")
         if self.session.profile is not self.settings.profile:
             object.__setattr__(self, "settings", self.settings.with_profile(self.session.profile))
+        if not isinstance(self.author_draft, AuthorDraft):
+            raise ValueError("author form is invalid")
+        if not self.settings.author_mode and any(
+            screen in AUTHOR_SCREENS for screen in (self.session.screen, *self.session.history)
+        ):
+            raise ValueError("an Author screen needs Author Mode enabled")
         if not self.settings.maintainer_mode and any(
             isinstance(screen, MaintainerScreen)
             for screen in (self.session.screen, *self.session.history)
@@ -1048,6 +1078,10 @@ def opening_state(settings: ConsumerSettings, *, workspace: str = "") -> Consume
 #: requirements: `QA-028` wants the first empty, `QA-018`/`D-184` wants the second untouched. This
 #: is read only on forward navigation, which is the difference between them.
 _FORM_DRAFTS: dict[ApplicationScreen, Callable[[ConsumerUiState], ConsumerUiState]] = {
+    ConsumerScreen.AUTHOR_WORKSPACE: lambda state: replace(
+        state, author_draft=AuthorDraft(workspace=state.settings.author_workspace)
+    ),
+    ConsumerScreen.AUTHOR_INIT: lambda state: replace(state, author_draft=AuthorDraft()),
     ConsumerScreen.REGISTRY_ADD: lambda state: replace(state, registry_draft=RegistryDraft()),
     MaintainerScreen.SOURCE_ADD: lambda state: replace(state, source_draft=SourceDraft()),
     MaintainerScreen.REGISTRY_INIT: lambda state: replace(
@@ -1067,7 +1101,9 @@ def _navigate(
     state: ConsumerUiState, screen: ApplicationScreen | None
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
     if screen is None or screen not in navigation_targets(
-        state.session.screen, maintainer_mode=state.settings.maintainer_mode
+        state.session.screen,
+        maintainer_mode=state.settings.maintainer_mode,
+        author_mode=state.settings.author_mode,
     ):
         return state, ()
     # What the next screen is about: the row somebody was on, or -- where this screen has no rows
@@ -1136,6 +1172,7 @@ def _navigate(
 #: -- Candidates is reachable sideways from the Registry screen, and Esc from it still means "done
 #: looking at candidates" rather than "back into whatever finished a moment ago" (`QA-072`).
 _OWNING_DASHBOARD: dict[ApplicationScreen, ApplicationScreen] = {
+    ConsumerScreen.AUTHOR: ConsumerScreen.DASHBOARD,
     **{
         target: ConsumerScreen.DASHBOARD
         for target in navigation_targets(ConsumerScreen.DASHBOARD, maintainer_mode=False)
@@ -1239,11 +1276,7 @@ def _move_column(
 def _toggle_selection(
     state: ConsumerUiState, key: str
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
-    key = key or (
-        state.focus
-        if state.session.screen is ConsumerScreen.ARTIFACT_DETAILS
-        else state.current_row
-    )
+    key = key or state.current_row
     if state.session.screen not in _SELECTABLE or not key:
         return state, ()
     if state.session.screen is ConsumerScreen.CONFIGURATION_TARGETS:
@@ -1397,7 +1430,6 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     ): MaintainerScreen.ADOPTION_REVIEW,
     # Install opens 05p, where the path is chosen (§173.7); Custom goes on to 05.
     (ConsumerActionKind.INSTALL, ConsumerScreen.MARKETPLACE): ConsumerScreen.INSTALL_PATH,
-    (ConsumerActionKind.INSTALL, ConsumerScreen.ARTIFACT_DETAILS): ConsumerScreen.INSTALL_PATH,
     (
         ConsumerActionKind.INSTALL,
         ConsumerScreen.COLLECTION_PREVIEW,
@@ -1505,6 +1537,30 @@ def _request_action(
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
     if action is None:
         return state, ()
+    if (
+        action is ConsumerActionKind.INSTALL
+        and state.session.screen is ConsumerScreen.MARKETPLACE
+        and not state.selection
+        and state.current_row
+    ):
+        state = replace(state, selection=(state.current_row,))
+    author_origins = {
+        ConsumerActionKind.AUTHOR_WORKSPACE: (ConsumerScreen.AUTHOR_WORKSPACE,),
+        ConsumerActionKind.AUTHOR_INIT: (ConsumerScreen.AUTHOR_INIT,),
+        ConsumerActionKind.AUTHOR_CHECK: (
+            ConsumerScreen.AUTHOR,
+            ConsumerScreen.AUTHOR_CHECK,
+            ConsumerScreen.AUTHOR_MANIFEST,
+        ),
+    }
+    if action in author_origins:
+        if not state.settings.author_mode or state.session.screen not in author_origins[action]:
+            return state, ()
+        return replace(state, action=action, failed_action=None, quit_pending=False), (
+            ConsumerUiCommand(
+                ConsumerUiCommandKind.RUN_AUTHOR, action=action, author_draft=state.author_draft
+            ),
+        )
     if (
         action is ConsumerActionKind.REGISTRY_PUSH
         and state.session.screen is MaintainerScreen.REGISTRY_PUSH
@@ -2101,6 +2157,34 @@ def _action_recorded(
     action = event.action
     if action is None or action is not state.action or not event.text:
         return state, ()
+    if action in (
+        ConsumerActionKind.AUTHOR_WORKSPACE,
+        ConsumerActionKind.AUTHOR_CHECK,
+        ConsumerActionKind.AUTHOR_INIT,
+    ):
+        settings = (
+            replace(state.settings, author_workspace=event.text)
+            if action is ConsumerActionKind.AUTHOR_WORKSPACE
+            else state.settings
+        )
+        author_target = (
+            ConsumerScreen.AUTHOR
+            if action is ConsumerActionKind.AUTHOR_WORKSPACE
+            else ConsumerScreen.AUTHOR_CHECK
+        )
+        session = (
+            state.session
+            if state.session.screen is author_target
+            else state.session.navigate(author_target)
+        )
+        return replace(
+            state,
+            session=session,
+            settings=settings,
+            action=None,
+            focus="" if action is ConsumerActionKind.AUTHOR_WORKSPACE else event.text,
+            quit_pending=False,
+        ), (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, author_target),)
     if action is ConsumerActionKind.MCP_TEST:
         # The answer is drawn where it was asked for, and Success behind it is unchanged: a test
         # is not a lifecycle result, so it moves nothing and clears nothing the install left.
@@ -2200,6 +2284,20 @@ def reduce_consumer_ui(
     if state.exited:
         return state, ()
     reduced, commands = _reduce(state, event)
+    if (
+        reduced is not state
+        and reduced.marketplace_scroll != -1
+        and event.kind
+        in (
+            ConsumerUiEventKind.MOVE,
+            ConsumerUiEventKind.SEARCH,
+            ConsumerUiEventKind.SEARCH_CLOSE,
+            ConsumerUiEventKind.NAVIGATE,
+            ConsumerUiEventKind.BACK,
+            ConsumerUiEventKind.TOGGLE_PROFILE,
+        )
+    ):
+        reduced = replace(reduced, marketplace_scroll=-1)
     if reduced.entered_secrets and (
         reduced.session.screen not in _SECRET_HOLDING_SCREENS or reduced.exited
     ):
@@ -2214,6 +2312,11 @@ def reduce_consumer_ui(
 def _reduce(
     state: ConsumerUiState, event: ConsumerUiEvent
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    if event.kind is ConsumerUiEventKind.SCROLL_MARKETPLACE:
+        if state.session.screen is not ConsumerScreen.MARKETPLACE:
+            return state, ()
+        delta = -1 if event.text == "up" else 1
+        return replace(state, marketplace_scroll=max(state.marketplace_scroll + delta, 0)), ()
     if event.kind is ConsumerUiEventKind.NAVIGATE:
         return _navigate(state, event.screen)
     if event.kind is ConsumerUiEventKind.BACK:
@@ -2320,6 +2423,18 @@ def _reduce(
             )
         config_draft = state.configuration_draft.edit(event.key, event.text)
         return replace(state, configuration_draft=config_draft, quit_pending=False), ()
+    if event.kind is ConsumerUiEventKind.EDIT_AUTHOR:
+        allowed: dict[ApplicationScreen, tuple[str, ...]] = {
+            ConsumerScreen.AUTHOR_WORKSPACE: ("workspace",),
+            ConsumerScreen.AUTHOR_INIT: ("kind", "name", "into"),
+        }
+        if event.key not in allowed.get(state.session.screen, ()):
+            return state, ()
+        return replace(
+            state,
+            author_draft=replace(state.author_draft, **{event.key: event.text}),
+            failed_action=None,
+        ), ()
     if event.kind is ConsumerUiEventKind.EDIT_REGISTRY:
         if state.session.screen is not ConsumerScreen.REGISTRY_ADD:
             return state, ()
@@ -2464,7 +2579,9 @@ def _reduce(
 
 
 #: Names the terminal shell gives the keys that are not one printable character.
-_SPECIAL_KEYS = frozenset({"up", "down", "left", "right", "enter", "escape", "backspace"})
+_SPECIAL_KEYS = frozenset(
+    {"page-up", "page-down", "up", "down", "left", "right", "enter", "escape", "backspace"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -2498,8 +2615,18 @@ def _event_binding(key: str, label: str, kind: ConsumerUiEventKind) -> _ScreenBi
 #: nowhere, is therefore not representable (`QA-026`). Structural keys such as Space and Enter are
 #: derived below from the same screen sets and review maps that the reducer uses.
 _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
+    ConsumerScreen.AUTHOR: (
+        _navigate_binding("w", "Workspace", ConsumerScreen.AUTHOR_WORKSPACE),
+        _navigate_binding("n", "New artifact", ConsumerScreen.AUTHOR_INIT),
+        _action_binding("r", "Check", ConsumerActionKind.AUTHOR_CHECK),
+    ),
+    ConsumerScreen.AUTHOR_CHECK: (
+        _action_binding("r", "Re-run check", ConsumerActionKind.AUTHOR_CHECK),
+    ),
+    ConsumerScreen.AUTHOR_MANIFEST: (
+        _action_binding("r", "Re-run check", ConsumerActionKind.AUTHOR_CHECK),
+    ),
     ConsumerScreen.MARKETPLACE: (_action_binding("i", "Install", ConsumerActionKind.INSTALL),),
-    ConsumerScreen.ARTIFACT_DETAILS: (_action_binding("i", "Install", ConsumerActionKind.INSTALL),),
     ConsumerScreen.COLLECTION_PREVIEW: (
         _action_binding("i", "Install", ConsumerActionKind.INSTALL),
     ),
@@ -2528,7 +2655,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _action_binding("d", "Disconnect", ConsumerActionKind.REGISTRY_REMOVE),
     ),
     MaintainerScreen.SOURCES: (
-        _navigate_binding("a", "Add Source", MaintainerScreen.SOURCE_ADD),
+        _navigate_binding("a", "Add upstream", MaintainerScreen.SOURCE_ADD),
         _action_binding("s", "Sync", ConsumerActionKind.SOURCE_SYNC),
         _action_binding("d", "Remove", ConsumerActionKind.SOURCE_REMOVE),
     ),
@@ -2565,7 +2692,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     # because a result screen has nothing to open, and an Enter that does nothing is how somebody
     # ends up pressing Esc through every screen they just walked (`QA-027`).
     MaintainerScreen.SOURCE_SYNC_RESULT: (
-        _navigate_binding("Enter", "Sources", MaintainerScreen.SOURCES),
+        _navigate_binding("Enter", "Upstream repositories", MaintainerScreen.SOURCES),
     ),
     MaintainerScreen.SCAN_RESULT: (
         _action_binding("a", "Adopt", ConsumerActionKind.REPOSITORY_ADOPT),
@@ -2592,12 +2719,14 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
 #: `QA-088`: no sentence on the screen says "Space toggles default" or "Space switches kind", so a
 #: shared "Toggle" would drop the only word that says what the key is for.
 _FORM_TOGGLE_LABELS: dict[ApplicationScreen, str] = {
+    ConsumerScreen.AUTHOR_INIT: "Switch kind",
     ConsumerScreen.REGISTRY_ADD: "Make default",
     MaintainerScreen.SOURCE_ADD: "Switch kind",
     MaintainerScreen.REGISTRY_INIT: "Local commit",
 }
 #: The row Space toggles on each form that has one.
 _FORM_TOGGLE_ROWS: dict[ApplicationScreen, str] = {
+    ConsumerScreen.AUTHOR_INIT: "kind",
     ConsumerScreen.REGISTRY_ADD: "default",
     MaintainerScreen.SOURCE_ADD: "kind",
     MaintainerScreen.REGISTRY_INIT: "commit",
@@ -2605,6 +2734,8 @@ _FORM_TOGGLE_ROWS: dict[ApplicationScreen, str] = {
 #: The rows of each fixed form that take typed text. Every other row -- a toggle, the submit row --
 #: takes none, so the universal letters are commands there rather than characters (D-269).
 _FORM_TEXT_ROWS: dict[ApplicationScreen, frozenset[str]] = {
+    ConsumerScreen.AUTHOR_WORKSPACE: frozenset({"workspace"}),
+    ConsumerScreen.AUTHOR_INIT: frozenset({"name", "into"}),
     ConsumerScreen.REGISTRY_ADD: frozenset({"alias", "url", "ref"}),
     MaintainerScreen.SOURCE_ADD: frozenset({"alias", "location", "ref"}),
     MaintainerScreen.REGISTRY_INIT: frozenset({"id", "name"}),
@@ -2847,8 +2978,8 @@ def key_bindings(
         elif state.session.screen in _SELECTABLE and " " not in keys:
             label = (
                 "Deselect"
-                if state.session.screen is ConsumerScreen.ARTIFACT_DETAILS
-                and state.focus in state.selection
+                if state.session.screen is ConsumerScreen.MARKETPLACE
+                and state.current_row in state.selection
                 else "Select"
             )
             bindings.append(KeyBinding("Space", label))
@@ -2900,6 +3031,8 @@ def key_bindings(
             bindings.append(KeyBinding("Enter", "Registry"))
     if state.session.screen in _SEARCHABLE:
         bindings.append(KeyBinding("/", "Search"))
+    if state.session.screen is ConsumerScreen.MARKETPLACE and state.viewport_rows:
+        bindings.append(KeyBinding("PgUp/PgDn", "Scroll"))
     if not typing:
         bindings.append(KeyBinding("v", state.session.profile.toggle_label))
     bindings.extend((KeyBinding("↑/↓", "Move"), KeyBinding("Esc", "Back")))
@@ -2951,6 +3084,11 @@ def key_event(
         if len(key) == 1 and key.isprintable():
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text=state.search + key)
         return None
+
+    if state.session.screen is ConsumerScreen.MARKETPLACE and key in ("page-up", "page-down"):
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.SCROLL_MARKETPLACE, text="up" if key == "page-up" else "down"
+        )
 
     text_rows = _form_text_rows(state)
     if (
@@ -3128,6 +3266,43 @@ def key_event(
             return ConsumerUiEvent(ConsumerUiEventKind.EDIT_REGISTRY_INIT, key=row, text=text)
         return None
 
+    if (
+        state.session.screen is ConsumerScreen.AUTHOR
+        and key == "enter"
+        and state.current_row == "check"
+    ):
+        return ConsumerUiEvent(
+            ConsumerUiEventKind.REQUEST_ACTION, action=ConsumerActionKind.AUTHOR_CHECK
+        )
+    if state.session.screen in (ConsumerScreen.AUTHOR_WORKSPACE, ConsumerScreen.AUTHOR_INIT):
+        row = cursor or state.current_row
+        draft = state.author_draft
+        values = {"workspace": draft.workspace, "name": draft.name, "into": draft.into}
+        if key == "escape":
+            return ConsumerUiEvent(ConsumerUiEventKind.BACK)
+        if key in ("up", "down"):
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text=key)
+        if key == " " and row == "kind":
+            kind = GENERATED_KINDS[(GENERATED_KINDS.index(draft.kind) + 1) % len(GENERATED_KINDS)]
+            return ConsumerUiEvent(ConsumerUiEventKind.EDIT_AUTHOR, key="kind", text=kind)
+        if key == "enter":
+            if row == "save":
+                action = (
+                    ConsumerActionKind.AUTHOR_WORKSPACE
+                    if state.session.screen is ConsumerScreen.AUTHOR_WORKSPACE
+                    else ConsumerActionKind.AUTHOR_INIT
+                )
+                return ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=action)
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if row in values and key == "backspace":
+            return ConsumerUiEvent(ConsumerUiEventKind.EDIT_AUTHOR, key=row, text=values[row][:-1])
+        if row in values and key.isprintable():
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_AUTHOR,
+                key=row,
+                text=key if len(key) > 1 else values[row] + key,
+            )
+        return None
     if state.session.screen is MaintainerScreen.COLLECTION_EDITOR:
         row = cursor or state.current_row
         values = {"name": state.collection_draft.name, "summary": state.collection_draft.summary}
@@ -3291,11 +3466,7 @@ def key_event(
     ):
         return ConsumerUiEvent(ConsumerUiEventKind.MOVE_COLUMN, text=key)
     if key == " ":
-        selected = (
-            state.focus
-            if state.session.screen is ConsumerScreen.ARTIFACT_DETAILS
-            else cursor or state.current_row
-        )
+        selected = cursor or state.current_row
         return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_SELECTION, key=selected)
     if key in ("up", "k"):
         return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")

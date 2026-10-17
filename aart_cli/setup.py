@@ -1468,7 +1468,7 @@ def setup_retry_command(*, coordinate: str, profile: str, scope: str) -> str:
     """
 
     return (
-        f"aart-cli marketplace setup {coordinate} --profile {profile} "
+        f"aart-cli consume setup {coordinate} --profile {profile} "
         f"--scope {scope} --yes --approve-setup-effects"
     )
 
@@ -1715,14 +1715,14 @@ def render_setup_review(plan: SetupPlan, *, width: int = CONTENT_MEASURE) -> Tup
 def retry_command(item: SetupQueueItem) -> str:
     """The command that runs this item's setup again.
 
-    The verb is `aart-cli marketplace setup`, which re-runs the declared recipe for an installed artifact and is
+    The verb is `aart-cli consume setup`, which re-runs the declared recipe for an installed artifact and is
     therefore the retry.  `--approve-setup-effects` is named because without it every reviewed
     effect is declined, and a retry that declines everything is not a retry.
     """
 
     coordinate = shlex.quote(f"{item.artifact_type}/{item.artifact_name}")
     return (
-        f"aart-cli marketplace setup {coordinate} --profile {shlex.quote(item.profile)} "
+        f"aart-cli consume setup {coordinate} --profile {shlex.quote(item.profile)} "
         f"--scope {item.scope} --yes --approve-setup-effects"
     )
 
@@ -1749,7 +1749,7 @@ def rollback_command_for(artifact_type: str, artifact_name: str, profile: str, s
 
     coordinate = shlex.quote(f"{artifact_type}/{artifact_name}")
     return (
-        f"aart-cli marketplace receipt undo {coordinate} --profile {shlex.quote(profile)} "
+        f"aart-cli consume receipt undo {coordinate} --profile {shlex.quote(profile)} "
         f"--scope {scope} --yes"
     )
 

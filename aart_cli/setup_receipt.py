@@ -84,8 +84,8 @@ def locate_setup_record(
             RECEIPT_NOT_INSTALLED,
             f"no installation of {coordinate} for profile {profile} in {scope} scope",
             (
-                "list what is installed with: aart-cli marketplace status",
-                "install it with: aart-cli marketplace install",
+                "list what is installed with: aart-cli consume status",
+                "install it with: aart-cli consume install",
             ),
         )
     if not installation.setup_state_ref:
@@ -97,10 +97,10 @@ def locate_setup_record(
             RECEIPT_NO_SETUP,
             f"{coordinate} is installed and no setup run has been recorded for it",
             (
-                "if it declares setup, run it with: aart-cli marketplace setup",
+                "if it declares setup, run it with: aart-cli consume setup",
                 "setup planning refused for an unverified source needs: "
                 "--authorize-untrusted-source",
-                "check whether it declares setup at all with: aart-cli marketplace list",
+                "check whether it declares setup at all with: aart-cli consume list",
             ),
         )
     return Ok(
@@ -143,10 +143,10 @@ def locate_receipt_setup_record(
             RECEIPT_NO_SETUP,
             f"{coordinate} is installed and no setup run has been recorded for it",
             (
-                "if it declares setup, run it with: aart-cli marketplace setup",
+                "if it declares setup, run it with: aart-cli consume setup",
                 "setup planning refused for an unverified source needs: "
                 "--authorize-untrusted-source",
-                "check whether it declares setup at all with: aart-cli marketplace list",
+                "check whether it declares setup at all with: aart-cli consume list",
             ),
         )
     return Ok(
@@ -168,7 +168,7 @@ def read_setup_record(text: str, *, location: ReceiptLocation) -> Result[SetupSt
         return _error(
             RECEIPT_INVALID,
             f"setup record for {location.coordinate} is invalid: {parsed.reason}",
-            ("re-run setup to rewrite the record with: aart-cli marketplace setup",),
+            ("re-run setup to rewrite the record with: aart-cli consume setup",),
         )
     records = parsed.value.records
     if len(records) != 1:
@@ -178,7 +178,7 @@ def read_setup_record(text: str, *, location: ReceiptLocation) -> Result[SetupSt
                 f"setup record for {location.coordinate} holds {len(records)} records "
                 "where exactly one is bound to an installation"
             ),
-            ("re-run setup to rewrite the record with: aart-cli marketplace setup",),
+            ("re-run setup to rewrite the record with: aart-cli consume setup",),
         )
     return Ok(records[0])
 
@@ -192,7 +192,7 @@ def missing_record(location: ReceiptLocation) -> Err:
             f"{location.coordinate} points at setup record {location.setup_state_ref} "
             "and that record is not present under the data root"
         ),
-        ("re-run setup to rewrite the record with: aart-cli marketplace setup",),
+        ("re-run setup to rewrite the record with: aart-cli consume setup",),
     )
 
 

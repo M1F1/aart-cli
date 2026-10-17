@@ -91,13 +91,17 @@ class FocusedOfferIsDescribedTest(unittest.TestCase):
         described = source.description(state)
 
         self.assertEqual(
-            _labels(described), ("Artifact", "Kind", "Version", "Source", "Description")
+            _labels(described)[:5], ("Artifact", "Kind", "Version", "Registry", "Description")
         )
         joined = "\n".join(described)
         for value in (focused.identity.name, focused.version, str(focused.source_alias)):
             self.assertIn(value, joined)
         self.assertIn(focused.summary, joined)
-        last_row = max(index for index, line in enumerate(drawn) if line.startswith(("> ", "  [")))
+        last_row = max(
+            index
+            for index, line in enumerate(drawn[: drawn.index(described[0])])
+            if line.strip() and line != SECTION_RULE
+        )
         self.assertEqual(drawn[last_row + 1 : last_row + 4], ("", SECTION_RULE, ""))
         self.assertEqual(drawn[last_row + 4 : last_row + 4 + len(described)], described)
 
@@ -121,7 +125,7 @@ class FocusedOfferIsDescribedTest(unittest.TestCase):
 
         self.assertTrue(expected)
         self.assertEqual((fast.current_row, again.current_row), (verbose.current_row,) * 2)
-        self.assertFalse(any(line in frame(source, fast) for line in expected))
+        self.assertFalse(any(line in frame(source, fast) for line in expected if line.strip()))
         self.assertEqual(frame(source, again), frame(source, verbose))
         self.assertEqual(
             {command.kind for command in (*fast_commands, *again_commands)},
@@ -192,7 +196,7 @@ class CollectionOffersAreDescribedTest(unittest.TestCase):
         joined = "\n".join(described)
 
         self.assertEqual(
-            _labels(described), ("Collection", "Version", "Source", "Includes", "Description")
+            _labels(described), ("Collection", "Version", "Registry", "Includes", "Description")
         )
         self.assertIn(COLLECTION.name, joined)
         self.assertIn("2 artifacts", joined)

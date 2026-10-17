@@ -47,7 +47,7 @@ from aart_cli.tui_marketplace import MarketplaceTarget, project_marketplace_rows
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import OFFERED, _delivered, _drive
 from tests.consumer_marketplace_shell_test import drive, screens
-from tests.consumer_shell_test import ENTER, ESCAPE, INSTALL_CUSTOM, SPACE, FakeTerminal, _at
+from tests.consumer_shell_test import ENTER, INSTALL_CUSTOM, SPACE, FakeTerminal, _at
 from tests.declared_harness_narrowing_test import _reached
 from tests.marketplace_fixtures import (
     artifact,
@@ -88,11 +88,12 @@ def _source(*profiles: str, notice: tuple[str, ...] = ()) -> CanonicalScreenSour
 def _details_state(key: str, *, selected: bool = False) -> ConsumerUiState:
     return ConsumerUiState(
         ConsumerSession(
-            ConsumerScreen.ARTIFACT_DETAILS,
-            history=(ConsumerScreen.MARKETPLACE,),
+            ConsumerScreen.MARKETPLACE,
+            history=(),
         ),
         selection=(key,) if selected else (),
         focus=key,
+        rows=(key,),
     )
 
 
@@ -185,9 +186,9 @@ class ArtifactDetailsControlTest(unittest.TestCase):
 
         self.assertEqual(selected.selection, (state.focus,))
         self.assertEqual(selected.focus, state.focus)
-        self.assertIs(selected.session.screen, ConsumerScreen.ARTIFACT_DETAILS)
+        self.assertIs(selected.session.screen, ConsumerScreen.MARKETPLACE)
         self.assertEqual(commands, ())
-        self.assertIn("Selected for installation.", "\n".join(_source("claude").status(selected)))
+        self.assertIn("[x]", "\n".join(frame(_source("claude"), selected)))
         self.assertIn("Space", {item.key for item in key_bindings(selected)})
         self.assertIn("Deselect", {item.label for item in key_bindings(selected)})
 
@@ -203,7 +204,8 @@ class ArtifactDetailsControlTest(unittest.TestCase):
         finished, _terminal = drive(
             ENTER,
             SPACE,
-            ESCAPE,
+            ord("v"),
+            ord("v"),
             state=_at(ConsumerScreen.MARKETPLACE),
         )
 
@@ -259,7 +261,7 @@ class ArtifactDetailsControlTest(unittest.TestCase):
                 )
 
         handler = Handler()
-        terminal = FakeTerminal(*INSTALL_CUSTOM, ord("q"))
+        terminal = FakeTerminal(*INSTALL_CUSTOM, ord("q"), ord("y"))
         finished = run_consumer_shell(
             unavailable,
             terminal,
@@ -268,8 +270,9 @@ class ArtifactDetailsControlTest(unittest.TestCase):
         )
 
         self.assertIs(handler.command.kind, ConsumerUiCommandKind.PREPARE_ACTION)
-        self.assertEqual(handler.command.focus, key)
-        self.assertIs(finished.session.screen, ConsumerScreen.ARTIFACT_DETAILS)
+        self.assertEqual(handler.command.focus, "")
+        self.assertEqual(handler.command.selection, (key,))
+        self.assertIs(finished.session.screen, ConsumerScreen.MARKETPLACE)
         self.assertIsNone(finished.action)
         self.assertTrue(
             terminal.screen_containing("no eligible installation harness is available.")
@@ -419,7 +422,7 @@ class DetailsAgreesWithReviewSelectionE2ETest(unittest.TestCase):
                 env, _at(ConsumerScreen.MARKETPLACE), ENTER, *INSTALL_CUSTOM, actions=handler
             )
             delivered = _delivered(env).exists()
-        self.assertIs(details.session.screen, ConsumerScreen.ARTIFACT_DETAILS)
+        self.assertIs(details.session.screen, ConsumerScreen.MARKETPLACE)
         assert row is not None
         return row.row, review, terminal, delivered
 

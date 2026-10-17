@@ -64,12 +64,61 @@ from aart_cli.tui_sources import (
 
 from ._configured_runtime import ConfiguredRuntime, load_runtime_configuration
 
-_SOURCE_OPERATION = "source.add"
-_REMOVE_OPERATION = "source.remove"
-_RESUBSCRIBE_OPERATION = "source.resubscribe"
-_LIST_OPERATION = "source.list"
-_SYNC_OPERATION = "source.sync"
-_HEALTH_OPERATION = "source.health"
+#: The two connection families (§175.2): the command a consumer or maintainer types, and the
+#: plural its JSON names the entries by. `None` -- an internal caller such as the TUI's own
+#: transactions -- sees every entry.
+_FAMILY_COMMANDS = {
+    "registry": SourceKind.REGISTRY_GIT.command,
+    "upstream": SourceKind.SOURCE_GIT.command,
+}
+_FAMILY_PLURALS = {"registry": "registries", "upstream": "upstreams"}
+
+
+def _family_of(source: ConfiguredSource) -> str:
+    return "registry" if source.is_registry else "upstream"
+
+
+def _role_label(source: ConfiguredSource) -> str:
+    """What a person reads a connection as (§175): a Registry, or an Upstream repository."""
+
+    return "Registry" if source.is_registry else "Upstream repository"
+
+
+def _in_family(request: Request, source: ConfiguredSource) -> bool:
+    return request.source_family is None or _family_of(source) == request.source_family
+
+
+def _command(request: Request) -> str:
+    return _FAMILY_COMMANDS[request.source_family or "registry"]
+
+
+def _operation(request: Request, verb: str) -> str:
+    return f"{request.source_family or 'source'}.{verb}"
+
+
+def _entries_key(request: Request) -> str:
+    return _FAMILY_PLURALS.get(request.source_family or "", "sources")
+
+
+def _family_refusal(request: Request, runtime: ConfiguredRuntime) -> Err | None:
+    """Refuse an alias the other family owns, before any review is planned for it."""
+
+    for source in runtime.loaded.user_configuration.sources:
+        if source.alias.value == request.source_alias and not _in_family(request, source):
+            return _other_family(request, source)
+    return None
+
+
+def _other_family(request: Request, source: ConfiguredSource) -> Err:
+    """An alias of the other family: name it and the command that owns it, never act on it."""
+
+    family = _family_of(source)
+    label = "a Registry" if family == "registry" else "an Upstream repository"
+    return _failure(
+        "source-not-configured",
+        f"{source.alias.value} is {label}, not one of these",
+        f"use `{_FAMILY_COMMANDS[family]} --help` for it",
+    )
 
 
 def _failure(code: str, message: str, *remediation: str) -> Err:
@@ -146,6 +195,9 @@ def _source_health(
     )
 
 
+_LOCAL_KINDS = frozenset({SourceKind.REGISTRY_LOCAL, SourceKind.SOURCE_LOCAL})
+
+
 def _source_data(
     source: ConfiguredSource,
     health: SourceHealth,
@@ -155,7 +207,7 @@ def _source_data(
     current = health.current
     return {
         "alias": source.alias.value,
-        "kind": source.kind.value,
+        "kind": "local" if source.kind in _LOCAL_KINDS else "git",
         "location": redact_text(source.location),
         "ref": None if source.ref is None else redact_text(source.ref),
         "enabled": source.enabled,
@@ -180,6 +232,9 @@ def _parse_add_source(request: Request) -> Result[ConfiguredSource]:
         kind = SourceKind(request.source_kind)
     except ValueError:
         return _failure("config-invalid", "source kind has an unsupported value")
+    registry_kind = kind in {SourceKind.REGISTRY_GIT, SourceKind.REGISTRY_LOCAL}
+    if request.source_family is not None and registry_kind != (request.source_family == "registry"):
+        return _failure("config-invalid", "this kind belongs to the other connection family")
     return configured_source_from_input(
         request.source_alias,
         kind,
@@ -327,6 +382,9 @@ def remove_configured_source(
         return runtime
     if runtime.value.loaded.recovery is not None:
         return _recovery_error()
+    refused = _family_refusal(request, runtime.value)
+    if refused is not None:
+        return refused
     view = build_source_stage(
         runtime.value.loaded.user_configuration,
         runtime.value.loaded.effective.policy,
@@ -379,13 +437,13 @@ def remove_configured_source(
 def _add(request: Request) -> int:
     added = add_configured_source(request)
     if isinstance(added, Err):
-        return _emit_error(request, _SOURCE_OPERATION, added)
+        return _emit_error(request, _operation(request, "add"), added)
     result = added.value
 
     payload = {
         "schema_version": 1,
         "ok": True,
-        "operation": _SOURCE_OPERATION,
+        "operation": _operation(request, "add"),
         "changed": result.changed,
         "source": _source_data(
             result.source,
@@ -409,10 +467,15 @@ def _add(request: Request) -> int:
     if request.json:
         print(json.dumps(payload, indent=2))
     else:
+        # Only a Registry can be the default a consumer installs from (§175.2).
+        default = (
+            f"; default={'yes' if result.default_registry == result.source.alias else 'no'}"
+            if result.source.is_registry
+            else ""
+        )
         print(
-            f"source added: {result.source.alias.value}; "
-            f"snapshot {result.synchronized.disposition.value}; "
-            f"default={'yes' if result.default_registry == result.source.alias else 'no'}"
+            f"{_role_label(result.source)} added: {result.source.alias.value}; "
+            f"snapshot {result.synchronized.disposition.value}{default}"
         )
     return _common.OK
 
@@ -421,14 +484,17 @@ def _remove(request: Request) -> int:
     if request.source_alias is None:
         return _emit_error(
             request,
-            _REMOVE_OPERATION,
+            _operation(request, "remove"),
             _failure("config-invalid", "source remove requires --alias"),
         )
     runtime = load_runtime_configuration(request, content_required=False)
     if isinstance(runtime, Err):
-        return _emit_error(request, _REMOVE_OPERATION, runtime)
+        return _emit_error(request, _operation(request, "remove"), runtime)
     if runtime.value.loaded.recovery is not None:
-        return _emit_error(request, _REMOVE_OPERATION, _recovery_error())
+        return _emit_error(request, _operation(request, "remove"), _recovery_error())
+    refused = _family_refusal(request, runtime.value)
+    if refused is not None:
+        return _emit_error(request, _operation(request, "remove"), refused)
     now = int(time.time())
     view = build_source_stage(
         runtime.value.loaded.user_configuration,
@@ -437,25 +503,25 @@ def _remove(request: Request) -> int:
         first_run=runtime.value.loaded.first_run is not None,
     )
     if isinstance(view, Err):
-        return _emit_error(request, _REMOVE_OPERATION, view)
+        return _emit_error(request, _operation(request, "remove"), view)
     try:
         alias = SourceAlias(request.source_alias)
     except ValueError:
         return _emit_error(
             request,
-            _REMOVE_OPERATION,
+            _operation(request, "remove"),
             _failure("config-invalid", "source alias is not a valid slug"),
         )
     planned = plan_source_removal(view.value, alias)
     if isinstance(planned, Err):
-        return _emit_error(request, _REMOVE_OPERATION, planned)
+        return _emit_error(request, _operation(request, "remove"), planned)
 
     review = render_source_removal_review(planned.value)
     if not request.yes:
         payload = {
             "schema_version": 1,
             "ok": True,
-            "operation": _REMOVE_OPERATION,
+            "operation": _operation(request, "remove"),
             "finalized": False,
             "review": list(review),
             "source": {
@@ -476,11 +542,11 @@ def _remove(request: Request) -> int:
 
     removed = remove_configured_source(request, expected_source=planned.value.source)
     if isinstance(removed, Err):
-        return _emit_error(request, _REMOVE_OPERATION, removed)
+        return _emit_error(request, _operation(request, "remove"), removed)
     payload = {
         "schema_version": 1,
         "ok": True,
-        "operation": _REMOVE_OPERATION,
+        "operation": _operation(request, "remove"),
         "finalized": True,
         "source": {
             "alias": removed.value.source.alias.value,
@@ -496,7 +562,10 @@ def _remove(request: Request) -> int:
     else:
         snapshot = "discarded" if removed.value.snapshot_discarded else "none stored"
         default = "; default registry cleared" if planned.value.cleared_default else ""
-        print(f"source removed: {planned.value.source.alias.value}; snapshot {snapshot}{default}")
+        print(
+            f"{_role_label(planned.value.source)} removed: {planned.value.source.alias.value}; "
+            f"snapshot {snapshot}{default}"
+        )
     return _common.OK
 
 
@@ -519,14 +588,17 @@ def _resubscribe(request: Request) -> int:
     if request.source_alias is None:
         return _emit_error(
             request,
-            _RESUBSCRIBE_OPERATION,
+            _operation(request, "resubscribe"),
             _failure("config-invalid", "source resubscribe requires --alias"),
         )
     runtime = load_runtime_configuration(request, content_required=False)
     if isinstance(runtime, Err):
-        return _emit_error(request, _RESUBSCRIBE_OPERATION, runtime)
+        return _emit_error(request, _operation(request, "resubscribe"), runtime)
     if runtime.value.loaded.recovery is not None:
-        return _emit_error(request, _RESUBSCRIBE_OPERATION, _recovery_error())
+        return _emit_error(request, _operation(request, "resubscribe"), _recovery_error())
+    refused = _family_refusal(request, runtime.value)
+    if refused is not None:
+        return _emit_error(request, _operation(request, "resubscribe"), refused)
     now = int(time.time())
     view = build_source_stage(
         runtime.value.loaded.user_configuration,
@@ -535,18 +607,18 @@ def _resubscribe(request: Request) -> int:
         first_run=runtime.value.loaded.first_run is not None,
     )
     if isinstance(view, Err):
-        return _emit_error(request, _RESUBSCRIBE_OPERATION, view)
+        return _emit_error(request, _operation(request, "resubscribe"), view)
     try:
         alias = SourceAlias(request.source_alias)
     except ValueError:
         return _emit_error(
             request,
-            _RESUBSCRIBE_OPERATION,
+            _operation(request, "resubscribe"),
             _failure("config-invalid", "source alias is not a valid slug"),
         )
     planned = plan_source_resubscription(view.value, alias)
     if isinstance(planned, Err):
-        return _emit_error(request, _RESUBSCRIBE_OPERATION, planned)
+        return _emit_error(request, _operation(request, "resubscribe"), planned)
 
     # Review and finalize both resolve the origin, in this process.  The reviewed transition is
     # then the only one `--yes` may apply, so an upstream that moves in between is a refusal.
@@ -554,14 +626,14 @@ def _resubscribe(request: Request) -> int:
         planned.value, data_root=runtime.value.paths.data_root, observed_at_epoch_seconds=now
     )
     if isinstance(reviewed, Err):
-        return _emit_error(request, _RESUBSCRIBE_OPERATION, reviewed)
+        return _emit_error(request, _operation(request, "resubscribe"), reviewed)
     resubscription = SourceResubscriptionRequest(planned.value, reviewed.value.transition)
     review = render_source_resubscription_review(resubscription)
     if not request.yes:
         payload = {
             "schema_version": 1,
             "ok": True,
-            "operation": _RESUBSCRIBE_OPERATION,
+            "operation": _operation(request, "resubscribe"),
             "finalized": False,
             "review": list(review),
             "source": {
@@ -589,7 +661,7 @@ def _resubscribe(request: Request) -> int:
             # rendered it.  Render the offered transition so it can be re-authorized.
             return _emit_error(
                 request,
-                _RESUBSCRIBE_OPERATION,
+                _operation(request, "resubscribe"),
                 _failure(
                     "source-invalid",
                     (
@@ -607,12 +679,12 @@ def _resubscribe(request: Request) -> int:
         observed_at_epoch_seconds=now,
     )
     if isinstance(adopted, Err):
-        return _emit_error(request, _RESUBSCRIBE_OPERATION, adopted)
+        return _emit_error(request, _operation(request, "resubscribe"), adopted)
     current = adopted.value.current
     payload = {
         "schema_version": 1,
         "ok": True,
-        "operation": _RESUBSCRIBE_OPERATION,
+        "operation": _operation(request, "resubscribe"),
         "finalized": True,
         "source": {
             "alias": planned.value.alias.value,
@@ -640,11 +712,11 @@ def _resubscribe(request: Request) -> int:
 def _list(request: Request) -> int:
     runtime = load_runtime_configuration(request, content_required=False)
     if isinstance(runtime, Err):
-        return _emit_error(request, _LIST_OPERATION, runtime)
+        return _emit_error(request, _operation(request, "list"), runtime)
     if runtime.value.loaded.recovery is not None:
         return _emit_error(
             request,
-            _LIST_OPERATION,
+            _operation(request, "list"),
             _failure(
                 "config-invalid",
                 "user configuration is invalid; source health cannot be reported safely",
@@ -659,39 +731,43 @@ def _list(request: Request) -> int:
             default_registry=runtime.value.loaded.user_configuration.default_registry,
         )
         for source in runtime.value.loaded.user_configuration.sources
+        if _in_family(request, source)
     )
     payload = {
         "schema_version": 1,
         "ok": True,
-        "operation": _LIST_OPERATION,
-        "sources": items,
+        "operation": _operation(request, "list"),
+        _entries_key(request): items,
     }
     if request.json:
         print(json.dumps(payload, indent=2))
     elif not items:
-        print("No configured sources. Add one with `aart-cli source add --help`.")
+        print(f"Nothing is connected. Add one with `{_command(request)} add --help`.")
     else:
         for item in items:
-            state = "default" if item["default"] else "configured"
+            state = "default" if item["default"] else "connected"
             print(f"{item['alias']} [{item['kind']}] {item['health']}; {state}; {item['location']}")
     return _common.OK
 
 
 def _selected_sources(
-    runtime: ConfiguredRuntime, alias: str | None
+    runtime: ConfiguredRuntime, request: Request
 ) -> Result[tuple[ConfiguredSource, ...]]:
-    """Resolve the requested aliases without ever creating or renaming a source."""
+    """Resolve the requested aliases within the request's family, never creating or renaming one."""
 
+    alias = request.source_alias
     sources = runtime.loaded.user_configuration.sources
     if alias is None:
-        return Ok(tuple(source for source in sources if source.enabled))
+        return Ok(tuple(s for s in sources if s.enabled and _in_family(request, s)))
     selected = tuple(source for source in sources if source.alias.value == alias)
     if not selected:
         return _failure(
             "source-not-configured",
-            f"no configured source has alias {alias}",
-            "run `aart-cli source list --json` to see configured aliases",
+            f"nothing connected has alias {alias}",
+            f"run `{_command(request)} list --json` to see connected aliases",
         )
+    if not _in_family(request, selected[0]):
+        return _other_family(request, selected[0])
     return Ok(selected)
 
 
@@ -706,8 +782,8 @@ class SynchronizedSource:
 def sync_configured_sources(request: Request) -> Result[tuple[SynchronizedSource, ...]]:
     """Refresh the managed snapshots of the requested sources, choosing no output surface.
 
-    This is the transaction behind both `aart-cli source sync` and screen 21's reviewed refresh
-    (B-084).  It never writes user configuration and never changes a source identity: it refreshes
+    This is the transaction behind `aart-cli consume registry sync`, `aart-cli maintain upstream
+    sync` and screen 21's reviewed refresh (B-084).  It never writes user configuration and never changes a source identity: it refreshes
     the managed snapshot for an already-configured origin and ref, which is exactly why a consumer
     may run it without any of the authority `add` needs.
 
@@ -722,7 +798,7 @@ def sync_configured_sources(request: Request) -> Result[tuple[SynchronizedSource
         return runtime
     if runtime.value.loaded.recovery is not None:
         return _recovery_error()
-    selected = _selected_sources(runtime.value, request.source_alias)
+    selected = _selected_sources(runtime.value, request)
     if isinstance(selected, Err):
         return selected
     synchronized: list[SynchronizedSource] = []
@@ -737,12 +813,12 @@ def sync_configured_sources(request: Request) -> Result[tuple[SynchronizedSource
 def _sync(request: Request) -> int:
     runtime = load_runtime_configuration(request, content_required=False)
     if isinstance(runtime, Err):
-        return _emit_error(request, _SYNC_OPERATION, runtime)
+        return _emit_error(request, _operation(request, "sync"), runtime)
     if runtime.value.loaded.recovery is not None:
-        return _emit_error(request, _SYNC_OPERATION, _recovery_error())
-    selected = _selected_sources(runtime.value, request.source_alias)
+        return _emit_error(request, _operation(request, "sync"), _recovery_error())
+    selected = _selected_sources(runtime.value, request)
     if isinstance(selected, Err):
-        return _emit_error(request, _SYNC_OPERATION, selected)
+        return _emit_error(request, _operation(request, "sync"), selected)
 
     results: list[dict] = []
     # Human rendering reads these typed locals rather than the heterogeneous JSON payload.
@@ -787,33 +863,38 @@ def _sync(request: Request) -> int:
     payload = {
         "schema_version": 1,
         "ok": not failed,
-        "operation": _SYNC_OPERATION,
-        "sources": results,
+        "operation": _operation(request, "sync"),
+        _entries_key(request): results,
     }
     if request.json:
         print(json.dumps(payload, indent=2))
     elif not results:
-        print("No enabled sources to synchronize.")
+        print("Nothing enabled to synchronize.")
     else:
         for line in lines:
             print(line)
+        if not failed and request.source_family == "registry":
+            # §175.2: `sync` refreshes what is offered; `update` is what changes installations.
+            print("Review updates for installed artifacts with `aart-cli consume update`.")
     return _common.ERROR if failed else _common.OK
 
 
 def _health(request: Request) -> int:
     runtime = load_runtime_configuration(request, content_required=False)
     if isinstance(runtime, Err):
-        return _emit_error(request, _HEALTH_OPERATION, runtime)
+        return _emit_error(request, _operation(request, "health"), runtime)
     if runtime.value.loaded.recovery is not None:
-        return _emit_error(request, _HEALTH_OPERATION, _recovery_error())
-    selected = _selected_sources(runtime.value, request.source_alias)
+        return _emit_error(request, _operation(request, "health"), _recovery_error())
+    selected = _selected_sources(runtime.value, request)
     if isinstance(selected, Err):
-        return _emit_error(request, _HEALTH_OPERATION, selected)
+        return _emit_error(request, _operation(request, "health"), selected)
     now = int(time.time())
     items = []
     degraded = False
     for source in runtime.value.loaded.user_configuration.sources:
         if source not in selected.value and request.source_alias is not None:
+            continue
+        if not _in_family(request, source):
             continue
         health = _source_health(source, runtime.value, now=now)
         current = health.current
@@ -822,7 +903,7 @@ def _health(request: Request) -> int:
         items.append(
             {
                 "alias": source.alias.value,
-                "kind": source.kind.value,
+                "kind": "local" if source.kind in _LOCAL_KINDS else "git",
                 "ref": source.ref,
                 "enabled": source.enabled,
                 "health": health.status.value,
@@ -840,15 +921,15 @@ def _health(request: Request) -> int:
     payload = {
         "schema_version": 1,
         "ok": not degraded,
-        "operation": _HEALTH_OPERATION,
+        "operation": _operation(request, "health"),
         "max_age_seconds": runtime.value.loaded.effective.configuration.sync.max_age_seconds,
         "sync_mode": runtime.value.loaded.effective.configuration.sync.mode.value,
-        "sources": items,
+        _entries_key(request): items,
     }
     if request.json:
         print(json.dumps(payload, indent=2))
     elif not items:
-        print("No configured sources. Add one with `aart-cli source add --help`.")
+        print(f"Nothing is connected. Add one with `{_command(request)} add --help`.")
     else:
         for item in items:
             age = "never synchronized" if item["age_seconds"] is None else f"{item['age_seconds']}s"

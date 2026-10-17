@@ -1,13 +1,20 @@
-"""Doubly confirmed reset of AART-owned per-user application state."""
+"""Reset AART-owned per-user state into a backup, and bring a backup back (§175.4).
+
+Nothing is deleted (INV-271). A reset renames each entry the factory reset plan names into
+`<application home>-backups/<UTC timestamp>/`, beside the home, so aart-cli starts as on a new
+machine and the old state can come back with `--restore`.
+"""
 
 from __future__ import annotations
 
+import errno
 import os
-import shutil
 import stat
 import sys
+from datetime import datetime, timezone
 
 from aart_cli.application.factory_reset import (
+    FactoryResetPlan,
     FactoryResetTarget,
     FactoryResetTargetKind,
     plan_factory_reset,
@@ -77,11 +84,72 @@ def _safe_observation(target: FactoryResetTarget, *, home: str) -> tuple[int, in
     return observed.st_dev, observed.st_ino, stat.S_IFMT(observed.st_mode)
 
 
-def _remove(target: FactoryResetTarget) -> None:
-    if target.kind is FactoryResetTargetKind.FILE:
-        os.unlink(target.path)
-    else:
-        shutil.rmtree(target.path)
+_RESET_PHRASE = "RESET AART"
+_RESTORE_PHRASE = "RESTORE AART"
+
+
+def _timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _backup_root(anchor: str) -> str:
+    """Beside the home: outside what a reset moves, and normally on the same filesystem."""
+
+    return anchor.rstrip(os.sep) + "-backups"
+
+
+def _real_directory(path: str) -> bool:
+    observed = os.lstat(path)
+    return stat.S_ISDIR(observed.st_mode) and not stat.S_ISLNK(observed.st_mode)
+
+
+def _new_backup(anchor: str) -> str:
+    root = _backup_root(anchor)
+    try:
+        if not _real_directory(root):
+            raise ValueError(f"refusing a backup directory that is not a real directory: {root}")
+    except FileNotFoundError:
+        os.mkdir(root, 0o700)
+    stamp = _timestamp()
+    candidate, attempt = os.path.join(root, stamp), 2
+    while True:
+        try:
+            os.mkdir(candidate, 0o700)
+            return candidate
+        except FileExistsError:
+            candidate, attempt = os.path.join(root, f"{stamp}-{attempt}"), attempt + 1
+
+
+def _observations(
+    plan: FactoryResetPlan, anchor: str
+) -> tuple[tuple[FactoryResetTarget, tuple[int, int, int]], ...]:
+    """Every existing target, validated before the first one moves."""
+
+    observed = tuple((target, _safe_observation(target, home=anchor)) for target in plan.targets)
+    return tuple((target, seen) for target, seen in observed if seen is not None)
+
+
+def _move(source: str, destination: str) -> None:
+    try:
+        os.rename(source, destination)
+    except OSError as error:
+        if error.errno == errno.EXDEV:
+            raise ValueError(
+                f"refusing to copy across filesystems: {source} and {destination} are on "
+                "different devices"
+            ) from error
+        raise
+
+
+def _move_out(
+    observations: tuple[tuple[FactoryResetTarget, tuple[int, int, int]], ...],
+    backup: str,
+    anchor: str,
+) -> None:
+    for target, observed in observations:
+        if _safe_observation(target, home=anchor) != observed:
+            raise ValueError(f"reset target changed after Review: {target.path}")
+        _move(target.path, os.path.join(backup, os.path.basename(target.path)))
 
 
 def _confirmed(prompt: str, phrase: str) -> bool:
@@ -89,6 +157,78 @@ def _confirmed(prompt: str, phrase: str) -> bool:
         return input(prompt) == phrase
     except (EOFError, KeyboardInterrupt, StopIteration):
         return False
+
+
+def _restorable(plan: FactoryResetPlan, directory: str, anchor: str) -> tuple[str, ...]:
+    """The entries of a backup, refusing anything a reset could not have put there."""
+
+    kinds = {os.path.basename(target.path): target.kind for target in plan.targets}
+    relative = os.path.relpath(directory, anchor)
+    if relative == os.curdir or not (relative == os.pardir or relative.startswith(os.pardir)):
+        raise ValueError(f"refusing to restore from inside the application home: {directory}")
+    try:
+        if not _real_directory(directory):
+            raise ValueError(f"refusing to restore from a symlink or file: {directory}")
+    except FileNotFoundError:
+        raise ValueError(f"no such backup: {directory}") from None
+    entries = tuple(sorted(os.listdir(directory)))
+    foreign = tuple(name for name in entries if name not in kinds)
+    if foreign:
+        raise ValueError(f"not an AART backup; it also holds: {', '.join(foreign)}")
+    for name in entries:
+        observed = os.lstat(os.path.join(directory, name))
+        expected = stat.S_ISREG if kinds[name] is FactoryResetTargetKind.FILE else stat.S_ISDIR
+        if stat.S_ISLNK(observed.st_mode) or not expected(observed.st_mode):
+            raise ValueError(f"refusing unsafe backup entry: {os.path.join(directory, name)}")
+    return entries
+
+
+def _reset(plan: FactoryResetPlan, anchor: str, *, yes: bool) -> int:
+    observations = _observations(plan, anchor)
+    if not observations:
+        print("Nothing to reset: aart-cli already starts clean.")
+        return OK
+    print("AART reset review")
+    print(f"This AART-owned state moves into a backup under {_backup_root(anchor)}:")
+    for target, _ in observations:
+        print(f"  {target.kind.value}: {target.path}")
+    print("Nothing is deleted. Projects, harness files and organization policy are not touched.")
+    print(f"Review identity: {plan.review_digest}")
+    if not yes and not _confirmed(f"Type {_RESET_PHRASE} to continue: ", _RESET_PHRASE):
+        print("Reset cancelled; nothing changed.")
+        return OK
+    backup = _new_backup(anchor)
+    _move_out(observations, backup, anchor)
+    print("aart-cli starts clean. The previous state is kept in:")
+    print(f"  {backup}")
+    print(f"Bring it back with: aart-cli reset --restore {backup}")
+    return OK
+
+
+def _restore(plan: FactoryResetPlan, anchor: str, directory: str, *, yes: bool) -> int:
+    entries = _restorable(plan, directory, anchor)
+    observations = _observations(plan, anchor)
+    print("AART restore review")
+    print(f"Bring back from {directory}: {', '.join(entries) or 'nothing'}")
+    if observations:
+        print(f"The current state moves into a new backup under {_backup_root(anchor)} first.")
+    if not yes and not _confirmed(f"Type {_RESTORE_PHRASE} to continue: ", _RESTORE_PHRASE):
+        print("Restore cancelled; nothing changed.")
+        return OK
+    if observations:
+        backup = _new_backup(anchor)
+        _move_out(observations, backup, anchor)
+        print(f"The state before this restore is kept in: {backup}")
+    if not os.path.lexists(anchor):
+        os.mkdir(anchor, 0o700)
+    for name in entries:
+        _move(os.path.join(directory, name), os.path.join(anchor, name))
+    try:
+        os.rmdir(directory)
+    except OSError:
+        pass
+    print(f"Restored the AART state from {directory}.")
+    return OK
 
 
 def run(request: Request) -> int:
@@ -103,43 +243,18 @@ def run(request: Request) -> int:
         for diagnostic in planned.diagnostics:
             print(f"error: {diagnostic.message}")
         return ERROR
-
-    plan = planned.value
-    print("AART factory reset review")
-    print("The following AART-owned application state will be removed:")
-    for target in plan.targets:
-        print(f"  {target.kind.value}: {target.path}")
-    print("Projects, harness files and credentials owned by other applications are not removed.")
-    print(f"Review identity: {plan.review_digest}")
-
-    if not _confirmed("Type RESET AART to continue: ", "RESET AART"):
-        print("Factory reset cancelled; nothing changed.")
-        return OK
-    if not _confirmed("Type DELETE AART STATE to confirm: ", "DELETE AART STATE"):
-        print("Factory reset cancelled; nothing changed.")
-        return OK
-
     try:
-        observations = tuple(
-            (target, _safe_observation(target, home=anchor)) for target in plan.targets
-        )
-        # Validate every existing target before deleting the first one.
-        for target, observed in observations:
-            if observed is None:
-                continue
-            if _safe_observation(target, home=anchor) != observed:
-                raise ValueError(f"factory reset target changed after Review: {target.path}")
-        for target, observed in observations:
-            if observed is not None:
-                if _safe_observation(target, home=anchor) != observed:
-                    raise ValueError(f"factory reset target changed before deletion: {target.path}")
-                _remove(target)
+        if request.reset_restore is not None:
+            return _restore(
+                planned.value,
+                anchor,
+                os.path.abspath(request.reset_restore),
+                yes=request.yes,
+            )
+        return _reset(planned.value, anchor, yes=request.yes)
     except (OSError, ValueError) as error:
         print(f"error: {error}")
         return ERROR
-
-    print("AART factory reset complete. No Registry, Source, setting, receipt or cache remains.")
-    return OK
 
 
 __all__ = ["run"]

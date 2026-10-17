@@ -64,12 +64,13 @@ class _Environment:
         ):
             code = cli.main(
                 [
-                    "source",
+                    "maintain",
+                    "upstream",
                     "add",
                     "--alias",
                     alias,
                     "--kind",
-                    "source-local",
+                    "local",
                     "--location",
                     str(_FIXTURE.resolve()),
                     "--json",

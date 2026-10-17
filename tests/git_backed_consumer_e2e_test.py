@@ -163,7 +163,7 @@ class _Environment:
 
     def run(self, *argv: str, source_transport: bool = False):
         arguments = [*argv, "--json"]
-        if argv[:2] == ("marketplace", "install"):
+        if argv[:2] == ("consume", "install"):
             arguments.extend(("--project", str(self.project)))
         output = io.StringIO()
         transport = (
@@ -190,14 +190,14 @@ class GitBackedConsumerE2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             env = _Environment(Path(raw).resolve())
 
-            sync_code, synchronized = env.run("source", "sync", source_transport=True)
+            sync_code, synchronized = env.run("consume", "registry", "sync", source_transport=True)
 
             self.assertEqual(sync_code, 0, synchronized)
             self.assertNotEqual(env.head, "a" * 40)
             self.assertEqual(len(env.transport_requests), 1)
-            self.assertEqual(synchronized["sources"][0]["resolved_revision"], env.head)
+            self.assertEqual(synchronized["registries"][0]["resolved_revision"], env.head)
 
-            list_code, marketplace = env.run("marketplace", "list")
+            list_code, marketplace = env.run("consume", "list")
 
             self.assertEqual(list_code, 0, marketplace)
             self.assertEqual(
@@ -207,7 +207,7 @@ class GitBackedConsumerE2ETest(unittest.TestCase):
             self.assertEqual(marketplace["artifacts"][0]["source"]["resolved_revision"], env.head)
 
             install_code, installed = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(install_code, 0, installed)
@@ -235,25 +235,23 @@ class GitBackedConsumerE2ETest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             env = _Environment(Path(raw).resolve())
             delivered = env.project / ".claude/skills/code-review-company-project/SKILL.md"
-            env.run("source", "sync", source_transport=True)
-            env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "registry", "sync", source_transport=True)
+            env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
             installed_revision = env.head
 
             moved = env.publish(AUTHORED_SKILL, AUTHORED_SKILL_1_3_0)
 
             self.assertNotEqual(moved, installed_revision)
 
-            sync_code, synchronized = env.run("source", "sync", source_transport=True)
+            sync_code, synchronized = env.run("consume", "registry", "sync", source_transport=True)
 
             self.assertEqual(sync_code, 0, synchronized)
-            self.assertEqual(synchronized["sources"][0]["resolved_revision"], moved)
+            self.assertEqual(synchronized["registries"][0]["resolved_revision"], moved)
             # The sync offered the commit and applied nothing: the delivered bytes are the ones
             # reviewed at install, and the record still names the revision they came from.
             self.assertEqual(delivered.read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
 
-            review_code, review = env.run(
-                "marketplace", "update", COORDINATE, "--profile", "claude"
-            )
+            review_code, review = env.run("consume", "update", COORDINATE, "--profile", "claude")
 
             self.assertEqual(review_code, 0, review)
             self.assertFalse(review["finalized"])
@@ -261,7 +259,7 @@ class GitBackedConsumerE2ETest(unittest.TestCase):
             self.assertEqual(delivered.read_text(encoding="utf-8"), as_delivered(SKILL_BODY))
 
             update_code, updated = env.run(
-                "marketplace",
+                "consume",
                 "update",
                 COORDINATE,
                 "--profile",

@@ -1152,7 +1152,7 @@ def _custom_receipt(
         "reversible": bool(applied.get("reversible", True)),
         # No command reverses a completed setup; `aart setup rollback` never shipped.  Running the
         # recipe again is what re-applies the compensation this receipt describes.
-        "recovery": "Re-run `aart-cli marketplace setup` for this artifact to retry the compensation.",
+        "recovery": "Re-run `aart-cli consume setup` for this artifact to retry the compensation.",
     }
 
 

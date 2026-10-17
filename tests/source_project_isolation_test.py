@@ -1,16 +1,14 @@
-"""No source operation writes anything beneath a project directory.
+"""No Registry operation writes anything beneath a project directory.
 
-This is the boundary that makes `source remove` safe to offer at all: a subscription, its
-managed snapshot, the object store, and installed files are four different things, and source
+This is the boundary that makes `consume registry remove` safe to offer at all: a subscription, its
+managed snapshot, the object store, and installed files are four different things, and Registry
 operations own only the first two.  That claim is what stops unsubscribing from silently deleting a
 skill out of someone's repository, so it is asserted here against the real CLI over a real project
 with real installed artifacts rather than left to inspection.
 
-The whole `source` family runs against a project that already holds an installed payload and a
-durable manifest.  Every file beneath the project is compared byte for byte, including modification
-times: these operations should not so much as open a project file.  The managed-symlink case gets
-its own test because it is the installation shape that reaches back into the data root, and so the
-one a snapshot-owning removal could break from a distance.
+The whole `consume registry` family runs against a project that already holds an installed
+payload.  Every file beneath the project is compared byte for byte, including modification times:
+these operations should not so much as open a project file.
 """
 
 from __future__ import annotations
@@ -20,22 +18,50 @@ import hashlib
 import io
 import json
 import os
-import shutil
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from aart_cli import cli
-from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _FIXTURE, _environment
+from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _PLACED, _environment
+from tests.reference_registry import REFERENCE_CONTENT, reference_snapshot, write_reference_registry
 
-_MANIFEST = Path(".aart-cli") / "manifest.json"
-_INSTALLED = Path(".claude") / "skills" / "code-review"
+_INSTALLED = _PLACED
+
+
+def _records(env) -> Path:
+    return Path(env.paths.data_root) / "state" / "installations"
+
+
+def _mirror(env) -> Path:
+    """A second Registry, so `add` has somewhere to point and `remove` leaves one behind."""
+
+    return write_reference_registry(
+        env.root / "mirror-registry",
+        reference_snapshot(*REFERENCE_CONTENT, declared_id="mirror-registry"),
+    )
+
+
+def _add_mirror(env) -> tuple[str, ...]:
+    return (
+        "consume",
+        "registry",
+        "add",
+        "--alias",
+        "mirror",
+        "--kind",
+        "local",
+        "--location",
+        str(_mirror(env)),
+        "--ref",
+        "main",
+    )
 
 
 def _source(env, *argv):
-    """Run one `source` subcommand and return ``(exit_code, parsed_json)``.
+    """Run one `consume registry` subcommand and return ``(exit_code, parsed_json)``.
 
-    The source family takes no ``--project``: sources are user-scope state, which is exactly the
+    The family takes no ``--project``: Registries are user-scope state, which is exactly the
     property under test, so these commands cannot even name a project to write into.
     """
 
@@ -83,35 +109,20 @@ class SourceOperationProjectIsolationTest(unittest.TestCase):
     def test_no_source_operation_writes_beneath_the_project(self) -> None:
         with _environment() as env:
             install_code, installed = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(install_code, 0, installed)
-            self.assertTrue((env.project / _MANIFEST).is_file())
             self.assertTrue((env.project / _INSTALLED / "SKILL.md").is_file())
 
-            # A second origin, so `add` has somewhere to point and `remove` leaves a source behind.
-            mirror = env.root / "mirror-source"
-            shutil.copytree(_FIXTURE, mirror)
-
             before = _project_snapshot(env.project)
-            self.assertIn(str(_MANIFEST), before)
 
             operations = (
-                (
-                    "source",
-                    "add",
-                    "--alias",
-                    "mirror",
-                    "--kind",
-                    "source-local",
-                    "--location",
-                    str(mirror),
-                ),
-                ("source", "list"),
-                ("source", "sync"),
-                ("source", "health"),
-                ("source", "remove", "--alias", "reference"),
-                ("source", "remove", "--alias", "reference", "--yes"),
+                _add_mirror(env),
+                ("consume", "registry", "list"),
+                ("consume", "registry", "sync"),
+                ("consume", "registry", "health"),
+                ("consume", "registry", "remove", "--alias", "reference"),
+                ("consume", "registry", "remove", "--alias", "reference", "--yes"),
             )
             for operation in operations:
                 code, payload = _source(env, *operation)
@@ -122,76 +133,31 @@ class SourceOperationProjectIsolationTest(unittest.TestCase):
                     f"`aart {' '.join(operation)}` changed the project tree",
                 )
 
-    def test_a_managed_symlink_survives_the_removal_of_the_source_that_supplied_it(self) -> None:
-        """Removal invalidates the snapshot and leaves the object store alone.
+    def test_the_installation_record_outlives_the_subscription(self) -> None:
+        """A project naming a removed alias keeps its record, rather than losing it.
 
-        A managed symlink points into the object store, so this is the installation that a
-        snapshot-owning removal would break if it reclaimed objects on the way out.
+        Status still lists the installation; it does not yet say its Registry is gone (B-205).
         """
 
         with _environment() as env:
-            code, payload = env.run(
-                "marketplace",
-                "install",
-                _COORDINATE,
-                "--profile",
-                "claude",
-                "--mode",
-                "symlink",
-                "--yes",
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
+            _source(env, *_add_mirror(env))
+            records_before = {path.name: path.read_bytes() for path in _records(env).iterdir()}
+
+            _source(env, "consume", "registry", "remove", "--alias", "reference", "--yes")
+
+            self.assertEqual(
+                {path.name: path.read_bytes() for path in _records(env).iterdir()}, records_before
             )
-            self.assertEqual(code, 0, payload)
-            link = env.project / _INSTALLED
-            self.assertTrue(link.is_symlink())
-            payload_bytes = (link / "SKILL.md").read_bytes()
-
-            removed_code, removed = _source(
-                env, "source", "remove", "--alias", "reference", "--yes"
-            )
-
-            self.assertEqual(removed_code, 0, removed)
-            self.assertTrue(removed["snapshot_discarded"])
-            self.assertTrue(link.is_symlink())
-            self.assertTrue(
-                link.resolve().is_dir(), f"dangling managed symlink: {os.readlink(link)}"
-            )
-            self.assertEqual((link / "SKILL.md").read_bytes(), payload_bytes)
-
-    def test_the_durable_manifest_outlives_the_subscription_and_reconciles_as_unavailable(
-        self,
-    ) -> None:
-        """A project naming a removed alias reports it, rather than losing the record."""
-
-        with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
-            mirror = env.root / "mirror-source"
-            shutil.copytree(_FIXTURE, mirror)
-            _source(
-                env,
-                "source",
-                "add",
-                "--alias",
-                "mirror",
-                "--kind",
-                "source-local",
-                "--location",
-                str(mirror),
-            )
-            manifest_before = (env.project / _MANIFEST).read_bytes()
-
-            _source(env, "source", "remove", "--alias", "reference", "--yes")
-
-            self.assertEqual((env.project / _MANIFEST).read_bytes(), manifest_before)
-            code, status = env.run("marketplace", "status", "--profile", "claude")
+            code, status = env.run("consume", "status", "--profile", "claude")
             self.assertEqual(code, 0, status)
-            self.assertEqual([item["status"] for item in status["items"]], ["source-unavailable"])
-            self.assertEqual(status["items"][0]["key"], f"{_COORDINATE}@1.0.0#claude/project")
+            self.assertEqual([item["key"] for item in status["items"]], [f"{_COORDINATE}@1.0.0"])
 
 
 class UninstallAfterSourceRemovalTest(unittest.TestCase):
-    """Uninstall plans from the manifest, so removing a subscription cannot strand a project.
+    """Uninstall plans from the installation records, so removing a Registry cannot strand a project.
 
-    `source remove`'s review names uninstall as a valid exit.  That claim was false while uninstall
+    `consume registry remove`'s review names uninstall as a valid exit.  That claim was false while uninstall
     resolved through the catalog first: with the subscription gone there was nothing to resolve
     through, and the command refused with `artifact-not-found` for an artifact it had a complete
     record of.  The removal is what these tests hold constant — the outcome must not depend on it.
@@ -199,16 +165,16 @@ class UninstallAfterSourceRemovalTest(unittest.TestCase):
 
     def test_uninstall_succeeds_after_the_source_it_came_from_is_removed(self) -> None:
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
             installed = env.project / _INSTALLED
             self.assertTrue(installed.exists())
             removed_code, removed = _source(
-                env, "source", "remove", "--alias", "reference", "--yes"
+                env, "consume", "registry", "remove", "--alias", "reference", "--yes"
             )
             self.assertEqual(removed_code, 0, removed)
 
             code, payload = env.run(
-                "marketplace", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -220,11 +186,11 @@ class UninstallAfterSourceRemovalTest(unittest.TestCase):
 
         def _uninstalled(remove_source: bool) -> dict[str, tuple[str, ...]]:
             with _environment() as env:
-                env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+                env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
                 if remove_source:
-                    _source(env, "source", "remove", "--alias", "reference", "--yes")
+                    _source(env, "consume", "registry", "remove", "--alias", "reference", "--yes")
                 code, payload = env.run(
-                    "marketplace", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
+                    "consume", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
                 )
                 self.assertEqual(code, 0, payload)
                 return _stable_snapshot(env.project)
@@ -232,13 +198,13 @@ class UninstallAfterSourceRemovalTest(unittest.TestCase):
         self.assertEqual(_uninstalled(remove_source=True), _uninstalled(remove_source=False))
 
     def test_an_uninstall_selector_naming_nothing_installed_says_exactly_that(self) -> None:
-        # Resolving from the manifest must not turn "you never installed this" into "uninstall
+        # Resolving from the records must not turn "you never installed this" into "uninstall
         # everything": an empty selection is how a bare `uninstall` selects the whole project.
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "uninstall",
                 "reference/skill/absent",
                 "--profile",

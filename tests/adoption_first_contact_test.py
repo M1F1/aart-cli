@@ -17,7 +17,7 @@ _SPELLED = {9: "nine", 10: "ten", 11: "eleven", 12: "twelve"}
 #: Substituted for every `<…>` before a route command is handed to the parser.
 _PLACEHOLDER = "placeholder"
 #: The four things §1.6 says a new user has to be able to tell apart.
-_STAGES = ("Source", "Candidate", "Registry", "Marketplace")
+_STAGES = ("Upstream repository", "Candidate", "Registry", "Marketplace")
 
 
 def _document(relative: str) -> str:
@@ -149,8 +149,8 @@ class DocumentedCommandSurfaceTest(unittest.TestCase):
         surface = _command_surface()
 
         self.assertGreater(len(surface), 5)
-        self.assertIn("marketplace", surface)
-        self.assertIn("install", surface["marketplace"])
+        self.assertIn("consume", surface)
+        self.assertIn("install", surface["consume"])
 
 
 class QuickStartRouteTest(unittest.TestCase):
@@ -163,7 +163,7 @@ class QuickStartRouteTest(unittest.TestCase):
     """
 
     #: The five steps §1.6 names, as the command that performs each one.
-    ROUTE = ("source add", "marketplace search", "marketplace install", "marketplace status")
+    ROUTE = ("consume registry add", "consume search", "consume install", "consume status")
 
     def _quick_start(self) -> str:
         return _section("Install an artifact")
@@ -188,7 +188,7 @@ class QuickStartRouteTest(unittest.TestCase):
         reader to skip the half where nothing has happened yet."""
 
         quick_start = self._quick_start()
-        reviewed = quick_start.index("aart-cli marketplace install")
+        reviewed = quick_start.index("aart-cli consume install")
         finalized = quick_start.index("--yes")
 
         self.assertLess(reviewed, finalized)
@@ -298,7 +298,7 @@ class OrientationTest(unittest.TestCase):
                 self.assertIn(kind.value, orientation)
 
     def test_the_orientation_names_the_path_an_artifact_travels_in_order(self) -> None:
-        """Source, Candidate, Registry, Marketplace are four different things and a new user who
+        """Upstream repository, Candidate, Registry, Marketplace are four different things and a new user who
         conflates any two of them cannot read a diagnostic that names one of them."""
 
         orientation = _section(self.HEADING)
@@ -420,7 +420,7 @@ class RemediationNamesRealCommandsTest(unittest.TestCase):
         sources = list((_ROOT / "aart_cli").rglob("*.py"))
 
         self.assertGreater(len(sources), 100)
-        self.assertIn("uninstall", surface["marketplace"])
+        self.assertIn("uninstall", surface["consume"])
 
 
 class InstallDocumentTest(unittest.TestCase):
@@ -550,7 +550,7 @@ class RegistryDocumentTest(unittest.TestCase):
         document = _document("docs/registry/maintaining-a-registry-v1.md")
         for phrase in (
             "Content enters by adopting an author's manifest",
-            "`registry adopt`",
+            "`maintain upstream adopt`",
             "tutorials/company-registry-tabnine-v1.md",
         ):
             with self.subTest(phrase=phrase):

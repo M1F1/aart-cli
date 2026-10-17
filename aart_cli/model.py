@@ -393,11 +393,6 @@ class Request:
     dry_run: bool = False
     json: bool = False
     prune: bool = False
-    install_mode: InstallMode = "copy"
-    # How a ``memory`` artifact meets an existing harness instruction file.  ``None`` lets the
-    # canonical default (``prepend``) apply; an installed record keeps its own recorded mode
-    # across later updates.
-    memory_mode: Optional[MemoryMode] = None
     # Git reference supplied only while adding a configured canonical source.
     ref: Optional[str] = None
     # The Git URL `registry adopt` reads.  Distinct from configured consumer sources: a maintainer
@@ -452,8 +447,13 @@ class Request:
     author_name: Optional[str] = None
     author_into: Optional[str] = None
     author_source: Optional[str] = None
+    # The backup `reset --restore` brings back (§175.4); ``None`` is a plain reset.
+    reset_restore: Optional[str] = None
     # Canonical configured-source command surface.
     source_action: Optional[str] = None
+    # Which connection family a `source` handler serves: "registry" (`consume registry`) or
+    # "upstream" (`maintain upstream`). Each sees only its own entries (§175.2, INV-269).
+    source_family: Optional[str] = None
     source_alias: Optional[str] = None
     source_kind: Optional[str] = None
     source_location: Optional[str] = None

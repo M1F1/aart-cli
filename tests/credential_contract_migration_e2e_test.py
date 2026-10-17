@@ -13,7 +13,7 @@ Two of the claims here run through the public verb and two run at the seam, and 
 convenience. `commands/marketplace.py` wires a real `MacOsKeychainProvider` on darwin, so a
 command-line test that actually stored a credential would write into the developer's own Keychain.
 The retention statement needs no credential to exist -- the removal review makes it either way --
-so it is driven through `aart-cli marketplace uninstall`. The dependant arithmetic does need one, so it
+so it is driven through `aart-cli consume uninstall`. The dependant arithmetic does need one, so it
 is measured where a file-backed provider can stand in, the same route every existing credential
 test takes.
 """
@@ -65,12 +65,10 @@ def _deletions(prepared) -> list[DeleteCredential]:
 
 
 class RemovalRetainsCredentialsTest(unittest.TestCase):
-    """`aart-cli marketplace uninstall` over a real machine, through the public verb."""
+    """`aart-cli consume uninstall` over a real machine, through the public verb."""
 
     def _installed(self, env) -> None:
-        code, payload = env.run(
-            "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
 
     def test_the_removal_review_says_credentials_are_retained(self) -> None:
@@ -84,7 +82,7 @@ class RemovalRetainsCredentialsTest(unittest.TestCase):
         with _environment() as env:
             self._installed(env)
 
-            code, payload = env.run("marketplace", "uninstall", COORDINATE, "--profile", "claude")
+            code, payload = env.run("consume", "uninstall", COORDINATE, "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertFalse(payload["finalized"])
@@ -96,7 +94,7 @@ class RemovalRetainsCredentialsTest(unittest.TestCase):
         with _environment() as env:
             self._installed(env)
 
-            code, text = env.run_text("marketplace", "uninstall", COORDINATE, "--profile", "claude")
+            code, text = env.run_text("consume", "uninstall", COORDINATE, "--profile", "claude")
 
             self.assertEqual(code, 0, text)
             self.assertIn("Credentials: retained.", text)

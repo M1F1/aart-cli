@@ -22,19 +22,13 @@ the `no-orphan-run-directory` claim answers `true` about a directory that was ne
 
 from __future__ import annotations
 
-import contextlib
 import json
-import shutil
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
-from tests.marketplace_lifecycle_e2e_test import (
-    _COORDINATE,
-    _FIXTURE,
-    _Environment,
-)
+from tests.configured_installation_draft_e2e_test import AuthoredSetup
+from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _environment_with_setup
 
 #: The protocol AART invokes: `<script> <phase> --result <path>`, one JSON verdict per phase. `plan`
 #: succeeds so the run reaches `apply`; `apply` fails so compensation is attempted; `rollback` fails
@@ -78,43 +72,27 @@ _RECIPE = {
 }
 
 _SETUP = (
-    "marketplace",
+    "consume",
     "setup",
     _COORDINATE,
     "--profile",
     "claude",
     "--yes",
-    "--authorize-untrusted-source",
     "--approve-setup-effects",
     "--authorize-custom-entrypoint",
 )
 
 
-@contextlib.contextmanager
 def _environment_whose_rollback_fails():
-    """The shared fixture source, copied and taught to carry the failing custom protocol."""
+    """The reference Registry, its Skill packaged to carry the failing custom protocol."""
 
-    with tempfile.TemporaryDirectory() as raw:
-        root = Path(raw).resolve()
-        location = root / "source"
-        shutil.copytree(_FIXTURE, location)
-        artifact = location / "artifacts" / "skill" / "code-review"
-        manifest = json.loads((artifact / "artifact.json").read_text(encoding="utf-8"))
-        manifest["setup"] = {"recipe": "setup/installer.json", "platforms": ["darwin"]}
-        (artifact / "artifact.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        (artifact / "setup").mkdir()
-        (artifact / "setup" / "installer.json").write_text(
-            json.dumps(_RECIPE, indent=2), encoding="utf-8"
+    return _environment_with_setup(
+        AuthoredSetup(
+            _RECIPE,
+            "Run the steps in setup/install.sh yourself.\n",
+            (("setup/install.sh", _SCRIPT, True),),
         )
-        script = artifact / "setup" / "install.sh"
-        script.write_text(_SCRIPT, encoding="utf-8")
-        script.chmod(0o755)
-        (artifact / "SETUP.md").write_text(
-            "Run the steps in setup/install.sh yourself.\n", encoding="utf-8"
-        )
-        machine = root / "machine"
-        machine.mkdir()
-        yield _Environment(machine, location)
+    )
 
 
 def _working_copies(env) -> list[Path]:
@@ -141,9 +119,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
     def _ran(self, env) -> tuple[int, dict]:
         """Install, then run the custom setup that fails and cannot undo itself."""
 
-        code, payload = env.run(
-            "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
         return env.run(*_SETUP)
 
@@ -189,7 +165,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
             self.assertEqual(len(left), 1, left)
 
             code, payload = env.run(
-                "marketplace", "receipt", "verify", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "verify", _COORDINATE, "--profile", "claude"
             )
 
             # A false claim is a finding, and a finding must not report success to CI.
@@ -201,7 +177,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
             self.assertIn("not removed", claim["detail"])
 
             shown, receipt = env.run(
-                "marketplace", "receipt", "show", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "show", _COORDINATE, "--profile", "claude"
             )
             self.assertEqual(shown, 0, receipt)
             # The claim's subject is the plan it belongs to, and the directory is named for it.
@@ -215,7 +191,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
         A parsed record's steps are frozen recursively into `MappingProxyType`, and the receipt
         projection copied each step shallowly -- so every nested object stayed a proxy and
         `json.dumps` refused it. The custom setup protocol is the one that writes such a step, which
-        made `aart-cli marketplace receipt show --json` end in a `TypeError` traceback for exactly the
+        made `aart-cli consume receipt show --json` end in a `TypeError` traceback for exactly the
         run whose evidence is hardest to reconstruct by hand. Writing this file found it.
         """
 
@@ -223,7 +199,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
             self._ran(env)
 
             code, payload = env.run(
-                "marketplace", "receipt", "show", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "show", _COORDINATE, "--profile", "claude"
             )
 
             self.assertEqual(code, 0, payload)
@@ -244,7 +220,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
             self._ran(env)
             before = _working_copies(env)
 
-            env.run("marketplace", "receipt", "verify", _COORDINATE, "--profile", "claude")
+            env.run("consume", "receipt", "verify", _COORDINATE, "--profile", "claude")
 
             self.assertEqual(_working_copies(env), before)
 
@@ -272,7 +248,7 @@ class InterruptedExecutionE2ETest(unittest.TestCase):
             self.assertEqual(len(_working_copies(env)), 2, _working_copies(env))
             # Both are reported, so a retry hides neither its predecessor's evidence nor its own.
             code, payload = env.run(
-                "marketplace", "receipt", "verify", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "verify", _COORDINATE, "--profile", "claude"
             )
             self.assertNotEqual(code, 0)
             self.assertIn("2 working copy", _orphan_claim(payload["verification"])["detail"])

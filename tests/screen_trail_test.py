@@ -102,7 +102,7 @@ class NestedTitleTest(TestCase):
             MaintainerScreen.SOURCES, ConsumerScreen.DASHBOARD, MaintainerScreen.DASHBOARD
         )
 
-        self.assertEqual(heading, "AART / Registry Maintainer / Sources")
+        self.assertEqual(heading, "AART / Registry Maintainer / Upstream repositories")
 
     def test_the_word_maintainer_is_said_once_however_deep_the_view(self) -> None:
         heading = self._heading(
@@ -112,7 +112,9 @@ class NestedTitleTest(TestCase):
             MaintainerScreen.SOURCES,
         )
 
-        self.assertEqual(heading, "AART / Registry Maintainer / Sources / Source Details")
+        self.assertEqual(
+            heading, "AART / Registry Maintainer / Upstream repositories / Upstream details"
+        )
         self.assertEqual(heading.count("Maintainer"), 1)
 
     def test_the_home_dashboard_is_aart_itself_rather_than_a_step_in_the_trail(self) -> None:
@@ -131,11 +133,11 @@ class NestedTitleTest(TestCase):
     def test_a_consumer_view_names_the_list_it_was_opened_from(self) -> None:
         self.assertEqual(
             self._heading(
-                ConsumerScreen.ARTIFACT_DETAILS,
+                ConsumerScreen.COLLECTION_PREVIEW,
                 ConsumerScreen.DASHBOARD,
                 ConsumerScreen.MARKETPLACE,
             ),
-            "AART / Marketplace / Artifact Details",
+            "AART / Marketplace / Collection",
         )
 
     def test_a_screen_that_did_not_run_still_says_so_after_its_trail(self) -> None:

@@ -48,7 +48,7 @@ An unusable value is refused with a diagnostic rather than silently corrected, b
 would mean writing one job's state into a directory another job also resolved to.
 
 ```sh
-AART_CLI_HOME=/runner/work/aart-state aart-cli marketplace status --profile claude
+AART_CLI_HOME=/runner/work/aart-state aart-cli consume status --profile claude
 ```
 
 That is the mechanism CI and isolated agent jobs use: a private home, without changing `HOME` and
@@ -71,13 +71,23 @@ and its configuration file — belongs to the harness it was installed into, und
 directory. The application home holds the canonical content and the record; it is not where an
 installed thing runs from.
 
-## Forgetting all of it
+## Starting clean
 
 ```sh
 aart-cli reset
 ```
 
-`reset` removes the entries listed above from the application home, after two exact confirmations
-and a review that names every path first. It never removes the home directory itself, and it never
-touches a project, a harness file or a credential item — so anything you put in that directory that
-AART did not write is still there afterwards.
+`reset` moves the entries listed above out of the application home into a backup beside it,
+`~/.aart-cli-backups/<UTC timestamp>/` (or `<AART_CLI_HOME>-backups/...`), after a review that names
+every path and one typed `RESET AART` (or `--yes`). aart-cli then starts as on a new machine.
+Nothing is deleted: it never removes the home directory itself, and it never touches a project, a
+harness file or a credential item, so anything you put in that directory that AART did not write is
+still there afterwards. Use it when a newer version cannot read the state an older one wrote: AART
+keeps no migrators.
+
+The command prints the backup directory. To go back to it, which first backs up the current state
+in turn:
+
+```sh
+aart-cli reset --restore ~/.aart-cli-backups/20261017T120000Z
+```

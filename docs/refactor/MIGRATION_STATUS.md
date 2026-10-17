@@ -4,6 +4,83 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-32 step 10: full CI green, CP-32 done.** After the tooling repair, the full suite
+exposed a `pathlib` import in `application/author_views.py`, an Author-blind layout sweep and four
+tests holding pre-§175 wording; all are fixed. Run 39051724417 passes on 3.10, 3.11 and 3.14.
+Next: merge PR #78.
+
+**2026-10-17, CP-32 step 10 (D-451): CI tooling repaired.** The manual lab uses the role
+commands; the distribution smoke installs from a local Registry through the installed `consume`
+CLI and proves a copied delivery survives environment removal. Human add/remove output and catalog
+headers say Registry or Upstream repository. Lab, distribution and label tests were red, now green;
+182 related tests pass. Next: push PR #78 and verify its full CI matrix.
+
+**2026-10-17, CP-32 step 9: documentation.** README, authoring/consumer/Registry guides
+and tutorials use the role commands and Registry-only consumer boundary, with Author Mode,
+reset/restore, inline details and complete columns. Forty-one role help routes, eight README/
+traceability contracts and docs-check pass. Broken-link mutation is detected. Next: step 10,
+CI tooling repairs and final PR verification; the full suite remains in CI.
+
+**2026-10-17, CP-32 step 14 (D-450): complete labeled Marketplace columns.** Grid
+cells wrap, narrow rows stack labeled fields, and bounded viewports scroll actions/More info
+with PgUp/PgDn while preserving headings and the footer. Resize and paging do not alter offers,
+search or selection. Twelve new focused contracts and targeted truncation evidence hold the
+layout; scoped advisory mutation kills 190/233. Next: documentation (9) and CI repairs/PR (10).
+
+**2026-10-17, CP-32 step 13 (D-449): Marketplace owns artifact details.** More info
+preserves complete approved evidence and declared input guidance, without current answers or
+provider state. The standalone route is gone; search, cursor, selection and single/bulk install
+remain. Targeted evidence-removal mutation turns two tests red; restored focused tests pass.
+Next: complete labeled Marketplace columns (14), documentation (9), CI/PR (10).
+
+**2026-10-17, CP-32 step 12 (D-448): Author Mode.** Its independent Settings opt-in adds
+Workspace, Check, full manifest diagnostics and New artifact, through the CLI's reader, checker
+and skeleton writer. Paths stay external/contained, files are never overwritten, and failed
+checks do not retain old green results. 1379 related tests and focused gates pass; projection
+mutation adequacy is 47/47. B-209 records a scoped mutmut cache pitfall and its verified workaround.
+Next: steps 13 and 14, Marketplace details under More info and complete labeled columns.
+
+**2026-10-17, CP-32 step 15 (D-447): unset inputs cannot pass MCP smoke.** A missing
+credential, secret placeholder or ordinary `AART_NOT_SET` yields NOT CONFIGURED and protocol
+NOT RUN. CLI JSON reports `ok: false` and returns nonzero; no server starts. Provider-side
+placeholder evidence is used without reading a secret. Two targeted mutations killed; 20
+directly affected tests and the related MCP E2E modules pass. Scoped mutation findings beyond
+this classification are B-208. Author Mode (step 12) is in progress; steps 13/14 remain planned.
+
+**2026-10-17, CP-32 scope extended (D-446): Marketplace details and readable columns.**
+The owner removed Marketplace's separate Artifact Details view in favor of More info, and
+requires labeled columns whose complete values remain visible at narrow widths. §175.6 and
+INV-273/274 are accepted; steps 13 and 14 are planned after Author Mode and before the docs
+and final verification. Implementation remains open.
+
+**2026-10-17, CP-32 step 8 (D-445): TUI role names.** Maintainer areas are Upstream
+repositories, Candidates and Registry; upstream forms, sync, Candidate columns and connection
+reviews use the role vocabulary. Consumer empty states and the wizard name Registries, and
+screen 21's existing Registry-only boundary remains held. 124 related modules / 1229 tests and
+focused gates pass; two targeted mutations killed. Wizard mutation findings outside this slice
+are B-207. Next: step 12, Author Mode.
+
+**2026-10-17, CP-32 step 7 (D-444): a consumer installs only from Registries.** The lifecycle
+runs only the Registry seam and names each way it declines. An unsynchronized Registry is
+`registry-not-synchronized`, an unqualified name resolves across Registries, and `--mode` and
+`--memory-mode` are gone. The e2e fixtures install from a real Git-backed `registry-local`
+(`tests/reference_registry.py`). B-203–B-206 record the gaps the retired native path covered.
+
+**2026-10-17, CP-32 specified (§175, D-439): consume, maintain, author.** The owner replaced the
+single `source` family with role families and named author repositories Upstream repositories.
+INV-269–INV-272 are accepted (with §175.4 reset with backup and §175.5 Author Mode). Step 2 split
+`config.json` into `registries` and `upstreams` (D-442); step 11 made `reset` back up instead of
+delete, with `--restore` (D-440). Steps 3, 4 and 6 replaced the parser with the role families and
+`--kind git|local`, family-filtered connection commands and new hints throughout (D-443); step 5 added
+`maintain candidate list`.
+
+**2026-10-17, §174 (D-438): a local author checkout is read as Git would commit it.**
+`source-local`, `author check` and `registry scan` / `promote --checkout` read only the paths
+`git ls-files --cached --others --exclude-standard` lists, so an ignored `.venv/` no longer stops
+a Source on its `bin/python` symlink. Outside Git the directory is read whole; managed snapshots
+are unchanged. Held by `tests/working_tree_snapshot_test.py` (with a Hypothesis property) and
+`tests/working_tree_source_e2e_test.py`.
+
 **2026-10-17, CP-31 step 15: verified.** PR #76 (plan and steps 1–14) passes the full quality
 suite on Python 3.10, 3.11 and 3.14. CI found one host-dependent test (uv absent), fixed by pinning
 the dependency managers; B-194 did not reproduce there. Merging PR #76 closes CP-31.

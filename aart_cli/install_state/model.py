@@ -105,6 +105,10 @@ def _safe_git_identity(value: str) -> bool:
     )
 
 
+def _normalized_absolute(value: str) -> bool:
+    return posixpath.isabs(value) and posixpath.normpath(value) == value
+
+
 @dataclass(frozen=True, slots=True)
 class SourceEvidence:
     alias: SourceAlias
@@ -126,15 +130,19 @@ class SourceEvidence:
             raise ValueError("installation source evidence is invalid")
         if self.kind is SourceKind.SOURCE_LOCAL:
             if (
-                not posixpath.isabs(self.origin)
-                or posixpath.normpath(self.origin) != self.origin
+                not _normalized_absolute(self.origin)
                 or _LOCAL_REVISION_RE.fullmatch(self.resolved_commit) is None
                 or self.subscription_ref is not None
             ):
                 raise ValueError("local source origin must be a normalized absolute path")
         elif (
             _COMMIT_RE.fullmatch(self.resolved_commit) is None
-            or (git_location_parts(self.origin) is None and not _safe_git_identity(self.origin))
+            or not (
+                # A local Registry is a checkout path read at a commit of its branch (CP-32).
+                _normalized_absolute(self.origin)
+                if self.kind is SourceKind.REGISTRY_LOCAL
+                else git_location_parts(self.origin) is not None or _safe_git_identity(self.origin)
+            )
             or not _safe_git_ref(self.subscription_ref or "")
         ):
             raise ValueError(

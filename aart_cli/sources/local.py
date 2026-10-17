@@ -39,6 +39,17 @@ def read_local_snapshot(request: LocalSnapshotRequest) -> Result[SourceCandidate
         return _error(f"cannot inspect local source: {error}")
     if not stat.S_ISDIR(root_status.st_mode):
         return _error("local source root must be a directory")
+    include = request.include
+    # Every directory on the way to an included file; the walk enters nothing else.
+    leading = (
+        None
+        if include is None
+        else frozenset(
+            "/".join(parts[:index])
+            for parts in (item.split("/") for item in include)
+            for index in range(1, len(parts))
+        )
+    )
     entries: list[SnapshotEntry] = []
     file_count = 0
     total_bytes = 0
@@ -58,6 +69,13 @@ def read_local_snapshot(request: LocalSnapshotRequest) -> Result[SourceCandidate
             relative = (
                 child.name if not relative_directory else f"{relative_directory}/{child.name}"
             )
+            if (
+                include is not None
+                and leading is not None
+                and relative not in include
+                and relative not in leading
+            ):
+                continue
             parsed = parse_relative_path(relative)
             if isinstance(parsed, Err):
                 return _error(f"local source contains an unsafe path: {relative!r}")
@@ -68,6 +86,9 @@ def read_local_snapshot(request: LocalSnapshotRequest) -> Result[SourceCandidate
             if stat.S_ISLNK(child_status.st_mode):
                 return _error(f"local source symlinks are forbidden: {relative}")
             if stat.S_ISDIR(child_status.st_mode):
+                if include is not None and relative in include:
+                    # A path Git lists as one entry but is a directory here: a submodule.
+                    continue
                 entries.append(SnapshotEntry(parsed.value, SnapshotEntryKind.DIRECTORY))
                 pending.append((child.path, relative, depth + 1))
                 continue

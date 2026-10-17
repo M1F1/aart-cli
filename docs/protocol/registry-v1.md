@@ -50,13 +50,13 @@ Compatibility, dependency and Collection validation remain part of admission; co
 and configured Registry identity remain separate from author-supplied metadata. Content cannot
 assign itself effective trust.
 
-`aart-cli registry build` rebuilds `registry/index.json` and `registry/snapshot.json` from approved
-version records. `--check` reports drift without applying it. `aart-cli registry lock` remains an
+`aart-cli maintain registry build` rebuilds `registry/index.json` and `registry/snapshot.json` from approved
+version records. `--check` reports drift without applying it. `aart-cli maintain registry lock` remains an
 accepted command, but approved records already contain their pins: it is a read-only check with
 nothing to resolve, not a producer of a separate lock file. The generated Registry workflow omits
 that redundant lock step and checks format, reproducible build, validation, audit and compatibility.
 
-`aart-cli registry publish` prepares the shared publication gate set, applies the reviewed derived
+`aart-cli maintain registry publish` prepares the shared publication gate set, applies the reviewed derived
 changes and commits the listed Git changes when explicitly finalized. It never pushes. Push is a
 separate reviewed action restricted to an eligible review branch.
 

@@ -20,19 +20,15 @@ un-install what a different, already-completed transaction placed.
 
 from __future__ import annotations
 
-import contextlib
 import json
-import shutil
-import tempfile
 import unittest
-from pathlib import Path
 
+from tests.configured_installation_draft_e2e_test import AuthoredSetup
 from tests.marketplace_lifecycle_e2e_test import (
     _CONFIGURED,
     _COORDINATE,
-    _FIXTURE,
     _RECIPE,
-    _Environment,
+    _environment_with_setup,
 )
 
 #: The declared setup of `_environment_declaring_setup`, plus one verification that cannot pass.
@@ -48,33 +44,12 @@ _VERIFIED_RECIPE = {
 }
 
 
-@contextlib.contextmanager
 def _environment_whose_verification_fails():
-    """`_environment_declaring_setup`, with the recipe swapped for one that fails its check.
+    """`_environment_declaring_setup`, with the recipe swapped for one that fails its check."""
 
-    Copied rather than parameterized: the fixture in `marketplace_lifecycle_e2e_test` yields an
-    environment and not the recipe, and threading a parameter through it would change a file this
-    slice is not otherwise touching.
-    """
-
-    with tempfile.TemporaryDirectory() as raw:
-        root = Path(raw).resolve()
-        location = root / "source"
-        shutil.copytree(_FIXTURE, location)
-        artifact = location / "artifacts" / "skill" / "code-review"
-        manifest = json.loads((artifact / "artifact.json").read_text(encoding="utf-8"))
-        manifest["setup"] = {"recipe": "setup/installer.json", "platforms": ["darwin"]}
-        (artifact / "artifact.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        (artifact / "setup").mkdir()
-        (artifact / "setup" / "installer.json").write_text(
-            json.dumps(_VERIFIED_RECIPE, indent=2), encoding="utf-8"
-        )
-        (artifact / "SETUP.md").write_text(
-            "Write `enabled = true` into .code-review.toml yourself.\n", encoding="utf-8"
-        )
-        machine = root / "machine"
-        machine.mkdir()
-        yield _Environment(machine, location)
+    return _environment_with_setup(
+        AuthoredSetup(_VERIFIED_RECIPE, "Write `enabled = true` into .code-review.toml yourself.\n")
+    )
 
 
 @unittest.skipUnless(
@@ -86,18 +61,15 @@ class VerificationFailureE2ETest(unittest.TestCase):
     def _configured(self, env) -> tuple[int, dict]:
         """Install, then run the declared setup with both consents, and return setup's verdict."""
 
-        code, payload = env.run(
-            "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
         return env.run(
-            "marketplace",
+            "consume",
             "setup",
             _COORDINATE,
             "--profile",
             "claude",
             "--yes",
-            "--authorize-untrusted-source",
             "--approve-setup-effects",
         )
 
@@ -119,16 +91,15 @@ class VerificationFailureE2ETest(unittest.TestCase):
 
     def test_the_human_rendering_names_the_artifact_rather_than_only_a_count(self) -> None:
         with _environment_whose_verification_fails() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
 
             code, text = env.run_text(
-                "marketplace",
+                "consume",
                 "setup",
                 _COORDINATE,
                 "--profile",
                 "claude",
                 "--yes",
-                "--authorize-untrusted-source",
                 "--approve-setup-effects",
             )
 
@@ -137,7 +108,7 @@ class VerificationFailureE2ETest(unittest.TestCase):
             self.assertIn("verification", text)
             # `configured=0` alone would be a clean-looking line. The retry is what makes the
             # rendering actionable rather than merely non-positive.
-            self.assertIn("aart-cli marketplace setup", text)
+            self.assertIn("aart-cli consume setup", text)
 
     def test_the_compensatable_effect_is_restored(self) -> None:
         with _environment_whose_verification_fails() as env:
@@ -159,7 +130,7 @@ class VerificationFailureE2ETest(unittest.TestCase):
             self._configured(env)
 
             code, payload = env.run(
-                "marketplace", "receipt", "show", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "show", _COORDINATE, "--profile", "claude"
             )
 
             self.assertEqual(code, 0, payload)
@@ -183,7 +154,7 @@ class VerificationFailureE2ETest(unittest.TestCase):
             self._configured(env)
 
             code, payload = env.run(
-                "marketplace", "receipt", "show", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "show", _COORDINATE, "--profile", "claude"
             )
             self.assertEqual(code, 0, payload)
             self.assertEqual(
@@ -194,7 +165,7 @@ class VerificationFailureE2ETest(unittest.TestCase):
             self.assertEqual(payload["receipt"]["rollback_command"], "")
 
             verified, verification = env.run(
-                "marketplace", "receipt", "verify", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "verify", _COORDINATE, "--profile", "claude"
             )
 
             self.assertEqual(verified, 0, verification)
@@ -209,7 +180,7 @@ class VerificationFailureE2ETest(unittest.TestCase):
         with _environment_whose_verification_fails() as env:
             self._configured(env)
 
-            code, payload = env.run("marketplace", "status", "--profile", "claude")
+            code, payload = env.run("consume", "status", "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertEqual([item["status"] for item in payload["items"]], ["current"])
