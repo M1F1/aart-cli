@@ -10805,3 +10805,36 @@ are reused, because those screens are gone.
   `aart/define-collection`. An unchanged definition is refused on 52 rather than committed.
 - **Like a promotion, the checkout must be the approved baseline.** A second Collection after an
   unpublished local commit is refused until the commit is published and synchronized.
+
+## D-433 — "Only manifests adopt" is INV-267 (CP-31 step 9)
+
+Step 1 added INV-266 "Only manifests adopt". D-430 later added "A Collection follows its members"
+under the same number, so §173.10 had two INV-266. All code, tests and plan entries that cite INV-266
+mean the Collection invariant, so that one keeps the number, and "Only manifests adopt" becomes
+INV-267. No other text cited the adoption invariant by number.
+
+## D-434 — An installed Collection is its members' ownership, given up as one removal (CP-31 step 9)
+
+§173.6 says Installed, Doctor and uninstall show an installed Collection as one row with its members
+under it, and uninstalling it keeps a member something else owns (INV-186, INV-215). The
+implementation choices:
+
+- **An install adds ownership, it does not replace it.** `propose_installation` takes `held`, the
+  recorded owners of each installation, and an install's intent adds its reasons to them. Before
+  this, a Collection installed over an artifact installed directly overwrote `direct` with
+  `collection`. A later Collection uninstall would then have removed the direct installation.
+- **A removal is keyed by installation** (`RemovalKey`: coordinate and `InstallationOwner`), as an
+  install is (§169.3). B-183 is promoted and fixed: one artifact ticked in two harnesses, or a
+  Collection installed into two, is one reviewed removal. D-393's "one harness at a time" refusal
+  is gone, and so is the unused `RemovalProposal.plan_for`.
+- **Uninstalling a Collection releases only its claim.** TUI `u` on the Collection row or its
+  details, and `marketplace uninstall <collection coordinate>`, select every installation the
+  Collection owns and pass `release` with that Collection's reason. Each record gives up the
+  released reasons it has. A record that keeps an owner converges on its installed state, so it
+  is measured against that state and is recorded again with the narrowed ownership. A Collection
+  is never uninstalled together with artifacts: the TUI and the CLI both refuse the mix.
+- **One order for Installed and Doctor** (`under_collections`): each Collection, then its member
+  installations indented under it, then the rest. A member of two Collections is drawn once,
+  under the first, because a row is an installation. Doctor's Collection line names the members
+  needing attention. CLI `doctor` now names installations as the TUI does (`…#harness`), so a
+  Collection's members are its rows.

@@ -90,6 +90,7 @@ from aart_cli.domain.selection import (
     ArtifactSelection,
     Collection,
     CollectionCoordinate,
+    OwnershipKind,
     VersionConstraint,
 )
 from aart_cli.io.configured_installation_action import (
@@ -1251,12 +1252,40 @@ def _configured_uninstall(request: Request, selectors: tuple[ArtifactSelector, .
     )
     if isinstance(inspected, Err):
         return _emit_error(request, inspected, operation)
-    installed = tuple(
-        item
-        for item in inspected.value.inspections
-        if not selectors
-        or any(_status_matches(selector, item.coordinate) for selector in selectors)
+    collections = tuple(item for item in selectors if item.identity.kind == "collection")
+    if collections and len(collections) != len(selectors):
+        return _emit_error(
+            request,
+            _invalid(
+                "a Collection is uninstalled on its own, not together with artifacts",
+                "uninstall the Collection, then the artifacts, in two commands",
+            ),
+            operation,
+        )
+    # A Collection is the member installations it owns. Uninstalling it gives up only its own
+    # claim on each, so a member something else still owns stays installed (INV-215).
+    release = tuple(
+        dict.fromkeys(
+            reason
+            for item in inspected.value.inspections
+            for reason in item.record.ownership
+            if reason.kind is OwnershipKind.COLLECTION
+            and any(_status_matches(selector, reason.owner) for selector in collections)
+        )
     )
+    if collections:
+        installed = tuple(
+            item
+            for item in inspected.value.inspections
+            if set(release) & set(item.record.ownership)
+        )
+    else:
+        installed = tuple(
+            item
+            for item in inspected.value.inspections
+            if not selectors
+            or any(_status_matches(selector, item.coordinate) for selector in selectors)
+        )
     if not installed:
         return None
 
@@ -1273,6 +1302,7 @@ def _configured_uninstall(request: Request, selectors: tuple[ArtifactSelector, .
         host=host,
         policy=policy,
         credential_providers=credential_providers,
+        release=release or None,
     )
     if isinstance(prepared, Err):
         return _emit_error(request, prepared, operation)

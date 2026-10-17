@@ -4502,6 +4502,9 @@ review's identity and invariants (`SourceRemovalRequest`), so it is its own slic
 
 ## B-183 — one artifact's installations in two harnesses cannot share one removal
 
+**Classification: PROMOTED TO CRITICAL PATH, then FIXED (CP-31 step 9, D-434, 2026-10-17).** A
+Collection installed into two harnesses is removed as one transaction (§173.6), which needs it.
+
 `propose_removal`, `RemovalProposal.plan_for` and `complete_configured_uninstall` key everything by
 `ArtifactCoordinate`, so ticking `X#claude` and `X#opencode` on Installed ends in "an artifact was
 observed twice". D-393 refuses that in words ("uninstalled one harness at a time"). Update was

@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-31 step 9 (D-433, D-434): installed Collections.**
+- Installed and Doctor draw a Collection with its member installations under it. Doctor names the
+  members needing attention. `u` and `marketplace uninstall <collection>` remove the Collection's
+  member installations in one review, and keep a member also owned directly (INV-215). An install
+  now adds ownership instead of replacing it. A removal is keyed by installation (B-183 fixed).
+  "Only manifests adopt" is renumbered INV-267. Evidence in the slice, Step 9.
+
 **2026-10-17, CP-31 step 8: a Collection's members are configured once each.**
 - 07 lists each member's configuration under its name. 07b asks each member's credential once for
   all its installations. Set later stores `AART_NOT_SET` for what is empty, member by member, and

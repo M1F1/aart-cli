@@ -124,16 +124,20 @@ class InstalledMultiUninstallTest(unittest.TestCase):
             for name in ("code-review", "lint-review"):
                 self.assertTrue(_delivered(env, name).exists(), name)
 
-    def test_one_artifact_in_two_harnesses_is_refused_in_words_and_removes_nothing(self) -> None:
+    def test_one_artifact_in_two_harnesses_is_removed_by_one_confirmation(self) -> None:
+        # B-183, now on the critical path: a Collection installed into two harnesses is removed
+        # as one transaction (§173.6), so a removal is keyed by installation, as an install is.
         with _environment(authored=AUTHORED_FOR_TWO_1_2_0) as env:
             self._install(env, COORDINATE, *TWO_HARNESSES)
 
-            finished, terminal, _ = self._walk(env, SPACE, DOWN, SPACE, ord("u"))
+            finished, terminal, handler = self._walk(env, SPACE, DOWN, SPACE, ord("u"), ENTER)
 
-            self.assertIs(finished.session.screen, ConsumerScreen.INSTALLED)
-            self.assertTrue(terminal.screen_containing("one harness at a time"), terminal.last)
+            review = terminal.screen_containing("/ Uninstall Review")
+            self.assertIn("for 2 artifacts", review)
+            self.assertEqual(finished.session.screen, ConsumerScreen.ACTIVITY_DETAILS, terminal.last)
             for harness in TWO_HARNESSES:
-                self.assertTrue(_delivered(env, "code-review", harness).exists(), harness)
+                self.assertFalse(_delivered(env, "code-review", harness).exists(), harness)
+            self.assertEqual(handler.source().screens.installed, ())
 
     def test_enter_after_the_receipt_returns_to_the_refreshed_installed_list(self) -> None:
         # D-400: *"jak wykonam uninstall w widoku installed to po kliknieciu enter na samym koncu

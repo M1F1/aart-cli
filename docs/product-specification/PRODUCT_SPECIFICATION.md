@@ -11265,5 +11265,5 @@ each version pins exact approved members. A transaction that approves a new vers
 also publishes the next version of every Collection naming it. No Collection's current version
 pins a member version older than that member's current approved version.
 
-**INV-266 — Only manifests adopt.** Canonical Registry content is written only from a source
+**INV-267 — Only manifests adopt.** Canonical Registry content is written only from a source
 manifest.

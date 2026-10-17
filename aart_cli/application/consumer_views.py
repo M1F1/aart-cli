@@ -143,6 +143,7 @@ __all__ = [
     "EffectView",
     "InstalledArtifactView",
     "InstalledCollectionView",
+    "under_collections",
     "InputView",
     "LifecycleDriftView",
     "LifecycleOutcomeView",
@@ -1721,6 +1722,29 @@ def project_installed_collection(
     )
 
 
+def under_collections(
+    collections: tuple[InstalledCollectionView, ...], installations: tuple[str, ...]
+) -> tuple[tuple[str, bool], ...]:
+    """Each Collection, then its member installations under it, then every other installation.
+
+    Installed and Doctor share this order (§173.6). Each pair is a row and whether it is drawn under
+    a Collection. A member of two Collections is drawn once, under the first, because a row is an
+    installation and two rows for one would leave the second unreachable.
+    """
+
+    present = set(installations)
+    placed: set[str] = set()
+    ordered: list[tuple[str, bool]] = []
+    for collection in collections:
+        ordered.append((collection.collection, False))
+        for member in collection.members:
+            if member.artifact in present and member.artifact not in placed:
+                placed.add(member.artifact)
+                ordered.append((member.artifact, True))
+    ordered.extend((row, False) for row in installations if row not in placed)
+    return tuple(ordered)
+
+
 @dataclass(frozen=True, slots=True)
 class LifecycleStepView:
     component: str
@@ -3123,11 +3147,17 @@ class DoctorView:
     repairable_issues: tuple[str, ...]
     actions: tuple[str, ...]
     artifacts: tuple[InstalledArtifactView, ...] = ()
+    collections: tuple[InstalledCollectionView, ...] = ()
 
 
-def project_doctor(artifacts: tuple[InstalledArtifactView, ...]) -> DoctorView:
+def project_doctor(
+    artifacts: tuple[InstalledArtifactView, ...],
+    collections: tuple[InstalledCollectionView, ...] = (),
+) -> DoctorView:
     if any(not isinstance(item, InstalledArtifactView) for item in artifacts):
         raise ValueError("Doctor projection needs installed artifact views")
+    if any(not isinstance(item, InstalledCollectionView) for item in collections):
+        raise ValueError("Doctor projection needs installed Collection views")
     # An issue is an installation, as Installed and repair address it: one artifact installed into
     # two harnesses is two issues, and keyed by coordinate they were one row twice (§169.3).
     issues = tuple(item.row for item in artifacts if item.health in {"attention", "broken"})
@@ -3144,6 +3174,7 @@ def project_doctor(artifacts: tuple[InstalledArtifactView, ...]) -> DoctorView:
         repairable,
         actions,
         artifacts,
+        collections,
     )
 
 

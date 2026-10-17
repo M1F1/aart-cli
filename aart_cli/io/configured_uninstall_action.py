@@ -29,6 +29,7 @@ from aart_cli.application.receipt_recording import (
 )
 from aart_cli.application.removal_proposal import (
     PlannedRemoval,
+    RemovalKey,
     RemovalProposal,
     plan_removal,
     propose_removal,
@@ -190,8 +191,9 @@ def prepare_configured_uninstall(
     """Plan taking these recorded installations out, measuring the machine and mutating nothing.
 
     `release` defaults to everything each record is owned for, which is what somebody uninstalling
-    an artifact directly means. A Collection removal passes the one claim it is giving up, so an
-    artifact something else still wants stays installed and the record narrows instead.
+    an artifact directly means. A Collection removal passes the claims it is giving up, and each
+    record gives up those it has, so an artifact something else still wants stays installed and the
+    record narrows instead. A record holding none of them is not this removal's to plan.
     """
 
     if not isinstance(host, InstallationHost):
@@ -201,25 +203,30 @@ def prepare_configured_uninstall(
 
     registry = LocalHarnessRegistry(host.harness_root)
     removals: list[PlannedRemoval] = []
-    observed: list[tuple[object, CurrentState]] = []
+    observed: list[tuple[RemovalKey, CurrentState]] = []
     for record in records:
-        planned = plan_removal(
-            record,
-            release=record.ownership if release is None else release,
-            delete_credentials=delete_credentials,
+        released = (
+            record.ownership
+            if release is None
+            else tuple(item for item in release if item in record.ownership)
         )
+        if release is not None and not released:
+            return _error(f"{record.coordinate} is not owned by what this uninstall gives up")
+        planned = plan_removal(record, release=released, delete_credentials=delete_credentials)
         if isinstance(planned, Err):
             return planned
         removals.append(planned.value)
+        # What something else still owns stays: its removal converges on the installed state.
+        retained = bool(set(record.ownership) - set(released))
         observed.append(
             (
-                record.coordinate,
+                planned.value.key,
                 # Measured against the state the removal converges to, not against the one it is
                 # leaving. Both name the same components; only this one is the vocabulary the
                 # executor re-measures in before it is allowed to touch anything, and a review
                 # written in the other one would be stale the moment it was checked.
                 observe_recorded_installation(
-                    planned.value.removal,
+                    planned.value.previous if retained else planned.value.removal,
                     record.receipt,
                     registry=registry,
                     credential_providers=credential_providers,
@@ -229,7 +236,7 @@ def prepare_configured_uninstall(
 
     proposed = propose_removal(
         tuple(removals),
-        observed=tuple(observed),  # type: ignore[arg-type]
+        observed=tuple(observed),
         policy=policy,
     )
     if isinstance(proposed, Err):
@@ -274,10 +281,10 @@ def complete_configured_uninstall(
     if isinstance(interpreters, Err):
         return interpreters
 
-    records = {item.coordinate: item.record.receipt for item in prepared.removals}
+    records = {item.key: item.record.receipt for item in prepared.removals}
 
     def inspect(desired: DesiredState) -> CurrentState:
-        receipt = records.get(desired.artifact)
+        receipt = records.get((desired.artifact, desired.owner))
         if receipt is None:
             raise ValueError(f"{desired.artifact} is not part of this removal")
         return observe_recorded_installation(
@@ -298,6 +305,8 @@ def complete_configured_uninstall(
         executed.value,
         recorded_at=recorded_at,
         store=LocalReceiptStore(host.state_root),
+        # A member something else still owns keeps its record, narrowed to who still owns it.
+        receipts=tuple((item.coordinate, item.record.receipt) for item in prepared.removals),
     )
     if isinstance(recorded, Err):
         return recorded

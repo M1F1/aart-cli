@@ -90,6 +90,7 @@ from aart_cli.application.consumer_views import (
     secrets_to_ask,
     target_from_row,
     target_row,
+    under_collections,
 )
 from aart_cli.application.credential_guidance import credential_guidance_lines
 from aart_cli.application.installed_setup import DeclaredArtifactSetup
@@ -1558,14 +1559,29 @@ def doctor_rows(view: DoctorView, *, leaving_out: tuple[str, ...] = ()) -> tuple
     if not isinstance(view, DoctorView):
         raise ValueError("Doctor rendering needs a Doctor view")
     lines: list[str] = []
-    for item in view.artifacts:
-        if item.row in leaving_out:
+    artifacts = {item.row: item for item in view.artifacts}
+    collections = {item.collection: item for item in view.collections}
+    # §173.6: a Collection, its members under it, and the members needing attention named on it.
+    for row, member in under_collections(view.collections, tuple(artifacts)):
+        indent = "  " if member else ""
+        group = collections.get(row)
+        if group is not None:
+            attention = group.members_requiring_attention
+            lines.append(
+                f"{'⚠' if attention else '✓'} {row}"
+                + (f" — needs attention: {', '.join(attention)}" if attention else "")
+            )
             continue
+        if row in leaving_out:
+            continue
+        item = artifacts[row]
         healthy = item.health in {"ready", "update"} and not item.placeholders
-        lines.append(f"{'✓' if healthy else '⚠'} {item.row}")
+        lines.append(f"{indent}{'✓' if healthy else '⚠'} {item.row}")
         if item.health in {"attention", "broken"}:
-            lines.extend(f"  {drift.component}: {_human(drift.kind)}" for drift in item.drift)
-        lines.extend(f"  {name}: {PLACEHOLDER_WARNING}" for name in item.placeholders)
+            lines.extend(
+                f"{indent}  {drift.component}: {_human(drift.kind)}" for drift in item.drift
+            )
+        lines.extend(f"{indent}  {name}: {PLACEHOLDER_WARNING}" for name in item.placeholders)
     return tuple(lines)
 
 
@@ -3466,11 +3482,12 @@ class CanonicalScreenSource:
             preview = self._screens.offered_collection(state.focus)
             return () if preview is None else preview.members
         if screen is ConsumerScreen.INSTALLED:
-            return tuple(
-                item.collection
+            collections = tuple(
+                item
                 for item in self._screens.installed_collections
                 if _matches(query, item.collection, item.health)
-            ) + tuple(
+            )
+            installations = tuple(
                 # The installation, not the artifact: two harnesses are two rows, and rows have to
                 # be distinct or the second one is unreachable (§169.3). The filter still matches
                 # on the coordinate a person would type.
@@ -3478,6 +3495,8 @@ class CanonicalScreenSource:
                 for item in self._screens.installed
                 if _matches(query, item.coordinate, item.health)
             )
+            # §173.6: a Collection, then its members under it.
+            return tuple(row for row, _ in under_collections(collections, installations))
         if screen is ConsumerScreen.UPDATES:
             return tuple(
                 item.coordinate
@@ -4747,8 +4766,24 @@ class CanonicalScreenSource:
         if screen in (ConsumerScreen.INSTALLED, ConsumerScreen.UPDATES):
             health = {item.collection: item.health for item in screens.installed_collections}
             health.update({item.row: item.health for item in screens.installed})
+            under = {
+                row
+                for row, member in under_collections(
+                    tuple(
+                        item
+                        for item in screens.installed_collections
+                        if item.collection in state.rows
+                    ),
+                    state.rows,
+                )
+                if member
+            }
             return self._list(
-                state, tuple(f"{row}  {_human(health.get(row, 'unknown'))}" for row in state.rows)
+                state,
+                tuple(
+                    f"{'  ' if row in under else ''}{row}  {_human(health.get(row, 'unknown'))}"
+                    for row in state.rows
+                ),
             )
         if screen is ConsumerScreen.INSTALLED_COLLECTION_DETAILS:
             group = screens.installed_collection(state.focus)

@@ -31,7 +31,7 @@ of 5 are superseded by them.
 
 ## Step 1 — specification
 
-§173 is accepted, with INV-262–INV-266. D-424 records the implementation choices for versions:
+§173 is accepted, with INV-262–INV-265 and INV-267 (renumbered from a second INV-266, D-433). D-424 records the implementation choices for versions:
 the compiler is told the version by a `RegistryVersions` port built from approved state, "unchanged"
 means the same input digest, and the number is chosen at Sync and checked at approval.
 
@@ -271,3 +271,44 @@ Evidence:
 Targeted mutation: keying 07b's rows by installation (`str(owner)`) instead of by artifact
 (`artifact_answer_key(owner)`) in `ConsumerActionHandler`'s secret projection turned the new test red, along with the two
 existing 07b tests that count prompts per artifact.
+
+## Step 9 — Installed, Doctor and uninstall for Collections (§173.6, INV-186, INV-215, D-434)
+
+Characterization found four gaps:
+- Installed listed members flat after the Collection row.
+- Doctor had no Collection at all.
+- `u` on a Collection said "nothing canonical is installed here".
+- `marketplace uninstall <collection>` fell through to the legacy manifest path and failed.
+
+Two deeper defects sat under them:
+- Installing a Collection over an artifact installed directly replaced `direct` ownership with
+  `collection`.
+- A removal was keyed by artifact, so a Collection in two harnesses could not be one removal
+  (B-183, promoted).
+
+D-434 records the fixes:
+- `held` ownership merged on install;
+- `RemovalKey`;
+- `release` per record;
+- a retained member is measured against, and recorded with, its installed state;
+- `under_collections` for Installed and Doctor;
+- CLI `doctor` names installations.
+
+Evidence:
+- `tests/collection_installed_e2e_test.py` (6), through the real shell and CLI:
+  - Installed rows and indentation;
+  - TUI and CLI Doctor name the drifted member on the Collection line, with members under it;
+  - `u` on the Collection removes four installations in one review;
+  - a directly installed member stays, with `direct` only;
+  - `marketplace uninstall` with a Collection coordinate does the same;
+  - a Collection mixed with artifacts is refused.
+- `tests/installed_multi_uninstall_e2e_test.py::test_one_artifact_in_two_harnesses_is_removed_by_one_confirmation`
+  replaces the D-393 refusal.
+
+228 affected modules (2416 tests) are green, apart from the two B-194 Hypothesis findings. mypy,
+ruff and docs-check are clean.
+
+Targeted mutations:
+- Disabling the `held` merge in `propose_installation` turned only the two tests red where a member
+  is also installed directly (TUI and CLI).
+- Observing a retained member against its removal state turned the same two red.

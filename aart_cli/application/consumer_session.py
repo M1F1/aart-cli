@@ -28,13 +28,13 @@ from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactCoordinate, InputId
 from aart_cli.domain.inputs import BoundInput, BoundInputs, RuntimeInput
 from aart_cli.domain.inspection import EnvironmentFacts
-from aart_cli.domain.installation_owner import installation_key
+from aart_cli.domain.installation_owner import InstallationOwner, installation_key
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.receipts import InstalledRecord
 from aart_cli.domain.reconciliation import CurrentState, DesiredState
 from aart_cli.domain.remediations import Remediation
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.domain.selection import ResolvedSelection
+from aart_cli.domain.selection import OwnershipReason, ResolvedSelection
 
 from .consumer_views import (
     ActivityView,
@@ -74,6 +74,7 @@ __all__ = [
     "UnadoptedInstallation",
     "assemble_consumer_machine",
     "begin_installation",
+    "installed_collections",
     "record_installation",
 ]
 
@@ -177,7 +178,7 @@ def credential_dependants(
     )
 
 
-def _collections(
+def installed_collections(
     inspections: tuple[InstalledInspection, ...], views: tuple[InstalledArtifactView, ...]
 ) -> tuple[InstalledCollectionView, ...]:
     """Group the installed artifacts by the Collections that want them.
@@ -289,6 +290,7 @@ def assemble_consumer_machine(
         item.health in (CredentialState.ABSENT.value, CredentialState.INVALID.value)
         for item in records
     )
+    collections = installed_collections(inspections, views)
     return ConsumerMachine(
         project_dashboard(
             views,
@@ -297,12 +299,12 @@ def assemble_consumer_machine(
             recent_activity=recent,
         ),
         views,
-        _collections(inspections, views),
+        collections,
         records,
         timeline,
         actions,
         registries,
-        project_doctor(views),
+        project_doctor(views, collections),
         tuple(sorted(configurations, key=lambda item: (item.coordinate, item.harness))),
     )
 
@@ -399,6 +401,7 @@ def begin_installation(
     previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
     selected_remediations: tuple[Remediation, ...] = (),
     credential_observations: tuple[CredentialObservation, ...] = (),
+    held: tuple[tuple[InstallationOwner, tuple[OwnershipReason, ...]], ...] = (),
 ) -> Result[ConsumerFlow]:
     """Begin the flow screens 05 to 09 draw, from what this machine would install.
 
@@ -415,6 +418,7 @@ def begin_installation(
         observed=observed,
         previous=previous,
         selected_remediations=selected_remediations,
+        held=held,
     )
     if isinstance(proposed, Err):
         return proposed

@@ -43,8 +43,8 @@ specification is amended (D-430, INV-266, plan step 16).
 committed on 45; and a promotion that approves a member's new version publishes the containing
 Collections' next versions in the same transaction. **Step 8 is done** (characterization only): 07
 and 07b ask each member's configuration and credentials once per member artifact, with Set later.
-**Next is step 9**: Installed, Doctor and uninstall for Collections (INV-186, INV-215). Steps
-10–15 follow.
+**Step 9 is done** (D-434): Installed, Doctor and uninstall for Collections. **Next is step
+10**: the default and custom install paths (#75, §173.7). Steps 11–15 follow.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).

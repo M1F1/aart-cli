@@ -159,7 +159,13 @@ from aart_cli.domain.python_runtime import PythonInstaller
 from aart_cli.domain.receipts import ArtifactReceipt, InstallationReceipt, InstalledRecord
 from aart_cli.domain.reconciliation import DesiredState
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.domain.selection import ArtifactRequest, ArtifactSelection, VersionConstraint
+from aart_cli.domain.selection import (
+    ArtifactRequest,
+    ArtifactSelection,
+    OwnershipKind,
+    OwnershipReason,
+    VersionConstraint,
+)
 from aart_cli.io.configured_configuration_action import (
     PreparedConfiguredConfiguration,
     complete_configured_configuration,
@@ -2500,35 +2506,38 @@ class LocalConsumerActions:
         )
 
     def _prepare_uninstall(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
-        collections = {item.collection for item in self.source().screens.installed_collections}
-        if len(self._targets(command)) > 1 and collections.intersection(self._targets(command)):
+        targets = self._targets(command)
+        collections = {
+            item.collection: item for item in self.source().screens.installed_collections
+        }
+        if len(targets) > 1 and collections.keys() & set(targets):
             return self._declined(
                 command,
                 _lines(
-                    "a Collection is uninstalled from its own details, not ticked with artifacts",
-                    "untick the Collection, or open it and uninstall it there",
+                    "a Collection is uninstalled on its own, not ticked with artifacts",
+                    "untick the Collection, or untick everything else",
                 ),
             )
-        inspected = self._inspections(self._targets(command))
+        # A Collection is its member installations, and uninstalling it gives up only its own
+        # claim on each: a member something else still owns stays installed (INV-215).
+        group = collections.get(targets[0]) if len(targets) == 1 else None
+        release = (
+            None
+            if group is None
+            else (OwnershipReason(OwnershipKind.COLLECTION, group.collection),)
+        )
+        inspected = self._inspections(
+            targets if group is None else tuple(item.artifact for item in group.members)
+        )
         if isinstance(inspected, Err):
             return self._declined(command, _refusal(inspected.diagnostics))
-        coordinates = [item.record.coordinate for item in inspected.value]
-        if len(set(coordinates)) != len(coordinates):
-            # A removal is keyed by artifact, so one artifact's installations in two harnesses
-            # cannot share one; said here rather than as the domain's "observed twice" (B-183).
-            return self._declined(
-                command,
-                _lines(
-                    "one artifact installed into two harnesses is uninstalled one harness at a time",
-                    "tick one installation of each artifact",
-                ),
-            )
         host = self._host()
         prepared = prepare_configured_uninstall(
             tuple(item.record for item in inspected.value),
             host=host,
             policy=self._context.policy,
             credential_providers=self._context.credential_providers,
+            release=release,
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
