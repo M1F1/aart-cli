@@ -63,6 +63,24 @@ Registries (INV-269). Step 1 (the specification, with §175.4 reset-with-backup 
 and 6, the `consume` / `maintain upstream` / `maintain registry` families (D-443). Step 5, `maintain candidate list`, is done too (B-202 for
 recording Candidates from the CLI). Step 7 is done: a consumer installs only from Registries (D-444; B-203–B-206 for what it
 exposed). Next are 8 (TUI names), then 12 (Author Mode), 9 and 10.
+
+**Exact next task: CP-32 step 8 (§175.3).** Nothing is implemented yet; a survey found:
+- Maintainer areas are named "Sources" (screen ids `31-sources` …, `MaintainerScreen.SOURCE_*` in
+  `application/maintainer_views.py`). The visible names live in `application/consumer_ui.py`
+  (`_navigate_binding(... "Add Source" / "Sources" / "Candidates" ...)` near line 2530),
+  `tui_maintainer.py` (`Sources: N`, "No authoring Sources are configured."), `wizard.py:47`,
+  `tui_layout._NAMES` ("Source Sync", "Source Scan") and `tui_consumer.py:1566`/`2129`/`2571`.
+- Target: three areas named as the CLI is: **Upstream repositories** (subtitle "Author
+  repositories this Registry takes artifacts from"), **Candidates**, **Registry** (Collections,
+  Validation, Publish). "Source Sync" becomes "Upstream sync", and "Add Source" becomes "Add
+  upstream". Internal enum and screen ids may stay (D-443) unless a test pins the visible id.
+- Every hint names the new commands. Check `consumer_actions.py` ~1959/2963/3012 and
+  `tui_sources.py:708/805` ("Sources stage"): the consumer screen is Registries and
+  lists Registries only. Verify that `tui_sources` loads only `is_registry` connections for screen 21.
+- Tests first: the screen-text tests under `tests/*tui*`, `tests/consumer_shell_test.py`,
+  `tests/local_registry_promotion_e2e_test.py` and the frame contracts pin today's words; change
+  them to the target, then the code. Record a targeted mutation in the slice doc, then
+  `handoff-plan done CP-32.8` and commit.
 See `slices/CP-32-roles-and-upstreams.md`.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
