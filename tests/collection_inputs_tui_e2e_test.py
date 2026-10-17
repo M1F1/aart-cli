@@ -17,6 +17,7 @@ from unittest import mock
 
 from aart_cli.application.consumer_views import ConsumerScreen
 from aart_cli.domain.inputs import SKIPPED_INPUT
+from aart_cli.domain.inspection import RemediationCapability, RemediationCapabilityKind
 from tests.artifact_installation_e2e_test import MANIFEST
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import (
@@ -49,6 +50,12 @@ _AUTHORED_JIRA = tuple(
     )
     for path, content in AUTHORED_MCP
 )
+# The review offers a dependency manager only when the host has more than one; pin both so the
+# keys below land on the same rows whether or not this machine has uv.
+_INSTALLERS = tuple(
+    RemediationCapability(RemediationCapabilityKind.PYTHON_INSTALLER, name)
+    for name in ("pip", "uv")
+)
 _STARTER = RegistryCollection("starter", "GitHub and Jira.", ("mcp/github", "mcp/jira"))
 
 
@@ -63,6 +70,10 @@ class CollectionInputsShellTest(unittest.TestCase):
         with (
             mock.patch(
                 "tests.configured_install_command_e2e_test._published_registry", _with_starter
+            ),
+            mock.patch(
+                "aart_cli.io.configured_installation_action.observe_python_installers",
+                return_value=_INSTALLERS,
             ),
             _environment() as env,
         ):
