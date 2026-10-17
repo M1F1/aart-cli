@@ -46,7 +46,7 @@ from aart_cli.domain.artifacts import ArtifactKind
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok
 from aart_cli.io.maintainer_views import unavailable_reasons
 from aart_cli.protocol.authoring import compile_author_snapshot
@@ -116,7 +116,7 @@ def _promote(bundle, registry: SourceSnapshot, approved: ApprovedRegistryState):
         validate_candidate(bundle, policy=policy),
         policy,
         approved,
-        mode=PromotionMode.VENDORED,
+        mode=RegistryContentMode.SELF_CONTAINED,
     )
     assert isinstance(prepared, Ok), prepared
     plan = plan_candidate_promotion(prepared.value, registry)

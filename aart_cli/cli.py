@@ -141,7 +141,7 @@ def _to_request(args: argparse.Namespace) -> Request:
         candidate_source_url=getattr(args, "candidate_source_url", None),
         target_registry_alias=getattr(args, "target_registry_alias", None),
         promotion_candidate_ids=tuple(getattr(args, "promotion_candidate_ids", ()) or ()),
-        promotion_mode=getattr(args, "promotion_mode", "vendored"),
+        content_mode=getattr(args, "content_mode", "self-contained"),
         check=bool(getattr(args, "check", False)),
         check_upstream=bool(getattr(args, "check_upstream", False)),
         source_id=getattr(args, "source_id", None),

@@ -808,10 +808,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_candidate_promote.add_argument(
         "--mode",
-        choices=("vendored", "referenced"),
-        default="vendored",
-        dest="promotion_mode",
-        help="enterprise default vendored, or explicit weaker referenced mode",
+        choices=("self-contained", "pinned-reference"),
+        default="self-contained",
+        dest="content_mode",
+        help="content mode: self-contained (enterprise default) or the weaker pinned-reference",
     )
     _add_registry_finalize(p_candidate_promote)
     _add_json(p_candidate_promote)

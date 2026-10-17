@@ -57,9 +57,9 @@ from aart_cli.domain.inspection import (
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.reconciliation import ComponentState
 from aart_cli.domain.registry import (
-    PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
+    RegistryContentMode,
 )
 from aart_cli.domain.result import Ok
 from aart_cli.domain.selection import (
@@ -211,7 +211,7 @@ class OpenCodeMcpInstallationTest(unittest.TestCase):
                 digest,
                 self.object_digest,
                 digest,
-                PromotionMode.VENDORED,
+                RegistryContentMode.SELF_CONTAINED,
                 PublicationStage.PUBLISHED,
             ),
             (KIT,),

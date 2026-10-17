@@ -325,7 +325,7 @@ class PromotionPublicationBoundaryE2ETest(unittest.TestCase):
                 record["validation_report_digest"], evidence["validation_report_digest"]
             )
             self.assertEqual(record["effective_policy_result"], evidence["effective_policy_digest"])
-            self.assertEqual(record["promotion_mode"], "vendored")
+            self.assertEqual(record["content_mode"], "self-contained")
             self.assertNotEqual(
                 record["registry_snapshot_before"], record["registry_snapshot_after"]
             )

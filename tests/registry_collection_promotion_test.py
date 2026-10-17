@@ -30,7 +30,7 @@ from aart_cli.application.registry_collections import (
     read_registry_collection,
 )
 from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok
 from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
 from tests.promotion_planning_test import _entry, _evidence, _ready_bundle
@@ -45,7 +45,9 @@ def _digest(character: str) -> ObjectDigest:
     return ObjectDigest("sha256", character * 64)
 
 
-def _promote(registry: SourceSnapshot, *bundles, collections=(), mode=PromotionMode.VENDORED):
+def _promote(
+    registry: SourceSnapshot, *bundles, collections=(), mode=RegistryContentMode.SELF_CONTAINED
+):
     planned = plan_bulk_promotion(
         registry,
         bundles,
@@ -96,7 +98,7 @@ def _collection_evidence(*collections):
     )
 
 
-def _published(registry: SourceSnapshot, *collections, mode=PromotionMode.VENDORED):
+def _published(registry: SourceSnapshot, *collections, mode=RegistryContentMode.SELF_CONTAINED):
     return _promote(registry, collections=collections, mode=mode)
 
 
@@ -199,10 +201,12 @@ class CollectionPromotionTest(unittest.TestCase):
     def test_a_collection_is_vendored_even_in_a_referenced_transaction(self) -> None:
         registry = _registry_with_members()
 
-        plan, projected = _published(registry, _change(registry), mode=PromotionMode.REFERENCED)
+        plan, projected = _published(
+            registry, _change(registry), mode=RegistryContentMode.PINNED_REFERENCE
+        )
 
         (version,) = plan.versions
-        self.assertIs(version.mode, PromotionMode.VENDORED)
+        self.assertIs(version.mode, RegistryContentMode.SELF_CONTAINED)
         self.assertIsInstance(load_registry_versions(projected), Ok)
 
     def test_a_published_collection_version_is_immutable(self) -> None:

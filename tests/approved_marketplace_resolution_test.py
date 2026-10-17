@@ -28,9 +28,9 @@ from aart_cli.domain.identifiers import (
     SourceAlias,
 )
 from aart_cli.domain.registry import (
-    PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
+    RegistryContentMode,
     RegistryLifecycle,
 )
 from aart_cli.domain.result import Err, Ok
@@ -68,7 +68,7 @@ def _version(
         _digest(payload_character),
         _digest(payload_character),
         _digest(snapshot_character),
-        PromotionMode.VENDORED,
+        RegistryContentMode.SELF_CONTAINED,
         publication,
         lifecycle,
         warning,

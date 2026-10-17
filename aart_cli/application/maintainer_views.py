@@ -62,10 +62,10 @@ from aart_cli.domain.python_runtime import (
     spec_descriptor_path,
 )
 from aart_cli.domain.registry import (
-    PromotionMode,
     RegistryArtifactVersion,
+    RegistryContentMode,
     RegistryLifecycle,
-    promotion_mode_consequences,
+    content_mode_consequences,
 )
 from aart_cli.domain.result import Err
 from aart_cli.protocol.authoring import read_package_description
@@ -104,7 +104,7 @@ __all__ = [
     "MaintainerSourceSyncReviewView",
     "MaintainerSourceView",
     "MaintainerPolicyReviewView",
-    "MaintainerPromotionModeView",
+    "MaintainerContentModeView",
     "MaintainerPromotionReviewView",
     "MaintainerRegistryChangeView",
     "MaintainerRegistryCommitView",
@@ -2227,7 +2227,7 @@ class MaintainerViews:
     def registry_diff(
         self,
         candidate_id: str,
-        mode: PromotionMode = PromotionMode.VENDORED,
+        mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
     ) -> MaintainerRegistryDiffView | None:
         """The registry transaction composed for one Candidate in one mode, refusals included."""
 
@@ -2245,7 +2245,7 @@ class MaintainerViews:
     def promotion(
         self,
         candidate_id: str,
-        mode: PromotionMode = PromotionMode.VENDORED,
+        mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
     ) -> MaintainerPromotionReviewView | None:
         """The promotion review composed for one Candidate in one mode, refusals included."""
 
@@ -2762,10 +2762,10 @@ def project_maintainer_policy_review(
 
 
 @dataclass(frozen=True, slots=True)
-class MaintainerPromotionModeView:
+class MaintainerContentModeView:
     """One typed promotion choice and the consequences the Registry contract assigns it."""
 
-    mode: PromotionMode
+    mode: RegistryContentMode
     label: str
     selected: bool
     enterprise_default: bool
@@ -2789,7 +2789,7 @@ class MaintainerPromotionReviewView:
     target_registry: str
     state: CandidateState
     mode: str
-    mode_choices: tuple[MaintainerPromotionModeView, ...]
+    mode_choices: tuple[MaintainerContentModeView, ...]
     canonical_digest: str
     source_revision: str
     review_digest: str | None
@@ -2811,7 +2811,7 @@ def project_maintainer_promotion_review(
     policy: EffectivePolicy,
     approved: ApprovedRegistryState | None,
     *,
-    mode: PromotionMode,
+    mode: RegistryContentMode,
     promotion: CandidatePromotionRecord = CandidatePromotionRecord.NOT_PROMOTED,
 ) -> MaintainerPromotionReviewView:
     """Project one Candidate's promotion review, including the reasons it may have none."""
@@ -2820,7 +2820,7 @@ def project_maintainer_promotion_review(
         not isinstance(bundle, CandidateBundle)
         or not isinstance(validation, CandidateValidation)
         or not isinstance(policy, EffectivePolicy)
-        or not isinstance(mode, PromotionMode)
+        or not isinstance(mode, RegistryContentMode)
         or not (approved is None or isinstance(approved, ApprovedRegistryState))
         or not isinstance(promotion, CandidatePromotionRecord)
     ):
@@ -2834,7 +2834,7 @@ def project_maintainer_promotion_review(
         "state": validation.state,
         "mode": mode.value,
         "mode_choices": tuple(
-            MaintainerPromotionModeView(
+            MaintainerContentModeView(
                 consequence.mode,
                 consequence.label,
                 consequence.mode is mode,
@@ -2843,7 +2843,7 @@ def project_maintainer_promotion_review(
                 consequence.payload_availability,
                 consequence.upstream_relationship,
             )
-            for consequence in (promotion_mode_consequences(item) for item in PromotionMode)
+            for consequence in (content_mode_consequences(item) for item in RegistryContentMode)
         ),
         "canonical_digest": str(candidate.canonical_digest),
         "source_revision": candidate.artifact.provenance.revision,
@@ -2945,7 +2945,7 @@ def project_maintainer_registry_diff(
     approved: ApprovedRegistryState | None,
     registry_snapshot: SourceSnapshot | None,
     *,
-    mode: PromotionMode,
+    mode: RegistryContentMode,
     promotion: CandidatePromotionRecord = CandidatePromotionRecord.NOT_PROMOTED,
 ) -> MaintainerRegistryDiffView:
     """Project the transaction, or the reasons there is none to project."""
@@ -2954,7 +2954,7 @@ def project_maintainer_registry_diff(
         not isinstance(bundle, CandidateBundle)
         or not isinstance(validation, CandidateValidation)
         or not isinstance(policy, EffectivePolicy)
-        or not isinstance(mode, PromotionMode)
+        or not isinstance(mode, RegistryContentMode)
         or not (approved is None or isinstance(approved, ApprovedRegistryState))
         or not (registry_snapshot is None or isinstance(registry_snapshot, SourceSnapshot))
         or not isinstance(promotion, CandidatePromotionRecord)

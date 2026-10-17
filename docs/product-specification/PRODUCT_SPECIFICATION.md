@@ -3582,15 +3582,15 @@ It scales organizationally because:
 
 ---
 
-# 80. Optional referenced mode
+# 80. Optional pinned-reference content mode
 
-aart-cli may still support a lighter referenced artifact mode:
+aart-cli may still support a lighter pinned-reference content mode (§173.9, D-376):
 
 ```python
-type ArtifactSourceMode = Vendored | Referenced
+type RegistryContentMode = SelfContained | PinnedReference
 ```
 
-`Referenced` means the registry stores a pinned source reference rather than a durable canonical payload.
+`PinnedReference` means the registry stores a pinned source reference rather than a durable canonical payload.
 
 This can be useful for:
 
@@ -3602,13 +3602,13 @@ temporary integrations
 very large or externally managed artifacts
 ```
 
-However, `Vendored` should be the default for approved enterprise marketplaces.
+However, `SelfContained` should be the default for approved enterprise marketplaces.
 
 The marketplace can surface the distinction:
 
 ```text
 company/mcp/github
-✓ Vendored
+✓ Self-contained
 ✓ Reproducible
 ✓ Upstream-independent
 ```
@@ -3617,7 +3617,7 @@ versus:
 
 ```text
 experimental/mcp/foo
-⚠ Referenced upstream
+⚠ Pinned reference to upstream
 ⚠ Availability depends on source
 ```
 
@@ -3625,15 +3625,15 @@ Policy can restrict the mode:
 
 ```yaml
 production:
-  allowed_source_modes:
-    - vendored
+  allowed_content_modes:
+    - self-contained
 ```
 
 The finite policy algebra therefore may include primitives such as:
 
 ```text
-AllowArtifactSourceMode(Vendored)
-ForbidArtifactSourceMode(Referenced)
+AllowRegistryContentMode(SelfContained)
+ForbidRegistryContentMode(PinnedReference)
 ```
 
 ---

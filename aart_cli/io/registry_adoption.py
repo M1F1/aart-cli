@@ -53,7 +53,7 @@ from aart_cli.domain.candidates import CandidateState
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
+from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.io.curation_runtime import default_native_acquirer
 from aart_cli.io.registry_promotion import FilesystemPromotionOutput
@@ -314,7 +314,7 @@ def list_adopted_artifacts(*, registry_root: str) -> Result[tuple[AdoptedArtifac
     }
     adopted = []
     for version in versions.value:
-        if version.mode is not PromotionMode.VENDORED:
+        if version.mode is not RegistryContentMode.SELF_CONTAINED:
             continue
         record = _adoption_record(version, files)
         if isinstance(record, Err):
@@ -612,7 +612,7 @@ def prepare_adoption(
         bundles,
         evidence=tuple(evidence),
         approved=approved.value,
-        mode=PromotionMode.VENDORED,
+        mode=RegistryContentMode.SELF_CONTAINED,
     )
     if isinstance(planned, Err):
         return planned

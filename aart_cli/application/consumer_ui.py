@@ -19,7 +19,7 @@ from enum import Enum
 from aart_cli.domain.configuration_files import configuration_value_problem
 from aart_cli.domain.inputs import SKIPPED_INPUT, InputValidation, validate_config_value
 from aart_cli.domain.publication import RegistryCommitOrigin, suggested_publication_branch
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 
 from .consumer_views import (
     INSTALL_PATH_DEFAULT,
@@ -512,7 +512,7 @@ class ConsumerUiCommand:
     selection: tuple[str, ...] = ()
     focus: str = ""
     review_digest: str = ""
-    promotion_mode: PromotionMode | None = None
+    content_mode: RegistryContentMode | None = None
     registry_draft: RegistryDraft | None = None
     source_draft: SourceDraft | None = None
     registry_init_draft: RegistryInitDraft | None = None
@@ -561,8 +561,8 @@ class ConsumerUiCommand:
             or any(character in self.focus for character in "\r\n")
             or not _safe_identity(self.review_digest)
             or (
-                self.promotion_mode is not None
-                and not isinstance(self.promotion_mode, PromotionMode)
+                self.content_mode is not None
+                and not isinstance(self.content_mode, RegistryContentMode)
             )
             or (
                 self.registry_draft is not None
@@ -707,7 +707,7 @@ class ConsumerUiState:
     candidate_filter: MaintainerCandidateFilter = MaintainerCandidateFilter()
     #: Which promotion the Maintainer is reviewing. Screen 42 chooses it; screens 41 and 43 obey
     #: it. Both modes are composed, so this selects a projection rather than causing one.
-    promotion_mode: PromotionMode = PromotionMode.VENDORED
+    content_mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED
     registry_draft: RegistryDraft = RegistryDraft()
     source_draft: SourceDraft = SourceDraft()
     registry_init_draft: RegistryInitDraft = RegistryInitDraft()
@@ -1670,8 +1670,8 @@ def _request_action(
         pairs=state.pairs if action is ConsumerActionKind.INSTALL else (),
         pair_scopes=state.pair_scopes if action is ConsumerActionKind.INSTALL else (),
         focus=focus,
-        promotion_mode=(
-            state.promotion_mode
+        content_mode=(
+            state.content_mode
             if action in (ConsumerActionKind.CANDIDATE_PROMOTION, ConsumerActionKind.BULK_PROMOTION)
             else None
         ),
@@ -2410,11 +2410,11 @@ def _reduce(
         if state.session.screen is not MaintainerScreen.PROMOTION_MODE:
             return state, ()
         chosen = (
-            PromotionMode.REFERENCED
-            if state.promotion_mode is PromotionMode.VENDORED
-            else PromotionMode.VENDORED
+            RegistryContentMode.PINNED_REFERENCE
+            if state.content_mode is RegistryContentMode.SELF_CONTAINED
+            else RegistryContentMode.SELF_CONTAINED
         )
-        return replace(state, promotion_mode=chosen, quit_pending=False), ()
+        return replace(state, content_mode=chosen, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.TOGGLE_CANDIDATE_FILTER:
         # Screen 53's rows are facet values, so a row is parsed back into the typed facet it
         # addresses rather than being pulled apart here. A row nothing can be made of changes

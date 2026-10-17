@@ -26,7 +26,7 @@ from aart_cli.application.promotion import (
 from aart_cli.application.registry_versions import ApprovedRegistryVersions
 from aart_cli.domain.candidates import assess_candidate
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Ok
 from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.protocol.native_tree import (
@@ -242,7 +242,7 @@ def _promote(
         (bundle,),
         evidence=((bundle.candidate.id, evidence),),
         approved=approved.value,
-        mode=PromotionMode.VENDORED,
+        mode=RegistryContentMode.SELF_CONTAINED,
     )
     if not isinstance(planned, Ok):
         raise RuntimeError(planned.diagnostics[0].message)

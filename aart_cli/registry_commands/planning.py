@@ -32,7 +32,7 @@ from aart_cli.domain.identifiers import (
     SourceAlias,
     SourceId,
 )
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.protocol.authoring import CompiledAuthorArtifact, ComplianceLevel
 from aart_cli.protocol.capabilities import Capability
@@ -775,7 +775,7 @@ def _promote_vendor(
             ),
         ),
         approved=approved.value,
-        mode=PromotionMode.VENDORED,
+        mode=RegistryContentMode.SELF_CONTAINED,
     )
     if isinstance(plan, Err):
         return plan
@@ -839,7 +839,7 @@ def read_vendored_artifact(
     matching = tuple(
         item
         for item in versions.value
-        if item.coordinate.artifact == identity and item.mode is PromotionMode.VENDORED
+        if item.coordinate.artifact == identity and item.mode is RegistryContentMode.SELF_CONTAINED
     )
     if not matching:
         return _error(

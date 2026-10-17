@@ -55,7 +55,7 @@ from aart_cli.configuration.schema import (
 )
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok
 from aart_cli.io.candidate_store import candidate_history_paths, read_candidate_history
 from aart_cli.io.git_acquisition import acquire_git_snapshot
@@ -647,7 +647,7 @@ class PromotionFromAnAdmittedGitSourceTest(unittest.TestCase):
                 data_root=env.paths.data_root,
                 registry_root=checkout,
                 policy=EffectivePolicy(),
-                mode=PromotionMode.VENDORED,
+                mode=RegistryContentMode.SELF_CONTAINED,
             )
             self.assertIsInstance(prepared, Ok, prepared)
             assert isinstance(prepared, Ok)

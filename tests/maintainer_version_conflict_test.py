@@ -29,7 +29,7 @@ from aart_cli.domain.candidates import (
     reject_candidate,
 )
 from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias
-from aart_cli.domain.registry import PromotionMode, registry_version_from_candidate
+from aart_cli.domain.registry import RegistryContentMode, registry_version_from_candidate
 from aart_cli.domain.result import Ok
 from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
 from tests.maintainer_candidate_shell_test import _projected_source
@@ -51,7 +51,7 @@ def _conflict():
         ready,
         object_digest=_digest("2"),
         registry_snapshot=_digest("1"),
-        mode=PromotionMode.VENDORED,
+        mode=RegistryContentMode.SELF_CONTAINED,
     )
     changed = reconcile_source_scan(
         SourceAlias("authors"),
@@ -94,7 +94,7 @@ class PublishedCandidateSupersessionTest(unittest.TestCase):
             assess_candidate(first.value.active[0].candidate),
             object_digest=_digest("2"),
             registry_snapshot=_digest("1"),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
         synced = reconcile_source_scan(
             SourceAlias("authors"),
@@ -127,7 +127,7 @@ class PublishedCandidateSupersessionTest(unittest.TestCase):
             assess_candidate(candidate.candidate),
             object_digest=_digest("2"),
             registry_snapshot=_digest("1"),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         synced = reconcile_source_scan(
@@ -163,7 +163,7 @@ class PublishedCandidateSupersessionTest(unittest.TestCase):
             assess_candidate(candidate.candidate),
             object_digest=_digest("2"),
             registry_snapshot=_digest("1"),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
         conflicting = dataclasses.replace(published, candidate_id=CandidateId("f" * 64))
 
@@ -202,7 +202,7 @@ class PublishedCandidateSupersessionTest(unittest.TestCase):
             assess_candidate(candidate.candidate),
             object_digest=_digest("2"),
             registry_snapshot=_digest("1"),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
         same_version_elsewhere = dataclasses.replace(
             published,
@@ -249,7 +249,7 @@ class PublishedCandidateSupersessionTest(unittest.TestCase):
             ready,
             object_digest=_digest("2"),
             registry_snapshot=_digest("1"),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
         guarded = (
             dataclasses.replace(

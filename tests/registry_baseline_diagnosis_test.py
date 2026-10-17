@@ -15,7 +15,7 @@ from unittest import TestCase, mock
 
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok
 from aart_cli.io.candidate_store import candidate_history_paths, read_candidate_history
 from aart_cli.io.maintainer_promotion import prepare_configured_candidate_promotion
@@ -71,7 +71,7 @@ def _prepare(env: _Environment, candidate_id, root: Path | None = None) -> Err:
         data_root=env.paths.data_root,
         registry_root=str(root or env.registry),
         policy=EffectivePolicy(),
-        mode=PromotionMode.VENDORED,
+        mode=RegistryContentMode.SELF_CONTAINED,
     )
     assert isinstance(result, Err), result
     return result

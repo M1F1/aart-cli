@@ -31,8 +31,8 @@ from aart_cli.domain.identifiers import (
     SourceAlias,
 )
 from aart_cli.domain.registry import (
-    PromotionMode,
     PublicationStage,
+    RegistryContentMode,
     RegistryLifecycle,
     deprecate_registry_version,
     publish_registry_version,
@@ -149,7 +149,7 @@ class CandidateLifecycleTest(unittest.TestCase):
             candidate,
             object_digest=_digest("e"),
             registry_snapshot=_digest("1"),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
         published = publish_registry_version(local, _digest("2"))
         deprecated = deprecate_registry_version(
@@ -176,7 +176,7 @@ class CandidateLifecycleTest(unittest.TestCase):
         )
         for field in immutable_fields:
             self.assertEqual(getattr(local, field), getattr(revoked, field))
-        self.assertEqual(local.mode, PromotionMode.VENDORED)
+        self.assertEqual(local.mode, RegistryContentMode.SELF_CONTAINED)
 
 
 if __name__ == "__main__":

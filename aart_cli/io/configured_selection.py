@@ -21,7 +21,7 @@ from aart_cli.application.registry_collections import read_registry_collection
 from aart_cli.configuration.policy import EffectiveConfiguration
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import SourceAlias
-from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
+from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import (
     ArtifactRequest,
@@ -80,9 +80,9 @@ def _approved_artifact(
     snapshot: SourceSnapshot,
     version: RegistryArtifactVersion,
 ) -> Result[ApprovedMarketplaceArtifact]:
-    if version.mode is not PromotionMode.VENDORED:
+    if version.mode is not RegistryContentMode.SELF_CONTAINED:
         return _error(
-            f"configured approved version {version.coordinate} is referenced; its verified "
+            f"configured approved version {version.coordinate} is a pinned reference; its verified "
             "dependency manifest is not available in this registry snapshot"
         )
     path, entry = _manifest_entry(snapshot, version)

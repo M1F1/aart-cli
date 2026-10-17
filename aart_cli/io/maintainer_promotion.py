@@ -26,7 +26,7 @@ from aart_cli.domain.candidates import CandidateId
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactIdentity, ObjectDigest, SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.io.git import GitProcessRequest, run_git_process
 from aart_cli.sources.model import (
@@ -296,7 +296,7 @@ def prepare_configured_candidate_promotion(
     data_root: str,
     registry_root: str,
     policy: EffectivePolicy,
-    mode: PromotionMode,
+    mode: RegistryContentMode,
 ) -> Result[PreparedConfiguredCandidatePromotion]:
     """Re-observe and pre-validate the exact local registry transaction to confirm."""
 
@@ -304,7 +304,7 @@ def prepare_configured_candidate_promotion(
         not isinstance(effective, EffectiveConfiguration)
         or not isinstance(candidate_id, CandidateId)
         or not isinstance(policy, EffectivePolicy)
-        or not isinstance(mode, PromotionMode)
+        or not isinstance(mode, RegistryContentMode)
         or not os.path.isabs(data_root)
         or os.path.normpath(data_root) != data_root
     ):
@@ -351,7 +351,7 @@ def prepare_configured_bulk_promotion(
     data_root: str,
     registry_root: str,
     policy: EffectivePolicy,
-    mode: PromotionMode,
+    mode: RegistryContentMode,
 ) -> Result[PreparedConfiguredCandidatePromotion]:
     """Re-observe and pre-validate one local registry transaction for a whole selection.
 
@@ -365,7 +365,7 @@ def prepare_configured_bulk_promotion(
         or not candidate_ids
         or any(not isinstance(item, CandidateId) for item in candidate_ids)
         or not isinstance(policy, EffectivePolicy)
-        or not isinstance(mode, PromotionMode)
+        or not isinstance(mode, RegistryContentMode)
         or not os.path.isabs(data_root)
         or os.path.normpath(data_root) != data_root
     ):

@@ -418,7 +418,7 @@ class Request:
     candidate_source_url: Optional[str] = None
     target_registry_alias: Optional[str] = None
     promotion_candidate_ids: Tuple[str, ...] = ()
-    promotion_mode: str = "vendored"
+    content_mode: str = "self-contained"
     check: bool = False
     # Resolve vendored origins during an audit.  Off by default: an audit that reached the network
     # unasked would fail offline and depend on somebody else's uptime in CI.

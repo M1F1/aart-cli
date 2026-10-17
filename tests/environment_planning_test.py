@@ -45,9 +45,9 @@ from aart_cli.domain.plans import PlannedRemediation, install_plan_to_data
 from aart_cli.domain.policies import EffectivePolicy, PolicyOverlay, compose_policy
 from aart_cli.domain.python_runtime import PyProjectSpec
 from aart_cli.domain.registry import (
-    PromotionMode,
     PublicationStage,
     RegistryArtifactVersion,
+    RegistryContentMode,
 )
 from aart_cli.domain.remediations import (
     ConfigureCredential,
@@ -93,7 +93,7 @@ def _resolved(name: str, *, character: str) -> ResolvedArtifact:
         _digest(character),
         _digest(character),
         _digest("f"),
-        PromotionMode.VENDORED,
+        RegistryContentMode.SELF_CONTAINED,
         PublicationStage.PUBLISHED,
     )
     return ResolvedArtifact(

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from aart_cli.application.promotion import load_registry_versions
 from aart_cli.domain.identifiers import ArtifactIdentity
-from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
+from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.protocol.native_tree import (
     SnapshotEntry,
@@ -128,7 +128,7 @@ def promoted_registry_artifacts(
 
     artifacts: list[IndexArtifact] = []
     for version in versions:
-        if version.mode is not PromotionMode.VENDORED:
+        if version.mode is not RegistryContentMode.SELF_CONTAINED:
             continue
         identity = version.coordinate.artifact
         entries = _package_entries(snapshot, _version_prefix(version))

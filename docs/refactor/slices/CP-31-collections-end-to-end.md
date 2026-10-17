@@ -403,3 +403,22 @@ example and the Hypothesis property.
 Collections with their automatic bump (D-430). `docs/using/consumer-lifecycle-v1.md` describes
 the Marketplace columns and the Default/Custom path. The vendor passages go with the commands in
 step 14.
+
+## Step 13 — The content mode is renamed (#54, D-376)
+
+`PromotionMode = VENDORED | REFERENCED` is now
+`RegistryContentMode = SELF_CONTAINED | PINNED_REFERENCE`, valued `self-contained` and
+`pinned-reference`. Everything that held the mode followed:
+- `promotion_mode` → `content_mode` (request, UI state, records);
+- `PromotionModeConsequences` → `ContentModeConsequences`;
+- `promotion_mode_consequences` → `content_mode_consequences`;
+- `MaintainerPromotionModeView` → `MaintainerContentModeView`;
+- `promote --mode` takes `self-contained` (the default) or `pinned-reference`;
+- the review says `Content mode: …`, labelled `Self-contained` and `Pinned reference`;
+- the diagnostics say `pinned-reference` rather than `referenced`.
+
+Spec §80 now uses the same names. Screen 42's id and the toggle command keep "promotion" because
+they name the step, not the mode. Every remaining `vendored` in the code is the vendor command
+family, which step 14 removes. This is a mechanical rename, so per D-334 it has no mutation of its
+own. The 33 modules naming the mode (396 tests) and the 228-module affected set are green, apart
+from the B-194 findings. mypy, ruff, tach and docs-check are clean.

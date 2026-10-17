@@ -16,7 +16,7 @@ from aart_cli.domain.candidates import (
     reject_candidate,
 )
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
-from aart_cli.domain.registry import PromotionMode, registry_version_from_candidate
+from aart_cli.domain.registry import RegistryContentMode, registry_version_from_candidate
 from aart_cli.domain.result import Ok
 from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.protocol.native_tree import (
@@ -243,7 +243,7 @@ class MaintainerSourceScanTest(unittest.TestCase):
             ready.candidate,
             object_digest=_digest("2"),
             registry_snapshot=_digest("1"),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         same = reconcile_source_scan(

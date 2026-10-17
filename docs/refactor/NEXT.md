@@ -47,8 +47,11 @@ and 07b ask each member's configuration and credentials once per member artifact
 (D-435): screen 05p chooses Default (Settings harnesses, scope and installer; no 05 or 07a) or
 Custom; Settings keeps default harnesses. **Step 11 is done** (D-436): Marketplace and Installed
 rows are a column grid (status, scope with project count, harnesses with `✓`, unset inputs).
-**Step 12 is done**: the Registry and consumer docs. **Next is step 13**: rename the content mode
-to `RegistryContentMode = SelfContained | PinnedReference` (#54, D-376). Steps 14–15 follow.
+**Step 12 is done**: the Registry and consumer docs. **Step 13 is done**: the content mode is
+`RegistryContentMode = SelfContained | PinnedReference` (#54, D-376), `promote --mode
+self-contained|pinned-reference`. **Next is step 14**: prune the vendor family (`discover`,
+`vendor`, `vendor-batch`, `revendor`, `audit --check-upstream`) and what only it used (#73, #53).
+Step 15 follows.
 
 The Registry's next version follows D-423: patch up to 5, then minor up to 3, then major
 (`1.0.5` → `1.1.0`, `1.3.5` → `2.0.0`).

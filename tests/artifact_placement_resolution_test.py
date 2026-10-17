@@ -356,9 +356,9 @@ class DeliveredPlacementTest(unittest.TestCase):
 def _stored_artifact(package, digest: ObjectDigest):
     from aart_cli.domain.candidates import CandidateId
     from aart_cli.domain.registry import (
-        PromotionMode,
         PublicationStage,
         RegistryArtifactVersion,
+        RegistryContentMode,
     )
     from aart_cli.domain.selection import (
         OwnershipKind,
@@ -376,7 +376,7 @@ def _stored_artifact(package, digest: ObjectDigest):
             digest,
             digest,
             digest,
-            PromotionMode.VENDORED,
+            RegistryContentMode.SELF_CONTAINED,
             PublicationStage.PUBLISHED,
         ),
         (OwnershipReason(OwnershipKind.DIRECT, str(package.coordinate)),),

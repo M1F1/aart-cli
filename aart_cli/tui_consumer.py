@@ -134,7 +134,7 @@ from aart_cli.application.maintainer_views import (
     project_maintainer_candidate_filters,
 )
 from aart_cli.domain.inputs import SKIPPED_INPUT, is_skipped_value
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import (
     ArtifactRequest,
@@ -2997,7 +2997,7 @@ class ConsumerScreens:
     def promotion(
         self,
         focus: str,
-        mode: PromotionMode = PromotionMode.VENDORED,
+        mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
     ) -> MaintainerPromotionReviewView | None:
         """The promotion review for a focus that is a Candidate ID or one of its check rows."""
 
@@ -3009,7 +3009,7 @@ class ConsumerScreens:
     def registry_diff(
         self,
         focus: str,
-        mode: PromotionMode = PromotionMode.VENDORED,
+        mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
     ) -> MaintainerRegistryDiffView | None:
         """The registry transaction for a focus that is a Candidate ID or a check row."""
 
@@ -3772,19 +3772,19 @@ class CanonicalScreenSource:
             # it would write nothing.
             return (
                 MaintainerScreen.PROMOTION_REVIEW
-                if self._screens.promotion(state.focus, state.promotion_mode) is not None
+                if self._screens.promotion(state.focus, state.content_mode) is not None
                 else None
             )
         if screen is MaintainerScreen.PROMOTION_REVIEW:
             return (
                 MaintainerScreen.PROMOTION_MODE
-                if self._screens.promotion(state.focus, state.promotion_mode) is not None
+                if self._screens.promotion(state.focus, state.content_mode) is not None
                 else None
             )
         if screen is MaintainerScreen.PROMOTION_MODE:
             return (
                 MaintainerScreen.REGISTRY_DIFF
-                if self._screens.registry_diff(state.focus, state.promotion_mode) is not None
+                if self._screens.registry_diff(state.focus, state.content_mode) is not None
                 else None
             )
         if screen is MaintainerScreen.REGISTRY_VALIDATION:
@@ -4667,7 +4667,7 @@ class CanonicalScreenSource:
                 else render_maintainer_policy_review(validation.review, profile)
             )
         if screen is MaintainerScreen.REGISTRY_DIFF:
-            registry_diff = screens.registry_diff(state.focus, state.promotion_mode)
+            registry_diff = screens.registry_diff(state.focus, state.content_mode)
             return (
                 ("That Candidate's registry transaction is not available.",)
                 if registry_diff is None
@@ -4773,7 +4773,7 @@ class CanonicalScreenSource:
         if screen in (MaintainerScreen.PROMOTION_REVIEW, MaintainerScreen.PROMOTION_MODE):
             # Screen 42 asks which promotion, so it draws the review of the mode currently chosen
             # rather than a separate summary that could drift from what 41 showed.
-            promotion = screens.promotion(state.focus, state.promotion_mode)
+            promotion = screens.promotion(state.focus, state.content_mode)
             return (
                 ("That Candidate's promotion review is not available.",)
                 if promotion is None

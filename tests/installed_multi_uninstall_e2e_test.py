@@ -134,7 +134,9 @@ class InstalledMultiUninstallTest(unittest.TestCase):
 
             review = terminal.screen_containing("/ Uninstall Review")
             self.assertIn("for 2 artifacts", review)
-            self.assertEqual(finished.session.screen, ConsumerScreen.ACTIVITY_DETAILS, terminal.last)
+            self.assertEqual(
+                finished.session.screen, ConsumerScreen.ACTIVITY_DETAILS, terminal.last
+            )
             for harness in TWO_HARNESSES:
                 self.assertFalse(_delivered(env, "code-review", harness).exists(), harness)
             self.assertEqual(handler.source().screens.installed, ())

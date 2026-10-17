@@ -44,7 +44,7 @@ from aart_cli.domain.diagnostics import (
 )
 from aart_cli.domain.identifiers import ArtifactIdentity, ArtifactKind, SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
+from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.io.curation_runtime import (
     default_native_acquirer,
@@ -732,12 +732,12 @@ def _run_candidate_promotion(request: Request) -> int:
             _error("candidate promotion aliases, URL or IDs are invalid", _READ_THE_ACTIONS),
         )
     try:
-        mode = PromotionMode(request.promotion_mode)
+        mode = RegistryContentMode(request.content_mode)
     except ValueError:
         return _emit_error(
             request,
             "promote",
-            _error("promotion mode must be vendored or referenced", _READ_THE_ACTIONS),
+            _error("content mode must be self-contained or pinned-reference", _READ_THE_ACTIONS),
         )
     output = FilesystemPromotionOutput(_root(request))
     registry_snapshot = output.current()

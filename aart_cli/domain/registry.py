@@ -13,16 +13,16 @@ if TYPE_CHECKING:
     from .collection_changes import RegistryCollectionChange
 
 
-class PromotionMode(str, Enum):
-    VENDORED = "vendored"
-    REFERENCED = "referenced"
+class RegistryContentMode(str, Enum):
+    SELF_CONTAINED = "self-contained"
+    PINNED_REFERENCE = "pinned-reference"
 
 
 @dataclass(frozen=True, slots=True)
-class PromotionModeConsequences:
-    """The ownership and availability contract selected by one promotion mode."""
+class ContentModeConsequences:
+    """The ownership and availability contract selected by one content mode."""
 
-    mode: PromotionMode
+    mode: RegistryContentMode
     label: str
     enterprise_default: bool
     registry_ownership: str
@@ -30,18 +30,18 @@ class PromotionModeConsequences:
     upstream_relationship: str
 
 
-_PROMOTION_MODE_CONSEQUENCES: dict[PromotionMode, PromotionModeConsequences] = {
-    PromotionMode.VENDORED: PromotionModeConsequences(
-        PromotionMode.VENDORED,
-        "Vendored",
+_CONTENT_MODE_CONSEQUENCES: dict[RegistryContentMode, ContentModeConsequences] = {
+    RegistryContentMode.SELF_CONTAINED: ContentModeConsequences(
+        RegistryContentMode.SELF_CONTAINED,
+        "Self-contained",
         True,
         "Registry owns the canonical manifest and declared payload.",
         "Installs use Registry-owned content and remain available if upstream disappears.",
         "Upstream is provenance for future checks, not an installation dependency.",
     ),
-    PromotionMode.REFERENCED: PromotionModeConsequences(
-        PromotionMode.REFERENCED,
-        "Referenced",
+    RegistryContentMode.PINNED_REFERENCE: ContentModeConsequences(
+        RegistryContentMode.PINNED_REFERENCE,
+        "Pinned reference",
         False,
         "Registry stores a pinned source revision, not a payload copy.",
         "Installs depend on upstream remaining available.",
@@ -50,12 +50,12 @@ _PROMOTION_MODE_CONSEQUENCES: dict[PromotionMode, PromotionModeConsequences] = {
 }
 
 
-def promotion_mode_consequences(mode: PromotionMode) -> PromotionModeConsequences:
+def content_mode_consequences(mode: RegistryContentMode) -> ContentModeConsequences:
     """Return the product contract a promotion choice carries, independently of its renderer."""
 
-    if not isinstance(mode, PromotionMode):
-        raise ValueError("promotion consequences need a promotion mode")
-    return _PROMOTION_MODE_CONSEQUENCES[mode]
+    if not isinstance(mode, RegistryContentMode):
+        raise ValueError("promotion consequences need a content mode")
+    return _CONTENT_MODE_CONSEQUENCES[mode]
 
 
 class PublicationStage(str, Enum):
@@ -78,7 +78,7 @@ class RegistryArtifactVersion:
     canonical_digest: ObjectDigest
     object_digest: ObjectDigest
     registry_snapshot: ObjectDigest
-    mode: PromotionMode
+    mode: RegistryContentMode
     publication: PublicationStage = PublicationStage.PROMOTED_LOCAL
     lifecycle: RegistryLifecycle = RegistryLifecycle.PUBLISHED
     lifecycle_reason: str | None = None
@@ -99,7 +99,7 @@ class RegistryArtifactVersion:
                     self.registry_snapshot,
                 )
             )
-            or not isinstance(self.mode, PromotionMode)
+            or not isinstance(self.mode, RegistryContentMode)
             or not isinstance(self.publication, PublicationStage)
             or not isinstance(self.lifecycle, RegistryLifecycle)
         ):
@@ -127,7 +127,7 @@ def registry_version_from_candidate(
     *,
     object_digest: ObjectDigest,
     registry_snapshot: ObjectDigest,
-    mode: PromotionMode,
+    mode: RegistryContentMode,
 ) -> RegistryArtifactVersion:
     if candidate.state not in {
         CandidateState.READY,
@@ -177,7 +177,7 @@ def registry_version_from_collection_change(
         change.canonical_digest,
         object_digest,
         registry_snapshot,
-        PromotionMode.VENDORED,
+        RegistryContentMode.SELF_CONTAINED,
     )
 
 

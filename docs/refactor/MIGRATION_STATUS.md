@@ -4,6 +4,10 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-17, CP-31 step 13 (D-376): the content mode is renamed.** `RegistryContentMode =
+SelfContained | PinnedReference`, valued `self-contained` / `pinned-reference`; `promotion_mode`
+became `content_mode` everywhere; spec §80 matches. Remaining `vendored` is the vendor family.
+
 **2026-10-17, CP-31 steps 11–12 (D-436): Marketplace and Installed columns, and the docs.**
 Marketplace rows show status, scope with a project count, the harnesses (eligible, with `✓` where
 installed) and unset inputs on one grid; Installed rows add scope and project, and More info the

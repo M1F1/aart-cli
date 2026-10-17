@@ -33,8 +33,8 @@ from aart_cli.configuration.policy import EffectiveConfiguration
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias
 from aart_cli.domain.registry import (
-    PromotionMode,
     RegistryArtifactVersion,
+    RegistryContentMode,
     RegistryLifecycle,
 )
 from aart_cli.domain.result import Err, Ok, Result
@@ -99,8 +99,10 @@ def _declined(version: RegistryArtifactVersion) -> str | None:
     """
 
     coordinate = version.coordinate
-    if version.mode is not PromotionMode.VENDORED:
-        return f"{coordinate}: referenced, so this registry snapshot holds no verified content"
+    if version.mode is not RegistryContentMode.SELF_CONTAINED:
+        return (
+            f"{coordinate}: pinned-reference, so this registry snapshot holds no verified content"
+        )
     if version.lifecycle is RegistryLifecycle.REVOKED:
         return f"{coordinate}: revoked by the registry"
     if version.lifecycle is RegistryLifecycle.DEPRECATED:

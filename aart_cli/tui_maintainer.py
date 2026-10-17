@@ -761,7 +761,7 @@ def render_maintainer_promotion_review(
     lines = [
         f"{view.artifact}@{view.version} — {_human(view.state.value)}",
         f"Target registry: {view.target_registry}",
-        f"Promotion mode: {view.mode}",
+        f"Content mode: {view.mode}",
         "",
         "Promotion choices:",
     ]

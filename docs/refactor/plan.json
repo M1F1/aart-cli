@@ -1154,12 +1154,12 @@
         {
           "id": "13",
           "title": "Rename the content mode: RegistryContentMode = SelfContained | PinnedReference (#54, D-376)",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "14",
           "title": "Prune (#73, #53): remove the vendor command family and every other unused legacy feature; adoption by manifest is the only way content enters a Registry (D-375, closes #41)",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "15",

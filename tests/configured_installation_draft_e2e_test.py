@@ -43,8 +43,8 @@ from aart_cli.domain.installation_owner import (
 )
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.registry import (
-    PromotionMode,
     RegistryArtifactVersion,
+    RegistryContentMode,
     publish_registry_version,
 )
 from aart_cli.domain.result import Ok
@@ -218,7 +218,7 @@ def _promote_one_locally(
     onto: SourceSnapshot,
     revision: str,
     setup: AuthoredSetup | None = None,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
 ) -> SourceSnapshot:
     """One author tree through one real promotion transaction onto `onto`, and no further.
 
@@ -278,7 +278,7 @@ def _promote_one(
     onto: SourceSnapshot,
     revision: str,
     setup: AuthoredSetup | None = None,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
 ) -> SourceSnapshot:
     """One author tree promoted onto `onto`, then recorded as published.
 
@@ -302,7 +302,7 @@ def _promote_one(
 def _promoted_local_registries(
     *authored: Authored,
     setup: AuthoredSetup | None = None,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
 ) -> SourceSnapshot:
     """Several author trees promoted into one registry, stopping where a maintainer stops."""
 
@@ -321,7 +321,7 @@ def _promoted_local_registries(
 def _published_registries(
     *authored: Authored,
     setup: AuthoredSetup | None = None,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
 ) -> SourceSnapshot:
     """Several author trees taken to a published registry, one promotion transaction each.
 
@@ -346,7 +346,7 @@ def _published_registry(
     authored: tuple[tuple[str, str] | tuple[str, str, bool], ...] = AUTHORED_MCP,
     *,
     setup: AuthoredSetup | None = None,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
 ) -> SourceSnapshot:
     """Take an author's files all the way to a published registry snapshot.
 

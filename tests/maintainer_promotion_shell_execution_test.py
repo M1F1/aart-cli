@@ -31,7 +31,7 @@ from aart_cli.application.maintainer_views import (
     project_maintainer_registry_validation,
 )
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Ok
 from aart_cli.protocol.native_tree import SnapshotOrigin, SourceSnapshot
 from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
@@ -77,7 +77,7 @@ class PromotionShellExecutionTest(unittest.TestCase):
     def test_enter_on_screen_43_requests_one_typed_promotion_in_the_chosen_mode(self) -> None:
         state = dataclasses.replace(
             _on(MaintainerScreen.REGISTRY_DIFF),
-            promotion_mode=PromotionMode.REFERENCED,
+            content_mode=RegistryContentMode.PINNED_REFERENCE,
         )
 
         event = key_event("enter", state)
@@ -97,7 +97,7 @@ class PromotionShellExecutionTest(unittest.TestCase):
                 ConsumerUiCommandKind.PREPARE_ACTION,
                 action=ConsumerActionKind.CANDIDATE_PROMOTION,
                 focus="a" * 64,
-                promotion_mode=PromotionMode.REFERENCED,
+                content_mode=RegistryContentMode.PINNED_REFERENCE,
             ),
             commands,
         )

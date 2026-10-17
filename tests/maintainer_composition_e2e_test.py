@@ -38,7 +38,7 @@ from aart_cli.configuration.model import (
 from aart_cli.configuration.schema import user_configuration_bytes
 from aart_cli.domain.candidates import assess_candidate
 from aart_cli.domain.identifiers import SourceAlias, SourceId
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Ok
 from aart_cli.io.candidate_store import (
     candidate_history_paths,
@@ -583,7 +583,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             expected = scan.active[0].candidate
             self.assertIs(finished.session.screen, MaintainerScreen.PROMOTION_MODE)
             # Choosing a mode is a different promotion to confirm, not a relabelled one.
-            self.assertIs(finished.promotion_mode, PromotionMode.REFERENCED)
+            self.assertIs(finished.content_mode, RegistryContentMode.PINNED_REFERENCE)
             # Screen 40 was entered from a check row rather than from a bare Candidate ID, which is
             # the whole reason the row identity is a parsed pair and not a split string.
             entered = parse_validation_row(finished.focus)
@@ -604,14 +604,14 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
 
             promotion = terminal.screen_containing("/ Promotion Review")
             self.assertIn("Target registry: company", promotion)
-            self.assertIn("Promotion mode: vendored", promotion)
+            self.assertIn("Content mode: self-contained", promotion)
             # This walk reaches a confirmable review against the registry this machine actually
             # synchronized, rather than the refusal an unsynchronized one would show.
             self.assertIn("Review digest:", promotion)
             self.assertNotIn("cannot be promoted", promotion)
             self.assertIn("Validation report:", promotion)
 
-            chosen = terminal.screen_containing("Promotion mode: referenced")
+            chosen = terminal.screen_containing("Content mode: pinned-reference")
             self.assertIn("Review digest:", chosen)
             self.assertNotEqual(
                 _digest_line(promotion), _digest_line(chosen), "mode must change the review"
@@ -869,7 +869,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
                 diffs = [
                     item for item in views.registry_diffs or () if item.candidate_id == promoted_id
                 ]
-                self.assertEqual(len(reviews), len(PromotionMode))
+                self.assertEqual(len(reviews), len(RegistryContentMode))
                 self.assertFalse(any(item.confirmable for item in reviews))
                 self.assertFalse(any(item.plannable for item in diffs))
                 self.assertTrue(

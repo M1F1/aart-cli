@@ -40,7 +40,7 @@ from aart_cli.application.sources import SourceStatusRequest, source_status
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
+from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.protocol.native_tree import SourceSnapshot
 from aart_cli.sources.model import (
@@ -267,7 +267,7 @@ def read_maintainer_views(
                 promotion=promotion[bundle.candidate.id.value],
             )
             for bundle, validation in runs
-            for mode in PromotionMode
+            for mode in RegistryContentMode
         )
         promotions = tuple(
             project_maintainer_promotion_review(
@@ -279,7 +279,7 @@ def read_maintainer_views(
                 promotion=promotion[bundle.candidate.id.value],
             )
             for bundle, validation in runs
-            for mode in PromotionMode
+            for mode in RegistryContentMode
         )
         # Screen 46 is about the registries themselves, so it covers every configured one rather
         # than only those some active Candidate happens to target.

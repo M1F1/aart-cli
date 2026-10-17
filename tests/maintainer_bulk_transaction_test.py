@@ -22,7 +22,7 @@ from aart_cli.application.maintainer_promotion import (
 from aart_cli.application.maintainer_sync import ApprovedRegistryState
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode
+from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok
 from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.protocol.native_tree import (
@@ -97,7 +97,7 @@ def _prepared(bundle: CandidateBundle, approved: ApprovedRegistryState):
         validate_candidate(bundle, policy=policy),
         policy,
         approved,
-        mode=PromotionMode.VENDORED,
+        mode=RegistryContentMode.SELF_CONTAINED,
     )
     assert isinstance(prepared, Ok), prepared
     return prepared.value
@@ -158,7 +158,7 @@ class BulkTransactionPrepareTest(unittest.TestCase):
             self.policy,
             self.approved,
             _workspace(),
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
     def test_a_prepared_transaction_carries_every_promotion_it_would_apply(self) -> None:
@@ -188,7 +188,7 @@ class BulkTransactionPrepareTest(unittest.TestCase):
             self.policy,
             self.approved,
             moved,
-            mode=PromotionMode.VENDORED,
+            mode=RegistryContentMode.SELF_CONTAINED,
         )
 
         self.assertIsInstance(prepared, Err)

@@ -21,7 +21,7 @@ from aart_cli.domain.identifiers import (
     ObjectDigest,
     SourceAlias,
 )
-from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion, RegistryLifecycle
+from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode, RegistryLifecycle
 from aart_cli.domain.result import Ok
 from aart_cli.domain.selection import ArtifactRequest, VersionConstraint
 from aart_cli.protocol.registry_versions import FIRST_REGISTRY_VERSION, next_registry_version
@@ -51,7 +51,7 @@ def _approved(
         _digest("3"),
         _digest("3"),
         _digest("4"),
-        PromotionMode.VENDORED,
+        RegistryContentMode.SELF_CONTAINED,
         lifecycle=lifecycle,
         lifecycle_reason=None if lifecycle is RegistryLifecycle.PUBLISHED else "withdrawn",
     )

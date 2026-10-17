@@ -43,7 +43,7 @@ from aart_cli.domain.collection_changes import RegistryCollectionChange
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import SourceAlias, source_revision_kind
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.registry import PromotionMode, RegistryArtifactVersion
+from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.serialization import canonical_json_bytes
 from aart_cli.protocol.hashing import sha256_bytes
@@ -304,7 +304,7 @@ class PreparedCandidatePromotion:
     validation: CandidateValidation
     policy: EffectivePolicy
     approved: ApprovedRegistryState
-    mode: PromotionMode
+    mode: RegistryContentMode
     evidence: PromotionEvidence
     review_digest: ObjectDigest = field(init=False)
 
@@ -315,7 +315,7 @@ class PreparedCandidatePromotion:
             or not isinstance(self.validation, CandidateValidation)
             or not isinstance(self.policy, EffectivePolicy)
             or not isinstance(self.approved, ApprovedRegistryState)
-            or not isinstance(self.mode, PromotionMode)
+            or not isinstance(self.mode, RegistryContentMode)
             or not isinstance(self.evidence, PromotionEvidence)
             or self.validation.candidate_id != self.candidate.candidate.id
             or self.observed.candidate.id != self.candidate.candidate.id
@@ -372,7 +372,7 @@ def prepare_candidate_promotion(
     policy: EffectivePolicy,
     approved: ApprovedRegistryState,
     *,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
 ) -> Result[PreparedCandidatePromotion]:
     """Bind one reviewed Candidate into a confirmable promotion, or say why it cannot be one."""
 
@@ -381,7 +381,7 @@ def prepare_candidate_promotion(
         or not isinstance(validation, CandidateValidation)
         or not isinstance(policy, EffectivePolicy)
         or not isinstance(approved, ApprovedRegistryState)
-        or not isinstance(mode, PromotionMode)
+        or not isinstance(mode, RegistryContentMode)
     ):
         return _error("preparing a promotion needs a Candidate, its run, a policy and a baseline")
     candidate = bundle.candidate
@@ -482,7 +482,7 @@ def plan_promotion_transaction(
     elif not isinstance(baseline, ApprovedRegistryState) or not isinstance(policy, EffectivePolicy):
         return _error("a Collection transaction needs its approved baseline and policy")
     else:
-        mode = PromotionMode.VENDORED
+        mode = RegistryContentMode.SELF_CONTAINED
     if any(
         item.mode is not mode or item.approved != baseline or item.policy != policy
         for item in promotions
@@ -638,7 +638,7 @@ def prepare_candidate_promotion_transaction(
     approved: ApprovedRegistryState,
     registry_workspace: SourceSnapshot,
     *,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
     baseline_mismatch: RegistryBaselineMismatch = RegistryBaselineMismatch.UNKNOWN,
 ) -> Result[PreparedCandidatePromotionTransaction]:
     """Plan and validate the exact inert registry state screens 43–45 will review.
@@ -664,7 +664,7 @@ def prepare_promotion_transaction(
     approved: ApprovedRegistryState,
     registry_workspace: SourceSnapshot,
     *,
-    mode: PromotionMode = PromotionMode.VENDORED,
+    mode: RegistryContentMode = RegistryContentMode.SELF_CONTAINED,
     baseline_mismatch: RegistryBaselineMismatch = RegistryBaselineMismatch.UNKNOWN,
 ) -> Result[PreparedCandidatePromotionTransaction]:
     """Plan and validate the exact inert registry state one transaction would leave behind.

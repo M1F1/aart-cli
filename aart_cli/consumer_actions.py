@@ -1788,10 +1788,10 @@ class LocalConsumerActions:
             )
         row = parse_validation_row(command.focus)
         raw_id = command.focus if row is None else row.candidate_id
-        if not raw_id or command.promotion_mode is None:
+        if not raw_id or command.content_mode is None:
             return self._declined(
                 command,
-                _lines("Candidate promotion needs one focused Candidate and promotion mode"),
+                _lines("Candidate promotion needs one focused Candidate and content mode"),
             )
         try:
             candidate_id = CandidateId(raw_id)
@@ -1803,14 +1803,14 @@ class LocalConsumerActions:
             data_root=self._data_root,
             registry_root=self._context.host.project_root,
             policy=self._context.policy,
-            mode=command.promotion_mode,
+            mode=command.content_mode,
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
         shown = (
             None
             if self._context.maintainer is None
-            else self._context.maintainer.registry_diff(raw_id, command.promotion_mode)
+            else self._context.maintainer.registry_diff(raw_id, command.content_mode)
         )
         if (
             shown is None
@@ -1846,10 +1846,10 @@ class LocalConsumerActions:
                 command,
                 _lines("bulk promotion needs the configured durable data root"),
             )
-        if not command.selection or command.promotion_mode is None:
+        if not command.selection or command.content_mode is None:
             return self._declined(
                 command,
-                _lines("bulk promotion needs a selection and a promotion mode"),
+                _lines("bulk promotion needs a selection and a content mode"),
             )
         try:
             selected = tuple(CandidateId(item) for item in command.selection)
@@ -1861,7 +1861,7 @@ class LocalConsumerActions:
             data_root=self._data_root,
             registry_root=self._context.host.project_root,
             policy=self._context.policy,
-            mode=command.promotion_mode,
+            mode=command.content_mode,
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
