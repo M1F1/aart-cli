@@ -11209,3 +11209,20 @@ implementation choices:
   action, moves the cursor to Custom and stays on 05p. Install from the Marketplace starts with no
   mismatches, and choosing Default again prepares and checks again, so a Settings change made in
   between is seen.
+
+## D-453 — A variable that names a secret ends in `_SECRET_NAME` (CP-33 step 6, #46)
+
+`AART_CLI_PIP_INDEX_CREDENTIALS_SECRET`, `AART_CLI_IMAGE_USERNAME_SECRET`,
+`AART_CLI_IMAGE_PASSWORD_SECRET`, `AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET` and
+`AART_CLI_GIT_CREDENTIALS_SECRET` hold the name of a secret, which the workflow looks up with
+`secrets[vars.NAME]`. The suffix said the opposite, and invited a credential into a readable
+variable. They are now `…_SECRET_NAME`, in this repository's workflows, the Registry CI that
+`maintain registry init` writes, the docs and the specification.
+- `_SECRET_NAME` rather than `_SECRET_REF`: *name* is what the value literally is, and the word the
+  documentation already used for every one of these rows.
+- No alias and no fallback (§169): an old name is read by nothing, which `vars.NAME || default`
+  already makes silent. The rollout docs (#80) list the old names among those to delete.
+- An existing Registry keeps its older generated workflow, which reads the old names:
+  `maintain registry init` refuses to overwrite a managed file whose content differs. Its
+  maintainer deletes the workflow and runs `init` again, then renames the variables. That is the
+  CP-26 break policy (no migrator), stated in the rollout docs.

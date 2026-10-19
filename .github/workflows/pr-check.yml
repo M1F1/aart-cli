@@ -35,7 +35,7 @@ env:
 
 jobs:
   gates:
-    if: vars.AART_CLI_IMAGE_USERNAME_SECRET == ''
+    if: vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME == ''
     name: gates (Python ${{ matrix.python-version }})
     runs-on: ${{ fromJSON(vars.AART_CLI_RUNNER || '["ubuntu-latest"]') }}
     # Every job takes its interpreter from an image, never from a download: a step-level `if:`
@@ -64,7 +64,7 @@ jobs:
       # needs a package index; the registry gates need none.  The variable holds the bare host and
       # names the secret holding `user:pass`, because a variable cannot hold a credential.
       AART_CLI_INDEX_URL: ${{ vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple' }}
-      AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET] }}
+      AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET_NAME] }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,14 +92,14 @@ jobs:
             && github.event.pull_request.base.sha || '' }}
 
   gates-private-image:
-    if: vars.AART_CLI_IMAGE_USERNAME_SECRET != ''
+    if: vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME != ''
     name: gates (Python ${{ matrix.python-version }}, private image)
     runs-on: ${{ fromJSON(vars.AART_CLI_RUNNER || '["ubuntu-latest"]') }}
     container:
       image: ${{ vars.AART_CLI_CI_IMAGE }}
       credentials:
-        username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET] }}
-        password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET] }}
+        username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME] }}
+        password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET_NAME] }}
     strategy:
       fail-fast: false
       matrix:
@@ -109,7 +109,7 @@ jobs:
           || vars.AART_CLI_PYTHON_VERSIONS || '["3.10", "3.11", "3.14"]') }}
     env:
       AART_CLI_INDEX_URL: ${{ vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple' }}
-      AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET] }}
+      AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET_NAME] }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -166,7 +166,7 @@ jobs:
           # means the gates never ran at all -- a broken condition, an image variable set to
           # something unexpected -- and that must fail rather than look like a pass.
           if [ "$PLAIN" = "skipped" ] && [ "$PRIVATE" = "skipped" ]; then
-            echo "::error::neither gate job ran; check AART_CLI_IMAGE_USERNAME_SECRET" >&2
+            echo "::error::neither gate job ran; check AART_CLI_IMAGE_USERNAME_SECRET_NAME" >&2
             exit 1
           fi
           for result in "$PLAIN" "$PRIVATE"; do

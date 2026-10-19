@@ -1252,7 +1252,7 @@
     },
     {
       "id": "CP-33",
-      "title": "Default says which Settings values do not fit, and points to Custom (#82)",
+      "title": "Default says which Settings values do not fit (#82); secret-name variables (#46); agent-readable docs with minimal upkeep (#47); Enterprise docs for 0.11 (#80); Enterprise distribution name (#24)",
       "status": "in_progress",
       "steps": [
         {
@@ -1276,9 +1276,44 @@
           "status": "done"
         },
         {
+          "id": "6",
+          "title": "#46: the five repository variables that name a secret end in _SECRET_NAME (workflows, generated Registry CI, docs, spec), D-453",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "#47: aart-cli docs [command…] [--json], generated from build_parser() at run time; every leaf command has a description=",
+          "status": "todo"
+        },
+        {
+          "id": "8",
+          "title": "#47: a hand-written llms.txt at the repository root that names no commands",
+          "status": "todo"
+        },
+        {
+          "id": "9",
+          "title": "#47: make docs-check refuses a fenced aart-cli command that does not parse",
+          "status": "todo"
+        },
+        {
+          "id": "10",
+          "title": "#47: one pruning pass over the user-facing docs; what --help now covers is deleted or merged",
+          "status": "todo"
+        },
+        {
+          "id": "11",
+          "title": "#80: refresh the Enterprise docs (release sequence, fork sync, one remote convention and one CI smoke, fork and Registry variables)",
+          "status": "todo"
+        },
+        {
+          "id": "12",
+          "title": "#24: an Enterprise fork names its distribution through AART_CLI_DISTRIBUTION_NAME; command, import package and home stay aart-cli",
+          "status": "todo"
+        },
+        {
           "id": "5",
           "title": "Focused verification and the PR",
-          "status": "in_progress"
+          "status": "todo"
         }
       ]
     }

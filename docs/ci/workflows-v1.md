@@ -88,7 +88,7 @@ None of these can be committed. Each is set per repository, on every instance se
    The gate jobs themselves come in two shapes, `gates` and `gates-private-image`, of which only one
    ever runs; requiring either by name would hang every pull request on an instance using the other.
    The aggregate fails when the shape that ran failed, and when neither ran — which is what a
-   mistyped `AART_CLI_IMAGE_USERNAME_SECRET` looks like.
+   mistyped `AART_CLI_IMAGE_USERNAME_SECRET_NAME` looks like.
 3. **Require branches to be up to date before merging.** Two pull requests can each be green and
    still break `main` together. `pr-check` does not run on `main`, so this setting is what catches
    the pair.
