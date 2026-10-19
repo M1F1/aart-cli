@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.11.0](https://github.com/M1F1/aart-cli/compare/v0.10.0...v0.11.0) (2026-10-19)
+
+
+### Added
+
+* **author:** add an independent workspace and authoring TUI (Author Mode) ([0142db7](https://github.com/M1F1/aart-cli/commit/0142db7bbc20afb0c1aec946ff9df000e5072109))
+* **cli:** consume, maintain and author replace the source, marketplace and registry command families ([0142db7](https://github.com/M1F1/aart-cli/commit/0142db7bbc20afb0c1aec946ff9df000e5072109))
+* **config:** keep Registries and Upstream repositories in separate lists ([0142db7](https://github.com/M1F1/aart-cli/commit/0142db7bbc20afb0c1aec946ff9df000e5072109))
+* **consume:** a consumer installs only from Registries; author repositories are Upstream repositories ([0142db7](https://github.com/M1F1/aart-cli/commit/0142db7bbc20afb0c1aec946ff9df000e5072109))
+* **maintain:** candidate list shows the recorded Candidates ([0142db7](https://github.com/M1F1/aart-cli/commit/0142db7bbc20afb0c1aec946ff9df000e5072109))
+* **marketplace:** keep complete artifact details under More info ([0142db7](https://github.com/M1F1/aart-cli/commit/0142db7bbc20afb0c1aec946ff9df000e5072109))
+* **marketplace:** wrap complete labeled columns and scroll narrow views ([0142db7](https://github.com/M1F1/aart-cli/commit/0142db7bbc20afb0c1aec946ff9df000e5072109))
+* **reset:** back up the AART state and start clean, with --restore ([0142db7](https://github.com/M1F1/aart-cli/commit/0142db7bbc20afb0c1aec946ff9df000e5072109))
+* **tui:** name Upstream repositories and Registry by role ([0142db7](https://github.com/M1F1/aart-cli/commit/0142db7bbc20afb0c1aec946ff9df000e5072109))
+
+
+### Fixed
+
+* **mcp:** report unset credentials and configuration before smoke ([0142db7](https://github.com/M1F1/aart-cli/commit/0142db7bbc20afb0c1aec946ff9df000e5072109))
+* **sources:** read a local author checkout as Git would commit it ([0142db7](https://github.com/M1F1/aart-cli/commit/0142db7bbc20afb0c1aec946ff9df000e5072109))
+
+
+### Documentation
+
+* explain role commands, Author Mode and inline Marketplace details ([0142db7](https://github.com/M1F1/aart-cli/commit/0142db7bbc20afb0c1aec946ff9df000e5072109))
+
 ## [0.10.0](https://github.com/M1F1/aart-cli/compare/v0.9.0...v0.10.0) (2026-10-17)
 
 
