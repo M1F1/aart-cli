@@ -15,7 +15,7 @@ changes only the output.
 - [Using an installed AART](docs/using/consumer-lifecycle-v1.md): install, update, check and undo
 - [Maintaining a registry](docs/registry/maintaining-a-registry-v1.md): from an Upstream repository to an approved artifact
 - [Writing an artifact](docs/authoring/authoring-an-artifact-v1.md): the manifest and its check
-- [Inside a company](docs/ci/running-inside-a-company-v1.md): what changes on GitHub Enterprise and in a fork
+- [Rolling out on GitHub Enterprise Server](docs/ci/github-enterprise-rollout.md): what changes on an Enterprise instance and in a fork
 
 ## Optional
 

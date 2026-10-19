@@ -67,7 +67,6 @@ unversioned packages. CP-26 removed that representation. Those paths are rejecte
 mixed checkout; no compatibility reader or automatic migration is provided. They are not inputs
 or outputs of current maintenance commands.
 
-See [maintenance planning](../registry/maintenance-planning-v1.md),
-[maintainer commands](../registry/maintainer-commands-v1.md) and the canonical
+See [maintaining a registry](../registry/maintaining-a-registry-v1.md) and the canonical
 [Product Specification](../product-specification/PRODUCT_SPECIFICATION.md) for review, publication
 and installation ownership.

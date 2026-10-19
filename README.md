@@ -225,8 +225,7 @@ the product's single source of truth, which every document below is written agai
 **Using AART** — [installing it](docs/install/installing-aart-v1.md) ·
 [the consumer lifecycle](docs/using/consumer-lifecycle-v1.md) ·
 [where AART keeps what it owns](docs/configuration/application-home-v1.md) ·
-[with a company registry](docs/tutorials/company-registry-v1.md) ·
-[with a local Registry](docs/tutorials/direct-source-v1.md) ·
+[with a company or local registry](docs/tutorials/company-registry-v1.md) ·
 [the environment AART gives Git](docs/configuration/git-environment-v1.md) ·
 [advisory runtime requirements](docs/marketplace/runtime-requirements-v1.md)
 
@@ -239,11 +238,10 @@ the product's single source of truth, which every document below is written agai
 
 **Maintaining a registry** — [the maintainer's route](docs/registry/maintaining-a-registry-v1.md) ·
 [standing up your first one](docs/tutorials/company-registry-tabnine-v1.md) ·
-[maintainer commands](docs/registry/maintainer-commands-v1.md) ·
-[maintenance planning](docs/registry/maintenance-planning-v1.md)
+`aart-cli docs maintain`
 
-**Inside a company** — [what changes there](docs/ci/running-inside-a-company-v1.md) ·
-[rolling out on GitHub Enterprise Server](docs/ci/github-enterprise-rollout.md)
+**Inside a company** — [rolling out on GitHub Enterprise Server](docs/ci/github-enterprise-rollout.md):
+every setting is a repository variable, so a copy on an Enterprise instance never edits a workflow
 
 **Security and policy** — [installation-risk baseline](docs/security/baseline-v1.md) ·
 [attestations and policy](docs/security/attestations-v1.md) ·
