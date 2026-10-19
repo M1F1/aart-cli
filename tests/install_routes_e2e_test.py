@@ -52,7 +52,9 @@ class DocumentedInstallRouteTest(unittest.TestCase):
         # Declining is a decision, not a gap: each one names why it cannot run here.
         for item in receipt["declined"]:
             with self.subTest(command=item["command"]):
-                self.assertIn(item["route"], ("network", "consumer-example", "generator"))
+                self.assertIn(
+                    item["route"], ("network", "consumer-example", "generator", "upgrade")
+                )
 
     def test_the_generated_lines_are_the_ones_the_release_body_will_carry(self) -> None:
         """D-277: the page names no address, so the address comes from `install_commands.py`.
