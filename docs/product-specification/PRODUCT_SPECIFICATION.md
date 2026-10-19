@@ -11461,3 +11461,30 @@ values and reasons only, never a configuration or secret value.
 **INV-275 — Default never silently differs from Settings.** A Default install either applies every
 Settings harness, the Settings scope and the Settings Python installer to every selected artifact,
 or installs nothing and lists each value that does not fit.
+
+
+# 177. The command reference is the parser
+
+Status: **ACCEPTED 2026-10-19 (D-454)**, on the owner's request (#47).
+
+The executable's parser is the only written command reference. `aart-cli docs` reads it when it
+runs and prints it, so the reference always matches the installed version, works offline and adds
+no runtime dependency:
+- `aart-cli docs` lists every command with its one-line help;
+- `aart-cli docs COMMAND…` prints that command's or group's description, usage, options and
+  defaults, and the commands under a group; the words may also be given as one quoted argument;
+- `--json` returns the same reference as one document: the program, its version, and for each
+  command its path, help, description, usage and arguments (name, flags, metavar, help, default,
+  choices, required, nargs);
+- an unknown command is a usage error (exit `2`) that names it and points to `aart-cli docs`.
+
+Every command and group carries a description, and every argument and option a help text. A
+repository-root `llms.txt` written by hand tells an agent to run `aart-cli docs --json` and links
+the few guides; it names no other command, so a rename never makes it stale. `make docs-check`
+hands every `aart-cli …` (or `python -m aart_cli …`) line in a fenced block of the README and the
+user-facing documents to the same parser and fails on one it rejects. `docs/refactor/` and this
+specification are not held to it: they record history and the target.
+
+**INV-276 — The documented command surface is the shipped one.** Every command, option and default
+the reference prints is read from the parser the executable runs, and no user-facing document shows
+a fenced command that parser rejects.

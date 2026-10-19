@@ -16,8 +16,9 @@ proxy that is the whole failure.
 `maintain registry init` turns an empty checkout into a registry: the two JSON markers, a `.gitignore`,
 the quality workflow, a `README.md` describing the registry it just made, and a `.aart-cli-version` pinning the AART
 that created it. Those last two are written only when absent — they are the files
-you own afterwards, and AART never compares or overwrites them. The workflows and the JSON are
-managed: hand-edit one and `init` refuses the registry.
+you own afterwards, and AART never compares or overwrites them. `init` runs once: it refuses a
+checkout that is already a registry. The workflow is generated and the same for every registry, so
+configure it with repository variables rather than edits, and a newer copy can replace it whole.
 
 The generated workflows need no configuration to run on github.com. To run them inside a company,
 set repository variables — no file in the registry changes. See

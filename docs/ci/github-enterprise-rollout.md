@@ -355,8 +355,19 @@ other everyday commands.
 ## Part 4 — Configure the registry repository
 
 This is a **different repository** from the `aart-cli` copy, with its own variables. The workflow
-files `maintain registry init` wrote are managed: `init` refuses a registry whose workflow was
-edited by hand, so configure it with **variables, never edits**.
+`maintain registry init` wrote is generated, and the same for every registry: configure it with
+**variables, never edits**, so a newer copy can replace it whole.
+
+`init` runs once and refuses a checkout that is already a registry, so a newer workflow comes from
+a scratch one. A registry whose workflow predates the `_SECRET_NAME` names reads variables ending
+in `_SECRET`, which nothing sets any more; there is no migrator, so replace it this way, commit the
+new file in a pull request, and rename the variables to the names below:
+
+```bash
+git init /tmp/fresh-registry
+aart-cli maintain registry init --source /tmp/fresh-registry --source-id scratch --display-name Scratch --yes
+cp /tmp/fresh-registry/.github/workflows/aart-cli-registry.yml .github/workflows/aart-cli-registry.yml
+```
 
 ### Step 1 — Choose how the registry's CI fetches AART
 
@@ -547,9 +558,9 @@ Read by the workflow `aart-cli maintain registry init` writes.
   the actions explicitly named in the generated workflow.
 - **A credential in a variable.** Variables are visible to anyone with read access. Every credential
   above is a secret, named by a variable.
-- **Many registries sharing one workflow.** Each registry carries its own copy of the managed
-  workflow. Replacing it with a call to a shared reusable workflow works, but `maintain registry init` then
-  refuses that registry, because its managed file no longer matches.
+- **Many registries sharing one workflow.** Each registry carries its own copy of the generated
+  workflow. Replacing it with a call to a shared reusable workflow works, but the registry then no
+  longer carries the file a newer `aart-cli` generates, so taking the next one is a merge by hand.
 
 ### What has been run on a real instance
 
