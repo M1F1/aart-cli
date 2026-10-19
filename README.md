@@ -208,6 +208,17 @@ state and then restores that backup. Harness files and projects stay in place. S
 
 ## Documentation
 
+**The command reference** is the CLI itself. `aart-cli docs` lists every command with what it does,
+`aart-cli docs consume install` describes one command with its usage, options and defaults, and
+`--json` returns all of it as one document for an agent. It is read from the installed version when
+it runs, so it always matches what you have. An agent starts at [`llms.txt`](llms.txt).
+
+```sh
+aart-cli docs
+aart-cli docs consume install
+aart-cli docs --json
+```
+
 **The specification** — [the Product Specification](docs/product-specification/PRODUCT_SPECIFICATION.md),
 the product's single source of truth, which every document below is written against
 

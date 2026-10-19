@@ -1,0 +1,22 @@
+# AART
+
+> A package manager for agent artifacts. It installs skills, guidelines, MCP servers, hooks and
+> memory into agentic harnesses, from a Registry somebody in your organization reviewed. The
+> executable and the package are `aart-cli`; the Python import package is `aart_cli`.
+
+The command reference is not written down here. Run `aart-cli docs --json` for every command with
+its description, usage, options, defaults and choices, read from the installed version when it
+runs. Every mutation reviews first and changes nothing until it is run again with `--yes`; `--json`
+changes only the output.
+
+## Guides
+
+- [README](README.md): installing AART and the shortest route to an installed artifact
+- [Using an installed AART](docs/using/consumer-lifecycle-v1.md): install, update, check and undo
+- [Maintaining a registry](docs/registry/maintaining-a-registry-v1.md): from an Upstream repository to an approved artifact
+- [Writing an artifact](docs/authoring/authoring-an-artifact-v1.md): the manifest and its check
+- [Inside a company](docs/ci/running-inside-a-company-v1.md): what changes on GitHub Enterprise and in a fork
+
+## Optional
+
+- [Product Specification](docs/product-specification/PRODUCT_SPECIFICATION.md): the single source of product truth; long, and it describes the target as well as what is shipped

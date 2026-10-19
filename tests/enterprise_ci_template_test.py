@@ -591,7 +591,9 @@ class TheContainerSwitchTest(unittest.TestCase):
                     continue
                 expected = "!=" if name.endswith("-private-image") else "=="
                 self.assertIn(
-                    f"vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME {expected} ''", body, f"{label}: {name}"
+                    f"vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME {expected} ''",
+                    body,
+                    f"{label}: {name}",
                 )
 
     def test_the_default_shape_carries_no_credentials_block(self) -> None:
@@ -615,10 +617,14 @@ class TheContainerSwitchTest(unittest.TestCase):
                     continue
                 where = f"{label}: {name}"
                 self.assertIn(
-                    "username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME] }}", body, where
+                    "username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME] }}",
+                    body,
+                    where,
                 )
                 self.assertIn(
-                    "password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET_NAME] }}", body, where
+                    "password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET_NAME] }}",
+                    body,
+                    where,
                 )
 
 

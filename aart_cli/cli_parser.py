@@ -235,6 +235,11 @@ def build_parser() -> argparse.ArgumentParser:
         p_source_list = family_sub.add_parser(
             "list",
             help=f"show connected {noun} entries and managed snapshot health",
+            description=(
+                f"List every {noun} this machine is connected to, with its alias, location, "
+                "whether it is the default, and the health of its managed snapshot. This reads "
+                "local state only; it fetches nothing and changes nothing."
+            ),
         )
         _add_json(p_source_list)
 
@@ -359,6 +364,11 @@ def build_parser() -> argparse.ArgumentParser:
         "candidate",
         formatter_class=_HELP_FORMATTER,
         help="review and promote the Candidates upstreams offer",
+        description=(
+            "A Candidate is an artifact an Upstream repository offers that this Registry has not "
+            "approved yet. List the Candidates the connected Upstream repositories recorded, and "
+            "promote exact ones into the Registry after review."
+        ),
     )
     candidate_sub = p.add_subparsers(dest="candidate_action", metavar="ACTION", required=True)
 
@@ -368,6 +378,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_marketplace_list = marketplace_sub.add_parser(
         "list",
         help="emit all canonical marketplace sources and artifacts",
+        description=(
+            "Print every connected Registry and every artifact it offers, from the managed "
+            "snapshots on this machine. On a large catalog, `consume search` finds one artifact "
+            "without reading the whole list. This reads only; run `consume registry sync` to "
+            "refresh the snapshots first."
+        ),
     )
     _add_json(p_marketplace_list)
 
@@ -553,8 +569,20 @@ def build_parser() -> argparse.ArgumentParser:
         "test",
         formatter_class=_HELP_FORMATTER,
         help="run each installation's declared smoke operation and report both stages",
+        description=(
+            "For each installed MCP named, or every one with --all, check its installation "
+            "configuration, then start it and make the one read-only call its manifest declares. "
+            "Missing credentials or AART_NOT_SET values stop at NOT CONFIGURED and the server is "
+            "never started. A PASS does not prove the call reached the external service. Exits "
+            "non-zero unless every installation passes."
+        ),
     )
-    p_mcp_test.add_argument("names", nargs="*", metavar="INSTALLED")
+    p_mcp_test.add_argument(
+        "names",
+        nargs="*",
+        metavar="INSTALLED",
+        help="installed MCP coordinate(s) to test; use --all instead to test every one",
+    )
     p_mcp_test.add_argument(
         "--all",
         dest="all_installed",
@@ -597,6 +625,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_receipt_show = receipt_sub.add_parser(
         "show",
         help="print the persisted setup record for one installed artifact",
+        description=(
+            "Print the setup record of one installed artifact as it was written: plan hash, "
+            "installer hash, timings, exit status, and one receipt per step with its module, "
+            "target and disposition. It asks the machine nothing; `receipt verify` does that."
+        ),
     )
     p_receipt_show.add_argument(
         "names",
@@ -698,7 +731,16 @@ def build_parser() -> argparse.ArgumentParser:
             help="finalize the reviewed registry mutation (without this only review)",
         )
 
-    p_init = registry_sub.add_parser("init", help="initialize a canonical registry checkout")
+    p_init = registry_sub.add_parser(
+        "init",
+        help="initialize a canonical registry checkout",
+        description=(
+            "Turn a local Git checkout into an AART Registry: protocol markers, `.aart-cli-version`, "
+            "a README and the registry CI workflows. Without --yes this only reviews the files it "
+            "would write; a file that already exists with different content is refused, never "
+            "replaced."
+        ),
+    )
     _add_registry_source(p_init)
     p_init.add_argument(
         "--source-id", required=True, metavar="SLUG", help="stable registry/source identity"
@@ -730,9 +772,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_collection = registry_sub.add_parser(
         "collection",
         help="define or change a Collection of artifacts this registry approved",
+        description=(
+            "Write a Collection: a named set of artifacts this Registry already approved, each "
+            "pinned at its highest approved version. A new Collection needs --summary. Without "
+            "--yes this only reviews the change."
+        ),
     )
     _add_registry_source(p_collection)
-    p_collection.add_argument("names", nargs=1, metavar="NAME")
+    p_collection.add_argument(
+        "names", nargs=1, metavar="NAME", help="the Collection name, as a lowercase slug"
+    )
     p_collection.add_argument(
         "--summary",
         metavar="TEXT",
@@ -924,7 +973,12 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="writable local registry Git checkout",
     )
-    p_check_adoption.add_argument("names", nargs=1, metavar="KIND/NAME@VERSION")
+    p_check_adoption.add_argument(
+        "names",
+        nargs=1,
+        metavar="KIND/NAME@VERSION",
+        help="the adopted artifact version to compare with its upstream",
+    )
     _add_registry_finalize(p_check_adoption)
     p_check_adoption.add_argument(
         "--expect",
@@ -933,20 +987,48 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_json(p_check_adoption)
 
-    p_format = registry_sub.add_parser("format", help="canonicalize registry JSON files")
+    p_format = registry_sub.add_parser(
+        "format",
+        help="canonicalize registry JSON files",
+        description=(
+            "Rewrite every managed JSON document in its canonical form. With --check it changes "
+            "nothing and exits 1 when any file would change; without --yes it only reviews."
+        ),
+    )
     _add_registry_source(p_format)
     _add_check(p_format)
     _add_registry_finalize(p_format)
     _add_json(p_format)
 
-    p_validate = registry_sub.add_parser("validate", help="validate registry protocol content")
+    p_validate = registry_sub.add_parser(
+        "validate",
+        help="validate registry protocol content",
+        description=(
+            "Check the approved version records, catalogs, packages, compatibility bounds and "
+            "dependency graph against the Registry protocol. This reads only and works on a plain "
+            "snapshot without .git."
+        ),
+    )
     _add_registry_source(p_validate)
     _add_json(p_validate)
 
     for action in ("lock", "build"):
         target = registry_sub.add_parser(
             action,
-            help=f"{'resolve authored references' if action == 'lock' else 'compile the index'}",
+            help=(
+                "check that approved versions carry their pins"
+                if action == "lock"
+                else "compile the index"
+            ),
+            description=(
+                "Check that every approved version record under registry/versions/ already carries "
+                "its source and content pins. There is nothing to resolve and no separate lock "
+                "file is written."
+                if action == "lock"
+                else "Rebuild registry/index.json and registry/snapshot.json deterministically from "
+                "the approved versions. With --check it changes nothing and exits 1 when either "
+                "file is out of date; without --yes it only reviews."
+            ),
         )
         _add_registry_source(target)
         _add_check(target)
@@ -954,7 +1036,14 @@ def build_parser() -> argparse.ArgumentParser:
         _add_json(target)
 
     p_audit = registry_sub.add_parser(
-        "audit", help="audit review, provenance, setup, and available security metadata"
+        "audit",
+        help="audit review, provenance, setup, and available security metadata",
+        description=(
+            "Report evidence gaps: missing review, provenance, license or setup information, and "
+            "absent assessment evidence. When security/index.json exists, every attestation is "
+            "verified against the compiled objects, and critical installation risk is refused. "
+            "Warnings are gaps in evidence, not risk conclusions."
+        ),
     )
     _add_registry_source(p_audit)
     _add_json(p_audit)
@@ -1001,7 +1090,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_json(p_push)
 
-    p_test = registry_sub.add_parser("test", help="run a compatibility validation fixture")
+    p_test = registry_sub.add_parser(
+        "test",
+        help="run a compatibility validation fixture",
+        description=(
+            "Validate the Registry as the oldest AART it supports would read it, as the latest "
+            "would, or both. The latest defaults to the running version. This reads only."
+        ),
+    )
     _add_registry_source(p_test)
     p_test.add_argument(
         "--compatibility",
@@ -1020,7 +1116,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_json(p_test)
 
-    p_diff = registry_sub.add_parser("diff", help="show deterministic managed-file drift")
+    p_diff = registry_sub.add_parser(
+        "diff",
+        help="show deterministic managed-file drift",
+        description=(
+            "Show how each managed file differs from its canonical form, without changing the "
+            "checkout. The same input always prints the same diff."
+        ),
+    )
     _add_registry_source(p_diff)
     _add_json(p_diff)
 
@@ -1036,9 +1139,18 @@ def build_parser() -> argparse.ArgumentParser:
     security_sub = p.add_subparsers(dest="security_action", metavar="ACTION", required=True)
 
     p_security = security_sub.add_parser(
-        "scan", help="run the zero-dependency baseline over an immutable object envelope"
+        "scan",
+        help="run the zero-dependency baseline over an immutable object envelope",
+        description=(
+            "Verify the object against the approved Registry that publishes the artifact, run the "
+            "built-in baseline over it, and report its installation risk. With --cache the result "
+            "is also written as a canonical local attestation. An assessment reduces uncertainty; "
+            "it is not a safety guarantee."
+        ),
     )
-    p_security.add_argument("security_input", metavar="OBJECT")
+    p_security.add_argument(
+        "security_input", metavar="OBJECT", help="immutable object envelope (JSON) to scan"
+    )
     p_security.add_argument(
         "--registry",
         dest="security_registry",
@@ -1058,14 +1170,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_json(p_security)
 
-    p_security = security_sub.add_parser("show", help="show a canonical assessment or attestation")
-    p_security.add_argument("security_input", metavar="EVIDENCE")
+    p_security = security_sub.add_parser(
+        "show",
+        help="show a canonical assessment or attestation",
+        description=(
+            "Print an assessment or attestation file: provider version, rules digest, coverage, "
+            "installation risk, findings with remediation, and status. This reads only."
+        ),
+    )
+    p_security.add_argument(
+        "security_input", metavar="EVIDENCE", help="assessment or attestation file to show"
+    )
     _add_json(p_security)
 
     p_security = security_sub.add_parser(
-        "verify", help="verify canonical attestation identity, freshness, and locally derived trust"
+        "verify",
+        help="verify canonical attestation identity, freshness, and locally derived trust",
+        description=(
+            "Check that an attestation is canonical and that its identity matches every expected "
+            "digest and version given; any mismatch marks it stale and exits non-zero. Publisher "
+            "trust is derived only when --publisher-source-id, --registry-inputs-digest and "
+            "--publisher-trust are given together."
+        ),
     )
-    p_security.add_argument("security_input", metavar="ATTESTATION")
+    p_security.add_argument(
+        "security_input", metavar="ATTESTATION", help="attestation file to verify"
+    )
     p_security.add_argument(
         "--object-digest",
         dest="security_object_digest",
@@ -1115,10 +1245,23 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json(p_security)
 
     p_security = security_sub.add_parser(
-        "analyzers", help="list reviewed optional analyzer adapters and local availability"
+        "analyzers",
+        help="list reviewed optional analyzer adapters and local availability",
+        description=(
+            "List the optional analyzers AART knows how to run and whether each is installed on "
+            "this machine. AART never installs one; a missing analyzer means less evidence, not "
+            "a failure."
+        ),
     )
     _add_json(p_security)
-    p_security = security_sub.add_parser("suites", help="list built-in analyzer suites")
+    p_security = security_sub.add_parser(
+        "suites",
+        help="list built-in analyzer suites",
+        description=(
+            "List the built-in analyzer suites: what each one adds and which optional providers "
+            "it runs when they are installed."
+        ),
+    )
     _add_json(p_security)
 
     # author ------------------------------------------------------------------ #
@@ -1181,5 +1324,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="the directory to check (default: the working directory)",
     )
     _add_json(p_author_check)
+
+    # docs -------------------------------------------------------------------- #
+    p = sub.add_parser(
+        "docs",
+        formatter_class=_HELP_FORMATTER,
+        help="print the command reference, read from this parser",
+        description=(
+            "Print every command with what it does, or one command's description, usage, options "
+            "and defaults. It is read from this installed version when it runs, so it always "
+            "matches it. --json gives the same reference as one document, for agents."
+        ),
+    )
+    p.add_argument(
+        "docs_path",
+        nargs="*",
+        metavar="COMMAND",
+        help="the command or group to describe, such as `consume install` (default: all)",
+    )
+    _add_json(p)
 
     return parser
