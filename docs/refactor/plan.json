@@ -1249,6 +1249,38 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-33",
+      "title": "Default says which Settings values do not fit, and points to Custom (#82)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Specify CP-33: §176 (Default checks every Settings value against the measured preparation), INV-275, D-452; §173.7 no longer falls back to 05",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Pure check: default_path_mismatches over the measured harness targets, per-pair scope offers and the Python installer offer, with a Hypothesis property for INV-275",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Default on 05p: the adapter refuses a mismatched Default before anything is narrowed, the reducer keeps 05p with the cursor on Custom, 05p draws the block and an unavailable Default",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Docs and traceability: consumer guide, INV-275 row",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Focused verification and the PR",
+          "status": "in_progress"
+        }
+      ]
     }
   ]
 }

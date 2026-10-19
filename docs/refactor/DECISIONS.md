@@ -11181,3 +11181,31 @@ survival comparison always fail turns `distribution_e2e_test` red.
 `consume registry add` and the skill repository with `maintain upstream add`. Human add/remove
 output and catalog headers name a connection "Registry" or "Upstream repository" (§175), never
 "source"; only a Registry reports `default=`.
+
+## D-452 — Default checks Settings against the measured preparation and stays on 05p (CP-33, #82)
+
+The owner asked on 2026-10-19 that a Default install whose Settings cannot install some selected
+artifact say so, list the values, and send the person to Custom. §176 and INV-275 state it. The
+implementation choices:
+
+- **The check runs when Default is chosen, not when 05p opens.** D-435 keeps 05p free of
+  preparation, and which harness can host which artifact is known only from the measured draft
+  (`_installation_targets`). Choosing Default already prepares while 05p stays on screen, so the
+  answer arrives there. A mismatch is never computed from Marketplace rows, which could disagree
+  with the plan.
+- **A partial fit blocks too.** An artifact that some Settings harnesses can host and others
+  cannot used to install into the subset. The owner wants "Default" to mean Settings, so every
+  Settings harness that cannot host a selected artifact is a mismatch (the recommendation in #82).
+- **One pure function, `default_path_mismatches`,** in `application/consumer_views.py` takes the
+  measured targets, the detected harnesses, the per-pair scope offers and the Python installer
+  offer, and returns `DefaultPathMismatch(artifact, setting, value, reason)` values. The adapter
+  calls it twice: harness and scope before anything is asked or narrowed, and the installer once
+  the plan is ready, because `python_installers` is empty until then.
+- **Whole-selection facts carry no artifact.** A Settings harness that is not detected, and the
+  Python installer offer, hold for the whole selection (`python_installers` is not keyed by
+  artifact), so they are one line each rather than one per artifact.
+- **A Collection is one artifact**, as on 05 (§173.5): its line names the Collection.
+- **The reducer stores the mismatches on the state** (`default_path_mismatches`), clears the
+  action, moves the cursor to Custom and stays on 05p. Install from the Marketplace starts with no
+  mismatches, and choosing Default again prepares and checks again, so a Settings change made in
+  between is seen.

@@ -11224,9 +11224,9 @@ After choosing in the Marketplace and pressing Install, a person chooses the pat
 - **Custom** is the §172 flow: 05, 07, 07a, 07b, Ready.
 
 The choice is screen **05p Install Path**, between Install and 05, with Default first. It states
-what Default will use. When the Settings harnesses leave some artifact with no harness that can
-host it, Default does not guess: it opens 05 so the person chooses, and the install goes on as
-Custom from there (D-435).
+what Default will use. When a Settings value cannot be applied to the selection, Default does
+not guess and does not narrow: it says which values do not fit and leaves the person on 05p to
+choose Custom (§176, superseding D-435's fallback to 05).
 
 Settings holds the default harnesses beside the default scope and Python installer: screen 28
 draws one on/off row per detected harness, and with none on, Default uses every detected harness
@@ -11433,3 +11433,31 @@ Marketplace state or introducing another details screen.
 
 **INV-274 — Marketplace columns remain named and complete.** Every Marketplace field has a
 visible heading or label, and narrowing the terminal never truncates its heading or value.
+
+# 176. Default says which Settings values do not fit
+
+Status: **ACCEPTED 2026-10-19 (D-452)**, on the owner's request (#82). This narrows §173.7.
+
+Default means exactly what Settings says. When the person chooses Default on 05p, the install is
+prepared from Settings as before (§173.7), and every Settings value is checked against what that
+preparation measured for each selected artifact:
+- **harness**: each Settings harness has to be detected and able to host the artifact. With no
+  harness in Settings there is nothing to check, because Default uses every detected harness that
+  can host it;
+- **scope**: the Settings default scope has to be offered for the artifact;
+- **Python installer**: when the selection declares Python dependencies, the Settings installer has
+  to be one this machine and policy can use for it.
+
+When any value does not fit, nothing is installed, narrowed or substituted, and no other screen
+opens. 05p stays, with a block under "Default uses:" listing each mismatch once: the artifact (or
+the whole selection, for a fact that holds for all of it), the Settings value and the reason, then
+"Choose Custom". The cursor moves to Custom, and the Default row says it is not available with
+these Settings. Choosing Default again checks again. Custom is the §172 flow, unchanged. When every
+value fits, 05p and Default behave exactly as in §173.7.
+
+A Collection is one artifact here, as on 05 (§173.5). The block carries artifact names, Settings
+values and reasons only, never a configuration or secret value.
+
+**INV-275 — Default never silently differs from Settings.** A Default install either applies every
+Settings harness, the Settings scope and the Settings Python installer to every selected artifact,
+or installs nothing and lists each value that does not fit.
