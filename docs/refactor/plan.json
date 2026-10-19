@@ -1283,37 +1283,37 @@
         {
           "id": "7",
           "title": "#47: aart-cli docs [command…] [--json], generated from build_parser() at run time; every leaf command has a description=",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "8",
           "title": "#47: a hand-written llms.txt at the repository root that names no commands",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "9",
           "title": "#47: make docs-check refuses a fenced aart-cli command that does not parse",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "10",
           "title": "#47: one pruning pass over the user-facing docs; what --help now covers is deleted or merged",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "11",
           "title": "#80: refresh the Enterprise docs (release sequence, fork sync, one remote convention and one CI smoke, fork and Registry variables)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "id": "12",
-          "title": "#24: an Enterprise fork names its distribution through AART_CLI_DISTRIBUTION_NAME; command, import package and home stay aart-cli",
-          "status": "todo"
+          "title": "#24: an Enterprise fork names its distribution through AART_CLI_DISTRIBUTION_NAME; command, import package and home stay aart-cli -- blocked: the issue was deleted on GitHub (HTTP 410) during CP-33; not implemented, B-213",
+          "status": "blocked"
         },
         {
           "id": "5",
           "title": "Focused verification and the PR",
-          "status": "todo"
+          "status": "in_progress"
         }
       ]
     }

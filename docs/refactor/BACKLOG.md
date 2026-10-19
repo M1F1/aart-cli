@@ -4802,3 +4802,36 @@ database, has not generated yet:
 Both pass with the database moved aside, and both fail on `main` without the CP-33 changes. Fix
 `tui_layout.bulleted` (and the skeleton's bottom-row placement) for a block whose items start
 with an indented continuation, then pin both examples with `@example`.
+
+## B-213 — #24, an Enterprise distribution name, if the issue comes back
+
+Planned as CP-33 step 12: a fork names its distribution through `AART_CLI_DISTRIBUTION_NAME`
+while the command, import package and home stay `aart-cli`. During CP-33 (2026-10-19) GitHub
+answered HTTP 410 "This issue was deleted" for #24, so it was not implemented (D-455). Its text is
+in the CP-33 session transcript, not in the repository. Reopen as a new issue and a new slice if
+the owner still wants it; nothing in the code depends on it.
+
+## B-214 — Walk `END_TO_END_ACCEPTANCE.md` again in the lab
+
+CP-33 step 10 moved the CLI walkthrough onto the CP-32 command names, and DOC003 now holds every
+command in it to the parser. Parsing is not running: the walkthrough has not been walked in the
+manual lab since, and the publish-then-`maintain registry push --branch manual-review` step and its
+`git remote set-head origin --auto` hint are the parts most likely to need a correction. Walk it
+once with `make manual-test-setup-empty` and record findings in `manual-acceptance.md`.
+
+## B-215 — A docs site, a committed generated reference, `llms-full.txt`
+
+Out of scope by #47's own terms (D-454): GitHub Pages does not carry into an Enterprise fork
+without its own setup, and a committed reference or `llms-full.txt` is a second copy that drifts.
+`aart-cli docs --json` and `llms.txt` cover the agent's need. Revisit only if a reader without the
+CLI installed has to read the reference.
+
+## B-216 — No command refreshes a Registry's generated workflow
+
+`maintain registry init` refuses a checkout that is already a registry, and `validate` does not
+compare `.github/workflows/aart-cli-registry.yml` with what `init` would write today. A Registry
+whose workflow predates a rename (as `_SECRET_NAME` in D-453) keeps it until the maintainer
+copies a fresh one from a scratch `init`, which the rollout docs describe. A `validate` warning on
+drift, or a `maintain registry init --refresh-workflow`, would make that visible. Not required by
+any invariant today.
+

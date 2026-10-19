@@ -4,6 +4,15 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-19, CP-33 steps 6–11 (§177, INV-276, D-453–D-455): the remaining issues.** Secret-name
+variables end in `_SECRET_NAME` (#46). `aart-cli docs` prints the command reference read from the
+parser, every command and argument carries text, `llms.txt` points agents at it, and `docs-check`
+refuses a fenced command the parser rejects (#47). Four documents were deleted or merged, and the
+Enterprise rollout, release and walkthrough docs describe 0.11 (#80); D-453's workflow-replacement
+claim is corrected. #24 was deleted on GitHub and is not implemented (B-213). Lint, format-check,
+typecheck, docs-check and the docs/CLI test modules pass; four targeted mutations went red. Next:
+step 5, CI on PR #83.
+
 **2026-10-19, CP-33 steps 1–4 (§176, INV-275, D-452): Default says which Settings values do not
 fit.** Choosing Default checks each Settings harness, the scope and the Python installer against
 the measured preparation. A mismatch installs nothing and keeps 05p, which lists the values with

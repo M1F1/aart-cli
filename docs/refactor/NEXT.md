@@ -2,12 +2,15 @@
 
 ## Where the work is (2026-10-19, after 0.11.0)
 
-**CP-32 is released as 0.11.0.** The active work is **CP-33** (#82, §176, INV-275, D-452) on
-`feat/cp-33-default-path-mismatch`: `docs/refactor/slices/CP-33-default-path-says-what-does-not-fit.md`.
-Choosing Default on 05p checks every Settings value against the measured preparation; a value that
-does not fit is listed on 05p with its reason, nothing is installed, and the cursor moves to
-Custom. Steps 1–4 are done. Next is step 5: push, open the PR (title `feat(tui): …`, minor) and
-read `gh pr checks`. B-211 records the missing e2e for a Python installer mismatch.
+**CP-32 is released as 0.11.0.** The active work is **CP-33** on
+`feat/cp-33-default-path-mismatch`, PR #83: `docs/refactor/slices/CP-33-default-path-says-what-does-not-fit.md`.
+It closes #82 (Default names the Settings values that do not fit, §176, INV-275), #46
+(`_SECRET_NAME`, D-453), #47 (`aart-cli docs` from the parser, `llms.txt`, DOC003, pruning; §177,
+INV-276, D-454) and #80 (Enterprise docs, D-455). #24 was deleted on GitHub and is not implemented
+(B-213). Steps 1–4 and 6–11 are done; step 5 is the PR: read `gh pr checks` on #83, fix what CI
+finds, and merge only with the owner's approval (title `feat(tui): …`, minor; no `!` in the
+override block). Then mark CP-33 done. Open follow-ups: B-211, B-212, B-214 (walk
+`END_TO_END_ACCEPTANCE.md` in the lab), B-216.
 
 ## Where the work is (2026-10-16, after 0.9.0)
 
