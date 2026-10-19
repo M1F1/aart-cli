@@ -117,6 +117,14 @@ backend. The downloaded-wheel route avoids that build requirement.
 release wheel is byte-reproducible from its tag; see
 [wheel reproducibility](../release/wheel-reproducibility-v1.md) to check one.
 
+To move an existing installation to a newer wheel you already downloaded, AART can reinstall itself
+from that file. It never looks for a newer version on its own; `--dry-run` prints what it would run:
+
+```sh
+aart-cli upgrade --wheel ./aart_cli-X.Y.Z-py3-none-any.whl --dry-run
+aart-cli upgrade --wheel ./aart_cli-X.Y.Z-py3-none-any.whl
+```
+
 ## On a private Enterprise instance
 
 A fork on a GitHub Enterprise Server instance is normally private, and that changes which of those

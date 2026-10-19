@@ -22,7 +22,7 @@ Maintainers work in an explicit writable registry checkout. Before a PR they run
 
 ```shell
 aart-cli maintain registry format --source . --check
-aart-cli maintain registry validate --source . --strict --frozen
+aart-cli maintain registry validate --source .
 aart-cli maintain registry lock --source . --check
 aart-cli maintain registry build --source . --check
 aart-cli maintain registry audit --source .

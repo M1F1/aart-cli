@@ -25,17 +25,13 @@ authoring-workspace lock/index is generated.
 
 ## Interface
 
-```text
-aart-cli author init|check
-aart-cli consume registry add|list|sync|remove|resubscribe|health
-aart-cli consume list|search|health|install|update|uninstall|status|setup|receipt|mcp test
-aart-cli doctor
-aart-cli reset [--restore DIR] [--yes]
-aart-cli maintain upstream add|list|sync|remove|resubscribe|health|scan|adopt|check
-aart-cli maintain candidate list|promote
-aart-cli maintain registry init|collection|format|validate|lock|build|audit|publish|push|test|diff
-aart-cli security scan|show|verify|analyzers|suites
-aart-cli upgrade --wheel FILE | --source-checkout DIR
+The command reference is generated from the parser when the CLI runs, so it is not written down
+here. `aart-cli docs` lists every command; `aart-cli docs COMMAND` describes one; `--json` gives an
+agent all of it as one document.
+
+```sh
+aart-cli docs
+aart-cli docs --json
 ```
 
 Running `aart-cli` without a subcommand on a TTY opens the human-oriented TUI (curses or text

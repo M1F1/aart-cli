@@ -201,11 +201,12 @@ already-clean registry reports that there is nothing to commit.
 should independently verify what history contains:
 
 ```sh
-aart-cli maintain registry validate --source . --strict --frozen
+aart-cli maintain registry validate --source .
+aart-cli maintain registry build --source . --check
 aart-cli maintain registry audit --source .
 ```
 
-`--frozen` fails when the committed lock or index does not match authored content. Push the commit,
+`build --check` fails when the committed index or snapshot does not match the approved versions. Push the commit,
 open a pull request, and review it like any other repository.
 ## 7. Keeping an adopted copy current
 
