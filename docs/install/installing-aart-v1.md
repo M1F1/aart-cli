@@ -171,7 +171,7 @@ aart-cli consume registry add \
 aart-cli consume list --json
 ```
 
-`source add` acquires, compiles, and validates the exact snapshot before it saves configuration.
+`consume registry add` acquires, compiles, and validates the exact snapshot before it saves configuration.
 With automatic synchronization (the default), source-bearing marketplace and TUI entry points
 compare with the origin and publish a validated changed snapshot first. Manual mode reports
 `not-synchronized` or `could-not-check` without moving the local pointer.

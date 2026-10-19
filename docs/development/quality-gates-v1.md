@@ -2,7 +2,7 @@
 
 **The installed runtime has no dependencies.** `dependencies = []` in `pyproject.toml`, standard
 library only — that is a design rule, not an accident, and the gates below exist partly to keep it
-true. Everything in this section is developer and CI tooling that a user of `aart` never installs.
+true. Everything in this section is developer and CI tooling that a user of `aart-cli` never installs.
 
 Install them into a virtual environment, so nothing lands in the system interpreter:
 

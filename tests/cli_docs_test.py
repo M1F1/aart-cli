@@ -123,6 +123,9 @@ class DocsTextTest(unittest.TestCase):
         self.assertIn("only a merge makes reviewed bytes the registry", out)
         self.assertIn("--branch NAME", out)
 
+    def test_a_quoted_path_is_the_same_path(self) -> None:
+        self.assertEqual(_run("maintain registry push"), _run("maintain", "registry", "push"))
+
     def test_an_unknown_command_is_a_usage_error_that_names_it(self) -> None:
         code, out, err = _run("consume", "nonsense")
 

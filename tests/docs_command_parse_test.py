@@ -72,6 +72,17 @@ class FencedCommandParseTest(unittest.TestCase):
 
         self.assertEqual(_codes(text), [])
 
+    def test_the_module_spelling_is_held_to_the_same_parser(self) -> None:
+        text = (
+            "```sh\n"
+            "python3 -m aart_cli.cli consume list\n"
+            "python -m aart_cli consume list\n"
+            "python3 -m aart_cli.cli source add --alias x\n"
+            "```\n"
+        )
+
+        self.assertEqual(_codes(text), [(4, "DOC003")])
+
     def test_a_continued_command_is_checked_whole_and_reported_where_it_starts(self) -> None:
         text = (
             "```sh\n"

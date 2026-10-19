@@ -52,6 +52,12 @@ def _link_path(raw_target: str) -> str | None:
 _COMMANDS_NOT_HELD = ("docs/refactor/", "docs/product-specification/")
 _PLACEHOLDER_RE = re.compile(r"<[^<>\s]+>")
 _ENV_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+#: The same executable spelled as a module, as the manual lab and an editable checkout run it.
+_MODULE_SPELLINGS = tuple(
+    [python, "-m", module]
+    for python in ("python", "python3")
+    for module in ("aart_cli", "aart_cli.cli")
+)
 #: Where a shell line stops being the `aart-cli` invocation: a pipe, a list or a redirection.
 _SHELL_BREAKS = frozenset({"|", "||", "&", "&&", ";", ">", ">>", "<", "2>", "&>"})
 
@@ -87,8 +93,10 @@ def _fenced_commands(text: str) -> Iterator[tuple[int, str]]:
             words = stripped.split()
             while words and _ENV_ASSIGNMENT_RE.match(words[0]):
                 words.pop(0)
-            if not words or words[0] != "aart-cli":
+            if words[:1] != ["aart-cli"] and words[:3] not in _MODULE_SPELLINGS:
                 continue
+            if words[0] != "aart-cli":
+                words = ["aart-cli", *words[3:]]
             start, joined = line_number, " ".join(words)
         if joined.endswith("\\"):
             pending = (start, joined[:-1].rstrip())

@@ -336,9 +336,9 @@ purpose.
 **Publishing a module newer than a consumer's AART withholds the whole registry from that
 consumer, and no `requires_aart` floor prevents it.** The floor is an artifact-level bound, and the
 refusal happens before any artifact is considered: a recipe is parsed while the source snapshot is
-validated. An executable that does not know the module refuses the registry at `source add` —
+validated. An executable that does not know the module refuses the registry at `consume registry add` —
 `unknown or unsupported setup module` — and a consumer already subscribed keeps their
-last-known-good snapshot, with `source sync` failing and everything they already had still
+last-known-good snapshot, with `consume registry sync` failing and everything they already had still
 installable. Closed rather than silent, and named precisely, which is the correct failure; it is
 still a failure, and it applies to *every* artifact in that registry rather than to the one using
 the module. Raise the artifact's `requires_aart` floor anyway — it is true — but plan the rollout

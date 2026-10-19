@@ -81,7 +81,7 @@ proving it again at the tag proves the same tree twice.
 | the tagged commit is an ancestor of `main` | the tag names source nobody reviewed |
 | `scripts/release.py check` | schema freeze, system matrix, packaging, and the seven registry reconciliation checks |
 | `scripts/packaging_check.py` | the wheel does not build cleanly in a throwaway copy, or does not import back out |
-| `scripts/release_artifact.py --tag` | the wheel's filename, metadata version, project name or declared dependencies disagree with the tag, or the installed `aart` reports another version |
+| `scripts/release_artifact.py --tag` | the wheel's filename, metadata version, project name or declared dependencies disagree with the tag, or the installed `aart-cli` reports another version |
 | attach, publish | — |
 
 The fourth is the one a pull request could not have run: the wheel did not exist yet. It is also

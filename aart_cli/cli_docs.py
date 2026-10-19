@@ -104,6 +104,8 @@ def run(
     err: TextIO,
 ) -> int:
     """Print the reference for `path` (the whole tree when empty) and return the exit code."""
+    # `docs "consume install"` and `docs consume install` name one command.
+    path = [word for part in path for word in part.split()]
     found = _find(parser, path)
     if found is None:
         err.write(
