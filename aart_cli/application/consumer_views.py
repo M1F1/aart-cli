@@ -95,6 +95,10 @@ __all__ = [
     "choose_pair_scope",
     "default_pair_scopes",
     "settings_pairs",
+    "DefaultPathMismatch",
+    "default_path_mismatches",
+    "render_default_path_mismatches",
+    "install_path_label",
     "pair_scope_from_key",
     "pair_scope_key",
     "scope_choice_offered",
@@ -483,6 +487,107 @@ def settings_pairs(
         for target in targets
         if not harnesses or target.harness in harnesses
         for artifact in target.artifacts
+    )
+
+
+#: The Settings values Default applies (§176), in the words 05p uses for them.
+DEFAULT_PATH_SETTINGS = ("harness", "scope", "Python installer")
+
+
+@dataclass(frozen=True, slots=True)
+class DefaultPathMismatch:
+    """One Settings value Default cannot apply (§176): to `artifact`, or to the whole selection.
+
+    It carries names and reasons only. A configuration or secret value never reaches it.
+    """
+
+    artifact: str
+    setting: str
+    value: str
+    reason: str
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.artifact, str)
+            or self.setting not in DEFAULT_PATH_SETTINGS
+            or not isinstance(self.value, str)
+            or not self.value
+            or not isinstance(self.reason, str)
+            or not self.reason
+            or any(
+                character in item
+                for item in (self.artifact, self.value, self.reason)
+                for character in "\r\n"
+            )
+        ):
+            raise ValueError("a Default path mismatch is invalid")
+
+
+def default_path_mismatches(
+    targets: tuple[HarnessTargetView, ...],
+    *,
+    detected: tuple[str, ...],
+    harnesses: tuple[str, ...],
+    scope_offers: tuple[tuple[str, tuple[str, ...]], ...] = (),
+    scope: str = "",
+    installer: PythonInstallerChoiceView | None = None,
+    python_installer: str = "",
+) -> tuple[DefaultPathMismatch, ...]:
+    """Each Settings value Default cannot apply to this selection, once; empty when all apply.
+
+    `targets` are what the preparation measured, so a harness absent from them hosts nothing here.
+    With no harness in Settings there is no harness to check: Default then uses every detected
+    one that can host each artifact (§173.7). `scope_offers` are the Settings pairs' offers, and
+    `installer` is the selection's Python installer offer, `None` when nothing needs Python.
+    """
+
+    hosts = {item.harness: item.artifacts for item in targets}
+    artifacts = tuple(dict.fromkeys(artifact for item in targets for artifact in item.artifacts))
+    found = [
+        DefaultPathMismatch("", "harness", harness, "not detected on this machine")
+        for harness in harnesses
+        if harness not in detected
+    ]
+    found.extend(
+        DefaultPathMismatch(artifact, "harness", harness, "can't host it")
+        for artifact in artifacts
+        for harness in harnesses
+        if harness in detected and artifact not in hosts.get(harness, ())
+    )
+    refused: dict[str, tuple[str, ...]] = {}
+    for pair, offered in scope_offers:
+        parsed = pair_from_key(pair)
+        if parsed is not None and offered and scope not in offered:
+            refused.setdefault(parsed[0], offered)
+    found.extend(
+        DefaultPathMismatch(artifact, "scope", scope, f"only {' and '.join(offered)} is offered")
+        for artifact, offered in refused.items()
+    )
+    if installer is not None and python_installer not in installer.offered:
+        found.append(
+            DefaultPathMismatch(
+                "",
+                "Python installer",
+                python_installer,
+                f"only {' and '.join(installer.offered)} can install this selection here",
+            )
+        )
+    return tuple(found)
+
+
+def render_default_path_mismatches(found: tuple[DefaultPathMismatch, ...]) -> tuple[str, ...]:
+    """05p's block for a Default that does not fit (§176); nothing when everything fits."""
+
+    if not found:
+        return ()
+    return (
+        "Default can't install with your Settings:",
+        *(
+            f"  {item.artifact or 'The whole selection'} -- {item.setting} {item.value}: "
+            f"{item.reason}"
+            for item in found
+        ),
+        "Choose Custom to pick harnesses, scope and installer for these.",
     )
 
 
@@ -3187,6 +3292,15 @@ INSTALL_PATH_PURPOSE: dict[str, str] = {
     INSTALL_PATH_CUSTOM: "Chooses the harnesses, the scope and the Python installer for this "
     "install, then asks what needs entering.",
 }
+
+
+def install_path_label(row: str, *, blocked: bool) -> str:
+    """How 05p names a path row; Default says so while Settings does not fit (§176)."""
+
+    label = row.capitalize()
+    if row == INSTALL_PATH_DEFAULT and blocked:
+        return f"{label} (not available with these Settings)"
+    return label
 
 
 def settings_to_data(view: ConsumerSettings) -> dict[str, object]:

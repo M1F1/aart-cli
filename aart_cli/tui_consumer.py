@@ -71,6 +71,7 @@ from aart_cli.application.consumer_views import (
     RemediationView,
     RunningInstallationView,
     default_harness_row,
+    install_path_label,
     installed_cells,
     installer_from_row,
     installer_row,
@@ -88,6 +89,7 @@ from aart_cli.application.consumer_views import (
     placeholders_left,
     project_collection,
     project_registries,
+    render_default_path_mismatches,
     scope_choice_offered,
     scope_matrix_columns,
     scope_matrix_from_row,
@@ -4366,7 +4368,10 @@ class CanonicalScreenSource:
                 target_status,
             )
         if screen is ConsumerScreen.INSTALL_PATH:
-            return render_install_path(state.settings, screens.harnesses)
+            return separate(
+                render_install_path(state.settings, screens.harnesses),
+                render_default_path_mismatches(state.default_path_mismatches),
+            )
         if screen is ConsumerScreen.SUCCESS and self.rows(state):
             # CP-23 task 06: what happened is the state of the view; the choices are the rows.
             if screens.transaction is not None:
@@ -4607,8 +4612,10 @@ class CanonicalScreenSource:
                 for row in state.rows
             )
         if screen is ConsumerScreen.INSTALL_PATH:
+            blocked = bool(state.default_path_mismatches)
             return tuple(
-                f"{'>' if row == state.current_row else ' '} {row.capitalize()}"
+                f"{'>' if row == state.current_row else ' '} "
+                f"{install_path_label(row, blocked=blocked)}"
                 for row in state.rows
             )
         if screen is ConsumerScreen.SUCCESS and self.rows(state):

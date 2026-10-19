@@ -21,6 +21,7 @@ from aart_cli.application.consumer_views import (
     INSTALL_PATH_ROWS,
     ConsumerScreen,
     ConsumerSession,
+    DefaultPathMismatch,
     target_row,
 )
 from aart_cli.application.maintainer_views import MaintainerScreen
@@ -116,6 +117,55 @@ class ConsumerInstallActionTest(unittest.TestCase):
         self.assertEqual(command.selection, (ARTIFACT,))
         # Nothing an earlier Custom attempt chose is carried: Settings answers it.
         self.assertEqual((command.targets, command.pairs, chosen.pairs), ((), (), ()))
+
+    def test_a_default_that_does_not_fit_stays_on_05p_with_custom_next(self) -> None:
+        state = ConsumerUiState(
+            ConsumerSession(ConsumerScreen.MARKETPLACE), selection=(ARTIFACT,), rows=(ARTIFACT,)
+        )
+        chosen, _ = _request(state, ConsumerActionKind.INSTALL, INSTALL_PATH_DEFAULT)
+        unfit = (DefaultPathMismatch(ARTIFACT, "harness", "codex", "can't host it"),)
+
+        blocked, commands = reduce_consumer_ui(
+            chosen,
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=ConsumerActionKind.INSTALL,
+                default_path_mismatches=unfit,
+            ),
+        )
+
+        # §176: no plan, no other screen, and the cursor on the path that can choose.
+        self.assertEqual(commands, ())
+        self.assertIs(blocked.session.screen, ConsumerScreen.INSTALL_PATH)
+        self.assertEqual(blocked.default_path_mismatches, unfit)
+        self.assertEqual(blocked.current_row, INSTALL_PATH_CUSTOM)
+        self.assertIsNone(blocked.action)
+        self.assertFalse(blocked.install_default)
+        self.assertIsNone(blocked.session.review_digest)
+
+        again, (command,) = reduce_consumer_ui(
+            replace(blocked, cursor=INSTALL_PATH_ROWS.index(INSTALL_PATH_DEFAULT)),
+            ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=ConsumerActionKind.INSTALL),
+        )
+        self.assertTrue(command.default_path, "Default again checks again")
+        self.assertEqual(again.default_path_mismatches, ())
+
+    def test_install_from_the_marketplace_starts_05p_without_an_old_block(self) -> None:
+        unfit = (DefaultPathMismatch("", "harness", "tabnine", "not detected on this machine"),)
+        state = ConsumerUiState(
+            ConsumerSession(ConsumerScreen.MARKETPLACE),
+            selection=(ARTIFACT,),
+            rows=(ARTIFACT,),
+            default_path_mismatches=unfit,
+        )
+
+        path, _ = reduce_consumer_ui(
+            state,
+            ConsumerUiEvent(ConsumerUiEventKind.REQUEST_ACTION, action=ConsumerActionKind.INSTALL),
+        )
+
+        self.assertIs(path.session.screen, ConsumerScreen.INSTALL_PATH)
+        self.assertEqual(path.default_path_mismatches, ())
 
     def test_install_without_ticks_uses_the_focused_offer(self) -> None:
         state = ConsumerUiState(ConsumerSession(ConsumerScreen.MARKETPLACE), rows=(ARTIFACT,))

@@ -15,6 +15,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from aart_cli.application.consumer_views import (
+    INSTALL_PATH_CUSTOM,
     ConsumerScreen,
     ConsumerSettings,
     HarnessTargetView,
@@ -93,13 +94,47 @@ class DefaultPathTest(unittest.TestCase):
         self.assertTrue(in_home, terminal.last)
         self.assertFalse(in_project)
 
-    def test_a_settings_harness_that_cannot_host_it_leaves_the_choice_to_05(self) -> None:
+    def test_a_settings_harness_that_cannot_host_it_is_named_and_05p_stays(self) -> None:
         settings = ConsumerSettings(default_harnesses=("codex",))
 
         finished, terminal, delivered = self._install(settings, *_DEFAULT)
 
-        self.assertIs(finished.session.screen, ConsumerScreen.REVIEW_SELECTION, terminal.last)
+        # §176: no silent jump to 05; 05p says which value does not fit, and Custom is next.
+        self.assertIs(finished.session.screen, ConsumerScreen.INSTALL_PATH, terminal.last)
         self.assertEqual(delivered, {"claude": False, "opencode": False})
+        self.assertIn("can't install with your Settings:", terminal.last)
+        self.assertIn("harness codex", terminal.last)
+        self.assertIn("Default (not available with these Settings)", terminal.last)
+        self.assertIn("> Custom", terminal.last)
+        self.assertEqual(finished.current_row, INSTALL_PATH_CUSTOM)
+        self.assertIsNone(finished.action)
+
+    def test_a_partial_fit_installs_nothing_rather_than_into_the_subset(self) -> None:
+        settings = ConsumerSettings(default_harnesses=("opencode", "codex"))
+
+        finished, terminal, delivered = self._install(settings, *_DEFAULT)
+
+        # Before §176 this installed into opencode alone and said nothing about codex.
+        self.assertIs(finished.session.screen, ConsumerScreen.INSTALL_PATH, terminal.last)
+        self.assertEqual(delivered, {"claude": False, "opencode": False})
+        self.assertIn("harness codex", terminal.last)
+        self.assertNotIn("harness opencode", terminal.last)
+
+    def test_custom_after_the_block_is_the_05_flow_and_installs_what_was_chosen(self) -> None:
+        settings = ConsumerSettings(default_harnesses=("codex",))
+
+        finished, terminal, _ = self._install(settings, *_DEFAULT, ENTER)
+
+        self.assertIs(finished.session.screen, ConsumerScreen.REVIEW_SELECTION, terminal.last)
+
+    def test_default_again_checks_again_and_changes_nothing(self) -> None:
+        settings = ConsumerSettings(default_harnesses=("codex",))
+
+        finished, terminal, delivered = self._install(settings, *_DEFAULT, ord("k"), ENTER)
+
+        self.assertIs(finished.session.screen, ConsumerScreen.INSTALL_PATH, terminal.last)
+        self.assertEqual(delivered, {"claude": False, "opencode": False})
+        self.assertIn("can't install with your Settings:", terminal.last)
 
     def test_custom_is_the_05_flow(self) -> None:
         finished, terminal, delivered = self._install(
