@@ -204,7 +204,9 @@ class RefusalTest(unittest.TestCase):
 
             self.assertEqual(code, ERROR)
             self.assertEqual(_tree(root), set())
-            self.assertIn("create it there with `aart-cli registry collection", said.getvalue())
+            self.assertIn(
+                "create it there with `aart-cli maintain registry collection", said.getvalue()
+            )
 
     def test_every_kind_this_build_generates_writes_a_workspace(self) -> None:
         for kind in GENERATED_KINDS:

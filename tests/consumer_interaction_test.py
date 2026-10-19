@@ -108,8 +108,8 @@ class KeyboardNavigationTest(unittest.TestCase):
 
     def test_enter_opens_the_detail_the_screen_names_and_back_returns_to_the_row(self):
         state = press(at(ConsumerScreen.MARKETPLACE), DOWN)
-        opened = press(state, ENTER, detail=ConsumerScreen.ARTIFACT_DETAILS)
-        self.assertEqual(opened.session.screen, ConsumerScreen.ARTIFACT_DETAILS)
+        opened = press(state, ENTER, detail=ConsumerScreen.COLLECTION_PREVIEW)
+        self.assertEqual(opened.session.screen, ConsumerScreen.COLLECTION_PREVIEW)
 
         returned = press(opened, ESCAPE)
         self.assertEqual(returned.session.screen, ConsumerScreen.MARKETPLACE)

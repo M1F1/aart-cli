@@ -74,31 +74,39 @@ def _uncached_object_refusal() -> Err:
 
 
 class OfflineCapabilityTest(unittest.TestCase):
-    def test_an_uncached_source_names_the_cache_rather_than_the_artifact(self) -> None:
-        """Capability one: metadata. The name in the request is the part that was not wrong."""
+    def test_an_unsynchronized_registry_names_the_cache_rather_than_the_artifact(self) -> None:
+        """Capability one: metadata. The name in the request is the part that was not wrong.
+
+        Installing reads the last synchronized snapshot and never fetches, so `--offline` changes
+        nothing here: with or without it the refusal names the Registry and the sync that fills it.
+        """
 
         with _environment_over_a_writable_source() as (env, _location):
             shutil.rmtree(
                 Path(source_store_paths(env.paths.data_root, source_instance_id(env.source)).root)
             )
 
-            code, refused = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--offline", "--yes"
-            )
+            for offline in (("--offline",), ()):
+                with self.subTest(offline=bool(offline)):
+                    code, refused = env.run(
+                        "consume", "install", _COORDINATE, "--profile", "claude", *offline, "--yes"
+                    )
 
-            self.assertEqual(code, 1, refused)
-            diagnostic = refused["diagnostics"][0]
-            self.assertEqual(diagnostic["code"], "source-not-synchronized")
-            self.assertIn("--offline forbids fetching it", diagnostic["message"])
-            self.assertIn(
-                "aart-cli source sync --alias reference, while connected",
-                diagnostic["remediation"],
-            )
+                    self.assertEqual(code, 1, refused)
+                    diagnostic = refused["diagnostics"][0]
+                    self.assertEqual(diagnostic["code"], "registry-not-synchronized")
+                    self.assertIn(
+                        "nothing has been synchronized from reference", diagnostic["message"]
+                    )
+                    self.assertEqual(
+                        diagnostic["remediation"],
+                        ["aart-cli consume registry sync --alias reference"],
+                    )
 
-            # The same command without the flag installs, so the refusal is about the capability
-            # rather than about the artifact, the source or the machine.
+            # Synchronizing is the whole repair: the same command then installs.
+            env.publish("synchronize again")
             code, installed = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--offline", "--yes"
             )
             self.assertEqual(code, 0, installed)
 
@@ -150,7 +158,7 @@ class OfflineCapabilityTest(unittest.TestCase):
                 Path(source_store_paths(env.paths.data_root, source_instance_id(env.source)).root)
             )
             _, metadata = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--offline", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--offline", "--yes"
             )
 
         payload = _uncached_object_refusal()

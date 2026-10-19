@@ -150,7 +150,7 @@ class ThePrCheckVerdictTest(unittest.TestCase):
 
 
 class TheEmittedRegistryHasAnAggregateTooTest(unittest.TestCase):
-    """The same invariant, in the CI `aart-cli registry init` writes for somebody else.
+    """The same invariant, in the CI `aart-cli maintain registry init` writes for somebody else.
 
     A registry owner protecting `main` faces exactly the situation `pr-check.yml` documents for
     this repository: the gate job is emitted in two container shapes, only one of which ever runs,

@@ -102,7 +102,7 @@ def _materialize(root: pathlib.Path, snapshot: SourceSnapshot) -> None:
 
 
 def _two_ready_candidates():
-    """One Source Scan holding two Ready Candidates for the same registry.
+    """One Upstream scan holding two Ready Candidates for the same registry.
 
     Bulk promotion only means anything with more than one, and both have to come from one scan so
     the durable history the shell reads is the one thing that says they exist.
@@ -214,8 +214,8 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertIs(finished.session.screen, MaintainerScreen.SOURCE_DETAILS)
             self.assertTrue(terminal.screen_containing("/ Registry Maintainer Dashboard"))
             self.assertIn("candidates: 1", terminal.screen_containing("ready for promotion:"))
-            self.assertIn("authors", terminal.screen_containing("/ Sources"))
-            detail = terminal.screen_containing("/ Source Details")
+            self.assertIn("authors", terminal.screen_containing("/ Upstream repositories"))
+            detail = terminal.screen_containing("/ Upstream details")
             self.assertIn("branch: main", detail)
             self.assertIn("Candidates: 1", detail)
 
@@ -343,10 +343,10 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             )
 
             self.assertIs(finished.session.screen, MaintainerScreen.SOURCE_SYNC_RESULT)
-            review = terminal.screen_containing("/ Source Sync")
+            review = terminal.screen_containing("/ Upstream sync")
             self.assertIn("Registry mutations: none", review)
             self.assertIn("review identity: sha256:", review)
-            result = terminal.screen_containing("/ Source Sync Result")
+            result = terminal.screen_containing("/ Upstream sync result")
             self.assertIn("discovered manifests: 1", result)
             self.assertIn("Candidates: 1", result)
             self.assertIn("Registry mutations: none", result)
@@ -811,7 +811,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             # Registry Workspace draws the local Registry the walk just wrote into.  The local
             # commit is deliberately not a sync, so the checkout is ahead of the synchronized
             # approved snapshot here -- and saying so is the point of the working-tree line.
-            registry = terminal.screen_containing("/ Registry Workspace")
+            registry = terminal.screen_containing("/ Registry\n")
             self.assertIn(env.source.alias.value, registry)
             self.assertIn("Approved versions:", registry)
             self.assertIn("Working tree:", registry)

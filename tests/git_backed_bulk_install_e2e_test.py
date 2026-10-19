@@ -35,15 +35,15 @@ SKILL = "company/skill/code-review"
 class _Chain(unittest.TestCase):
     def _synchronized(self, raw: str):
         env = _Environment(Path(raw).resolve(), AUTHORED_SKILL, AUTHORED_SERVER)
-        code, synchronized = env.run("source", "sync", source_transport=True)
+        code, synchronized = env.run("consume", "registry", "sync", source_transport=True)
         self.assertEqual(0, code, synchronized)
-        return env, synchronized["sources"][0]["resolved_revision"]
+        return env, synchronized["registries"][0]["resolved_revision"]
 
 
 class BulkInstallFromOneCommitTest(_Chain):
     def _install_both(self, env):
         code, installed = env.run(
-            "marketplace", "install", SERVER, SKILL, "--profile", "claude", "--yes"
+            "consume", "install", SERVER, SKILL, "--profile", "claude", "--yes"
         )
         self.assertEqual(0, code, installed)
         return installed
@@ -132,7 +132,7 @@ class CollectionsAreReachableTest(_Chain):
 
     def _synchronized_with_collection(self, raw: str):
         env = _Environment(Path(raw).resolve(), AUTHORED_SKILL, AUTHORED_SERVER, AUTHORED_STARTER)
-        code, synchronized = env.run("source", "sync", source_transport=True)
+        code, synchronized = env.run("consume", "registry", "sync", source_transport=True)
         self.assertEqual(0, code, synchronized)
         return env
 
@@ -140,7 +140,7 @@ class CollectionsAreReachableTest(_Chain):
         with tempfile.TemporaryDirectory() as raw:
             env = self._synchronized_with_collection(raw)
 
-            code, listed = env.run("marketplace", "list")
+            code, listed = env.run("consume", "list")
 
             self.assertEqual(0, code, listed)
             self.assertEqual(
@@ -154,7 +154,7 @@ class CollectionsAreReachableTest(_Chain):
         with tempfile.TemporaryDirectory() as raw:
             env = self._synchronized_with_collection(raw)
 
-            _, listed = env.run("marketplace", "list")
+            _, listed = env.run("consume", "list")
 
             (collection,) = listed["collections"]
             self.assertEqual(
@@ -178,10 +178,10 @@ class CollectionsAreReachableTest(_Chain):
             env = _Environment(
                 Path(raw).resolve(), AUTHORED_SKILL, AUTHORED_SERVER, AUTHORED_STARTER, moved
             )
-            code, synchronized = env.run("source", "sync", source_transport=True)
+            code, synchronized = env.run("consume", "registry", "sync", source_transport=True)
             self.assertEqual(0, code, synchronized)
 
-            code, listed = env.run("marketplace", "list")
+            code, listed = env.run("consume", "list")
 
             self.assertEqual(0, code, listed)
             (collection,) = listed["collections"]
@@ -196,7 +196,7 @@ class CollectionsAreReachableTest(_Chain):
             env = self._synchronized_with_collection(raw)
 
             code, installed = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 "company/collection/starter",
                 "--profile",
@@ -215,7 +215,7 @@ class CollectionsAreReachableTest(_Chain):
             env = self._synchronized_with_collection(raw)
 
             code, installed = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 "company/collection/starter@1.0.0",
                 "--profile",
@@ -231,7 +231,7 @@ class CollectionsAreReachableTest(_Chain):
             env = self._synchronized_with_collection(raw)
 
             code, refused = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 "company/collection/starter@9.0.0",
                 "--profile",
@@ -251,7 +251,7 @@ class CollectionsAreReachableTest(_Chain):
             env = self._synchronized_with_collection(raw)
 
             code, refused = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 "company/collection/starter",
                 "--profile",
@@ -268,7 +268,7 @@ class CollectionsAreReachableTest(_Chain):
         with tempfile.TemporaryDirectory() as raw:
             env, _ = self._synchronized(raw)
 
-            code, listed = env.run("marketplace", "list")
+            code, listed = env.run("consume", "list")
 
             self.assertEqual(0, code, listed)
             self.assertEqual([], listed["collections"])

@@ -1,7 +1,7 @@
 """Symlink-safe durable storage for Candidate lifecycle history.
 
 Compiled artifact envelopes are immutable and content-addressed. A small per-Source index points at
-those envelopes and is the only value atomically replaced when Source Sync establishes a newer
+those envelopes and is the only value atomically replaced when Upstream sync establishes a newer
 scan. Objects are written first and retained, so interruption can leave unreferenced evidence but
 can never make a partial scan current.
 """
@@ -319,7 +319,7 @@ def write_candidate_history(
     scan: SourceScan,
 ) -> Result[CandidateHistoryReceipt]:
     if not isinstance(paths, CandidateHistoryPaths) or not isinstance(scan, SourceScan):
-        raise ValueError("writing Candidate history needs managed paths and one Source Scan")
+        raise ValueError("writing Candidate history needs managed paths and one Upstream scan")
     serialized = serialize_source_scan(scan)
     if isinstance(serialized, Err):
         return serialized

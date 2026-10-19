@@ -132,9 +132,7 @@ def _bound(location: ReceiptLocation, record: SetupStateRecord) -> Result[Receip
             RECEIPT_NOT_INSTALLED,
             f"the setup record for {location.coordinate} belongs to {record.scope} scope, "
             f"not {location.scope}",
-            (
-                f"read it with: aart-cli marketplace receipt show <coordinate> --scope {record.scope}",
-            ),
+            (f"read it with: aart-cli consume receipt show <coordinate> --scope {record.scope}",),
         )
     if location.profile == record.profile:
         return Ok(location)
@@ -177,7 +175,7 @@ def _locate_canonical(
         return _error(
             RECEIPT_INVALID,
             f"{selector} names more than one configured installation: {found}",
-            ("name one with: aart-cli marketplace receipt show <coordinate>",),
+            ("name one with: aart-cli consume receipt show <coordinate>",),
         )
     record = matches[0]
     serves = sorted(receipt_profiles(record.receipt) & set(chosen)) if chosen else []
@@ -217,8 +215,8 @@ def _locate_legacy(
         f"no installation of {selector} in {scope} scope"
         + (f" for profile {', '.join(chosen)}" if chosen else ""),
         (
-            "list what is installed with: aart-cli marketplace status",
-            "install it with: aart-cli marketplace install",
+            "list what is installed with: aart-cli consume status",
+            "install it with: aart-cli consume install",
         ),
     )
     manifest = Path(state_paths.destination_path)
@@ -238,7 +236,7 @@ def _locate_legacy(
         return _error(
             RECEIPT_INVALID,
             f"{selector} names more than one installation in {scope} scope: {found}",
-            ("name one with: aart-cli marketplace receipt show <coordinate> --profile <profile>",),
+            ("name one with: aart-cli consume receipt show <coordinate> --profile <profile>",),
         )
 
     installation = candidates[0]
@@ -308,9 +306,9 @@ def unsupported_action(action: str | None) -> Err:
         RECEIPT_INVALID,
         f"unsupported receipt action {action!r}",
         (
-            "read a persisted record with: aart-cli marketplace receipt show <coordinate>",
-            "check whether it is still true with: aart-cli marketplace receipt verify <coordinate>",
-            "reverse what it recorded with: aart-cli marketplace receipt undo <coordinate>",
+            "read a persisted record with: aart-cli consume receipt show <coordinate>",
+            "check whether it is still true with: aart-cli consume receipt verify <coordinate>",
+            "reverse what it recorded with: aart-cli consume receipt undo <coordinate>",
         ),
     )
 
@@ -358,7 +356,7 @@ def _error(code: DiagnosticCode, message: str, remediation: Tuple[str, ...] = ()
                 Severity.ERROR,
                 message,
                 remediation=remediation
-                or ("list what is installed with: aart-cli marketplace status",),
+                or ("list what is installed with: aart-cli consume status",),
             ),
         )
     )

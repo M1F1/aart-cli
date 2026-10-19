@@ -10768,7 +10768,11 @@ Each selected installation receives two independently evidenced stage results:
 | MCP startup and protocol | Its actual installed launcher responds using a supported MCP protocol, advertises the declared tool, and completes the declared call with a valid result |
 
 The second stage depends on the first: when installation configuration does not pass, the protocol
-stage is `NOT RUN` with the failed prerequisite named. Nothing else is verified. AART does not
+stage is `NOT RUN` with the failed prerequisite named. A missing credential or an ordinary input
+or credential still holding `AART_NOT_SET` makes installation configuration `NOT CONFIGURED`,
+with the input-entry recovery named. A provider item existing is insufficient when the provider
+reports that it is a placeholder; the comparison stays inside the provider (§172.3). This is a
+verification result, not a refusal to install or launch the artifact (§172.3). Nothing else is verified. AART does not
 claim that a passing protocol stage proves external-service access, authentication or permissions:
 a server that turns an upstream failure into an ordinary successful result passes this stage, and
 the report must not suggest otherwise. No keyword reading, result expectation or model assessment
@@ -11275,3 +11279,157 @@ pins a member version older than that member's current approved version.
 
 **INV-267 — Only manifests adopt.** Canonical Registry content is written only from a source
 manifest.
+
+# 174. An author's local checkout is read as Git would commit it
+
+Status: **ACCEPTED 2026-10-17 (D-438)**, on the owner's request: AART works on an author's local
+repository out of the box, without conditions on how the author keeps it.
+
+A `source-local` Source, `aart-cli author check`, and `registry scan` / `registry promote
+--checkout` read a directory the author works in. When that directory is inside a Git work tree,
+the Source is the files Git would commit from it: the tracked files and the untracked ones its
+ignore rules do not exclude, each read from the working tree. A virtual environment, cache or
+editor directory the author ignores is not part of the Source, so its symlinks, special files and
+size neither refuse nor bound it. A directory outside Git is read whole. Every file that is read is
+still read without following links, and a symlink or special file Git would commit is still
+refused. AART's own managed snapshots are read whole, as before.
+
+**INV-268 — Ignored files are not the author's Source.** A path the author's Git ignore rules
+exclude from a local checkout never enters a Source snapshot, and never makes reading it fail.
+
+# 175. Three roles, three command families: consume, maintain, author
+
+Status: **ACCEPTED 2026-10-17 (D-439)**, on the owner's decision. Supersedes the single `source`
+command family and the `registry-*` / `source-*` source kinds wherever they meet a user.
+
+## 175.1 The two kinds of repository
+
+- An **Upstream repository** (short: *upstream*) is a repository its authors keep. A Registry
+  maintainer connects it, synchronizes it and promotes its Candidates. A consumer never sees one.
+- A **Registry** is a namespace of approved artifact versions taken from upstreams, plus the
+  Collections its maintainer defines from them. A Registry authors no artifact of its own; a
+  Collection is the only thing it creates. A consumer installs from Registries and from nothing
+  else.
+
+Artifacts flow one way: upstream → Candidate → Registry → consumer. "Source" is no longer a name
+either role sees.
+
+## 175.2 The command families
+
+Every role-specific command lives under its role's verb; commands about the whole installation of
+aart-cli stay at the top level.
+
+```text
+aart-cli consume registry add|list|sync|remove|resubscribe|health   --kind local|git
+aart-cli consume list|search|install|update|uninstall|status|setup|receipt|health
+aart-cli consume mcp test
+
+aart-cli maintain upstream add|list|sync|remove|resubscribe|health|scan|adopt|check   --kind local|git
+aart-cli maintain candidate list|promote
+aart-cli maintain registry init|collection|format|validate|lock|build|audit|diff|test|publish|push
+
+aart-cli author init|check
+
+aart-cli doctor|upgrade|reset|security
+```
+
+- `consume registry sync` refreshes what a Registry offers and then points at `consume update`,
+  whose review lists each installed artifact a newer approved version would replace (§82, §83).
+  `sync` never changes installed artifacts; `update` never changes a Registry. Naming those
+  artifacts in `sync`'s own output is B-201.
+- `maintain upstream sync` discovers Candidates in connected upstreams; `scan` reports Candidates
+  in one explicit checkout without changing anything; `adopt` and `check` are today's `registry
+  adopt` and `registry check-upstream`. `maintain candidate promote` is today's `registry promote`.
+- The kind is the family plus `local` or `git`; the four `registry-*` / `source-*` kinds go.
+- `security` stays at the top level: consumers verify attestations and maintainers scan.
+- `source`, `marketplace` and the top-level `registry` family are removed, without aliases.
+
+## 175.3 Configuration and TUI
+
+- Configuration keeps two lists, `registries` and `upstreams`. Consumer commands, screens and
+  policy read only `registries`; the policy's direct-source switch goes, because a consumer can no
+  longer connect an upstream at all.
+- The consumer TUI's Registries screen lists Registries only. Registry Maintainer Mode has three
+  areas named as the CLI is: **Upstream repositories** ("Author repositories this Registry takes
+  artifacts from"), **Candidates**, and **Registry** (Collections, Validation, Publish).
+
+## 175.4 A clean start that keeps the old state
+
+AART keeps no migrators (§169), so a state written by another version, or one a person broke by
+hand, must never leave aart-cli unusable. `aart-cli reset` therefore moves the AART-owned state out
+of the application home instead of deleting it, and aart-cli starts as on a new machine:
+
+- **Backup, not deletion.** Every target the factory reset plan names moves, by rename, into
+  `<application home>-backups/<UTC timestamp>/` beside the home (`~/.aart-cli-backups/...`, or
+  beside `AART_CLI_HOME`). The command prints that directory. Nothing is copied and nothing is
+  removed; the backup holds no secret values, because the home holds none (§169).
+- **One confirmation.** The step is reversible, so one typed `RESET AART` (or `--yes`) replaces
+  the two confirmations a deletion needed.
+- **Going back.** `aart-cli reset --restore DIR` moves the current state into a new backup first,
+  then moves `DIR`'s contents back into the home. Restoring a state another version wrote is for
+  running that version again; this version does not read it.
+- **Out of the box.** When startup cannot load the local state (an invalid or foreign settings,
+  history or configuration file), the error names `aart-cli reset` as the way to a clean start.
+- Projects, harness files and organization policy are untouched, as before. Artifacts already
+  installed into harnesses stay there; after a reset AART no longer records them.
+
+## 175.5 Author Mode in the TUI
+
+Authoring is a role in its own right, not a CLI-only corner. Like Registry Maintainer Mode, **Author
+Mode** is hidden by default and enabled in Settings (`[ ] Author Mode`); with it on, the TUI adds an
+Author area beside the consumer one, and with it off no author navigation appears.
+
+- **Workspace.** The author picks the directory of their upstream repository once (a normalized
+  absolute path, remembered in AART settings, never inside the application home's content). The
+  area reads it exactly as `author check` does: as Git would commit it (§174).
+- **Check.** Runs `author check` over the workspace and lists every manifest with ok or its
+  diagnostics, the same result the CLI prints; selecting one shows its errors in full. Re-run is
+  one key.
+- **New artifact.** Chooses a kind and a name and writes the template `author init` writes, into
+  the workspace or a chosen subdirectory; nothing existing is replaced, and the screen then shows
+  that manifest's check.
+- The area runs the same application code as `aart-cli author`, so a result never differs between
+  the TUI and the CLI. It never connects the workspace as an upstream and never changes a Registry.
+
+**INV-269 — A consumer reads only Registries.** No consumer command, screen or configuration entry
+connects an upstream, and nothing a consumer installs comes from one.
+
+**INV-270 — The first word names the role.** Every command specific to consuming, maintaining or
+authoring is under `consume`, `maintain` or `author`; each noun means one thing within its family.
+
+**INV-272 — Author Mode is the CLI's author family.** Every author action in the TUI is an
+`aart-cli author` action with the same result; Author Mode is opt-in like Registry Maintainer Mode.
+
+**INV-271 — A reset never destroys state.** `aart-cli reset` moves AART-owned state into a backup
+it names and can restore; it removes nothing.
+
+
+## 175.6 Marketplace holds artifact details and readable columns
+
+Accepted 2026-10-17, on the owner's request (D-446). This narrows §161's standalone Artifact
+Details screen and extends §173.8.
+
+- **Details stay in Marketplace.** The separate Marketplace Artifact Details screen is removed.
+  Every piece of information it provided is available for the artifact under the cursor through
+  Marketplace's existing Verbose / More info control. This includes its existing provenance,
+  security, harness compatibility, installation status, digest and declared input guidance fields. Browsing these details keeps the selection,
+  search, cursor and install route in Marketplace. Install acts on marked offers, or on the
+  offer under the cursor when nothing is marked, preserving the former single-artifact install
+  without a preliminary tick. Collection preview and Installed details keep
+  their own purposes.
+- **Columns have headings.** Each Marketplace column has a visible heading identifying its
+  meaning, including status, scope, harnesses and unset inputs (§173.8). Headings and cells use
+  the same layout.
+- **Narrow terminals keep the content.** A narrow Marketplace never ellipsizes or drops a
+  heading or a cell value to make the columns fit. It wraps content into additional lines, or
+  stacks labeled fields where columns would be unreadable. Row boundaries and the focused
+  artifact remain clear; nothing requires opening another view to recover a truncated cell.
+  When wrapping exceeds the terminal height, PgUp/PgDn scroll the content while headings and
+  the navigation footer remain available; moving between offers keeps the focused row visible.
+
+**INV-273 — Marketplace details stay with the offer.** Everything the retired Artifact Details
+screen showed is available under More info on the focused Marketplace artifact, without losing
+Marketplace state or introducing another details screen.
+
+**INV-274 — Marketplace columns remain named and complete.** Every Marketplace field has a
+visible heading or label, and narrowing the terminal never truncates its heading or value.

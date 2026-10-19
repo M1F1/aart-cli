@@ -150,13 +150,13 @@ def _follow_up(
     quoted = shlex.quote(workspace)
     if action is CurationAction.INIT:
         return (
-            f"aart-cli registry validate --source {quoted}",
-            f"aart-cli registry build --source {quoted}",
-            f"aart-cli registry audit --source {quoted}",
+            f"aart-cli maintain registry validate --source {quoted}",
+            f"aart-cli maintain registry build --source {quoted}",
+            f"aart-cli maintain registry audit --source {quoted}",
         )
     return (
-        f"aart-cli registry validate --source {quoted}",
-        f"aart-cli registry audit --source {quoted}",
+        f"aart-cli maintain registry validate --source {quoted}",
+        f"aart-cli maintain registry audit --source {quoted}",
     )
 
 

@@ -110,12 +110,13 @@ class SourceCliParserAndDispatchTests(unittest.TestCase):
         request = cli._to_request(
             cli.build_parser().parse_args(
                 [
-                    "source",
+                    "consume",
+                    "registry",
                     "add",
                     "--alias",
                     "company",
                     "--kind",
-                    "registry-git",
+                    "git",
                     "--location",
                     "https://git.example.test/company/registry.git",
                     "--ref",
@@ -149,13 +150,15 @@ class SourceCliParserAndDispatchTests(unittest.TestCase):
             cli.DISPATCH,
             {"source": source_handler, "marketplace": marketplace_handler},
         ):
-            self.assertEqual(cli.main(["source", "list"]), 17)
-            self.assertEqual(cli.main(["marketplace", "list", "--json"]), 19)
+            self.assertEqual(cli.main(["consume", "registry", "list"]), 17)
+            self.assertEqual(cli.main(["consume", "list", "--json"]), 19)
         self.assertEqual(calls, [("source", "list"), ("marketplace", "list")])
 
 
 class SourceCliCommandTests(unittest.TestCase):
-    def test_local_source_add_then_agent_browse_uses_durable_state_without_objects(self) -> None:
+    def test_an_added_upstream_is_healthy_and_offers_a_consumer_nothing(self) -> None:
+        """INV-269: an Upstream repository is the Maintainer's input, never the consumer's catalog."""
+
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw).resolve()
             home = root / "aart-cli-home"
@@ -179,30 +182,33 @@ class SourceCliCommandTests(unittest.TestCase):
                 with contextlib.redirect_stdout(add_stdout):
                     added = cli.main(
                         [
-                            "source",
+                            "maintain",
+                            "upstream",
                             "add",
                             "--alias",
                             "fixture",
                             "--kind",
-                            "source-local",
+                            "local",
                             "--location",
                             fixture,
                             "--json",
                         ]
                     )
                 with contextlib.redirect_stdout(list_stdout):
-                    listed = cli.main(["source", "list", "--json"])
+                    listed = cli.main(["maintain", "upstream", "list", "--json"])
                 with contextlib.redirect_stdout(marketplace_stdout):
-                    browsed = cli.main(["marketplace", "list", "--json"])
+                    browsed = cli.main(["consume", "list", "--json"])
 
             self.assertEqual(added, 0)
             self.assertEqual(listed, 0)
             self.assertEqual(browsed, 0)
             self.assertEqual(json.loads(add_stdout.getvalue())["source"]["alias"], "fixture")
-            self.assertEqual(json.loads(list_stdout.getvalue())["sources"][0]["health"], "healthy")
+            self.assertEqual(
+                json.loads(list_stdout.getvalue())["upstreams"][0]["health"], "healthy"
+            )
             marketplace = json.loads(marketplace_stdout.getvalue())
             self.assertTrue(marketplace["ok"])
-            self.assertEqual(len(marketplace["artifacts"]), 2)
+            self.assertEqual(marketplace["artifacts"], [])
             self.assertFalse((root / "data" / "objects").exists())
 
     def test_add_synchronizes_before_saving_and_emits_json(self) -> None:
@@ -227,12 +233,13 @@ class SourceCliCommandTests(unittest.TestCase):
         ):
             result = cli.main(
                 [
-                    "source",
+                    "consume",
+                    "registry",
                     "add",
                     "--alias",
                     "company",
                     "--kind",
-                    "registry-git",
+                    "git",
                     "--location",
                     "https://git.example.test/company/registry.git",
                     "--json",
@@ -243,7 +250,7 @@ class SourceCliCommandTests(unittest.TestCase):
         self.assertEqual(events, ["sync", "save"])
         payload = json.loads(stdout.getvalue())
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["operation"], "source.add")
+        self.assertEqual(payload["operation"], "registry.add")
         self.assertEqual(payload["source"]["alias"], "company")
         self.assertTrue(payload["source"]["default"])
         self.assertEqual(payload["sync"]["source_id"], "team-registry")
@@ -274,12 +281,13 @@ class SourceCliCommandTests(unittest.TestCase):
         ):
             result = cli.main(
                 [
-                    "source",
+                    "consume",
+                    "registry",
                     "add",
                     "--alias",
                     "company",
                     "--kind",
-                    "registry-git",
+                    "git",
                     "--location",
                     "https://git.example.test/company/registry.git",
                     "--json",
@@ -290,7 +298,7 @@ class SourceCliCommandTests(unittest.TestCase):
         self.assertEqual(events, [])
         payload = json.loads(stdout.getvalue())
         self.assertFalse(payload["ok"])
-        self.assertEqual(payload["operation"], "source.add")
+        self.assertEqual(payload["operation"], "registry.add")
         self.assertEqual(payload["diagnostics"][0]["code"], "source-unavailable")
 
     def test_add_second_registry_preserves_existing_default_without_an_explicit_flag(self) -> None:
@@ -323,12 +331,13 @@ class SourceCliCommandTests(unittest.TestCase):
         ):
             result = cli.main(
                 [
-                    "source",
+                    "consume",
+                    "registry",
                     "add",
                     "--alias",
                     "team",
                     "--kind",
-                    "registry-git",
+                    "git",
                     "--location",
                     "https://git.example.test/team/registry.git",
                     "--json",
@@ -359,12 +368,13 @@ class SourceCliCommandTests(unittest.TestCase):
         ):
             result = cli.main(
                 [
-                    "source",
+                    "consume",
+                    "registry",
                     "add",
                     "--alias",
                     "company",
                     "--kind",
-                    "registry-git",
+                    "git",
                     "--location",
                     "https://git.example.test/company/registry.git",
                     "--json",
@@ -403,12 +413,13 @@ class SourceCliCommandTests(unittest.TestCase):
         ):
             result = cli.main(
                 [
-                    "source",
+                    "consume",
+                    "registry",
                     "add",
                     "--alias",
                     "company",
                     "--kind",
-                    "registry-git",
+                    "git",
                     "--location",
                     "https://git.example.test/company/registry.git",
                     "--json",
@@ -423,7 +434,7 @@ class SourceCliCommandTests(unittest.TestCase):
     def test_remove_flags_map_to_a_distinct_request_contract(self) -> None:
         request = cli._to_request(
             cli.build_parser().parse_args(
-                ["source", "remove", "--alias", "company", "--yes", "--json"]
+                ["consume", "registry", "remove", "--alias", "company", "--yes", "--json"]
             )
         )
 
@@ -452,7 +463,7 @@ class SourceCliCommandTests(unittest.TestCase):
     def test_resubscribe_flags_map_to_a_distinct_request_contract(self) -> None:
         request = cli._to_request(
             cli.build_parser().parse_args(
-                ["source", "resubscribe", "--alias", "company", "--yes", "--json"]
+                ["consume", "registry", "resubscribe", "--alias", "company", "--yes", "--json"]
             )
         )
 
@@ -500,7 +511,8 @@ class SourceCliCommandTests(unittest.TestCase):
         ):
             result = cli.main(
                 [
-                    "source",
+                    "consume",
+                    "registry",
                     "resubscribe",
                     "--alias",
                     "company",
@@ -560,7 +572,9 @@ class SourceCliCommandTests(unittest.TestCase):
             ),
             contextlib.redirect_stdout(stdout),
         ):
-            result = cli.main(["source", "resubscribe", "--alias", "company", "--json"])
+            result = cli.main(
+                ["consume", "registry", "resubscribe", "--alias", "company", "--json"]
+            )
 
         self.assertEqual(result, 0)
         self.assertEqual(events, [])
@@ -569,7 +583,7 @@ class SourceCliCommandTests(unittest.TestCase):
         self.assertFalse(payload["finalized"])
         self.assertEqual(payload["transition"]["from"]["source_id"], "team-registry")
         self.assertEqual(payload["transition"]["to"]["source_id"], "renamed-registry")
-        self.assertIn("Source resubscription review:", payload["review"][0])
+        self.assertIn("Registry resubscription review:", payload["review"][0])
 
     def test_resubscribe_with_yes_adopts_the_reviewed_transition_and_writes_no_configuration(
         self,
@@ -610,7 +624,9 @@ class SourceCliCommandTests(unittest.TestCase):
             ),
             contextlib.redirect_stdout(stdout),
         ):
-            result = cli.main(["source", "resubscribe", "--alias", "company", "--yes", "--json"])
+            result = cli.main(
+                ["consume", "registry", "resubscribe", "--alias", "company", "--yes", "--json"]
+            )
 
         self.assertEqual(result, 0)
         # Adoption keeps the subscription: no configuration write, so alias, kind, origin, ref and
@@ -641,11 +657,11 @@ class SourceCliCommandTests(unittest.TestCase):
             ),
             contextlib.redirect_stdout(stdout),
         ):
-            result = cli.main(["source", "resubscribe", "--alias", "typo", "--json"])
+            result = cli.main(["consume", "registry", "resubscribe", "--alias", "typo", "--json"])
 
         self.assertEqual(result, 1)
         payload = json.loads(stdout.getvalue())
-        self.assertIn("aart-cli source list", payload["diagnostics"][0]["remediation"][0])
+        self.assertIn("aart-cli consume registry list", payload["diagnostics"][0]["remediation"][0])
 
     def test_remove_without_yes_reviews_and_touches_neither_store_nor_configuration(self) -> None:
         events: list[str] = []
@@ -667,16 +683,16 @@ class SourceCliCommandTests(unittest.TestCase):
             ),
             contextlib.redirect_stdout(stdout),
         ):
-            result = cli.main(["source", "remove", "--alias", "company", "--json"])
+            result = cli.main(["consume", "registry", "remove", "--alias", "company", "--json"])
 
         self.assertEqual(result, 0)
         self.assertEqual(events, [])
         payload = json.loads(stdout.getvalue())
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["operation"], "source.remove")
+        self.assertEqual(payload["operation"], "registry.remove")
         self.assertFalse(payload["finalized"])
         self.assertTrue(payload["source"]["cleared_default"])
-        self.assertIn("Source removal review:", payload["review"][0])
+        self.assertIn("Registry removal review:", payload["review"][0])
 
     def test_remove_with_yes_discards_the_snapshot_before_writing_the_configuration(self) -> None:
         events: list[str] = []
@@ -703,7 +719,9 @@ class SourceCliCommandTests(unittest.TestCase):
             ),
             contextlib.redirect_stdout(stdout),
         ):
-            result = cli.main(["source", "remove", "--alias", "company", "--yes", "--json"])
+            result = cli.main(
+                ["consume", "registry", "remove", "--alias", "company", "--yes", "--json"]
+            )
 
         self.assertEqual(result, 0)
         self.assertEqual(events, ["discard", "save"])
@@ -711,6 +729,62 @@ class SourceCliCommandTests(unittest.TestCase):
         self.assertTrue(payload["finalized"])
         self.assertTrue(payload["snapshot_discarded"])
         self.assertEqual(payload["source"]["alias"], "company")
+
+    def test_human_add_and_remove_name_a_registry_by_its_role(self) -> None:
+        """§175: a consumer connects a Registry, so the text output never calls it a source."""
+
+        added = io.StringIO()
+        runtime = _runtime()
+        with (
+            patch(
+                "aart_cli.commands.source.load_runtime_configuration",
+                side_effect=(Ok(runtime), Ok(runtime)),
+            ),
+            patch(
+                "aart_cli.commands.source.sync_configured_source",
+                return_value=Ok(_sync_outcome()),
+            ),
+            contextlib.redirect_stdout(added),
+        ):
+            add_code = cli.main(
+                [
+                    "consume",
+                    "registry",
+                    "add",
+                    "--alias",
+                    "company",
+                    "--kind",
+                    "git",
+                    "--location",
+                    "https://git.example.test/company/registry.git",
+                ]
+            )
+        _source, configuration = self._configured()
+        removed = io.StringIO()
+        with (
+            patch(
+                "aart_cli.commands.source.load_runtime_configuration",
+                return_value=Ok(_runtime(configuration)),
+            ),
+            patch(
+                "aart_cli.commands.source.discard_configured_source",
+                return_value=Ok(SimpleNamespace(existed=True, discarded=None)),
+            ),
+            patch(
+                "aart_cli.commands.source._source_health",
+                return_value=SourceHealth(HealthStatus.HEALTHY, 12, None),
+            ),
+            contextlib.redirect_stdout(removed),
+        ):
+            remove_code = cli.main(["consume", "registry", "remove", "--alias", "company", "--yes"])
+
+        self.assertEqual((add_code, remove_code), (0, 0), added.getvalue() + removed.getvalue())
+        self.assertTrue(added.getvalue().startswith("Registry added: company;"), added.getvalue())
+        self.assertIn("default=yes", added.getvalue())
+        self.assertTrue(
+            removed.getvalue().startswith("Registry removed: company;"), removed.getvalue()
+        )
+        self.assertNotIn("source", (added.getvalue() + removed.getvalue()).casefold())
 
     def test_remove_never_writes_configuration_when_the_snapshot_cannot_be_discarded(self) -> None:
         events: list[str] = []
@@ -741,7 +815,9 @@ class SourceCliCommandTests(unittest.TestCase):
             ),
             contextlib.redirect_stdout(stdout),
         ):
-            result = cli.main(["source", "remove", "--alias", "company", "--yes", "--json"])
+            result = cli.main(
+                ["consume", "registry", "remove", "--alias", "company", "--yes", "--json"]
+            )
 
         self.assertEqual(result, 1)
         self.assertEqual(events, [])
@@ -763,12 +839,71 @@ class SourceCliCommandTests(unittest.TestCase):
             ),
             contextlib.redirect_stdout(stdout),
         ):
-            result = cli.main(["source", "remove", "--alias", "absent", "--yes", "--json"])
+            result = cli.main(
+                ["consume", "registry", "remove", "--alias", "absent", "--yes", "--json"]
+            )
 
         self.assertEqual(result, 1)
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["diagnostics"][0]["code"], "source-selection-invalid")
-        self.assertIn("aart-cli source list", payload["diagnostics"][0]["remediation"][0])
+        self.assertIn("aart-cli consume registry list", payload["diagnostics"][0]["remediation"][0])
+
+    def test_each_family_lists_and_removes_only_its_own_connections(self) -> None:
+        """§175.2/INV-270: a consumer sees Registries, a maintainer Upstream repositories."""
+
+        registry = ConfiguredSource(
+            SourceAlias("company"),
+            SourceKind.REGISTRY_GIT,
+            "https://git.example.test/company/registry.git",
+            "main",
+            True,
+        )
+        upstream = ConfiguredSource(
+            SourceAlias("authors"),
+            SourceKind.SOURCE_GIT,
+            "https://git.example.test/team/authors.git",
+            "main",
+            True,
+        )
+        configuration = default_user_configuration()
+        configuration = type(configuration)(
+            configuration.schema_version,
+            (registry, upstream),
+            registry.alias,
+            configuration.sync,
+        )
+        runtime = _runtime(configuration)
+
+        def run(*argv: str) -> tuple[int, dict]:
+            stdout = io.StringIO()
+            with (
+                patch(
+                    "aart_cli.commands.source.load_runtime_configuration",
+                    return_value=Ok(runtime),
+                ),
+                patch(
+                    "aart_cli.commands.source._source_health",
+                    return_value=SourceHealth(HealthStatus.HEALTHY, 12, None),
+                ),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = cli.main([*argv, "--json"])
+            return code, json.loads(stdout.getvalue())
+
+        code, consumed = run("consume", "registry", "list")
+        self.assertEqual(code, 0, consumed)
+        self.assertEqual([item["alias"] for item in consumed["registries"]], ["company"])
+        self.assertNotIn("upstreams", consumed)
+
+        code, maintained = run("maintain", "upstream", "list")
+        self.assertEqual(code, 0, maintained)
+        self.assertEqual([item["alias"] for item in maintained["upstreams"]], ["authors"])
+        self.assertEqual(maintained["operation"], "upstream.list")
+
+        code, refused = run("consume", "registry", "remove", "--alias", "authors", "--yes")
+        self.assertEqual(code, 1, refused)
+        self.assertIn("Upstream repository", refused["diagnostics"][0]["message"])
+        self.assertIn("aart-cli maintain upstream", refused["diagnostics"][0]["remediation"][0])
 
     def test_list_reports_managed_health_without_mutating_configuration(self) -> None:
         source = ConfiguredSource(
@@ -798,13 +933,13 @@ class SourceCliCommandTests(unittest.TestCase):
             ),
             contextlib.redirect_stdout(stdout),
         ):
-            result = cli.main(["source", "list", "--json"])
+            result = cli.main(["consume", "registry", "list", "--json"])
 
         self.assertEqual(result, 0)
         payload = json.loads(stdout.getvalue())
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["sources"][0]["health"], "healthy")
-        self.assertTrue(payload["sources"][0]["default"])
+        self.assertEqual(payload["registries"][0]["health"], "healthy")
+        self.assertTrue(payload["registries"][0]["default"])
 
     def test_list_refuses_to_treat_a_corrupt_config_as_empty(self) -> None:
         recovery = ConfigRecoveryPlan(
@@ -821,7 +956,7 @@ class SourceCliCommandTests(unittest.TestCase):
             ),
             contextlib.redirect_stdout(stdout),
         ):
-            result = cli.main(["source", "list", "--json"])
+            result = cli.main(["consume", "registry", "list", "--json"])
 
         self.assertEqual(result, 1)
         payload = json.loads(stdout.getvalue())
@@ -868,7 +1003,7 @@ class MarketplaceCliCommandTests(unittest.TestCase):
             ),
             contextlib.redirect_stdout(stdout),
         ):
-            result = cli.main(["marketplace", "list", "--json"])
+            result = cli.main(["consume", "list", "--json"])
 
         self.assertEqual(result, 0)
         payload = json.loads(stdout.getvalue())
@@ -895,7 +1030,7 @@ class MarketplaceCliCommandTests(unittest.TestCase):
             ),
             contextlib.redirect_stdout(stdout),
         ):
-            result = cli.main(["marketplace", "list", "--json"])
+            result = cli.main(["consume", "list", "--json"])
 
         self.assertEqual(result, 1)
         payload = json.loads(stdout.getvalue())

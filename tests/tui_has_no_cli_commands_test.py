@@ -172,7 +172,7 @@ class DuplicateConnectionSpeaksInteractivelyTest(unittest.TestCase):
         assert isinstance(refused, Err), refused
         self.assertTrue(
             any(
-                "aart-cli source sync" in step
+                "aart-cli consume registry sync" in step
                 for item in refused.diagnostics
                 for step in item.remediation
             ),
@@ -205,7 +205,7 @@ class NoFrameDrawsACommandTest(unittest.TestCase):
 
     def test_no_screen_draws_a_command_even_while_a_refusal_is_on_it(self) -> None:
         source = self._source()
-        settings = ConsumerSettings().with_maintainer_mode(True)
+        settings = ConsumerSettings(author_mode=True).with_maintainer_mode(True)
 
         for screen in (*ConsumerScreen, *MaintainerScreen):
             with self.subTest(screen=screen.value):

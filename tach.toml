@@ -33,7 +33,7 @@ depends_on = []
 
 [[modules]]
 path = "aart_cli.application"
-depends_on = [ "aart_cli.sources", "aart_cli.redaction", "aart_cli.store", "aart_cli.domain", "aart_cli.protocol", "aart_cli.marketplace", "aart_cli.configuration"]
+depends_on = ["aart_cli.authoring",  "aart_cli.sources", "aart_cli.redaction", "aart_cli.store", "aart_cli.domain", "aart_cli.protocol", "aart_cli.marketplace", "aart_cli.configuration"]
 
 [[modules]]
 path = "aart_cli.authoring"
@@ -69,7 +69,7 @@ depends_on = ["aart_cli.application", "aart_cli.install_state", "aart_cli.regist
 
 [[modules]]
 path = "aart_cli.consumer_actions"
-depends_on = ["aart_cli.domain", "aart_cli.protocol", "aart_cli.io", "aart_cli.configuration", "aart_cli.registry_commands", "aart_cli.application", "aart_cli.tui_consumer", "aart_cli.store"]
+depends_on = ["aart_cli.authoring", "aart_cli.domain", "aart_cli.protocol", "aart_cli.io", "aart_cli.configuration", "aart_cli.registry_commands", "aart_cli.application", "aart_cli.tui_consumer", "aart_cli.store"]
 
 [[modules]]
 path = "aart_cli.curation"
@@ -185,7 +185,7 @@ depends_on = ["aart_cli.application", "aart_cli.tui_marketplace", "aart_cli.tui_
 
 [[modules]]
 path = "aart_cli.tui_consumer"
-depends_on = ["aart_cli.tui_layout", "aart_cli.io", "aart_cli.domain", "aart_cli.tui_maintainer", "aart_cli.application", "aart_cli.tui_marketplace"]
+depends_on = ["aart_cli.tui_marketplace_rows", "aart_cli.tui_marketplace_detail", "aart_cli.authoring", "aart_cli.tui_layout", "aart_cli.io", "aart_cli.domain", "aart_cli.tui_maintainer", "aart_cli.application", "aart_cli.tui_marketplace"]
 
 [[modules]]
 path = "aart_cli.tui_failures"
@@ -210,3 +210,11 @@ depends_on = ["aart_cli.domain", "aart_cli.configuration", "aart_cli.sources"]
 [[modules]]
 path = "aart_cli.wizard"
 depends_on = ["aart_cli.tui_layout", "aart_cli.tui_sources"]
+
+[[modules]]
+path = "aart_cli.tui_marketplace_detail"
+depends_on = ["aart_cli.application", "aart_cli.tui_layout", "aart_cli.tui_marketplace"]
+
+[[modules]]
+path = "aart_cli.tui_marketplace_rows"
+depends_on = ["aart_cli.tui_layout"]

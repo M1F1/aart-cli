@@ -39,7 +39,7 @@ def _run(env, *argv: str) -> tuple[int, str]:
 class SearchCommandTest(unittest.TestCase):
     def test_a_word_finds_the_artifact_whose_name_holds_it(self):
         with _environment() as env:
-            code, out = _run(env, "marketplace", "search", "review")
+            code, out = _run(env, "consume", "search", "review")
 
         self.assertEqual(0, code, out)
         self.assertIn("reference/skill/code-review@1.0.0", out)
@@ -47,14 +47,14 @@ class SearchCommandTest(unittest.TestCase):
 
     def test_the_summary_line_says_how_much_of_the_catalog_answered(self):
         with _environment() as env:
-            _code, out = _run(env, "marketplace", "search", "review")
+            _code, out = _run(env, "consume", "search", "review")
 
         self.assertRegex(out.splitlines()[0], r"^\d+ of \d+ match 'review'\.$")
 
     def test_a_second_word_narrows_the_answer(self):
         with _environment() as env:
-            _code, one = _run(env, "marketplace", "search", "review")
-            _code, two = _run(env, "marketplace", "search", "review", "house")
+            _code, one = _run(env, "consume", "search", "review")
+            _code, two = _run(env, "consume", "search", "review", "house")
 
         self.assertIn("code-review", one)
         self.assertNotIn("code-review", two)
@@ -62,7 +62,7 @@ class SearchCommandTest(unittest.TestCase):
 
     def test_finding_nothing_is_not_a_failure_and_says_what_to_try(self):
         with _environment() as env:
-            code, out = _run(env, "marketplace", "search", "kubernetes")
+            code, out = _run(env, "consume", "search", "kubernetes")
 
         self.assertEqual(0, code, out)
         self.assertIn("Nothing matches 'kubernetes'", out)
@@ -70,14 +70,14 @@ class SearchCommandTest(unittest.TestCase):
 
     def test_a_collection_is_searched_beside_the_artifacts(self):
         with _environment() as env:
-            _code, out = _run(env, "marketplace", "search", "essentials")
+            _code, out = _run(env, "consume", "search", "essentials")
 
         self.assertIn("reference/collection/essentials", out)
         self.assertIn("[collection]", out)
 
     def test_the_limit_keeps_the_best_row(self):
         with _environment() as env:
-            _code, out = _run(env, "marketplace", "search", "review", "--limit", "1")
+            _code, out = _run(env, "consume", "search", "review", "--limit", "1")
 
         printed = [line for line in out.splitlines() if line.startswith("  ")]
         self.assertEqual(1, len(printed), out)
@@ -85,7 +85,7 @@ class SearchCommandTest(unittest.TestCase):
 
     def test_a_limit_below_one_is_refused_rather_than_printing_nothing(self):
         with _environment() as env:
-            code, out = _run(env, "marketplace", "search", "review", "--limit", "0", "--json")
+            code, out = _run(env, "consume", "search", "review", "--limit", "0", "--json")
 
         self.assertNotEqual(0, code)
         payload = json.loads(out)
@@ -94,7 +94,7 @@ class SearchCommandTest(unittest.TestCase):
 
     def test_the_json_says_what_matched_and_where(self):
         with _environment() as env:
-            code, out = _run(env, "marketplace", "search", "review", "--json")
+            code, out = _run(env, "consume", "search", "review", "--json")
 
         self.assertEqual(0, code, out)
         payload = json.loads(out)
@@ -112,10 +112,10 @@ class SearchCommandTest(unittest.TestCase):
         """A search whose answer cannot be pasted into the next command answers nothing."""
 
         with _environment() as env:
-            _code, out = _run(env, "marketplace", "search", "review", "--json")
+            _code, out = _run(env, "consume", "search", "review", "--json")
             coordinate = json.loads(out)["matches"][0]["coordinate"]
             code, payload = env.run(
-                "marketplace", "install", coordinate, "--profile", "claude", "--yes"
+                "consume", "install", coordinate, "--profile", "claude", "--yes"
             )
 
         self.assertEqual(0, code, payload)

@@ -373,7 +373,7 @@ class RegistryRefreshCompositionTest(unittest.TestCase):
         self.assertEqual(called, [])
         self.assertEqual(prepared.event.review_digest, "")
         notice = "\n".join(prepared.source.screens.notice)
-        self.assertIn("authoring Source", notice)
+        self.assertIn("upstream repository", notice)
         self.assertIn("not a registry", notice)
 
     def test_an_unreviewed_execution_is_refused(self) -> None:

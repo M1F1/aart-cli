@@ -72,6 +72,7 @@ def connect_baked_default_registry(
     added = add(
         Request(
             command="source",
+            source_family="registry",
             source_action="add",
             source_alias=seed.source.alias.value,
             source_kind=seed.source.kind.value,

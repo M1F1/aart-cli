@@ -257,15 +257,15 @@ nothing is recorded as an `invalid` Candidate.
 - [ ] Put it back (`git revert --no-edit HEAD && git push`) before continuing.
 
 A Source whose Candidate history was recorded at another revision than the snapshot it has pinned
-shows `Attention` and lists no Candidates. `aart-cli source sync` produces exactly that, because the
-consumer refresh moves the pin and writes no Candidate history — writing it is Maintainer
-authority. It takes a minute to prove, and it is the failure the first released version could not
+shows `Attention` and lists no Candidates. `aart-cli maintain upstream sync` produces exactly that, because a
+connection refresh moves the pin and writes no Candidate history — recording Candidates is the
+scan's job. It takes a minute to prove, and it is the failure the first released version could not
 recover from (issue #8, D-280 to D-282):
 
 - [ ] Push a commit to one author repository, then refresh it from outside the screens:
 
 ```sh
-aart-cli source sync
+aart-cli maintain upstream sync
 aart-cli doctor
 ```
 
@@ -322,7 +322,7 @@ confirmation (`QA-033`).
 
 This step changed again. `D-228` once had AART push a reviewed commit to a review branch from this
 screen; the product owner reversed that for the TUI (Product Specification 164.7, `D-249`), and
-CP-23 task 05 removed it (`D-255`). The supported `aart-cli registry push` CLI is unchanged — this
+CP-23 task 05 removed it (`D-255`). The supported `aart-cli maintain registry push` CLI is unchanged — this
 walkthrough is TUI-only, so it does not use it.
 
 The committed **Registry commit** screen says what comes next, in order:

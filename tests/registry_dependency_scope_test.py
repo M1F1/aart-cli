@@ -157,8 +157,8 @@ class DependencyScopeRemediationTest(unittest.TestCase):
 
         joined = " ".join(self._remediation())
 
-        self.assertIn("aart-cli registry scan", joined)
-        self.assertIn("aart-cli registry promote", joined)
+        self.assertIn("aart-cli maintain upstream scan", joined)
+        self.assertIn("aart-cli maintain candidate promote", joined)
         self.assertIn("copy the upstream content into an artifact this registry owns", joined)
 
 

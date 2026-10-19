@@ -40,7 +40,7 @@ def _starter_registry():
 
 def _install(env, coordinate: str, *harnesses: str) -> None:
     profiles = (item for harness in harnesses for item in ("--profile", harness))
-    code, payload = env.run("marketplace", "install", coordinate, *profiles, "--yes")
+    code, payload = env.run("consume", "install", coordinate, *profiles, "--yes")
     assert code == 0, payload
 
 
@@ -152,10 +152,8 @@ class CollectionUninstallTest(unittest.TestCase):
             _install(env, DUMMY, "claude")
             _install(env, STARTER, "claude")
 
-            reviewed, review = env.run("marketplace", "uninstall", STARTER, "--profile", "claude")
-            code, payload = env.run(
-                "marketplace", "uninstall", STARTER, "--profile", "claude", "--yes"
-            )
+            reviewed, review = env.run("consume", "uninstall", STARTER, "--profile", "claude")
+            code, payload = env.run("consume", "uninstall", STARTER, "--profile", "claude", "--yes")
             records = _records(env)
             delivered = _skill(env).exists()
 
@@ -169,9 +167,7 @@ class CollectionUninstallTest(unittest.TestCase):
         with _starter_registry() as env:
             _install(env, STARTER, "claude")
 
-            code, payload = env.run(
-                "marketplace", "uninstall", STARTER, DUMMY, "--profile", "claude"
-            )
+            code, payload = env.run("consume", "uninstall", STARTER, DUMMY, "--profile", "claude")
             records = _records(env)
 
         self.assertNotEqual(code, 0, payload)

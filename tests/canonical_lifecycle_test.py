@@ -220,8 +220,8 @@ class CanonicalLifecycleTest(unittest.TestCase):
             assert migration.value.terminal is not None
             self.assertEqual(migration.value.terminal.status, LifecycleStatus.CONFLICT)
             self.assertIn("update would orphan recorded effects", migration.value.terminal.detail)
-            self.assertIn("marketplace uninstall", migration.value.terminal.detail)
-            self.assertIn("marketplace install", migration.value.terminal.detail)
+            self.assertIn("consume uninstall", migration.value.terminal.detail)
+            self.assertIn("consume install", migration.value.terminal.detail)
             self.assertTrue(legacy.exists())
             self.assertFalse((project / ".mcp.json").exists())
 

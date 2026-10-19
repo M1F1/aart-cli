@@ -48,7 +48,7 @@ class MergedInstallationTest(unittest.TestCase):
         self.memory = self.env.project / "CLAUDE.md"
 
     def _install(self) -> tuple[int, dict]:
-        return self.env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
+        return self.env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
 
     def _text(self) -> str:
         return self.memory.read_text(encoding="utf-8")
@@ -75,7 +75,7 @@ class MergedInstallationTest(unittest.TestCase):
     def test_review_names_the_merge_and_writes_nothing(self) -> None:
         self.memory.write_text(NOTES, encoding="utf-8")
 
-        code, payload = self.env.run("marketplace", "install", COORDINATE, "--profile", "claude")
+        code, payload = self.env.run("consume", "install", COORDINATE, "--profile", "claude")
 
         self.assertEqual(code, 0, payload)
         self.assertFalse(payload["finalized"])
@@ -93,7 +93,7 @@ class MergedInstallationTest(unittest.TestCase):
     def test_a_later_invocation_reports_it_installed_and_healthy(self) -> None:
         self._install()
 
-        code, payload = self.env.run("marketplace", "status", "--profile", "claude")
+        code, payload = self.env.run("consume", "status", "--profile", "claude")
 
         self.assertEqual(code, 0, payload)
         self.assertEqual([COORDINATE + "@1.2.0"], [item["key"] for item in payload["items"]])
@@ -106,7 +106,7 @@ class MergedInstallationTest(unittest.TestCase):
             encoding="utf-8",
         )
 
-        code, payload = self.env.run("marketplace", "status", "--profile", "claude")
+        code, payload = self.env.run("consume", "status", "--profile", "claude")
 
         self.assertEqual(code, 0, payload)
         self.assertNotEqual("ready", payload["items"][0]["health"])
@@ -115,7 +115,7 @@ class MergedInstallationTest(unittest.TestCase):
         self._install()
         self.memory.write_text(self._text() + "\nA thought I had later.\n", encoding="utf-8")
 
-        code, payload = self.env.run("marketplace", "status", "--profile", "claude")
+        code, payload = self.env.run("consume", "status", "--profile", "claude")
 
         self.assertEqual(code, 0, payload)
         self.assertEqual(
@@ -129,7 +129,7 @@ class MergedInstallationTest(unittest.TestCase):
         self._install()
 
         code, payload = self.env.run(
-            "marketplace", "uninstall", COORDINATE, "--profile", "claude", "--yes"
+            "consume", "uninstall", COORDINATE, "--profile", "claude", "--yes"
         )
 
         self.assertEqual(code, 0, payload)

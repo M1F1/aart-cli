@@ -359,8 +359,8 @@ def separate(*blocks: Sequence[str]) -> Tuple[str, ...]:
 _NAMES = (
     "Registry Maintainer Mode",
     "Registry Maintainer Dashboard",
-    "Source Sync",
-    "Source Scan",
+    "Upstream sync",
+    "Upstream scan",
     "Registry Sync",
     "Registry Workspace",
     "Registry Diff",

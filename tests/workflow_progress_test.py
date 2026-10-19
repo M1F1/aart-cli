@@ -70,9 +70,9 @@ class WorkflowProgressTest(TestCase):
                     MaintainerScreen.SOURCE_SYNC,
                     MaintainerScreen.SOURCES,
                 ),
-                "✓ Sources",
-                "▸ Source Sync",
-                "· Source Sync Result",
+                "✓ Upstream repositories",
+                "▸ Upstream sync",
+                "· Upstream sync result",
             ),
             (
                 _state(
@@ -80,8 +80,8 @@ class WorkflowProgressTest(TestCase):
                     MaintainerScreen.SOURCES,
                     MaintainerScreen.SOURCE_ADD,
                 ),
-                "✓ Sources",
-                "▸ Review Source",
+                "✓ Upstream repositories",
+                "▸ Review upstream",
                 "·",
             ),
             (

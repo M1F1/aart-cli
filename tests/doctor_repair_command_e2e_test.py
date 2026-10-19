@@ -20,9 +20,7 @@ INSTALLED_COORDINATE = "company/skill/code-review@1.2.0"
 
 class DoctorRepairCommandE2ETest(unittest.TestCase):
     def _damaged(self, env) -> None:
-        code, payload = env.run(
-            "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
         _delete_delivery(env)
         self.assertFalse(_delivered(env).exists())
@@ -130,7 +128,7 @@ class DoctorRepairCommandE2ETest(unittest.TestCase):
     def test_user_scope_is_selected_explicitly_and_repaired_in_its_own_harness_root(self) -> None:
         with _environment() as env:
             code, installed = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 COORDINATE,
                 "--profile",

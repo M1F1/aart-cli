@@ -55,6 +55,10 @@ class WizardOnboardingTests(unittest.TestCase):
         self.assertIn("aart", rendered)
         self.assertIn("User", rendered)
         self.assertIn("Maintainer", rendered)
+        self.assertIn(
+            "configs, hooks, memory - from an approved Registry into the harnesses",
+            onboarding_lines("curses"),
+        )
         # Onboarding has a status bar saying enter=start, so a sentence carrying that key would be
         # its second copy.
         self.assertNotIn("Press Enter", rendered)
@@ -95,7 +99,7 @@ class WizardStepperTests(unittest.TestCase):
     def test_the_whole_path_is_visible_on_the_very_first_screens(self):
         rendered = "\n".join(render_stepper(_at_role(), width=120))
 
-        for label in ("How it works", "Role", "Sources", "Harness", "Action"):
+        for label in ("How it works", "Role", "Registries", "Harness", "Action"):
             self.assertIn(label, rendered)
 
     def test_a_projected_tail_is_marked_and_a_settled_one_is_not(self):

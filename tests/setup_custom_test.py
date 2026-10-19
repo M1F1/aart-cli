@@ -140,7 +140,7 @@ class CustomProtocolTests(unittest.TestCase):
             # until `2.6.0` shipped `receipt undo` and then was a claim the same executable
             # contradicted in every record it wrote.
             self.assertIn("mcp/atlassian", result.rollback_command)
-            self.assertIn("aart-cli marketplace receipt undo", result.rollback_command)
+            self.assertIn("aart-cli consume receipt undo", result.rollback_command)
 
 
 class WrittenCommandFieldTests(unittest.TestCase):

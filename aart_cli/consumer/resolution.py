@@ -142,7 +142,7 @@ def resolve_installed_selectors(
                     INSTALLATION_NOT_FOUND,
                     Severity.ERROR,
                     f"{selector} is not installed in this scope",
-                    remediation=("aart-cli marketplace status",),
+                    remediation=("aart-cli consume status",),
                 )
             )
             continue

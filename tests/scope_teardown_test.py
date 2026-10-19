@@ -24,7 +24,7 @@ from aart_cli.lifecycle.io import _tear_down
 from aart_cli.lifecycle.model import ScopeTeardown
 from tests.canonical_lifecycle_test import _install, _state
 from tests.canonical_symlink_test import _fixture
-from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _environment
+from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _PLACED, _environment
 from tests.privileges import skip_if_root
 
 _MEMORY = "reference/memory/house"
@@ -225,13 +225,13 @@ class ScopeTeardownEndToEndTest(unittest.TestCase):
             _git(env.project, "commit", "-qm", "initial")
             self.assertEqual(_git(env.project, "status", "--porcelain"), "")
             install_code, installed = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(install_code, 0, installed)
             self.assertNotEqual(_git(env.project, "status", "--porcelain"), "")
 
             code, payload = env.run(
-                "marketplace", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -242,34 +242,36 @@ class ScopeTeardownEndToEndTest(unittest.TestCase):
                 sorted(map(str, env.project.rglob("*"))),
             )
 
-    def test_the_manifest_waits_for_the_last_installation_in_the_scope(self) -> None:
-        # Each uninstall reclaims the directories its own payload emptied; the manifest belongs to
-        # the scope, so it survives every uninstall but the last.
+    def test_each_uninstall_takes_its_own_record_and_leaves_the_other(self) -> None:
+        # There is no per-scope manifest any more: each installation is one record in the
+        # application home, so an uninstall takes exactly its own record and its own files.
+        # The emptied directories and the emptied instruction file stay behind for now (B-204).
         with _environment() as env:
-            env.run("marketplace", "install", _COORDINATE, "--profile", "claude", "--yes")
-            env.run("marketplace", "install", _MEMORY, "--profile", "claude", "--yes")
+            env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", _MEMORY, "--profile", "claude", "--yes")
+            records = Path(env.paths.data_root) / "state" / "installations"
+            self.assertEqual(len(list(records.iterdir())), 2)
 
             code, payload = env.run(
-                "marketplace", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
-            self.assertTrue((env.project / ".aart-cli" / "manifest.json").is_file())
-            self.assertFalse((env.project / ".claude" / "skills").exists())
+            self.assertEqual(len(list(records.iterdir())), 1)
+            self.assertFalse((env.project / _PLACED).exists())
+            self.assertIn("aart-cli memory:house", (env.project / "CLAUDE.md").read_text())
 
             last_code, last = env.run(
-                "marketplace", "uninstall", _MEMORY, "--profile", "claude", "--yes"
+                "consume", "uninstall", _MEMORY, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(last_code, 0, last)
-            self.assertFalse((env.project / ".aart-cli").exists())
+            self.assertEqual(list(records.iterdir()), [])
 
-    def test_user_scope_reclaims_its_manifest_and_the_directory_it_emptied(self) -> None:
-        # The user state root is shared with the object-reference index, so it stays: what the
-        # uninstall owns there is the manifest and its lock, and those go.
+    def test_a_user_scope_uninstall_takes_its_record_and_its_placement(self) -> None:
         with _environment() as env:
             install_code, installed = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 _COORDINATE,
                 "--profile",
@@ -279,11 +281,13 @@ class ScopeTeardownEndToEndTest(unittest.TestCase):
                 "--yes",
             )
             self.assertEqual(install_code, 0, installed)
-            state_root = Path(env.paths.data_root) / "state"
-            self.assertTrue((state_root / "manifest.json").is_file())
+            records = Path(env.paths.data_root) / "state" / "installations"
+            placed = env.home / ".claude" / "skills" / "code-review-reference-user"
+            self.assertEqual(len(list(records.iterdir())), 1)
+            self.assertTrue((placed / "SKILL.md").is_file())
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "uninstall",
                 _COORDINATE,
                 "--profile",
@@ -294,10 +298,8 @@ class ScopeTeardownEndToEndTest(unittest.TestCase):
             )
 
             self.assertEqual(code, 0, payload)
-            self.assertFalse((state_root / "manifest.json").exists())
-            self.assertFalse((state_root / "state.lock").exists())
-            self.assertTrue((state_root / "object-references.json").is_file())
-            self.assertFalse((env.home / ".claude" / "skills").exists())
+            self.assertEqual(list(records.iterdir()), [])
+            self.assertFalse(placed.exists())
             self.assertTrue((env.home / ".claude").is_dir())
 
 

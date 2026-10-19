@@ -21,7 +21,7 @@ class ConfigurationSchemaTest(unittest.TestCase):
     def test_minimal_configuration_allows_zero_sources_and_no_registry(self) -> None:
         result = parse_user_configuration('{"schema_version":1}')
         explicit_null = parse_user_configuration(
-            '{"schema_version":1,"sources":[],"default_registry":null}'
+            '{"schema_version":1,"upstreams":[],"default_registry":null}'
         )
 
         self.assertIsInstance(result, Ok)
@@ -40,10 +40,13 @@ class ConfigurationSchemaTest(unittest.TestCase):
         result = parse_user_configuration(
             """{
               "schema_version": 1,
-              "sources": [
-                {"alias":"company","kind":"registry-git","url":"git@github.company.example:agents/registry.git","ref":"main","enabled":true},
-                {"alias":"public","kind":"source-git","url":"https://github.com/example/artifacts.git","ref":"v1","enabled":true},
-                {"alias":"local-dev","kind":"source-local","path":"/work/artifacts","enabled":false}
+              "registries": [
+                {"alias":"company","kind":"git","url":"git@github.company.example:agents/registry.git","ref":"main","enabled":true},
+                {"alias":"checkout","kind":"local","path":"/work/registry","ref":"review","enabled":true}
+              ],
+              "upstreams": [
+                {"alias":"public","kind":"git","url":"https://github.com/example/artifacts.git","ref":"v1","enabled":true},
+                {"alias":"local-dev","kind":"local","path":"/work/artifacts","enabled":false}
               ],
               "default_registry": "company",
               "sync": {"mode":"manual","max_age_seconds":42},
@@ -55,7 +58,20 @@ class ConfigurationSchemaTest(unittest.TestCase):
         assert isinstance(result, Ok)
         self.assertEqual(
             tuple(source.kind for source in result.value.sources),
-            (SourceKind.REGISTRY_GIT, SourceKind.SOURCE_LOCAL, SourceKind.SOURCE_GIT),
+            (
+                SourceKind.REGISTRY_LOCAL,
+                SourceKind.REGISTRY_GIT,
+                SourceKind.SOURCE_LOCAL,
+                SourceKind.SOURCE_GIT,
+            ),
+        )
+        self.assertEqual(
+            tuple(source.alias.value for source in result.value.registries),
+            ("checkout", "company"),
+        )
+        self.assertEqual(
+            tuple(source.alias.value for source in result.value.upstreams),
+            ("local-dev", "public"),
         )
         self.assertEqual(str(result.value.default_registry), "company")
         self.assertEqual(
@@ -63,21 +79,51 @@ class ConfigurationSchemaTest(unittest.TestCase):
             result,
         )
 
+    def test_registries_and_upstreams_are_separate_lists(self) -> None:
+        """§175.3: the family decides the kind, and an entry is refused in the other family."""
+
+        written = user_configuration_bytes(
+            parse_user_configuration(
+                '{"schema_version":1,'
+                '"registries":[{"alias":"company","kind":"git","url":"https://example.test/r.git","ref":"main","enabled":true}],'
+                '"upstreams":[{"alias":"authors","kind":"local","path":"/work/authors","enabled":true}]}'
+            ).value  # type: ignore[union-attr]
+        )
+        self.assertIn(b'"registries":[{"alias":"company"', written)
+        self.assertIn(b'"upstreams":[{"alias":"authors"', written)
+        self.assertNotIn(b'"sources"', written)
+        self.assertNotIn(b"registry-git", written)
+        self.assertNotIn(b"source-local", written)
+        for document in (
+            '{"schema_version":1,"sources":[]}',
+            '{"schema_version":1,"registries":[{"alias":"a","kind":"registry-git","url":"https://example.test/a","ref":"main","enabled":true}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"a","kind":"source-local","path":"/a","enabled":true}]}',
+            '{"schema_version":1,"registries":[{"alias":"a","kind":"local","path":"/a","enabled":true}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"a","kind":"local","path":"/a","ref":"main","enabled":true}]}',
+            '{"schema_version":1,"registries":[{"alias":"a","kind":"local","url":"/a","ref":"main","enabled":true}]}',
+            '{"schema_version":1,'
+            '"registries":[{"alias":"same","kind":"git","url":"https://example.test/r.git","ref":"main","enabled":true}],'
+            '"upstreams":[{"alias":"same","kind":"local","path":"/a","enabled":true}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"a","kind":"local","path":"/a","enabled":true}],"default_registry":"a"}',
+        ):
+            with self.subTest(document=document):
+                self.assertIsInstance(parse_user_configuration(document), Err)
+
     def test_user_configuration_rejects_ambiguous_or_unsafe_values(self) -> None:
         cases = (
             "{}",
             '{"schema_version":2}',
             '{"schema_version":1,"unknown":true}',
-            '{"schema_version":1,"sources":[{"alias":"same","kind":"source-local","path":"/a","enabled":true},{"alias":"same","kind":"source-local","path":"/b","enabled":true}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"same","kind":"local","path":"/a","enabled":true},{"alias":"same","kind":"local","path":"/b","enabled":true}]}',
             # SRC02: two refs of one origin are legitimate; the same origin at the *same* ref,
             # including across equivalent transport spellings, still collides on one pointer.
-            '{"schema_version":1,"sources":[{"alias":"main","kind":"source-git","url":"https://example.test/team/artifacts.git","ref":"main","enabled":true},{"alias":"duplicate","kind":"source-git","url":"git@EXAMPLE.test:team/artifacts","ref":"main","enabled":true}]}',
-            '{"schema_version":1,"sources":[{"alias":"local","kind":"source-local","path":"relative","enabled":true}]}',
-            '{"schema_version":1,"sources":[{"alias":"secret","kind":"source-git","url":"'
+            '{"schema_version":1,"upstreams":[{"alias":"main","kind":"git","url":"https://example.test/team/artifacts.git","ref":"main","enabled":true},{"alias":"duplicate","kind":"git","url":"git@EXAMPLE.test:team/artifacts","ref":"main","enabled":true}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"local","kind":"local","path":"relative","enabled":true}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"secret","kind":"git","url":"'
             + credential_url("example.test", "/repo.git", held="token")
             + '","ref":"main","enabled":true}]}',
-            '{"schema_version":1,"sources":[{"alias":"git","kind":"source-git","url":"https://example.test/repo.git","ref":"bad ref","enabled":true}]}',
-            '{"schema_version":1,"sources":[{"alias":"direct","kind":"source-git","url":"https://example.test/repo.git","ref":"main","enabled":true}],"default_registry":"direct"}',
+            '{"schema_version":1,"upstreams":[{"alias":"git","kind":"git","url":"https://example.test/repo.git","ref":"bad ref","enabled":true}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"direct","kind":"git","url":"https://example.test/repo.git","ref":"main","enabled":true}],"default_registry":"direct"}',
             '{"schema_version":1,"reporting":{"mode":"automatic"}}',
         )
         for document in cases:
@@ -88,16 +134,16 @@ class ConfigurationSchemaTest(unittest.TestCase):
         invalid = (
             "[]",
             '{"schema_version":true}',
-            '{"schema_version":1,"sources":{}}',
-            '{"schema_version":1,"sources":[1]}',
-            '{"schema_version":1,"sources":[{"alias":"a","enabled":true,"url":"https://example.test/a"}]}',
-            '{"schema_version":1,"sources":[{"alias":"a","kind":"unknown","enabled":true,"url":"https://example.test/a"}]}',
-            '{"schema_version":1,"sources":[{"alias":"Bad_Alias","kind":"source-local","path":"/a","enabled":true}]}',
-            '{"schema_version":1,"sources":[{"alias":"a","kind":"source-local","path":"/a","enabled":"yes"}]}',
-            '{"schema_version":1,"sources":[{"alias":"a","kind":"source-local","path":1,"enabled":true}]}',
-            '{"schema_version":1,"sources":[{"alias":"a","kind":"source-local","path":"/a","enabled":true,"url":"https://example.test/a"}]}',
-            '{"schema_version":1,"sources":[{"alias":"a","kind":"source-git","url":1,"enabled":true}]}',
-            '{"schema_version":1,"sources":[{"alias":"a","kind":"source-git","url":"https://example.test/a","ref":1,"enabled":true}]}',
+            '{"schema_version":1,"upstreams":{}}',
+            '{"schema_version":1,"upstreams":[1]}',
+            '{"schema_version":1,"upstreams":[{"alias":"a","enabled":true,"url":"https://example.test/a"}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"a","kind":"unknown","enabled":true,"url":"https://example.test/a"}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"Bad_Alias","kind":"local","path":"/a","enabled":true}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"a","kind":"local","path":"/a","enabled":"yes"}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"a","kind":"local","path":1,"enabled":true}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"a","kind":"local","path":"/a","enabled":true,"url":"https://example.test/a"}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"a","kind":"git","url":1,"enabled":true}]}',
+            '{"schema_version":1,"upstreams":[{"alias":"a","kind":"git","url":"https://example.test/a","ref":1,"enabled":true}]}',
             '{"schema_version":1,"sync":1}',
             '{"schema_version":1,"sync":{"unknown":1}}',
             '{"schema_version":1,"sync":{"mode":"sometimes"}}',
@@ -108,7 +154,7 @@ class ConfigurationSchemaTest(unittest.TestCase):
             '{"schema_version":1,"reporting":{"mode":"sometimes"}}',
             '{"schema_version":1,"reporting":{"destination":"Bad_Alias"}}',
             '{"schema_version":1,"default_registry":"Bad_Alias"}',
-            '{"schema_version":1,"sources":[{"alias":"disabled","kind":"registry-git","url":"https://example.test/a","enabled":false}],"default_registry":"disabled"}',
+            '{"schema_version":1,"registries":[{"alias":"disabled","kind":"git","url":"https://example.test/a","enabled":false}],"default_registry":"disabled"}',
         )
 
         for document in invalid:
@@ -117,7 +163,7 @@ class ConfigurationSchemaTest(unittest.TestCase):
 
     def test_git_ref_default_and_ssh_location_are_canonical(self) -> None:
         parsed = parse_user_configuration(
-            '{"schema_version":1,"sources":[{"alias":"ssh","kind":"source-git","url":"ssh://git@example.test/team/repo.git","enabled":true}]}'
+            '{"schema_version":1,"upstreams":[{"alias":"ssh","kind":"git","url":"ssh://git@example.test/team/repo.git","enabled":true}]}'
         )
 
         self.assertIsInstance(parsed, Ok)
@@ -130,11 +176,10 @@ class ConfigurationSchemaTest(unittest.TestCase):
         full = parse_organization_policy(
             """{
               "schema_version": 1,
-              "recommended_sources": ["company"],
-              "required_sources": [],
+              "recommended_registries": ["company"],
+              "required_registries": [],
               "allowed_git_hosts": ["github.company.example"],
               "allowed_repository_prefixes": ["agents/", "platform/"],
-              "allow_direct_sources": false,
               "minimum_trust_for_user_scope": "direct-source",
               "allowed_setup_capabilities": ["managed-file", "keychain"],
               "allow_custom_setup_entrypoints": false,
@@ -157,7 +202,7 @@ class ConfigurationSchemaTest(unittest.TestCase):
         invalid = (
             '{"schema_version":1,"allowed_git_hosts":["https://github.example"]}',
             '{"schema_version":1,"allowed_repository_prefixes":["../agents/"]}',
-            '{"schema_version":1,"recommended_sources":["same"],"required_sources":["same"]}',
+            '{"schema_version":1,"recommended_registries":["same"],"required_registries":["same"]}',
             '{"schema_version":1,"reporting":{"deny_public_destinations":"yes"}}',
         )
         for document in invalid:
@@ -171,13 +216,14 @@ class ConfigurationSchemaTest(unittest.TestCase):
             '{"schema_version":true}',
             '{"schema_version":2}',
             '{"schema_version":1,"unknown":true}',
-            '{"schema_version":1,"recommended_sources":1}',
-            '{"schema_version":1,"recommended_sources":["Bad_Alias"]}',
-            '{"schema_version":1,"required_sources":["same","same"]}',
+            '{"schema_version":1,"recommended_registries":1}',
+            '{"schema_version":1,"recommended_registries":["Bad_Alias"]}',
+            '{"schema_version":1,"required_registries":["same","same"]}',
             '{"schema_version":1,"allowed_git_hosts":1}',
             '{"schema_version":1,"allowed_git_hosts":[1]}',
             '{"schema_version":1,"allowed_repository_prefixes":1}',
-            '{"schema_version":1,"allow_direct_sources":"yes"}',
+            '{"schema_version":1,"allow_direct_sources":false}',
+            '{"schema_version":1,"recommended_sources":["company"]}',
             '{"schema_version":1,"allow_custom_setup_entrypoints":"yes"}',
             '{"schema_version":1,"minimum_trust_for_user_scope":1}',
             '{"schema_version":1,"minimum_trust_for_user_scope":"trusted-by-name"}',

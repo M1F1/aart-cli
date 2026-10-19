@@ -149,7 +149,7 @@ class NewSubscriptionIsStatedTest(unittest.TestCase):
     def test_the_add_forms_say_they_do_not_replace_what_is_connected(self) -> None:
         for screen, noun in (
             (ConsumerScreen.REGISTRY_ADD, "registry"),
-            (MaintainerScreen.SOURCE_ADD, "Source"),
+            (MaintainerScreen.SOURCE_ADD, "upstream"),
         ):
             with self.subTest(screen=screen):
                 self.assertIn(

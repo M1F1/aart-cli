@@ -62,7 +62,7 @@ class TerminalResultReturnTest(unittest.TestCase):
             binding.label for binding in key_bindings(_state(MaintainerScreen.SOURCE_SYNC_RESULT))
         }
 
-        self.assertIn("Sources", labels)
+        self.assertIn("Upstream repositories", labels)
 
     def test_pressing_it_really_moves_the_session(self) -> None:
         moved, _ = reduce_consumer_ui(

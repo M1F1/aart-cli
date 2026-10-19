@@ -8,7 +8,7 @@ Git author repository
         -> Candidate
         -> selected promotion
         -> Registry
-        -> later Source Sync reports upstream movement
+        -> later Upstream sync reports upstream movement
 ```
 
 Its public entrance is `aart-cli source add --kind source-git`. Until B-094 that entrance validated
@@ -216,20 +216,21 @@ class _Environment:
         return code, (json.loads(raw) if raw.strip() else None)
 
     def synchronize_registry(self):
-        """Source Sync compares Candidates against an approved registry, so give it one."""
+        """Upstream sync compares Candidates against an approved registry, so give it one."""
 
-        code, payload = self.run("source", "sync")
+        code, payload = self.run("consume", "registry", "sync")
         assert code == 0, payload
         return payload
 
     def add_author_source(self, alias: str = "superpowers"):
         return self.run(
-            "source",
+            "maintain",
+            "upstream",
             "add",
             "--alias",
             alias,
             "--kind",
-            "source-git",
+            "git",
             "--location",
             AUTHOR_LOCATION,
             "--ref",
@@ -264,7 +265,7 @@ class AuthoringSourceAdmissionTest(unittest.TestCase):
             self.assertEqual(code, 0, payload)
             assert payload is not None
             self.assertEqual(payload["source"]["alias"], "superpowers")
-            self.assertEqual(payload["source"]["kind"], "source-git")
+            self.assertEqual(payload["source"]["kind"], "git")
             self.assertEqual(payload["source"]["location"], AUTHOR_LOCATION)
 
     def test_the_admitted_source_pins_the_real_commit_the_author_repository_is_at(self) -> None:
@@ -295,11 +296,11 @@ class AuthoringSourceAdmissionTest(unittest.TestCase):
             self.assertEqual(env.add_author_source()[0], 0)
             env.author.publish(UPDATED_SKILL_BODY)
 
-            code, payload = env.run("source", "sync", "--alias", "superpowers")
+            code, payload = env.run("maintain", "upstream", "sync", "--alias", "superpowers")
 
             self.assertEqual(code, 0, payload)
             assert payload is not None
-            (listed,) = [item for item in payload["sources"] if item["alias"] == "superpowers"]
+            (listed,) = [item for item in payload["upstreams"] if item["alias"] == "superpowers"]
             self.assertEqual(listed["source_id"], "superpowers")
             self.assertEqual(listed["resolved_revision"], env.author.head)
 
@@ -307,13 +308,13 @@ class AuthoringSourceAdmissionTest(unittest.TestCase):
         with _environment() as env:
             self.assertEqual(env.add_author_source()[0], 0)
 
-            code, payload = env.run("source", "list")
+            code, payload = env.run("maintain", "upstream", "list")
 
             self.assertEqual(code, 0, payload)
             assert payload is not None
-            listed = {item["alias"]: item for item in payload["sources"]}
+            listed = {item["alias"]: item for item in payload["upstreams"]}
             self.assertIn("superpowers", listed)
-            self.assertEqual(listed["superpowers"]["kind"], "source-git")
+            self.assertEqual(listed["superpowers"]["kind"], "git")
 
     def test_a_repository_that_declares_no_manifest_at_all_is_still_refused(self) -> None:
         """INV-201 in the direction that keeps it a rule: no manifest, no Source.
@@ -381,11 +382,11 @@ class AuthoringSourceIsNotAMarketplaceTest(unittest.TestCase):
         self,
     ) -> None:
         with _environment() as env:
-            before_code, before = env.run("marketplace", "list")
+            before_code, before = env.run("consume", "list")
             self.assertEqual(before_code, 0, before)
 
             self.assertEqual(env.add_author_source()[0], 0)
-            after_code, after = env.run("marketplace", "list")
+            after_code, after = env.run("consume", "list")
 
             self.assertEqual(after_code, 0, after)
             assert before is not None and after is not None
@@ -399,7 +400,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
     """Source -> Candidate -> upstream movement, over the source the public command admitted.
 
     Admission on its own is not the claim B-094 makes; it is the door the claim walks through.
-    These drive the same configured composition the Maintainer Source Sync screens call, over
+    These drive the same configured composition the Maintainer Upstream sync screens call, over
     the durable store `aart-cli source add` just wrote, so what is proven is the real monitored flow
     rather than a compiled snapshot handed to a fixture.
     """
@@ -414,7 +415,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
         )
 
     def _sync_result(self, env: _Environment, alias: str = "superpowers"):
-        """One reviewed Source Sync, exactly as the screen performs it: prepare then confirm."""
+        """One reviewed Upstream sync, exactly as the screen performs it: prepare then confirm."""
 
         with mock.patch(
             "aart_cli.io.source_runtime.acquire_git_snapshot",
@@ -446,6 +447,28 @@ class MonitoredSourceFlowTest(unittest.TestCase):
                 ["verification-before-completion"],
             )
             self.assertEqual(result.scan.revision, env.author.head)
+
+    def test_candidate_list_shows_what_the_sync_recorded_and_changes_nothing(self) -> None:
+        """§175.2: `maintain candidate list` reads the history Upstream sync wrote."""
+
+        with _environment() as env:
+            env.synchronize_registry()
+            self.assertEqual(env.add_author_source()[0], 0)
+            code, empty = env.run("maintain", "candidate", "list")
+            self.assertEqual((code, empty["candidates"]), (0, []), empty)
+
+            result = self._sync(env)
+            history = sorted(Path(env.paths.data_root).rglob("*"))
+            code, listed = env.run("maintain", "candidate", "list")
+
+            self.assertEqual(code, 0, listed)
+            self.assertEqual(listed["operation"], "candidate.list")
+            (candidate,) = listed["candidates"]
+            self.assertEqual(candidate["id"], result.scan.active[0].candidate.id.value)
+            self.assertEqual(candidate["upstream"], "superpowers")
+            self.assertEqual(candidate["revision"], env.author.head)
+            self.assertEqual(candidate["promotion"], "not-promoted")
+            self.assertEqual(sorted(Path(env.paths.data_root).rglob("*")), history)
 
     def test_the_unrelated_files_beside_the_manifest_are_not_artifacts(self) -> None:
         """INV-201: README.md and every other file are evidence of nothing on their own."""
@@ -552,7 +575,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
         """CP-24.03: the way back, end to end, with no file moved by hand.
 
         The owner's store held Candidate history from an earlier revision. Nothing said so
-        outside the screens that would not load, `aart-cli source sync` reported `unchanged` and wrote
+        outside the screens that would not load, `aart-cli maintain upstream sync` reported `unchanged` and wrote
         nothing, and the only recovery found was `mv .../candidates .../candidates.bak`.
         """
 
@@ -561,10 +584,10 @@ class MonitoredSourceFlowTest(unittest.TestCase):
             self.assertEqual(env.add_author_source()[0], 0)
             synced = self._sync(env)
 
-            # Exactly how the reported store came about: the consumer refresh moves the pin and
-            # writes no Candidate history, because writing it is Maintainer authority.
+            # Exactly how the reported store came about: a connection refresh moves the pin and
+            # writes no Candidate history, because recording Candidates is the scan's job.
             moved = env.author.publish(UPDATED_SKILL_BODY)
-            refreshed = env.run("source", "sync")
+            refreshed = env.run("maintain", "upstream", "sync")
             self.assertEqual(refreshed[0], 0, refreshed[1])
             self.assertNotEqual(moved, synced.scan.revision)
 
@@ -581,7 +604,7 @@ class MonitoredSourceFlowTest(unittest.TestCase):
                         "pinned_revision": moved,
                         "recorded_revision": synced.scan.revision,
                         "remediation": (
-                            "run Source Sync on superpowers to rebuild its Candidate history"
+                            "run Upstream sync on superpowers to rebuild its Candidate history"
                         ),
                     }
                 ],

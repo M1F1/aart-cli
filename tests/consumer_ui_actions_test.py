@@ -98,8 +98,9 @@ class ConsumerInstallActionTest(unittest.TestCase):
 
     def test_default_prepares_from_settings_and_stays_on_05p(self) -> None:
         state = ConsumerUiState(
-            ConsumerSession(ConsumerScreen.ARTIFACT_DETAILS),
+            ConsumerSession(ConsumerScreen.MARKETPLACE),
             focus=ARTIFACT,
+            rows=(ARTIFACT,),
             targets=("tabnine",),
             pairs=(f"{ARTIFACT}\ttabnine",),
         )
@@ -111,18 +112,21 @@ class ConsumerInstallActionTest(unittest.TestCase):
         (command,) = commands
         self.assertIs(command.kind, ConsumerUiCommandKind.PREPARE_ACTION)
         self.assertTrue(command.default_path)
-        self.assertEqual(command.focus, ARTIFACT)
+        self.assertEqual(command.focus, "")
+        self.assertEqual(command.selection, (ARTIFACT,))
         # Nothing an earlier Custom attempt chose is carried: Settings answers it.
         self.assertEqual((command.targets, command.pairs, chosen.pairs), ((), (), ()))
 
-    def test_install_without_a_selection_is_not_a_request(self) -> None:
-        state = ConsumerUiState(
-            ConsumerSession(ConsumerScreen.MARKETPLACE),
-            rows=(ARTIFACT,),
-        )
-
+    def test_install_without_ticks_uses_the_focused_offer(self) -> None:
+        state = ConsumerUiState(ConsumerSession(ConsumerScreen.MARKETPLACE), rows=(ARTIFACT,))
         after, commands = _request(state, ConsumerActionKind.INSTALL)
+        self.assertEqual(after.selection, (ARTIFACT,))
+        self.assertEqual(commands[0].selection, (ARTIFACT,))
+        self.assertEqual(commands[0].focus, "")
 
+    def test_install_without_any_offer_is_not_a_request(self) -> None:
+        state = ConsumerUiState(ConsumerSession(ConsumerScreen.MARKETPLACE))
+        after, commands = _request(state, ConsumerActionKind.INSTALL)
         self.assertIs(after, state)
         self.assertEqual(commands, ())
 
@@ -267,7 +271,7 @@ class ConsumerInstalledActionTest(unittest.TestCase):
         state = ConsumerUiState(
             ConsumerSession(
                 ConsumerScreen.REVIEW_SELECTION,
-                history=(ConsumerScreen.ARTIFACT_DETAILS,),
+                history=(ConsumerScreen.MARKETPLACE,),
             ),
             selection=(ARTIFACT,),
             targets=("claude",),
@@ -295,19 +299,20 @@ class ConsumerInstalledActionTest(unittest.TestCase):
         self.assertIs(commands[0].action, ConsumerActionKind.INSTALL)
         self.assertEqual(commands[0].selection, (ARTIFACT,))
         self.assertEqual(commands[0].targets, ("claude", "opencode"))
-        self.assertEqual(commands[0].focus, ARTIFACT)
+        self.assertEqual(commands[0].focus, "")
 
     def test_install_request_reuses_retained_harness_intent(self) -> None:
         state = ConsumerUiState(
-            ConsumerSession(ConsumerScreen.ARTIFACT_DETAILS),
+            ConsumerSession(ConsumerScreen.MARKETPLACE),
             focus=ARTIFACT,
+            rows=(ARTIFACT,),
             targets=("tabnine",),
         )
 
         _review, commands = _request(state, ConsumerActionKind.INSTALL)
 
-        self.assertEqual(commands[0].selection, ())
-        self.assertEqual(commands[0].focus, ARTIFACT)
+        self.assertEqual(commands[0].selection, (ARTIFACT,))
+        self.assertEqual(commands[0].focus, "")
         self.assertEqual(commands[0].targets, ("tabnine",))
 
     def test_recorded_install_clears_harness_intent(self) -> None:

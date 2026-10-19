@@ -12,6 +12,7 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from typing import Callable, Protocol, TypeAlias, runtime_checkable
 
+from aart_cli.application.author_views import manifest_lines
 from aart_cli.application.consumer_session import ConsumerMachine
 from aart_cli.application.consumer_ui import (
     ACTION_ANSWER_SCREENS,
@@ -133,6 +134,7 @@ from aart_cli.application.maintainer_views import (
     parse_validation_row,
     project_maintainer_candidate_filters,
 )
+from aart_cli.authoring.check import AuthorCheckReport
 from aart_cli.domain.inputs import SKIPPED_INPUT, is_skipped_value
 from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
@@ -215,6 +217,8 @@ from aart_cli.tui_marketplace import (
     project_marketplace_rows,
     render_artifact_detail,
 )
+from aart_cli.tui_marketplace_detail import artifact_disclosure
+from aart_cli.tui_marketplace_rows import marketplace_viewport, render_marketplace_rows
 
 __all__ = [
     "DETAIL_LEVEL_NAMES",
@@ -289,6 +293,8 @@ _KEY_NAMES: dict[int, str] = {
     260: "left",  # curses.KEY_LEFT
     261: "right",  # curses.KEY_RIGHT
     263: "backspace",  # curses.KEY_BACKSPACE
+    338: "page-down",
+    339: "page-up",
     343: "enter",  # curses.KEY_ENTER
 }
 
@@ -1464,7 +1470,7 @@ def render_registry(
     if not view.is_registry:
         # An empty row with no explanation reads as a registry that approved nothing, which is a
         # fault; this one is configured, healthy and simply not a registry (INV-026, B-038).
-        lines.append("    an authoring Source, not a registry")
+        lines.append("    an upstream repository")
     return tuple(lines)
 
 
@@ -1481,7 +1487,7 @@ def registry_purpose(view: RegistryView) -> tuple[str, ...]:
     )
     return (
         purpose,
-        f"Kind: {_human(view.kind)}",
+        f"Kind: {_human(view.kind.removeprefix('registry-'))}",
         f"Origin: {view.origin}",
         f"Health: {_human(view.health)}; last sync: {age}",
         f"Revision: {view.revision or 'none'}",
@@ -1508,6 +1514,7 @@ def render_settings(
         "python-installer": f"Python installer: {view.python_installer}",
         "show-updates": f"Show available updates: {'on' if view.show_updates else 'off'}",
         "maintainer-mode": f"Registry Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
+        "author-mode": f"Author Mode: {'on' if view.author_mode else 'off'}",
         # §173.7: the harnesses the Default install path uses, one row per detected harness.
         **{
             default_harness_row(item): f"Default harness {item}: "
@@ -1521,6 +1528,7 @@ def render_settings(
         "python-installer": "Installation",
         "show-updates": "Updates",
         "maintainer-mode": "Advanced",
+        "author-mode": "Advanced",
     }
     groups: list[tuple[str, ...]] = []
     previous = ""
@@ -1563,7 +1571,7 @@ def settings_consequence(view: ConsumerSettings) -> tuple[str, ...]:
         raise ValueError("settings rendering needs consumer settings")
     if view.maintainer_mode:
         return ("Maintainer screens are reachable from the Dashboard.",)
-    return ("Registry Maintainer Mode off hides Sources, Candidates, Promotion and Publish.",)
+    return ("Registry Maintainer Mode off hides Upstream repositories, Candidates and Registry.",)
 
 
 def doctor_rows(view: DoctorView, *, leaving_out: tuple[str, ...] = ()) -> tuple[str, ...]:
@@ -2113,20 +2121,24 @@ _DESCRIBED_SCREENS: frozenset[ApplicationScreen] = frozenset(
 
 _DASHBOARD_DESCRIPTIONS: dict[ApplicationScreen, str] = {
     ConsumerScreen.MARKETPLACE: "Browse and install approved tools from configured registries.",
+    ConsumerScreen.AUTHOR: "Check and create artifacts in your Upstream repository.",
     ConsumerScreen.INSTALLED: "See what AART manages in this project and whether it is healthy.",
     ConsumerScreen.UPDATES: "Review newer approved versions; nothing changes without confirmation.",
-    ConsumerScreen.REGISTRIES: "See which sources determine what Marketplace can offer.",
+    ConsumerScreen.REGISTRIES: "See which Registries determine what Marketplace can offer.",
     ConsumerScreen.CREDENTIALS: (
         "Manage ordinary per-harness configuration beside provider-held credentials."
     ),
     ConsumerScreen.ACTIVITY: "Review recorded changes, results and their receipts.",
     ConsumerScreen.DOCTOR: "Inspect health and find the smallest safe repair for detected drift.",
     ConsumerScreen.SETTINGS: "Choose detail, installation scope and optional Registry Maintainer Mode.",
-    MaintainerScreen.DASHBOARD: "Open advanced source, validation and promotion workflows.",
+    MaintainerScreen.DASHBOARD: "Maintain Upstream repositories, Candidates and Registry.",
+    MaintainerScreen.SOURCES: "Author repositories this Registry takes artifacts from",
+    MaintainerScreen.CANDIDATES: "Review artifacts discovered in Upstream repositories.",
+    MaintainerScreen.REGISTRY: "Collections, Validation, Publish.",
 }
 
 _REGISTRY_EXPLANATION: tuple[str, ...] = (
-    "Connect an approved Git registry by URL. Local authoring Sources belong in Registry Maintainer Mode.",
+    "Connect an approved Git registry by URL. Upstream repositories belong in Registry Maintainer Mode.",
 )
 """What a registry is, said on the screen that offers to connect one (`QA-043`)."""
 
@@ -2147,7 +2159,7 @@ _SOURCE_ADD_INTRO: tuple[str, ...] = (
     "Subscribe to an authoring repository. AART discovers only the aart-cli.yaml and",
     "aart-cli.json manifests its authors committed; nothing here is approved content yet.",
     "",
-    "This adds another Source. Nothing already connected is changed.",
+    "This adds another upstream. Nothing already connected is changed.",
 )
 """What subscribing to an authoring repository does, and what it does not approve (`QA-087`)."""
 
@@ -2164,7 +2176,7 @@ _REGISTRY_INIT_INTRO: tuple[str, ...] = (
 
 _REPOSITORY_SCAN_INTRO: tuple[str, ...] = (
     "Look at one repository for explicit aart-cli.yaml and aart-cli.json manifests.",
-    "This is a one-off read: the repository is not saved as a Source or monitored.",
+    "This is a one-off read: the repository is not saved as an upstream or monitored.",
 )
 """What a scan reads, and what it deliberately does not keep (`QA-087`)."""
 
@@ -2205,13 +2217,28 @@ _FIRST_RUN_LINES: tuple[str, ...] = (
     "skills, MCP servers, rules and hooks.",
     "",
     "SETUP REQUIRED",
-    "  No sources are configured, so Marketplace has nothing to offer yet.",
+    "  No registries are configured, so Marketplace has nothing to offer yet.",
     "  → Start here: open Registries and choose Add Registry.",
 )
 
 
 #: Titles the identifier cannot spell, because `.title()` would write an acronym as a word.
-_TITLES: dict[ApplicationScreen, str] = {ConsumerScreen.MCP_TEST: "Test MCP Installations"}
+_TITLES: dict[ApplicationScreen, str] = {
+    ConsumerScreen.MCP_TEST: "Test MCP Installations",
+    ConsumerScreen.AUTHOR: "Author",
+    ConsumerScreen.AUTHOR_WORKSPACE: "Author Workspace",
+    ConsumerScreen.AUTHOR_CHECK: "Author Check",
+    ConsumerScreen.AUTHOR_MANIFEST: "Manifest diagnostics",
+    ConsumerScreen.AUTHOR_INIT: "New artifact",
+    MaintainerScreen.SOURCES: "Upstream repositories",
+    MaintainerScreen.SOURCE_ADD: "Add upstream",
+    MaintainerScreen.SOURCE_ADD_REVIEW: "Review upstream",
+    MaintainerScreen.SOURCE_REMOVE: "Remove upstream",
+    MaintainerScreen.SOURCE_DETAILS: "Upstream details",
+    MaintainerScreen.SOURCE_SYNC: "Upstream sync",
+    MaintainerScreen.SOURCE_SYNC_RESULT: "Upstream sync result",
+    MaintainerScreen.REGISTRY: "Registry",
+}
 
 
 def _after_configuration(plan: ConsumerPlanView, *, default_path: bool = False) -> ConsumerScreen:
@@ -2390,7 +2417,7 @@ def _review_facts(state: ConsumerUiState, screens: "ConsumerScreens") -> tuple[s
     if screen is ConsumerScreen.REGISTRY_REMOVE:
         return () if not state.focus else (f"Disconnect {state.focus} from this project.",)
     if screen is MaintainerScreen.SOURCE_REMOVE:
-        return () if not state.focus else (f"Remove Source {state.focus} from this project.",)
+        return () if not state.focus else (f"Remove upstream {state.focus} from this project.",)
     if screen is ConsumerScreen.CREDENTIAL_REVIEW:
         record = screens.credential(state.focus)
         if record is None:
@@ -2483,7 +2510,15 @@ def _key_legend(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[s
 def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
     """One drawn screen: heading, body, prompts, and the persistent navigation footer."""
 
-    return render(compose_frame(source, state))
+    view = compose_frame(source, state)
+    if state.session.screen is ConsumerScreen.MARKETPLACE:
+        view, _ = marketplace_viewport(
+            view,
+            columns=state.viewport_columns,
+            height=state.viewport_rows,
+            offset=state.marketplace_scroll,
+        )
+    return render(view)
 
 
 def _matrix_label(artifact: str) -> str:
@@ -2696,6 +2731,22 @@ def run_consumer_shell(
     )
     current = _reload(active_source, current, entering=True)
     while not current.exited:
+        dimensions = (getattr(terminal, "columns", CONTENT_MEASURE), getattr(terminal, "rows", 0))
+        resized = dimensions != (current.viewport_columns, current.viewport_rows)
+        current = replace(
+            current,
+            viewport_columns=dimensions[0],
+            viewport_rows=dimensions[1],
+            marketplace_scroll=-1 if resized else current.marketplace_scroll,
+        )
+        if current.session.screen is ConsumerScreen.MARKETPLACE:
+            _, offset = marketplace_viewport(
+                compose_frame(active_source, current),
+                columns=current.viewport_columns,
+                height=current.viewport_rows,
+                offset=current.marketplace_scroll,
+            )
+            current = replace(current, marketplace_scroll=offset)
         terminal.draw(frame(active_source, current))
         # A paste arrives whole on a text field, and the reducer, not a second list here, knows
         # which rows are text fields (D-269).
@@ -2726,6 +2777,7 @@ def run_consumer_shell(
                 ConsumerUiCommandKind.PREPARE_ACTION,
                 ConsumerUiCommandKind.EXECUTE_ACTION,
                 ConsumerUiCommandKind.ENTER_SECRET,
+                ConsumerUiCommandKind.RUN_AUTHOR,
             ):
                 continue
             if action_handler is None:
@@ -2905,6 +2957,7 @@ class ConsumerScreens:
     mcp_test: McpTestView | None = None
     #: The harnesses this machine measured, which Settings offers for the Default path (§173.7).
     harnesses: tuple[str, ...] = ()
+    author_report: AuthorCheckReport | None = None
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -3143,6 +3196,7 @@ def screens_from(
     install_unhosted: tuple[str, ...] = (),
     mcp_test: McpTestView | None = None,
     harnesses: tuple[str, ...] = (),
+    author_report: AuthorCheckReport | None = None,
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -3198,6 +3252,7 @@ def screens_from(
         install_unhosted,
         mcp_test,
         harnesses,
+        author_report,
     )
 
 
@@ -3274,21 +3329,14 @@ def marketplace_offer_description(
     """
 
     if isinstance(entry, MarketplaceEntry):
-        row = entry.row
-        fields = (
-            ("Artifact", row.identity.name),
-            ("Kind", _human(row.identity.kind).capitalize()),
-            ("Version", row.version),
-            ("Source", str(row.source_alias)),
-            ("Description", row.summary.strip() or _NO_APPROVED_DESCRIPTION),
-        )
+        return artifact_disclosure(entry.row, entry.inputs)
     elif isinstance(entry, MarketplaceCollectionEntry):
         offered = entry.collection
         count = len(offered.members)
         fields = (
             ("Collection", offered.coordinate.name),
             ("Version", offered.coordinate.version),
-            ("Source", str(offered.coordinate.source)),
+            ("Registry", str(offered.coordinate.source)),
             ("Includes", f"{count} artifact{'' if count == 1 else 's'}"),
             ("Description", offered.summary.strip() or _NO_APPROVED_DESCRIPTION),
         )
@@ -3330,6 +3378,15 @@ class CanonicalScreenSource:
 
     def rows(self, state: ConsumerUiState) -> tuple[str, ...]:
         screen, query = state.session.screen, state.search
+        if screen is ConsumerScreen.AUTHOR:
+            return ("workspace", "check", "new-artifact")
+        if screen is ConsumerScreen.AUTHOR_WORKSPACE:
+            return ("workspace", "save")
+        if screen is ConsumerScreen.AUTHOR_INIT:
+            return ("kind", "name", "into", "save")
+        if screen is ConsumerScreen.AUTHOR_CHECK:
+            report = self._screens.author_report
+            return () if report is None else tuple(verdict.path for verdict in report.verdicts)
         if screen is ConsumerScreen.CONFIGURATION_TARGETS:
             coordinate = state.user_inputs_artifact
             return tuple(
@@ -3412,14 +3469,18 @@ class CanonicalScreenSource:
             return tuple(
                 target.value
                 for target in navigation_targets(
-                    screen, maintainer_mode=state.settings.maintainer_mode
+                    screen,
+                    maintainer_mode=state.settings.maintainer_mode,
+                    author_mode=state.settings.author_mode,
                 )
             )
         if screen is MaintainerScreen.DASHBOARD:
             return tuple(
                 target.value
                 for target in navigation_targets(
-                    screen, maintainer_mode=state.settings.maintainer_mode
+                    screen,
+                    maintainer_mode=state.settings.maintainer_mode,
+                    author_mode=state.settings.author_mode,
                 )
             )
         if screen is MaintainerScreen.SOURCES:
@@ -3669,6 +3730,13 @@ class CanonicalScreenSource:
         """Enter opens the detail of whatever this screen is currently about."""
 
         screen, row = state.session.screen, state.current_row or state.focus
+        if screen is ConsumerScreen.AUTHOR:
+            return {
+                "workspace": ConsumerScreen.AUTHOR_WORKSPACE,
+                "new-artifact": ConsumerScreen.AUTHOR_INIT,
+            }.get(row)
+        if screen is ConsumerScreen.AUTHOR_CHECK:
+            return ConsumerScreen.AUTHOR_MANIFEST if row in state.rows else None
         if screen is ConsumerScreen.SUCCESS:
             # The cursor alone: Success's focus is the recorded receipt, never a choice.
             return next(
@@ -3684,7 +3752,9 @@ class CanonicalScreenSource:
                 (
                     target
                     for target in navigation_targets(
-                        screen, maintainer_mode=state.settings.maintainer_mode
+                        screen,
+                        maintainer_mode=state.settings.maintainer_mode,
+                        author_mode=state.settings.author_mode,
                     )
                     if target.value == row
                 ),
@@ -3695,7 +3765,9 @@ class CanonicalScreenSource:
                 (
                     target
                     for target in navigation_targets(
-                        screen, maintainer_mode=state.settings.maintainer_mode
+                        screen,
+                        maintainer_mode=state.settings.maintainer_mode,
+                        author_mode=state.settings.author_mode,
                     )
                     if target.value == row
                 ),
@@ -3798,7 +3870,7 @@ class CanonicalScreenSource:
         if screen is ConsumerScreen.MARKETPLACE:
             if self._screens.offered_collection(state.current_row) is not None:
                 return ConsumerScreen.COLLECTION_PREVIEW
-            return ConsumerScreen.ARTIFACT_DETAILS if state.current_row else None
+            return None
         if screen is ConsumerScreen.COLLECTION_PREVIEW:
             return ConsumerScreen.COLLECTION_CUSTOMIZE if state.focus else None
         if screen is ConsumerScreen.INSTALLED:
@@ -4099,7 +4171,9 @@ class CanonicalScreenSource:
         if state.session.screen not in _DESCRIBED_SCREENS:
             return ()
         targets = navigation_targets(
-            state.session.screen, maintainer_mode=state.settings.maintainer_mode
+            state.session.screen,
+            maintainer_mode=state.settings.maintainer_mode,
+            author_mode=state.settings.author_mode,
         )
         selected = next((target for target in targets if target.value == state.current_row), None)
         described = None if selected is None else _DASHBOARD_DESCRIPTIONS.get(selected)
@@ -4247,12 +4321,6 @@ class CanonicalScreenSource:
             # From the session's own settings, not the machine snapshot: the same reason the rows
             # are drawn from `state.settings`.
             return settings_consequence(state.settings)
-        if screen is ConsumerScreen.ARTIFACT_DETAILS and screens.offered(state.focus) is not None:
-            return (
-                "Selected for installation."
-                if state.focus in state.selection
-                else "Not selected for installation.",
-            )
         if screen is ConsumerScreen.CREDENTIAL_ACTION and self.rows(state):
             record = screens.credential(state.focus)
             assert record is not None
@@ -4312,10 +4380,22 @@ class CanonicalScreenSource:
                 return _REGISTRY_EXPLANATION
             return separate(
                 _REGISTRY_EXPLANATION,
-                ("No sources are configured.",),
+                ("No registries are configured.",),
                 ("Marketplace needs an approved registry before it can offer tools.",),
                 ("Choose Add Registry above to connect the first one.",),
             )
+        if screen in (
+            ConsumerScreen.AUTHOR,
+            ConsumerScreen.AUTHOR_CHECK,
+            ConsumerScreen.AUTHOR_INIT,
+        ):
+            return (f"Workspace: {state.settings.author_workspace or 'Choose a workspace first'}",)
+        if screen is ConsumerScreen.AUTHOR_WORKSPACE:
+            return (
+                "Choose the directory of your Upstream repository. Files stay outside the AART home.",
+            )
+        if screen is MaintainerScreen.SOURCES:
+            return ("Author repositories this Registry takes artifacts from",)
         if screen is MaintainerScreen.DASHBOARD:
             # An unavailable composition is the state of the view, not something to put a cursor
             # on -- and saying so here keeps the rows' block holding only rows.
@@ -4536,8 +4616,62 @@ class CanonicalScreenSource:
                 f"{'>' if target.value == state.current_row else ' '} {label}"
                 for target, label in self._success_choices()
             )
+        if screen is ConsumerScreen.AUTHOR:
+            return tuple(
+                f"{'>' if row == state.current_row else ' '} {label}"
+                for row, label in (
+                    ("workspace", "Workspace"),
+                    ("check", "Check"),
+                    ("new-artifact", "New artifact"),
+                )
+            )
+        if screen in (ConsumerScreen.AUTHOR_WORKSPACE, ConsumerScreen.AUTHOR_INIT):
+            author_form = state.author_draft
+            fields = (
+                (
+                    (
+                        "workspace",
+                        "Workspace",
+                        author_form.workspace or "<directory of your Upstream repository>",
+                    ),
+                    ("save", "Continue", "Save workspace"),
+                )
+                if screen is ConsumerScreen.AUTHOR_WORKSPACE
+                else (
+                    ("kind", "Kind", author_form.kind),
+                    ("name", "Name", author_form.name or "<artifact name>"),
+                    ("into", "Directory within workspace", author_form.into),
+                    ("save", "Create", "Write template and check"),
+                )
+            )
+            return tuple(
+                f"{'>' if row == state.current_row else ' '} {label}: {value}"
+                for row, label, value in fields
+            )
+        if screen is ConsumerScreen.AUTHOR_CHECK:
+            report = screens.author_report
+            if report is None:
+                return ("Run Check to read every manifest in the workspace.",)
+            return tuple(
+                f"{'>' if verdict.path == state.current_row else ' '} {'ok' if verdict.accepted else 'error'} {verdict.path}"
+                for verdict in report.verdicts
+            )
+        if screen is ConsumerScreen.AUTHOR_MANIFEST:
+            report = screens.author_report
+            verdict = (
+                None
+                if report is None
+                else next((item for item in report.verdicts if item.path == state.focus), None)
+            )
+            if verdict is None:
+                return ("That manifest is not in the latest check. Re-run Check.",)
+            return manifest_lines(verdict)
         if screen is ConsumerScreen.DASHBOARD:
-            targets = navigation_targets(screen, maintainer_mode=state.settings.maintainer_mode)
+            targets = navigation_targets(
+                screen,
+                maintainer_mode=state.settings.maintainer_mode,
+                author_mode=state.settings.author_mode,
+            )
             menu = tuple(
                 f"{'>' if row == state.current_row else ' '} {_title(target)}"
                 for row, target in zip(
@@ -4556,7 +4690,11 @@ class CanonicalScreenSource:
                 f"{'>' if row == state.current_row else ' '} {_title(target)}"
                 for row, target in zip(
                     state.rows,
-                    navigation_targets(screen, maintainer_mode=state.settings.maintainer_mode),
+                    navigation_targets(
+                        screen,
+                        maintainer_mode=state.settings.maintainer_mode,
+                        author_mode=state.settings.author_mode,
+                    ),
                     strict=False,
                 )
             )
@@ -4574,19 +4712,19 @@ class CanonicalScreenSource:
         if screen is MaintainerScreen.SOURCE_DETAILS:
             source = None if screens.maintainer is None else screens.maintainer.source(state.focus)
             return (
-                ("That authoring Source is not available.",)
+                ("That upstream is not available.",)
                 if source is None
                 else render_maintainer_source(source, profile)
             )
         if screen is MaintainerScreen.SOURCE_SYNC:
             return (
-                ("No Source Sync has been prepared.",)
+                ("No Upstream sync has been prepared.",)
                 if screens.source_sync_review is None
                 else render_source_sync_review(screens.source_sync_review, profile)
             )
         if screen is MaintainerScreen.SOURCE_SYNC_RESULT:
             return (
-                ("No Source Sync result has been persisted.",)
+                ("No Upstream sync result has been persisted.",)
                 if screens.source_sync_result is None
                 else render_source_sync_result(screens.source_sync_result, profile)
             )
@@ -4792,13 +4930,11 @@ class CanonicalScreenSource:
                 elif entry is not None:
                     status = "installed" if key.partition("@")[0] in held else "not installed"
                     cells.append((key, status))
-            return self._list(state, columns(cells, width=CONTENT_MEASURE - _ROW_PREFIX))
-        if screen is ConsumerScreen.ARTIFACT_DETAILS:
-            entry = screens.offered(state.focus)
-            return (
-                ("Nothing is offered here.",)
-                if entry is None
-                else render_marketplace_artifact(entry.row, profile, inputs=entry.inputs)
+            return render_marketplace_rows(
+                cells,
+                current=state.current_row,
+                selected=state.selection,
+                width=min(CONTENT_MEASURE, state.viewport_columns),
             )
         if screen in (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE):
             preview = screens.offered_collection(state.focus)
@@ -4940,7 +5076,7 @@ class CanonicalScreenSource:
             git = authoring.kind == "source-git"
             values = {
                 "alias": authoring.alias or "<type a short name>",
-                "kind": authoring.kind,
+                "kind": authoring.kind.removeprefix("source-"),
                 "location": authoring.location
                 or (
                     "<type a credential-free Git URL>"

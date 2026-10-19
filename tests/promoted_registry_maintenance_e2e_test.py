@@ -113,6 +113,7 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
             _git(checkout, "config", "user.name", "AART Test")
             _git(checkout, "config", "user.email", "aart@example.invalid")
             code, text = _cli(
+                "maintain",
                 "registry",
                 "init",
                 "--source",
@@ -142,6 +143,7 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
             _git(checkout, "config", "user.email", "aart@example.invalid")
 
             code, text = _cli(
+                "maintain",
                 "registry",
                 "init",
                 "--source",
@@ -165,11 +167,12 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
                 "--target-registry",
                 "company",
             )
-            code, text = _cli("registry", "scan", *common, "--json")
+            code, text = _cli("maintain", "upstream", "scan", *common, "--json")
             self.assertEqual(code, 0, text)
             candidate = json.loads(text)["candidates"][0]["candidate_id"]
             code, text = _cli(
-                "registry",
+                "maintain",
+                "candidate",
                 "promote",
                 *common,
                 "--candidate",
@@ -184,7 +187,9 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
         with self._promoted_registry() as checkout:
             failed = []
             for verb, *arguments in GENERATED_GATE:
-                code, text = _cli("registry", verb, "--source", str(checkout), *arguments)
+                code, text = _cli(
+                    "maintain", "registry", verb, "--source", str(checkout), *arguments
+                )
                 if code != 0:
                     failed.append(f"{verb}: {text.strip().splitlines()[:3]}")
 
@@ -195,14 +200,14 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
 
         with self._empty_registry() as checkout:
             for verb in ("lock", "build", "format"):
-                code, text = _cli("registry", verb, "--source", str(checkout), "--yes")
+                code, text = _cli("maintain", "registry", verb, "--source", str(checkout), "--yes")
                 self.assertEqual(code, 0, text)
 
             for verb in ("validate", "audit"):
-                code, text = _cli("registry", verb, "--source", str(checkout))
+                code, text = _cli("maintain", "registry", verb, "--source", str(checkout))
                 self.assertEqual(code, 0, text)
 
-            code, text = _cli("registry", "publish", "--source", str(checkout), "--yes")
+            code, text = _cli("maintain", "registry", "publish", "--source", str(checkout), "--yes")
             self.assertEqual(code, 0, text)
 
             self.assertFalse((checkout / "aart.lock.json").exists())
@@ -215,7 +220,7 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
 
         with self._promoted_registry() as checkout:
             for verb in ("lock", "build"):
-                code, text = _cli("registry", verb, "--source", str(checkout), "--yes")
+                code, text = _cli("maintain", "registry", verb, "--source", str(checkout), "--yes")
                 self.assertEqual(code, 0, text)
 
             self.assertFalse((checkout / "aart.lock.json").exists())
@@ -230,11 +235,11 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
             approved = catalog.read_bytes()
             catalog.write_bytes(b'{"schema": "aart-cli.dev/registry-index/v1"}')
 
-            code, text = _cli("registry", "build", "--source", str(checkout), "--check")
+            code, text = _cli("maintain", "registry", "build", "--source", str(checkout), "--check")
 
             self.assertNotEqual(code, 0, text)
 
-            code, text = _cli("registry", "build", "--source", str(checkout), "--yes")
+            code, text = _cli("maintain", "registry", "build", "--source", str(checkout), "--yes")
 
             self.assertEqual(code, 0, text)
             self.assertEqual(catalog.read_bytes(), approved)
@@ -243,7 +248,7 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
         """Publish chains build, validate and audit; canonical packages need no legacy lock."""
 
         with self._promoted_registry() as checkout:
-            code, text = _cli("registry", "publish", "--source", str(checkout), "--yes")
+            code, text = _cli("maintain", "registry", "publish", "--source", str(checkout), "--yes")
 
             self.assertEqual(code, 0, text)
             self.assertFalse((checkout / "aart.lock.json").exists())
@@ -268,7 +273,7 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
             (checkout / "aart.lock.json").write_text("{}\n", encoding="utf-8")
             (checkout / "aart.index.json").write_text("{}\n", encoding="utf-8")
 
-            code, text = _cli("registry", "publish", "--source", str(checkout), "--yes")
+            code, text = _cli("maintain", "registry", "publish", "--source", str(checkout), "--yes")
 
             self.assertNotEqual(code, 0, text)
             self.assertNotIn("publish gate failed", text)
@@ -285,7 +290,13 @@ class PromotedRegistryMaintenanceE2ETest(unittest.TestCase):
             record.write_text(json.dumps(content), encoding="utf-8")
 
             code, text = _cli(
-                "registry", "validate", "--source", str(checkout), "--strict", "--frozen"
+                "maintain",
+                "registry",
+                "validate",
+                "--source",
+                str(checkout),
+                "--strict",
+                "--frozen",
             )
 
             self.assertNotEqual(code, 0, text)

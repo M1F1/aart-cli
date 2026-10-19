@@ -17,23 +17,25 @@ class RegistryPublicationGateSpec:
 
 
 REGISTRY_PUBLICATION_GATES = (
-    RegistryPublicationGateSpec("format", ("aart-cli registry format --source . --check",)),
     RegistryPublicationGateSpec(
-        "lock", ("aart-cli registry lock --source . --check",), in_generated_workflow=False
+        "format", ("aart-cli maintain registry format --source . --check",)
     ),
-    RegistryPublicationGateSpec("build", ("aart-cli registry build --source . --check",)),
+    RegistryPublicationGateSpec(
+        "lock", ("aart-cli maintain registry lock --source . --check",), in_generated_workflow=False
+    ),
+    RegistryPublicationGateSpec("build", ("aart-cli maintain registry build --source . --check",)),
     # `--strict --frozen` stood here and in the generated workflow since 0.0.1, and the CLI has
     # never accepted either: a generated registry's CI failed this step with `unrecognized
     # arguments`. It surfaced when this list moved the command into a `.py` file, where the guard
     # that requires every command the package names to be one the parser accepts could see it. The
     # byte template had hidden it from that guard for the whole life of the repository (B-156).
-    RegistryPublicationGateSpec("validate", ("aart-cli registry validate --source .",)),
-    RegistryPublicationGateSpec("audit", ("aart-cli registry audit --source .",)),
+    RegistryPublicationGateSpec("validate", ("aart-cli maintain registry validate --source .",)),
+    RegistryPublicationGateSpec("audit", ("aart-cli maintain registry audit --source .",)),
     RegistryPublicationGateSpec(
         "compatibility",
         (
-            "aart-cli registry test --source . --compatibility minimum",
-            "aart-cli registry test --source . --compatibility latest",
+            "aart-cli maintain registry test --source . --compatibility minimum",
+            "aart-cli maintain registry test --source . --compatibility latest",
         ),
     ),
 )

@@ -124,6 +124,7 @@ from aart_cli.application.maintainer_views import (
     project_source_sync_result,
     project_source_sync_review,
 )
+from aart_cli.authoring.check import AuthorCheckReport
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.configuration.schema import configured_source_from_input
@@ -167,6 +168,7 @@ from aart_cli.domain.selection import (
     OwnershipReason,
     VersionConstraint,
 )
+from aart_cli.io.author_operations import check_workspace, new_artifact, select_workspace
 from aart_cli.io.configured_configuration_action import (
     PreparedConfiguredConfiguration,
     complete_configured_configuration,
@@ -719,7 +721,7 @@ class RegistryConnectionSnapshot:
     """Configuration-derived views re-read after a subscription succeeds.
 
     Both subscriptions land here: connecting an approved registry (screen 21a) and connecting an
-    authoring Source (screen 31a) change the same three derived things, so the value that carries
+    upstream repository (screen 31a) change the same three derived things, so the value that carries
     them back is one value rather than two identical ones.
     """
 
@@ -885,6 +887,7 @@ class LocalConsumerActions:
         self._promotion_result: CandidatePromotionExecutionResult | None = None
         self._mcp_test = mcp_test
         self._after_install: _AfterInstall | None = None
+        self._author_report: AuthorCheckReport | None = None
 
     def observe_progress(self, report: Callable[[RunningInstallationView], None] | None) -> None:
         """Take the screen's progress reporter for one execution, or give it back (None)."""
@@ -1096,6 +1099,7 @@ class LocalConsumerActions:
                 install_unhosted=self._unhosted,
                 mcp_test=mcp_test,
                 harnesses=self._context.host.profiles,
+                author_report=self._author_report,
             )
         )
 
@@ -1104,6 +1108,8 @@ class LocalConsumerActions:
     def handle(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         if not isinstance(command, ConsumerUiCommand) or command.action is None:
             raise ValueError("a consumer action handler needs a typed action command")
+        if command.kind is ConsumerUiCommandKind.RUN_AUTHOR:
+            return self._run_author(command)
         if command.kind is ConsumerUiCommandKind.PREPARE_ACTION:
             return self._prepare(command)
         if command.kind is ConsumerUiCommandKind.EXECUTE_ACTION:
@@ -1111,6 +1117,75 @@ class LocalConsumerActions:
         if command.kind is ConsumerUiCommandKind.ENTER_SECRET:
             return self._enter_secret(command)
         raise ValueError(f"{command.kind.value} is not a consumer action")
+
+    def _run_author(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        def failed(diagnostics: tuple[Diagnostic, ...]) -> ConsumerActionUpdate:
+            return ConsumerActionUpdate(
+                self.source(notice=_refusal(diagnostics)),
+                ConsumerUiEvent(ConsumerUiEventKind.ACTION_FAILED, action=command.action),
+            )
+
+        if not self.settings.author_mode or command.author_draft is None:
+            return ConsumerActionUpdate(
+                self.source(notice=("Enable Author Mode in Settings first.",)),
+                ConsumerUiEvent(ConsumerUiEventKind.ACTION_FAILED, action=command.action),
+            )
+        draft = command.author_draft
+        value = (
+            draft.workspace
+            if command.action is ConsumerActionKind.AUTHOR_WORKSPACE
+            else self.settings.author_workspace
+        )
+        selected = select_workspace(value, application_home=self._data_root)
+        if isinstance(selected, Err):
+            if command.action is ConsumerActionKind.AUTHOR_CHECK:
+                self._author_report = None
+            return failed(selected.diagnostics)
+        root = selected.value
+        if command.action is ConsumerActionKind.AUTHOR_WORKSPACE:
+            self.save_settings(replace(self.settings, author_workspace=root))
+            self._author_report = None
+            return ConsumerActionUpdate(
+                self.source(notice=("Author workspace saved.",)),
+                ConsumerUiEvent(
+                    ConsumerUiEventKind.ACTION_RECORDED, action=command.action, text=root
+                ),
+            )
+        focus = "checked"
+        if command.action is ConsumerActionKind.AUTHOR_INIT:
+            created = new_artifact(
+                root,
+                kind=draft.kind,
+                name=draft.name,
+                into=draft.into,
+                application_home=self._data_root,
+            )
+            if isinstance(created, Err):
+                return failed(created.diagnostics)
+            focus = created.value
+        elif command.action is not ConsumerActionKind.AUTHOR_CHECK:
+            raise ValueError("unknown author operation")
+        checked = check_workspace(root)
+        if isinstance(checked, Err):
+            self._author_report = None
+            if command.action is ConsumerActionKind.AUTHOR_INIT:
+                return ConsumerActionUpdate(
+                    self.source(
+                        notice=(
+                            f"Wrote {focus}. Check could not read the workspace:",
+                            *_refusal(checked.diagnostics),
+                        )
+                    ),
+                    ConsumerUiEvent(
+                        ConsumerUiEventKind.ACTION_RECORDED, action=command.action, text=focus
+                    ),
+                )
+            return failed(checked.diagnostics)
+        self._author_report = checked.value
+        return ConsumerActionUpdate(
+            self.source(),
+            ConsumerUiEvent(ConsumerUiEventKind.ACTION_RECORDED, action=command.action, text=focus),
+        )
 
     def discard_secrets(self) -> None:
         """Forget every value 07b took; the session left the screens that may hold one."""
@@ -1619,7 +1694,7 @@ class LocalConsumerActions:
         )
 
     def _prepare_source_addition(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
-        """Review one authoring Source subscription: screen 31a's confirmable value (B-083).
+        """Review one upstream repository subscription: screen 31a's confirmable value (B-083).
 
         The kind is checked here rather than only in the schema because this form's *purpose* is
         the 164.2 boundary: an approved registry is screen 21a's subject, and a Maintainer form
@@ -1628,14 +1703,13 @@ class LocalConsumerActions:
 
         draft = command.source_draft
         if draft is None or self._source_connection is None:
-            return self._declined(command, _lines("Source connection is unavailable"))
+            return self._declined(command, _lines("Upstream connection is unavailable"))
         if draft.kind not in AUTHORING_SOURCE_KINDS:
             return self._declined(
                 command,
                 _lines(
-                    f"{draft.kind} is not an authoring Source kind",
-                    "choose source-git or source-local; an approved registry is connected in "
-                    "Registries",
+                    f"{draft.kind} is not an upstream repository kind",
+                    "choose git or local; an approved registry is connected in Registries",
                 ),
             )
         kind = SourceKind(draft.kind)
@@ -1663,9 +1737,9 @@ class LocalConsumerActions:
         return ConsumerActionUpdate(
             self.source(
                 notice=(
-                    "Source connection review:",
+                    "Upstream connection review:",
                     f"  alias: {parsed.value.alias.value}",
-                    f"  kind: {parsed.value.kind.value}",
+                    f"  kind: {parsed.value.kind.value.removeprefix('source-')}",
                     f"  location: {parsed.value.location}",
                     f"  branch or tag: {parsed.value.ref or 'not applicable'}",
                     "  next: acquire a pinned snapshot, discover declared aart-cli.yaml/aart-cli.json "
@@ -1956,10 +2030,12 @@ class LocalConsumerActions:
         if self._data_root is None:
             return self._declined(
                 command,
-                _lines("Source Sync needs the configured durable data root"),
+                _lines("Upstream sync needs the configured durable data root"),
             )
         if not command.focus:
-            return self._declined(command, _lines("Source Sync needs one focused authoring Source"))
+            return self._declined(
+                command, _lines("Upstream sync needs one focused upstream repository")
+            )
         prepared = prepare_configured_source_sync(
             self._context.effective,
             SourceAlias(command.focus),
@@ -2798,7 +2874,7 @@ class LocalConsumerActions:
     def _prepare_registry_refresh(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         """Review refreshing one connected registry: which subscription, and what it is not.
 
-        The row has to be a registry.  An authoring Source holds Candidates that a maintainer
+        The row has to be a registry.  An upstream repository holds Candidates that a maintainer
         promotes, so "refresh what Marketplace can offer" is an effect it cannot have (INV-199),
         and offering the action there would advertise a result that never arrives.
         """
@@ -2816,7 +2892,7 @@ class LocalConsumerActions:
             return self._declined(
                 command,
                 _lines(
-                    f"{alias} is an authoring Source, not a registry; "
+                    f"{alias} is an upstream repository, not a registry; "
                     "its Candidates are promoted in Registry Maintainer Mode"
                 ),
             )
@@ -2917,15 +2993,15 @@ class LocalConsumerActions:
         )
 
     def _prepare_source_removal(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
-        """Review removing one authoring Source: the same unsubscribe as `aart-cli source remove`.
+        """Review removing one upstream repository: the same unsubscribe as `aart-cli maintain upstream remove`.
 
         Removing is how a Source whose origin, branch or kind was entered wrong is corrected:
-        removed here, then added again from Add Source (D-391). The port is the Registry one,
+        removed here, then added again from Add upstream (D-391). The port is the Registry one,
         because the transaction is one; only the subject it is offered for differs.
         """
 
         if self._registry_removal is None:
-            return self._declined(command, _lines("Source removal is unavailable"))
+            return self._declined(command, _lines("Upstream removal is unavailable"))
         source = next(
             (
                 item
@@ -2935,7 +3011,9 @@ class LocalConsumerActions:
             None,
         )
         if source is None:
-            return self._declined(command, _lines(f"no authoring Source here is {command.focus}"))
+            return self._declined(
+                command, _lines(f"no upstream repository here is {command.focus}")
+            )
         identity = json.dumps(
             {
                 "alias": source.alias.value,
@@ -2953,14 +3031,14 @@ class LocalConsumerActions:
         return ConsumerActionUpdate(
             self.source(
                 notice=(
-                    "Remove Source review:",
-                    f"  Source: {source.alias}",
-                    f"  kind: {source.kind.value}",
+                    "Remove upstream review:",
+                    f"  Upstream: {source.alias}",
+                    f"  kind: {source.kind.value.removeprefix('source-')}",
                     f"  origin: {redact_text(source.location)}",
                     f"  branch or tag: {source.ref or 'repository default'}",
-                    "  removes: this Source, its AART-managed snapshot and its Candidates",
+                    "  removes: this upstream, its AART-managed snapshot and its Candidates",
                     "  keeps: every version already promoted into a Registry",
-                    "  Add it again from Add Source; Source Sync then rebuilds its Candidates.",
+                    "  Add it again from Add upstream; Upstream sync then rebuilds its Candidates.",
                 )
             ),
             ConsumerUiEvent(
@@ -3007,12 +3085,12 @@ class LocalConsumerActions:
             command,
             pending.draft.alias,
             notice=(
-                f"Source {pending.draft.alias} added.",
+                f"Upstream {pending.draft.alias} added.",
                 "",
-                "Run Source Sync to discover artifacts and create or refresh Candidates, "
-                "including new upstream versions. Adding a Source only connects it.",
+                "Run Upstream sync to discover artifacts and create or refresh Candidates, "
+                "including new upstream versions. Adding an upstream only connects it.",
                 "",
-                "Source Sync does not promote Candidates or update installed artifacts.",
+                "Upstream sync does not promote Candidates or update installed artifacts.",
             ),
         )
 
@@ -3353,7 +3431,7 @@ class LocalConsumerActions:
     def _prepare_installed_mcp_test(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         """Review the test of installations chosen on Installed, or the one a details screen is.
 
-        Selection is installation-qualified exactly as `aart-cli mcp test` makes it (§170.1,
+        Selection is installation-qualified exactly as `aart-cli consume mcp test` makes it (§170.1,
         INV-254): each key is one installation in one harness, read back from the receipts now.
         A chosen row that is not an MCP is refused by name rather than dropped, because a test
         that quietly covers less than was ticked reads as a pass for what it skipped.

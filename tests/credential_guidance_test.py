@@ -773,10 +773,10 @@ class CommandLineGuidanceE2ETest(unittest.TestCase):
             ),
         ):
             text_code, text = env.run_text(
-                "marketplace", "install", "company/mcp/github", "--profile", "claude"
+                "consume", "install", "company/mcp/github", "--profile", "claude"
             )
             json_code, payload = env.run(
-                "marketplace", "install", "company/mcp/github", "--profile", "claude"
+                "consume", "install", "company/mcp/github", "--profile", "claude"
             )
 
         # Named by installation rather than by coordinate: the question belongs to one target, and

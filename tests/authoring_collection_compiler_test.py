@@ -65,7 +65,7 @@ class CollectionInSourceTest(unittest.TestCase):
         (diagnostic,) = refusal.diagnostics
         self.assertEqual(diagnostic.message, COLLECTION_IN_SOURCE)
         self.assertEqual(diagnostic.remediation, (COLLECTION_IN_SOURCE_REMEDIATION,))
-        self.assertIn("aart-cli registry collection", COLLECTION_IN_SOURCE_REMEDIATION)
+        self.assertIn("aart-cli maintain registry collection", COLLECTION_IN_SOURCE_REMEDIATION)
 
     def test_the_artifact_only_compiler_refuses_it_too(self) -> None:
         manifest = _file("collections/data-engineer/aart-cli.json", json.dumps(_COLLECTION))

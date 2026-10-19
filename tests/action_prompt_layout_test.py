@@ -172,7 +172,8 @@ class EveryScreenSeparatesItsPromptTest(unittest.TestCase):
 
     def _sweep(self, notice: tuple[str, ...]) -> None:
         source = self._source(notice)
-        settings = ConsumerSettings().with_maintainer_mode(True)
+        # Both opt-ins, so the sweep reaches the Maintainer and Author screens too.
+        settings = ConsumerSettings(author_mode=True).with_maintainer_mode(True)
         for screen in (*ConsumerScreen, *MaintainerScreen):
             with self.subTest(screen=screen.value):
                 state = ConsumerUiState(ConsumerSession(screen), settings=settings)

@@ -48,7 +48,7 @@ from aart_cli.tui_layout import (
 
 #: Screen 35's column headings. They are part of the grid rather than a hand-spaced string, so the
 #: header cannot drift away from the rows it names (`QA-030`).
-_CANDIDATE_HEADINGS = ("STATUS", "ARTIFACT", "VERSION", "SOURCE")
+_CANDIDATE_HEADINGS = ("STATUS", "ARTIFACT", "VERSION", "UPSTREAM")
 
 #: Screen 47 nests its selectable rows under a registry, and the grid gets the remaining measure.
 _BULK_INDENT = 2
@@ -144,7 +144,7 @@ def render_maintainer_dashboard(
     if profile is PresentationProfile.MORE_INFO and view.lifecycle_counts:
         candidates.append(f"Candidate lifecycle: {_lifecycle(view.lifecycle_counts)}")
     return separate(
-        (f"Sources: {view.source_count}",),
+        (f"Upstream repositories: {view.source_count}",),
         tuple(candidates),
         (f"Validation failures: {view.validation_failure_count}",),
         (f"Ready for promotion: {view.ready_count}",),
@@ -166,7 +166,7 @@ def render_maintainer_sources(
     ):
         raise ValueError("Maintainer Sources rendering needs Source views, cursor and profile")
     if not sources:
-        return ("No authoring Sources are configured.",)
+        return ("No Upstream repositories are configured.",)
     lines: list[str] = []
     for source in sources:
         # One empty line between Sources and nowhere else, as between inputs (issue #12, #49).
@@ -206,7 +206,7 @@ def render_maintainer_source(
     if profile is PresentationProfile.MORE_INFO:
         lines.extend(
             (
-                f"Kind: {_human(source.kind)}",
+                f"Kind: {_human(source.kind.removeprefix('source-'))}",
                 "Target registries: " + (", ".join(source.target_registries) or "none"),
                 "Candidate states: "
                 + (
@@ -228,7 +228,7 @@ def render_source_sync_review(
     if not isinstance(view, MaintainerSourceSyncReviewView) or not isinstance(
         profile, PresentationProfile
     ):
-        raise ValueError("Source Sync review rendering needs a typed view and profile")
+        raise ValueError("Upstream sync review rendering needs a typed view and profile")
     revision = view.current_revision or "never synchronized"
     registry_revision = view.approved_revision
     if profile is PresentationProfile.LESS_INFO:
@@ -238,12 +238,12 @@ def render_source_sync_review(
     # `QA-029`: what it is, where it stands, what it will do, and the evidence, as four groups a
     # reader can skip between rather than as one block they have to read to the end.
     identity = [
-        f"Sync authoring Source {view.alias}",
+        f"Sync upstream {view.alias}",
         f"Location: {view.location}",
         f"Branch: {view.branch or 'local'}",
     ]
     if profile is PresentationProfile.MORE_INFO:
-        identity.append(f"Source kind: {_human(view.kind)}")
+        identity.append(f"Upstream kind: {_human(view.kind.removeprefix('source-'))}")
     standing = [
         f"Current revision: {revision}",
         f"Current Candidates: {view.candidate_count}",
@@ -269,11 +269,11 @@ def render_source_sync_result(
     if not isinstance(view, MaintainerSourceSyncResultView) or not isinstance(
         profile, PresentationProfile
     ):
-        raise ValueError("Source Sync result rendering needs a typed view and profile")
+        raise ValueError("Upstream sync result rendering needs a typed view and profile")
     revision = view.revision if profile is PresentationProfile.MORE_INFO else view.revision[:12]
     # `QA-029` again, on the screen the run lands on: the outcome, what it found, what it left
     # alone, and the evidence.
-    outcome = [f"Source Sync {view.disposition}: {view.alias}", f"Pinned revision: {revision}"]
+    outcome = [f"Upstream sync {view.disposition}: {view.alias}", f"Pinned revision: {revision}"]
     found = [
         f"Discovered manifests: {view.manifest_count}",
         f"Candidates: {view.candidate_count}",
@@ -303,7 +303,7 @@ def render_source_sync_result(
 def candidate_status(view: MaintainerCandidateView) -> str:
     """A Candidate's status as the Registry trees record it, before its stored state (D-259).
 
-    A local commit is not a sync, so until Source Sync observes a synchronized Registry the stored
+    A local commit is not a sync, so until Upstream sync observes a synchronized Registry the stored
     state still reads New or Ready. The record is what is true now; nothing here says Published.
     """
 
@@ -370,7 +370,7 @@ def maintainer_candidate_detail(
     fields = (
         ("Artifact", focused.artifact),
         ("Version", focused.version),
-        ("Source", focused.source_alias),
+        ("Upstream", focused.source_alias),
         ("Status", candidate_status(focused)),
         ("Candidate", focused.id),
         ("Target registry", focused.target_registry),
@@ -393,8 +393,8 @@ def render_maintainer_candidate(
     lines = [
         f"{view.artifact}@{view.version} — {candidate_status(view)}",
         f"Kind: {view.kind}",
-        f"Source: {view.source_alias} · {view.source_location}",
-        f"Source revision: {_short(view.source_revision, profile)}",
+        f"Upstream: {view.source_alias} · {view.source_location}",
+        f"Upstream revision: {_short(view.source_revision, profile)}",
         f"Manifest: {view.manifest_path}",
         f"Artifact input digest: {_short(view.input_digest, profile)}",
         f"Payload digest: {_short(view.payload_digest, profile)}",
@@ -465,8 +465,8 @@ def render_maintainer_provenance(
         pin = f"Pinned local snapshot: {_short(view.local_snapshot_digest or '', profile)}"
     lines = [
         f"{view.coordinate} — Provenance",
-        f"Source: {view.source_url}",
-        f"Source kind: {_human(view.source_kind.value)}",
+        f"Upstream: {view.source_url}",
+        f"Upstream kind: {_human(view.source_kind.value)}",
         pin,
         f"Manifest: {view.manifest_path}",
         f"Artifact input digest: {_short(view.input_digest, profile)}",
@@ -779,7 +779,7 @@ def render_maintainer_promotion_review(
     lines.extend(
         (
             "",
-            f"Source revision: {_short(view.source_revision, profile)}",
+            f"Upstream revision: {_short(view.source_revision, profile)}",
             f"Canonical digest: {_short(view.canonical_digest, profile)}",
         )
     )
@@ -1269,7 +1269,7 @@ def repository_scan_status(view: MaintainerRepositoryScanView) -> tuple[str, ...
             f"Repository scan: {view.url}",
             f"Resolved commit: {view.commit}",
             f"{view.manifest_count} explicit manifest(s) found; this repository was not saved as"
-            " a Source.",
+            " an upstream.",
         ),
         *refused,
         () if adoptable else ("Nothing in this repository can be adopted.",),
@@ -1303,7 +1303,7 @@ def render_repository_adoption_review(
         "Registry paths that will change:",
         *(f"  {path}" for path in view.changed_paths),
         "",
-        "The repository will not be saved as a Source. Nothing is pushed or merged.",
+        "The repository will not be saved as an upstream. Nothing is pushed or merged.",
     ]
     if profile is PresentationProfile.MORE_INFO:
         lines.append(f"Review identity: {view.review_digest}")
@@ -1392,7 +1392,7 @@ def render_adoption_upstream_check(
     else:
         lines.append("The upstream declaration is invalid and cannot become a proposal.")
     lines.extend(f"  {detail}" for detail in view.details)
-    lines.append("This check saved no Source and changed no Registry files.")
+    lines.append("This check saved no upstream and changed no Registry files.")
     return tuple(lines)
 
 

@@ -66,7 +66,7 @@ class HookInstallationTest(unittest.TestCase):
         self.script = self.env.project / ".claude/hooks/guard-bash-company-project/run.sh"
 
     def _install(self) -> tuple[int, dict]:
-        return self.env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
+        return self.env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
 
     def _document(self) -> dict:
         return json.loads(self.settings.read_text(encoding="utf-8"))
@@ -112,7 +112,7 @@ class HookInstallationTest(unittest.TestCase):
     def test_review_names_the_hook_and_writes_nothing(self) -> None:
         self._write_existing()
 
-        code, payload = self.env.run("marketplace", "install", COORDINATE, "--profile", "claude")
+        code, payload = self.env.run("consume", "install", COORDINATE, "--profile", "claude")
 
         self.assertEqual(code, 0, payload)
         self.assertFalse(payload["finalized"])
@@ -130,7 +130,7 @@ class HookInstallationTest(unittest.TestCase):
     def test_a_later_invocation_reports_it_installed_and_healthy(self) -> None:
         self._install()
 
-        code, payload = self.env.run("marketplace", "status", "--profile", "claude")
+        code, payload = self.env.run("consume", "status", "--profile", "claude")
 
         self.assertEqual(code, 0, payload)
         self.assertEqual([COORDINATE + "@1.2.0"], [item["key"] for item in payload["items"]])
@@ -142,7 +142,7 @@ class HookInstallationTest(unittest.TestCase):
         document["hooks"]["PreToolUse"][0]["hooks"][0]["type"] = "shell"
         self.settings.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
 
-        code, payload = self.env.run("marketplace", "status", "--profile", "claude")
+        code, payload = self.env.run("consume", "status", "--profile", "claude")
 
         self.assertEqual(code, 0, payload)
         self.assertNotEqual("ready", payload["items"][0]["health"])
@@ -155,7 +155,7 @@ class HookInstallationTest(unittest.TestCase):
         )
         self.settings.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
 
-        code, payload = self.env.run("marketplace", "status", "--profile", "claude")
+        code, payload = self.env.run("consume", "status", "--profile", "claude")
 
         self.assertEqual(code, 0, payload)
         self.assertEqual(
@@ -169,7 +169,7 @@ class HookInstallationTest(unittest.TestCase):
         self._install()
 
         code, payload = self.env.run(
-            "marketplace", "uninstall", COORDINATE, "--profile", "claude", "--yes"
+            "consume", "uninstall", COORDINATE, "--profile", "claude", "--yes"
         )
 
         self.assertEqual(code, 0, payload)

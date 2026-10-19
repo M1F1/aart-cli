@@ -357,7 +357,7 @@ def _resolve_locked(
         changed_identity = _failure(
             "source-invalid",
             "resolved source changed its declared source identity",
-            f"review both identities with `aart-cli source resubscribe --alias "
+            f"review both identities with `{request.source.kind.command} resubscribe --alias "
             f"{request.source.alias.value}`, then re-run it with --yes to adopt the change",
             interactive=(
                 f"The origin behind {request.source.alias.value} now declares a different "
@@ -548,7 +548,7 @@ def _adopt_locked(
         return _failure(
             "source-invalid",
             "no managed snapshot is subscribed at this origin",
-            f"run `aart-cli source sync --alias {alias}` to publish one first",
+            f"run `{request.source.kind.command} sync --alias {alias}` to publish one first",
         )
     acquired = _candidate(request, paths, ports.sync)
     if isinstance(acquired, Err):
@@ -573,7 +573,7 @@ def _adopt_locked(
         return _failure(
             "source-invalid",
             "source still declares the identity this alias is already subscribed to",
-            f"run `aart-cli source sync --alias {alias}` to refresh the snapshot instead",
+            f"run `{request.source.kind.command} sync --alias {alias}` to refresh the snapshot instead",
         )
     try:
         observed = SourceIdentityTransition(
@@ -592,7 +592,7 @@ def _adopt_locked(
         return _failure(
             "source-invalid",
             "source no longer declares the identity that was reviewed",
-            f"run `aart-cli source resubscribe --alias {alias}` again to review the current transition",
+            f"run `{request.source.kind.command} resubscribe --alias {alias}` again to review the current transition",
         )
     published = ports.sync.publish(
         SourcePublishCommand(paths, validated.value, request.observed_at_epoch_seconds)

@@ -175,7 +175,7 @@ class SourceLifecyclePlanningTests(unittest.TestCase):
 
     def test_an_organization_required_alias_cannot_be_unsubscribed(self) -> None:
         required = _registry("company")
-        policy = OrganizationPolicy(1, required_sources=(SourceAlias("company"),))
+        policy = OrganizationPolicy(1, required_registries=(SourceAlias("company"),))
         view = _view(_configuration(required, default="company"), policy)
 
         refused = plan_source_removal(view, SourceAlias("company"))
@@ -191,7 +191,7 @@ class SourceLifecyclePlanningTests(unittest.TestCase):
 
         self.assertIsInstance(refused, Err)
         assert isinstance(refused, Err)
-        self.assertIn("aart-cli source list", refused.diagnostics[0].remediation[0])
+        self.assertIn("aart-cli consume registry list", refused.diagnostics[0].remediation[0])
 
     def test_the_removal_review_promises_installed_artifacts_are_kept(self) -> None:
         view = _view(_configuration(_registry(), default="registry"))

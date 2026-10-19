@@ -174,7 +174,7 @@ class WizardStageFailureTests(unittest.TestCase):
         self.assertFalse(failure.recoverable)
         self.assertEqual(failure.choices, ("back", "quit"))
         self.assertIn(
-            "Sources could not be loaded", "\n".join(render_wizard_stage_failure(failure))
+            "Registries could not be loaded", "\n".join(render_wizard_stage_failure(failure))
         )
 
 

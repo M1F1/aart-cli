@@ -29,7 +29,7 @@ from tests.configured_setup_gap_test import CONFIGURED, COORDINATE, _declaring_s
 
 _VERSIONED = f"{COORDINATE}@1.2.0"
 _INSTALL = (
-    "marketplace",
+    "consume",
     "install",
     COORDINATE,
     "--profile",
@@ -37,7 +37,7 @@ _INSTALL = (
     "--yes",
     "--approve-setup-effects",
 )
-_UNINSTALL = ("marketplace", "uninstall", COORDINATE, "--profile", "claude", "--yes")
+_UNINSTALL = ("consume", "uninstall", COORDINATE, "--profile", "claude", "--yes")
 
 
 @unittest.skipUnless(

@@ -37,7 +37,6 @@ from aart_cli.io.config_store import (
     write_configuration,
 )
 from aart_cli.io.configured_offers import project_configured_registry
-from aart_cli.io.object_store import publish_object
 from aart_cli.io.source_runtime import observe_configured_source, sync_configured_source
 from aart_cli.io.source_store import (
     read_current_source,
@@ -48,17 +47,11 @@ from aart_cli.marketplace.model import (
     MarketplaceSourceState,
 )
 from aart_cli.profiles.builtin import builtin
-from aart_cli.protocol.native_tree import (
-    SnapshotEntry,
-    load_native_source,
-)
-from aart_cli.protocol.paths import SafeRelativePath, parse_relative_path
-from aart_cli.protocol.registry_index import index_artifact_from_package
+from aart_cli.protocol.native_tree import SnapshotEntry
 from aart_cli.registry_maintenance.promoted import (
     is_promoted_registry,
     legacy_registry_paths,
 )
-from aart_cli.registry_maintenance.source_validation import declares_native_source
 from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
 from aart_cli.security.aggregation import ArtifactSecurityEvidence
 from aart_cli.security.application import verify_security_index
@@ -84,9 +77,7 @@ from aart_cli.sources.model import (
     source_store_paths,
 )
 from aart_cli.store.model import (
-    ObjectPublishCommand,
     ObjectStorePaths,
-    make_object_candidate,
     object_store_paths,
 )
 
@@ -133,78 +124,6 @@ def _entry(snapshot, path: str) -> SnapshotEntry | None:
     return next((item for item in snapshot.entries if str(item.path) == path), None)
 
 
-def _package_entries(snapshot, root: SafeRelativePath) -> Result[tuple[SnapshotEntry, ...]]:
-    prefix = f"{root}/"
-    result = []
-    for item in snapshot.entries:
-        raw = str(item.path)
-        if not raw.startswith(prefix):
-            continue
-        relative = parse_relative_path(raw.removeprefix(prefix))
-        if isinstance(relative, Err):
-            return relative
-        result.append(SnapshotEntry(relative.value, item.kind, item.content, item.executable))
-    if not result:
-        return _error(f"canonical package is absent from its source snapshot: {root}")
-    return Ok(tuple(result))
-
-
-def _package_root(snapshot, native, identity) -> SafeRelativePath:
-    matches = tuple(
-        SafeRelativePath((*root.parts, identity.kind, identity.name))
-        for root in native.manifest.artifact_roots
-        if _entry(snapshot, f"{root}/{identity.kind}/{identity.name}/artifact.json") is not None
-    )
-    if len(matches) != 1:
-        raise ValueError(f"canonical package root is ambiguous: {identity}")
-    return matches[0]
-
-
-def _index_native(
-    snapshot,
-    native,
-    paths: ObjectStorePaths | None,
-    expected_by_identity=None,
-):
-    """Validate native packages into graph index records, optionally publishing their objects."""
-
-    indexed = []
-    for package in native.artifacts:
-        try:
-            root = _package_root(snapshot, native, package.manifest.identity)
-        except ValueError as error:
-            return _error(str(error))
-        entries = _package_entries(snapshot, root)
-        if isinstance(entries, Err):
-            return entries
-        expected = (
-            None
-            if expected_by_identity is None
-            else expected_by_identity.get(package.manifest.identity)
-        )
-        candidate = make_object_candidate(entries.value, expected_digest=expected)
-        if isinstance(candidate, Err):
-            return candidate
-        if paths is not None:
-            published = publish_object(ObjectPublishCommand(paths, candidate.value))
-            if isinstance(published, Err):
-                return published
-        indexed.append(
-            index_artifact_from_package(
-                package,
-                source_id=native.manifest.source_id,
-                object_digest=candidate.value.digest,
-            )
-        )
-    return Ok(tuple(indexed))
-
-
-def _materialize_native(snapshot, native, paths, expected_by_identity=None):
-    """Compatibility wrapper for the consumer service's object-materializing composition path."""
-
-    return _index_native(snapshot, native, paths, expected_by_identity)
-
-
 def _project_graph_source(
     configured,
     current,
@@ -218,39 +137,13 @@ def _project_graph_source(
     # native branch below would otherwise compile it as an authoring Source and refuse it for
     # missing the package layout a Registry does not have.
     if not configured.is_registry:
-        # An authoring Source holds Candidates, and a Candidate is by definition not approved
-        # content (INV-199).  It contributes nothing to the consumer Marketplace -- and, because
-        # the loop that calls this returns on the first Err, "nothing" has to mean an empty
-        # projection rather than a refusal: a subscribed author repository must not be able to
-        # take the whole Marketplace away from the consumer who subscribed to it (B-094).
-        if not declares_native_source(snapshot):
-            return Ok(
-                _GraphProjection(GraphSource(configured.alias, current.declared_source_id, (), ()))
-            )
-        native = load_native_source(
-            snapshot,
-            executable_version=_VERSION,
-            available_capabilities=_CAPABILITIES,
-        )
-        if isinstance(native, Err):
-            return native
-        indexed = _index_native(
-            snapshot,
-            native.value,
-            paths if materialize_objects else None,
-        )
-        if isinstance(indexed, Err):
-            return indexed
+        # An Upstream repository holds Candidates, and a Candidate is by definition not approved
+        # content (INV-199): a consumer reads only Registries (INV-269), so it offers nothing here
+        # -- not even what a native source marker declares.  "Nothing" is an empty projection
+        # rather than a refusal, because the loop that calls this returns on the first Err and a
+        # connected upstream must not take the whole Marketplace away (B-094).
         return Ok(
-            _GraphProjection(
-                GraphSource(
-                    configured.alias,
-                    native.value.manifest.source_id,
-                    native.value.manifest.required_capabilities,
-                    indexed.value,
-                    native.value.collections,
-                )
-            )
+            _GraphProjection(GraphSource(configured.alias, current.declared_source_id, (), ()))
         )
 
     # The approved registry projection is the canonical consumer representation produced by

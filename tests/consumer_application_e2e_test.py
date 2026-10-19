@@ -384,7 +384,7 @@ class ConsumerApplicationRefusalTest(unittest.TestCase):
             self.assertTrue(finished.exited, "a vanished offer took the application down")
             # Where it was asked is Artifact Details (`QA-018`/`D-184`) -- the screen the install
             # was requested from -- not the review of a plan that was never prepared.
-            self.assertEqual(finished.session.screen, ConsumerScreen.ARTIFACT_DETAILS)
+            self.assertEqual(finished.session.screen, ConsumerScreen.MARKETPLACE)
             self.assertIsNone(finished.session.review_digest)
             self.assertIsNone(finished.action)
             self.assertFalse(_delivered(env).exists())

@@ -68,6 +68,12 @@ def _run_author(request: Request) -> int:
     return author.run(request)
 
 
+def _run_candidate(request: Request) -> int:
+    from .commands import candidate
+
+    return candidate.run(request)
+
+
 def _run_mcp(request: Request) -> int:
     from .commands import mcp
 
@@ -85,6 +91,7 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "reset": _run_reset,
     "author": _run_author,
     "mcp": _run_mcp,
+    "candidate": _run_candidate,
 }
 
 # Structured results used by interactive frontends. Flag mode retains ``DISPATCH`` and its
@@ -109,13 +116,57 @@ def _split_csv(values) -> Tuple[str, ...]:
     return tuple(out)
 
 
+#: `maintain upstream` actions that are Registry maintenance rather than a connection change.
+_UPSTREAM_REGISTRY_ACTIONS = {"scan": "scan", "adopt": "adopt", "check": "check-upstream"}
+
+
+def _route(args: argparse.Namespace) -> tuple[str, dict[str, object]]:
+    """The handler a role-family command reaches, and the request fields it implies (§175.2).
+
+    The public surface is `consume`, `maintain` and `author` (INV-270); the handlers behind them
+    are the ones the old families had, so only this mapping knows both names.
+    """
+
+    command = args.command
+    if command == "consume":
+        action = args.consume_action
+        if action == "registry":
+            return "source", {"source_family": "registry"}
+        if action == "mcp":
+            return "mcp", {}
+        return "marketplace", {"marketplace_action": action}
+    if command == "maintain":
+        action = args.maintain_action
+        if action == "upstream":
+            if args.source_action in _UPSTREAM_REGISTRY_ACTIONS:
+                return "registry", {
+                    "registry_action": _UPSTREAM_REGISTRY_ACTIONS[args.source_action],
+                    "source_action": None,
+                }
+            return "source", {"source_family": "upstream"}
+        if action == "candidate":
+            if args.candidate_action == "list":
+                return "candidate", {}
+            return "registry", {"registry_action": args.candidate_action}
+        return "registry", {}
+    return command, {}
+
+
+def _source_kind(args: argparse.Namespace, family: object) -> Optional[str]:
+    transport = getattr(args, "source_kind", None)
+    if transport is None:
+        return None
+    return f"{'registry' if family == 'registry' else 'source'}-{transport}"
+
+
 def _to_request(args: argparse.Namespace) -> Request:
     """Map a parsed namespace to a frozen :class:`Request`.
 
     Uses ``getattr`` with defaults because each subparser defines only its own flags.
     """
+    command, routed = _route(args)
     return Request(
-        command=args.command,
+        command=command,
         names=tuple(getattr(args, "names", None) or ()),
         profiles=_split_csv(getattr(args, "profile", None)),
         source_dir=getattr(args, "source_dir", None),
@@ -128,11 +179,9 @@ def _to_request(args: argparse.Namespace) -> Request:
         dry_run=bool(getattr(args, "dry_run", False)),
         json=bool(getattr(args, "json", False)),
         prune=bool(getattr(args, "prune", False)),
-        install_mode=getattr(args, "install_mode", None) or "copy",
-        memory_mode=getattr(args, "memory_mode", None),
         ref=getattr(args, "ref", None),
         native_url=getattr(args, "native_url", None),
-        registry_action=getattr(args, "registry_action", None),
+        registry_action=routed.get("registry_action", getattr(args, "registry_action", None)),  # type: ignore[arg-type]
         candidate_checkout=getattr(args, "candidate_checkout", None),
         candidate_source_alias=getattr(args, "candidate_source_alias", None),
         candidate_source_url=getattr(args, "candidate_source_url", None),
@@ -168,12 +217,14 @@ def _to_request(args: argparse.Namespace) -> Request:
         author_name=getattr(args, "author_name", None),
         author_into=getattr(args, "author_into", None),
         author_source=getattr(args, "author_source", None),
-        source_action=getattr(args, "source_action", None),
+        reset_restore=getattr(args, "reset_restore", None),
+        source_action=routed.get("source_action", getattr(args, "source_action", None)),  # type: ignore[arg-type]
+        source_family=routed.get("source_family"),  # type: ignore[arg-type]
         source_alias=getattr(args, "source_alias", None),
-        source_kind=getattr(args, "source_kind", None),
+        source_kind=_source_kind(args, routed.get("source_family")),
         source_location=getattr(args, "source_location", None),
         source_make_default=getattr(args, "source_make_default", None),
-        marketplace_action=getattr(args, "marketplace_action", None),
+        marketplace_action=routed.get("marketplace_action"),  # type: ignore[arg-type]
         mcp_action=getattr(args, "mcp_action", None),
         all_installed=bool(getattr(args, "all_installed", False)),
         show_response=bool(getattr(args, "show_response", False)),
@@ -213,7 +264,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not args.command:
         return _run_bare(parser, args)
     request = _to_request(args)
-    return DISPATCH[args.command](request)
+    return DISPATCH[request.command](request)
 
 
 if __name__ == "__main__":

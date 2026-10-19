@@ -18,7 +18,10 @@ from aart_cli.application.consumer_ui import (
     reduce_consumer_ui,
 )
 from aart_cli.application.consumer_views import (
+    AUTHOR_SCREENS,
     ConsumerScreen,
+    ConsumerSession,
+    ConsumerSettings,
     PresentationProfile,
     navigation_targets,
     project_credential_record,
@@ -101,6 +104,15 @@ def route(screen: ConsumerScreen) -> tuple[ConsumerScreen, ...]:
 
 def at(screen: ConsumerScreen, profile: PresentationProfile = PresentationProfile.LESS_INFO):
     source = CanonicalScreenSource(screens())
+    if screen in AUTHOR_SCREENS:
+        return source, _reload(
+            source,
+            ConsumerUiState(
+                ConsumerSession(screen, profile=profile),
+                settings=ConsumerSettings(author_mode=True),
+            ),
+            entering=True,
+        )
     state = _reload(source, ConsumerUiState(), entering=True)
     if profile is PresentationProfile.MORE_INFO:
         state, _ = reduce_consumer_ui(state, ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROFILE))

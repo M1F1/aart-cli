@@ -623,7 +623,7 @@ class MaintainerSourceSyncReviewView:
             or isinstance(self.candidate_count, bool)
             or self.candidate_count < 0
         ):
-            raise ValueError("Maintainer Source Sync review view is invalid")
+            raise ValueError("Maintainer Upstream sync review view is invalid")
 
 
 @dataclass(frozen=True, slots=True)
@@ -681,7 +681,7 @@ class MaintainerSourceSyncResultView:
             )
             or len({path for path, _ in self.refusals}) != len(self.refusals)
         ):
-            raise ValueError("Maintainer Source Sync result view is invalid")
+            raise ValueError("Maintainer Upstream sync result view is invalid")
 
     @property
     def candidate_count(self) -> int:
@@ -795,7 +795,7 @@ class MaintainerCandidateView:
     semantic_changes: tuple[MaintainerCandidateSemanticChangeView, ...]
     file_changes: tuple[MaintainerCandidateFileChangeView, ...]
     #: What the Registry trees record for this Candidate, which its stored state cannot say until
-    #: Source Sync observes a synchronized Registry (CP-23 task 09, D-259).
+    #: Upstream sync observes a synchronized Registry (CP-23 task 09, D-259).
     promotion: CandidatePromotionRecord = CandidatePromotionRecord.NOT_PROMOTED
 
     def __post_init__(self) -> None:
@@ -1283,7 +1283,7 @@ def project_maintainer_candidates(
         or not isinstance(records, Mapping)
         or any(not isinstance(item, CandidatePromotionRecord) for item in records.values())
     ):
-        raise ValueError("Maintainer Candidate projection needs Source Scans")
+        raise ValueError("Maintainer Candidate projection needs Upstream scans")
     all_history = {bundle.candidate.id: bundle for scan in scans for bundle in scan.history}
     if sum(len(scan.history) for scan in scans) != len(all_history):
         raise ValueError("Maintainer Candidate history contains duplicate Candidate IDs")
@@ -2263,7 +2263,7 @@ class MaintainerViews:
 
 def project_source_sync_review(prepared: PreparedSourceSync) -> MaintainerSourceSyncReviewView:
     if not isinstance(prepared, PreparedSourceSync):
-        raise ValueError("Source Sync review projection needs a prepared Source Sync")
+        raise ValueError("Upstream sync review projection needs a prepared Upstream sync")
     source = prepared.request.source
     return MaintainerSourceSyncReviewView(
         source.alias.value,
@@ -2287,7 +2287,7 @@ def project_source_sync_result(
     if not isinstance(result, SourceSyncExecutionResult) or not isinstance(
         target_registry, SourceAlias
     ):
-        raise ValueError("Source Sync result projection needs a persisted result and target")
+        raise ValueError("Upstream sync result projection needs a persisted result and target")
     counts = Counter((bundle.candidate.state for bundle in result.scan.active))
     return MaintainerSourceSyncResultView(
         result.scan.source_alias.value,
@@ -2318,7 +2318,7 @@ def _source_status(configured: ConfiguredSource, health: SourceHealth) -> Mainta
 
 UNBOUND_SCAN_DIAGNOSTIC = (
     "Candidate history was recorded at another revision than the pinned snapshot; "
-    "run Source Sync on this Source to rebuild it from the pinned snapshot"
+    "run Upstream sync on this upstream to rebuild it from the pinned snapshot"
 )
 
 
@@ -2336,7 +2336,7 @@ class UnboundCandidateHistory:
 
     @property
     def remedy(self) -> str:
-        return f"run Source Sync on {self.alias} to rebuild its Candidate history"
+        return f"run Upstream sync on {self.alias} to rebuild its Candidate history"
 
 
 def scan_binds_current_pin(
@@ -2367,7 +2367,7 @@ def project_maintainer_source(
     health: SourceHealth,
     scan: SourceScan | None = None,
 ) -> MaintainerSourceView:
-    """Bind configuration, durable Source health and one matching non-mutating Source Scan."""
+    """Bind configuration, durable Source health and one matching non-mutating Upstream scan."""
 
     if (
         not isinstance(configured, ConfiguredSource)

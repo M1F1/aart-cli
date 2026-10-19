@@ -326,9 +326,7 @@ def test_laf73_a_rollback_line_this_executable_rejects_is_reported_not_rewritten
     status, detail = statuses[ROLLBACK_COMMAND_RUNS]
 
     assert status == FALSE
-    assert (
-        "aart-cli marketplace receipt undo mcp/x --profile claude --scope project --yes" in detail
-    )
+    assert "aart-cli consume receipt undo mcp/x --profile claude --scope project --yes" in detail
     assert record.rollback_command == before
 
 
@@ -364,7 +362,7 @@ def test_laf73_the_probe_rejects_the_sentence_and_accepts_the_command() -> None:
     assert command_accepted("no command reverses a completed setup; undo mcp/x") is False
     assert (
         command_accepted(
-            "aart-cli marketplace receipt undo mcp/x --profile claude --scope project --yes"
+            "aart-cli consume receipt undo mcp/x --profile claude --scope project --yes"
         )
         is True
     )

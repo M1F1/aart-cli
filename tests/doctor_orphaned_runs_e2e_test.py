@@ -1,6 +1,6 @@
 """End to end: the global report finds a working copy nobody knew to ask about.
 
-CP-15 step 4b proved that `aart-cli marketplace receipt verify <coordinate>` names the working copy an
+CP-15 step 4b proved that `aart-cli consume receipt verify <coordinate>` names the working copy an
 interrupted run left behind. That claim has a precondition buried in it: the operator must already
 know which receipt to verify. Being interrupted is usually the reason they stopped watching, so the
 one fact they cannot supply is the one the existing surface requires.
@@ -32,13 +32,12 @@ from tests.interrupted_execution_e2e_test import (
 from tests.marketplace_lifecycle_e2e_test import _COORDINATE
 
 _SETUP = (
-    "marketplace",
+    "consume",
     "setup",
     _COORDINATE,
     "--profile",
     "claude",
     "--yes",
-    "--authorize-untrusted-source",
     "--approve-setup-effects",
     "--authorize-custom-entrypoint",
 )
@@ -55,9 +54,7 @@ def _runs_root(env) -> Path:
 )
 class DoctorOrphanedRunsE2ETest(unittest.TestCase):
     def _installed(self, env) -> None:
-        code, payload = env.run(
-            "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
 
     def _interrupted(self, env) -> None:
@@ -107,7 +104,7 @@ class DoctorOrphanedRunsE2ETest(unittest.TestCase):
 
             _code, payload = env.run("doctor")
             shown, receipt = env.run(
-                "marketplace", "receipt", "show", _COORDINATE, "--profile", "claude"
+                "consume", "receipt", "show", _COORDINATE, "--profile", "claude"
             )
 
             self.assertEqual(shown, 0, receipt)

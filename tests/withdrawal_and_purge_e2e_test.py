@@ -8,51 +8,44 @@ say when the exceptional case arrives: if a secret is found in canonical payload
 clearly state that removing the current payload does not guarantee removal from Git history and that
 repository-specific secret-removal and credential-rotation procedures are still required"*.
 
-So this file measures a withdrawal from both sides. Upstream really deletes the artifact from a real
-source and the source is really re-synchronized, which is the closest thing to a purge that exists
+So this file measures a withdrawal from both sides. The Registry really stops publishing the
+artifact and is really re-synchronized, which is the closest thing to a purge that exists
 here -- AART offers no purge verb at all, which is the strongest possible form of "exceptional". The
 question is then what survived and what stopped being offered. And separately, at the one place AART
 tells anyone a credential is sitting in artifact content, whether the sentence it gives them is the
 one 165.10 requires.
 
-The withdrawal has to be coherent to be measured. Deleting the artifact alone leaves the fixture's
-Collection referencing something that is gone, and the compiler refuses that graph -- correctly, and
-before any of these questions is reached. Emptying the Collection is refused too, for its own
-reason. So the Collection is re-pointed at the artifact that remains, which is what a maintainer
-withdrawing one artifact would actually publish.
+The withdrawal has to be coherent to be measured. Deleting the artifact alone leaves the
+Registry's Collection referencing something that is gone. So the Collection is re-pointed at the
+artifact that remains, which is what a Maintainer withdrawing one artifact would actually publish.
 """
 
 from __future__ import annotations
 
-import json
-import shutil
 import unittest
 from pathlib import Path
 
+from tests.configured_installation_draft_e2e_test import RegistryCollection
 from tests.credential_fixtures import access_token, secret_object
-from tests.marketplace_lifecycle_e2e_test import _COORDINATE
+from tests.marketplace_lifecycle_e2e_test import _COORDINATE, _PLACED
+from tests.reference_registry import memory, republish
 from tests.security_baseline_test import _fixture, _scan
 from tests.source_sync_command_e2e_test import (
     _environment_over_a_writable_source,
     _source_json,
 )
 
-#: The one artifact the fixture's Collection may still point at once the Skill is gone.
-_REMAINING = {
-    "type": "memory",
-    "name": "house",
-    "version": {"min_inclusive": "1.0.0", "max_exclusive": "2.0.0"},
-}
-
 
 def _withdraw(location: Path) -> None:
-    """Publish the revision a maintainer would: the artifact gone, and nothing dangling."""
+    """Publish the revision a Maintainer would: the artifact gone, and nothing dangling."""
 
-    shutil.rmtree(location / "artifacts" / "skill" / "code-review")
-    collection = location / "collections" / "essentials.json"
-    value = json.loads(collection.read_text(encoding="utf-8"))
-    value["artifacts"] = [_REMAINING]
-    collection.write_text(json.dumps(value, indent=2), encoding="utf-8")
+    republish(
+        location,
+        memory(),
+        RegistryCollection(
+            "essentials", "Install the essential reviewed agent artifacts.", ("memory/house",)
+        ),
+    )
 
 
 def _placed(env) -> list[str]:
@@ -65,27 +58,25 @@ class WithdrawnArtifactE2ETest(unittest.TestCase):
     def _withdrawn(self, env, location: Path) -> list[str]:
         """Install, then have upstream withdraw the artifact and re-synchronize. Returns files."""
 
-        code, payload = env.run(
-            "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", _COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
         before = _placed(env)
         _withdraw(location)
-        synced, report = _source_json(env, "source", "sync")
+        synced, report = _source_json(env, "consume", "registry", "sync")
         self.assertEqual(synced, 0, report)
-        self.assertEqual([item["disposition"] for item in report["sources"]], ["published"])
+        self.assertEqual([item["disposition"] for item in report["registries"]], ["published"])
         return before
 
     def test_a_withdrawn_artifact_stops_being_offered(self) -> None:
         with _environment_over_a_writable_source() as (env, location):
             self._withdrawn(env, location)
 
-            code, payload = _source_json(env, "marketplace", "list")
+            code, payload = _source_json(env, "consume", "list")
 
             self.assertEqual(code, 0, payload)
             offered = [item["coordinate"] for item in payload["artifacts"]]
             self.assertNotIn(_COORDINATE + "@1.0.0", offered)
-            # The source is still there and still serving; only that one row is gone.
+            # The Registry is still there and still serving; only that one row is gone.
             self.assertTrue(offered, payload)
 
     def test_installing_a_withdrawn_artifact_is_refused_with_a_way_to_look(self) -> None:
@@ -93,13 +84,13 @@ class WithdrawnArtifactE2ETest(unittest.TestCase):
             self._withdrawn(env, location)
 
             code, payload = env.run(
-                "marketplace", "install", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertNotEqual(code, 0)
             diagnostic = payload["diagnostics"][0]
             self.assertEqual(diagnostic["code"], "artifact-not-found")
-            self.assertTrue(diagnostic["remediation"], diagnostic)
+            self.assertEqual(diagnostic["remediation"], ["aart-cli consume list"])
 
     def test_what_is_already_installed_is_not_deleted_with_it(self) -> None:
         """165.10's whole point: withdrawal hides from new installs, it does not reach a machine.
@@ -112,12 +103,10 @@ class WithdrawnArtifactE2ETest(unittest.TestCase):
             before = self._withdrawn(env, location)
 
             self.assertEqual(_placed(env), before)
-            code, payload = env.run("marketplace", "status", "--profile", "claude")
+            code, payload = env.run("consume", "status", "--profile", "claude")
             self.assertEqual(code, 0, payload)
-            item = payload["items"][0]
-            # Its own word, and an honest one: the artifact is not broken and it is not current.
-            self.assertEqual(item["status"], "removed-upstream")
-            self.assertNotIn(item["status"], {"current", "broken", "source-unavailable"})
+            # The record stands. Status does not yet say the Registry withdrew it (B-205).
+            self.assertEqual([item["key"] for item in payload["items"]], [f"{_COORDINATE}@1.0.0"])
 
     def test_the_payload_bytes_stay_in_the_object_store(self) -> None:
         """Nothing physically deletes content, which is what keeps the local install whole.
@@ -147,11 +136,12 @@ class WithdrawnArtifactE2ETest(unittest.TestCase):
             self._withdrawn(env, location)
 
             code, payload = env.run(
-                "marketplace", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
+                "consume", "uninstall", _COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
-            self.assertNotIn(".claude/skills/code-review/SKILL.md", _placed(env))
+            self.assertNotIn(str(_PLACED / "SKILL.md"), _placed(env))
+            self.assertEqual(payload["items"][0]["status"], "removed")
 
 
 class ErasureClaimTest(unittest.TestCase):

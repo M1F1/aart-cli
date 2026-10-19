@@ -125,9 +125,7 @@ class SetupPlanningTests(unittest.TestCase):
 
         self.assertEqual([record.status for record in records], ["skipped", "skipped"])
         # The retry is the canonical verb, not the `aart setup` group removed in 2.0.0.
-        self.assertTrue(
-            all("aart-cli marketplace setup" in record.retry_command for record in records)
-        )
+        self.assertTrue(all("aart-cli consume setup" in record.retry_command for record in records))
 
 
 if __name__ == "__main__":

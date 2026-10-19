@@ -384,9 +384,9 @@ def _recorded_subscription_current(
         # `could-not-check` belongs here with the rest.  It does not mean the source is gone; it
         # means the live re-check against the origin failed while the published snapshot -- the
         # one the two lines above just required, and the one this comparison is actually made
-        # against -- is intact and still serving.  That is exactly what a refused `aart-cli source
-        # sync` leaves behind, and excluding it made one invalid upstream revision report every
-        # installation from that source as `source-unavailable` and gave `aart-cli marketplace update`
+        # against -- is intact and still serving.  That is exactly what a refused `aart-cli maintain
+        # upstream sync` leaves behind, and excluding it made one invalid upstream revision report every
+        # installation from that source as `source-unavailable` and gave `aart-cli consume update`
         # a terminal refusal for an installation that was current.  Whether a snapshot exists is
         # the digest check; health is not asked that question twice.
         and source.health.value in {"healthy", "stale", "degraded", "could-not-check"}
@@ -889,12 +889,12 @@ def _retired_effect_update(
     detail = (
         "update would orphan recorded effects at "
         + ", ".join(retired)
-        + "; migrate transactionally with `aart-cli marketplace uninstall "
+        + "; migrate transactionally with `aart-cli consume uninstall "
         + coordinate
         + " --profile "
         + record.profile
         + scope
-        + " --yes`, then `aart-cli marketplace install "
+        + " --yes`, then `aart-cli consume install "
         + coordinate
         + " --profile "
         + record.profile

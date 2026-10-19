@@ -356,7 +356,7 @@ jobs:
             if gate.in_generated_workflow and gate.name != "compatibility"
             for command in gate.commands
         )
-        + b"""      - run: aart-cli registry test --source . --compatibility ${{ matrix.compatibility }}
+        + b"""      - run: aart-cli maintain registry test --source . --compatibility ${{ matrix.compatibility }}
 """,
     )
     + _aggregate(b"registry-quality")
@@ -395,28 +395,28 @@ to finalize. AART never pushes.
 
 ```sh
 # Discover author manifests in a clean source checkout, then review their exact Candidates
-aart-cli registry scan --help
-aart-cli registry promote --help
+aart-cli maintain upstream scan --help
+aart-cli maintain candidate promote --help
 
 # Adopt artifacts from a repository's manifests without subscribing to it
-aart-cli registry adopt --source . --url https://github.com/acme/prompts.git --ref main
+aart-cli maintain upstream adopt --source . --url https://github.com/acme/prompts.git --ref main
 
 # Create or change a Collection of approved artifacts
-aart-cli registry collection --help
+aart-cli maintain registry collection --help
 
 # Build, validate, audit, and commit - review first, then finalize
-aart-cli registry publish --source .
-aart-cli registry publish --source . --yes
+aart-cli maintain registry publish --source .
+aart-cli maintain registry publish --source . --yes
 ```
 
 Run the gates yourself at any time:
 
 ```sh
-aart-cli registry format --source . --check
-aart-cli registry validate --source .
-aart-cli registry build --source . --check
-aart-cli registry audit --source .
-aart-cli registry test --source . --compatibility latest
+aart-cli maintain registry format --source . --check
+aart-cli maintain registry validate --source .
+aart-cli maintain registry build --source . --check
+aart-cli maintain registry audit --source .
+aart-cli maintain registry test --source . --compatibility latest
 ```
 
 ## Pointing CI at AART

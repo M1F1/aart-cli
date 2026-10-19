@@ -40,7 +40,7 @@ class ConfiguredInstallCommandReportTest(unittest.TestCase):
     def test_the_install_names_the_setup_it_did_not_run(self) -> None:
         with _declaring_setup() as env:
             code, payload = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -69,9 +69,7 @@ class ConfiguredInstallCommandReportTest(unittest.TestCase):
         """
 
         with _declaring_setup() as env:
-            _, payload = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
-            )
+            _, payload = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
 
             store = LocalReceiptStore(str(pathlib.Path(env.paths.data_root) / "state"))
             record = sole_record(
@@ -93,7 +91,7 @@ class ConfiguredInstallCommandReportTest(unittest.TestCase):
 
         with _environment() as env:
             code, payload = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -102,7 +100,7 @@ class ConfiguredInstallCommandReportTest(unittest.TestCase):
     def test_the_text_output_names_it_too(self) -> None:
         with _declaring_setup() as env:
             code, text = env.run_text(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, text)

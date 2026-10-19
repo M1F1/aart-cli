@@ -79,7 +79,6 @@ class FinishedSequenceLeavesTheStackTest(TestCase):
             ConsumerScreen.SUCCESS,
             ConsumerScreen.DASHBOARD,
             ConsumerScreen.MARKETPLACE,
-            ConsumerScreen.ARTIFACT_DETAILS,
             ConsumerScreen.REVIEW_SELECTION,
             ConsumerScreen.READY,
             ConsumerScreen.INSTALLING,

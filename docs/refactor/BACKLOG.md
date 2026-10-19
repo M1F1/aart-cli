@@ -4660,3 +4660,121 @@ Found: CP-31 step 14 (2026-10-17). The audit-level test that an `mcp` package wh
 names a payload file, or has no `server`, is reported by `registry audit` built its package with
 `registry vendor`, and went with it. `describe_delivery` and both messages remain covered directly.
 A replacement adopts an `mcp` manifest and audits the result; not needed for §173.
+
+## B-200 — `maintain candidate reject` on the CLI
+
+The Candidate model carries a rejection reason and the Maintainer TUI shows it, but no CLI command
+rejects a Candidate. CP-32 (D-439) gives Candidates their own noun; a `reject` action with a reason
+belongs there once it is wanted. Not required by §175.
+
+## B-201 — `consume registry sync` naming the installed artifacts it makes updatable
+
+§175.2 has `consume registry sync` point at `consume update`, whose review lists what a newer
+approved version would replace. Naming those artifacts in `sync`'s own output needs an installed
+versus offered comparison the consumer path does not compute today: `InstalledInspection
+.update_available` is never set to true anywhere, so the Installed view's Update health is also
+unreachable. Not required by §175; it is the same comparison both would read.
+
+## B-202 — Recording Candidate history from the command line
+
+`maintain candidate list` (CP-32 step 5) reads the Candidate history Registry Maintainer Mode's
+Source Sync writes (`io/maintainer_sync.py`), and nothing on the command line writes it:
+`maintain upstream sync` refreshes the pinned snapshot and `maintain upstream scan` only reports.
+A scripted maintainer therefore has to open the TUI once per change. Not required by §175, which
+names `candidate list|promote` only; the transaction exists and needs a CLI face.
+
+## B-203 — Runtime requirements in the author format
+
+`consume health` reports runtime requirements as not declared for every Registry artifact. The
+only declaration is `aart.runtime-requirements` in the native package format, which a Registry no
+longer serves (D-444). The author manifest (`aart-cli.dev/*/v1`) needs a field for it before health
+can say anything about a Registry installation. Not required by §175.
+
+## B-204 — Uninstall leaves the files AART created
+
+On the Registry path, the last uninstall in a scope leaves three things behind:
+- the instruction file it created, emptied (`CLAUDE.md`, `TABNINE.md`);
+- a settings file it created, now `{"mcpServers": {}}`;
+- empty placement directories (`.claude/skills`, `.claude/aart-cli/...`).
+
+Git ignores empty directories, so a clean checkout stays clean except for those files. The retired
+native path tore the scope down. The Registry path needs install-time evidence that a file did not
+exist before, so that removal can restore its absence. Pinned by `tests/marketplace_memory_e2e_test.py`,
+`tests/tabnine_mcp_e2e_test.py` and `tests/scope_teardown_test.py`.
+
+## B-205 — Registry status compares nothing against the Registry
+
+`consume status` on the Registry path reports `current` in three cases where a comparison against
+the Registry would say otherwise:
+- the Registry has since withdrawn the artifact (was `removed-upstream`);
+- the Registry has been removed (was `source-unavailable`);
+- the installation drifts from policy (§165.21). Development installs are not marked either
+  (§165.23).
+
+The retired path had all of these. The manifest-backed `policy_drift_e2e_test` was deleted with it
+(D-444). `withdrawal_and_purge_e2e_test`, `source_project_isolation_test` and
+`identity_change_reconciliation_test` pin today's answer and name this item.
+
+## B-206 — Delete the unreachable native consumer pipeline
+
+After D-444 the lifecycle never reaches these, but they still exist:
+- `load_local_consumer_service`'s install flow, which `_health` still loads for its environment;
+- the `ConsumerApplicationService` prepare and finalize;
+- the legacy `marketplace/catalog.py` resolution failures;
+- the `Request` fields only they read;
+- the `_FIXTURE` constant in `tests/marketplace_lifecycle_e2e_test.py`.
+
+Delete them once `consume health` reads the Registry seam (B-203).
+
+
+## B-207 — Wizard mutation findings outside CP-32's naming slice
+
+A scoped advisory run over `aart_cli/wizard.py` with `wizard_render_test` and `wizard_state_test`
+produced 636 mutants: initially 476 killed and 160 survived. The existing tests leave parts of
+backtracking, basket reconciliation, position retention, finalization and wrapping unheld. Examples:
+`x_back__mutmut_24`, `x_reconcile_basket__mutmut_9`, `x_remember_position__mutmut_6`,
+`x_can_finalize__mutmut_7`, `x__fit__mutmut_13`. These are outside step 8's vocabulary changes;
+review them when changing those behaviors, rather than widening the active slice.
+
+The three survivors that changed the new onboarding Registry sentence prompted an exact-line
+assertion in `WizardOnboardingTests`. Explicit mutmut reruns classified those three as timeouts
+(476 killed, 157 survived, 3 timeouts); direct targeted mutation of that sentence is held by the
+updated test. The screen-title regression is separately mutation-proven in the CP-32 slice.
+
+
+## B-208 — Installed smoke mutation findings outside unset-input classification
+
+CP-32 step 15's scoped `make mutants` over `io/installed_smoke.py`, with
+`installed_mcp_configuration_test` and `mcp_smoke_cli_test`, reported 402 mutants: 175 killed,
+156 survived, 71 without tests. Reviewed survivors outside the new missing/placeholder behavior
+include launcher/configuration integrity error branches, unsupported-provider error wording,
+response metadata and declaration/plan fields. Representative ids:
+`x__configuration_values__mutmut_14`, `_29`, `_65`; `x_smoke_installation__mutmut_39`;
+`x_smoke_plan__mutmut_1` (no tests in this scope). Message mutations retaining the placeholder
+and recovery words (`_59`, `_81`, `_89`) preserve this slice's semantic claims.
+Review these on the corresponding next change; this result does not reclassify those independent
+behaviors onto CP-32's active slice. The new classification and no-start claims have dedicated
+red/green, property and targeted-mutation evidence in the slice.
+
+
+## B-209 — Scoped mutmut retargeting can retain another scope's call statistics
+
+Observed during CP-32 step 12: after mutating `io/author_operations.py`, a run scoped to
+`application/author_views.py` produced 47 “no tests” results despite direct projection tests.
+`mutants/mutmut-stats.json` retained the earlier scope's call mapping. A copied uninstrumented
+module can also be classified unmodified from its mtime when the scope changes.
+
+The verified local workaround was to remove only the selected module's generated file, `.meta`
+and `.spans`, plus the generated `mutmut-stats.json`, then rerun the scoped command. The same
+projection scope then killed 44/47; mutation-derived tests for uppercase workspace paths and
+command-free recovery killed the remaining three, yielding 47/47. Existing unrelated mutation
+results were not removed. Teach `scripts/mutants.py` to handle scope changes explicitly in a
+separate tooling slice; do not treat an unexplained “no tests” report as adequacy evidence.
+
+
+## B-210 — Retire the unused compact Marketplace artifact wrapper
+
+CP-32 step 13 removes the last production call to `tui_consumer.render_marketplace_artifact`.
+Tests still characterize that former compact/full wrapper; the complete evidence renderer is
+reused by More info. Remove the unused wrapper and its obsolete compact-pane tests in a cleanup
+slice. It grants no route or fallback authority and is not required by INV-273.

@@ -40,7 +40,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
     def test_a_real_receipt_resolves_to_approved_registry_and_object_evidence(self) -> None:
         with _environment(authored=AUTHORED, setup=AuthoredSetup(RECIPE)) as env:
             code, payload = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(code, 0, payload)
             effective = effective_configuration((env.source,), default_registry="company")
@@ -95,7 +95,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
 
     def test_a_subject_request_for_a_profile_the_receipt_did_not_install_is_refused(self) -> None:
         with _environment(authored=AUTHORED, setup=AuthoredSetup(RECIPE)) as env:
-            env.run("marketplace", "install", COORDINATE, "--profile", "claude", "--yes")
+            env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
             effective = effective_configuration((env.source,), default_registry="company")
             host = InstallationHost(
                 env.paths.data_root,
@@ -120,7 +120,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
     def test_setup_persists_its_record_pointer_and_object_reference_on_the_receipt(self) -> None:
         with _environment(authored=AUTHORED, setup=AuthoredSetup(RECIPE)) as env:
             code, payload = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(code, 0, payload)
             effective = effective_configuration((env.source,), default_registry="company")
@@ -190,7 +190,7 @@ class ConfiguredSetupSubjectTest(unittest.TestCase):
     def test_reference_failure_restores_receipt_and_setup_state_pointer(self) -> None:
         with _environment(authored=AUTHORED, setup=AuthoredSetup(RECIPE)) as env:
             code, payload = env.run(
-                "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "install", COORDINATE, "--profile", "claude", "--yes"
             )
             self.assertEqual(code, 0, payload)
             effective = effective_configuration((env.source,), default_registry="company")

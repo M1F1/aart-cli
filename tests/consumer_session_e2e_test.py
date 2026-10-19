@@ -24,7 +24,13 @@ from aart_cli.application.consumer_ui import (
     ConsumerUiState,
     reduce_consumer_ui,
 )
-from aart_cli.application.consumer_views import ConsumerScreen, navigation_targets
+from aart_cli.application.consumer_views import (
+    AUTHOR_SCREENS,
+    ConsumerScreen,
+    ConsumerSession,
+    ConsumerSettings,
+    navigation_targets,
+)
 from aart_cli.application.execution import execute_lifecycle
 from aart_cli.application.installed_state import (
     current_state_from_observation,
@@ -153,6 +159,19 @@ class ConsumerSessionTest(InstalledFixture):
         """Draw one screen, reached the way a person reaches it: by the accepted routes."""
 
         source = CanonicalScreenSource(screens_from(self.machine()))
+        if screen in AUTHOR_SCREENS:
+            return "\n".join(
+                frame(
+                    source,
+                    _reload(
+                        source,
+                        ConsumerUiState(
+                            ConsumerSession(screen), settings=ConsumerSettings(author_mode=True)
+                        ),
+                        entering=True,
+                    ),
+                )
+            )
         state = _reload(source, ConsumerUiState(), entering=True)
         for hop in _route(screen):
             state, _ = reduce_consumer_ui(

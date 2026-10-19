@@ -73,9 +73,13 @@ ApplicationScreen = ConsumerScreen | MaintainerScreen
 # Deliberately explicit.  Do not derive this from the enums: a newly declared screen must fail the
 # matrix until somebody records the state that proves what it draws and what its keys do.
 RECORDED_SCREENS: tuple[ApplicationScreen, ...] = (
+    ConsumerScreen.AUTHOR,
+    ConsumerScreen.AUTHOR_WORKSPACE,
+    ConsumerScreen.AUTHOR_CHECK,
+    ConsumerScreen.AUTHOR_MANIFEST,
+    ConsumerScreen.AUTHOR_INIT,
     ConsumerScreen.DASHBOARD,
     ConsumerScreen.MARKETPLACE,
-    ConsumerScreen.ARTIFACT_DETAILS,
     ConsumerScreen.COLLECTION_PREVIEW,
     ConsumerScreen.COLLECTION_CUSTOMIZE,
     ConsumerScreen.INSTALL_PATH,
@@ -174,15 +178,50 @@ def _consumer_cases() -> dict[ConsumerScreen, ScreenCase]:
         source, state = consumer_install_flow_shell_test.at(screen)
         cases[screen] = ScreenCase(f"{screen.value}:dashboard-route", source, state)
 
+    from dataclasses import replace
+
+    from aart_cli.application.consumer_views import ConsumerSettings
+    from aart_cli.authoring.check import AuthorCheckReport, ManifestVerdict
+    from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+
+    author_report = AuthorCheckReport(
+        (
+            ManifestVerdict(
+                "aart-cli.yaml",
+                (
+                    Diagnostic(
+                        DiagnosticCode("author-manifest-invalid"),
+                        Severity.ERROR,
+                        "Registry assigns versions; delete artifact.version.",
+                    ),
+                ),
+            ),
+        )
+    )
+    author_source = CanonicalScreenSource(
+        replace(consumer_marketplace_shell_test.screens(), author_report=author_report)
+    )
+    for screen in (ConsumerScreen.AUTHOR_CHECK, ConsumerScreen.AUTHOR_MANIFEST):
+        cases[screen] = ScreenCase(
+            f"{screen.value}:manifest-diagnostics",
+            author_source,
+            _reload(
+                author_source,
+                ConsumerUiState(
+                    ConsumerSession(screen),
+                    settings=ConsumerSettings(author_mode=True, author_workspace="/work/authors"),
+                    focus="aart-cli.yaml",
+                ),
+                entering=True,
+            ),
+        )
+
     marketplace_source = CanonicalScreenSource(consumer_marketplace_shell_test.screens())
     artifact = marketplace_source.screens.marketplace[0].key
     collection = marketplace_source.screens.collections[0]
     marketplace_states = {
         ConsumerScreen.MARKETPLACE: ConsumerUiState(
             ConsumerSession(ConsumerScreen.MARKETPLACE), selection=(artifact,)
-        ),
-        ConsumerScreen.ARTIFACT_DETAILS: ConsumerUiState(
-            ConsumerSession(ConsumerScreen.ARTIFACT_DETAILS), focus=artifact
         ),
         ConsumerScreen.COLLECTION_PREVIEW: ConsumerUiState(
             ConsumerSession(ConsumerScreen.COLLECTION_PREVIEW),

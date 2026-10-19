@@ -269,10 +269,10 @@ def _canonical_setup_run(
             scope=scope or "selected scope",
             status="planning-failed",
             detail=failure.detail,
-            # `aart-cli marketplace setup` re-runs the recipe. Planning
+            # `aart-cli consume setup` re-runs the recipe. Planning
             # failed here, so no effect was applied and the profile/scope may not be known: the
             # coordinate alone is the most this failure can honestly say.
-            retry_command=f"aart-cli marketplace setup {key}",
+            retry_command=f"aart-cli consume setup {key}",
             manual=failure.manual,
         ):
             write(line)
@@ -744,6 +744,14 @@ class _CursesTerminal:
     def __init__(self, stdscr) -> None:
         self._stdscr = stdscr
 
+    @property
+    def rows(self) -> int:
+        return max(self._stdscr.getmaxyx()[0] - 1, 0)
+
+    @property
+    def columns(self) -> int:
+        return max(self._stdscr.getmaxyx()[1] - 1, 1)
+
     def draw(self, lines: Tuple[str, ...]) -> None:
         self._stdscr.clear()
         height, width = self._stdscr.getmaxyx()
@@ -1032,6 +1040,7 @@ def _canonical_consumer_actions(
                 "source",
                 project=project_root,
                 user_home=home,
+                source_family="registry",
                 source_action="add",
                 source_alias=draft.alias,
                 source_kind=draft.kind,
@@ -1045,7 +1054,7 @@ def _canonical_consumer_actions(
         return reread()
 
     def registry_refresh(alias: str) -> DomainResult[RegistryConnectionSnapshot]:
-        # The same authority once more: `aart-cli source sync` and screen 21c refresh a subscription
+        # The same authority once more: `consume registry sync` and screen 21c refresh a subscription
         # through one transaction (B-084).  It writes no configuration, so a consumer may run it
         # with none of the authority `add` needs, and a failed fetch leaves the last known good
         # snapshot exactly where it was.
@@ -1056,6 +1065,7 @@ def _canonical_consumer_actions(
                 "source",
                 project=project_root,
                 user_home=home,
+                source_family="registry",
                 source_action="sync",
                 source_alias=alias,
             )
@@ -1067,9 +1077,9 @@ def _canonical_consumer_actions(
     def registry_removal(
         source: ConfiguredSource,
     ) -> DomainResult[RegistryConnectionSnapshot]:
-        # Disconnect is the reviewed TUI face of the same unsubscribe transaction as
-        # `aart-cli source remove`. The complete reviewed identity prevents an alias repointed after
-        # Review from deleting a different managed snapshot.
+        # Disconnect is the reviewed TUI face of the same unsubscribe transaction as `consume
+        # registry remove` and `maintain upstream remove`. The complete reviewed identity prevents
+        # an alias repointed after Review from deleting a different managed snapshot.
         from .commands.source import remove_configured_source
 
         removed = remove_configured_source(
@@ -1077,6 +1087,8 @@ def _canonical_consumer_actions(
                 "source",
                 project=project_root,
                 user_home=home,
+                # One port serves Registries and the Maintainer's Upstream repositories alike.
+                source_family="registry" if source.is_registry else "upstream",
                 source_action="remove",
                 source_alias=source.alias.value,
             ),
@@ -1097,6 +1109,7 @@ def _canonical_consumer_actions(
                 "source",
                 project=project_root,
                 user_home=home,
+                source_family="upstream",
                 source_action="add",
                 source_alias=draft.alias,
                 source_kind=draft.kind,
@@ -1294,7 +1307,7 @@ def _canonical_installation_host(
 
     Its profiles are `_canonical_marketplace_target`'s measured set, so they are marked as what
     this build has rather than what anybody typed. That is the whole difference between the shell
-    and the command here: `aart-cli marketplace install` refuses without `--profile`, so a harness that
+    and the command here: `aart-cli consume install` refuses without `--profile`, so a harness that
     cannot host the artifact is a mistake in the request; the shell asked for no harness at all, so
     a measured one that cannot host this artifact at this scope is simply not in its plan.
     """
@@ -1342,6 +1355,8 @@ def _render_consumer_startup_failure(failure: DomainErr) -> int:
         print(f"{diagnostic.severity.value} [{diagnostic.code.value}]: {diagnostic.message}")
         for remediation in diagnostic.remediation:
             print(f"  fix: {remediation}")
+    # A state another version wrote, or one broken by hand, is never a dead end (§175.4).
+    print("To start clean and keep this state in a backup: aart-cli reset")
     return 2
 
 
@@ -1418,7 +1433,7 @@ def run(
     if source_dir is not None or repo is not None:
         print(
             "error: direct catalog directories and repository aliases are no longer supported; "
-            "add a canonical registry in Sources instead."
+            "add an approved Registry in Registries instead."
         )
         return 2
     canonical_failures = InternalFailureContext()

@@ -3,8 +3,8 @@
 ## Purpose
 
 This is the manual test for AART's **command line**. You play two roles in order: a maintainer who
-builds and publishes a Registry with `aart-cli registry ...`, then a consumer who subscribes to it and
-installs from it with `aart-cli source ...` and `aart-cli marketplace ...`.
+builds and publishes a Registry with `aart-cli maintain ...`, then a consumer who subscribes to it and
+installs from it with `aart-cli consume registry ...` and `aart-cli consume ...`.
 
 There are two routes through the same product, and this is one of them:
 
@@ -191,11 +191,11 @@ Open `make manual-test-shell-consumer`. Fresh home, empty project, nothing confi
 ## 6 — Subscribe
 
 ```sh
-python3 -m aart_cli.cli source add --alias manual-registry --kind registry-git \
+python3 -m aart_cli.cli source add --alias manual-registry --kind git \
   --location https://manual.aart.test/registry.git --ref "$REF" --default
 ```
 
-- [ ] Confirm a local path is refused for `--kind registry-git`.
+- [ ] Confirm a local path is refused for `--kind git`.
 - [ ] `source list --json`, then `source health`.
 
 Expected: `source add` validates and snapshots the exact origin before saving, so it needs no
@@ -246,13 +246,15 @@ Expected: an update names both the old and the new version before applying. Repa
 it restores what drifted and touches nothing else. Uninstall removes what the receipt recorded and
 leaves unrelated files alone.
 
-## 11 — Factory reset
+## 11 — Reset with backup
 
-- [ ] `reset` — read the exact target list, then cancel at the first confirmation.
-- [ ] Run it again and complete both confirmations (`RESET AART`, then `DELETE AART STATE`).
+- [ ] `reset` — read the exact target list, then cancel at the confirmation.
+- [ ] Run it again and type `RESET AART`; note the backup directory it prints.
+- [ ] `reset --restore <that directory>` and type `RESTORE AART`.
 
-Expected: the plan names exact AART-owned configuration/data/cache targets and nothing else.
-Cancelling or EOF changes nothing. Projects, harness files and other applications' credentials stay
+Expected: the plan names exact AART-owned configuration/data/cache targets and nothing else. The
+reset leaves aart-cli empty and the backup holds every target; the restore brings them back and
+keeps the emptied state in a new backup. Cancelling or EOF changes nothing. Projects, harness files and other applications' credentials stay
 untouched. Remember this reset acts on the **lab** home, not yours.
 
 Checkpoint for Act II:

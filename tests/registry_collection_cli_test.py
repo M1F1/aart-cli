@@ -87,6 +87,7 @@ class RegistryCollectionCliTest(unittest.TestCase):
         _git(self.author, "commit", "-qm", "v1")
         _git(self.registry, "init", "-q", "-b", "main")
         code, said = _cli(
+            "maintain",
             "registry",
             "init",
             "--source",
@@ -107,18 +108,25 @@ class RegistryCollectionCliTest(unittest.TestCase):
         )
 
     def _scan(self) -> dict:
-        code, said = _cli("registry", "scan", *self.common, "--json")
+        code, said = _cli("maintain", "upstream", "scan", *self.common, "--json")
         self.assertEqual(code, 0, said)
         return json.loads(said)
 
     def _promote_member(self, *flags: str) -> tuple[int, str]:
         (member,) = self._scan()["candidates"]
         return _cli(
-            "registry", "promote", *self.common, "--candidate", member["candidate_id"], *flags
+            "maintain",
+            "candidate",
+            "promote",
+            *self.common,
+            "--candidate",
+            member["candidate_id"],
+            *flags,
         )
 
     def _collection(self, *flags: str, summary: str | None = "Approved data engineering tools."):
         return _cli(
+            "maintain",
             "registry",
             "collection",
             "--source",
@@ -178,6 +186,7 @@ class RegistryCollectionCliTest(unittest.TestCase):
         self.assertEqual(self._promote_member("--yes")[0], 0)
 
         code, said = _cli(
+            "maintain",
             "registry",
             "collection",
             "--source",

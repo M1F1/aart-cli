@@ -1,4 +1,4 @@
-"""`aart-cli registry push` moves the reviewed commit, and never to the default branch (`D-228`).
+"""`aart-cli maintain registry push` moves the reviewed commit, and never to the default branch (`D-228`).
 
 164.7 stopped ending the maintainer's work at the local commit. The push is an action inside AART,
 and the boundary it keeps is the branch: reviewed bytes go somewhere people can look at them, and
@@ -40,6 +40,7 @@ def _registry() -> Iterator[tuple[pathlib.Path, pathlib.Path, str]]:
         _git(root, "config", "user.name", "AART Test")
         _git(root, "config", "user.email", "aart@example.invalid")
         initialized = _run(
+            "maintain",
             "registry",
             "init",
             "--source",
@@ -52,7 +53,7 @@ def _registry() -> Iterator[tuple[pathlib.Path, pathlib.Path, str]]:
         )
         if initialized != 0:
             raise RuntimeError("canonical Registry fixture did not initialize")
-        published = _run("registry", "publish", "--source", str(root), "--yes")
+        published = _run("maintain", "registry", "publish", "--source", str(root), "--yes")
         if published != 0:
             raise RuntimeError("canonical Registry fixture did not publish")
         _git(root, "remote", "add", "origin", str(remote))
@@ -75,7 +76,15 @@ class RegistryPushCliTest(unittest.TestCase):
     def test_push_is_one_of_the_registry_actions(self) -> None:
         parser = cli.build_parser()
         parsed = parser.parse_args(
-            ("registry", "push", "--source", "/tmp/registry", "--branch", "registry-update")
+            (
+                "maintain",
+                "registry",
+                "push",
+                "--source",
+                "/tmp/registry",
+                "--branch",
+                "registry-update",
+            )
         )
         self.assertEqual("push", parsed.registry_action)
         self.assertEqual("registry-update", parsed.publication_branch)
@@ -83,7 +92,9 @@ class RegistryPushCliTest(unittest.TestCase):
 
     def test_it_pushes_the_committed_revision_to_the_named_branch(self) -> None:
         with _registry() as (root, remote, revision):
-            code = _run("registry", "push", "--source", str(root), "--branch", "registry-update")
+            code = _run(
+                "maintain", "registry", "push", "--source", str(root), "--branch", "registry-update"
+            )
 
             self.assertEqual(0, code)
             self.assertEqual(revision, _git(remote, "rev-parse", "refs/heads/registry-update"))
@@ -91,7 +102,9 @@ class RegistryPushCliTest(unittest.TestCase):
     def test_it_leaves_the_default_branch_where_it_was(self) -> None:
         with _registry() as (root, remote, revision):
             before = _git(remote, "rev-parse", "refs/heads/main")
-            _run("registry", "push", "--source", str(root), "--branch", "registry-update")
+            _run(
+                "maintain", "registry", "push", "--source", str(root), "--branch", "registry-update"
+            )
 
             self.assertEqual(before, _git(remote, "rev-parse", "refs/heads/main"))
             self.assertNotEqual(before, revision)
@@ -99,7 +112,7 @@ class RegistryPushCliTest(unittest.TestCase):
     def test_pushing_to_the_default_branch_is_refused_by_the_command(self) -> None:
         with _registry() as (root, remote, revision):
             before = _git(remote, "rev-parse", "refs/heads/main")
-            code = _run("registry", "push", "--source", str(root), "--branch", "main")
+            code = _run("maintain", "registry", "push", "--source", str(root), "--branch", "main")
 
             self.assertNotEqual(0, code)
             self.assertEqual(before, _git(remote, "rev-parse", "refs/heads/main"))
@@ -109,7 +122,15 @@ class RegistryPushCliTest(unittest.TestCase):
         with _registry() as (root, remote, revision):
             _git(root, "switch", "-c", "reviewed-change")
 
-            code = _run("registry", "push", "--source", str(root), "--branch", "redirected-change")
+            code = _run(
+                "maintain",
+                "registry",
+                "push",
+                "--source",
+                str(root),
+                "--branch",
+                "redirected-change",
+            )
 
             self.assertNotEqual(0, code)
             self.assertNotEqual(
@@ -131,7 +152,9 @@ class RegistryPushCliTest(unittest.TestCase):
         with _registry() as (root, remote, _revision):
             (root / "README.md").write_text("changed after review\n", encoding="utf-8")
 
-            code = _run("registry", "push", "--source", str(root), "--branch", "registry-update")
+            code = _run(
+                "maintain", "registry", "push", "--source", str(root), "--branch", "registry-update"
+            )
 
             self.assertNotEqual(0, code)
             self.assertNotEqual(
@@ -155,7 +178,16 @@ class RegistryPushCliTest(unittest.TestCase):
             _git(root, "init", "-b", "main")
 
             self.assertNotEqual(
-                0, _run("registry", "push", "--source", str(root), "--branch", "registry-update")
+                0,
+                _run(
+                    "maintain",
+                    "registry",
+                    "push",
+                    "--source",
+                    str(root),
+                    "--branch",
+                    "registry-update",
+                ),
             )
 
 
@@ -170,7 +202,16 @@ class RegistryPushMovesNothingItDoesNotOwnTest(unittest.TestCase):
     def test_an_existing_review_branch_is_advanced_by_an_ordinary_push(self) -> None:
         with _registry() as (root, remote, _revision):
             self.assertEqual(
-                0, _run("registry", "push", "--source", str(root), "--branch", "registry-update")
+                0,
+                _run(
+                    "maintain",
+                    "registry",
+                    "push",
+                    "--source",
+                    str(root),
+                    "--branch",
+                    "registry-update",
+                ),
             )
             readme = root / "README.md"
             readme.write_text(
@@ -182,14 +223,32 @@ class RegistryPushMovesNothingItDoesNotOwnTest(unittest.TestCase):
             second = _git(root, "rev-parse", "HEAD")
 
             self.assertEqual(
-                0, _run("registry", "push", "--source", str(root), "--branch", "registry-update")
+                0,
+                _run(
+                    "maintain",
+                    "registry",
+                    "push",
+                    "--source",
+                    str(root),
+                    "--branch",
+                    "registry-update",
+                ),
             )
             self.assertEqual(second, _git(remote, "rev-parse", "refs/heads/registry-update"))
 
     def test_a_diverged_review_branch_is_refused_rather_than_forced(self) -> None:
         with _registry() as (root, remote, _revision):
             self.assertEqual(
-                0, _run("registry", "push", "--source", str(root), "--branch", "registry-update")
+                0,
+                _run(
+                    "maintain",
+                    "registry",
+                    "push",
+                    "--source",
+                    str(root),
+                    "--branch",
+                    "registry-update",
+                ),
             )
             published = _git(remote, "rev-parse", "refs/heads/registry-update")
             _git(root, "reset", "--hard", "HEAD~1")
@@ -201,7 +260,9 @@ class RegistryPushMovesNothingItDoesNotOwnTest(unittest.TestCase):
             _git(root, "add", "README.md")
             _git(root, "commit", "-m", "Promote other@1.0.0")
 
-            code = _run("registry", "push", "--source", str(root), "--branch", "registry-update")
+            code = _run(
+                "maintain", "registry", "push", "--source", str(root), "--branch", "registry-update"
+            )
 
             self.assertNotEqual(0, code)
             self.assertEqual(published, _git(remote, "rev-parse", "refs/heads/registry-update"))

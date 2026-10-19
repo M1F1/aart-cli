@@ -30,15 +30,13 @@ def _artifact_tree(env) -> pathlib.Path:
 
 class ConfiguredUninstallCommandTest(unittest.TestCase):
     def _installed(self, env) -> None:
-        code, payload = env.run(
-            "marketplace", "install", COORDINATE, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
         self.assertTrue(_delivered(env).exists())
 
     def test_uninstall_before_any_canonical_install_leaves_it_to_the_legacy_path(self) -> None:
         with _environment() as env:
-            code, payload = env.run("marketplace", "uninstall", COORDINATE, "--profile", "claude")
+            code, payload = env.run("consume", "uninstall", COORDINATE, "--profile", "claude")
 
             self.assertNotEqual(code, 0, payload)
 
@@ -46,7 +44,7 @@ class ConfiguredUninstallCommandTest(unittest.TestCase):
         with _environment() as env:
             self._installed(env)
 
-            code, payload = env.run("marketplace", "uninstall", COORDINATE, "--profile", "claude")
+            code, payload = env.run("consume", "uninstall", COORDINATE, "--profile", "claude")
 
             self.assertEqual(code, 0, payload)
             self.assertFalse(payload["finalized"])
@@ -62,10 +60,10 @@ class ConfiguredUninstallCommandTest(unittest.TestCase):
             self._installed(env)
             neighbour = _delivered(env).parent.parent / "somebody-elses-skill"
             neighbour.mkdir()
-            _, review = env.run("marketplace", "uninstall", COORDINATE, "--profile", "claude")
+            _, review = env.run("consume", "uninstall", COORDINATE, "--profile", "claude")
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "uninstall",
                 COORDINATE,
                 "--profile",
@@ -84,7 +82,7 @@ class ConfiguredUninstallCommandTest(unittest.TestCase):
                 "removing one Skill took the directory the harness reads all of them from",
             )
 
-            status_code, status = env.run("marketplace", "status", "--profile", "claude")
+            status_code, status = env.run("consume", "status", "--profile", "claude")
             self.assertEqual(status_code, 0, status)
             self.assertEqual(status["items"], [])
 
@@ -93,7 +91,7 @@ class ConfiguredUninstallCommandTest(unittest.TestCase):
             self._installed(env)
 
             code, payload = env.run(
-                "marketplace",
+                "consume",
                 "uninstall",
                 COORDINATE,
                 "--profile",
@@ -115,7 +113,7 @@ class ConfiguredUninstallCommandTest(unittest.TestCase):
             env.disable_source()
 
             code, payload = env.run(
-                "marketplace", "uninstall", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "uninstall", COORDINATE, "--profile", "claude", "--yes"
             )
 
             self.assertEqual(code, 0, payload)
@@ -124,13 +122,11 @@ class ConfiguredUninstallCommandTest(unittest.TestCase):
     def test_uninstalling_something_already_gone_converges_instead_of_failing(self) -> None:
         with _environment() as env:
             self._installed(env)
-            first, _ = env.run(
-                "marketplace", "uninstall", COORDINATE, "--profile", "claude", "--yes"
-            )
+            first, _ = env.run("consume", "uninstall", COORDINATE, "--profile", "claude", "--yes")
             self.assertEqual(first, 0)
 
             code, payload = env.run(
-                "marketplace", "uninstall", COORDINATE, "--profile", "claude", "--yes"
+                "consume", "uninstall", COORDINATE, "--profile", "claude", "--yes"
             )
 
             # The record is gone, so this is no longer a canonical installation to remove. What

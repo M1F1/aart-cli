@@ -4,7 +4,7 @@ The owner reversed D-228 for the terminal surface. Screen 45 reviews and writes 
 transaction and then says what happens next outside AART: push the Registry branch, get it
 reviewed and merged where the Registry requires that, update the local checkout, and run Registry
 Sync to observe the approved state. No key on any state of screen 45 can prepare or execute a push,
-and the supported `aart-cli registry push` CLI contract is untouched.
+and the supported `aart-cli maintain registry push` CLI contract is untouched.
 """
 
 from __future__ import annotations
@@ -116,8 +116,8 @@ class RegistryCommitScreenExplainsManualPublicationTest(unittest.TestCase):
         for claim in ("Published", "published", "press p", "Enter pushes", "Publication"):
             with self.subTest(claim=claim):
                 self.assertNotIn(claim, drawn)
-        # Source Sync reads authoring repositories; it is not how an approved Registry is observed.
-        self.assertNotIn("Source Sync", drawn)
+        # Upstream sync reads authoring repositories; it is not how an approved Registry is observed.
+        self.assertNotIn("Upstream sync", drawn)
 
     def test_the_commit_view_and_renderer_carry_no_publication_target(self) -> None:
         fields = {field.name for field in dataclasses.fields(MaintainerRegistryCommitView)}

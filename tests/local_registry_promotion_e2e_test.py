@@ -1,11 +1,11 @@
 """D-388: a Candidate is promoted into a local Registry checkout from the Maintainer screens.
 
-The operator could not update a Registry connected as `registry-local`: Source Sync found the
+The operator could not update a Registry connected as `registry-local`: Upstream sync found the
 bumped version and every review screen drew, and then Registry Diff refused with "target registry
 company is not configured and enabled", because promotion looked for its target among `registry-git`
 subscriptions only (B-180). The CLI route (`registry scan` / `registry promote`) already worked, so
 this walks the TUI one on a real machine: a Registry initialized and published with Git, connected by
-its local path, an authoring Source beside it with a version bump, and the screens from Source Sync
+its local path, an authoring Source beside it with a version bump, and the screens from Upstream sync
 to the commit.
 """
 
@@ -114,6 +114,7 @@ class LocalRegistryPromotionTest(unittest.TestCase):
                 common = ("--source", str(registry), "--checkout", str(author), *_SOURCE)
                 steps = (
                     (
+                        "maintain",
                         "registry",
                         "init",
                         "--source",
@@ -130,19 +131,28 @@ class LocalRegistryPromotionTest(unittest.TestCase):
                     self.assertEqual(code, 0, said)
                 _git(registry, "add", "-A")
                 _git(registry, "commit", "-qm", "init")
-                code, scan = _cli("registry", "scan", *common, "--json")
+                code, scan = _cli("maintain", "upstream", "scan", *common, "--json")
                 self.assertEqual(code, 0, scan)
                 candidate = json.loads(scan)["candidates"][0]["candidate_id"]
                 for step in (
-                    ("registry", "promote", *common, "--candidate", candidate, "--yes"),
-                    ("registry", "publish", "--source", str(registry), "--yes"),
                     (
-                        "source",
+                        "maintain",
+                        "candidate",
+                        "promote",
+                        *common,
+                        "--candidate",
+                        candidate,
+                        "--yes",
+                    ),
+                    ("maintain", "registry", "publish", "--source", str(registry), "--yes"),
+                    (
+                        "consume",
+                        "registry",
                         "add",
                         "--alias",
                         "company",
                         "--kind",
-                        "registry-local",
+                        "local",
                         "--location",
                         str(registry),
                         "--ref",
@@ -150,12 +160,13 @@ class LocalRegistryPromotionTest(unittest.TestCase):
                         "--default" if default else "--no-default",
                     ),
                     (
-                        "source",
+                        "maintain",
+                        "upstream",
                         "add",
                         "--alias",
                         "authors",
                         "--kind",
-                        "source-local",
+                        "local",
                         "--location",
                         str(author),
                     ),
@@ -180,7 +191,7 @@ class LocalRegistryPromotionTest(unittest.TestCase):
         terminal = _Terminal(*codes)
         state = opening_state(handler.settings)
         if draft is not None:
-            # The Add Source form, filled in, with the cursor on its submit row.
+            # The Add upstream form, filled in, with the cursor on its submit row.
             state = ConsumerUiState(
                 ConsumerSession(MaintainerScreen.SOURCE_ADD),
                 settings=handler.settings,
@@ -204,9 +215,9 @@ class LocalRegistryPromotionTest(unittest.TestCase):
             before = _git(registry, "rev-parse", "HEAD")
             # Settings → Registry Maintainer Mode on.
             self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 4, ENTER, ESCAPE)
-            # Registry Maintainer Dashboard → Sources → the authoring Source → Source Sync, confirmed.
+            # Registry Maintainer Dashboard → Sources → the authoring Source → Upstream sync, confirmed.
             synced = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
-            self.assertTrue(synced.screen_containing("/ Source Sync Result"), synced.last)
+            self.assertTrue(synced.screen_containing("/ Upstream sync result"), synced.last)
             # Candidates → the changed Candidate → its review walk, through to the commit.
             walked = self._shell(
                 home,
@@ -230,14 +241,14 @@ class LocalRegistryPromotionTest(unittest.TestCase):
 
     def test_source_sync_targets_the_only_registry_when_none_is_the_default(self) -> None:
         # D-390: disconnecting the default Registry left the other one connected but no default,
-        # and Source Sync refused with no way to name one. One enabled Registry is unambiguous.
+        # and Upstream sync refused with no way to name one. One enabled Registry is unambiguous.
         with self._machine(default=False) as (home, registry, _author):
             self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 4, ENTER, ESCAPE)
             synced = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
 
             drawn = "\n".join("\n".join(frame) for frame in synced.frames)
             self.assertNotIn("explicit default target registry", drawn)
-            self.assertTrue(synced.screen_containing("/ Source Sync Result"), synced.last)
+            self.assertTrue(synced.screen_containing("/ Upstream sync result"), synced.last)
             before = _git(registry, "rev-parse", "HEAD")
             walked = self._shell(
                 home, registry, *(DOWN,) * 8, ENTER, DOWN, ENTER, ENTER, ord("d"), *(ENTER,) * 9
@@ -245,20 +256,22 @@ class LocalRegistryPromotionTest(unittest.TestCase):
             self.assertNotEqual(_git(registry, "rev-parse", "HEAD"), before, walked.last)
 
     def test_a_source_is_removed_from_maintainer_sources_and_added_again(self) -> None:
-        # D-391: a Source entered wrong had no way out of the TUI; `aart-cli source remove` did.
+        # D-391: a Source entered wrong had no way out of the TUI; the CLI's remove did.
         with self._machine() as (home, registry, author):
             self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 4, ENTER, ESCAPE)
             synced = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
-            self.assertTrue(synced.screen_containing("/ Source Sync Result"), synced.last)
+            self.assertTrue(synced.screen_containing("/ Upstream sync result"), synced.last)
 
             removed = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("d"), ENTER)
-            review = removed.screen_containing("remove Source review")
-            self.assertIn("[d] Remove", removed.screen_containing("/ Sources"))
-            self.assertIn("Source: authors", review)
+            review = removed.screen_containing("remove upstream review")
+            self.assertIn("[d] Remove", removed.screen_containing("/ Upstream repositories"))
+            self.assertIn("Upstream: authors", review)
             self.assertIn("its Candidates", review)
-            code, listed = _cli("source", "list")
+            code, listed = _cli("maintain", "upstream", "list")
             self.assertEqual(code, 0, listed)
             self.assertNotIn("authors", listed)
+            code, listed = _cli("consume", "registry", "list")
+            self.assertEqual(code, 0, listed)
             self.assertIn("company", listed)
 
             added = self._shell(
@@ -268,7 +281,7 @@ class LocalRegistryPromotionTest(unittest.TestCase):
                 ENTER,
                 draft=SourceDraft("authors", "source-local", str(author), ""),
             )
-            self.assertTrue(added.screen_containing("source authors added"), added.last)
+            self.assertTrue(added.screen_containing("upstream authors added"), added.last)
             before = _git(registry, "rev-parse", "HEAD")
             self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
             walked = self._shell(

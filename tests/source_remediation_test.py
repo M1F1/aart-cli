@@ -25,7 +25,6 @@ import io
 import json
 import os
 import re
-import shutil
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -51,9 +50,11 @@ from aart_cli.tui_sources import (
 )
 from tests.configuration_application_test import _FakePorts as _ConfigurationPorts
 from tests.configuration_application_test import _paths
-from tests.marketplace_lifecycle_e2e_test import _FIXTURE, _environment
+from tests.marketplace_lifecycle_e2e_test import _environment
+from tests.reference_registry import REFERENCE_CONTENT, republish
 from tests.registry_maintenance_fixtures import approved_registry_snapshot, write_snapshot
 from tests.source_sync_application_test import _candidate, _current, _FakePorts, _request
+from tests.source_sync_command_e2e_test import _environment_over_a_writable_source
 
 _COMMAND = re.compile(r"`(aart-cli [^`]+)`")
 _BACKTICKED = re.compile(r"`(aart-cli\s[^`]+)`")
@@ -156,7 +157,7 @@ def _mentions(text: str) -> tuple[str, ...]:
 def _without_sentence_stop(mention: str) -> str:
     """Drop a full stop that ends the sentence, keep one that is an argument.
 
-    `aart-cli registry audit --source .` ends in a period that names the current directory, and
+    `aart-cli maintain registry audit --source .` ends in a period that names the current directory, and
     stripping it turned a correct command into `--source: expected one argument` -- the guard
     reporting a defect it had introduced itself. A period is punctuation only when something other
     than a space precedes it; `--source .` has a space, and no shell would read that as the end of
@@ -174,7 +175,7 @@ def _visible_strings(tree: ast.AST):
     A docstring explains the code to whoever maintains it; this file's own explanation of why
     ``aart-cli setup rollback`` had to go would otherwise be a finding about itself.  An f-string is
     rendered whole, with each interpolation replaced by ``PLACEHOLDER`` — reading only its constant
-    pieces would report ``aart-cli source sync --alias`` as a command missing its value.
+    pieces would report ``aart-cli consume registry sync --alias`` as a command missing its value.
     """
 
     documentation = {
@@ -302,7 +303,7 @@ class SourceRemediationNamesRealCommandsTest(unittest.TestCase):
         refused = sync_source(_request(source), ports.ports())
 
         commands = self.assert_runnable(_refusal(refused))
-        self.assertIn("aart-cli source resubscribe --alias registry", commands)
+        self.assertIn("aart-cli consume registry resubscribe --alias registry", commands)
 
     def test_an_already_configured_alias_points_at_commands_that_exist(self) -> None:
         held = _registry("registry", "https://git.example.test/team/registry.git")
@@ -331,7 +332,9 @@ class SourceRemediationNamesRealCommandsTest(unittest.TestCase):
         refused = plan_source_removal(_view(held), SourceAlias("typo"))
 
         commands = self.assert_runnable(_refusal(refused))
-        self.assertTrue(any(command.startswith("aart-cli source list") for command in commands))
+        self.assertTrue(
+            any(command.startswith("aart-cli consume registry list") for command in commands)
+        )
 
     def test_a_content_operation_without_any_source_points_at_the_command_that_adds_one(
         self,
@@ -344,7 +347,7 @@ class SourceRemediationNamesRealCommandsTest(unittest.TestCase):
         )
 
         commands = self.assert_runnable(_refusal(refused))
-        self.assertIn("aart-cli source add --help", commands)
+        self.assertIn("aart-cli consume registry add --help", commands)
 
     def test_the_guard_rejects_a_remediation_naming_a_command_that_does_not_exist(self) -> None:
         """The guard is only worth having if it fails on the thing it claims to catch."""
@@ -364,6 +367,24 @@ class EveryVisibleCommandMentionTest(unittest.TestCase):
         )
 
         self.assertEqual(dead_ends, (), "\n".join(("",) + dead_ends))
+
+    def test_every_hint_built_on_a_connection_family_is_a_command(self) -> None:
+        """The prefix the scan above cannot see, because hints interpolate it (§175.2).
+
+        A Registry is managed by the consumer family and an Upstream repository by the maintainer
+        family; a hint that named the other one would send the reader to a refusal.
+        """
+
+        for kind in SourceKind:
+            family = (
+                "consume registry"
+                if kind in {SourceKind.REGISTRY_GIT, SourceKind.REGISTRY_LOCAL}
+                else "maintain upstream"
+            )
+            self.assertEqual(kind.command, f"aart-cli {family}")
+            for suffix in ("sync --alias x", "resubscribe --alias x", "remove --alias x", "list"):
+                with self.subTest(kind=kind.value, suffix=suffix):
+                    self.assertIsNone(_parse_failure(f"{kind.command} {suffix}"))
 
     def test_the_scan_reaches_strings_that_are_not_diagnostics(self) -> None:
         """A guard that only saw refusals would have missed every dead end v2 actually found.
@@ -479,7 +500,7 @@ class RegistryRefusalRemediationTest(unittest.TestCase):
                 contextlib.redirect_stdout(stdout),
                 contextlib.redirect_stderr(io.StringIO()),
             ):
-                cli.main(["registry", "audit", "--source", str(workspace)])
+                cli.main(["maintain", "registry", "audit", "--source", str(workspace)])
 
             printed = stdout.getvalue()
             findings = [
@@ -502,7 +523,7 @@ class RegistryRefusalRemediationTest(unittest.TestCase):
                 contextlib.redirect_stdout(stdout),
                 contextlib.redirect_stderr(io.StringIO()),
             ):
-                code = cli.main(["registry", "test", "--source", str(env.project)])
+                code = cli.main(["maintain", "registry", "test", "--source", str(env.project)])
 
             self.assertEqual(code, 1, stdout.getvalue())
             remediation = _remediation_in_text(stdout.getvalue())
@@ -550,7 +571,7 @@ class RendererParityTest(unittest.TestCase):
         with _environment() as env:
             text, envelope = self._both_renderers(
                 env,
-                "marketplace",
+                "consume",
                 "install",
                 "unknown/skill/nothing",
                 "--profile",
@@ -564,7 +585,9 @@ class RendererParityTest(unittest.TestCase):
 
     def test_a_single_source_operation_renders_the_same_remediation_in_both(self) -> None:
         with _environment() as env:
-            text, envelope = self._both_renderers(env, "source", "sync", "--alias", "absent")
+            text, envelope = self._both_renderers(
+                env, "maintain", "upstream", "sync", "--alias", "absent"
+            )
 
             self.assertTrue(text)
             self.assertEqual(sorted(text), sorted(envelope))
@@ -572,26 +595,19 @@ class RendererParityTest(unittest.TestCase):
     def test_the_per_source_sync_renderer_renders_the_same_remediation_in_both(self) -> None:
         """The renderer this package repaired, on the refusal `2.1.0` exists to deliver."""
 
-        with _environment() as staging:
-            source = staging.root / "renamed-source"
-            shutil.copytree(_FIXTURE, source)
+        with _environment_over_a_writable_source() as (env, location):
+            republish(location, *REFERENCE_CONTENT, declared_id="renamed-reference-registry")
 
-            with _environment(source) as env:
-                marker = source / "aart-cli-source.json"
-                document = json.loads(marker.read_text(encoding="utf-8"))
-                document["source_id"] = "renamed-reference-source"
-                marker.write_text(json.dumps(document, indent=2), encoding="utf-8")
+            text, envelope = self._both_renderers(env, "consume", "registry", "sync")
 
-                text, envelope = self._both_renderers(env, "source", "sync")
-
-                self.assertEqual(len(text), 1, text)
-                self.assertIn("aart-cli source resubscribe --alias reference", text[0])
-                self.assertEqual(sorted(text), sorted(envelope))
+            self.assertEqual(len(text), 1, text)
+            self.assertIn("aart-cli consume registry resubscribe --alias reference", text[0])
+            self.assertEqual(sorted(text), sorted(envelope))
 
     def test_registry_renders_the_same_remediation_in_both(self) -> None:
         with _environment() as env:
             text, envelope = self._both_renderers(
-                env, "registry", "validate", "--source", str(env.project)
+                env, "maintain", "registry", "validate", "--source", str(env.project)
             )
 
             self.assertTrue(text, "a refused registry validate must print a next step")

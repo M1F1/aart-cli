@@ -1,7 +1,7 @@
 """The difference between the harnesses somebody named and the harnesses this machine happens to
 have.
 
-`aart-cli marketplace install` never guesses: it refuses without `--profile`, so every profile it
+`aart-cli consume install` never guesses: it refuses without `--profile`, so every profile it
 places into was typed by the operator, and a profile that cannot be placed is a refusal -- they
 asked for something that will not work.
 
@@ -169,7 +169,7 @@ class ShellHostTest(unittest.TestCase):
         self.assertEqual(tuple(sorted(measured_harnesses())), self._host().profiles)
 
     def test_and_says_that_nobody_asked_for_them(self) -> None:
-        """`aart-cli marketplace install` refuses without `--profile`; the shell names none, so a
+        """`aart-cli consume install` refuses without `--profile`; the shell names none, so a
         measured harness that cannot host one artifact must not refuse the whole install."""
 
         self.assertFalse(self._host().profiles_requested)

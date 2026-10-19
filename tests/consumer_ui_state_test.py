@@ -16,6 +16,7 @@ from aart_cli.application.consumer_ui import (
 from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
+    ConsumerSettings,
     PresentationProfile,
 )
 
@@ -126,7 +127,9 @@ class ConsumerUiStateTest(unittest.TestCase):
 
         for screen in ConsumerScreen:
             with self.subTest(screen=screen.value):
-                before = ConsumerUiState(ConsumerSession(screen))
+                before = ConsumerUiState(
+                    ConsumerSession(screen), settings=ConsumerSettings(author_mode=True)
+                )
 
                 after, commands = reduce_consumer_ui(
                     before, ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_PROFILE)

@@ -39,7 +39,7 @@ _LEGACY_V01_FIELDS = frozenset({"repo", "installed"})
 # again under the current protocol.
 _LEGACY_MIGRATION_REMEDIATION = (
     "Remove the retired state file and reinstall: this revision is not converted at runtime",
-    "Reinstall the artifacts you need with: aart-cli marketplace install <coordinate> --profile <name>",
+    "Reinstall the artifacts you need with: aart-cli consume install <coordinate> --profile <name>",
 )
 
 

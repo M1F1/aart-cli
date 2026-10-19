@@ -30,9 +30,7 @@ SECOND_AUTHORED_SKILL: tuple[tuple[str, str], ...] = (
 
 class DoctorCommandE2ETest(unittest.TestCase):
     def _install(self, env, coordinate: str) -> None:
-        code, payload = env.run(
-            "marketplace", "install", coordinate, "--profile", "claude", "--yes"
-        )
+        code, payload = env.run("consume", "install", coordinate, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
 
     def _two_installations(self, env) -> None:
@@ -119,7 +117,7 @@ class DoctorCommandE2ETest(unittest.TestCase):
             self._install(env, COORDINATE)
             env.publish(SECOND_AUTHORED_SKILL)
             code, installed = env.run(
-                "marketplace",
+                "consume",
                 "install",
                 SECOND_COORDINATE,
                 "--profile",

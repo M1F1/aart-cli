@@ -2,22 +2,22 @@
 
 Registry maintenance plans changes over inert snapshots. Filesystem access, Git acquisition,
 credentials and publication effects remain behind explicit ports. Authoring takes place in a
-separate Source checkout; the Registry stores reviewed canonical versions.
+separate upstream checkout; the Registry stores reviewed canonical versions.
 
 ## Candidate review and promotion
 
-Source scan compiles explicit author manifests into Candidates without changing the Registry.
+Upstream scan compiles explicit author manifests into Candidates without changing the Registry.
 Promotion checks the selected Candidate, source revision, validation evidence and policy against
 the reviewed state. The resulting plan writes:
 
-- a versioned canonical package under `artifacts/<kind>/<name>/<version>/` for vendored mode,
-  or a pinned document under `references/<kind>/<name>/<version>.json` for reference mode;
+- a versioned canonical package under `artifacts/<kind>/<name>/<version>/` for self-contained mode,
+  or a pinned document under `references/<kind>/<name>/<version>.json` for pinned-reference mode;
 - the approved record at `registry/versions/<kind>/<name>/<version>.json`;
 - the Candidate audit record under `registry/promotions/`;
 - derived `registry/index.json` and `registry/snapshot.json` catalogs.
 
 Existing approved versions remain represented. An already approved coordinate/version cannot be
-replaced with different package bytes. Source movement is discovered and reviewed explicitly; it
+replaced with different package bytes. Upstream movement is discovered and reviewed explicitly; it
 does not automatically change approved versions or installed artifacts.
 
 ## Build and publication

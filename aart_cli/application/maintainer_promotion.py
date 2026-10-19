@@ -108,7 +108,7 @@ def _error(message: str, *remediation: str) -> Err:
 class CandidatePromotionRecord(Enum):
     """What the Registry trees say about one Candidate, independent of its stored state.
 
-    Candidate state only becomes ``promoted`` when Source Sync reconciles against the synchronized
+    Candidate state only becomes ``promoted`` when Upstream sync reconciles against the synchronized
     approved Registry, and a local commit is deliberately not a sync (D-249). So whether a Candidate
     was already promoted is read from the trees each time rather than written beside its history,
     which is what lets a restart say exactly what the screen said before it (CP-23 task 09, D-259).
@@ -164,7 +164,7 @@ def candidate_promotion_record_refusal(
     if record is CandidatePromotionRecord.PROMOTED:
         return (
             f"this Candidate is already promoted in the synchronized {registry} Registry; "
-            "run Source Sync to record it"
+            "run Upstream sync to record it"
         )
     return None
 

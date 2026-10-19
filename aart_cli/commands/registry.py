@@ -66,6 +66,7 @@ from aart_cli.io.registry_workspace import (
     FilesystemRegistryWorkspace,
     read_registry_workspace,
 )
+from aart_cli.io.working_tree import read_working_tree
 from aart_cli.model import Request
 from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.protocol.hashing import parse_sha256
@@ -88,7 +89,6 @@ from aart_cli.registry_maintenance.promoted import (
     legacy_registry_paths,
 )
 from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES, EXECUTABLE_VERSION
-from aart_cli.sources.local import read_local_snapshot
 from aart_cli.sources.model import LocalSnapshotRequest, SnapshotLimits, source_instance_id
 
 _VERSION = EXECUTABLE_VERSION
@@ -99,20 +99,20 @@ REGISTRY_COMMAND_INVALID = DiagnosticCode("registry-command-invalid")
 # What an operator does next after this module refuses. The planning module carries the
 # same idea for the refusals it raises; these are the ones raised before planning is reached, where
 # the problem is the invocation rather than the workspace.
-_READ_THE_ACTIONS = ("`aart-cli registry --help` lists the actions this command accepts",)
+_READ_THE_ACTIONS = ("`aart-cli maintain registry --help` lists the actions this command accepts",)
 _NAME_THE_ARTIFACT = (
     "name exactly one artifact kind and name, in the form the action's own `--help` shows",
 )
 _INITIALIZE = (
     "point `--source` at a registry checkout, or create one with "
-    "`aart-cli registry init --source-id SLUG --display-name NAME --yes`",
+    "`aart-cli maintain registry init --source-id SLUG --display-name NAME --yes`",
 )
 _STATE_THE_RELEASE = (
-    "state the release to test against: `aart-cli registry test --latest-version VERSION`",
+    "state the release to test against: `aart-cli maintain registry test --latest-version VERSION`",
 )
 _MINIMUM_VERSION = (
     "record a minimum AART version in `aart-cli-registry.json` — `requires_aart.min_inclusive` — then "
-    "`aart-cli registry test`",
+    "`aart-cli maintain registry test`",
 )
 
 
@@ -460,9 +460,9 @@ def _run_scan(request: Request) -> int:
             request,
             "scan",
             _error(
-                "Source Scan requires one clean pinned Git checkout at HEAD",
+                "Upstream scan requires one clean pinned Git checkout at HEAD",
                 (
-                    "commit or discard author checkout changes; `aart-cli registry scan --help` "
+                    "commit or discard author checkout changes; `aart-cli maintain upstream scan --help` "
                     "shows the explicit source boundaries",
                 ),
             ),
@@ -477,7 +477,7 @@ def _run_scan(request: Request) -> int:
             None,
             True,
         )
-        acquired = read_local_snapshot(
+        acquired = read_working_tree(
             LocalSnapshotRequest(
                 source_instance_id(configured),
                 source_alias,
@@ -546,7 +546,7 @@ def _run_scan(request: Request) -> int:
             )
         )
     else:
-        print(f"Source Scan {source_alias.value}@{pinned_revision}")
+        print(f"Upstream scan {source_alias.value}@{pinned_revision}")
         print(f"target registry: {target_registry.value}")
         print(f"{len(candidates)} candidate(s); registry mutations: 0")
         for item in candidates:
@@ -633,7 +633,7 @@ def _run_candidate_promotion(request: Request) -> int:
             None,
             True,
         )
-        acquired = read_local_snapshot(
+        acquired = read_working_tree(
             LocalSnapshotRequest(
                 source_instance_id(configured),
                 source_alias,
@@ -671,9 +671,9 @@ def _run_candidate_promotion(request: Request) -> int:
             request,
             "promote",
             _error(
-                "one or more selected Candidate IDs no longer match the pinned Source Scan",
+                "one or more selected Candidate IDs no longer match the pinned Upstream scan",
                 (
-                    "use `aart-cli registry scan --help`, run a fresh scan with explicit boundaries, "
+                    "use `aart-cli maintain upstream scan --help`, run a fresh scan with explicit boundaries, "
                     "and review the current Candidate IDs",
                 ),
             ),
@@ -701,7 +701,7 @@ def _run_candidate_promotion(request: Request) -> int:
                     f"Candidate {candidate.id} is {validation.state.value} and cannot be promoted",
                     (
                         "open the Candidate's validation in the Maintainer screens to see each "
-                        "failing check, fix the author manifest, commit it and run Source Scan again",
+                        "failing check, fix the author manifest, commit it and run Upstream scan again",
                     ),
                 ),
             )
@@ -855,7 +855,7 @@ def _run_collection(request: Request) -> int:
             "collection",
             _error(
                 "a Collection is made of artifacts this Registry approved, and it has none",
-                ("approve its members first; see `aart-cli registry promote --help`",),
+                ("approve its members first; see `aart-cli maintain candidate promote --help`",),
             ),
         )
     (target_registry,) = registries
@@ -1180,11 +1180,11 @@ def _run_publish(request: Request) -> int:
 
 
 _NAME_THE_SCAN = (
-    "name the repository to look at: `aart-cli registry adopt --source DIR --url URL --ref REF`",
+    "name the repository to look at: `aart-cli maintain upstream adopt --source DIR --url URL --ref REF`",
 )
 _NAME_THE_ADOPTED = (
     "name one adopted artifact, as `KIND/NAME@VERSION`; "
-    "`aart-cli registry adopt --source DIR --url URL --ref REF` without `--artifact` lists what a "
+    "`aart-cli maintain upstream adopt --source DIR --url URL --ref REF` without `--artifact` lists what a "
     "repository declares",
 )
 

@@ -69,7 +69,12 @@ def drive(*codes: int, state=None):
     """Drive the shell, answering the quit prompt a ticked Collection makes it ask."""
 
     terminal = FakeTerminal(*codes, ord("q"), ord("y"))
-    return run_consumer_shell(CanonicalScreenSource(screens()), terminal, state=state), terminal
+    return run_consumer_shell(
+        CanonicalScreenSource(screens()),
+        terminal,
+        state=state,
+        settings_writer=lambda _settings: None,
+    ), terminal
 
 
 class MarketplaceShellTest(unittest.TestCase):
@@ -94,10 +99,10 @@ class MarketplaceShellTest(unittest.TestCase):
         self.assertRegex(fast.last, rf"> \[ \] {COLLECTION}\s+not installed\n")
         self.assertRegex(verbose.last, r"Description\s+Everything a developer needs")
 
-    def test_enter_on_an_artifact_opens_its_details_rather_than_a_collection(self):
+    def test_enter_on_an_artifact_keeps_the_marketplace_and_its_controls(self):
         state, terminal = drive(ENTER, state=_at(ConsumerScreen.MARKETPLACE))
 
-        self.assertEqual(state.session.screen, ConsumerScreen.ARTIFACT_DETAILS)
+        self.assertEqual(state.session.screen, ConsumerScreen.MARKETPLACE)
         self.assertIn(self.keys()[0], terminal.last)
         self.assertIn("[i] Install", terminal.last)
         self.assertIn("[Space] Select", terminal.last)
