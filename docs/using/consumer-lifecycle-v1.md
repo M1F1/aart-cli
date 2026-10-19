@@ -71,9 +71,11 @@ focused offer if none is marked. Enter on a Collection still opens its member pr
 
 After Install, the TUI asks for a path. **Default** takes the harnesses, the scope and the Python
 installer from Settings and goes straight to what still needs entering, or to Ready. With no
-harness chosen in Settings, it uses every detected harness that can host the artifact; when the
-chosen ones cannot host it, the harness choice is asked after all. **Custom** asks each choice in
-turn. `consume install` names its harnesses with `--profile`, so the CLI has no path choice.
+harness chosen in Settings, it uses every detected harness that can host the artifact. Default
+installs exactly what Settings says or nothing: when a Settings harness is not detected or cannot
+host a selected artifact, the Settings scope is not offered for it, or the Settings Python
+installer cannot be used, the Install Path screen lists each of those values with the artifact and
+the reason, and moves the cursor to Custom. **Custom** asks each choice in turn. `consume install` names its harnesses with `--profile`, so the CLI has no path choice.
 
 ## MCP setup and credentials
 
