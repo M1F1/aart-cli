@@ -4778,3 +4778,27 @@ CP-32 step 13 removes the last production call to `tui_consumer.render_marketpla
 Tests still characterize that former compact/full wrapper; the complete evidence renderer is
 reused by More info. Remove the unused wrapper and its obsolete compact-pane tests in a cleanup
 slice. It grants no route or fallback authority and is not required by INV-273.
+
+## B-211 — An end-to-end Default walk for a Python installer that does not fit
+
+CP-33 (§176) checks the Settings Python installer against the selection's installer offer once
+the plan is ready. The unit examples and the INV-275 property hold the check, but no e2e fixture
+selects an artifact with Python dependencies on a machine where the Settings installer is
+unusable. Add one when such a fixture exists (an artifact that declares Python dependencies, with
+`uv` made unavailable). Per-artifact attribution is not possible today, because
+`PreparedConfiguredInstallation.python_installers` is not keyed by artifact; the block therefore
+names the whole selection.
+
+## B-212 — `bulleted` and the screen skeleton fail two stored Hypothesis examples
+
+Found while verifying CP-33 (2026-10-19); it is not caused by CP-33 and is outside its claims. The
+local `.hypothesis` database replays two falsifying examples that CI, starting with an empty
+database, has not generated yet:
+- `screen_skeleton_test.py::BulletedPropertyTest::test_every_item_is_marked_and_nothing_said_is_lost`
+  with `block=('0', ' 0')`: `bulleted` leaves the line `0` without a `- ` or `  ` marker.
+- `screen_skeleton_test.py::ScreenSkeletonPropertyTest::test_the_keys_stay_on_the_bottom_rows_whatever_the_terminal_gives`:
+  the bottom rows come out as `('', '0')` instead of `('0', '0')`.
+
+Both pass with the database moved aside, and both fail on `main` without the CP-33 changes. Fix
+`tui_layout.bulleted` (and the skeleton's bottom-row placement) for a block whose items start
+with an indented continuation, then pin both examples with `@example`.

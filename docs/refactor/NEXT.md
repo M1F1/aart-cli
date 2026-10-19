@@ -1,5 +1,14 @@
 # AART Refactor — Next Work
 
+## Where the work is (2026-10-19, after 0.11.0)
+
+**CP-32 is released as 0.11.0.** The active work is **CP-33** (#82, §176, INV-275, D-452) on
+`feat/cp-33-default-path-mismatch`: `docs/refactor/slices/CP-33-default-path-says-what-does-not-fit.md`.
+Choosing Default on 05p checks every Settings value against the measured preparation; a value that
+does not fit is listed on 05p with its reason, nothing is installed, and the cursor moves to
+Custom. Steps 1–4 are done. Next is step 5: push, open the PR (title `feat(tui): …`, minor) and
+read `gh pr checks`. B-211 records the missing e2e for a Python installer mismatch.
+
 ## Where the work is (2026-10-16, after 0.9.0)
 
 **CP-30 is released as 0.9.0** (#69, which also carried #66–#68). Next is **CP-31**, the owner's
