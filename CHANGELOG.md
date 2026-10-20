@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.12.0](https://github.com/M1F1/aart-cli/compare/v0.11.0...v0.12.0) (2026-10-20)
+
+
+### Added
+
+* **cli:** aart-cli docs prints the command reference read from the parser, and every command and argument has help text ([fcfb9a8](https://github.com/M1F1/aart-cli/commit/fcfb9a80cc7d114c1e36595f026fc9aedbf99dbf))
+* **docs:** docs-check refuses a documented aart-cli command the parser does not accept ([fcfb9a8](https://github.com/M1F1/aart-cli/commit/fcfb9a80cc7d114c1e36595f026fc9aedbf99dbf))
+* **tui:** Default lists the Settings values that cannot install the selection and points to Custom ([fcfb9a8](https://github.com/M1F1/aart-cli/commit/fcfb9a80cc7d114c1e36595f026fc9aedbf99dbf))
+
+
+### Changed
+
+* **ci:** repository variables that name a secret end in _SECRET_NAME ([fcfb9a8](https://github.com/M1F1/aart-cli/commit/fcfb9a80cc7d114c1e36595f026fc9aedbf99dbf))
+
+
+### Documentation
+
+* Default installs exactly what Settings says or names what does not fit ([fcfb9a8](https://github.com/M1F1/aart-cli/commit/fcfb9a80cc7d114c1e36595f026fc9aedbf99dbf))
+* llms.txt points agents at aart-cli docs ([fcfb9a8](https://github.com/M1F1/aart-cli/commit/fcfb9a80cc7d114c1e36595f026fc9aedbf99dbf))
+* one guide for maintaining a registry, and fewer documents restating the command reference ([fcfb9a8](https://github.com/M1F1/aart-cli/commit/fcfb9a80cc7d114c1e36595f026fc9aedbf99dbf))
+* the Enterprise rollout, release sequence and walkthroughs describe 0.11 ([fcfb9a8](https://github.com/M1F1/aart-cli/commit/fcfb9a80cc7d114c1e36595f026fc9aedbf99dbf))
+
 ## [0.11.0](https://github.com/M1F1/aart-cli/compare/v0.10.0...v0.11.0) (2026-10-19)
 
 
