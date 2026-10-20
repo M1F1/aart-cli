@@ -238,7 +238,7 @@ class DefaultsReproduceThePublicRunTest(unittest.TestCase):
         behave the way this repository always has.  This one cannot: a default naming a
         github.com repository reproduces nothing on an instance that cannot reach github.com --
         it guarantees a failed clone.  So the default is gone and presence is the switch, the
-        same shape `AART_CLI_IMAGE_USERNAME_SECRET` already uses.
+        same shape `AART_CLI_IMAGE_USERNAME_SECRET_NAME` already uses.
 
         Actions cannot tell an unset variable from an empty one, which is why a default and an
         opt-out cannot both exist here.  This repository sets the variable explicitly; clearing
@@ -591,7 +591,9 @@ class TheContainerSwitchTest(unittest.TestCase):
                     continue
                 expected = "!=" if name.endswith("-private-image") else "=="
                 self.assertIn(
-                    f"vars.AART_CLI_IMAGE_USERNAME_SECRET {expected} ''", body, f"{label}: {name}"
+                    f"vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME {expected} ''",
+                    body,
+                    f"{label}: {name}",
                 )
 
     def test_the_default_shape_carries_no_credentials_block(self) -> None:
@@ -615,10 +617,14 @@ class TheContainerSwitchTest(unittest.TestCase):
                     continue
                 where = f"{label}: {name}"
                 self.assertIn(
-                    "username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET] }}", body, where
+                    "username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME] }}",
+                    body,
+                    where,
                 )
                 self.assertIn(
-                    "password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET] }}", body, where
+                    "password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET_NAME] }}",
+                    body,
+                    where,
                 )
 
 
@@ -642,10 +648,10 @@ class VariablesCannotWeakenTheGatesTest(unittest.TestCase):
         **EMITTED,
     }
 
-    #: `AART_CLI_IMAGE_USERNAME_SECRET` chooses which of two identical shapes of a job runs, and
+    #: `AART_CLI_IMAGE_USERNAME_SECRET_NAME` chooses which of two identical shapes of a job runs, and
     #: `TheContainerSwitchTest` holds the two to the same steps. A second name here is a new power
     #: over the quality contract and needs its own case.
-    INFRASTRUCTURE = frozenset({"AART_CLI_IMAGE_USERNAME_SECRET"})
+    INFRASTRUCTURE = frozenset({"AART_CLI_IMAGE_USERNAME_SECRET_NAME"})
 
     def _conditions(self, text: str) -> list[str]:
         """Every condition, in both spellings.

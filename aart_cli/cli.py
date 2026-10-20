@@ -19,6 +19,7 @@ import argparse
 import sys
 from typing import Callable, Optional, Sequence, Tuple
 
+from . import cli_docs
 from .cli_parser import build_parser
 from .command_outcome import OK
 from .commands import upgrade
@@ -263,6 +264,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
     if not args.command:
         return _run_bare(parser, args)
+    if args.command == "docs":
+        # The reference is read from the parser itself, so it reaches no command handler.
+        return cli_docs.run(
+            parser, args.docs_path, as_json=args.json, out=sys.stdout, err=sys.stderr
+        )
     request = _to_request(args)
     return DISPATCH[request.command](request)
 

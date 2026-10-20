@@ -4778,3 +4778,60 @@ CP-32 step 13 removes the last production call to `tui_consumer.render_marketpla
 Tests still characterize that former compact/full wrapper; the complete evidence renderer is
 reused by More info. Remove the unused wrapper and its obsolete compact-pane tests in a cleanup
 slice. It grants no route or fallback authority and is not required by INV-273.
+
+## B-211 — An end-to-end Default walk for a Python installer that does not fit
+
+CP-33 (§176) checks the Settings Python installer against the selection's installer offer once
+the plan is ready. The unit examples and the INV-275 property hold the check, but no e2e fixture
+selects an artifact with Python dependencies on a machine where the Settings installer is
+unusable. Add one when such a fixture exists (an artifact that declares Python dependencies, with
+`uv` made unavailable). Per-artifact attribution is not possible today, because
+`PreparedConfiguredInstallation.python_installers` is not keyed by artifact; the block therefore
+names the whole selection.
+
+## B-212 — `bulleted` and the screen skeleton fail two stored Hypothesis examples
+
+Found while verifying CP-33 (2026-10-19); it is not caused by CP-33 and is outside its claims. The
+local `.hypothesis` database replays two falsifying examples that CI, starting with an empty
+database, has not generated yet:
+- `screen_skeleton_test.py::BulletedPropertyTest::test_every_item_is_marked_and_nothing_said_is_lost`
+  with `block=('0', ' 0')`: `bulleted` leaves the line `0` without a `- ` or `  ` marker.
+- `screen_skeleton_test.py::ScreenSkeletonPropertyTest::test_the_keys_stay_on_the_bottom_rows_whatever_the_terminal_gives`:
+  the bottom rows come out as `('', '0')` instead of `('0', '0')`.
+
+Both pass with the database moved aside, and both fail on `main` without the CP-33 changes. Fix
+`tui_layout.bulleted` (and the skeleton's bottom-row placement) for a block whose items start
+with an indented continuation, then pin both examples with `@example`.
+
+## B-213 — #24, an Enterprise distribution name, if the issue comes back
+
+Planned as CP-33 step 12: a fork names its distribution through `AART_CLI_DISTRIBUTION_NAME`
+while the command, import package and home stay `aart-cli`. During CP-33 (2026-10-19) GitHub
+answered HTTP 410 "This issue was deleted" for #24, so it was not implemented (D-455). Its text is
+in the CP-33 session transcript, not in the repository. Reopen as a new issue and a new slice if
+the owner still wants it; nothing in the code depends on it.
+
+## B-214 — Walk `END_TO_END_ACCEPTANCE.md` again in the lab
+
+CP-33 step 10 moved the CLI walkthrough onto the CP-32 command names, and DOC003 now holds every
+command in it to the parser. Parsing is not running: the walkthrough has not been walked in the
+manual lab since, and the publish-then-`maintain registry push --branch manual-review` step and its
+`git remote set-head origin --auto` hint are the parts most likely to need a correction. Walk it
+once with `make manual-test-setup-empty` and record findings in `manual-acceptance.md`.
+
+## B-215 — A docs site, a committed generated reference, `llms-full.txt`
+
+Out of scope by #47's own terms (D-454): GitHub Pages does not carry into an Enterprise fork
+without its own setup, and a committed reference or `llms-full.txt` is a second copy that drifts.
+`aart-cli docs --json` and `llms.txt` cover the agent's need. Revisit only if a reader without the
+CLI installed has to read the reference.
+
+## B-216 — No command refreshes a Registry's generated workflow
+
+`maintain registry init` refuses a checkout that is already a registry, and `validate` does not
+compare `.github/workflows/aart-cli-registry.yml` with what `init` would write today. A Registry
+whose workflow predates a rename (as `_SECRET_NAME` in D-453) keeps it until the maintainer
+copies a fresh one from a scratch `init`, which the rollout docs describe. A `validate` warning on
+drift, or a `maintain registry init --refresh-workflow`, would make that visible. Not required by
+any invariant today.
+

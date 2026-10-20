@@ -211,7 +211,7 @@ class PublishingToAnIndexIsOptionalTest(unittest.TestCase):
             with self.subTest(workflow=path.name):
                 self.assertIn(
                     "AART_CLI_INDEX_PUBLISH_CREDENTIALS: "
-                    "${{ secrets[vars.AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET] }}",
+                    "${{ secrets[vars.AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET_NAME] }}",
                     workflow,
                 )
                 self.assertIn("INDEX_PUBLISH_URL: ${{ vars.AART_CLI_INDEX_PUBLISH_URL }}", workflow)

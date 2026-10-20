@@ -38,12 +38,12 @@ env:
 
 jobs:
   mutants:
-    if: vars.AART_CLI_IMAGE_USERNAME_SECRET == ''
+    if: vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME == ''
     runs-on: ${{ fromJSON(vars.AART_CLI_RUNNER || '["ubuntu-latest"]') }}
     container: ${{ vars.AART_CLI_CI_IMAGE || format('python:{0}', vars.AART_CLI_RELEASE_PYTHON_VERSION || '3.11') }}
     env:
       AART_CLI_INDEX_URL: ${{ vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple' }}
-      AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET] }}
+      AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET_NAME] }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,16 +54,16 @@ jobs:
           tests: ${{ inputs.tests }}
 
   mutants-private-image:
-    if: vars.AART_CLI_IMAGE_USERNAME_SECRET != ''
+    if: vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME != ''
     runs-on: ${{ fromJSON(vars.AART_CLI_RUNNER || '["ubuntu-latest"]') }}
     container:
       image: ${{ vars.AART_CLI_CI_IMAGE }}
       credentials:
-        username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET] }}
-        password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET] }}
+        username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME] }}
+        password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET_NAME] }}
     env:
       AART_CLI_INDEX_URL: ${{ vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple' }}
-      AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET] }}
+      AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET_NAME] }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

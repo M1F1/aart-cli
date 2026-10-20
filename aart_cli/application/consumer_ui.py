@@ -25,6 +25,7 @@ from aart_cli.domain.registry import RegistryContentMode
 from .author_views import AuthorDraft
 from .consumer_views import (
     AUTHOR_SCREENS,
+    INSTALL_PATH_CUSTOM,
     INSTALL_PATH_DEFAULT,
     SETTING_ROWS,
     SUCCESS_CHOICES,
@@ -32,6 +33,7 @@ from .consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     ConsumerSettings,
+    DefaultPathMismatch,
     choose_pair_scope,
     default_harness_from_row,
     installer_from_row,
@@ -484,10 +486,13 @@ class ConsumerUiEvent:
     pairs: tuple[str, ...] = ()
     #: The scope each of those pairs was prepared for, which 07a then shows as chosen.
     pair_scopes: tuple[str, ...] = ()
+    #: §176: the Settings values a Default install could not apply, which 05p then lists.
+    default_path_mismatches: tuple[DefaultPathMismatch, ...] = ()
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.kind, ConsumerUiEventKind)
+            or not _mismatches_valid(self.default_path_mismatches)
             or not _rows_valid(self.pairs)
             or not _rows_valid(self.pair_scopes)
             or (
@@ -656,6 +661,14 @@ def selects_rows(screen: ApplicationScreen) -> bool:
     )
 
 
+def _mismatches_valid(found: tuple[DefaultPathMismatch, ...]) -> bool:
+    return (
+        isinstance(found, tuple)
+        and len(set(found)) == len(found)
+        and all(isinstance(item, DefaultPathMismatch) for item in found)
+    )
+
+
 def _rows_valid(rows: tuple[str, ...]) -> bool:
     return (
         isinstance(rows, tuple)
@@ -763,6 +776,9 @@ class ConsumerUiState:
     #: Screen 05p chose the Default path (§173.7): the install goes past 05 and 07a, to 07, 07b or
     #: Ready, until a Back to 05 makes it Custom.
     install_default: bool = False
+    #: §176: why Default does not fit Settings for this selection, drawn on 05p until Install
+    #: starts again from where it was asked.
+    default_path_mismatches: tuple[DefaultPathMismatch, ...] = ()
     #: The artifact whose two input sections screen 22a shows. Credential drill-down changes
     #: ``focus`` to a provider reference, so this parent identity is carried separately.
     user_inputs_artifact: str = ""
@@ -812,6 +828,7 @@ class ConsumerUiState:
             or not isinstance(self.config_form_active, bool)
             or not isinstance(self.inputs_submitted, bool)
             or not isinstance(self.install_default, bool)
+            or not _mismatches_valid(self.default_path_mismatches)
             or not isinstance(self.user_inputs_artifact, str)
             or any(character in self.user_inputs_artifact for character in "\r\n")
             or not isinstance(self.configuration_input, str)
@@ -1664,7 +1681,12 @@ def _request_action(
         if target is ConsumerScreen.INSTALL_PATH:
             # 05p only asks which path; nothing is prepared until one is chosen (§173.7).
             moved, navigation = _navigate(state, target)
-            return replace(moved, install_default=False, quit_pending=False), navigation
+            return (
+                replace(
+                    moved, install_default=False, default_path_mismatches=(), quit_pending=False
+                ),
+                navigation,
+            )
     elif (
         action
         not in (
@@ -1799,6 +1821,7 @@ def _install_by_default(
         session=session,
         action=ConsumerActionKind.INSTALL,
         install_default=True,
+        default_path_mismatches=(),
         targets=(),
         pairs=(),
         pair_scopes=(),
@@ -1820,6 +1843,39 @@ def _install_by_default(
             focus=focus,
             default_path=True,
         ),
+    )
+
+
+def _default_path_unfit(
+    state: ConsumerUiState, found: tuple[DefaultPathMismatch, ...]
+) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
+    """§176: Default does not fit Settings, so 05p stays, lists why, and offers Custom.
+
+    Nothing is pending afterwards: no plan was made, so no identity is kept and no form is open.
+    The cursor moves to Custom, the path that can choose what Settings could not.
+    """
+
+    session = replace(
+        state.session, semantic_identity=None, selection_identity=None, review_digest=None
+    )
+    return (
+        replace(
+            state,
+            session=session,
+            action=None,
+            install_default=False,
+            default_path_mismatches=found,
+            cursor=(
+                state.rows.index(INSTALL_PATH_CUSTOM)
+                if INSTALL_PATH_CUSTOM in state.rows
+                else state.cursor
+            ),
+            config_draft=InstallationConfigDraft(),
+            config_form_active=False,
+            inputs_submitted=False,
+            quit_pending=False,
+        ),
+        (),
     )
 
 
@@ -1857,6 +1913,8 @@ def _action_prepared(
     if action is None or action is not state.action:
         return state, ()
     on_path = state.install_default and state.session.screen is ConsumerScreen.INSTALL_PATH
+    if action is ConsumerActionKind.INSTALL and on_path and event.default_path_mismatches:
+        return _default_path_unfit(state, event.default_path_mismatches)
     if (
         action is ConsumerActionKind.INSTALL
         and event.pairs

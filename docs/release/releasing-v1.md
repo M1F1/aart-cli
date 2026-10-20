@@ -3,9 +3,10 @@
 **Merge a pull request whose title says what kind of change it is. Later, merge the release pull
 request that Release Please keeps open.** That is the release.
 
-Nobody edits a version. Nobody writes a changelog entry. Nobody pushes a tag or presses a button.
-The one decision left to a person is the one a machine has no business making: *when* the
-accumulated changes should become a release.
+Nobody edits a version. Nobody writes a changelog entry. Nobody pushes a tag. The one button is
+approving the release pull request's run ([step 3](#the-sequence)), and the one decision left to a
+person is the one a machine has no business making: *when* the accumulated changes should become a
+release.
 
 ## What a pull request title has to say
 
@@ -21,8 +22,12 @@ feat(registry)!: replace legacy source schema
 |---|---|
 | `fix`, `perf`, `revert` | patch |
 | `feat` | minor |
-| anything with `!` before the colon | major |
+| anything with `!` before the colon | major -- and below `1.0.0` that means `1.0.0` |
 | `docs`, `test`, `ci`, `chore`, `build`, `refactor`, `security` | nothing releases on its own |
+
+`bump-minor-pre-major` is off, so a `!` does not become the next minor below `1.0.0`: it becomes
+`1.0.0`. Until that is the intent, leave `!` out of the title and out of the body's override block
+below, and say what breaks in the description.
 
 `pr-check` validates the title on every pull request, and refuses one it cannot classify. That is
 a check on semantic change metadata, not on a version number — nothing in it knows what version
@@ -35,6 +40,76 @@ Locally:
 ```sh
 python scripts/conventional_title.py "feat(tui): add a screen"
 ```
+
+## What the body has to say
+
+Branch commits disappear at the squash, so without help the changelog gets one line for the whole
+pull request. A pull request that carries more than one change says what the changelog should list
+in a `BEGIN_COMMIT_OVERRIDE` block in its description:
+
+```text
+BEGIN_COMMIT_OVERRIDE
+feat(tui): Default says which Settings values cannot install the selection
+
+feat(cli): aart-cli docs prints the command reference read from the parser
+
+docs: one guide for maintaining a registry
+END_COMMIT_OVERRIDE
+```
+
+- One entry per change, separated by blank lines.
+- **No `!` anywhere in the block.** Release Please reads every entry, so one `!` makes the release
+  major whatever the title says.
+- It is a curated list, not a `git log` dump. Only `test`, `ci` and `chore` are hidden; `docs` and
+  `refactor` are listed, so internal bookkeeping commits would appear as Documentation or Changed.
+
+The title still decides the version; the block decides what the changelog says about it.
+
+## The sequence
+
+Run these inside a clone of the repository that is releasing; `gh` takes the repository from it.
+`PR` is the pull request being merged.
+
+```sh
+PR=<number>
+```
+
+1. Wait for `pr-check` on the pull request, then squash merge it. The squash commit is what
+   Release Please reads.
+
+   ```sh
+   gh pr checks "$PR" --watch
+   gh pr merge "$PR" --squash --delete-branch
+   ```
+
+2. Release Please opens or updates one release pull request.
+
+   ```sh
+   gh pr list --search "chore: release main"
+   ```
+
+3. **Approve its run.** The release pull request is opened by a bot, so its `pr-check` waits for
+   approval: open the pull request's run and press **Approve and run workflows**. Until somebody
+   does, the pull request shows `UNSTABLE` and `gh pr checks` says *no checks reported*. That is
+   waiting, not failing.
+
+4. When `pr-check` is green, merge the release pull request. That is the release: the tag, the
+   GitHub Release and the `CHANGELOG.md` entry follow from it.
+
+   ```sh
+   RELEASE_PR=$(gh pr list --search "chore: release main" --json number --jq '.[0].number')
+   gh pr merge "$RELEASE_PR" --squash --delete-branch
+   ```
+
+5. Confirm the wheel is attached before telling anyone the version exists. The last step of the
+   release run attaches it, so a Release page can be empty for several minutes, honestly.
+
+   ```sh
+   gh release view "vX.Y.Z" --json assets -q '.assets[].name'
+   ```
+
+An Enterprise copy takes the release afterwards; see
+[taking a later release](../ci/github-enterprise-rollout.md#step-5--take-a-later-release).
 
 ## What happens after the merge
 
@@ -59,7 +134,7 @@ on `main`, and proving it again at the tag proves the same tree twice.
 | The tagged commit is in `main` | the tag names source no one reviewed |
 | Release checklist | schema freeze, system matrix, packaging, and the seven registry reconciliation checks |
 | Wheel build | the pinned `poetry-core` is not the one building it |
-| `scripts/release_artifact.py` | the wheel's filename, metadata version, project name or declared dependencies disagree with the tag, or the installed `aart` reports another version |
+| `scripts/release_artifact.py` | the wheel's filename, metadata version, project name or declared dependencies disagree with the tag, or the installed `aart-cli` reports another version |
 | Attach and publish | — |
 
 The last one is the one a pull request could not have run: the wheel did not exist yet.

@@ -54,6 +54,7 @@ from aart_cli.application.consumer_views import (
     ConsumerPlanView,
     ConsumerScreen,
     ConsumerSettings,
+    DefaultPathMismatch,
     HarnessTargetView,
     InputView,
     InstallScopeChoiceView,
@@ -67,6 +68,7 @@ from aart_cli.application.consumer_views import (
     RunningInstallationView,
     default_pair_scopes,
     default_pairs,
+    default_path_mismatches,
     harness_choice_problems,
     offer_install_scopes,
     offer_python_installers,
@@ -1303,6 +1305,21 @@ class LocalConsumerActions:
             ConsumerUiEvent(ConsumerUiEventKind.ACTION_PREPARED, action=command.action),
         )
 
+    def _default_path_unfit(
+        self, command: ConsumerUiCommand, unfit: tuple[DefaultPathMismatch, ...]
+    ) -> ConsumerActionUpdate:
+        """§176: Default does not fit Settings, so nothing is pending and 05p says why."""
+
+        self._pending, self._pending_action = None, None
+        return ConsumerActionUpdate(
+            self.source(),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                default_path_mismatches=unfit,
+            ),
+        )
+
     def _prepare(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         self._pending, self._pending_action = None, None
         action = command.action
@@ -2216,6 +2233,17 @@ class LocalConsumerActions:
             command.install_scope or context.settings.default_scope,
             command.pair_scopes,
         )
+        if command.default_path:
+            # §176: Default applies Settings or says which value does not fit; it never narrows.
+            unfit = default_path_mismatches(
+                targets,
+                detected=context.host.profiles,
+                harnesses=context.settings.default_harnesses,
+                scope_offers=scope_offers,
+                scope=context.settings.default_scope,
+            )
+            if unfit:
+                return self._default_path_unfit(command, unfit)
         if targets and not prepared.value.ready:
             # #50: configuration is per installation and an installation is a harness, so nothing
             # is asked until the harness is chosen. Before then the answer is the choice itself; a
@@ -2409,6 +2437,17 @@ class LocalConsumerActions:
             scope_choice=self._scope_choice(action.flow.plan, command.install_scope),
             installer_choice=self._installer_choice(prepared.value, preferred),
         )
+        if command.default_path:
+            # The installer offer exists only once the plan is ready, so it is checked here.
+            unfit = default_path_mismatches(
+                (),
+                detected=(),
+                harnesses=(),
+                installer=plan.installer_choice,
+                python_installer=preferred.value,
+            )
+            if unfit:
+                return self._default_path_unfit(command, unfit)
         chosen: tuple[str, ...] = ()
         reviewed = prepared.value
         reviewed_host = host

@@ -41,7 +41,11 @@ depends_on = ["aart_cli.protocol", "aart_cli.domain"]
 
 [[modules]]
 path = "aart_cli.cli"
-depends_on = ["aart_cli.tui", "aart_cli.command_outcome", "aart_cli.outcomes", "aart_cli.commands", "aart_cli.model", "aart_cli.cli_parser"]
+depends_on = ["aart_cli.tui", "aart_cli.command_outcome", "aart_cli.outcomes", "aart_cli.commands", "aart_cli.model", "aart_cli.cli_parser", "aart_cli.cli_docs"]
+
+[[modules]]
+path = "aart_cli.cli_docs"
+depends_on = ["aart_cli", "aart_cli.command_outcome"]
 
 [[modules]]
 path = "aart_cli.cli_parser"

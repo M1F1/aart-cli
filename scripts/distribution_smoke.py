@@ -641,6 +641,9 @@ def classify_command(command: str) -> str:
         return "generator"
     if "$(pbpaste)" in command:
         return "clipboard"
+    # It moves an installation that already exists, so a fresh environment has nothing to upgrade.
+    if command.startswith("aart-cli upgrade "):
+        return "upgrade"
     if "./aart_cli-X.Y.Z-py3-none-any.whl" in command:
         return "disk"
     return "unclassified"

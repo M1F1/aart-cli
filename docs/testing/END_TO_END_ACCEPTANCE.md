@@ -84,10 +84,10 @@ Open `make manual-test-shell-maintainer`. The current directory is the empty Reg
 
 ## 1 — Review before initializing
 
-- [ ] Run `registry init` **without** `--yes` first.
+- [ ] Run `maintain registry init` **without** `--yes` first.
 
 ```sh
-python3 -m aart_cli.cli registry init \
+python3 -m aart_cli.cli maintain registry init \
   --source . --source-id manual-registry --display-name "Manual Registry"
 ```
 
@@ -99,10 +99,10 @@ it expects (`validate`, `lock`, `build`, `audit`).
 
 ## 2 — Observe the author sources as Candidates
 
-`registry scan` reads a clean author checkout at its exact HEAD and never mutates anything:
+`maintain upstream scan` reads a clean author checkout at its exact HEAD and never mutates anything:
 
 ```sh
-python3 -m aart_cli.cli registry scan --source . \
+python3 -m aart_cli.cli maintain upstream scan --source . \
   --checkout ../skill --source-alias manual-skill \
   --source-url https://manual.aart.test/skill.git --target-registry manual-registry
 ```
@@ -116,13 +116,13 @@ same facts as the text form.
 
 ## 3 — Bring an artifact into the Registry
 
-`registry promote` is the Candidate-promotion transaction. It takes the same boundaries as
-`registry scan` plus one `--candidate` per Candidate ID the scan reported. It runs validation and
+`maintain candidate promote` is the Candidate-promotion transaction. It takes the same boundaries as
+`maintain upstream scan` plus one `--candidate` per Candidate ID the scan reported. It runs validation and
 the effective policy for each Candidate itself, the same run the Maintainer screens show, and the
 review names each Candidate's validation-report and effective-policy digests before `--yes`
 writes them into its promotion record (D-387, closing `QA-056`). No evidence is typed in.
 
-- [ ] Run `registry promote` review-only for the scanned Candidates and read the evidence it
+- [ ] Run `maintain candidate promote` review-only for the scanned Candidates and read the evidence it
       states, then repeat with `--yes`. Expected: one validation-report digest per Candidate,
       nothing committed and nothing pushed.
 
@@ -130,7 +130,7 @@ Adoption is the other CLI route into the Registry. It reads one repository's man
 subscribing to it:
 
 ```sh
-python3 -m aart_cli.cli registry adopt --source . --url https://manual.aart.test/skill.git --ref "$REF"
+python3 -m aart_cli.cli maintain upstream adopt --source . --url https://manual.aart.test/skill.git --ref "$REF"
 ```
 
 - [ ] Run it review-only first, read what the manifests compile to, then repeat with
@@ -145,7 +145,7 @@ not commit or push.
 ## 4 — Publish
 
 ```sh
-python3 -m aart_cli.cli registry publish --source .
+python3 -m aart_cli.cli maintain registry publish --source .
 ```
 
 Expected: it prepares lock and index in memory, runs validate and audit over that exact snapshot,
@@ -156,20 +156,23 @@ with *"Reviewed only. Re-run with --yes to write, validate, audit, and commit."*
 - [ ] Confirm with `git log` that exactly one commit was created, and with `git status` that
       nothing was pushed.
 
-Then publish the branch yourself. On the CLI route this is still your job: `registry publish`
-commits every listed change and stops there, which its own `--help` says in those words. Pushing a
-reviewed registry commit from inside AART is a **TUI** action, added under `D-228` for Product
-Specification 164.7, and it is not on this route.
+Then push the commit to a review branch. `maintain registry publish` commits every listed change and
+stops there; `maintain registry push` is the separate step, and it refuses the default branch by name:
 
 ```sh
-git push origin HEAD
+python3 -m aart_cli.cli maintain registry push --source . --branch manual-review
 ```
+
+- [ ] Try `--branch` with the default branch once and confirm it is refused.
+
+If it answers that the checkout does not know the remote's default branch, run
+`git remote set-head origin --auto` and push again.
 
 ## 5 — Read the Registry back
 
-- [ ] `registry validate --source . --strict --frozen`
-- [ ] `registry audit --source .`
-- [ ] `registry diff --source .`
+- [ ] `maintain registry validate --source .` and `maintain registry build --source . --check`
+- [ ] `maintain registry audit --source .`
+- [ ] `maintain registry diff --source .`
 - [ ] `security scan` and `security show` over a published artifact envelope.
 
 Expected: validation is clean, audit reports review/provenance/setup and available security
@@ -179,7 +182,7 @@ assessments reduce uncertainty rather than guaranteeing safety.
 Checkpoint for Act I:
 
 - [ ] Every mutating command reviewed first and changed nothing without `--yes`.
-- [ ] No command pushed or merged.
+- [ ] Only `maintain registry push` pushed, and only to the review branch; nothing merged.
 - [ ] `--json` output matched the text output wherever both exist.
 
 ---
@@ -191,21 +194,21 @@ Open `make manual-test-shell-consumer`. Fresh home, empty project, nothing confi
 ## 6 — Subscribe
 
 ```sh
-python3 -m aart_cli.cli source add --alias manual-registry --kind git \
+python3 -m aart_cli.cli consume registry add --alias manual-registry --kind git \
   --location https://manual.aart.test/registry.git --ref "$REF" --default
 ```
 
 - [ ] Confirm a local path is refused for `--kind git`.
-- [ ] `source list --json`, then `source health`.
+- [ ] `consume registry list --json`, then `consume registry health`.
 
-Expected: `source add` validates and snapshots the exact origin before saving, so it needs no
-interactive confirmation. The listing distinguishes an approved Registry from an authoring Source.
+Expected: `consume registry add` validates and snapshots the exact origin before saving, so it needs
+no interactive confirmation.
 
 ## 7 — Browse
 
-- [ ] `marketplace list --json`
-- [ ] `marketplace search manual`
-- [ ] `marketplace health`
+- [ ] `consume list --json`
+- [ ] `consume search manual`
+- [ ] `consume health`
 
 Expected: both published artifacts appear with real provenance — the registry revision and the
 author commit — and never a placeholder.
@@ -213,7 +216,7 @@ author commit — and never a placeholder.
 ## 8 — Install
 
 ```sh
-python3 -m aart_cli.cli marketplace install manual-registry/skill/manual-check@1.0.0 \
+python3 -m aart_cli.cli consume install manual-registry/skill/manual-check@1.0.0 \
   --profile claude
 ```
 
@@ -228,8 +231,8 @@ credential reference; the value never appears in output, receipts or logs.
 
 ## 9 — Inspect what happened
 
-- [ ] `marketplace status --json`
-- [ ] `marketplace setup` and `marketplace receipt` for the MCP
+- [ ] `consume status --json`
+- [ ] `consume setup` and `consume receipt show` for the MCP
 - [ ] `doctor`
 
 Expected: `doctor` reports installed health, offline readiness, activity, credentials and
@@ -237,10 +240,10 @@ configuration, and its account matches what you actually did.
 
 ## 10 — Update, repair, remove
 
-- [ ] Publish `1.0.1` from the maintainer shell, then `source sync` and `marketplace update`.
+- [ ] Publish `1.0.1` from the maintainer shell, then `consume registry sync` and `consume update`.
 - [ ] Damage an installed file by hand, then re-run `doctor` and repair the reported issue.
-- [ ] `marketplace uninstall` the Skill.
-- [ ] `source remove --alias manual-registry`.
+- [ ] `consume uninstall` the Skill.
+- [ ] `consume registry remove --alias manual-registry`.
 
 Expected: an update names both the old and the new version before applying. Repair is minimal —
 it restores what drifted and touches nothing else. Uninstall removes what the receipt recorded and
@@ -269,14 +272,13 @@ Checkpoint for Act II:
 
 These are correct behavior, not findings:
 
-- The CLI never pushes or merges: `registry publish` commits and stops. Pushing a reviewed
-  registry commit to a configured non-default branch is a TUI action (164.7, `D-228`); the default
-  branch is refused there rather than delegated, and merging is always the reviewer's work through
-  `gh` or the forge.
+- AART never merges: `maintain registry publish` commits and stops, and `maintain registry push`
+  pushes only to a named non-default branch. Merging is always the reviewer's work, through `gh` or
+  the forge.
 - `file://` origins are refused; origins must be credential-free HTTPS/SSH.
-- A self-contained artifact does not track upstream: `registry check-upstream` reports what moved, and a new version is adopted explicitly.
+- A self-contained artifact does not track upstream: `maintain upstream check` reports what moved, and a new version is adopted explicitly.
 - Security assessments reduce uncertainty and are not safety guarantees.
-- `marketplace install` requires an explicit `--profile`.
+- `consume install` requires an explicit `--profile`.
 
 ## When you are done
 

@@ -11181,3 +11181,98 @@ survival comparison always fail turns `distribution_e2e_test` red.
 `consume registry add` and the skill repository with `maintain upstream add`. Human add/remove
 output and catalog headers name a connection "Registry" or "Upstream repository" (§175), never
 "source"; only a Registry reports `default=`.
+
+## D-452 — Default checks Settings against the measured preparation and stays on 05p (CP-33, #82)
+
+The owner asked on 2026-10-19 that a Default install whose Settings cannot install some selected
+artifact say so, list the values, and send the person to Custom. §176 and INV-275 state it. The
+implementation choices:
+
+- **The check runs when Default is chosen, not when 05p opens.** D-435 keeps 05p free of
+  preparation, and which harness can host which artifact is known only from the measured draft
+  (`_installation_targets`). Choosing Default already prepares while 05p stays on screen, so the
+  answer arrives there. A mismatch is never computed from Marketplace rows, which could disagree
+  with the plan.
+- **A partial fit blocks too.** An artifact that some Settings harnesses can host and others
+  cannot used to install into the subset. The owner wants "Default" to mean Settings, so every
+  Settings harness that cannot host a selected artifact is a mismatch (the recommendation in #82).
+- **One pure function, `default_path_mismatches`,** in `application/consumer_views.py` takes the
+  measured targets, the detected harnesses, the per-pair scope offers and the Python installer
+  offer, and returns `DefaultPathMismatch(artifact, setting, value, reason)` values. The adapter
+  calls it twice: harness and scope before anything is asked or narrowed, and the installer once
+  the plan is ready, because `python_installers` is empty until then.
+- **Whole-selection facts carry no artifact.** A Settings harness that is not detected, and the
+  Python installer offer, hold for the whole selection (`python_installers` is not keyed by
+  artifact), so they are one line each rather than one per artifact.
+- **A Collection is one artifact**, as on 05 (§173.5): its line names the Collection.
+- **The reducer stores the mismatches on the state** (`default_path_mismatches`), clears the
+  action, moves the cursor to Custom and stays on 05p. Install from the Marketplace starts with no
+  mismatches, and choosing Default again prepares and checks again, so a Settings change made in
+  between is seen.
+
+## D-453 — A variable that names a secret ends in `_SECRET_NAME` (CP-33 step 6, #46)
+
+`AART_CLI_PIP_INDEX_CREDENTIALS_SECRET`, `AART_CLI_IMAGE_USERNAME_SECRET`,
+`AART_CLI_IMAGE_PASSWORD_SECRET`, `AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET` and
+`AART_CLI_GIT_CREDENTIALS_SECRET` hold the name of a secret, which the workflow looks up with
+`secrets[vars.NAME]`. The suffix said the opposite, and invited a credential into a readable
+variable. They are now `…_SECRET_NAME`, in this repository's workflows, the Registry CI that
+`maintain registry init` writes, the docs and the specification.
+- `_SECRET_NAME` rather than `_SECRET_REF`: *name* is what the value literally is, and the word the
+  documentation already used for every one of these rows.
+- No alias and no fallback (§169): an old name is read by nothing, which `vars.NAME || default`
+  already makes silent. The rollout docs (#80) list the old names among those to delete.
+- An existing Registry keeps its older generated workflow, which reads the old names. That is the
+  CP-26 break policy (no migrator), and the rollout docs (#80) state the replacement.
+- **Corrected in CP-33 step 5:** this entry first said the maintainer deletes the workflow and runs
+  `init` again. Run against a real checkout, `init` refuses any checkout that is already a
+  registry (`planning.py`, "registry init refuses an existing registry workspace"), whatever its
+  workflow holds. The workflow is the same bytes for every `--source-id`, and `validate` does not
+  read it, so the working replacement is `init` in a scratch `git init` directory and a copy of
+  `.github/workflows/aart-cli-registry.yml`. The rollout docs give that sequence.
+
+## D-454 — The command reference is read from the parser when the CLI runs (CP-33 steps 7–9, #47)
+
+The owner asked for docs agents can read, with as little upkeep as possible, that carry into an
+Enterprise fork unchanged. §177 and INV-276 state it. The choices:
+
+- **`aart-cli docs` walks `build_parser()` at run time** (`aart_cli/cli_docs.py`), rather than a
+  generated file committed to the repository: nothing goes stale, nothing churns in a diff, and the
+  reference matches the installed version offline. It reads argparse's own structures
+  (`_SubParsersAction`, `_choices_actions`), which the repository already did in tests.
+- **It is a top-level command, not under a role family.** INV-270 places commands *specific* to
+  consuming, maintaining or authoring; the reference serves all three, like `doctor` and `reset`.
+- **`main()` answers it before `_to_request`.** It reaches no command handler and needs no
+  `Request` field.
+- **A quoted path is the same path.** `docs "consume install"` splits on whitespace, because a
+  script or an agent naturally passes the path as one argument.
+- **Every command, group, argument and option carries text.** 19 leaves, one group and six
+  positionals had none; the test walks the parser, so a new one without text fails.
+- **`llms.txt` names only `aart-cli docs`** and relative links, so a rename never makes it stale
+  and the links resolve in a fork. A test holds both.
+- **DOC003 in `make docs-check`** hands every fenced `aart-cli …` or `python -m aart_cli …` line in
+  the README and user-facing documents to the parser, with placeholders replaced, shell pipes,
+  lists and redirections cut, and `\` continuations joined. `docs/refactor/` and the specification
+  are exempt: they record history and the target. It found `validate --strict --frozen` (never an
+  option) in two tutorials and a CLI walkthrough still on pre-CP-32 command names.
+- **Not done (backlog, as #47 said):** GitHub Pages, a committed generated reference and
+  `llms-full.txt`.
+
+## D-455 — Pruning and the Enterprise docs refresh (CP-33 steps 10–11, #47, #80)
+
+- **Four documents deleted or merged**, listed in the PR: the maintainer command table (now
+  `aart-cli docs maintain registry`) and maintenance planning merged into
+  `maintaining-a-registry-v1.md`; the nine-line "running inside a company" pointer; the local
+  Registry tutorial, which existed only to keep an old URL, merged into `company-registry-v1.md`.
+  `docs/testing/` stays: the walkthroughs are test procedures the `manual-test-*` targets use.
+- **One remote convention, made by a command.** Part 1 of the rollout clones the public repository
+  and renames its remote to `upstream`, then adds the Enterprise copy as `origin`. The bare-clone
+  route is gone: a normal clone fetches no `refs/pull/*`, which is what `--bare` existed to avoid,
+  so one clone serves seeding, later syncs and the CI smoke run.
+- **Old variable names are found by pattern, not listed.** `enterprise_ci_template_test` refuses a
+  backticked `AART_CLI_*` name no workflow reads, so the page detects leftovers with `grep` (not
+  `AART_CLI_`, or ending in `_SECRET`) instead of naming each one.
+- **The release sequence runs `gh` from the clone**, without `--repo`, so it is right in a fork.
+- **#24 (Enterprise distribution name) is not implemented.** It was planned as CP-33 step 12, and
+  GitHub answers HTTP 410 "This issue was deleted" for it. A deleted issue is the owner's answer;
+  B-213 records where its text is if it comes back.

@@ -43,8 +43,8 @@ _PROVIDE_AART = b"""      - name: Provide AART
           TOOL_URL: ${{ vars.AART_CLI_TOOL_URL || (vars.AART_CLI_REPOSITORY && format('{0}/{1}.git', github.server_url, vars.AART_CLI_REPOSITORY)) || '' }}
           TOOL_REF: ${{ vars.AART_CLI_REF }}
           INDEX_URL: ${{ vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple' }}
-          INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET] }}
-          GIT_CREDENTIALS: ${{ secrets[vars.AART_CLI_GIT_CREDENTIALS_SECRET] }}
+          INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET_NAME] }}
+          GIT_CREDENTIALS: ${{ secrets[vars.AART_CLI_GIT_CREDENTIALS_SECRET_NAME] }}
           PY: ${{ vars.AART_CLI_PYTHON || 'python3' }}
         run: |
           # `sh`, not `bash`.  This step names no shell, and Actions serves `bash -e {0}` only if
@@ -213,11 +213,11 @@ _PLAIN_CONTAINER = b"""    container: ${{ vars.AART_CLI_CI_IMAGE }}
 _PRIVATE_CONTAINER = b"""    container:
       image: ${{ vars.AART_CLI_CI_IMAGE }}
       credentials:
-        username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET] }}
-        password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET] }}
+        username: ${{ secrets[vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME] }}
+        password: ${{ secrets[vars.AART_CLI_IMAGE_PASSWORD_SECRET_NAME] }}
 """
-_PLAIN_WHEN = b"vars.AART_CLI_IMAGE_USERNAME_SECRET == ''"
-_PRIVATE_WHEN = b"vars.AART_CLI_IMAGE_USERNAME_SECRET != ''"
+_PLAIN_WHEN = b"vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME == ''"
+_PRIVATE_WHEN = b"vars.AART_CLI_IMAGE_USERNAME_SECRET_NAME != ''"
 
 
 def _job(job_id: bytes, body: bytes, header: bytes = b"", when: bytes = b"") -> bytes:
@@ -298,7 +298,7 @@ def _aggregate(job_id: bytes) -> bytes:
           # means the gates never ran at all -- a broken condition, an image variable set to
           # something unexpected -- and that must fail rather than look like a pass.
           if [ "$PLAIN" = "skipped" ] && [ "$PRIVATE" = "skipped" ]; then
-            echo "::error::neither gate job ran; check AART_CLI_IMAGE_USERNAME_SECRET" >&2
+            echo "::error::neither gate job ran; check AART_CLI_IMAGE_USERNAME_SECRET_NAME" >&2
             exit 1
           fi
           # An allowlist rather than a check for "failure": a cancelled run is neither success nor
@@ -448,7 +448,7 @@ wins**, and they are never combined:
 | 1 | `AART_CLI_PACKAGE` | `aart-cli=={version}` | `pip` from `AART_CLI_PIP_INDEX_URL` |
 | 2 | `AART_CLI_WHEEL_URL` | `https://host/.../v{version}/aart_cli-{version}-py3-none-any.whl` | fetch, then unzip |
 | 3 | `AART_CLI_TOOL_PATH` | `/opt/aart` | Already on the runner |
-| 4 | `AART_CLI_TOOL_URL` | `https://ghe.corp/platform/aart-cli.git` | `git clone` at `v` + the pin. Private copy: name a secret in `AART_CLI_GIT_CREDENTIALS_SECRET` |
+| 4 | `AART_CLI_TOOL_URL` | `https://ghe.corp/platform/aart-cli.git` | `git clone` at `v` + the pin. Private copy: name a secret in `AART_CLI_GIT_CREDENTIALS_SECRET_NAME` |
 
 `{version}` is replaced with whatever `.aart-cli-version` says, so the version appears **once**, in
 Git, and never in a settings page. Set `AART_CLI_REF` to override the pin for one registry - the run
@@ -479,7 +479,7 @@ AART: aart-cli 0.1.0  via index https://nexus.corp/pypi/simple (aart-cli==0.1.0)
 |---|---|---|
 | `AART_CLI_PIP_INDEX_URL` | `https://pypi.org/simple` | Index used by `AART_CLI_PACKAGE` |
 | `AART_CLI_REPOSITORY` | unset | `owner/name` of your AART repository, combined with this instance's own URL. Shorter than `AART_CLI_TOOL_URL` when the copy is on this instance |
-| `AART_CLI_GIT_CREDENTIALS_SECRET` | unset | **Name** of a secret holding a token, or `user:token`, for the `git clone` arm. A bare token is used as `x-access-token`. Without it the clone is anonymous, and a private copy answers `could not read Username` |
+| `AART_CLI_GIT_CREDENTIALS_SECRET_NAME` | unset | **Name** of a secret holding a token, or `user:token`, for the `git clone` arm. A bare token is used as `x-access-token`. Without it the clone is anonymous, and a private copy answers `could not read Username` |
 | `AART_CLI_REF` | `v` + the pin | Escape hatch: a branch or tag instead of `.aart-cli-version`. Switches the version check off |
 | `AART_CLI_RUNNER` | `["ubuntu-latest"]` | JSON array of runner labels. Must be JSON, not a bare word |
 | `AART_CLI_CI_IMAGE` | unset | Container image for the jobs. Unset means the runner's own environment |
