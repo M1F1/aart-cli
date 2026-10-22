@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.15.0](https://github.com/M1F1/aart-cli/compare/v0.14.0...v0.15.0) (2026-10-22)
+
+
+### Added
+
+* the Registry view lists each promoted version as kind/name@version, with digests in Verbose ([d6aea1b](https://github.com/M1F1/aart-cli/commit/d6aea1be42eaa406638e7213773e4542777c6499))
+
+
+### Fixed
+
+* a Collection published with registry collection --yes passes the Registry's own validate, audit, build and format ([d6aea1b](https://github.com/M1F1/aart-cli/commit/d6aea1be42eaa406638e7213773e4542777c6499))
+
+
+### Documentation
+
+* the Registry check to require on the default branch is registry-quality-gate ([d6aea1b](https://github.com/M1F1/aart-cli/commit/d6aea1be42eaa406638e7213773e4542777c6499))
+
 ## [0.14.0](https://github.com/M1F1/aart-cli/compare/v0.13.0...v0.14.0) (2026-10-22)
 
 
