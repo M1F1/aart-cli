@@ -152,6 +152,24 @@ def _baseline_context(
     return _registry_baseline_mismatch(root, registry, approved_snapshot.revision)
 
 
+def _workspace_refusal(
+    root: str, registry: ConfiguredSource, mismatch: RegistryBaselineMismatch
+) -> Err | None:
+    """Say which directory aart-cli runs in and which Registry it must be (§183).
+
+    A Registry change is written into the checkout aart-cli was started in. Another repository is
+    refused before anything is planned in it, naming both, because the generic baseline message
+    could only say "a different Git repository" and left the reader to guess which.
+    """
+
+    if mismatch is not RegistryBaselineMismatch.WRONG_WORKSPACE:
+        return None
+    return _error(
+        f"aart-cli was started in {root}, which is not a checkout of Registry {registry.alias}",
+        f"start aart-cli in a checkout of {registry.location} and try again",
+    )
+
+
 def _staged_paths(root: str) -> Result[tuple[str, ...]]:
     pending = _git(root, "diff", "--cached", "--name-only", "-z")
     if isinstance(pending, Err):
@@ -326,6 +344,10 @@ def prepare_configured_candidate_promotion(
     workspace = output.current()
     if isinstance(workspace, Err):
         return workspace
+    mismatch = _baseline_context(root.value, registry, approved.value, workspace.value)
+    refused = _workspace_refusal(root.value, registry, mismatch)
+    if refused is not None:
+        return refused
     validation = validate_candidate(candidate.value, policy=policy)
     transaction = prepare_candidate_promotion_transaction(
         candidate.value,
@@ -334,7 +356,7 @@ def prepare_configured_candidate_promotion(
         approved.value,
         workspace.value,
         mode=mode,
-        baseline_mismatch=_baseline_context(root.value, registry, approved.value, workspace.value),
+        baseline_mismatch=mismatch,
     )
     if isinstance(transaction, Err):
         return transaction
@@ -397,6 +419,10 @@ def prepare_configured_bulk_promotion(
     workspace = FilesystemPromotionOutput(root.value).current()
     if isinstance(workspace, Err):
         return workspace
+    mismatch = _baseline_context(root.value, registry, approved.value, workspace.value)
+    refused = _workspace_refusal(root.value, registry, mismatch)
+    if refused is not None:
+        return refused
     transaction = prepare_promotion_transaction(
         tuple(bundles),
         tuple(validate_candidate(item, policy=policy) for item in bundles),
@@ -404,7 +430,7 @@ def prepare_configured_bulk_promotion(
         approved.value,
         workspace.value,
         mode=mode,
-        baseline_mismatch=_baseline_context(root.value, registry, approved.value, workspace.value),
+        baseline_mismatch=mismatch,
     )
     if isinstance(transaction, Err):
         return transaction
@@ -451,6 +477,10 @@ def prepare_configured_collection(
     workspace = FilesystemPromotionOutput(root.value).current()
     if isinstance(workspace, Err):
         return workspace
+    mismatch = _baseline_context(root.value, registry, approved.value, workspace.value)
+    refused = _workspace_refusal(root.value, registry, mismatch)
+    if refused is not None:
+        return refused
     defined = plan_collection_definition(
         approved.value.versions,
         workspace.value,
@@ -471,7 +501,7 @@ def prepare_configured_collection(
         policy,
         approved.value,
         workspace.value,
-        baseline_mismatch=_baseline_context(root.value, registry, approved.value, workspace.value),
+        baseline_mismatch=mismatch,
     )
     if isinstance(transaction, Err):
         return transaction

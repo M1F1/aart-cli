@@ -182,6 +182,7 @@ def _to_request(args: argparse.Namespace) -> Request:
         prune=bool(getattr(args, "prune", False)),
         ref=getattr(args, "ref", None),
         native_url=getattr(args, "native_url", None),
+        adoption_renames=tuple(getattr(args, "adoption_renames", None) or ()),
         registry_action=routed.get("registry_action", getattr(args, "registry_action", None)),  # type: ignore[arg-type]
         candidate_checkout=getattr(args, "candidate_checkout", None),
         candidate_source_alias=getattr(args, "candidate_source_alias", None),

@@ -50,6 +50,7 @@ from .consumer_views import (
 )
 from .maintainer_views import (
     REGISTRY_WORKSPACE_READY_ROW,
+    REGISTRY_WORKSPACE_ROW,
     MaintainerCandidateFilter,
     MaintainerScreen,
     parse_candidate_filter_row,
@@ -73,6 +74,7 @@ __all__ = [
     "RegistryDraft",
     "RegistryInitDraft",
     "CollectionDraft",
+    "ADOPTION_NAME_ROW",
     "COLLECTION_SAVE_ROW",
     "RepositoryScanDraft",
     "SourceDraft",
@@ -155,6 +157,8 @@ class ConsumerUiEventKind(str, Enum):
     EDIT_REGISTRY_INIT = "edit-registry-init"
     EDIT_COLLECTION = "edit-collection"
     EDIT_REPOSITORY_SCAN = "edit-repository-scan"
+    #: 46d: the Registry name a scanned artifact is adopted under, keyed by its scanned coordinate.
+    EDIT_ADOPTION_NAME = "edit-adoption-name"
     EDIT_PUBLICATION_BRANCH = "edit-publication-branch"
     EDIT_INSTALL_CONFIG = "edit-install-config"
     EDIT_CONFIGURATION = "edit-configuration"
@@ -533,6 +537,9 @@ class ConsumerUiCommand:
     registry_init_draft: RegistryInitDraft | None = None
     repository_scan_draft: RepositoryScanDraft | None = None
     collection_draft: CollectionDraft | None = None
+    #: Screen 46d's typed Registry names, as (scanned coordinate, new name), for the selected
+    #: artifacts whose own name the Registry took from another upstream (INV-279).
+    adoption_names: tuple[tuple[str, str], ...] = ()
     targets: tuple[str, ...] = ()
     #: The artifact×harness pairs ticked on screen 05's matrix (§172.2), as `pair_key` strings.
     #: `targets` stays the harnesses they go into, so a plan is still prepared for those hosts.
@@ -573,6 +580,7 @@ class ConsumerUiCommand:
             or not _rows_valid(self.pairs)
             or not _rows_valid(self.pair_scopes)
             or not _config_answers_valid(self.config_answers)
+            or not _config_answers_valid(self.adoption_names)
             or not isinstance(self.focus, str)
             or any(character in self.focus for character in "\r\n")
             or not _safe_identity(self.review_digest)
@@ -625,6 +633,8 @@ _SEARCHABLE = frozenset(
         ConsumerScreen.CREDENTIALS,
         ConsumerScreen.ACTIVITY,
         MaintainerScreen.CANDIDATES,
+        # Its artifact rows only: on the name and summary rows `/` is a character (§183).
+        MaintainerScreen.COLLECTION_EDITOR,
     }
 )
 _SELECTABLE = frozenset(
@@ -750,6 +760,8 @@ class ConsumerUiState:
     registry_commit_subject: str = ""
     repository_scan_draft: RepositoryScanDraft = RepositoryScanDraft()
     collection_draft: CollectionDraft = CollectionDraft()
+    #: Screen 46d's typed Registry names, keyed by scanned coordinate (INV-279).
+    adoption_names: tuple[tuple[str, str], ...] = ()
     #: The directory this session was launched from, already written for a reader. It is context
     #: for every screen -- an install and a Registry edit land relative to it -- so it is carried
     #: on the state rather than fetched where it is drawn, which keeps the frame off the
@@ -856,6 +868,7 @@ class ConsumerUiState:
             or not isinstance(self.registry_commit_applied, bool)
             or not isinstance(self.repository_scan_draft, RepositoryScanDraft)
             or not isinstance(self.collection_draft, CollectionDraft)
+            or not _config_answers_valid(self.adoption_names)
         ):
             raise ValueError("consumer UI state is invalid")
         if self.session.profile is not self.settings.profile:
@@ -1240,6 +1253,21 @@ def _set_rows(
     if standing not in rows:
         standing = state.focus
     cursor = rows.index(standing) if standing in rows else 0
+    if (
+        standing not in rows
+        and state.session.screen is MaintainerScreen.COLLECTION_EDITOR
+        and state.search
+    ):
+        # A filter hid the artifact under the cursor: land on the first match, so Space ticks it
+        # rather than typing a space into the name (§183).
+        cursor = next(
+            (
+                index
+                for index, row in enumerate(rows)
+                if row not in ("name", "summary", COLLECTION_SAVE_ROW)
+            ),
+            cursor,
+        )
     if standing not in rows and rows[:1] == (CONFIG_SET_LATER_ROW,) and len(rows) > 1:
         # 07 opens on its first field: Set later is offered first, never pressed by accident.
         cursor = 1
@@ -1765,6 +1793,11 @@ def _request_action(
         ),
         collection_draft=(
             state.collection_draft if action is ConsumerActionKind.COLLECTION_DEFINE else None
+        ),
+        adoption_names=(
+            tuple(item for item in state.adoption_names if item[0] in selection)
+            if action is ConsumerActionKind.REPOSITORY_ADOPT
+            else ()
         ),
         install_scope=(state.install_scope if action is ConsumerActionKind.INSTALL else ""),
         python_installer=(state.python_installer if action is ConsumerActionKind.INSTALL else ""),
@@ -2571,6 +2604,13 @@ def _reduce(
         else:
             return state, ()
         return replace(state, repository_scan_draft=scan_draft, quit_pending=False), ()
+    if event.kind is ConsumerUiEventKind.EDIT_ADOPTION_NAME:
+        if state.session.screen is not MaintainerScreen.SCAN_RESULT or not event.key:
+            return state, ()
+        names = tuple(item for item in state.adoption_names if item[0] != event.key)
+        if event.text:
+            names = (*names, (event.key, event.text))
+        return replace(state, adoption_names=names, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.TOGGLE_PROFILE:
         return _apply_setting(state, state.settings.toggled("detail-level"))
     if event.kind is ConsumerUiEventKind.TOGGLE_SETTING:
@@ -2813,6 +2853,10 @@ def _form_text_rows(state: ConsumerUiState) -> frozenset[str] | None:
     """The rows of the open form that take typed text, or None when no form is open."""
 
     screen = state.session.screen
+    if screen is MaintainerScreen.SCAN_RESULT:
+        # 46d is a list, not a form; only its Registry name rows take text (INV-279).
+        row = state.current_row
+        return frozenset({row}) if row.startswith(ADOPTION_NAME_ROW) else None
     if screen is ConsumerScreen.CONFIGURATION_VALUE:
         return frozenset(item.id for item in state.configuration_draft.fields)
     if screen is ConsumerScreen.REQUIRED_INPUTS:
@@ -2826,6 +2870,8 @@ def _form_text_rows(state: ConsumerUiState) -> frozenset[str] | None:
 
 #: Screen 52's submit row. Every row between the text fields and this one is a member.
 COLLECTION_SAVE_ROW = "save"
+#: Screen 46d's row for the Registry name of the scanned artifact it prefixes (INV-279).
+ADOPTION_NAME_ROW = "name:"
 
 
 def _collection_member_row(state: ConsumerUiState) -> bool:
@@ -2945,6 +2991,9 @@ def _mcp_test_origin(state: ConsumerUiState) -> str:
 
 
 def _binding_enabled(binding: _ScreenBinding, state: ConsumerUiState) -> bool:
+    if typing_text(state) and len(binding.display.key) == 1:
+        # A letter typed into a field is text, so it is not also offered as a command.
+        return False
     if (
         binding.event.action is ConsumerActionKind.MCP_TEST
         and state.session.screen is ConsumerScreen.INSTALLED_ARTIFACT_DETAILS
@@ -2959,6 +3008,10 @@ def _binding_enabled(binding: _ScreenBinding, state: ConsumerUiState) -> bool:
         return state.current_row not in ("", "add-registry")
     if binding.event.action is ConsumerActionKind.REGISTRY_PUSH:
         return state.current_row == REGISTRY_WORKSPACE_READY_ROW
+    if binding.event.screen is MaintainerScreen.COLLECTIONS:
+        # The Collections opened are the cursor's Registry's, so a row that is no Registry opens
+        # none (§183).
+        return state.current_row not in ("", REGISTRY_WORKSPACE_ROW, REGISTRY_WORKSPACE_READY_ROW)
     return True
 
 
@@ -3087,7 +3140,7 @@ def key_bindings(
             and "enter" not in keys
         ):
             bindings.append(KeyBinding("Enter", "Registry"))
-    if state.session.screen in _SEARCHABLE:
+    if state.session.screen in _SEARCHABLE and not typing:
         bindings.append(KeyBinding("/", "Search"))
     if state.session.screen is ConsumerScreen.MARKETPLACE and state.viewport_rows:
         bindings.append(KeyBinding("PgUp/PgDn", "Scroll"))
@@ -3155,6 +3208,26 @@ def key_event(
         and key in _UNIVERSAL_LETTERS
     ):
         return ConsumerUiEvent(_UNIVERSAL_LETTERS[key])
+
+    if state.session.screen is MaintainerScreen.SCAN_RESULT and (
+        cursor or state.current_row
+    ).startswith(ADOPTION_NAME_ROW):
+        coordinate = (cursor or state.current_row).removeprefix(ADOPTION_NAME_ROW)
+        typed = dict(state.adoption_names).get(coordinate, "")
+        if key == "escape":
+            return ConsumerUiEvent(ConsumerUiEventKind.BACK)
+        if key in ("up", "down", "enter"):
+            return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up" if key == "up" else "down")
+        if key == "backspace":
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_ADOPTION_NAME, key=coordinate, text=typed[:-1]
+            )
+        if key.isprintable():
+            text = key if len(key) > 1 else typed + key
+            return ConsumerUiEvent(
+                ConsumerUiEventKind.EDIT_ADOPTION_NAME, key=coordinate, text=text
+            )
+        return None
 
     # Screen 46j answers every other key itself, so the universal letters have to be settled above
     # it: D-269 keeps `v`, `?` and `q` working on a form's non-field rows, and reading `continue`
@@ -3365,11 +3438,16 @@ def key_event(
         row = cursor or state.current_row
         values = {"name": state.collection_draft.name, "summary": state.collection_draft.summary}
         if key == "escape":
+            # An applied filter is cleared first, so leaving never costs the draft by surprise.
+            if state.search:
+                return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text="")
             return ConsumerUiEvent(ConsumerUiEventKind.BACK)
         if key == "up":
             return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="up")
         if key == "down":
             return ConsumerUiEvent(ConsumerUiEventKind.MOVE, text="down")
+        if key == "/" and row not in values:
+            return ConsumerUiEvent(ConsumerUiEventKind.SEARCH_OPEN)
         if key == " " and row not in values and row != COLLECTION_SAVE_ROW:
             return ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_SELECTION, key=row)
         if key == "enter":

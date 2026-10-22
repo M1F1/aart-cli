@@ -46,12 +46,14 @@ from aart_cli.application.promotion import (
     finalize_promotion,
     load_registry_versions,
     plan_bulk_promotion,
+    recorded_upstreams,
+    upstream_conflicts,
     validate_promoted_registry,
 )
 from aart_cli.application.registry_versions import ApprovedRegistryVersions
 from aart_cli.domain.candidates import CandidateState
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.identifiers import ArtifactIdentity, SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
@@ -119,9 +121,13 @@ def _scan_alias(url: str) -> SourceAlias:
     those are recorded as provenance.
     """
 
-    tail = url.rstrip("/").rsplit("/", 1)[-1]
-    slug = _SLUG.sub("-", tail.removesuffix(".git").lower()).strip("-")
+    slug = _url_slug(url)
     return SourceAlias(f"scan-{slug}" if slug else "scan-repository")
+
+
+def _url_slug(url: str) -> str:
+    tail = url.rstrip("/").rsplit("/", 1)[-1]
+    return _SLUG.sub("-", tail.removesuffix(".git").lower()).strip("-")
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +144,9 @@ class ScannedArtifact:
     state: str
     payload_paths: tuple[str, ...]
     adoptable: bool
+    #: The upstreams this Registry already took `kind/name` from, when this repository is not one
+    #: of them. Adopting it then needs another Registry name (INV-279).
+    held_by: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,6 +204,9 @@ class RepositoryScan:
     #: screen and the state adoption enforces are then one answer, not two that can disagree.
     bundles: tuple[CandidateBundle, ...] = field(default=(), repr=False, compare=False)
     registry_alias: str = ""
+    #: The pinned read itself, so giving an artifact another Registry name compiles the same commit
+    #: again rather than acquiring the repository a second time.
+    acquisition: NativeReferenceAcquisition | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,8 +343,12 @@ def scan_repository(
     registry_root: str,
     acquire: RepositoryAcquirer = default_native_acquirer,
     policy: EffectivePolicy = _DEFAULT_POLICY,
+    names: tuple[tuple[str, str], ...] = (),
 ) -> Result[RepositoryScan]:
-    """Observe one repository's declared artifacts at one pinned commit, changing nothing."""
+    """Observe one repository's declared artifacts at one pinned commit, changing nothing.
+
+    `names` publishes the manifest at a path under another Registry name (INV-279).
+    """
 
     if not os.path.isabs(registry_root) or os.path.normpath(registry_root) != registry_root:
         return _error("a repository is scanned against an absolute registry checkout")
@@ -360,6 +376,7 @@ def scan_repository(
         revision=acquired.value.resolved_commit,
         versions=ApprovedRegistryVersions(approved.value, alias.value),
         provenance_extensions=((REPOSITORY_ADOPTION_RECORD, JsonObject((("ref", ref),))),),
+        names=names,
     )
     if isinstance(compiled, Err):
         return compiled
@@ -389,16 +406,18 @@ def scan_repository(
         else validated_candidate(bundle, policy=policy)
         for bundle in observed.value.active
     )
+    recorded = recorded_upstreams(workspace.value, approved.value)
     return Ok(
         RepositoryScan(
             url,
             ref,
             acquired.value.resolved_commit,
             observed.value.manifest_count,
-            tuple(_scanned(bundle) for bundle in bundles),
+            tuple(_scanned(bundle, recorded) for bundle in bundles),
             observed.value,
             bundles,
             alias.value.value,
+            acquired.value,
         )
     )
 
@@ -411,10 +430,13 @@ _TERMINAL = frozenset(
 )
 
 
-def _scanned(bundle: CandidateBundle) -> ScannedArtifact:
+def _scanned(
+    bundle: CandidateBundle, recorded: dict[ArtifactIdentity, frozenset[str]]
+) -> ScannedArtifact:
     candidate = bundle.candidate
     artifact = candidate.artifact
     version = artifact.coordinate.version or ""
+    holders = recorded.get(artifact.coordinate.artifact, frozenset())
     return ScannedArtifact(
         _coordinate(bundle),
         str(artifact.coordinate.artifact.kind),
@@ -430,6 +452,7 @@ def _scanned(bundle: CandidateBundle) -> ScannedArtifact:
             if str(entry.path).startswith("payload/")
         ),
         candidate.state in _ADOPTABLE,
+        () if artifact.provenance.source in holders else tuple(sorted(holders)),
     )
 
 
@@ -468,6 +491,9 @@ def check_adopted_upstream(
         )
     if acquired.value.url != adopted.url or acquired.value.requested_ref != adopted.ref:
         return _error("the upstream acquisition does not match the adopted URL and ref")
+    # The manifest keeps the name this Registry published it under, which is not the author's when
+    # the name was taken from another upstream (INV-279).
+    names = ((adopted.manifest_path, adopted.coordinate.split("@", 1)[0].split("/", 1)[1]),)
     alias = _registry_alias(registry_root)
     if isinstance(alias, Err):
         return alias
@@ -484,6 +510,7 @@ def check_adopted_upstream(
         revision=acquired.value.resolved_commit,
         versions=ApprovedRegistryVersions(approved.value, alias.value),
         provenance_extensions=((REPOSITORY_ADOPTION_RECORD, JsonObject((("ref", adopted.ref),))),),
+        names=names,
     )
     if isinstance(compiled, Err):
         return Ok(
@@ -527,6 +554,7 @@ def check_adopted_upstream(
         registry_root=registry_root,
         acquire=lambda _url, _ref: acquired,
         policy=policy,
+        names=names,
     )
     if isinstance(rescanned, Err):
         return rescanned
@@ -562,11 +590,15 @@ def prepare_adoption(
     *,
     registry_root: str,
     policy: EffectivePolicy = _DEFAULT_POLICY,
+    renames: tuple[tuple[str, str], ...] = (),
 ) -> Result[PreparedAdoption]:
     """Plan the exact owned copies one selection would write, writing nothing.
 
     A selection is one transaction: the registry is left as the review describes it or not written
     at all, so an artifact whose own plan refuses takes the whole preparation down by name.
+
+    `renames` gives a selected `kind/name` another Registry name. A name this Registry already took
+    from another upstream is refused rather than made that artifact's next version (INV-279).
     """
 
     if not isinstance(scan, RepositoryScan):
@@ -594,12 +626,36 @@ def prepare_adoption(
             f"{', '.join(sorted(refused))} did not pass validation, so it cannot be adopted",
             "Open the scan again and choose an artifact whose manifest validates.",
         )
+    if renames:
+        return _renamed(
+            scan, selected, bundles, renames, registry_root=registry_root, policy=policy
+        )
     workspace = FilesystemRegistryWorkspace(registry_root).snapshot()
     if isinstance(workspace, Err):
         return workspace
     approved = load_registry_versions(workspace.value)
     if isinstance(approved, Err):
         return approved
+    conflicts = upstream_conflicts(workspace.value, approved.value, bundles)
+    if conflicts:
+        named = ", ".join(str(item.identity) for item in conflicts)
+        return Err(
+            tuple(
+                Diagnostic(
+                    REPOSITORY_ADOPTION_REFUSED,
+                    Severity.ERROR,
+                    f"{item.message}; adopt it under another name",
+                    remediation=(
+                        f"Repeat the adoption with --rename {item.identity}=NEW-NAME "
+                        f"(for example {item.identity.name}-{_url_slug(scan.url) or 'upstream'}).",
+                    ),
+                    interactive=(
+                        f"Type another name in the Registry name row under {named}, then continue.",
+                    ),
+                )
+                for item in conflicts
+            )
+        )
     evidence = []
     for bundle in bundles:
         validation = validate_candidate(bundle, policy=policy)
@@ -625,6 +681,56 @@ def prepare_adoption(
             tuple(str(change.path) for change in planned.value.changes),
             planned.value,
         )
+    )
+
+
+def _renamed(
+    scan: RepositoryScan,
+    selected: tuple[str, ...],
+    bundles: tuple[CandidateBundle, ...],
+    renames: tuple[tuple[str, str], ...],
+    *,
+    registry_root: str,
+    policy: EffectivePolicy,
+) -> Result[PreparedAdoption]:
+    """Compile the same pinned commit again with the given Registry names, then prepare that."""
+
+    by_identity = {
+        str(bundle.candidate.artifact.coordinate.artifact): str(bundle.artifact.manifest_path)
+        for bundle in bundles
+    }
+    unknown = tuple(identity for identity, _name in renames if identity not in by_identity)
+    if unknown or len(dict(renames)) != len(renames):
+        return _error(
+            f"a new Registry name is given for {', '.join(sorted(unknown)) or 'one artifact twice'}"
+            ", which is not one selected artifact",
+            "Name each selected artifact at most once, as KIND/NAME=NEW-NAME.",
+        )
+    if scan.acquisition is None:
+        return _error(
+            "this scan does not hold the commit it read, so it cannot be compiled again",
+            "Scan the repository again, then adopt from that scan.",
+        )
+    acquisition = scan.acquisition
+    rescanned = scan_repository(
+        url=scan.url,
+        ref=scan.ref,
+        registry_root=registry_root,
+        acquire=lambda _url, _ref: Ok(acquisition),
+        policy=policy,
+        names=tuple((by_identity[identity], name) for identity, name in renames),
+    )
+    if isinstance(rescanned, Err):
+        return rescanned
+    paths = tuple(str(bundle.artifact.manifest_path) for bundle in bundles)
+    found = {item.manifest_path: item.coordinate for item in rescanned.value.artifacts}
+    if any(path not in found for path in paths) or len(paths) != len(selected):
+        return _error("compiling the scan again did not find what was selected")
+    return prepare_adoption(
+        rescanned.value,
+        tuple(found[path] for path in paths),
+        registry_root=registry_root,
+        policy=policy,
     )
 
 

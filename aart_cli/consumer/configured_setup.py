@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Literal
@@ -151,13 +152,16 @@ def _effect_proofs(
                 source_path=_source_path(receipt.launcher, receipt.root),
             ),
         )
+    # A shared payload is the canonical object's `payload/`, so its parent spells each source
+    # `payload/...` exactly as the private tree's root does (D-457).
+    held = receipt.root if receipt.payload is None else os.path.dirname(receipt.payload)
     deliveries = tuple(
         EffectProof(
             "copy-tree" if item.kind is DeliveryKind.TREE else "write-file",
             _relative_destination(item.destination, host, scope),
             "copy",
             item.digest,
-            source_path=_source_path(item.source, receipt.root),
+            source_path=_source_path(item.source, held),
         )
         for item in receipt.deliveries
         if item.harness == profile

@@ -330,13 +330,19 @@ def removal_state_from_placement(
 
     environment = ArtifactEnvironment(receipt.artifact, receipt.root)
     absent = ComponentState.ABSENT
-    components: list[DesiredComponent] = [
-        DesiredComponent(
-            ComponentId(Component.PAYLOAD),
-            (RemoveOwnedPath(environment.root, recursive=True),),
-            target=absent,
-        )
-    ]
+    # A shared payload is the canonical object, which other installations and the store's own
+    # references still hold; uninstalling withdraws only what this installation placed (D-457).
+    components: list[DesiredComponent] = (
+        []
+        if receipt.payload is not None
+        else [
+            DesiredComponent(
+                ComponentId(Component.PAYLOAD),
+                (RemoveOwnedPath(environment.root, recursive=True),),
+                target=absent,
+            )
+        ]
+    )
     components.extend(
         DesiredComponent(
             ComponentId(Component.DELIVERY, delivery.harness),

@@ -12,13 +12,15 @@ from aart_cli.tui_consumer import frame, run_consumer_shell
 from aart_cli.tui_marketplace_rows import render_marketplace_rows
 from tests.marketplace_cursor_description_test import _distinct, _listed
 
-HEADINGS = ("Artifact", "Status", "Scope", "Harnesses", "Unset")
+HEADINGS = ("Artifact", "Registry", "Upstream", "Status", "Scope", "Harnesses", "Configuration")
 ROW = (
-    "company/mcp/a-very-long-artifact-coordinate@1.2.3",
+    "mcp/a-very-long-artifact-coordinate@1.2.3",
+    "company",
+    "acme/database-server",
     "update available",
     "user + 17 projects",
     "claude ✓, codex ✓, opencode, tabnine",
-    "12 not set",
+    "not configured (12 missing)",
 )
 
 
@@ -32,9 +34,9 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
         header = lines[0]
         starts = [header.index(label) for label in HEADINGS]
         ends = starts[1:] + [80]
-        self.assertTrue(lines[1].startswith("> [x] "))
+        self.assertTrue(lines[2].startswith("> [x] "))
         for value, start, end in zip(ROW, starts, ends, strict=True):
-            recovered = "".join(line[start:end].strip() for line in lines[1:])
+            recovered = "".join(line[start:end].strip() for line in lines[2:])
             self.assertEqual(flat(recovered), flat(value))
         self.assertTrue(all(len(line) <= 80 for line in lines))
 
@@ -55,23 +57,25 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
         def holds(width, value):
             row = (
                 value,
+                "company",
+                "acme/skills",
                 "update available",
                 "user + 17 projects",
                 "codex ✓, opencode",
-                "3 not set",
+                "not configured (3 missing)",
             )
             lines = render_marketplace_rows((row,), current=value, selected=(), width=width)
             self.assertTrue(all(len(line) <= width for line in lines))
-            if width < 67:
+            if width < 78:
                 shown = flat("\n".join(lines))
                 for label, cell in zip(HEADINGS, row, strict=True):
                     self.assertIn(flat(label + ":" + cell), shown)
             else:
                 starts = [lines[0].index(label) for label in HEADINGS]
                 for i, cell in enumerate(row):
-                    end = starts[i + 1] if i < 4 else width
+                    end = starts[i + 1] if i < len(HEADINGS) - 1 else width
                     self.assertEqual(
-                        flat("".join(line[starts[i] : end] for line in lines[1:])), flat(cell)
+                        flat("".join(line[starts[i] : end] for line in lines[2:])), flat(cell)
                     )
 
         holds()
@@ -87,14 +91,14 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
         lines = render_marketplace_rows(
             (("team/collection/tools@1.0.0", "installed"),), current="", selected=(), width=26
         )
-        for label in ("Scope", "Harnesses", "Unset"):
+        for label in ("Scope", "Harnesses", "Configuration"):
             self.assertIn(label + ": —", "\n".join(lines))
 
     def test_header_gutter_and_left_aligned_cells_match(self):
         lines = render_marketplace_rows((ROW,), current=ROW[0], selected=(), width=80)
         self.assertTrue(lines[0].startswith("      Artifact"))
         for label, value in zip(HEADINGS, ROW, strict=True):
-            self.assertTrue(lines[1][lines[0].index(label) :].startswith(value.split()[0][:5]))
+            self.assertTrue(lines[2][lines[0].index(label) :].startswith(value.split()[0][:5]))
 
     def test_paging_reaches_every_details_line_and_never_exceeds_generated_viewports(self):
         from aart_cli.tui_layout import Frame, render, wrap_lines
@@ -157,7 +161,7 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
             (("team/collection/tools@1.0.0", "installed"),), current="", selected=(), width=80
         )
         start = lines[0].index("Scope")
-        self.assertTrue(all(not line[start:].strip() for line in lines[1:]))
+        self.assertTrue(all(not line[start:].strip() for line in lines[2:]))
 
     def test_collection_rows_keep_all_column_labels(self):
         lines = render_marketplace_rows(
@@ -202,7 +206,7 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
         self.assertTrue(any(line.startswith(">") for line in screen.frames[0]))
         self.assertIn("PgUp/PgDn", "\n".join(screen.frames[0]))
         self.assertTrue(all(len(line) <= 26 for view in screen.frames for line in view))
-        self.assertIn("Unset: —", "\n".join(screen.frames[-2]))
+        self.assertIn("Configuration: —", "\n".join(screen.frames[-2]))
         self.assertEqual(screen.frames[-3], screen.frames[-2], "the end must clamp")
         self.assertNotEqual(
             screen.frames[-2], screen.frames[-1], "one PageUp must move immediately"

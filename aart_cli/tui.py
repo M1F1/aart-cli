@@ -1180,10 +1180,10 @@ def _canonical_consumer_actions(
         """Bind both review halves to this project registry; neither publishes it."""
 
         @staticmethod
-        def prepare(scan, selected):
+        def prepare(scan, selected, renames=()):
             from .io.registry_adoption import prepare_adoption
 
-            return prepare_adoption(scan, selected, registry_root=project_root)
+            return prepare_adoption(scan, selected, registry_root=project_root, renames=renames)
 
         @staticmethod
         def apply(prepared, review_digest):

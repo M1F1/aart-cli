@@ -195,7 +195,11 @@ def observe_placement(receipt: PlacedArtifactReceipt) -> PlacementObservation:
         SettingsObservation(item.harness, found is not None, found)
         for item, found in ((entry, _entry_digest(entry)) for entry in receipt.settings)
     ]
-    payload = ArtifactEnvironment(receipt.artifact, receipt.root).payload
+    payload = (
+        ArtifactEnvironment(receipt.artifact, receipt.root).payload
+        if receipt.payload is None
+        else receipt.payload
+    )
     present = os.path.isdir(payload)
     return PlacementObservation(
         payload_present=present,

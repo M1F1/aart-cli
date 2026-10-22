@@ -192,8 +192,8 @@ def _registry_baseline_error(mismatch: RegistryBaselineMismatch) -> Err:
         )
     if mismatch is RegistryBaselineMismatch.WRONG_WORKSPACE:
         return _error(
-            "the selected workspace is a different Git repository from the configured Registry",
-            "open the configured Registry checkout and review promotion there",
+            "aart-cli was started in a different Git repository from the configured Registry",
+            "start aart-cli in a checkout of that Registry and try again",
         )
     return _error(
         "registry workspace does not match the synchronized approved baseline",
@@ -398,12 +398,12 @@ def prepare_candidate_promotion(
     if validation.state is CandidateState.INVALID:
         return _error(
             "Candidate is invalid under this policy and cannot be promoted",
-            "Screen 39 names each failing check and what it expected.",
+            "Validation Details names each failing check and what it expected.",
         )
     if validation.state is CandidateState.APPROVAL_REQUIRED:
         return _error(
             "policy requires manual approval before this Candidate can be promoted",
-            "Screen 40 lists the required checks this run did not pass.",
+            "Policy Review lists the required checks this run did not pass.",
         )
     if validation.state not in _PROMOTABLE or candidate.state is CandidateState.INVALID:
         return _error("Candidate is not in a promotable state")

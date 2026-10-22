@@ -390,10 +390,22 @@ class PlacedArtifactReceipt:
     #: with two trees and two records, and this is what tells them apart. `None` for the
     #: lower-level callers that never cross that boundary.
     owner: InstallationOwner | None = None
+    #: Where the payload the deliveries and merges are copied from lives, when it is not a private
+    #: copy under `root`. A kind the harness only reads is delivered straight from the canonical
+    #: object in the application home, which the installed reference keeps from collection, so no
+    #: second copy sits beside the harness's own (§179, D-457). `None` is the private tree
+    #: `root/payload`, which a plugin still needs because the harness loads it from there.
+    payload: str | None = None
 
     def __post_init__(self) -> None:
         if not (self.owner is None or isinstance(self.owner, InstallationOwner)):
             raise ValueError("a placed artifact receipt belongs to one installation owner")
+        if self.payload is not None and (
+            not isinstance(self.payload, str)
+            or not self.payload.startswith("/")
+            or any(character in self.payload for character in "\r\n")
+        ):
+            raise ValueError("placed artifact receipt payload must be one absolute path")
         for value, label in ((self.artifact, "artifact"), (self.root, "root")):
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"placed artifact receipt {label} is invalid")
@@ -435,11 +447,12 @@ class PlacedArtifactReceipt:
         if len(set(entries)) != len(entries):
             raise ValueError("two settings entries cannot own the same entry of the same list")
         sources: tuple[ArtifactDelivery | ArtifactMerge, ...] = (*self.deliveries, *self.merges)
+        base = self.root if self.payload is None else self.payload
         for item in sources:
-            if not _within(self.root, item.source):
-                # Re-delivery copies from the artifact's own tree. A source outside it would let
-                # a repair place content this installation never owned.
-                raise ValueError("a delivery source lies inside the artifact root")
+            if not _within(base, item.source):
+                # Re-delivery copies from this installation's payload. A source outside it would
+                # let a repair place content this installation never owned.
+                raise ValueError("a delivery source lies inside the artifact's payload")
         for items, label in (
             (self.deliveries, "delivery"),
             (self.merges, "merge"),
@@ -539,10 +552,12 @@ def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str,
     setup: dict[str, object] = (
         {} if receipt.setup_state_ref is None else {"setup_state_ref": receipt.setup_state_ref}
     )
+    shared: dict[str, object] = {} if receipt.payload is None else {"payload": receipt.payload}
     return {
         **owned,
         **identity,
         **setup,
+        **shared,
         "artifact": receipt.artifact,
         "config": [
             {"digest": str(item.digest), "input": item.input.value} for item in receipt.config
@@ -750,6 +765,7 @@ def placed_artifact_receipt_from_data(data: object) -> Result[PlacedArtifactRece
                 ),
                 None if data.get("setup_state_ref") is None else str(data["setup_state_ref"]),
                 _owner(data.get("owner")),
+                None if data.get("payload") is None else str(data["payload"]),
             )
         )
     except ValueError as error:

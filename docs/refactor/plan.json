@@ -1253,7 +1253,7 @@
     {
       "id": "CP-33",
       "title": "Default says which Settings values do not fit (#82); secret-name variables (#46); agent-readable docs with minimal upkeep (#47); Enterprise docs for 0.11 (#80); Enterprise distribution name (#24)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -1313,7 +1313,69 @@
         {
           "id": "5",
           "title": "Focused verification and the PR",
-          "status": "in_progress"
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-34",
+      "title": "Owner-reported fixes after 0.12.0",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Marketplace draws the cursor's page of ten offers, one line each with no gaps, so More info stays on screen (§178, INV-277, D-456)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "A Skill, guideline, hook or memory is delivered from the canonical object, with no private aart-cli/ tree beside the harness (§179, INV-278, D-457)",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "A Registry artifact name belongs to one upstream repository: adopting the same kind/name from another upstream is refused instead of becoming its next version",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "The maintainer gives a refused artifact another Registry name (CLI --as, TUI), and upstream checks follow the renamed artifact",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "Marketplace shows Registry and Upstream columns; the Artifact column drops the Registry alias",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "The Unset column becomes Configuration: configured, or not configured with how many inputs are missing",
+          "status": "done"
+        },
+        {
+          "id": "8",
+          "title": "The Collection editor filters its artifacts with / like Marketplace, and keeps hidden ticks",
+          "status": "done"
+        },
+        {
+          "id": "9",
+          "title": "The Collection editor keeps its Collection after a refusal or Back; no screen numbers in messages; a wrong-workspace refusal names the directory and the Registry",
+          "status": "done"
+        },
+        {
+          "id": "10",
+          "title": "Collections say which Registry they belong to, and o opens them only from a Registry row",
+          "status": "done"
+        },
+        {
+          "id": "11",
+          "title": "Marketplace and Installed rule their column headings off from the rows, and Installed names its columns",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Focused verification and the PR",
+          "status": "done"
         }
       ]
     }

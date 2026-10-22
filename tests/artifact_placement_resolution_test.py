@@ -274,15 +274,16 @@ class DeliveredPlacementTest(unittest.TestCase):
         self.assertEqual("code-review-company-project", delivery.projected_name)
         self.assertIs(DeliveryKind.TREE, delivery.kind)
 
-    def test_the_delivery_is_made_from_the_copy_this_install_owns(self) -> None:
-        """Not from the store. A repair copies from what the installation placed, which is the
-        only tree this artifact controls: the store's object is shared and may be pruned."""
+    def test_the_delivery_is_made_from_the_canonical_object(self) -> None:
+        """D-457: a Skill keeps no private copy beside the harness. Its delivery and a later repair
+        read the canonical object, which the installed reference keeps from collection."""
 
         placement = self._one()
 
         (delivery,) = placement.deliveries
-        self.assertTrue(delivery.source.startswith(f"{placement.root}/"), delivery.source)
-        self.assertNotIn(self.store.objects, delivery.source)
+        self.assertTrue(placement.shared_payload)
+        self.assertTrue(delivery.source.startswith(self.store.objects), delivery.source)
+        self.assertFalse(delivery.source.startswith(f"{placement.root}/"), delivery.source)
 
     def test_a_skill_registers_with_nothing(self) -> None:
         self.assertEqual((), self._one().targets)

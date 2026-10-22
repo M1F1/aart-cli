@@ -370,6 +370,7 @@ def _project_repository_scan(scan: RepositoryScan) -> MaintainerRepositoryScanVi
                 item.state,
                 item.payload_paths,
                 item.adoptable,
+                item.held_by,
             )
             for item in scan.artifacts
         ),
@@ -763,7 +764,10 @@ class RepositoryAdoptionPort(Protocol):
     """The two halves of one reviewed adoption, already bound to a registry checkout."""
 
     def prepare(
-        self, scan: RepositoryScan, selected: tuple[str, ...]
+        self,
+        scan: RepositoryScan,
+        selected: tuple[str, ...],
+        renames: tuple[tuple[str, str], ...] = (),
     ) -> Result[PreparedAdoption]: ...
 
     def apply(self, prepared: PreparedAdoption, review_digest: str) -> Result[PreparedAdoption]: ...
@@ -1576,7 +1580,20 @@ class LocalConsumerActions:
                 command,
                 _lines("scan a repository before choosing artifacts to adopt"),
             )
-        prepared = self._repository_adoption.prepare(self._scanned_repository, command.selection)
+        # Typed against the scanned coordinate; adoption names the artifact by kind/name (INV-279).
+        scanned = {
+            item.coordinate: f"{item.kind}/{item.name}"
+            for item in self._scanned_repository.artifacts
+        }
+        prepared = self._repository_adoption.prepare(
+            self._scanned_repository,
+            command.selection,
+            tuple(
+                (scanned[coordinate], name)
+                for coordinate, name in command.adoption_names
+                if coordinate in scanned
+            ),
+        )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
         self._pending = prepared.value
@@ -1910,9 +1927,7 @@ class LocalConsumerActions:
         ):
             return self._declined(
                 command,
-                _lines(
-                    "registry transaction changed after screen 43 was composed; review it again"
-                ),
+                _lines("the Registry change differs from the one reviewed; review it again"),
             )
         self._pending = prepared.value
         self._pending_action = command.action
@@ -1970,7 +1985,7 @@ class LocalConsumerActions:
         }:
             return self._declined(
                 command,
-                _lines("the selection changed after screen 47 was composed; review it again"),
+                _lines("the selection changed after Bulk Promotion showed it; review it again"),
             )
         self._pending = prepared.value
         self._pending_action = command.action
@@ -1999,7 +2014,9 @@ class LocalConsumerActions:
         opened = parse_collection_row(command.focus)
         draft = command.collection_draft
         if opened is None or draft is None:
-            return self._declined(command, _lines("a Collection is defined from screen 52"))
+            return self._declined(
+                command, _lines("a Collection is defined in the Collection Editor")
+            )
         alias, existing = opened
         name = existing if existing is not None else draft.name.strip()
         if not name:

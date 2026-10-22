@@ -11488,3 +11488,199 @@ specification are not held to it: they record history and the target.
 **INV-276 — The documented command surface is the shipped one.** Every command, option and default
 the reference prints is read from the parser the executable runs, and no user-facing document shows
 a fenced command that parser rejects.
+
+
+# 178. Marketplace lists a page of ten, one line per offer
+
+Status: **ACCEPTED 2026-10-21 (D-456)**, on the owner's request (CP-34). This narrows §175.6.
+
+- **Ten offers at a time.** Marketplace draws the page of ten offers that holds the cursor
+  (1–10, 11–20, …) and, when there are more than ten, says which ones it shows and of how many.
+  Moving the cursor past the page edge turns the page. Search, filters, selection and the install
+  route still cover every offer, not only the page.
+- **More info stays on screen.** Because the list is at most ten offers, the More info block for
+  the offer under the cursor follows the list on the first screen instead of after every offer.
+- **One line per offer.** Each column is as wide as its widest value. When the terminal has room,
+  every offer is one line, directly under the headings, with no blank line between offers. Only a
+  terminal too narrow for that wraps the widest columns first; INV-274 still forbids truncation,
+  and the stacked layout keeps a blank line between offers because each one spans several lines.
+
+**INV-277 — The focused offer's details fit beside the list.** Marketplace never draws more than
+ten offers at once, the drawn ones always include the offer under the cursor, and in the grid
+layout each offer is one line whenever the terminal is wide enough for every value.
+
+
+# 179. A kind the harness only reads keeps no private copy
+
+Status: **ACCEPTED 2026-10-21 (D-457)**, on the owner's request (CP-34). This narrows §169.3.
+
+§169.3 gave every installation a private tree under its harness, and a Skill, guideline, hook or
+memory got one too: its payload was copied into `<harness>/aart-cli/<kind>/<alias>/<name>/payload`
+and copied again to where the harness reads it. The harness reads only the second copy, so a
+project held every such artifact twice.
+
+- **Delivered from the canonical object.** A Skill, guideline, hook or memory is delivered or merged
+  straight from the payload of its canonical object in the application home
+  (`objects/sha256/…/payload`). No `aart-cli/` subtree is written for it beside the harness.
+- **The object is the installation's evidence.** The receipt records that payload path. Doctor
+  measures it against the approved payload digest, and repair re-delivers from it. The installed
+  object reference (§169.2) keeps it from collection while any installation records it.
+- **Uninstall withdraws only what was placed.** Removing such an installation withdraws its
+  deliveries, merged regions and settings entries and leaves the canonical object to the store.
+- **Loaded kinds keep their tree.** An MCP server (payload, runtime, launcher, configuration) and a
+  plugin (loaded by the harness from its tree) keep the private tree §169.3 describes.
+
+**INV-278 — One copy where the harness reads.** Installing a Skill, guideline, hook or memory writes
+nothing beside the harness except what the harness reads, and its delivery sources lie in the
+canonical object its receipt records.
+
+
+
+# 180. An adopted name belongs to its upstream
+
+Status: **ACCEPTED 2026-10-21 (D-458)**, on the owner's request (CP-34). This narrows §173.2 for
+repository adoption.
+
+§173.2 compares a manifest with the approved versions "of the same artifact", and the artifact was
+only its `kind/name`. Adopting `skill/brainstorming` from a second repository therefore made it the
+next version of the first repository's `skill/brainstorming`: two authors' work under one name and
+one version line, with nothing said.
+
+- **One name, one upstream.** A `kind/name` this Registry adopted or promoted belongs to the
+  upstream URL its versions record. Adopting it from that URL works as §173.2 says. Adopting it from
+  another URL is refused before anything is written, and the refusal names both URLs.
+- **The scan says so first.** A repository scan marks each artifact whose name the Registry already
+  took from another upstream and names that upstream, on the CLI (`held_by`) and on screen 46d.
+- **Another Registry name.** The Maintainer can adopt such an artifact under another name:
+  `aart-cli maintain upstream adopt … --artifact KIND/NAME@VERSION --rename KIND/NAME=NEW-NAME`, or
+  by typing it in the artifact's Registry name row on screen 46d. The copy is then its own artifact,
+  starting at `1.0.0`, beside the first. Its input digest is still the author's, so its upstream
+  check compares like with like and proposes later versions under the Registry name.
+- **Source promotion is not covered.** A Source records the location its surface was given (a URL
+  on the CLI, a configured location in the TUI), so it is not yet a stable upstream identity.
+
+**INV-279 — An adopted name has one upstream.** Repository adoption never publishes a version of a
+`kind/name` whose existing versions record a different upstream URL; it refuses, and the same
+artifact can be adopted under a Registry name that is free or that the same upstream holds.
+
+
+# 181. A Marketplace offer names its Registry and its upstream
+
+Status: **ACCEPTED 2026-10-21 (D-459)**, on the owner's request (CP-34). This extends §173.8 and
+§178.
+
+The Artifact column read `alias/kind/name@version`. The Registry was buried in that coordinate, and
+the row did not say where the work came from. Two Registries' copies of one name, or one Registry's
+copies of two upstreams adopted under different names (§180), could not be told apart.
+
+- **Columns.** A Marketplace offer's columns are, in order: Artifact, Registry, Upstream, Status,
+  Scope, Harnesses, Unset.
+- **Artifact column.** It is `kind/name@version`, and the Registry column is the alias that offers
+  it. A Collection's row shows the Collection in Artifact and its alias in Registry, and leaves
+  Upstream empty.
+- **Upstream column.** It is the last two path segments of the URL the version's provenance
+  records, read as `owner/repository`. Scheme, host, port, credentials and a trailing `.git` are
+  dropped, so the row never shows a secret. An offer with no recorded upstream leaves it empty.
+- **More info.** It shows the whole upstream URL, with any credentials redacted (INV-052), as the
+  `Upstream` field.
+- **Rows still keyed by offer.** Selection, the cursor and installation still name the offer by its
+  full coordinate, and only the drawn column drops the alias.
+- **Wrapping.** The added columns make the grid wider. A terminal too narrow for every value on one
+  line wraps as §178 says, and INV-274 still forbids truncation.
+
+**INV-280 — An offer's row names where it is offered and where it came from.** Every Marketplace
+artifact row shows its Registry alias and its upstream as their own columns, never a credential, and
+More info shows the redacted whole upstream URL.
+
+
+# 182. Configuration, not Unset
+
+Status: **ACCEPTED 2026-10-21 (D-460)**, on the owner's request (CP-34). This replaces the unset
+inputs column of §173.8 and §181.
+
+The last column was `Unset`, with values such as `3 not set`. The owner could not tell what it
+meant.
+
+- **Heading.** The column is `Configuration`, on Marketplace and on Installed.
+- **Values.** `configured` when every input of what is installed has a value.
+  `not configured (N missing)` while N inputs still hold `AART_NOT_SET`; on Marketplace, N is
+  summed over the offer's installations, because each keeps its own (§169.4). An offer nothing
+  installs leaves the column empty.
+- **Not health.** Installed's health column keeps its own words (`ready`, …). Configuration says
+  only whether the inputs have values, the same condition that makes §170.2's installation
+  configuration stage `NOT CONFIGURED`.
+- **Widths.** No column is narrower than its heading, so the header line names every column in
+  full (INV-274). The grid still fits an 80-column terminal.
+
+**INV-281 — Configuration is said in words.** Every Marketplace and Installed row that has an
+installation says `configured` or `not configured (N missing)` under the heading `Configuration`,
+and N is the count of inputs still holding `AART_NOT_SET`.
+
+
+# 183. Collections are found, kept and placed plainly
+
+Status: **ACCEPTED 2026-10-21 (D-461, D-462, D-463)**, on the owner's request (CP-34). This
+extends §173.3's screens 51 and 52.
+
+The owner, with two Registries and many approved artifacts, found Collections hard to use. The
+editor listed every artifact with no way to find one. A refused Continue brought the editor back
+empty, saying "Open a Collection from screen 51 first". The refusal talked about promotion. Nothing
+said which Registry the Collections belonged to.
+
+- **Search in the editor.** On an artifact row of the Collection Editor, `/` opens the filter
+  Marketplace has. It matches the artifact's `kind/name`, case-insensitively, and keeps the Name,
+  Summary and Continue rows. On the Name and Summary rows `/` is a character. A filter hides rows
+  and never unticks one. The selected count includes ticks the filter hides, and Continue saves
+  them. When the filter hides the row under the cursor, the cursor moves to the first match. Esc
+  first clears an applied filter, and a second Esc leaves.
+- **The editor keeps its Collection.** Continue's review stays about the Collection being
+  edited. A refusal, or Back from the review, returns to the same Collection with its name,
+  summary and ticks.
+- **The refusal says where.** A Registry change is written into the checkout `aart-cli` was
+  started in. When that directory is another Git repository, Collections, promotion and bulk
+  promotion refuse before planning. The refusal names that directory, the Registry it is not, and
+  the configured Registry location to start `aart-cli` in.
+- **No screen numbers.** No message, status or refusal names a screen by its number. Screen
+  numbers are this specification's index, not the reader's. A message names the screen as its
+  heading does.
+- **Collections name their Registry.** The Collections screen says "Collections of Registry
+  ALIAS", and the editor says "New Collection in ALIAS" (or the Collection and version). Both say
+  that saving writes into the Registry checkout `aart-cli` was started in. On the Registry screen,
+  `o` is offered only while the cursor is on a Registry row, and opens that Registry's
+  Collections.
+
+**INV-282 — The editor finds an artifact by name.** On the Collection Editor's artifact rows `/`
+filters the artifacts by `kind/name`, the form rows stay, and every tick, shown or hidden, is
+counted and saved.
+
+**INV-283 — A refused or abandoned Collection review returns to its Collection.** After a refusal
+or Back, the Collection Editor shows the same Collection, draft and ticks. No user-visible message
+names a screen by number.
+
+**INV-284 — Collections name their Registry.** The Collections screen and the Collection Editor
+name the Registry they belong to and where saving writes, and `o` opens only the Collections of
+the Registry under the cursor.
+
+
+# 184. Column headings are named and ruled off
+
+Status: **ACCEPTED 2026-10-22 (D-464)**, on the owner's request (CP-34). This extends §173.8,
+§181 and §182.
+
+On Marketplace the heading line sat directly on the first offer, so scrolling the list the owner
+could not tell headings from rows. Installed drew its cells (`ready  configured`) with no heading
+at all.
+
+- **Rule.** Under the heading line of Marketplace's grid and of Installed, a rule of `─` runs under
+  each heading, starting where the heading starts and as wide as its column, with the column gap
+  between rules. The rows start on the next line.
+- **Installed headings.** Installed's columns are headed `Artifact`, `Health`, `Scope`, `Project`
+  and `Configuration`, on the same grid as its rows. A Collection's row fills only Artifact and
+  Health.
+- **Narrow Marketplace.** The stacked form labels each field, so it has no heading line and no
+  rule.
+
+**INV-285 — Headings are named and ruled off.** Wherever Marketplace or Installed draws a heading
+line, the next line is a rule under each heading, as wide as its column, and every heading starts
+where its cells start.
+

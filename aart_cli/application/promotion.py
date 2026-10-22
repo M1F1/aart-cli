@@ -54,6 +54,7 @@ from aart_cli.protocol.hashing import (
     tree_digest,
 )
 from aart_cli.protocol.json import JsonArray, JsonObject, canonical_json_bytes, parse_json
+from aart_cli.protocol.native_schema import parse_provenance
 from aart_cli.protocol.native_tree import (
     SnapshotEntry,
     SnapshotEntryKind,
@@ -468,6 +469,78 @@ def _files(snapshot: SourceSnapshot) -> Result[dict[str, SnapshotEntry]]:
     if isinstance(validated, Err):
         return validated
     return Ok({str(entry.path): entry for entry in snapshot.entries})
+
+
+def recorded_upstreams(
+    snapshot: SourceSnapshot, approved: tuple[RegistryArtifactVersion, ...]
+) -> dict[ArtifactIdentity, frozenset[str]]:
+    """The upstream URLs each approved artifact name was taken from (INV-279).
+
+    A self-contained version records its upstream in its package provenance, a pinned reference in
+    its reference record. A Collection has none. A record this cannot read names no upstream: the
+    answer is whose name it is, and validating the Registry is another check's job.
+    """
+
+    files = {
+        str(entry.path): entry for entry in snapshot.entries if entry.kind is SnapshotEntryKind.FILE
+    }
+    found: dict[ArtifactIdentity, set[str]] = {}
+    for version in approved:
+        identity = version.coordinate.artifact
+        base = f"{identity.kind}/{identity.name}/{version.coordinate.version}"
+        url: object = None
+        if identity.kind == "collection":
+            continue
+        if version.mode is RegistryContentMode.SELF_CONTAINED:
+            entry = files.get(f"artifacts/{base}/provenance.json")
+            provenance = parse_provenance(entry.content) if entry is not None else None
+            if isinstance(provenance, Ok):
+                url = provenance.value.origin.url
+        else:
+            entry = files.get(f"references/{base}.json")
+            reference = parse_json(entry.content) if entry is not None else None
+            if isinstance(reference, Ok) and isinstance(reference.value, JsonObject):
+                url = reference.value.get("source")
+        if isinstance(url, str) and url:
+            found.setdefault(identity, set()).add(url)
+    return {identity: frozenset(urls) for identity, urls in found.items()}
+
+
+@dataclass(frozen=True, slots=True)
+class UpstreamConflict:
+    """A Candidate whose name the Registry already holds for another upstream (INV-279)."""
+
+    identity: ArtifactIdentity
+    recorded: frozenset[str]
+    upstream: str
+
+    @property
+    def message(self) -> str:
+        return (
+            f"{self.identity} in this Registry comes from {', '.join(sorted(self.recorded))}; "
+            f"{self.upstream} is another upstream, so it cannot become its next version"
+        )
+
+
+def upstream_conflicts(
+    snapshot: SourceSnapshot,
+    approved: tuple[RegistryArtifactVersion, ...],
+    selected: tuple[CandidateBundle, ...],
+) -> tuple[UpstreamConflict, ...]:
+    """Every selected Candidate that would publish under a name another upstream holds."""
+
+    recorded = recorded_upstreams(snapshot, approved)
+    return tuple(
+        UpstreamConflict(identity, recorded[identity], upstream)
+        for bundle in selected
+        for identity, upstream in (
+            (
+                bundle.candidate.artifact.coordinate.artifact,
+                bundle.candidate.artifact.provenance.source,
+            ),
+        )
+        if identity in recorded and upstream not in recorded[identity]
+    )
 
 
 def registry_state_digest(snapshot: SourceSnapshot) -> Result[ObjectDigest]:

@@ -9,11 +9,14 @@ from typing import Sequence
 
 from aart_cli.tui_layout import Frame, render, wrap_lines
 
-_HEADINGS = ("Artifact", "Status", "Scope", "Harnesses", "Unset")
-_MINIMUM = (16, 16, 7, 9, 5)
+_HEADINGS = ("Artifact", "Registry", "Upstream", "Status", "Scope", "Harnesses", "Configuration")
+_MINIMUM = (8, 8, 8, 9, 5, 9, 13)
+"""Never below a heading, so the header line names every column in full (INV-274)."""
 _GUTTER = 6
 _GAP = 2
 _GRID_MINIMUM = _GUTTER + sum(_MINIMUM) + _GAP * (len(_HEADINGS) - 1)
+MARKETPLACE_WINDOW = 10
+"""Offers drawn at once; the rest are a page away (INV-277)."""
 
 
 def _lines(value: str, width: int, *, indent: int = 0) -> tuple[str, ...]:
@@ -29,29 +32,64 @@ def _lines(value: str, width: int, *, indent: int = 0) -> tuple[str, ...]:
     )
 
 
+def _sizes(rows: Sequence[Sequence[str]], available: int) -> list[int]:
+    """Each column as wide as its widest value, narrowed widest-first only when they do not fit.
+
+    A row then takes one line whenever the terminal has room for it (D-456); a column wraps only
+    after every wider column has given up its excess, and never below its minimum.
+    """
+
+    sizes = [
+        max(minimum, len(heading), *(len(row[index]) for row in rows if index < len(row)))
+        for index, (heading, minimum) in enumerate(zip(_HEADINGS, _MINIMUM, strict=True))
+    ]
+    while sum(sizes) > available:
+        widest = max(
+            (index for index, size in enumerate(sizes) if size > _MINIMUM[index]),
+            key=lambda index: sizes[index],
+        )
+        sizes[widest] -= 1
+    return sizes
+
+
 def render_marketplace_rows(
-    rows: Sequence[Sequence[str]], *, current: str, selected: tuple[str, ...], width: int
+    rows: Sequence[Sequence[str]],
+    *,
+    current: str,
+    selected: tuple[str, ...],
+    width: int,
+    keys: Sequence[str] | None = None,
 ) -> tuple[str, ...]:
     """Keep complete cells and logical row identity independent of physical line count.
 
-    ``width`` is usable columns, with curses's reserved last column already excluded.
+    ``width`` is usable columns, with curses's reserved last column already excluded. ``keys``
+    identify the rows for the cursor and selection; without them a row is keyed by its first cell.
     Empty cells remain explicit in stacked mode; short Collection rows share the same headings.
+    Only the page of ``MARKETPLACE_WINDOW`` offers that holds the cursor is drawn, so More info
+    for that offer follows the list on screen however many offers there are (INV-277).
     """
 
     if width < 1:
         raise ValueError("Marketplace needs at least one usable column")
     grid = width >= _GRID_MINIMUM
-    sizes = (_MINIMUM[0] + max(width - _GRID_MINIMUM, 0), *_MINIMUM[1:])
+    keyed = list(keys) if keys is not None else [row[0] for row in rows]
+    if len(keyed) != len(rows):
+        raise ValueError("Marketplace needs one key per row")
+    focused = keyed.index(current) if current in keyed else 0
+    start = focused - focused % MARKETPLACE_WINDOW
+    page = rows[start : start + MARKETPLACE_WINDOW]
     drawn: list[str] = []
     if grid:
+        sizes = _sizes(rows, width - _GUTTER - _GAP * (len(_HEADINGS) - 1))
         drawn.append(
             " " * _GUTTER
             + (" " * _GAP)
             .join(heading.ljust(size) for heading, size in zip(_HEADINGS, sizes, strict=True))
             .rstrip()
         )
-    for row in rows:
-        key = row[0]
+        # The headings are ruled off from the first offer, each rule as wide as its column (D-464).
+        drawn.append(" " * _GUTTER + (" " * _GAP).join("─" * size for size in sizes))
+    for key, row in zip(keyed[start : start + MARKETPLACE_WINDOW], page, strict=True):
         cells = tuple(row) + ("",) * (len(_HEADINGS) - len(row))
         mark = f"{'>' if key == current else ' '} {'[x]' if key in selected else '[ ]'}"
         if grid:
@@ -70,7 +108,11 @@ def render_marketplace_rows(
             drawn.extend(_lines(mark, width))
             for heading, cell in zip(_HEADINGS, cells, strict=True):
                 drawn.extend(_lines(f"  {heading}: {cell or '—'}", width, indent=4))
-        drawn.append("")
+            # Stacked fields need a boundary between offers; a grid row is its own line (D-456).
+            drawn.append("")
+    if len(rows) > MARKETPLACE_WINDOW:
+        counter = f"Offers {start + 1}–{start + len(page)} of {len(rows)}; ↑/↓ for more."
+        drawn.extend(("", *_lines(counter, width)))
     if not rows:
         drawn.extend(_lines("Nothing here yet.", width))
     return tuple(drawn)

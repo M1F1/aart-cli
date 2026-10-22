@@ -151,6 +151,22 @@ def columns(rows: Sequence[Sequence[str]], *, width: int) -> Tuple[str, ...]:
     return tuple(lines)
 
 
+def headed_columns(
+    headings: Sequence[str], rows: Sequence[Sequence[str]], *, width: int
+) -> Tuple[str, str, Tuple[str, ...]]:
+    """The heading line, a rule under each heading as wide as its column, and the rows (D-464).
+
+    The headings take part in the grid, so a column is never narrower than its heading's natural
+    width while the budget allows it, and every heading starts where its cells start.
+    """
+
+    table = (tuple(headings), *rows)
+    lines = columns(table, width=width)
+    widths = _column_widths(table, budget=measure(width, bound=CONTENT_MEASURE))
+    rule = (" " * _COLUMN_GAP).join("─" * size for size in widths)
+    return lines[0], rule, lines[1:]
+
+
 def field_block(fields: Sequence[Tuple[str, str]], *, indent: int, width: int) -> Tuple[str, ...]:
     """Render ``label   value`` lines on one label column, wrapping values under the value column."""
 

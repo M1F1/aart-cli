@@ -171,21 +171,19 @@ def _merges(
     scope: Scope,
     profiles: tuple[str, ...],
     profiles_requested: bool,
-    root: str,
+    payload: str,
     harness_root: str,
 ) -> Result[tuple[ArtifactMerge, ...]]:
     """Which region of which shared file each requested harness would read this artifact from.
 
     The destination is a file the user writes in, so what is recorded is the region rather than the
-    file, and the digest covers only the body that goes in it. The source is inside `root` for the
-    same reason a delivery's is: the store's object is shared and may be pruned, and a repair has to
-    re-merge from the copy this installation owns.
+    file, and the digest covers only the body that goes in it. The source is inside `payload`, the
+    canonical object a repair re-merges from (D-457).
     """
 
     packaged = package_merge(kind, entries)  # type: ignore[arg-type]
     if isinstance(packaged, Err):
         return packaged
-    payload = ArtifactEnvironment(str(identity), root).payload
     if not is_block_name(identity.name):
         return _error(f"{identity} cannot name a region of a file somebody else owns")
 
@@ -307,15 +305,15 @@ def _deliveries(
     scope: Scope,
     profiles: tuple[str, ...],
     profiles_requested: bool,
-    root: str,
+    payload: str,
     harness_root: str,
 ) -> Result[tuple[ArtifactDelivery, ...]]:
     """Where each requested harness would read this artifact from, and what it would find there.
 
-    The source is inside `root` rather than inside the store, because that is the copy this
-    installation owns: the store's object is shared with every other installation of the same
-    version and may be pruned, so a repair copying from it would depend on somebody else's
-    housekeeping.
+    The source is the canonical object's payload in the application home, not a private copy
+    beside the harness's own: the harness reads only the delivered copy, so a second one under
+    `aart-cli/` held the same bytes for nobody (D-457). The installed reference keeps that object
+    from collection, and a repair re-delivers from it.
 
     What the harness reads it under is the installed name, not the authored one (`§169.7`,
     `D-349`): the same artifact taken from two Registries, or installed at two scopes, reaches two
@@ -349,7 +347,6 @@ def _deliveries(
     packaged = package_delivery(kind, entries, projection=project)  # type: ignore[arg-type]
     if isinstance(packaged, Err):
         return packaged
-    payload = ArtifactEnvironment(str(identity), root).payload
     source = payload if not packaged.value.source else f"{payload}/{packaged.value.source}"
 
     deliveries: list[ArtifactDelivery] = []
@@ -449,6 +446,7 @@ def placements_for(
     # every time that the store held it.
     entries = stored.value.candidate.entries
     package_root = stored.value.root
+    canonical = package_payload_root(package_root)
 
     described = read_package_description(entries)
     if isinstance(described, Err):
@@ -531,7 +529,7 @@ def placements_for(
                 scope=scope,
                 profiles=(profile,),
                 profiles_requested=profiles_requested,
-                root=root,
+                payload=canonical,
                 harness_root=harness_root,
             )
             if isinstance(blocks, Err):
@@ -562,7 +560,7 @@ def placements_for(
                 scope=scope,
                 profiles=(profile,),
                 profiles_requested=profiles_requested,
-                root=root,
+                payload=canonical,
                 harness_root=harness_root,
             )
             if isinstance(made, Err):
@@ -590,7 +588,7 @@ def placements_for(
                     artifact,
                     described.value,
                     root=root,
-                    payload_source=package_payload_root(package_root),
+                    payload_source=canonical,
                     targets=tuple(targets),
                     sources=sources,
                     preferred_installer=preferred_installer,
@@ -601,6 +599,9 @@ def placements_for(
                     # installing machine records what the approved version says it placed.
                     payload_digest=artifact.version.payload_digest if delivered else None,
                     owner=owner,
+                    # Only a plugin is loaded from its own tree; every other kind a harness reads
+                    # is delivered or merged from the canonical object (D-457).
+                    shared_payload=delivered and kind is not ArtifactKind.PLUGIN,
                 )
             )
         except ValueError as error:

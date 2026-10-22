@@ -17,6 +17,7 @@ from aart_cli.application.consumer_session import ConsumerMachine
 from aart_cli.application.consumer_ui import (
     ACTION_ANSWER_SCREENS,
     ACTION_REQUEST_SCREENS,
+    ADOPTION_NAME_ROW,
     COLLECTION_SAVE_ROW,
     CONFIG_CONTINUE_ROW,
     CONFIG_SET_LATER_ROW,
@@ -156,8 +157,8 @@ from aart_cli.tui_layout import (
     action_prompt,
     bulleted,
     cards,
-    columns,
     field_block,
+    headed_columns,
     is_action_prompt,
     list_item,
     listed,
@@ -174,6 +175,7 @@ from aart_cli.tui_maintainer import (
     maintainer_candidate_filter_status,
     maintainer_collection_detail,
     maintainer_collection_editor_status,
+    maintainer_collections_status,
     maintainer_registry_descriptor,
     maintainer_registry_detail,
     maintainer_registry_push_status,
@@ -376,6 +378,7 @@ def _credential_row(view: CredentialRecordView) -> str:
 _USER_CONFIG_ROW_PREFIX = "configuration:"
 #: The cursor and the tick a list draws before each entry: `> [x] `.
 _ROW_PREFIX = 6
+_INSTALLED_HEADINGS = ("Artifact", "Health", "Scope", "Project", "Configuration")
 
 
 def _user_config_row(identifier: str) -> str:
@@ -3520,7 +3523,11 @@ class CanonicalScreenSource:
             return (
                 *(("name",) if opened[1] is None else ()),
                 "summary",
-                *(identity for identity, _version in registry.approved_artifacts),
+                *(
+                    identity
+                    for identity, _version in registry.approved_artifacts
+                    if _matches(query, identity)
+                ),
                 COLLECTION_SAVE_ROW,
             )
         if screen is MaintainerScreen.REGISTRY_PUSH:
@@ -3535,7 +3542,16 @@ class CanonicalScreenSource:
             return (
                 ()
                 if scan is None
-                else tuple(item.coordinate for item in scan.artifacts if item.adoptable)
+                else tuple(
+                    row
+                    for item in scan.artifacts
+                    if item.adoptable
+                    for row in (
+                        (item.coordinate, f"{ADOPTION_NAME_ROW}{item.coordinate}")
+                        if item.held_by
+                        else (item.coordinate,)
+                    )
+                )
             )
         if screen is MaintainerScreen.ADOPTED_ARTIFACTS:
             return tuple(item.coordinate for item in self._screens.adopted_artifacts)
@@ -4236,8 +4252,22 @@ class CanonicalScreenSource:
             return separate(
                 ()
                 if registry is None
-                else maintainer_collection_editor_status(registry, self._opened_collection(state)),
+                else separate(
+                    *(
+                        (line,)
+                        for line in maintainer_collection_editor_status(
+                            registry, self._opened_collection(state)
+                        )
+                    )
+                ),
                 prose,
+            )
+        if screen is MaintainerScreen.COLLECTIONS:
+            listed = self._collection_registry(state)
+            return (
+                ()
+                if listed is None
+                else separate(*((line,) for line in maintainer_collections_status(listed)))
             )
         if prose:
             return prose
@@ -4825,7 +4855,7 @@ class CanonicalScreenSource:
         if screen is MaintainerScreen.COLLECTION_EDITOR:
             registry = self._collection_registry(state)
             if registry is None or not state.rows:
-                return ("Open a Collection from screen 51 first.",)
+                return ("Choose a Collection, or New Collection, on the Collections screen.",)
             return render_maintainer_collection_editor(
                 registry,
                 self._opened_collection(state),
@@ -4869,6 +4899,7 @@ class CanonicalScreenSource:
                     screens.repository_scan,
                     state.selection,
                     cursor=state.current_row,
+                    names=state.adoption_names,
                 )
             )
         if screen is MaintainerScreen.ADOPTION_REVIEW:
@@ -4933,15 +4964,22 @@ class CanonicalScreenSource:
                 if isinstance(entry, MarketplaceEntry):
                     hosts = {item.profile for item in entry.row.compatibility if item.compatible}
                     eligible = tuple(sorted(hosts & set(screens.harnesses)))
-                    cells.append(marketplace_cells(key, screens.installed, eligible))
+                    cells.append(
+                        marketplace_cells(
+                            key, screens.installed, eligible, upstream=entry.row.upstream
+                        )
+                    )
                 elif entry is not None:
                     status = "installed" if key.partition("@")[0] in held else "not installed"
-                    cells.append((key, status))
+                    alias, _, collection = key.partition("/")
+                    cells.append((collection, alias, "", status))
             return render_marketplace_rows(
                 cells,
                 current=state.current_row,
                 selected=state.selection,
-                width=min(CONTENT_MEASURE, state.viewport_columns),
+                keys=tuple(key for key in state.rows if key in offered),
+                # The whole terminal, not the measure, so a row fits on one line (D-456).
+                width=state.viewport_columns,
             )
         if screen in (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE):
             preview = screens.offered_collection(state.focus)
@@ -4966,23 +5004,26 @@ class CanonicalScreenSource:
                 if member
             }
             views = {item.row: item for item in screens.installed}
-            return self._list(
-                state,
-                columns(
-                    tuple(
-                        (
-                            f"{'  ' if row in under else ''}{row}",
-                            *(
-                                installed_cells(views[row], _human(health[row]))
-                                if row in views
-                                else (_human(health.get(row, "unknown")),)
-                            ),
-                        )
-                        for row in state.rows
-                    ),
-                    width=CONTENT_MEASURE - _ROW_PREFIX,
+            if not state.rows:
+                return self._list(state, ())
+            heading, rule, entries = headed_columns(
+                _INSTALLED_HEADINGS,
+                tuple(
+                    (
+                        f"{'  ' if row in under else ''}{row}",
+                        *(
+                            installed_cells(views[row], _human(health[row]))
+                            if row in views
+                            else (_human(health.get(row, "unknown")),)
+                        ),
+                    )
+                    for row in state.rows
                 ),
+                width=CONTENT_MEASURE - _ROW_PREFIX,
             )
+            # Named and ruled off like Marketplace's, so a cell says which column it is (D-464).
+            gutter = " " * _ROW_PREFIX
+            return (gutter + heading.rstrip(), gutter + rule, *self._list(state, entries))
         if screen is ConsumerScreen.INSTALLED_COLLECTION_DETAILS:
             group = screens.installed_collection(state.focus)
             return (
