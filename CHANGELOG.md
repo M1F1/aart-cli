@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.13.0](https://github.com/M1F1/aart-cli/compare/v0.12.0...v0.13.0) (2026-10-22)
+
+
+### Added
+
+* **registry:** adopt an artifact under another Registry name with --rename or the TUI Registry name row ([81606b9](https://github.com/M1F1/aart-cli/commit/81606b9b442781d7e5ee70ab74207e5473232c5e))
+* **tui:** Collections name their Registry, and o opens them only from a Registry row ([81606b9](https://github.com/M1F1/aart-cli/commit/81606b9b442781d7e5ee70ab74207e5473232c5e))
+* **tui:** Marketplace and Installed rule their column headings off from the rows, and Installed names its columns ([81606b9](https://github.com/M1F1/aart-cli/commit/81606b9b442781d7e5ee70ab74207e5473232c5e))
+* **tui:** Marketplace draws a page of ten offers, one line each, so More info stays on screen ([81606b9](https://github.com/M1F1/aart-cli/commit/81606b9b442781d7e5ee70ab74207e5473232c5e))
+* **tui:** Marketplace shows Registry and Upstream columns, and the Artifact column drops the Registry alias ([81606b9](https://github.com/M1F1/aart-cli/commit/81606b9b442781d7e5ee70ab74207e5473232c5e))
+* **tui:** the Collection Editor filters its artifacts with / and keeps ticks the filter hides ([81606b9](https://github.com/M1F1/aart-cli/commit/81606b9b442781d7e5ee70ab74207e5473232c5e))
+* **tui:** the Unset column becomes Configuration, saying configured or how many inputs are missing ([81606b9](https://github.com/M1F1/aart-cli/commit/81606b9b442781d7e5ee70ab74207e5473232c5e))
+
+
+### Fixed
+
+* **install:** a Skill, guideline, hook or memory is delivered as one copy where the harness reads ([81606b9](https://github.com/M1F1/aart-cli/commit/81606b9b442781d7e5ee70ab74207e5473232c5e))
+* **registry:** a launch directory that is not the Registry checkout is refused naming the directory and the Registry ([81606b9](https://github.com/M1F1/aart-cli/commit/81606b9b442781d7e5ee70ab74207e5473232c5e))
+* **registry:** adopting a kind/name this Registry took from another upstream is refused instead of becoming its next version ([81606b9](https://github.com/M1F1/aart-cli/commit/81606b9b442781d7e5ee70ab74207e5473232c5e))
+* **tui:** no message names a screen by its number ([81606b9](https://github.com/M1F1/aart-cli/commit/81606b9b442781d7e5ee70ab74207e5473232c5e))
+* **tui:** the Collection Editor keeps its Collection after a refused Continue or Back ([81606b9](https://github.com/M1F1/aart-cli/commit/81606b9b442781d7e5ee70ab74207e5473232c5e))
+
 ## [0.12.0](https://github.com/M1F1/aart-cli/compare/v0.11.0...v0.12.0) (2026-10-20)
 
 
