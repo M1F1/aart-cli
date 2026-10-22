@@ -1764,7 +1764,8 @@ def render_installation_config_form(
         )
         mark = ">" if current_row == field.row else " "
         accepted = "  accepted" if field.accepted and problem is None else ""
-        lines.append(f"{mark} {label} ({field.id}): [{shown}]{accepted}")
+        optional = "" if field.required else ", optional"
+        lines.append(f"{mark} {label} ({field.id}{optional}): [{shown}]{accepted}")
         if view is not None and view.example:
             lines.append(f"    (e.g. {view.example})")
         if problem is not None:
@@ -1784,7 +1785,8 @@ def installation_config_purpose(
 
     if current_row == CONFIG_SET_LATER_ROW:
         return (
-            "Leaves every value without an answer as AART_NOT_SET and goes on.",
+            "Leaves every required value without an answer as AART_NOT_SET, leaves an empty "
+            "optional one unset, and goes on.",
             "Set it later in Credentials and variables.",
         )
     view = next(

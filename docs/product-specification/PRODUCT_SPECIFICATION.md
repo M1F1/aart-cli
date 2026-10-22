@@ -11755,3 +11755,26 @@ prepared with no answers and refused, so such artifacts installed only through t
 `--input`, `--secret-env` or `--set-later` installs an artifact that has required inputs, with no
 terminal. Each installation holds its own copy of each answer. A credential's value reaches only
 the credential store, and every refusal happens before anything is written.
+
+# 187. An optional input is asked, and reaches the server only when answered
+
+Status: **ACCEPTED 2026-10-22 (D-469)**, on the owner's request (CP-35). This narrows §172.3-4.
+
+An Enterprise agent found two problems:
+- 07 asked only required inputs, so an optional one could not be given at install.
+- Set later puts `AART_NOT_SET` into every field it is handed. An optional input that reached the
+  server as that text was read as a value. A URL became `AART_NOT_SET/...`.
+
+- **07 shows an artifact's optional inputs** whenever it asks about that artifact. Each is marked
+  optional, follows the required ones, and is pre-filled with its declared default, if any.
+- **An empty optional field is no answer.** It needs no acceptance, the input stays unbound, and the
+  server applies its own default.
+- **Set later never fills an optional input.** It keeps a valid value, empties anything else, and
+  puts `AART_NOT_SET` only into required inputs. The same holds for `consume install --set-later`
+  (§186).
+- **The command line binds an optional input** only when `--input` gives it or it declares a
+  default.
+
+**INV-288 — An optional input is never the placeholder.** No install path, form or command line,
+binds `AART_NOT_SET` to an optional input. An optional input nobody answered is absent from the
+installation's configuration and environment.

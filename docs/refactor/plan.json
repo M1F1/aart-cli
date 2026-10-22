@@ -1401,13 +1401,13 @@
         },
         {
           "id": "4",
-          "title": "Optional inputs are asked, never become AART_NOT_SET, and reach the server only when answered",
-          "status": "in_progress"
+          "title": "Optional inputs are asked, never become AART_NOT_SET, and reach the server only when answered (§187, INV-288, D-469)",
+          "status": "done"
         },
         {
           "id": "5",
           "title": "A uv-locked project installs exactly its lock",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "6",

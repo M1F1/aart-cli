@@ -5,7 +5,7 @@ Status: **in progress** on `feat/cp-35-headless-inputs-and-fast-ci`, at the owne
 an MCP server from an upstream fork with no terminal: required inputs could not be answered on the
 command line, skipped optional inputs reached the server as `AART_NOT_SET`, and a `uv.lock`
 project was refused. The owner added CI speed to the same epic. Authority so far: Product
-Specification §169.4, §185, §186, INV-286, INV-287, D-466, D-467, D-468.
+Specification §169.4, §185, §186, §187, INV-286, INV-287, INV-288, D-466, D-467, D-468, D-469.
 
 ## Steps
 
@@ -17,7 +17,7 @@ See `docs/refactor/plan.json`, epic CP-35.
 3. `consume install` answers inputs on the command line (`--input`, `--secret-env`,
    `--set-later`; §186, INV-287, D-468). Done.
 4. Optional inputs are asked, never become `AART_NOT_SET`, and reach the server only when
-   answered. Todo.
+   answered (§187, INV-288, D-469). Done.
 5. A uv-locked project installs exactly its lock. Todo.
 6. Focused verification and the PR. Todo.
 
@@ -157,3 +157,38 @@ command prepared with no answers and refused.
   tests red.
 - Checking only that the variable exists, not that it is non-empty, turned the empty-variable
   subtest red, and only it.
+
+## Step 4 — optional inputs are asked and never become the placeholder (§187, INV-288, D-469)
+
+**Why.** For mcp-atlassian, an input skipped with Set later reached the server as the text
+`AART_NOT_SET`. 07 never asked optional inputs at all. A required input that is set later still
+gets the placeholder (§172.3); an optional one must not.
+
+**Change.**
+- `copy_artifact_answers(skip_unanswered=True)` gives `AART_NOT_SET` only to required inputs. This
+  is the CLI's `--set-later` path.
+- `InstallationConfigField` gains `required` and `unset`, meaning optional and empty.
+  - `ready` accepts an unset field.
+  - `answers` leaves it out.
+  - `set_later()` empties an optional field without a valid value instead of filling it.
+- `consumer_actions.py` adds each optional ordinary input of an artifact that 07 asks about, after
+  the required ones and pre-filled with its default.
+- `tui_consumer.py` marks the field `(id, optional)`. The Verbose text for Set later says optional
+  values stay unset.
+- 07b's optional credentials are B-223.
+
+**Tests.** `tests/optional_inputs_test.py`:
+- Hypothesis over the form draft: after Set later the draft is ready, every required row has an
+  answer, and no optional row holds the placeholder or an empty answer.
+- Hypothesis over `copy_artifact_answers`: the placeholder goes only to required inputs nobody
+  answered.
+- The form marks an optional field.
+- The production action prepares 07 with the optional `github-host` after `github-org`, and binds
+  it only once it is answered.
+- `consume install --set-later` writes no `github-host` line and no placeholder. With `--input` it
+  writes the value.
+
+**Targeted mutations.**
+- Dropping `field.input.required` from `copy_artifact_answers` turned the copy property and the CLI
+  `--set-later` test red.
+- Making `ready` ignore `unset` turned the two form-draft tests red.

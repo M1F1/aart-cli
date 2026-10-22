@@ -4903,3 +4903,12 @@ Status: **open**, noncritical (CP-35 step 3, D-468).
 §169.5 asks Linux and headless runs to use an approved available provider. Candidates are the
 Secret Service API (`secret-tool`) and a provider that only references a CI secret by name. Either
 needs a specification decision on where the item lives and who may read it.
+
+## B-223 — 07b could ask optional credentials
+
+Status: **open**, noncritical (CP-35 step 4, D-469).
+
+07 now shows optional ordinary inputs (§187), but 07b asks only required credentials. An optional
+credential, such as a proxy password, can be given at install only through `consume install
+--secret-env`, or afterwards in Credentials and variables. 07b could list it as optional, with
+Skip leaving it unbound rather than storing the placeholder.

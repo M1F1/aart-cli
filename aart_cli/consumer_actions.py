@@ -2384,14 +2384,28 @@ class LocalConsumerActions:
                 if isinstance(prepared, Err):
                     return self._declined(command, _refusal(prepared.diagnostics))
         if not prepared.value.ready:
+            # §187: an artifact that 07 asks about shows its optional inputs too, so they can be
+            # given at all; one left empty stays unbound.
+            unanswered_keys = {field.key for field in prepared.value.draft.inputs.unanswered}
+            asked = {
+                artifact_answer_key(field.owner)
+                for field in prepared.value.draft.inputs.unanswered
+                if isinstance(field.input, ConfigInput)
+            }
             config_fields: dict[tuple[str, str], ConfigInput] = {}
-            for field in prepared.value.draft.inputs.unanswered:
+            for field in prepared.value.draft.inputs.fields:
                 runtime_input = field.input
-                if isinstance(runtime_input, ConfigInput):
-                    config_fields.setdefault(
-                        (artifact_answer_key(field.owner), runtime_input.id.value), runtime_input
-                    )
+                artifact = artifact_answer_key(field.owner)
+                if isinstance(runtime_input, ConfigInput) and (
+                    field.key in unanswered_keys
+                    or (not runtime_input.required and artifact in asked)
+                ):
+                    config_fields.setdefault((artifact, runtime_input.id.value), runtime_input)
             if config_fields:
+                order = {
+                    artifact: index
+                    for index, artifact in enumerate(dict.fromkeys(key for key, _ in config_fields))
+                }
                 observations = []
                 for reference in prepared.value.draft.inputs.credential_references:
                     owner = next(
@@ -2414,8 +2428,13 @@ class LocalConsumerActions:
                             runtime_input.default or "",
                             runtime_input.validation,
                             owner=artifact,
+                            required=runtime_input.required,
                         )
-                        for (artifact, _), runtime_input in config_fields.items()
+                        # Within each artifact the required inputs come first (§187).
+                        for (artifact, _), runtime_input in sorted(
+                            config_fields.items(),
+                            key=lambda item: (order[item[0][0]], not item[1].required),
+                        )
                     )
                 )
                 return ConsumerActionUpdate(

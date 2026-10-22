@@ -4,6 +4,11 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-22, CP-35 step 4 (§187, INV-288, D-469): optional inputs.** 07 shows an artifact's
+optional inputs, marked and pre-filled with their default. An empty one stays unbound, and neither
+Set later nor `--set-later` puts `AART_NOT_SET` into it. Evidence:
+`docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
+
 **2026-10-22, CP-35 step 3 (§186, INV-287, D-468): headless install inputs.** `consume install`
 and `update` take `--input ALIAS/KIND/NAME:INPUT=VALUE`, `--secret-env ALIAS/KIND/NAME:INPUT=VARIABLE`
 and `--set-later`. One answer covers every installation of its artifact, a declared default stands,

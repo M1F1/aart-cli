@@ -11509,3 +11509,18 @@ owner asked for command-line answers.
   credential into the wrong flag.
 - **Only macOS has a store.** `--secret-env` and `--set-later` with a credential refuse elsewhere,
   by name. A Linux provider is B-222, not this step.
+
+## D-469 — Optional inputs are asked and never become the placeholder (CP-35 step 4)
+
+- **When 07 shows them.** Optional inputs are added to the form only for an artifact the form
+  already asks about. An artifact whose inputs are all optional or answered still goes straight to
+  review. Showing a form for nothing but optional values would put a stop in the Default path
+  (§173.7) for answers the server does not need. Credentials and variables edits them later.
+- **Empty means absent, not empty text.** The launcher refuses an empty value, and the server's
+  own default is the right one for an input nobody chose. So an empty optional field is skipped,
+  not written.
+- **Defaults stay as before.** 07 pre-fills an optional input's default, and leaving it is an answer
+  (§172.4). The command line applies the same default (D-468), so both paths bind the same
+  values.
+- **Optional credentials stay out of scope.** 07b asks only required credentials, and the CLI
+  binds an optional one only through `--secret-env`. Asking optional credentials in 07b is B-223.

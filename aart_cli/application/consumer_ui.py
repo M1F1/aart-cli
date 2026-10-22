@@ -259,13 +259,18 @@ CONFIG_SET_LATER_ROW = "<set-later>"
 
 @dataclass(frozen=True, slots=True)
 class InstallationConfigField:
-    """One non-secret answer held only for the lifetime of the interactive form."""
+    """One non-secret answer held only for the lifetime of the interactive form.
+
+    An optional field left empty is no answer: the input stays unbound and the server applies its
+    own default (§187).
+    """
 
     id: str
     value: str = ""
     validation: InputValidation | None = None
     accepted: bool = False
     owner: str = ""
+    required: bool = True
 
     def __post_init__(self) -> None:
         if (
@@ -278,6 +283,7 @@ class InstallationConfigField:
             or not isinstance(self.accepted, bool)
             or not isinstance(self.owner, str)
             or any(character in self.owner for character in "\r\n\t")
+            or not isinstance(self.required, bool)
         ):
             raise ValueError("installation config field is invalid")
 
@@ -292,6 +298,12 @@ class InstallationConfigField:
         return configuration_value_problem(self.value) or validate_config_value(
             self.validation, self.value
         )
+
+    @property
+    def unset(self) -> bool:
+        """An optional field nobody filled in, which is complete and is not an answer."""
+
+        return not self.required and not self.value
 
 
 @dataclass(frozen=True, slots=True)
@@ -309,12 +321,14 @@ class InstallationConfigDraft:
     @property
     def ready(self) -> bool:
         return bool(self.fields) and all(
-            item.accepted and item.problem is None for item in self.fields
+            item.unset or (item.accepted and item.problem is None) for item in self.fields
         )
 
     @property
     def answers(self) -> tuple[tuple[str, str], ...]:
-        return tuple((item.row, item.value) for item in self.fields if item.accepted)
+        return tuple(
+            (item.row, item.value) for item in self.fields if item.accepted and not item.unset
+        )
 
     def value(self, identifier: str) -> str:
         field = next((item for item in self.fields if item.row == identifier), None)
@@ -339,17 +353,19 @@ class InstallationConfigDraft:
         )
 
     def set_later(self) -> "InstallationConfigDraft":
-        """Set later (§172.3): every value without a valid answer becomes `AART_NOT_SET`.
+        """Set later (§172.3): every required value without a valid answer becomes `AART_NOT_SET`.
 
         A value that is there and valid, a declared default included, is an answer and is kept
         (§172.4). An empty value or one with a problem is not an answer, so it is the one skipped.
+        An optional one is emptied instead, so it stays unbound and never reaches the server as the
+        placeholder's text (§187).
         """
 
         return InstallationConfigDraft(
             tuple(
                 replace(item, accepted=True)
                 if item.value and item.problem is None
-                else replace(item, value=SKIPPED_INPUT, accepted=True)
+                else replace(item, value=SKIPPED_INPUT if item.required else "", accepted=True)
                 for item in self.fields
             )
         )
