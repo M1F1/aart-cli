@@ -1424,7 +1424,7 @@
     {
       "id": "CP-36",
       "title": "Owner-reported Registry view fixes",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -1439,14 +1439,14 @@
         {
           "id": "3",
           "title": "Focused verification and the PR (one PR with CP-37)",
-          "status": "todo"
+          "status": "done"
         }
       ]
     },
     {
       "id": "CP-37",
       "title": "Retryable publication to an internal index",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -1456,7 +1456,7 @@
         {
           "id": "2",
           "title": "Focused verification and the PR (shared with CP-36)",
-          "status": "todo"
+          "status": "done"
         }
       ]
     }

@@ -1,6 +1,6 @@
 # CP-37 — Retryable publication to an internal index
 
-Status: **in progress** on `feat/cp-36-readable-promotions`, shipped in one PR with CP-36, at the
+Status: **done**, PR #89, on `feat/cp-36-readable-promotions`, shipped in one PR with CP-36, at the
 owner's request (2026-10-22). Authority: Product Specification §192, INV-293, D-474.
 
 ## Steps
@@ -9,7 +9,7 @@ See `docs/refactor/plan.json`, epic CP-37.
 
 1. `publish-index.yml` uploads the Release's wheel, asks the install index first, and runs again by
    tag (§192, INV-293, D-474). Done.
-2. Focused verification and the PR, shared with CP-36. Todo.
+2. Focused verification and the PR, shared with CP-36. Done: PR #89, all gates green.
 
 ## Step 1 — The index upload is its own retryable workflow
 

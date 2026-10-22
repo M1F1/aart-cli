@@ -1,6 +1,11 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-22, after 0.14.0)
+## Where the work is (2026-10-22, CP-36 and CP-37 in PR #89)
+
+CP-36 and CP-37 are done in PR #89, which ships as 0.15.0. Nothing critical is open. B-220 awaits
+the owner's decision; B-225 (development builds to an internal index) is backlog.
+
+## Where the work was (2026-10-22, after 0.14.0)
 
 **CP-35 is merged (#87) and released as 0.14.0 (#88).** **CP-36**, owner-reported Registry view
 fixes, and **CP-37**, retryable publication to an internal index, share

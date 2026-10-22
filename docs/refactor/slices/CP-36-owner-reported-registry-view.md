@@ -1,6 +1,6 @@
 # CP-36 — Owner-reported Registry view fixes
 
-Status: **in progress** on `feat/cp-36-readable-promotions`, at the owner's request (2026-10-22).
+Status: **done**, PR #89, on `feat/cp-36-readable-promotions`, at the owner's request (2026-10-22).
 Authority so far: Product Specification §190–§191, INV-291–INV-292, D-472–D-473.
 
 ## Steps
@@ -11,7 +11,7 @@ See `docs/refactor/plan.json`, epic CP-36. The owner may report more; add each a
 1. Recent promotions name each version as `kind/name@version`; digests stay in Verbose (§190,
    INV-291, D-472). Done.
 2. A published Collection passes the Registry's own checks (§191, INV-292, D-473). Done.
-3. Focused verification and the PR. Todo.
+3. Focused verification and the PR. Done: PR #89, shared with CP-37, all gates green.
 
 ## Step 1 — Recent promotions are listed by name (§190, INV-291, D-472)
 
