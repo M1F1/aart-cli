@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-22, CP-35 step 5 (§188, INV-289, D-470): CI takes only an upstream's default branch.**
+`upstream adopt` records whether the adopted commit is reachable from the upstream's own `HEAD`.
+The plain audit warns about one that is not; `registry audit --for-default-branch`, which the
+generated workflow runs, refuses it and every remote version without that record. Evidence:
+`docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
+
 **2026-10-22, CP-35 step 4 (§187, INV-288, D-469): optional inputs.** 07 shows an artifact's
 optional inputs, marked and pre-filled with their default. An empty one stays unbound, and neither
 Set later nor `--set-later` puts `AART_NOT_SET` into it. Evidence:
@@ -17,7 +23,7 @@ before anything is written. Evidence: `docs/refactor/slices/CP-35-headless-input
 
 **2026-10-22, CP-35 step 2 (§185, INV-286, D-467): Registry CI refuses local origins.** `registry
 audit` warns about every approved version promoted from a local checkout, self-contained or pinned
-reference, and `--require-remote-origins` refuses them. The generated Registry workflow passes it;
+reference, and `--for-default-branch` refuses them. The generated Registry workflow passes it;
 `publish` does not, so trial Registries still commit. Evidence:
 `docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
 

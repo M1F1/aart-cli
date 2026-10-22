@@ -46,6 +46,7 @@ from aart_cli.registry_maintenance.delivery import (
     describe_delivery,
     mcp_descriptor_message,
 )
+from aart_cli.registry_maintenance.model import REPOSITORY_ADOPTION_RECORD
 from aart_cli.registry_maintenance.planning import (
     registry_native_content,
 )
@@ -174,6 +175,45 @@ def _local_origin(version: str, location: object, *, refused: bool) -> Diagnosti
         _REMOTE_ORIGIN,
         warning=not refused,
     )
+
+
+_DEFAULT_BRANCH = (
+    "the default branch others install from takes only what its upstream's default branch holds: "
+    "adopt it again with `aart-cli maintain upstream adopt --source . --url URL --ref REF "
+    "--artifact KIND/NAME@VERSION`, naming the default branch or a tag on it",
+)
+
+
+def _off_default_branch(
+    version: str, url: object, record: object, *, refused: bool
+) -> Diagnostic | None:
+    """A remote version not shown to come from its upstream's default branch (INV-289).
+
+    `upstream adopt` records whether the adopted commit is reachable from the upstream's default
+    branch. A plain audit reports only a version recorded as off it; for the default branch, a
+    version with no such record is refused too, because nothing shows where it came from.
+    """
+
+    where = f" of {url}" if isinstance(url, str) and url else ""
+    if not isinstance(record, JsonObject):
+        if not refused:
+            return None
+        message = (
+            f"{version} was not adopted with `upstream adopt`, so nothing records that it came "
+            f"from the default branch{where}"
+        )
+    elif record.get("default_branch") is True:
+        return None
+    elif record.get("default_branch") is False:
+        ref = record.get("ref")
+        message = f"{version} was adopted from {ref}, which is not on the default branch{where}"
+    elif not refused:
+        return None
+    else:
+        message = (
+            f"{version} was adopted without a record of whether it is on the default branch{where}"
+        )
+    return _diagnostic(message, _DEFAULT_BRANCH, warning=not refused)
 
 
 def _note(message: str) -> Diagnostic:
@@ -648,13 +688,15 @@ def audit_registry_workspace(
     *,
     executable_version: SemVer,
     available_capabilities: tuple[Capability, ...],
-    require_remote_origins: bool = False,
+    for_default_branch: bool = False,
 ) -> Result[RegistryQualityReport]:
     """Audit committed registry content: a pure function of the snapshot, with no network.
 
-    A version promoted from a local checkout is a warning, so a maintainer's trial Registry still
-    publishes and is told. `require_remote_origins` makes it an error: the generated Registry CI
-    passes it, so such a version never reaches the default branch others install from (INV-286).
+    A version promoted from a local checkout, or adopted from off its upstream's default branch, is
+    a warning, so a maintainer's trial Registry still publishes and is told. `for_default_branch`
+    makes both errors, and also refuses a remote version with no adoption record saying it came
+    from the default branch. The generated Registry CI passes it, so such a version never reaches
+    the default branch others install from (INV-286, INV-289).
     """
 
     parsed = _registry_inputs(snapshot)
@@ -718,9 +760,18 @@ def audit_registry_workspace(
                     _local_origin(
                         f"{manifest.value.identity}@{base.rsplit('/', 1)[-1]}",
                         parsed_provenance.value.origin.url,
-                        refused=require_remote_origins,
+                        refused=for_default_branch,
                     )
                 )
+            else:
+                branch = _off_default_branch(
+                    f"{manifest.value.identity}@{base.rsplit('/', 1)[-1]}",
+                    parsed_provenance.value.origin.url,
+                    dict(parsed_provenance.value.extensions).get(REPOSITORY_ADOPTION_RECORD),
+                    refused=for_default_branch,
+                )
+                if branch is not None:
+                    diagnostics.append(branch)
         # What a consumer receives from an `mcp` package is a property of the package.
         diagnostics.extend(package_delivery_diagnostics(files.value, base, manifest.value))
         if manifest.value.license is None:
@@ -753,9 +804,20 @@ def audit_registry_workspace(
                 _local_origin(
                     f"{parts[1]}/{parts[2]}@{parts[3]}",
                     record.value.get("source"),
-                    refused=require_remote_origins,
+                    refused=for_default_branch,
                 )
             )
+        else:
+            # `upstream adopt` writes only self-contained versions, so a pinned reference never
+            # carries the record (INV-289).
+            branch = _off_default_branch(
+                f"{parts[1]}/{parts[2]}@{parts[3]}",
+                record.value.get("source"),
+                None,
+                refused=for_default_branch,
+            )
+            if branch is not None:
+                diagnostics.append(branch)
     security_file = files.value.get("security/index.json")
     if security_file is None:
         diagnostics.append(

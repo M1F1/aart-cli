@@ -4912,3 +4912,13 @@ Status: **open**, noncritical (CP-35 step 4, D-469).
 credential, such as a proxy password, can be given at install only through `consume install
 --secret-env`, or afterwards in Credentials and variables. 07b could list it as optional, with
 Skip leaving it unbound rather than storing the placeholder.
+
+## B-224 — An upstream that releases from a branch other than its default
+
+Status: **open**, noncritical (CP-35 step 5, D-470).
+
+INV-289 accepts only commits reachable from the upstream's own default branch. Some upstreams
+release from a `release/*` or `stable` branch and keep the default branch for development. Such a
+Registry today has to adopt from a tag on the default branch, or ask the upstream to change its
+default. An explicit, reviewed allowance per upstream, recorded where CI reads it but not
+changeable on a pull request branch alone, needs a specification decision.

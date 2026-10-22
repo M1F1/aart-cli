@@ -5,7 +5,7 @@ Status: **in progress** on `feat/cp-35-headless-inputs-and-fast-ci`, at the owne
 an MCP server from an upstream fork with no terminal: required inputs could not be answered on the
 command line, skipped optional inputs reached the server as `AART_NOT_SET`, and a `uv.lock`
 project was refused. The owner added CI speed to the same epic. Authority so far: Product
-Specification §169.4, §185, §186, §187, INV-286, INV-287, INV-288, D-466, D-467, D-468, D-469.
+Specification §169.4, §185-188, INV-286-289, D-466-470.
 
 ## Steps
 
@@ -18,8 +18,10 @@ See `docs/refactor/plan.json`, epic CP-35.
    `--set-later`; §186, INV-287, D-468). Done.
 4. Optional inputs are asked, never become `AART_NOT_SET`, and reach the server only when
    answered (§187, INV-288, D-469). Done.
-5. A uv-locked project installs exactly its lock. Todo.
-6. Focused verification and the PR. Todo.
+5. The Registry CI takes only versions adopted from an upstream's default branch (§188, INV-289,
+   D-470). Added by the owner during the epic. Done.
+6. A uv-locked project installs exactly its lock. Todo.
+7. Focused verification and the PR. Todo.
 
 ## Step 1 — the suite runs once per interpreter, in parallel (D-466)
 
@@ -77,14 +79,14 @@ Registry that was then pushed. The owner asked that such content be impossible t
 default branch, not merely discouraged.
 
 **Change.**
-- `audit_registry_workspace(require_remote_origins=...)` reports each approved version whose
+- `audit_registry_workspace(for_default_branch=...)` reports each approved version whose
   `provenance.json` origin kind is `local`, or whose `references/KIND/NAME/VERSION.json` revision
   is a `local:` pin. Each finding names the coordinate and the recorded location and says to adopt
   from the upstream's Git URL.
 - The finding is a warning by default, which is what `publish` runs, so trial Registries still
-  commit. It is an error under `registry audit --require-remote-origins`.
+  commit. It is an error under `registry audit --for-default-branch`.
 - `REGISTRY_PUBLICATION_GATES`' audit command, and therefore the generated workflow, passes
-  `--require-remote-origins`.
+  `--for-default-branch`.
 - The generated README and `docs/tutorials/company-registry-tabnine-v1.md` say so and say to make
   `registry-quality` required on the default branch.
 - `docs/ci/github-enterprise-rollout.md` adds that the pull request bringing the new workflow must
@@ -192,3 +194,42 @@ gets the placeholder (§172.3); an optional one must not.
 - Dropping `field.input.required` from `copy_artifact_answers` turned the copy property and the CLI
   `--set-later` test red.
 - Making `ready` ignore `unset` turned the two form-draft tests red.
+
+## Step 5 — the Registry CI takes only an upstream's default branch (§188, INV-289, D-470)
+
+**Why.** The owner pointed out that step 2 still let a version adopted from an upstream's feature
+branch reach the Registry's default branch. Adoption from any branch must stay possible for trials.
+
+**Change.**
+- `io/git_acquisition.py` adds `commit_on_default_branch(request, commit)`. It runs
+  `git merge-base COMMIT refs/remotes/origin/HEAD` in the mirror the acquisition already fetched,
+  where `HEAD` is the upstream's own default branch. The result is None when that cannot be
+  answered.
+- `io/curation_runtime.py`: `_candidate` returns the answer beside the candidate.
+  `NativeReferenceAcquisition` gains `default_branch`.
+- `registry_maintenance/model.py` now holds `REPOSITORY_ADOPTION_RECORD` and
+  `adoption_record(ref, default_branch)`, which writes the field only when it is known.
+  `io/registry_adoption.py` uses it for adoption and for the next version `upstream check`
+  proposes.
+- `registry_commands/planning.py` adds `_off_default_branch`:
+  - The plain audit warns about a version recorded as off the default branch.
+  - `for_default_branch` refuses that, a version adopted without the record, a version promoted
+    from a Git Source, and every remote pinned reference.
+- `--require-remote-origins` (step 2, unreleased) is renamed `--for-default-branch` everywhere.
+- The generated README, the tutorial and `docs/ci/github-enterprise-rollout.md` say what CI refuses
+  and that the upstream's default branch is its Git host's, not always `main`.
+- Release branches other than the default are B-224.
+
+**Tests.**
+- `tests/registry_default_branch_test.py`:
+  - Audit: an adoption recorded on the default branch passes either way. One recorded off it warns,
+    naming the ref and the upstream, and is refused under the flag. Promoted, pinned and
+    unrecorded remote versions are silent in the plain audit and refused under the flag.
+  - Real Git: `main` and a tag on it are on the default branch; a feature branch is not.
+- `tests/registry_repository_scan_test.py`: a real adoption writes `default_branch: true`.
+- `tests/registry_remote_origins_test.py` follows the rename.
+
+**Targeted mutations.**
+- Treating a record with no `default_branch` as on it turned only the `unrecorded` subtest red.
+- Comparing the commit with itself instead of `refs/remotes/origin/HEAD` turned the reachability
+  test red.

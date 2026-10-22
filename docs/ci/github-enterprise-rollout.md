@@ -370,10 +370,14 @@ aart-cli maintain registry init --source /tmp/fresh-registry --source-id scratch
 cp /tmp/fresh-registry/.github/workflows/aart-cli-registry.yml .github/workflows/aart-cli-registry.yml
 ```
 
-From 0.14.0 the workflow's audit refuses every version promoted from a local checkout rather than
-adopted from a remote upstream (§185, INV-286). It reads the whole Registry, not the change, so the
-pull request that brings the new workflow and `.aart-cli-version` must also leave no such version
-behind. `aart-cli maintain registry audit --source .` lists them as warnings before you start.
+From 0.14.0 the workflow's audit takes only versions that `upstream adopt` recorded as coming from
+their remote upstream's default branch, or a tag on it (§185, §188, INV-286, INV-289). It refuses
+versions promoted from a local checkout, versions adopted from another branch, and versions
+promoted from a Git Source, pinned references or versions adopted with an older aart-cli, none of
+which carry that record. It reads the whole Registry, not the change, so the pull request that
+brings the new workflow and `.aart-cli-version` must also leave no such version behind. Adopt with
+aart-cli 0.14.0 or later. Before you start, `aart-cli maintain registry audit --source .
+--for-default-branch` lists every version it would refuse.
 Then make `registry-quality` a required check on the default branch, because without branch
 protection GitHub merges a pull request whose check is red.
 

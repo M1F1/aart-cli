@@ -33,7 +33,7 @@ REGISTRY_PUBLICATION_GATES = (
     # CI is where a Registry becomes what other people install, so CI alone refuses a version from
     # a local checkout; `publish` runs the plain audit and only warns (INV-286, D-467).
     RegistryPublicationGateSpec(
-        "audit", ("aart-cli maintain registry audit --source . --require-remote-origins",)
+        "audit", ("aart-cli maintain registry audit --source . --for-default-branch",)
     ),
     RegistryPublicationGateSpec(
         "compatibility",

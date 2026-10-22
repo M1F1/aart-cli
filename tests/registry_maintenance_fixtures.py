@@ -172,11 +172,13 @@ def approved_registry_snapshot(
     registry_alias: str = "company",
     local: bool = False,
     mode: str = "self-contained",
+    adoption=None,
 ) -> SourceSnapshot:
     """An initialized Registry holding one approved, vendored version per name.
 
     `local` promotes from an author's checkout on this machine instead of a Git URL, and `mode`
     chooses how the Registry holds each version, `self-contained` or `pinned-reference`.
+    `adoption` is the record `upstream adopt` writes into each version's provenance, if any.
 
     Built through the same promotion the maintainer runs, so the fixture cannot claim a shape the
     product does not write: `registry/versions/`, `registry/promotions/`, both derived catalogs and
@@ -214,6 +216,9 @@ def approved_registry_snapshot(
         source_alias=SourceAlias("authors"),
         source="/home/author/servers" if local else "https://git.example/servers.git",
         revision=revision,
+        provenance_extensions=(
+            () if adoption is None else (("aart.repository-adoption", adoption),)
+        ),
     )
     assert isinstance(compiled, Ok), compiled
     scanned = reconcile_source_scan(

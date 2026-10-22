@@ -480,8 +480,8 @@ class Request:
     # one.  ``--yes`` alone still means "finalize what this process just computed"; supplying this
     # additionally requires that what was reviewed is still what would happen.
     expect: Optional[str] = None
-    # `registry audit --require-remote-origins` (INV-286).
-    require_remote_origins: bool = False
+    # `registry audit --for-default-branch` (INV-286).
+    for_default_branch: bool = False
     # `consume install`/`update` inputs (§169.4, D-468): raw `ALIAS/KIND/NAME:INPUT=...` flags.
     install_inputs: tuple[str, ...] = ()
     install_secret_envs: tuple[str, ...] = ()

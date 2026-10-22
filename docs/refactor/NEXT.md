@@ -8,10 +8,13 @@ Step 1 is done (D-466): CI runs the suite once per interpreter, in parallel proc
 coverage. Step 2 is done (§185, INV-286, D-467): the generated Registry CI refuses versions promoted
 from a local checkout. Step 3 is done (§186, INV-287, D-468): `consume install` and `update` take
 `--input`, `--secret-env` and `--set-later`. Step 4 is done (§187, INV-288, D-469): 07 asks
-optional inputs, and neither Set later nor `--set-later` ever binds `AART_NOT_SET` to one. Next is
-step 5, installing a `uv.lock` project with `uv sync --frozen`. Step 6, the PR, stays last. B-220
-still awaits the owner's decision; B-222 (a Linux credential store) and B-223 (optional
-credentials in 07b) are new.
+optional inputs, and neither Set later nor `--set-later` ever binds `AART_NOT_SET` to one. Step 5,
+added by the owner, is done (§188, INV-289, D-470): `upstream adopt` records whether the commit is
+on the upstream's default branch, and `registry audit --for-default-branch` (renamed from
+`--require-remote-origins`) refuses every remote version not recorded so. Next is step 6, installing
+a `uv.lock` project with `uv sync --frozen`. Step 7, the PR, stays last. B-220 still awaits the
+owner's decision. B-222 (a Linux credential store), B-223 (optional credentials in 07b) and B-224
+(release branches) are new.
 
 ## Where the work is (2026-10-21, after 0.12.0)
 

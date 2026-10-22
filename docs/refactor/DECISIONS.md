@@ -11473,7 +11473,7 @@ Three places were considered:
   committing at all.
 - The audit, in two modes. This was chosen.
 
-The plain `registry audit` that `publish` runs warns. `--require-remote-origins`, which only the
+The plain `registry audit` that `publish` runs warns. `--for-default-branch`, which only the
 generated workflow passes, refuses. The rule therefore lives in aart-cli and in the managed
 workflow, not in a value inside the Registry. Turning it off means editing a managed file, which is
 refused, or removing CI, which branch protection prevents.
@@ -11524,3 +11524,28 @@ owner asked for command-line answers.
   values.
 - **Optional credentials stay out of scope.** 07b asks only required credentials, and the CLI
   binds an optional one only through `--secret-env`. Asking optional credentials in 07b is B-223.
+
+## D-470 — CI takes only versions from an upstream's default branch (CP-35 step 5)
+
+The owner asked that a version adopted from an upstream's non-default branch also be refused when
+it reaches the Registry's default branch, while adoption from any branch stays possible elsewhere.
+
+- **Decided at adoption, checked offline.** Registry CI in Enterprise cannot read private
+  upstreams. The acquisition already fetches the upstream's `HEAD` into the mirror, so
+  `commit_on_default_branch` runs `git merge-base COMMIT refs/remotes/origin/HEAD` without another
+  network call. The answer is written into the adoption record, which the audit reads from the
+  committed snapshot.
+- **The default branch is the upstream's own `HEAD`.** It is not a name in aart-cli or a setting in
+  the Registry. A Registry setting would let a maintainer turn the check off on a branch, the same
+  reason D-467 kept local origins out of the marker. An upstream that releases from another branch
+  needs an explicit allowance (B-224).
+- **Reachability, not ref name.** A tag on the default branch is accepted, which is the
+  recommended adoption ref. A ref named `main` whose commit later left it is judged by the commit,
+  at adoption time.
+- **Unproven is refused only by the CI.** Versions promoted from a Git Source, pinned references and
+  versions adopted before 0.14.0 carry no record. The plain audit says nothing about them, because
+  a trial Registry is allowed to hold them. `--for-default-branch` refuses them, and the remediation
+  is to adopt from the default branch.
+- **One flag.** `--require-remote-origins` (D-467, unreleased) is renamed `--for-default-branch`.
+  It now means "audit this snapshot as the default branch others install from" and covers both
+  checks.

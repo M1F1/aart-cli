@@ -176,7 +176,7 @@ def _to_request(args: argparse.Namespace) -> Request:
         artifact_kind=getattr(args, "artifact_kind", None),
         yes=bool(getattr(args, "yes", False)),
         expect=getattr(args, "expect", None),
-        require_remote_origins=bool(getattr(args, "require_remote_origins", False)),
+        for_default_branch=bool(getattr(args, "for_default_branch", False)),
         install_inputs=tuple(getattr(args, "install_inputs", None) or ()),
         install_secret_envs=tuple(getattr(args, "install_secret_envs", None) or ()),
         set_later=bool(getattr(args, "set_later", False)),

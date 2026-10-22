@@ -287,8 +287,9 @@ class SelectiveAdoptionTest(_Lab):
         self.assertTrue(origin["input_digest"].startswith("sha256:"))
         self.assertEqual(
             provenance["aart.repository-adoption"],
-            {"ref": "main"},
-            "an explicit upstream check needs the moving ref, not only this pinned commit",
+            {"default_branch": True, "ref": "main"},
+            "an explicit upstream check needs the moving ref, and the Registry CI needs to know "
+            "the commit is on the upstream's default branch (INV-289)",
         )
 
     def test_the_review_names_every_chosen_coordinate_and_the_resolved_commit(self) -> None:

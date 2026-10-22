@@ -1092,9 +1092,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_registry_source(p_audit)
     p_audit.add_argument(
-        "--require-remote-origins",
+        "--for-default-branch",
         action="store_true",
-        dest="require_remote_origins",
+        dest="for_default_branch",
         help=(
             "refuse every version promoted from a local checkout instead of warning; the "
             "generated Registry CI passes this"

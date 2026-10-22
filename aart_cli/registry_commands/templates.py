@@ -409,15 +409,16 @@ aart-cli maintain registry publish --source .
 aart-cli maintain registry publish --source . --yes
 ```
 
-Run the gates yourself at any time. These are the commands CI runs. CI refuses every version
-promoted from a checkout on someone's machine rather than adopted from a remote upstream; without
-`--require-remote-origins` the audit only warns about them:
+Run the gates yourself at any time. These are the commands CI runs. CI refuses every version that
+was not adopted from its remote upstream's default branch or a tag on it, such as a version
+promoted from a checkout on someone's machine or adopted from a feature branch. Without
+`--for-default-branch` the audit only warns about those two:
 
 ```sh
 aart-cli maintain registry format --source . --check
 aart-cli maintain registry validate --source .
 aart-cli maintain registry build --source . --check
-aart-cli maintain registry audit --source . --require-remote-origins
+aart-cli maintain registry audit --source . --for-default-branch
 aart-cli maintain registry test --source . --compatibility latest
 ```
 

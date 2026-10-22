@@ -1406,11 +1406,16 @@
         },
         {
           "id": "5",
+          "title": "The Registry CI takes only versions adopted from an upstream's default branch (§188, INV-289, D-470)",
+          "status": "done"
+        },
+        {
+          "id": "6",
           "title": "A uv-locked project installs exactly its lock",
           "status": "in_progress"
         },
         {
-          "id": "6",
+          "id": "7",
           "title": "Focused verification and the PR",
           "status": "todo"
         }

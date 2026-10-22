@@ -11699,9 +11699,9 @@ reaching the default branch.
 - **The audit names them.** `aart-cli maintain registry audit` reports every approved version
   promoted from a local checkout, with its coordinate and the location it records, and says to
   adopt it from its upstream's Git URL instead.
-- **A trial Registry still works.** Without `--require-remote-origins`, the finding is a warning.
+- **A trial Registry still works.** Without `--for-default-branch`, the finding is a warning.
   `publish` runs this audit, so a maintainer's trial Registry still commits and is told.
-- **CI refuses them.** `--require-remote-origins` makes the finding an error. The workflow
+- **CI refuses them.** `--for-default-branch` makes the finding an error. The workflow
   `registry init` generates runs the audit with it, so a pull request whose result holds such a
   version is red. The Registry has no setting that turns it off: the workflow is managed, and a
   hand-edited copy is refused.
@@ -11778,3 +11778,34 @@ An Enterprise agent found two problems:
 **INV-288 — An optional input is never the placeholder.** No install path, form or command line,
 binds `AART_NOT_SET` to an optional input. An optional input nobody answered is absent from the
 installation's configuration and environment.
+
+# 188. The default branch others install from takes only an upstream's default branch
+
+Status: **ACCEPTED 2026-10-22 (D-470)**, on the owner's request (CP-35). This extends §185.
+
+A maintainer may adopt from any branch or tag of an upstream, which is how a change is tried
+before it lands. A version adopted from a feature branch holds what the upstream has not accepted.
+Once the Registry's default branch has it, everyone installs it.
+
+- **The upstream decides what its default branch is.** It is the branch the upstream's `HEAD`
+  names on its Git host: `main`, `master`, `trunk` or anything else. aart-cli neither assumes a
+  name nor lets a Registry override it.
+- **Adoption records it.** `upstream adopt`, and the next version `upstream check` proposes,
+  record `default_branch` beside the ref in the version's `aart.repository-adoption` provenance
+  record. It is true when the adopted commit is reachable from the upstream's default branch, so a
+  tag on that branch counts. The record is left out when the acquisition cannot tell.
+- **The plain audit warns** about a version recorded as off the default branch, naming its ref and
+  upstream. A trial Registry still publishes.
+- **The CI refuses.** `registry audit --for-default-branch`, which the generated workflow runs, is
+  an error for every remote version not recorded as on the upstream's default branch. That covers:
+  - a version adopted from another branch;
+  - a version adopted with no record;
+  - a version promoted from a Git Source rather than adopted;
+  - every pinned reference, which adoption never writes.
+
+  The audit reads committed bytes only, so Registry CI needs no access to private upstreams.
+
+**INV-289 — The default branch takes only an upstream's default branch.** The generated Registry CI
+fails for every snapshot holding a remote version whose adoption record does not say its commit
+is reachable from the upstream's default branch. `upstream adopt` writes that record from the
+upstream's own `HEAD`.
