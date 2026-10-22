@@ -17,6 +17,7 @@ from hypothesis import strategies as st
 from aart_cli.application.consumer_views import marketplace_cells, short_upstream
 from aart_cli.tui_consumer import frame
 from aart_cli.tui_marketplace_rows import render_marketplace_rows
+from tests.credential_fixtures import credential_url
 from tests.marketplace_cursor_description_test import _distinct, _listed
 
 _SEGMENT = st.text(
@@ -31,7 +32,7 @@ class ShortUpstreamTest(unittest.TestCase):
             ("https://github.com/obra/superpowers/", "obra/superpowers"),
             ("git@github.com:obra/superpowers.git", "obra/superpowers"),
             ("ssh://git@git.example:2222/group/sub/tools.git", "sub/tools"),
-            ("https://user:token@git.example/acme/skills", "acme/skills"),
+            (credential_url("git.example", "/acme/skills", held="token"), "acme/skills"),
             ("/home/me/src/authors", "src/authors"),
             ("file:///home/me/src/authors", "src/authors"),
             ("", ""),
@@ -122,7 +123,7 @@ class MarketplaceUpstreamColumnsTest(unittest.TestCase):
     ) -> None:
         composed = _distinct()
         first = composed.marketplace[0]
-        url = "https://user:secret-token@git.example/acme/superpowers.git"
+        url = credential_url("git.example", "/acme/superpowers.git", held="secret-token")
         offer = dataclasses.replace(first, row=dataclasses.replace(first.row, upstream=url))
         source, state = _listed(
             dataclasses.replace(composed, marketplace=(offer, *composed.marketplace[1:]))
