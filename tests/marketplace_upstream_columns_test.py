@@ -93,8 +93,8 @@ class MarketplaceUpstreamColumnsTest(unittest.TestCase):
             lines[0].split(),
             ["Artifact", "Registry", "Upstream", "Status", "Scope", "Harnesses", "Configuration"],
         )
-        self.assertTrue(lines[1].startswith("> [x] skill/review@1.2.0"), lines)
-        self.assertNotIn("company/skill", lines[1])
+        self.assertTrue(lines[2].startswith("> [x] skill/review@1.2.0"), lines)
+        self.assertNotIn("company/skill", lines[2])
 
     def test_the_marketplace_frame_shows_the_columns_and_more_info_the_whole_upstream(self) -> None:
         composed = _distinct()

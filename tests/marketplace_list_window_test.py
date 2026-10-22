@@ -108,9 +108,9 @@ class MarketplaceListWindowTest(unittest.TestCase):
         natural = 6 + sum(widest) + 2 * 6
         for width in (natural, 180):
             lines = render_marketplace_rows(rows, current=rows[1][0], selected=(), width=width)
-            self.assertEqual(len(lines), 1 + len(rows), lines)
+            self.assertEqual(len(lines), 2 + len(rows), lines)
             self.assertTrue(lines[0].startswith("      Artifact"))
-            for line, row in zip(lines[1:], rows, strict=True):
+            for line, row in zip(lines[2:], rows, strict=True):
                 for cell in row:
                     self.assertIn(cell, line)
         wrapped = render_marketplace_rows(rows, current="", selected=(), width=natural - 1)

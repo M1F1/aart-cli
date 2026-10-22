@@ -71,7 +71,7 @@ class ConfigurationCellTest(unittest.TestCase):
         )
 
         self.assertIn("Configuration", wide[0])
-        self.assertIn("not configured (2 missing)", wide[1])
+        self.assertIn("not configured (2 missing)", wide[2])
         self.assertIn("Configuration: not configured", " ".join(" ".join(narrow).split()))
         self.assertNotIn("Unset", "\n".join((*wide, *narrow)))
 

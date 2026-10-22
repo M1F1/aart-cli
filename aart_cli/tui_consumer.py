@@ -157,8 +157,8 @@ from aart_cli.tui_layout import (
     action_prompt,
     bulleted,
     cards,
-    columns,
     field_block,
+    headed_columns,
     is_action_prompt,
     list_item,
     listed,
@@ -378,6 +378,7 @@ def _credential_row(view: CredentialRecordView) -> str:
 _USER_CONFIG_ROW_PREFIX = "configuration:"
 #: The cursor and the tick a list draws before each entry: `> [x] `.
 _ROW_PREFIX = 6
+_INSTALLED_HEADINGS = ("Artifact", "Health", "Scope", "Project", "Configuration")
 
 
 def _user_config_row(identifier: str) -> str:
@@ -5003,23 +5004,26 @@ class CanonicalScreenSource:
                 if member
             }
             views = {item.row: item for item in screens.installed}
-            return self._list(
-                state,
-                columns(
-                    tuple(
-                        (
-                            f"{'  ' if row in under else ''}{row}",
-                            *(
-                                installed_cells(views[row], _human(health[row]))
-                                if row in views
-                                else (_human(health.get(row, "unknown")),)
-                            ),
-                        )
-                        for row in state.rows
-                    ),
-                    width=CONTENT_MEASURE - _ROW_PREFIX,
+            if not state.rows:
+                return self._list(state, ())
+            heading, rule, entries = headed_columns(
+                _INSTALLED_HEADINGS,
+                tuple(
+                    (
+                        f"{'  ' if row in under else ''}{row}",
+                        *(
+                            installed_cells(views[row], _human(health[row]))
+                            if row in views
+                            else (_human(health.get(row, "unknown")),)
+                        ),
+                    )
+                    for row in state.rows
                 ),
+                width=CONTENT_MEASURE - _ROW_PREFIX,
             )
+            # Named and ruled off like Marketplace's, so a cell says which column it is (D-464).
+            gutter = " " * _ROW_PREFIX
+            return (gutter + heading.rstrip(), gutter + rule, *self._list(state, entries))
         if screen is ConsumerScreen.INSTALLED_COLLECTION_DETAILS:
             group = screens.installed_collection(state.focus)
             return (

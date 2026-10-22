@@ -1,10 +1,10 @@
 # CP-34 — Owner-reported fixes after 0.12.0
 
-Status: **done**, opened as a PR from `feat/cp-34-owner-fixes`, at the owner's request (2026-10-21): one epic
+Status: **in PR #85** from `feat/cp-34-owner-fixes`, at the owner's request (2026-10-21): one epic
 that collects the fixes the owner reports while using 0.12.0. Each fix is its own step.
-Authority so far: Product Specification §178–§183, INV-277, INV-278, INV-279,
-INV-280, INV-281, INV-282, INV-283, INV-284, D-456, D-457, D-458, D-459, D-460, D-461, D-462,
-D-463.
+Authority so far: Product Specification §178–§184, INV-277, INV-278, INV-279,
+INV-280, INV-281, INV-282, INV-283, INV-284, INV-285, D-456, D-457, D-458, D-459, D-460, D-461, D-462,
+D-463, D-464.
 
 ## Steps
 
@@ -25,6 +25,8 @@ are added before it.
 9. The Collection Editor keeps its Collection after a refusal or Back; no screen numbers in
    messages; a wrong-workspace refusal names the directory and the Registry. Done.
 10. Collections name their Registry, and `o` opens them only from a Registry row. Done.
+11. Marketplace and Installed rule their headings off from the rows; Installed names its
+    columns. Done.
 2. Focused verification and the PR. Done.
 
 ## Step 1 — Marketplace lists a page of ten
@@ -257,3 +259,26 @@ ruff, the format check, mypy, docs-check and secret-shape-check pass. Every test
 added or changed passes (149 tests, 21 subtests), with the B-217 property deselected. The full
 suite runs in CI on the PR, not locally (D-317/D-334). The PR title is a `feat`, so the release is
 a minor one.
+
+## Step 11 — headings named and ruled off
+
+Product Specification §184, INV-285, D-464. The owner, scrolling Marketplace, could not tell the
+heading line from the first offer, and asked for the same headings on Installed, which had none.
+
+- Marketplace's grid draws a rule of `─` under each heading, as wide as its column.
+- `tui_layout.headed_columns` lays the headings out in the rows' grid and returns the rule.
+  Installed draws `Artifact`, `Health`, `Scope`, `Project` and `Configuration` with it.
+
+Evidence:
+- `tests/marketplace_heading_rule_test.py`: the rule separates headings from the first offer; a
+  Hypothesis property over rows and grid widths puts each rule under its heading, at least as wide;
+  the stacked form has no rule.
+- `tests/installed_column_headings_test.py`: Installed's headings sit over their cells with the
+  rule between.
+- Five Marketplace tests that read the first offer from `lines[1]` now read `lines[2]`.
+- 1573 tests over the Marketplace, Installed, layout, consumer, TUI and screen modules pass, with
+  the two B-217 properties deselected.
+
+Targeted mutations, each restored and each red:
+- the rule shifted one column left → the Hypothesis property is red.
+- the headings left out of Installed's grid → the Installed test is red.

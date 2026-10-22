@@ -11660,3 +11660,27 @@ names a screen by number.
 **INV-284 — Collections name their Registry.** The Collections screen and the Collection Editor
 name the Registry they belong to and where saving writes, and `o` opens only the Collections of
 the Registry under the cursor.
+
+
+# 184. Column headings are named and ruled off
+
+Status: **ACCEPTED 2026-10-22 (D-464)**, on the owner's request (CP-34). This extends §173.8,
+§181 and §182.
+
+On Marketplace the heading line sat directly on the first offer, so scrolling the list the owner
+could not tell headings from rows. Installed drew its cells (`ready  configured`) with no heading
+at all.
+
+- **Rule.** Under the heading line of Marketplace's grid and of Installed, a rule of `─` runs under
+  each heading, starting where the heading starts and as wide as its column, with the column gap
+  between rules. The rows start on the next line.
+- **Installed headings.** Installed's columns are headed `Artifact`, `Health`, `Scope`, `Project`
+  and `Configuration`, on the same grid as its rows. A Collection's row fills only Artifact and
+  Health.
+- **Narrow Marketplace.** The stacked form labels each field, so it has no heading line and no
+  rule.
+
+**INV-285 — Headings are named and ruled off.** Wherever Marketplace or Installed draws a heading
+line, the next line is a rule under each heading, as wide as its column, and every heading starts
+where its cells start.
+

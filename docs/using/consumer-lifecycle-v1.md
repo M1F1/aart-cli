@@ -59,8 +59,8 @@ redacted); `not installed`, `installed` or `update available`; where it is insta
 `2 projects`, or `user + 2 projects`); the detected harnesses that can host it, with `✓` on each
 that holds it; and its configuration. Configuration is `configured` when every input has a value,
 `not configured (2 missing)` while inputs still hold `AART_NOT_SET`, and empty when nothing is
-installed. Installed draws each installation on its own row, with its health, scope, project and
-configuration. In Installed, More info adds the project's directory and harness.
+installed. Installed draws each installation on its own row, under the headings Artifact, Health,
+Scope, Project and Configuration. Both screens draw a rule under each heading. In Installed, More info adds the project's directory and harness.
 
 Marketplace labels its columns Artifact, Registry, Upstream, Status, Scope, Harnesses and
 Configuration. Long values wrap; narrow windows use the same labels as stacked fields. PgUp/PgDn

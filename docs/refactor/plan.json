@@ -1368,6 +1368,11 @@
           "status": "done"
         },
         {
+          "id": "11",
+          "title": "Marketplace and Installed rule their column headings off from the rows, and Installed names its columns",
+          "status": "done"
+        },
+        {
           "id": "2",
           "title": "Focused verification and the PR",
           "status": "done"

@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-22, CP-34 step 11 (§184, INV-285, D-464): headings named and ruled off.** Marketplace's
+grid rules its headings off from the offers, and Installed names its columns (Artifact, Health,
+Scope, Project, Configuration) over the same grid with the same rule. Evidence:
+`marketplace_heading_rule_test.py` (Hypothesis), `installed_column_headings_test.py`, 1573 tests
+over the touched modules, two targeted mutations red.
+
 **2026-10-22, CP-34 step 2: focused verification and the PR.** ruff, format, mypy, docs-check
 and secret-shape-check pass; every test module CP-34 added or changed passes (149 tests). CP-34 is
 done and opened as a PR; CI runs the full suite.

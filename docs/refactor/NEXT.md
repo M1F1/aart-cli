@@ -2,8 +2,8 @@
 
 ## Where the work is (2026-10-21, after 0.12.0)
 
-**CP-33 is merged (#83) and released as 0.12.0.** **CP-34**, owner-reported fixes, is done and
-opened as a PR from `feat/cp-34-owner-fixes`; the next work is whatever the owner reports next, and
+**CP-33 is merged (#83) and released as 0.12.0.** **CP-34**, owner-reported fixes (steps 1–11), is
+in PR #85 from `feat/cp-34-owner-fixes`; the next work is whatever the owner reports next, and
 B-220 awaits the owner's decision: `docs/refactor/slices/CP-34-owner-reported-fixes.md`. Step 1
 is done (§178, INV-277, D-456): Marketplace draws the cursor's page of ten offers, one line each
 with no gaps, so More info stays on screen. Step 3 is done (§179, INV-278, D-457): a Skill,

@@ -11427,3 +11427,13 @@ its own statement.
 Automatically writing into a configured local Registry checkout, regardless of the launch
 directory, would remove the need to start `aart-cli` there. It changes where a reviewed
 transaction writes, so it is B-220, not part of this step.
+
+## D-464 — Marketplace and Installed rule their headings off from the rows (CP-34 step 11)
+
+The owner could not tell Marketplace's heading line from the first offer, and Installed had no
+headings. A rule of `─` per column, rather than a blank line, separates the headings: it costs the
+same one line, and it shows each column's width where a cell wraps. Installed uses a new
+`tui_layout.headed_columns`, which puts the headings into the grid so a heading starts where its
+cells start. Marketplace's grid already sized columns against its headings and only adds the rule.
+The narrow stacked Marketplace labels every field and is unchanged.
+

@@ -87,6 +87,8 @@ def render_marketplace_rows(
             .join(heading.ljust(size) for heading, size in zip(_HEADINGS, sizes, strict=True))
             .rstrip()
         )
+        # The headings are ruled off from the first offer, each rule as wide as its column (D-464).
+        drawn.append(" " * _GUTTER + (" " * _GAP).join("─" * size for size in sizes))
     for key, row in zip(keyed[start : start + MARKETPLACE_WINDOW], page, strict=True):
         cells = tuple(row) + ("",) * (len(_HEADINGS) - len(row))
         mark = f"{'>' if key == current else ' '} {'[x]' if key in selected else '[ ]'}"
