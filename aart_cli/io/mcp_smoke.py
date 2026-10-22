@@ -315,6 +315,10 @@ def _execute(
         if returncode != 0:
             return _error("installed MCP process exited unsuccessfully")
         return Ok(DirectSmokeRun(params["protocolVersion"], tools.value, call.value))
+    except BrokenPipeError:
+        # A launcher that refuses exits at once, often before the first message is written, so
+        # whether this or an empty read reports it is a race. Both mean the same thing.
+        return _error("installed MCP closed before the protocol exchange completed")
     except OSError:
         return _error("installed MCP launcher could not be started")
     finally:

@@ -266,3 +266,18 @@ lock.
 - Replacing `UV_PROJECT_ENVIRONMENT` with another variable turned both argv subtests and the real
   sync red.
 - Accepting any lock path ending in `uv.lock` turned the two misplaced-lock subtests red.
+
+## Step 7 — what the PR's CI found
+
+The first CI run on the PR failed on four tests the focused runs had not covered:
+- `curation_runtime_test` mocked `_candidate` with the bare candidate that step 5 replaced with
+  `(candidate, default_branch)`. The mocks now return the pair, and the tests check that the
+  answer reaches `NativeReferenceAcquisition` and that a repository's own `HEAD` commit is on its
+  default branch.
+- `git_backed_runtime_e2e_test` still expected `github-org` among the missing inputs. Step 3
+  made its declared default an answer (§172.4, D-468), so only the credential is missing.
+- `mcp_smoke_stdio_test` failed on a real race. A launcher that refuses exits at once. When it is
+  gone before the first message is written, the write raised `BrokenPipeError`, which the smoke
+  reported as "launcher could not be started". It now reports "closed before the protocol exchange
+  completed", the same as an empty read. A new test forces that ordering with a process whose stdin
+  is already broken. Removing the new `except` turned only that test red.
