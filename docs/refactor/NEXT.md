@@ -11,8 +11,9 @@ from a local checkout. Step 3 is done (§186, INV-287, D-468): `consume install`
 optional inputs, and neither Set later nor `--set-later` ever binds `AART_NOT_SET` to one. Step 5,
 added by the owner, is done (§188, INV-289, D-470): `upstream adopt` records whether the commit is
 on the upstream's default branch, and `registry audit --for-default-branch` (renamed from
-`--require-remote-origins`) refuses every remote version not recorded so. Next is step 6, installing
-a `uv.lock` project with `uv sync --frozen`. Step 7, the PR, stays last. B-220 still awaits the
+`--require-remote-origins`) refuses every remote version not recorded so. Step 6 is done (§189,
+INV-290, D-471): a `type: uv` artifact installs exactly its `uv.lock` with `uv sync --frozen` into
+the installation's own environment. Next is step 7: focused gates, the PR, and release 0.14.0. B-220 still awaits the
 owner's decision. B-222 (a Linux credential store), B-223 (optional credentials in 07b) and B-224
 (release branches) are new.
 

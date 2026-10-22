@@ -11809,3 +11809,27 @@ Once the Registry's default branch has it, everyone installs it.
 fails for every snapshot holding a remote version whose adoption record does not say its commit
 is reachable from the upstream's default branch. `upstream adopt` writes that record from the
 upstream's own `HEAD`.
+
+# 189. A uv-locked project installs exactly its lock
+
+Status: **ACCEPTED 2026-10-22 (D-471)**, from an Enterprise agent's report (CP-35). This makes the
+`type: uv` contract of §108 installable.
+
+An artifact that declared `type: uv` validated and was then refused at install, so the only way to
+ship it was to drop the lock and let each installation resolve its own versions.
+
+- **The lock sits beside the project.** The lock of a `type: uv` contract is the `uv.lock` in the
+  directory of its `pyproject.toml`, the only one `uv sync` reads. A lock declared anywhere else is
+  refused when the manifest is read.
+- **Only uv installs it.** A lock is meaningful to the resolver that wrote it (§109), so a host
+  without uv refuses the install. It never installs the loose project instead.
+- **Exactly the lock, into the installation's own environment.** aart-cli runs `uv sync --frozen
+  --no-dev --no-editable --no-python-downloads` against the payload's project, with the
+  installation's environment (§85, INV-044) as uv's project environment, and `--offline` when the
+  install is offline. uv neither re-resolves nor rewrites the lock, makes no `.venv` in the payload,
+  installs no development dependencies, links nothing back to the payload, and downloads no
+  interpreter.
+
+**INV-290 — A uv-locked project installs exactly its lock.** Installing a `type: uv` artifact puts
+the versions its `uv.lock` pins into that installation's own environment, leaves the payload and
+its lock unchanged, and is refused rather than resolved loosely when uv is not the installer.

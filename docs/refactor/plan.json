@@ -1412,12 +1412,12 @@
         {
           "id": "6",
           "title": "A uv-locked project installs exactly its lock",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "7",
           "title": "Focused verification and the PR",
-          "status": "todo"
+          "status": "in_progress"
         }
       ]
     }

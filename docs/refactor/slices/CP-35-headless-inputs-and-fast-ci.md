@@ -5,7 +5,7 @@ Status: **in progress** on `feat/cp-35-headless-inputs-and-fast-ci`, at the owne
 an MCP server from an upstream fork with no terminal: required inputs could not be answered on the
 command line, skipped optional inputs reached the server as `AART_NOT_SET`, and a `uv.lock`
 project was refused. The owner added CI speed to the same epic. Authority so far: Product
-Specification §169.4, §185-188, INV-286-289, D-466-470.
+Specification §169.4, §185-189, INV-286-290, D-466-471.
 
 ## Steps
 
@@ -20,7 +20,7 @@ See `docs/refactor/plan.json`, epic CP-35.
    answered (§187, INV-288, D-469). Done.
 5. The Registry CI takes only versions adopted from an upstream's default branch (§188, INV-289,
    D-470). Added by the owner during the epic. Done.
-6. A uv-locked project installs exactly its lock. Todo.
+6. A uv-locked project installs exactly its lock (§189, INV-290, D-471). Done.
 7. Focused verification and the PR. Todo.
 
 ## Step 1 — the suite runs once per interpreter, in parallel (D-466)
@@ -233,3 +233,36 @@ branch reach the Registry's default branch. Adoption from any branch must stay p
 - Treating a record with no `default_branch` as on it turned only the `unrecorded` subtest red.
 - Comparing the commit with itself instead of `refs/remotes/origin/HEAD` turned the reachability
   test red.
+
+## Step 6 — a uv-locked project installs exactly its lock (§189, INV-290, D-471)
+
+**Why.** An Enterprise agent's `type: uv` artifact validated and was then refused at install
+("installing a locked project with uv is not supported yet"). The only workaround was to drop the
+lock.
+
+**Change.**
+- `domain/python_runtime.py`: `PyProjectSpec` refuses a uv lock that is not `uv.lock` beside its
+  `pyproject.toml`, the only lock `uv sync` reads.
+- `io/python_runtime.py`:
+  - `ProcessRunner` and `run_python_process` take an optional `environment`, merged after the
+    allowlist.
+  - `_sync_lock` runs `uv sync --frozen --no-dev --no-editable --no-python-downloads [--offline]
+    --python <env>/bin/python --project <payload project dir>` with
+    `UV_PROJECT_ENVIRONMENT=<env>`.
+  - A non-uv installer is refused with `PYTHON_RUNTIME_UNSUPPORTED`, and nothing runs.
+  - The old "not supported yet" refusal is gone, and so is its test in
+    `python_environment_integration_test.py`.
+
+**Tests.** `tests/uv_locked_project_test.py`:
+- The argv and environment, online and offline.
+- pip is refused and nothing runs.
+- Lock placement: beside the project passes; another directory, another file name, or the payload
+  root for a nested project is refused.
+- Real `uv lock --offline` and the runtime's sync against a wheel the test builds, with
+  `package = false`. The pinned version is importable from the installation's environment, the
+  payload has no `.venv`, and the lock is byte-for-byte unchanged. It is skipped where uv is absent.
+
+**Targeted mutations.**
+- Replacing `UV_PROJECT_ENVIRONMENT` with another variable turned both argv subtests and the real
+  sync red.
+- Accepting any lock path ending in `uv.lock` turned the two misplaced-lock subtests red.

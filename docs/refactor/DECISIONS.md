@@ -11549,3 +11549,21 @@ it reaches the Registry's default branch, while adoption from any branch stays p
 - **One flag.** `--require-remote-origins` (D-467, unreleased) is renamed `--for-default-branch`.
   It now means "audit this snapshot as the default branch others install from" and covers both
   checks.
+
+## D-471 — A uv-locked project is installed with `uv sync --frozen` (CP-35 step 6)
+
+- **`uv sync`, not an exported requirements file.** `uv export` followed by `uv pip install` would
+  also honour the lock, but it writes a temporary file and installs the project in a second step.
+  `uv sync --frozen` reads the lock as written in one call and fails rather than re-resolve.
+- **The environment is set through `UV_PROJECT_ENVIRONMENT`.** `uv sync` has no flag for the target
+  environment; without the variable it makes `.venv` inside the payload. `--python` names the
+  installation's interpreter too, so uv never picks another. The process runner takes an optional
+  environment mapping, added after the allowlist, for this one variable.
+- **`--no-editable` and `--no-dev`.** An installation must not depend on the payload staying put,
+  and development dependencies are not the server's. A project with `package = false` installs only
+  its dependencies, which `uv sync` handles the same way.
+- **The lock's place is checked when the manifest is read.** `uv sync` ignores a lock anywhere but
+  beside `pyproject.toml`, so declaring one elsewhere would be a lock nobody reads. Refusing early
+  says so to the author rather than at install.
+- **No fallback.** A host whose installer is pip refuses the install (§109). Poetry locks remain
+  unsupported (`LOCK_FORMATS` is `uv` only).

@@ -84,6 +84,12 @@ class PyProjectSpec:
             object.__setattr__(self, "lock", _payload_relative(self.lock, "lock path"))
             if self.lock_format not in LOCK_FORMATS:
                 raise ValueError("lock format is unsupported")
+            # `uv sync` reads the project's lock from beside its pyproject.toml and nowhere else, so
+            # a lock declared elsewhere would be one the install never read (§189).
+            project = self.pyproject.rpartition("/")[0]
+            beside = f"{project}/uv.lock" if project else "uv.lock"
+            if self.lock_format == "uv" and self.lock != beside:
+                raise ValueError(f"a uv lock sits beside its pyproject.toml, as {beside}")
 
 
 PythonDependencySpec: TypeAlias = RequirementsFile | PyProjectSpec

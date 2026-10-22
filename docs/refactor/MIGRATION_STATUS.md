@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-22, CP-35 step 6 (§189, INV-290, D-471): a uv-locked project installs its lock.** A
+`type: uv` artifact was refused at install. aart-cli now runs `uv sync --frozen --no-dev
+--no-editable` with the installation's environment as uv's project environment, so the pinned
+versions land there and the payload keeps no `.venv`. A lock not beside its `pyproject.toml` is
+refused when the manifest is read. Evidence: `docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
+
 **2026-10-22, CP-35 step 5 (§188, INV-289, D-470): CI takes only an upstream's default branch.**
 `upstream adopt` records whether the adopted commit is reachable from the upstream's own `HEAD`.
 The plain audit warns about one that is not; `registry audit --for-default-branch`, which the

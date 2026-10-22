@@ -40,7 +40,13 @@ class ProcessOutcome:
 
 
 class ProcessRunner(Protocol):
-    def __call__(self, argv: tuple[str, ...], *, timeout: float) -> ProcessOutcome: ...
+    def __call__(
+        self,
+        argv: tuple[str, ...],
+        *,
+        timeout: float,
+        environment: Mapping[str, str] | None = None,
+    ) -> ProcessOutcome: ...
 
 
 def _environment(environ: Mapping[str, str]) -> dict[str, str]:
@@ -56,11 +62,18 @@ def _environment(environ: Mapping[str, str]) -> dict[str, str]:
     return result
 
 
-def run_python_process(argv: tuple[str, ...], *, timeout: float) -> ProcessOutcome:
+def run_python_process(
+    argv: tuple[str, ...],
+    *,
+    timeout: float,
+    environment: Mapping[str, str] | None = None,
+) -> ProcessOutcome:
+    """Run one installer process; `environment` adds variables the command itself sets."""
+
     completed = subprocess.run(
         argv,
         shell=False,
-        env=_environment(os.environ),
+        env={**_environment(os.environ), **(environment or {})},
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -159,9 +172,18 @@ class LocalPythonRuntime:
             )
         return None
 
-    def _execute(self, argv: tuple[str, ...], label: str) -> Result[ProcessOutcome]:
+    def _execute(
+        self,
+        argv: tuple[str, ...],
+        label: str,
+        environment: Mapping[str, str] | None = None,
+    ) -> Result[ProcessOutcome]:
         try:
-            outcome = self.run(argv, timeout=self.timeout_seconds)
+            outcome = (
+                self.run(argv, timeout=self.timeout_seconds, environment=environment)
+                if environment
+                else self.run(argv, timeout=self.timeout_seconds)
+            )
         except FileNotFoundError:
             return _failure(PYTHON_RUNTIME_FAILED, f"{label} failed: {argv[0]} is not available")
         except OSError as error:
@@ -244,6 +266,48 @@ class LocalPythonRuntime:
             )
         return None
 
+    def _sync_lock(self, effect: InstallPythonDependencies) -> Result[EnvironmentReceipt]:
+        """Install exactly what the project's `uv.lock` pins, into this artifact's environment (§189).
+
+        `--frozen` installs the lock as written and never re-resolves or rewrites it. The project is
+        built into the environment rather than linked to the payload, without development
+        dependencies, and uv may not download an interpreter. `UV_PROJECT_ENVIRONMENT` is what
+        keeps uv from making `.venv` inside the payload and installing there.
+        """
+
+        if effect.installer != PythonInstaller.UV.value:
+            # Only the resolver that wrote a lock can read it; installing the loose project instead
+            # would defeat the reason the lock exists.
+            return _failure(
+                PYTHON_RUNTIME_UNSUPPORTED,
+                f"{effect.installer} cannot install a project locked with uv",
+            )
+        argv = (
+            self.uv_executable,
+            "sync",
+            "--frozen",
+            "--no-dev",
+            "--no-editable",
+            "--no-python-downloads",
+            *(("--offline",) if self.offline else ()),
+            "--python",
+            f"{effect.environment}/bin/python",
+            "--project",
+            effect.descriptor.rsplit("/", 1)[0],
+        )
+        executed = self._execute(
+            argv,
+            "dependency installation",
+            {"UV_PROJECT_ENVIRONMENT": effect.environment},
+        )
+        if isinstance(executed, Err):
+            return executed
+        return Ok(
+            EnvironmentReceipt(
+                self.environment.interpreter, "installed the locked project with uv sync"
+            )
+        )
+
     def install_dependencies(self, effect: InstallPythonDependencies) -> Result[EnvironmentReceipt]:
         refused = self._refuse_unowned(effect.environment, effect.descriptor)
         if refused is not None:
@@ -254,12 +318,7 @@ class LocalPythonRuntime:
                 f"this interpreter installs into {self.environment.environment} only",
             )
         if effect.descriptor_kind == "locked-project":
-            # The lock is modelled and planned, but installing one is not implemented here yet.
-            # Ignoring it and installing loose versions would defeat the reason it exists.
-            return _failure(
-                PYTHON_RUNTIME_UNSUPPORTED,
-                f"installing a locked project with {effect.installer} is not supported yet",
-            )
+            return self._sync_lock(effect)
         argv = self._install_argv(effect)
         if argv is None:
             return _failure(
