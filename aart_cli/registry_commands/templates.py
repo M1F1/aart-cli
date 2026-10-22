@@ -422,7 +422,7 @@ aart-cli maintain registry audit --source . --for-default-branch
 aart-cli maintain registry test --source . --compatibility latest
 ```
 
-Make the `registry-quality` check required on the default branch (branch protection). Otherwise
+Make the `registry-quality-gate` check required on the default branch (branch protection). Otherwise
 GitHub lets a pull request merge while that check is red.
 
 ## Pointing CI at AART

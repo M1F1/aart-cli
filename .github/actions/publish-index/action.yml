@@ -1,0 +1,43 @@
+name: AART publish to index
+description: >
+  Upload the wheel attached to a GitHub Release to the index this fork publishes to, unless the
+  index already lists that exact file. Its own action because the two job shapes of
+  publish-index.yml share it, and a step copied is a step that drifts.
+
+inputs:
+  python:
+    description: The interpreter to run the script with.
+    required: true
+  tag:
+    description: The release tag whose attached wheel is published.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # `twine` is the usual answer and it is one more program the image has to carry.  This walk has
+    # already lost Make, `gh` and `curl` to exactly that, each on an image holding git, an
+    # interpreter and nothing else, so the upload is one HTTP POST written against the standard
+    # library.  See scripts/publish_to_index.py.
+    #
+    # The wheel is the one the Release carries, downloaded rather than rebuilt, so the index holds
+    # the bytes the Release does.  The index is asked first: the same file already there is
+    # success, so running this again for a tag is always safe (§192, INV-293).
+    - name: Publish the Release's wheel to the internal index
+      shell: bash
+      env:
+        TAG: ${{ inputs.tag }}
+      run: |
+        set -euo pipefail
+        # GitHub masks the secret it was given, which is the whole string.  Neither half is masked
+        # until it is handed back, so both halves of both logins are re-masked before anything can
+        # echo one.  `:-` and not bare expansion: with `set -u` a missing secret would abort here
+        # on a shell error naming a variable, instead of reaching the script, which says which
+        # secret is missing and what it holds.
+        for held in "${AART_CLI_INDEX_PUBLISH_CREDENTIALS:-}" "${AART_CLI_INDEX_CREDENTIALS:-}"; do
+          if [ -n "$held" ]; then
+            echo "::add-mask::${held%%:*}"
+            echo "::add-mask::${held#*:}"
+          fi
+        done
+        ${{ inputs.python }} scripts/publish_to_index.py --url "$INDEX_PUBLISH_URL" --release "$TAG" --index "$AART_CLI_INDEX_URL"

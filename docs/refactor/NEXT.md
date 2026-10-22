@@ -1,5 +1,25 @@
 # AART Refactor — Next Work
 
+## Where the work is (2026-10-22, CP-36 and CP-37 in PR #89)
+
+CP-36 and CP-37 are done in PR #89, which ships as 0.15.0. Nothing critical is open. B-220 awaits
+the owner's decision; B-225 (development builds to an internal index) is backlog.
+
+## Where the work was (2026-10-22, after 0.14.0)
+
+**CP-35 is merged (#87) and released as 0.14.0 (#88).** **CP-36**, owner-reported Registry view
+fixes, and **CP-37**, retryable publication to an internal index, share
+`feat/cp-36-readable-promotions` and one PR: `docs/refactor/slices/CP-36-owner-reported-registry-view.md`
+and `docs/refactor/slices/CP-37-retryable-index-publish.md`. CP-37 step 1 is done (§192, INV-293,
+D-474): `publish-index.yml` uploads the Release's wheel after the release, asks the install index
+first, and runs again by tag.
+Step 1 is done (§190, INV-291, D-472): Recent promotions on the Maintainer Registry view name each
+version as `kind/name@version`, and the digests are only in Verbose. Step 2 is done (§191,
+INV-292, D-473): a Collection published with `registry collection --yes` no longer fails the
+Registry's own `validate`, `audit`, `build` and `format`. The owner may report more;
+add each as a step before "Focused verification and the PR", which stays last. B-220 still awaits
+the owner's decision.
+
 ## Where the work is (2026-10-22, CP-35 in its PR)
 
 **CP-34 is merged (#85) and released as 0.13.0 (#86).** **CP-35** is on

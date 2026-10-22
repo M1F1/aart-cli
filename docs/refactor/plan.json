@@ -1420,6 +1420,45 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-36",
+      "title": "Owner-reported Registry view fixes",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Recent promotions name each version as kind/name@version; digests stay in Verbose (§190, INV-291, D-472)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "A published Collection passes the Registry's own validate, audit, build and format (§191, INV-292, D-473)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Focused verification and the PR (one PR with CP-37)",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-37",
+      "title": "Retryable publication to an internal index",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "publish-index.yml uploads the Release's wheel, asks the install index first, and runs again by tag (§192, INV-293, D-474)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Focused verification and the PR (shared with CP-36)",
+          "status": "done"
+        }
+      ]
     }
   ]
 }

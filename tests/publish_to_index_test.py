@@ -12,6 +12,7 @@ import base64
 import email
 import hashlib
 import io
+import json
 import unittest
 import urllib.error
 import zipfile
@@ -176,6 +177,181 @@ class ARefusalIsQuotedTest(unittest.TestCase):
                     with self.assertRaises(publish_to_index.PublishError) as refusal:
                         publish_to_index.publish("https://nexus.example.org/repository/x/", path)
         self.assertIn("certificate verify failed", str(refusal.exception))
+
+
+class _Index:
+    """A stand-in for `urlopen` that answers by URL and records every request it was handed."""
+
+    def __init__(self, answers: dict[str, bytes | int]) -> None:
+        self.answers = answers
+        self.seen: list[urllib.request.Request] = []
+
+    def __call__(self, request, *_args, **_kwargs):  # noqa: ANN001 - urllib's own shape
+        self.seen.append(request)
+        answer = self.answers.get(request.full_url, b"")
+        if isinstance(answer, int):
+            raise urllib.error.HTTPError(
+                request.full_url,
+                answer,
+                "refused",
+                {},  # type: ignore[arg-type]
+                io.BytesIO(b"no such project"),
+            )
+        return io.BytesIO(answer)
+
+    def posts(self) -> list[str]:
+        return [request.full_url for request in self.seen if request.get_method() == "POST"]
+
+
+_UPLOAD = "https://nexus.example.org/repository/pypi-internal/"
+_GROUP = "https://nexus.example.org/repository/pypi-group/simple"
+_PAGE = _GROUP + "/aart-cli/"
+
+
+def _listing(name: str, digest: str) -> bytes:
+    return (
+        "<html><body>"
+        f'<a href="../../packages/aart-cli/9.9.8/aart_cli-9.9.8-py3-none-any.whl#sha256={"0" * 64}">'
+        "aart_cli-9.9.8-py3-none-any.whl</a>"
+        f'<a href="../../packages/aart-cli/9.9.9/{name}#sha256={digest}">{name}</a>'
+        "</body></html>"
+    ).encode()
+
+
+class AWheelTheIndexHoldsIsNotUploadedAgainTest(unittest.TestCase):
+    """A retried publish must be safe, and an index refuses a second upload of the same version.
+
+    So the index is asked first. The same file already there is success; a different file under the
+    same name is the one outcome nobody should paper over (§192, INV-293).
+    """
+
+    def _run(self, answers: dict[str, bytes | int]) -> tuple[_Index, str]:
+        index = _Index(answers)
+        with TemporaryDirectory() as held:
+            path = _wheel(Path(held))
+            self.digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            for url, answer in list(answers.items()):
+                if answer == b"SAME":
+                    answers[url] = _listing(path.name, self.digest)
+            environment = {
+                "AART_CLI_INDEX_PUBLISH_CREDENTIALS": "deploy:written",
+                "AART_CLI_INDEX_CREDENTIALS": "reader:read",
+            }
+            with mock.patch.dict("os.environ", environment):
+                with mock.patch.object(publish_to_index.urllib.request, "urlopen", index):
+                    said = publish_to_index.publish_once(_UPLOAD, path, _GROUP)
+        return index, said
+
+    def test_the_same_file_already_in_the_index_is_success_without_an_upload(self) -> None:
+        index, said = self._run({_PAGE: b"SAME"})
+
+        self.assertEqual(index.posts(), [])
+        self.assertIn("already", said)
+        self.assertIn(self.digest, said)
+
+    def test_a_different_file_under_the_same_name_is_refused_without_an_upload(self) -> None:
+        index = _Index({_PAGE: _listing("aart_cli-9.9.9-py3-none-any.whl", "f" * 64)})
+        with TemporaryDirectory() as held:
+            path = _wheel(Path(held))
+            with mock.patch.dict("os.environ", {"AART_CLI_INDEX_PUBLISH_CREDENTIALS": "d:w"}):
+                with mock.patch.object(publish_to_index.urllib.request, "urlopen", index):
+                    with self.assertRaises(publish_to_index.PublishError) as refusal:
+                        publish_to_index.publish_once(_UPLOAD, path, _GROUP)
+
+        self.assertEqual(index.posts(), [])
+        self.assertIn("f" * 64, str(refusal.exception))
+
+    def test_a_project_the_index_does_not_know_is_uploaded(self) -> None:
+        index, said = self._run({_PAGE: 404})
+
+        self.assertEqual(index.posts(), [_UPLOAD])
+        self.assertIn("published", said)
+
+    def test_another_version_listed_does_not_count_as_this_one(self) -> None:
+        index, _ = self._run({_PAGE: _listing("aart_cli-9.9.7-py3-none-any.whl", "1" * 64)})
+
+        self.assertEqual(index.posts(), [_UPLOAD])
+
+    def test_the_check_reads_with_the_install_credential_and_the_upload_writes_with_its_own(
+        self,
+    ) -> None:
+        index, _ = self._run({_PAGE: 404})
+
+        (check,) = [request for request in index.seen if request.get_method() == "GET"]
+        (upload,) = [request for request in index.seen if request.get_method() == "POST"]
+        read = base64.b64decode(check.get_header("Authorization").removeprefix("Basic "))
+        write = base64.b64decode(upload.get_header("Authorization").removeprefix("Basic "))
+        self.assertEqual(read.decode(), "reader:read")
+        self.assertEqual(write.decode(), "deploy:written")
+
+    def test_without_an_index_to_ask_it_uploads(self) -> None:
+        index = _Index({})
+        with TemporaryDirectory() as held:
+            path = _wheel(Path(held))
+            with mock.patch.dict("os.environ", {"AART_CLI_INDEX_PUBLISH_CREDENTIALS": "d:w"}):
+                with mock.patch.object(publish_to_index.urllib.request, "urlopen", index):
+                    publish_to_index.publish_once(_UPLOAD, path, None)
+
+        self.assertEqual([request.get_method() for request in index.seen], ["POST"])
+
+
+_API = "https://ghe.example/api/v3"
+_RELEASE = _API + "/repos/org/aart-cli/releases/tags/v9.9.9"
+_ASSET = _API + "/repos/org/aart-cli/releases/assets/11"
+
+
+def _release(*names: str) -> bytes:
+    return json.dumps(
+        {
+            "assets": [
+                {"name": name, "url": f"{_API}/repos/org/aart-cli/releases/assets/{11 + number}"}
+                for number, name in enumerate(names)
+            ]
+        }
+    ).encode()
+
+
+class TheWheelComesFromTheReleaseTest(unittest.TestCase):
+    """The index gets the bytes the Release carries, not a second build of the same tag (§192)."""
+
+    ENVIRONMENT = {
+        "GITHUB_API_URL": _API,
+        "GITHUB_REPOSITORY": "org/aart-cli",
+        "GITHUB_TOKEN": "unused-by-the-fake",
+    }
+
+    def test_the_one_wheel_attached_to_the_release_is_downloaded_byte_for_byte(self) -> None:
+        index = _Index(
+            {
+                _RELEASE: _release("aart_cli-9.9.9-py3-none-any.whl", "notes.txt"),
+                _ASSET: b"the attached bytes",
+            }
+        )
+        with TemporaryDirectory() as held, mock.patch.dict("os.environ", self.ENVIRONMENT):
+            with mock.patch.object(publish_to_index.github_api.urllib.request, "urlopen", index):
+                path = publish_to_index.released_wheel("v9.9.9", Path(held))
+            content = path.read_bytes()
+
+        self.assertEqual(path.name, "aart_cli-9.9.9-py3-none-any.whl")
+        self.assertEqual(content, b"the attached bytes")
+        download = index.seen[-1]
+        self.assertEqual(download.get_header("Accept"), "application/octet-stream")
+        # The asset API redirects to storage that refuses a second credential, so the token must
+        # not follow the redirect.
+        self.assertNotIn("Authorization", download.headers)
+        self.assertIn("Authorization", download.unredirected_hdrs)
+
+    def test_a_release_without_exactly_one_wheel_is_refused_by_name(self) -> None:
+        for names in ((), ("aart_cli-9.9.9-py3-none-any.whl", "aart_cli-9.9.8-py3-none-any.whl")):
+            index = _Index({_RELEASE: _release(*names)})
+            with TemporaryDirectory() as held, mock.patch.dict("os.environ", self.ENVIRONMENT):
+                with mock.patch.object(
+                    publish_to_index.github_api.urllib.request, "urlopen", index
+                ):
+                    with self.subTest(names=names):
+                        with self.assertRaises(publish_to_index.PublishError) as refusal:
+                            publish_to_index.released_wheel("v9.9.9", Path(held))
+                        self.assertIn("v9.9.9", str(refusal.exception))
 
 
 if __name__ == "__main__":

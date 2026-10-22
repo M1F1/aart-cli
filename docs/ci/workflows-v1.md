@@ -21,7 +21,8 @@ request.** If direct pushes to `main` were allowed, nothing would prove the sour
 |---|---|---|---|
 | `pr-check.yml` | `pr-check` | `pull_request` | all ten quality gates on 3.10, 3.11 and 3.14, plus the title check — narrowed on a release pull request, below |
 | `release-please.yml` | `release please` | push to `main` | maintains the release pull request; when one is merged, calls `release.yml` |
-| `release.yml` | `release` | tag push, release published, `workflow_call` | the release checks, build, attach, publish |
+| `release.yml` | `release` | tag push, release published, `workflow_call` | the release checks, build, attach; then calls `publish-index.yml` |
+| `publish-index.yml` | `publish to index` | `workflow_call` from `release.yml`, `workflow_dispatch` with a tag | uploads the Release's wheel to `AART_CLI_INDEX_PUBLISH_URL` unless the index already lists it; skipped when that is unset |
 | `deep-quality.yml` | `deep quality` | `workflow_dispatch` | scoped mutation testing of one module |
 
 Versions, tags and the changelog are Release Please's; see
@@ -36,7 +37,11 @@ Only what has the release as its subject:
 * `packaging-check` — the one quality gate whose subject is the wheel rather than the source
 * build, then `scripts/release_artifact.py --tag` — the wheel's filename, metadata, declared
   dependencies and installed command, against the tag it is published under
-* attach to the release, and publish to an index when `AART_CLI_INDEX_PUBLISH_URL` is set
+* attach to the release
+
+When `AART_CLI_INDEX_PUBLISH_URL` is set, the `index` job then calls `publish-index.yml`. It is a
+separate workflow so that an index that refuses does not turn the release red, and so that any tag
+can be published again by hand. It checks nothing itself: it uploads the wheel the Release carries.
 
 Everything else is left to `pr-check`: a release is cut from a commit that reached `main`, and
 nothing reaches `main` except through a pull request that passed all ten gates.

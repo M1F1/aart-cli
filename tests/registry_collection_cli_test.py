@@ -182,6 +182,16 @@ class RegistryCollectionCliTest(unittest.TestCase):
             {"company/collection/data-engineer@1.0.0": ["mcp/github-mcp@1.0.0"]},
         )
 
+    def test_a_published_collection_passes_the_registry_s_own_checks(self) -> None:
+        self.assertEqual(self._promote_member("--yes")[0], 0)
+        self.assertEqual(self._collection("--yes")[0], 0)
+
+        # The same gates the generated Registry CI runs; each one compiled the Collection's version
+        # as a native package and refused it for having no artifact.json (D-473).
+        for action in (("validate",), ("audit",), ("build", "--check"), ("format", "--check")):
+            code, said = _cli("maintain", "registry", *action, "--source", str(self.registry))
+            self.assertEqual(code, 0, f"{action}: {said}")
+
     def test_a_member_the_registry_has_not_approved_is_refused_by_name(self) -> None:
         self.assertEqual(self._promote_member("--yes")[0], 0)
 

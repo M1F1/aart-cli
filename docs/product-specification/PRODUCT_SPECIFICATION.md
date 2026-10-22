@@ -11833,3 +11833,74 @@ ship it was to drop the lock and let each installation resolve its own versions.
 **INV-290 — A uv-locked project installs exactly its lock.** Installing a `type: uv` artifact puts
 the versions its `uv.lock` pins into that installation's own environment, leaves the payload and
 its lock unchanged, and is refused rather than resolved loosely when uv is not the installer.
+
+# 190. The Registry view names what each promotion published
+
+Status: **ACCEPTED 2026-10-22 (D-472)**, on the owner's report (CP-36). This refines §164.8.
+
+Recent promotions on the Maintainer Registry view listed only digests: the snapshot each promotion
+produced and the candidate ids it promoted. Nobody could tell from them which artifacts had been
+promoted.
+
+- **Names, not digests.** Each promotion is numbered, newest first, with how many versions it
+  published. Under it, each version is listed as `kind/name@version`, read from the approved
+  version that candidate became. The Registry's alias is the row's own and is not repeated.
+- **Nothing is dropped.** A candidate that no approved version carries any more is still listed,
+  as no longer in this Registry, with its shortened candidate id.
+- **Digests stay in Verbose.** The description of the row under the cursor gives each promotion's
+  content mode and the full snapshot digest it produced, and each version's name with its full
+  candidate id.
+- **The validity diagnostic names versions too.** An approved version with no promotion record is
+  named as `kind/name@version`.
+
+**INV-291 — The Registry view names what each promotion published.** No line of Recent promotions
+outside Verbose is a digest. Every version a promotion published appears there by
+`kind/name@version`, or as no longer in this Registry.
+
+# 191. A published Collection passes the Registry's own checks
+
+Status: **ACCEPTED 2026-10-22 (D-473)**, on the owner's report (CP-36). This refines §173.3.
+
+A Collection published with `registry collection --yes` made the Registry fail its own `validate`,
+`audit`, `build` and `format` with "required file is missing: artifact.json", so `publish` refused
+to commit it and the generated Registry CI would have failed. Those checks compiled every
+self-contained approved version as a native package, and a Collection's version is one
+`collection.json` naming its pinned members, not a package.
+
+- **A Collection's version is not compiled as a package.** Its bytes are still held to its approval
+  like every approved version's. Its members are approved versions this Registry already checks.
+- **Its members decide where it installs.** Nothing on the Collection names a harness. It is offered
+  only where every member can be hosted (§173.5).
+
+**INV-292 — A published Collection passes the Registry's own checks.** A Registry that passes
+`validate`, `audit`, `build --check` and `format --check` still passes them after `registry
+collection --yes` publishes a Collection of its approved artifacts.
+
+# 192. Publishing a release to an internal index can be retried
+
+Status: **ACCEPTED 2026-10-22 (D-474)**, on the owner's Enterprise rollout (CP-37). This refines
+§126.3.
+
+A fork that sets `AART_CLI_INDEX_PUBLISH_URL` publishes each release's wheel to its own index,
+which is the recommended way for its Registries to fetch aart-cli. The upload used to be the last
+step of the release job. An index that refused turned the release red although the Release and its
+wheel already existed. A tag released before the variables were set, or whose upload failed, could
+only be published by deleting and recreating its Release.
+
+- **Its own workflow.** `publish-index.yml` uploads after the release has attached the wheel. A
+  refusal fails only that workflow.
+- **The Release's own bytes.** It downloads the wheel attached to the Release rather than building
+  the tag again, so the index holds exactly what the Release carries. It needs no workflow
+  artifact, which GitHub Enterprise Server refuses.
+- **By tag, at any time.** Anyone with access runs it again for any released tag.
+- **Safe to run again.** It first asks the install index (`AART_CLI_PIP_INDEX_URL`) for the wheel.
+  The same file already listed is success, and nothing is uploaded. A different file under the same
+  name is refused, and nothing is replaced. Only a file the index does not list is uploaded.
+- **Unset publishes nowhere.** Without `AART_CLI_INDEX_PUBLISH_URL` the workflow does nothing,
+  which is the public run. The variable decides where a checked wheel goes, never whether anything
+  is checked (INV-072).
+
+**INV-293 — Publishing to an internal index is idempotent and retryable.** For any released tag,
+running the index publication any number of times leaves the index holding exactly the Release's
+wheel, or fails without replacing a different file already there. A failed publication never turns
+the release itself red.

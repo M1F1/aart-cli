@@ -109,6 +109,7 @@ def request(
     body: bytes | None = None,
     content_type: str | None = None,
     auth: str | None = None,
+    accept: str | None = None,
 ) -> bytes:
     """Call the API, and on refusal raise with what the API said.
 
@@ -118,10 +119,15 @@ def request(
     Enterprise walk were unreadable for exactly this reason.
     """
 
-    headers = {**_HEADERS, "Authorization": f"Bearer {auth or token()}"}
+    headers = dict(_HEADERS)
+    if accept:
+        headers["Accept"] = accept
     if content_type:
         headers["Content-Type"] = content_type
     call = urllib.request.Request(url, data=body, headers=headers, method=method)
+    # Unredirected: a release asset's download answers with a redirect to storage that refuses a
+    # request carrying a second credential, and urllib forwards ordinary headers to the redirect.
+    call.add_unredirected_header("Authorization", f"Bearer {auth or token()}")
     try:
         with urllib.request.urlopen(call) as response:  # noqa: S310 - https API host
             return response.read()

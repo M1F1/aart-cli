@@ -956,12 +956,15 @@ def render_maintainer_registry(
         lines.append("    No promotion has been recorded in this registry yet.")
         return tuple(lines)
     lines.append("    Recent promotions (newest first):")
-    for item in view.transactions:
-        lines.append(
-            f"      {_short(item.snapshot_after, fast)} ({item.mode}) "
-            f"{len(item.candidate_ids)} {_noun(len(item.candidate_ids), 'candidate')}"
+    for number, item in enumerate(view.transactions, start=1):
+        # What was published, by name (§190); the digests are in the Verbose description.
+        lines.append(f"      {number}. {len(item.versions)} {_noun(len(item.versions), 'version')}")
+        lines.extend(
+            f"        {version.artifact}"
+            if version.artifact is not None
+            else f"        no longer in this Registry (candidate {_short(version.candidate_id, fast)})"
+            for version in item.versions
         )
-        lines.extend(f"        {_short(candidate, fast)}" for candidate in item.candidate_ids)
     return tuple(lines)
 
 
@@ -975,9 +978,12 @@ def maintainer_registry_detail(view: MaintainerRegistryView) -> tuple[str, ...]:
     lines = [f"Revision: {view.revision or 'none'}", f"Snapshot: {view.snapshot}"]
     if view.working_tree.digest is not None:
         lines.append(f"Working tree observed: {view.working_tree.digest}")
-    for item in view.transactions:
-        lines.append(f"Promotion {item.snapshot_after} ({item.mode})")
-        lines.extend(f"  {candidate}" for candidate in item.candidate_ids)
+    for number, item in enumerate(view.transactions, start=1):
+        lines.append(f"Promotion {number} ({item.mode}) produced {item.snapshot_after}")
+        lines.extend(
+            f"  {version.artifact or 'no longer in this Registry'}  candidate {version.candidate_id}"
+            for version in item.versions
+        )
     return tuple(lines)
 
 

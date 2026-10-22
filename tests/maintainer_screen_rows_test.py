@@ -211,8 +211,11 @@ class RegistryMaintainerTest(_Contract):
                 f"Revision: {view.revision}",
                 f"Snapshot: {view.snapshot}",
                 f"Working tree observed: {view.working_tree.digest}",
-                f"Promotion {promotion.snapshot_after} ({promotion.mode})",
-                *(f"  {candidate}" for candidate in promotion.candidate_ids),
+                f"Promotion 1 ({promotion.mode}) produced {promotion.snapshot_after}",
+                *(
+                    f"  {version.artifact}  candidate {version.candidate_id}"
+                    for version in promotion.versions
+                ),
             ),
         )
         self.assertEqual(
