@@ -1438,7 +1438,24 @@
         },
         {
           "id": "3",
-          "title": "Focused verification and the PR",
+          "title": "Focused verification and the PR (one PR with CP-37)",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "id": "CP-37",
+      "title": "Retryable publication to an internal index",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "publish-index.yml uploads the Release's wheel, asks the install index first, and runs again by tag (§192, INV-293, D-474)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Focused verification and the PR (shared with CP-36)",
           "status": "todo"
         }
       ]

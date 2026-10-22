@@ -11593,3 +11593,26 @@ it reaches the Registry's default branch, while adoption from any branch stays p
 - **The test runs the checks the Registry CI runs.** The Collection CLI test read the Collection
   back but never ran `validate`, which is how 0.14.0 shipped the defect. The new test runs
   `validate`, `audit`, `build --check` and `format --check` after `--yes`.
+
+## D-474 — The index upload is its own retryable workflow (CP-37 step 1)
+
+- **Called from `release.yml`, not triggered by the Release event.** A second workflow listening
+  for `release: published` would race the release job that attaches the wheel it downloads. An
+  `index` job with `needs` on both container shapes and `always()` runs after whichever shape ran,
+  and only when the run attached the wheel. On github.com Release Please calls `release.yml`, so the
+  call is nested two deep; on an Enterprise fork a person creates the Release and it is one deep.
+- **The wheel comes from the Release.** Rebuilding the tag would publish a second build, and a
+  workflow artifact is refused by GHES. The asset download redirects to storage that rejects a
+  second credential, so `github_api.request` now sends the token as an unredirected header.
+- **Idempotent by asking the install index.** No new variable: `AART_CLI_PIP_INDEX_URL` is the
+  group a Registry installs from, so it must list what was published anyway. Same sha256 is
+  success; a different one is refused, because an index keeps one file per name and choosing is a
+  person's call. A listing without a sha256 is refused rather than guessed.
+- **`AART_CLI_INDEX_PUBLISH_URL` may gate a job.** It is the only variable besides the image switch
+  allowed in a condition, and only in `publish-index.yml`, which checks nothing (INV-072 test).
+- **No version bump, commit or push from CI.** The company's own release template bumps, commits
+  and tags from the Enterprise repository. An aart-cli fork must stay a fast-forward of the public
+  `main`, where Release Please owns versions, so only the upload is taken over.
+- **A dev channel is backlog (B-225).** Publishing `X.Y.Z.devN` builds of branches to a dev
+  repository is useful only once someone installs unreleased versions with pip; `AART_CLI_REF`
+  already lets a Registry run a branch.

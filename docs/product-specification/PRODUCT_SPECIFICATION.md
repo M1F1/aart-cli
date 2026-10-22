@@ -11875,3 +11875,32 @@ self-contained approved version as a native package, and a Collection's version 
 **INV-292 — A published Collection passes the Registry's own checks.** A Registry that passes
 `validate`, `audit`, `build --check` and `format --check` still passes them after `registry
 collection --yes` publishes a Collection of its approved artifacts.
+
+# 192. Publishing a release to an internal index can be retried
+
+Status: **ACCEPTED 2026-10-22 (D-474)**, on the owner's Enterprise rollout (CP-37). This refines
+§126.3.
+
+A fork that sets `AART_CLI_INDEX_PUBLISH_URL` publishes each release's wheel to its own index,
+which is the recommended way for its Registries to fetch aart-cli. The upload used to be the last
+step of the release job. An index that refused turned the release red although the Release and its
+wheel already existed. A tag released before the variables were set, or whose upload failed, could
+only be published by deleting and recreating its Release.
+
+- **Its own workflow.** `publish-index.yml` uploads after the release has attached the wheel. A
+  refusal fails only that workflow.
+- **The Release's own bytes.** It downloads the wheel attached to the Release rather than building
+  the tag again, so the index holds exactly what the Release carries. It needs no workflow
+  artifact, which GitHub Enterprise Server refuses.
+- **By tag, at any time.** Anyone with access runs it again for any released tag.
+- **Safe to run again.** It first asks the install index (`AART_CLI_PIP_INDEX_URL`) for the wheel.
+  The same file already listed is success, and nothing is uploaded. A different file under the same
+  name is refused, and nothing is replaced. Only a file the index does not list is uploaded.
+- **Unset publishes nowhere.** Without `AART_CLI_INDEX_PUBLISH_URL` the workflow does nothing,
+  which is the public run. The variable decides where a checked wheel goes, never whether anything
+  is checked (INV-072).
+
+**INV-293 — Publishing to an internal index is idempotent and retryable.** For any released tag,
+running the index publication any number of times leaves the index holding exactly the Release's
+wheel, or fails without replacing a different file already there. A failed publication never turns
+the release itself red.

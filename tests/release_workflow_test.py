@@ -188,40 +188,85 @@ class PublishingToAnIndexIsOptionalTest(unittest.TestCase):
 
     The switch is one variable, the same shape `REFERENCE_REGISTRY_URL` uses. A second variable to
     turn the first one on is a thing to forget, and this project has already paid for one of those.
+
+    The upload is its own workflow (§192, INV-293): an index that refuses no longer turns the
+    release red, and a failed or missed upload is retried by tag without recreating the Release.
     """
 
-    ACTION = ROOT / ".github" / "actions" / "release" / "action.yml"
-    WORKFLOWS = (ROOT / ".github" / "workflows" / "release.yml",)
+    RELEASE_ACTION = ROOT / ".github" / "actions" / "release" / "action.yml"
+    ACTION = ROOT / ".github" / "actions" / "publish-index" / "action.yml"
+    PUBLISH = ROOT / ".github" / "workflows" / "publish-index.yml"
+    RELEASE = ROOT / ".github" / "workflows" / "release.yml"
+    WORKFLOWS = (PUBLISH,)
 
     def test_the_step_runs_only_for_a_fork_that_asked_for_it(self) -> None:
-        action = self.ACTION.read_text(encoding="utf-8")
+        workflow = self.PUBLISH.read_text(encoding="utf-8")
 
-        self.assertIn("scripts/publish_to_index.py", action)
-        # Both halves of the guard matter.  Without the URL test, an unconfigured fork posts a
-        # wheel at an empty address; without `attach`, a plain tag push publishes a version the
-        # index already holds and fails a run that did nothing wrong.
-        self.assertIn(
-            "if: inputs.attach == 'true' && env.INDEX_PUBLISH_URL != ''",
-            action,
-        )
+        self.assertIn("scripts/publish_to_index.py", self.ACTION.read_text(encoding="utf-8"))
+        # Both shapes of the job carry the guard: without it an unconfigured fork posts a wheel at
+        # an empty address.
+        self.assertEqual(workflow.count("vars.AART_CLI_INDEX_PUBLISH_URL != ''"), 2)
+
+    def test_the_release_no_longer_uploads_and_calls_the_upload_after_it(self) -> None:
+        self.assertNotIn("publish_to_index", self.RELEASE_ACTION.read_text(encoding="utf-8"))
+        release = self.RELEASE.read_text(encoding="utf-8")
+        self.assertNotIn("INDEX_PUBLISH", release)
+        index = release.split("\n  index:\n", 1)[1]
+        self.assertIn("needs: [release, release-private-image]", index)
+        self.assertIn("uses: ./.github/workflows/publish-index.yml", index)
+        # Only a run that attached the wheel publishes it: a tag push builds a wheel nobody
+        # attached, and the upload reads the wheel off the Release.
+        self.assertIn("inputs.attach || github.event_name == 'release'", index)
+
+    def test_a_tag_can_be_published_again_by_hand(self) -> None:
+        workflow = self.PUBLISH.read_text(encoding="utf-8")
+        triggers = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+
+        self.assertIn("workflow_dispatch:", triggers)
+        self.assertIn("workflow_call:", triggers)
+        self.assertEqual(triggers.count("tag:"), 2)
+        action = self.ACTION.read_text(encoding="utf-8")
+        # The Release's own wheel, and the index asked first, so a retry is always safe.
+        self.assertIn('--release "$TAG"', action)
+        self.assertIn('--index "$AART_CLI_INDEX_URL"', action)
+
+    def test_no_workflow_hands_the_wheel_over_as_a_workflow_artifact(self) -> None:
+        """GHES refuses `upload-artifact@v4` at run time; the Release is the hand-over."""
+
+        for path in sorted((ROOT / ".github").rglob("*.yml")):
+            settings = "\n".join(
+                line
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if not line.lstrip().startswith("#")
+            )
+            with self.subTest(file=str(path.relative_to(ROOT))):
+                self.assertNotIn("upload-artifact", settings)
+                self.assertNotIn("download-artifact", settings)
 
     def test_the_credential_is_named_by_a_variable_and_written_nowhere(self) -> None:
         for path in self.WORKFLOWS:
             workflow = path.read_text(encoding="utf-8")
             with self.subTest(workflow=path.name):
-                self.assertIn(
-                    "AART_CLI_INDEX_PUBLISH_CREDENTIALS: "
-                    "${{ secrets[vars.AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET_NAME] }}",
-                    workflow,
+                self.assertEqual(
+                    workflow.count(
+                        "AART_CLI_INDEX_PUBLISH_CREDENTIALS: "
+                        "${{ secrets[vars.AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET_NAME] }}"
+                    ),
+                    2,
                 )
-                self.assertIn("INDEX_PUBLISH_URL: ${{ vars.AART_CLI_INDEX_PUBLISH_URL }}", workflow)
+                self.assertEqual(
+                    workflow.count("INDEX_PUBLISH_URL: ${{ vars.AART_CLI_INDEX_PUBLISH_URL }}"), 2
+                )
 
-    def test_both_halves_of_the_credential_are_remasked(self) -> None:
+    def test_both_halves_of_each_credential_are_remasked(self) -> None:
         """GitHub masks the value it was given -- `user:pass` -- and neither half after a split."""
 
         action = self.ACTION.read_text(encoding="utf-8")
-        publish = action.split("Publish the wheel to the internal index", 1)[1]
-        self.assertEqual(publish.count("::add-mask::"), 2)
+        loop = action.split("for held in ", 1)[1].split("done", 1)[0]
+        self.assertIn('"${AART_CLI_INDEX_PUBLISH_CREDENTIALS:-}"', loop.splitlines()[0])
+        self.assertIn('"${AART_CLI_INDEX_CREDENTIALS:-}"', loop.splitlines()[0])
+        self.assertIn('echo "::add-mask::${held%%:*}"', loop)
+        self.assertIn('echo "::add-mask::${held#*:}"', loop)
 
     def test_no_step_installs_a_publishing_tool(self) -> None:
         """`twine` would be the fourth program assumed present and absent, after make, gh and curl."""

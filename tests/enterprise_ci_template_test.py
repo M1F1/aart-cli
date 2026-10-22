@@ -25,7 +25,7 @@ from tests.credential_fixtures import credential_url
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PAGE = ROOT / "docs" / "ci" / "github-enterprise-rollout.md"
 ACTION = ROOT / ".github" / "actions" / "aart" / "action.yml"
-# The two workflows that run *this repository's* toolchain, and so have to be told where the
+# The workflows that run *this repository's* toolchain, and so have to be told where the
 # interpreter, the image and the index are.  `release-please.yml` is deliberately not here: it
 # runs one pinned action on the runner's own Node, touching neither pip nor Python, so every
 # variable below would be a variable it never reads.  `TheReleaseEngineIsPortableToo` states what
@@ -33,6 +33,7 @@ ACTION = ROOT / ".github" / "actions" / "aart" / "action.yml"
 WORKFLOWS = (
     ROOT / ".github" / "workflows" / "pr-check.yml",
     ROOT / ".github" / "workflows" / "release.yml",
+    ROOT / ".github" / "workflows" / "publish-index.yml",
 )
 RELEASE_ENGINE = ROOT / ".github" / "workflows" / "release-please.yml"
 # The workflows are thin by INV-076, so the steps -- and any condition on them -- are here.
@@ -649,9 +650,20 @@ class VariablesCannotWeakenTheGatesTest(unittest.TestCase):
     }
 
     #: `AART_CLI_IMAGE_USERNAME_SECRET_NAME` chooses which of two identical shapes of a job runs, and
-    #: `TheContainerSwitchTest` holds the two to the same steps. A second name here is a new power
-    #: over the quality contract and needs its own case.
-    INFRASTRUCTURE = frozenset({"AART_CLI_IMAGE_USERNAME_SECRET_NAME"})
+    #: `TheContainerSwitchTest` holds the two to the same steps. `AART_CLI_INDEX_PUBLISH_URL` is
+    #: where a released wheel goes, and gates only `publish-index.yml`, which checks nothing: the
+    #: release it uploads from has already passed every gate (§192). A further name here is a new
+    #: power over the quality contract and needs its own case.
+    INFRASTRUCTURE = frozenset(
+        {"AART_CLI_IMAGE_USERNAME_SECRET_NAME", "AART_CLI_INDEX_PUBLISH_URL"}
+    )
+
+    def test_the_publish_destination_gates_nothing_but_the_upload(self) -> None:
+        for label, text in self.SOURCES.items():
+            if label == ".github/workflows/publish-index.yml":
+                continue
+            for condition in self._conditions(text):
+                self.assertNotIn("AART_CLI_INDEX_PUBLISH_URL", condition, label)
 
     def _conditions(self, text: str) -> list[str]:
         """Every condition, in both spellings.
@@ -865,7 +877,7 @@ class ThisRepositorysWorkflowsStayThinTest(unittest.TestCase):
             for path in WORKFLOWS
         }
         self.assertEqual(
-            {"pr-check.yml": 1, "release.yml": 0},
+            {"pr-check.yml": 1, "release.yml": 0, "publish-index.yml": 0},
             {name: len(items) for name, items in inline.items()},
         )
         aggregate = _job_bodies(_read(ROOT / ".github" / "workflows" / "pr-check.yml"))["pr-check"]

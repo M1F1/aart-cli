@@ -4,6 +4,11 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-22, CP-37 step 1 (§192, INV-293, D-474): publishing to an internal index can be
+retried.** The upload left the release job for `publish-index.yml`, which `release.yml` calls after
+attaching the wheel and anyone can run by tag. It downloads the Release's wheel and skips a file the
+install index already lists. Evidence: `docs/refactor/slices/CP-37-retryable-index-publish.md`.
+
 **2026-10-22, CP-36 step 2 (§191, INV-292, D-473): a published Collection passes the Registry's
 own checks.** In 0.14.0, `registry collection --yes` left the Registry failing `validate`, `audit`,
 `build` and `format` ("required file is missing: artifact.json"). Collection versions are no longer

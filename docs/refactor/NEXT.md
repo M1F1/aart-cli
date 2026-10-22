@@ -3,7 +3,11 @@
 ## Where the work is (2026-10-22, after 0.14.0)
 
 **CP-35 is merged (#87) and released as 0.14.0 (#88).** **CP-36**, owner-reported Registry view
-fixes, is on `feat/cp-36-readable-promotions`: `docs/refactor/slices/CP-36-owner-reported-registry-view.md`.
+fixes, and **CP-37**, retryable publication to an internal index, share
+`feat/cp-36-readable-promotions` and one PR: `docs/refactor/slices/CP-36-owner-reported-registry-view.md`
+and `docs/refactor/slices/CP-37-retryable-index-publish.md`. CP-37 step 1 is done (§192, INV-293,
+D-474): `publish-index.yml` uploads the Release's wheel after the release, asks the install index
+first, and runs again by tag.
 Step 1 is done (§190, INV-291, D-472): Recent promotions on the Maintainer Registry view name each
 version as `kind/name@version`, and the digests are only in Verbose. Step 2 is done (§191,
 INV-292, D-473): a Collection published with `registry collection --yes` no longer fails the

@@ -12,6 +12,12 @@ The endpoint is the legacy upload API, which every private index in normal use s
 fields, which are read out of the wheel rather than restated here -- a wheel that disagreed with
 what was claimed about it would be worse than no upload at all.
 
+A retry has to be safe, and an index refuses a second upload of a version it holds. So with
+`--index` the index is asked first: the same file already listed there is success, a different
+file under the same name is refused, and only a file it does not list is uploaded (§192, INV-293).
+With `--release TAG` the wheel is the one attached to that GitHub Release rather than a build in
+`dist/`, so the index receives exactly the bytes the Release carries.
+
 Two things are deliberately not decided by this script:
 
 * **where** to publish, which is `--url` (a repository variable in CI). There is no default: a
@@ -26,14 +32,22 @@ from __future__ import annotations
 import argparse
 import base64
 import email.parser
+import html.parser
 import os
+import re
 import sys
+import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 import zipfile
 from hashlib import blake2b, md5, sha256
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import github_api  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -138,6 +152,91 @@ def credentials() -> str:
     return "Basic " + base64.b64encode(held.encode("utf-8")).decode("ascii")
 
 
+def released_wheel(tag: str, directory: Path) -> Path:
+    """Download the one wheel attached to the Release at `tag` into `directory`."""
+
+    api, repository = github_api.origin()
+    try:
+        release = github_api.json_request(f"{api}/repos/{repository}/releases/tags/{tag}")
+        wheels = [item for item in release.get("assets", ()) if item["name"].endswith(".whl")]
+        if len(wheels) != 1:
+            found = ", ".join(item["name"] for item in wheels) or "none"
+            raise PublishError(f"the Release at {tag} must carry exactly one wheel; found {found}")
+        (asset,) = wheels
+        content = github_api.request(asset["url"], accept="application/octet-stream")
+    except github_api.GitHubError as error:
+        raise PublishError(str(error)) from None
+    path = directory / asset["name"]
+    path.write_bytes(content)
+    return path
+
+
+class _Links(html.parser.HTMLParser):
+    """The `href` of every anchor on a PEP 503 project page."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.hrefs: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "a":
+            self.hrefs.extend(value for name, value in attrs if name == "href" and value)
+
+
+def indexed_digest(index: str, path: Path) -> str | None:
+    """The sha256 the index lists for this wheel's filename, or None when it does not list it.
+
+    Read with `AART_CLI_INDEX_CREDENTIALS`, the install login, when that is set: the hosted
+    repository a release uploads to is normally read through the group everything installs from.
+    """
+
+    project = re.sub(r"[-_.]+", "-", metadata(path)["Name"]).lower()
+    page = f"{index.rstrip('/')}/{project}/"
+    request = urllib.request.Request(page, headers={"Accept": "text/html"})
+    held = os.environ.get("AART_CLI_INDEX_CREDENTIALS", "")
+    if ":" in held:
+        login = base64.b64encode(held.encode("utf-8")).decode("ascii")
+        request.add_header("Authorization", f"Basic {login}")
+    try:
+        with urllib.request.urlopen(request) as response:  # noqa: S310 - operator-supplied index
+            listing = response.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            return None
+        detail = error.read().decode("utf-8", "replace").strip() or "(no response body)"
+        raise PublishError(f"GET {page} refused ({error.code})\n{detail}") from None
+    except urllib.error.URLError as error:
+        raise PublishError(f"GET {page} could not be reached: {error.reason}") from None
+    links = _Links()
+    links.feed(listing)
+    for href in links.hrefs:
+        address = urllib.parse.urlsplit(href)
+        if urllib.parse.unquote(address.path.rsplit("/", 1)[-1]) != path.name:
+            continue
+        fragment = dict(urllib.parse.parse_qsl(address.fragment))
+        if "sha256" not in fragment:
+            raise PublishError(f"{page} lists {path.name} without a sha256 to compare it by")
+        return fragment["sha256"]
+    return None
+
+
+def publish_once(url: str, path: Path, index: str | None) -> str:
+    """Upload unless `index` already lists this exact file; refuse if it lists another one."""
+
+    if index:
+        listed = indexed_digest(index, path)
+        local = sha256(path.read_bytes()).hexdigest()
+        if listed == local:
+            return f"already published: {index} lists {path.name} with sha256 {local}"
+        if listed is not None:
+            raise PublishError(
+                f"{index} already lists {path.name} with sha256 {listed}, but the wheel to "
+                f"publish has sha256 {local}. An index keeps one file per name; find out which "
+                "one is right before replacing anything."
+            )
+    return publish(url, path)
+
+
 def publish(url: str, path: Path) -> str:
     boundary = uuid.uuid4().hex
     payload = body(form(path), path, boundary)
@@ -168,11 +267,23 @@ def publish(url: str, path: Path) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--url", required=True, help="the index's upload endpoint")
-    parser.add_argument("--wheel", type=Path, help="the file to publish; found under dist/ if not")
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--wheel", type=Path, help="the file to publish; found under dist/ if not")
+    source.add_argument(
+        "--release", metavar="TAG", help="publish the wheel attached to this Release"
+    )
+    parser.add_argument(
+        "--index", help="simple index to ask first; a file it already lists is not uploaded again"
+    )
     parsed = parser.parse_args(argv)
 
     try:
-        print(publish(parsed.url, parsed.wheel or wheel()))
+        with tempfile.TemporaryDirectory() as held:
+            if parsed.release:
+                path = released_wheel(parsed.release, Path(held))
+            else:
+                path = parsed.wheel or wheel()
+            print(publish_once(parsed.url, path, parsed.index))
     except PublishError as error:
         print(f"publish refused: {error}", file=sys.stderr)
         return 2

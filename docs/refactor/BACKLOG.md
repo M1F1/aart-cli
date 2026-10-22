@@ -4922,3 +4922,13 @@ release from a `release/*` or `stable` branch and keep the default branch for de
 Registry today has to adopt from a tag on the default branch, or ask the upstream to change its
 default. An explicit, reviewed allowance per upstream, recorded where CI reads it but not
 changeable on a pull request branch alone, needs a specification decision.
+
+## B-225 — Development builds to an internal index
+
+Status: **open**, noncritical (CP-37, D-474).
+
+The owner's company publishes `X.Y.Z.devN` builds of non-default branches to a separate hosted dev
+repository, so a branch can be installed with pip before it is released. aart-cli publishes only
+released tags. A Registry can already run a branch of the fork through `AART_CLI_REF`. Add a dev
+channel only when someone needs to install unreleased aart-cli with pip; it would need its own
+upload URL variable and a version scheme Release Please does not fight.

@@ -241,7 +241,7 @@ index everything else uses, with credentials the instance already manages.
    | Variable | Set it to |
    |---|---|
    | `AART_CLI_INDEX_PUBLISH_URL` | the upload endpoint of a **hosted** repository, e.g. `https://nexus.corp/repository/pypi-internal/`. A proxy or group repository refuses uploads |
-   | `AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET_NAME` | the **name** of a secret holding `user:token` for a *deploy* account |
+   | `AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET_NAME` | the **name** of a secret holding `user:token` for an account that may upload to that repository. It may be the same secret `AART_CLI_PIP_INDEX_CREDENTIALS_SECRET_NAME` names, when that account can also write |
 
 2. Create the Release at the tag you already pushed. A tag push alone builds the wheel but neither
    creates a Release nor attaches it; `--verify-tag` refuses to invent a new tag.
@@ -252,11 +252,29 @@ index everything else uses, with credentials the instance already manages.
    ```
 
 Publishing starts the `release` workflow. It checks the tag is on `main`, runs the release
-checklist, builds the wheel, verifies it against the tag, attaches it to the release, and uploads it
-to the index. Expect two `release` runs for one tag — the tag push and the Release — with the same
-result. An index that already holds `X.Y.Z` refuses a second upload, so publish each tag once. If
-the run is red at *Prove the tagged source was merged into main*, the tags were pushed before
-`main`; redo [Part 1, step 5](#step-5--take-a-later-release) in order.
+checklist, builds the wheel, verifies it against the tag and attaches it to the release. Then its
+`index` job runs `publish-index.yml`, which downloads that attached wheel and uploads it to the
+index. Expect two `release` runs for one tag — the tag push and the Release — with the same result;
+only the Release's run publishes. If the run is red at *Prove the tagged source was merged into
+main*, the tags were pushed before `main`; redo [Part 1, step 5](#step-5--take-a-later-release) in
+order.
+
+The upload is its own workflow, so an index that refuses leaves the Release and its wheel green.
+Run it again for any released tag, for example one released before these variables were set:
+
+```bash
+gh workflow run publish-index.yml -f tag=vX.Y.Z
+gh run list --workflow publish-index.yml --limit 1
+```
+
+Running it again is always safe. It first asks `AART_CLI_PIP_INDEX_URL` whether the wheel is
+there, so that index must include the hosted repository, as a Nexus group does. The same file
+already listed is success and nothing is uploaded. A different file under the same name is refused
+and nothing is replaced. Then check what a registry would install:
+
+```bash
+pip download --no-deps --index-url <AART_CLI_PIP_INDEX_URL> aart-cli==X.Y.Z -d "$(mktemp -d)"
+```
 
 The checklist also reconciles against a reference registry when `AART_CLI_REFERENCE_REGISTRY_URL` is
 set. Leave it unset on a copy: those checks report `skipped`, never `passed`, with a warning.
@@ -378,7 +396,7 @@ which carry that record. It reads the whole Registry, not the change, so the pul
 brings the new workflow and `.aart-cli-version` must also leave no such version behind. Adopt with
 aart-cli 0.14.0 or later. Before you start, `aart-cli maintain registry audit --source .
 --for-default-branch` lists every version it would refuse.
-Then make `registry-quality` a required check on the default branch, because without branch
+Then make `registry-quality-gate` a required check on the default branch, because without branch
 protection GitHub merges a pull request whose check is red.
 
 ### Step 1 — Choose how the registry's CI fetches AART
@@ -515,6 +533,8 @@ aart-cli docs consume install
 | `.aart-cli-version pins X but … provided Y` | the route works and disagrees with the pin: a moved tag, an index that resolved another version, or an image with an old AART baked in |
 | `pin X overridden by AART_CLI_REF` | not a failure. Someone set `AART_CLI_REF` to run a branch or tag on purpose, and the run says so |
 | `aart-cli maintain registry push` refuses a branch that is not `main` | the checkout does not know the remote's default branch. Run `git remote set-head origin --auto` |
+| `publish to index` says the index already lists the wheel with another sha256 | that version was uploaded from a different build. Find out which file is right before deleting anything from the index |
+| `publish to index` says the Release must carry exactly one wheel | the Release has no wheel yet (its `release` run failed or is still running) or carries two. Fix the Release first |
 | `aart-cli consume registry add` says the URL is not a safe Git location | the location is not `https`, or it carries a user or token. Remove it and let the credential helper supply it |
 
 ## Reference
@@ -536,7 +556,7 @@ Read by `.github/workflows/pr-check.yml`, `.github/workflows/release.yml` and
 | `AART_CLI_IMAGE_USERNAME_SECRET_NAME` | unset | **name** of the secret holding the image registry's username. Setting it switches every job to the shape that logs in |
 | `AART_CLI_IMAGE_PASSWORD_SECRET_NAME` | unset | **name** of the secret holding the image registry's password |
 | `AART_CLI_POETRY` | `poetry` | how to invoke Poetry, which builds the wheel |
-| `AART_CLI_INDEX_PUBLISH_URL` | unset | upload endpoint of a hosted index. Set, a published release also uploads the wheel there; unset, it only attaches it |
+| `AART_CLI_INDEX_PUBLISH_URL` | unset | upload endpoint of a hosted index. Set, `publish-index.yml` uploads each published release's wheel there, and can be run again by tag; unset, a release only attaches it |
 | `AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET_NAME` | unset | **name** of a secret holding `user:token` for the publishing account |
 | `AART_CLI_REFERENCE_REGISTRY_URL` | unset | registry the release checklist reconciles against. Unset, those checks report `skipped` with a warning. It has no default: one naming a github.com repository reproduces nothing on an instance that cannot reach it |
 | `AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL` | unset | `<alias>=<url>` for the one Registry a wheel built here connects on a first run that has nothing configured. Unset bakes nothing, which is what the public build does. The alias is part of the value because it appears in the path of everything installed from that Registry, so it is chosen once and not changed. A malformed value fails the release rather than somebody's first run |
