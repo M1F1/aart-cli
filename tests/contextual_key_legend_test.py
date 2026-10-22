@@ -93,9 +93,12 @@ class ContextualKeyLegendTest(unittest.TestCase):
             MaintainerScreen.VALIDATION_DETAILS: ("[Enter] Policy",),
         }
 
+        # INV-284: `o` names the Collections of the Registry under the cursor, so the Registry
+        # screen is drawn with the cursor on one.
+        rows = {MaintainerScreen.REGISTRY: ("company",)}
         for screen, labels in expected.items():
             with self.subTest(screen=screen):
-                footer = self._footer(_state(screen))
+                footer = self._footer(_state(screen, rows=rows.get(screen, ())))
                 for label in labels:
                     self.assertIn(label, footer)
 
