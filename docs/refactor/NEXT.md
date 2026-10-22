@@ -1,6 +1,6 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-22, after CP-34 merged)
+## Where the work is (2026-10-22, CP-35 in its PR)
 
 **CP-34 is merged (#85) and released as 0.13.0 (#86).** **CP-35** is on
 `feat/cp-35-headless-inputs-and-fast-ci`: `docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
@@ -13,7 +13,8 @@ added by the owner, is done (§188, INV-289, D-470): `upstream adopt` records wh
 on the upstream's default branch, and `registry audit --for-default-branch` (renamed from
 `--require-remote-origins`) refuses every remote version not recorded so. Step 6 is done (§189,
 INV-290, D-471): a `type: uv` artifact installs exactly its `uv.lock` with `uv sync --frozen` into
-the installation's own environment. Next is step 7: focused gates, the PR, and release 0.14.0. B-220 still awaits the
+the installation's own environment. Step 7 is done: CP-35 is in one PR, released as 0.14.0 on merge. Next is whatever the owner
+reports next. B-220 still awaits the
 owner's decision. B-222 (a Linux credential store), B-223 (optional credentials in 07b) and B-224
 (release branches) are new.
 

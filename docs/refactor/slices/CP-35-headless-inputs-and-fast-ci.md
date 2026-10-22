@@ -1,6 +1,6 @@
 # CP-35 — Headless installation inputs, optional inputs, locked uv projects and a fast CI
 
-Status: **in progress** on `feat/cp-35-headless-inputs-and-fast-ci`, at the owner's request
+Status: **done**, in the PR from `feat/cp-35-headless-inputs-and-fast-ci`, at the owner's request
 (2026-10-22). The first three product steps come from an Enterprise agent's report on installing
 an MCP server from an upstream fork with no terminal: required inputs could not be answered on the
 command line, skipped optional inputs reached the server as `AART_NOT_SET`, and a `uv.lock`
@@ -21,7 +21,7 @@ See `docs/refactor/plan.json`, epic CP-35.
 5. The Registry CI takes only versions adopted from an upstream's default branch (§188, INV-289,
    D-470). Added by the owner during the epic. Done.
 6. A uv-locked project installs exactly its lock (§189, INV-290, D-471). Done.
-7. Focused verification and the PR. Todo.
+7. Focused verification and the PR. Done: focused gates passed locally, and CI runs the full suite on the PR.
 
 ## Step 1 — the suite runs once per interpreter, in parallel (D-466)
 

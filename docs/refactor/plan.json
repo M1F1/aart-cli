@@ -1382,7 +1382,7 @@
     {
       "id": "CP-35",
       "title": "Headless installation inputs, optional inputs, locked uv projects and a fast CI",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -1417,7 +1417,7 @@
         {
           "id": "7",
           "title": "Focused verification and the PR",
-          "status": "in_progress"
+          "status": "done"
         }
       ]
     }
