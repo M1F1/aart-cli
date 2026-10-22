@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.14.0](https://github.com/M1F1/aart-cli/compare/v0.13.0...v0.14.0) (2026-10-22)
+
+
+### Added
+
+* a uv-locked project installs exactly its uv.lock with uv sync --frozen ([b9d9ece](https://github.com/M1F1/aart-cli/commit/b9d9ecea4514b50b886f97e52ac7036d727b785e))
+* consume install and update answer inputs on the command line with --input, --secret-env and --set-later ([b9d9ece](https://github.com/M1F1/aart-cli/commit/b9d9ecea4514b50b886f97e52ac7036d727b785e))
+* optional inputs are asked on the install form and never reach the server as AART_NOT_SET ([b9d9ece](https://github.com/M1F1/aart-cli/commit/b9d9ecea4514b50b886f97e52ac7036d727b785e))
+* the generated Registry CI refuses versions promoted from a local checkout or adopted off the upstream's default branch (registry audit --for-default-branch) ([b9d9ece](https://github.com/M1F1/aart-cli/commit/b9d9ecea4514b50b886f97e52ac7036d727b785e))
+
 ## [0.13.0](https://github.com/M1F1/aart-cli/compare/v0.12.0...v0.13.0) (2026-10-22)
 
 
