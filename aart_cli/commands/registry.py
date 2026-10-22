@@ -369,6 +369,7 @@ def _run_audit(request: Request, workspace: FilesystemRegistryWorkspace) -> int:
         current.value,
         executable_version=_VERSION,
         available_capabilities=_CAPABILITIES,
+        require_remote_origins=request.require_remote_origins,
     )
     if isinstance(checked, Err):
         return _emit_error(request, "audit", checked)

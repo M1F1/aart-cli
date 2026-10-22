@@ -176,6 +176,7 @@ def _to_request(args: argparse.Namespace) -> Request:
         artifact_kind=getattr(args, "artifact_kind", None),
         yes=bool(getattr(args, "yes", False)),
         expect=getattr(args, "expect", None),
+        require_remote_origins=bool(getattr(args, "require_remote_origins", False)),
         force=bool(getattr(args, "force", False)),
         dry_run=bool(getattr(args, "dry_run", False)),
         json=bool(getattr(args, "json", False)),

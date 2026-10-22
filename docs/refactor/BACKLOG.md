@@ -4875,3 +4875,21 @@ planned and reviewed there whatever the launch directory.
 That changes where a reviewed transaction writes, and the workspace identity checks D-103 relies
 on. It needs a specification decision first: which checkout is authoritative when both exist, and
 how the review names it. A Git-URL Registry has no local checkout to choose, and stays as it is.
+
+## B-221 — Publishing a Registry could say which versions came from a local path
+
+Status: **resolved** by CP-35 step 2 (§185, INV-286, D-467). The audit, which `publish` runs, warns;
+the generated Registry CI refuses. Kept below for the reasoning.
+
+A version promoted from a local Source records `origin.kind: local` and the absolute path of the
+author's checkout. Self-contained versions keep it in `artifacts/KIND/NAME/VERSION/provenance.json`,
+pinned references in `references/KIND/NAME/VERSION.json`. That is correct provenance, and INV-207
+never rewrites it. But once the Registry is pushed for other people, the path names one person's
+machine, identifies no upstream anybody else can check, and holds the name against a later remote
+adoption (INV-279, B-219).
+
+A Registry publish review, or `maintain registry check`, could list the approved versions whose
+origin is local before the push, so a Maintainer moving from local trials to a shared remote knows
+to start a fresh Registry or adopt the remote upstream under another name. Today the owner has to
+find them in the checkout. A refusal would need a specification decision, because a local-only
+Registry is legitimate.

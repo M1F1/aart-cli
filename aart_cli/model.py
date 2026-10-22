@@ -480,6 +480,8 @@ class Request:
     # one.  ``--yes`` alone still means "finalize what this process just computed"; supplying this
     # additionally requires that what was reviewed is still what would happen.
     expect: Optional[str] = None
+    # `registry audit --require-remote-origins` (INV-286).
+    require_remote_origins: bool = False
     authorize_untrusted_source: bool = False
     authorize_custom_entrypoint: bool = False
     approve_setup_effects: bool = False

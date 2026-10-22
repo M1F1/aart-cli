@@ -65,6 +65,9 @@ jobs:
       # names the secret holding `user:pass`, because a variable cannot hold a credential.
       AART_CLI_INDEX_URL: ${{ vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple' }}
       AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET_NAME] }}
+      # Test processes per job (D-466). Empty uses every CPU the job may use; a runner whose
+      # container reports the host's CPUs rather than its quota sets the variable.
+      AART_CLI_TEST_WORKERS: ${{ vars.AART_CLI_TEST_WORKERS || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -110,6 +113,9 @@ jobs:
     env:
       AART_CLI_INDEX_URL: ${{ vars.AART_CLI_PIP_INDEX_URL || 'https://pypi.org/simple' }}
       AART_CLI_INDEX_CREDENTIALS: ${{ secrets[vars.AART_CLI_PIP_INDEX_CREDENTIALS_SECRET_NAME] }}
+      # Test processes per job (D-466). Empty uses every CPU the job may use; a runner whose
+      # container reports the host's CPUs rather than its quota sets the variable.
+      AART_CLI_TEST_WORKERS: ${{ vars.AART_CLI_TEST_WORKERS || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

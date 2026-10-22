@@ -1056,6 +1056,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     _add_registry_source(p_audit)
+    p_audit.add_argument(
+        "--require-remote-origins",
+        action="store_true",
+        dest="require_remote_origins",
+        help=(
+            "refuse every version promoted from a local checkout instead of warning; the "
+            "generated Registry CI passes this"
+        ),
+    )
     _add_json(p_audit)
 
     p_publish = registry_sub.add_parser(

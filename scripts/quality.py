@@ -33,6 +33,9 @@ QUALITY_GATES = (
 # so including it in `make quality` would prove one thing twice.  It exists for the release pull
 # request, which is gated on what it changes rather than on everything (INV-096, D-290).
 SELECTABLE_GATES = QUALITY_GATES + ("release-bump",)
+UNIT_PATTERN = "*_test.py"
+INTEGRATION_PATTERN = "*e2e_test.py"
+_PARALLEL = "scripts/parallel_tests.py"
 
 
 @dataclass(frozen=True)
@@ -98,15 +101,11 @@ def build_gates(temp_root: Path, python: str = sys.executable) -> tuple[Gate, ..
         Gate("format-check", ((python, "-m", "ruff", "format", "--check", *paths),)),
         Gate("lint", ((python, "-m", "ruff", "check", *paths),)),
         Gate("typecheck", ((python, "-m", "mypy", "--cache-dir", str(temp_root / "mypy")),)),
-        Gate(
-            "unit",
-            ((python, "-m", "unittest", "discover", "-s", "tests", "-p", "*_test.py"),),
-        ),
+        # The test gates run unittest's discovery in parallel processes (D-466): one process
+        # running five thousand tests in turn was most of a forty-minute pull request.
+        Gate("unit", ((python, _PARALLEL, "--pattern", UNIT_PATTERN),)),
         # The end-to-end gate: every ``*e2e_test.py`` drives the real CLI over real trees.
-        Gate(
-            "integration",
-            ((python, "-m", "unittest", "discover", "-s", "tests", "-p", "*e2e_test.py"),),
-        ),
+        Gate("integration", ((python, _PARALLEL, "--pattern", INTEGRATION_PATTERN),)),
         # No version gate: the release engine writes the one version value, so there is nothing to
         # reconcile (INV-085, INV-098).
         Gate("validate", ((python, "scripts/validate.py"),)),
@@ -118,19 +117,11 @@ def build_gates(temp_root: Path, python: str = sys.executable) -> tuple[Gate, ..
             (
                 (
                     python,
-                    "-m",
-                    "coverage",
-                    "run",
-                    "--branch",
-                    "--source=aart_cli",
-                    f"--data-file={coverage_data}",
-                    "-m",
-                    "unittest",
-                    "discover",
-                    "-s",
-                    "tests",
-                    "-p",
-                    "*_test.py",
+                    _PARALLEL,
+                    "--pattern",
+                    UNIT_PATTERN,
+                    "--coverage",
+                    str(coverage_data),
                 ),
                 (
                     python,
@@ -248,16 +239,22 @@ def redundant_gates(selected: tuple[str, ...]) -> dict[str, str]:
     the runner stop skipping instead of silently dropping a gate.
     """
 
-    if "integration" not in selected or "unit" not in selected:
-        return {}
-    every, subset = _discovered("*_test.py"), _discovered("*e2e_test.py")
+    redundant: dict[str, str] = {}
+    # `coverage` runs the unit gate's own discovery under measurement, so with both selected
+    # every test ran twice per interpreter (D-466). The same pattern is the proof.
+    covered = "coverage" in selected
+    if covered and "unit" in selected:
+        redundant["unit"] = f"the coverage gate runs every {UNIT_PATTERN} test under measurement"
+    runner = "coverage gate" if covered else "unit gate"
+    if "integration" not in selected or not (covered or "unit" in selected):
+        return redundant
+    every, subset = _discovered(UNIT_PATTERN), _discovered(INTEGRATION_PATTERN)
     if every is None or subset is None or not subset or not subset <= every:
-        return {}
-    return {
-        "integration": (
-            f"all {len(subset)} of its tests are among the {len(every)} the unit gate runs"
-        )
-    }
+        return redundant
+    redundant["integration"] = (
+        f"all {len(subset)} of its tests are among the {len(every)} the {runner} runs"
+    )
+    return redundant
 
 
 def changed_paths(root: Path, base: str | None = None) -> tuple[str, ...]:

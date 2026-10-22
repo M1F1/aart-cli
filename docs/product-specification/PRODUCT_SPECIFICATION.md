@@ -11684,3 +11684,34 @@ at all.
 line, the next line is a rule under each heading, as wide as its column, and every heading starts
 where its cells start.
 
+
+# 185. The default branch others install from holds only remote upstreams
+
+Status: **ACCEPTED 2026-10-22 (D-467)**, on the owner's request (CP-35). This extends §173.9 and
+§180.
+
+A maintainer tried artifacts out by promoting them from checkouts on their own machine into the
+Registry, and pushed. Each such version records `origin.kind: "local"` and the checkout's absolute
+path (self-contained), or a `local:` revision (pinned reference). Nobody else can check it against
+its upstream, and §180 then holds the name against the real remote upstream. Nothing stopped it
+reaching the default branch.
+
+- **The audit names them.** `aart-cli maintain registry audit` reports every approved version
+  promoted from a local checkout, with its coordinate and the location it records, and says to
+  adopt it from its upstream's Git URL instead.
+- **A trial Registry still works.** Without `--require-remote-origins`, the finding is a warning.
+  `publish` runs this audit, so a maintainer's trial Registry still commits and is told.
+- **CI refuses them.** `--require-remote-origins` makes the finding an error. The workflow
+  `registry init` generates runs the audit with it, so a pull request whose result holds such a
+  version is red. The Registry has no setting that turns it off: the workflow is managed, and a
+  hand-edited copy is refused.
+- **Branch protection is the Registry owner's part.** The check stops a merge only when it is
+  required on the default branch. The generated README says so; aart-cli does not change
+  repository settings.
+- **Adopt and promote are not refused.** A trial Registry is where local checkouts belong, so the
+  refusal sits where content becomes what others install.
+
+**INV-286 — The default branch holds only remote upstreams.** The generated Registry CI fails for
+every snapshot holding an approved version, self-contained or pinned reference, promoted from a
+local checkout. The plain audit reports each such version as a warning naming its coordinate and
+recorded location.

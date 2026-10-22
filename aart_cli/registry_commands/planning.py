@@ -11,11 +11,12 @@ from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import (
     ArtifactIdentity,
     SourceId,
+    source_revision_kind,
 )
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.protocol.capabilities import Capability
 from aart_cli.protocol.hashing import sha256_bytes
-from aart_cli.protocol.json import canonical_json_bytes, parse_json
+from aart_cli.protocol.json import JsonObject, canonical_json_bytes, parse_json
 from aart_cli.protocol.native_models import (
     ArtifactManifest,
     SourceManifest,
@@ -150,6 +151,28 @@ def _delivery(identity: ArtifactIdentity) -> tuple[str, ...]:
 def _error(message: str, remediation: tuple[str, ...]) -> Err:
     return Err(
         (Diagnostic(REGISTRY_COMMAND_INVALID, Severity.ERROR, message, remediation=remediation),)
+    )
+
+
+_REMOTE_ORIGIN = (
+    "a Registry other people install from takes artifacts only from remote upstreams: adopt it "
+    "from its upstream's Git URL with `aart-cli maintain upstream adopt --source . --url URL "
+    "--ref REF --artifact KIND/NAME@VERSION`, on a branch that holds no version from a local "
+    "checkout",
+)
+
+
+def _local_origin(version: str, location: object, *, refused: bool) -> Diagnostic:
+    """A version promoted from a checkout on the maintainer's machine (INV-286).
+
+    The location is the one the version itself records, so the finding says whose checkout it was.
+    """
+
+    where = f" ({location})" if isinstance(location, str) and location else ""
+    return _diagnostic(
+        f"{version} came from a local checkout{where}, not from a remote upstream",
+        _REMOTE_ORIGIN,
+        warning=not refused,
     )
 
 
@@ -625,8 +648,14 @@ def audit_registry_workspace(
     *,
     executable_version: SemVer,
     available_capabilities: tuple[Capability, ...],
+    require_remote_origins: bool = False,
 ) -> Result[RegistryQualityReport]:
-    """Audit committed registry content: a pure function of the snapshot, with no network."""
+    """Audit committed registry content: a pure function of the snapshot, with no network.
+
+    A version promoted from a local checkout is a warning, so a maintainer's trial Registry still
+    publishes and is told. `require_remote_origins` makes it an error: the generated Registry CI
+    passes it, so such a version never reaches the default branch others install from (INV-286).
+    """
 
     parsed = _registry_inputs(snapshot)
     if isinstance(parsed, Err):
@@ -684,6 +713,14 @@ def audit_registry_workspace(
             parsed_provenance = parse_provenance(provenance.content, path=provenance_path)
             if isinstance(parsed_provenance, Err):
                 diagnostics.extend(parsed_provenance.diagnostics)
+            elif parsed_provenance.value.origin.kind == "local":
+                diagnostics.append(
+                    _local_origin(
+                        f"{manifest.value.identity}@{base.rsplit('/', 1)[-1]}",
+                        parsed_provenance.value.origin.url,
+                        refused=require_remote_origins,
+                    )
+                )
         # What a consumer receives from an `mcp` package is a property of the package.
         diagnostics.extend(package_delivery_diagnostics(files.value, base, manifest.value))
         if manifest.value.license is None:
@@ -701,6 +738,24 @@ def audit_registry_workspace(
                 diagnostics.append(
                     _diagnostic(f"declared setup recipe is missing: {recipe}", _SETUP_RECIPE)
                 )
+    # A pinned reference holds no package, only the record of where it is: `revision` is the pin,
+    # and `local:` is a checkout on the maintainer's machine.
+    for path, item in sorted(files.value.items()):
+        parts = path.removesuffix(".json").split("/")
+        if item.kind is not SnapshotEntryKind.FILE or len(parts) != 4 or parts[0] != "references":
+            continue
+        record = parse_json(item.content)
+        if not isinstance(record, Ok) or not isinstance(record.value, JsonObject):
+            continue
+        revision = record.value.get("revision")
+        if isinstance(revision, str) and source_revision_kind(revision) == "local":
+            diagnostics.append(
+                _local_origin(
+                    f"{parts[1]}/{parts[2]}@{parts[3]}",
+                    record.value.get("source"),
+                    refused=require_remote_origins,
+                )
+            )
     security_file = files.value.get("security/index.json")
     if security_file is None:
         diagnostics.append(

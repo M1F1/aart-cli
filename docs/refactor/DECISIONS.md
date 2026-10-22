@@ -11437,3 +11437,51 @@ same one line, and it shows each column's width where a cell wraps. Installed us
 cells start. Marketplace's grid already sized columns against its headings and only adds the rule.
 The narrow stacked Marketplace labels every field and is unchanged.
 
+
+## D-466 — The suite runs once per interpreter, in parallel processes (CP-35 step 1)
+
+A pull request waited 37–40 minutes. Per interpreter, `unit` ran all ~5,000 tests in one process
+(10–17 minutes), then `coverage` ran the same tests again under measurement (13–21 minutes), on a
+four-core runner. Setup and every other gate took about two minutes together.
+
+`scripts/parallel_tests.py` keeps unittest and its discovery semantics: every module is imported by
+its top-level name with `tests/` on `sys.path`. It only splits the modules into chunks of similar
+size, heaviest first, about four per worker, which a pool of processes takes as each finishes, so
+one slow module does not hold back a fixed shard. Under `--coverage` each worker runs
+`coverage run --branch --parallel-mode` and the data is combined before `coverage report`. A
+failing chunk fails the run and its output is printed. `AART_CLI_TEST_WORKERS` overrides the
+process count. A local eight-process run of the whole suite took under three minutes.
+
+`redundant_gates` now also skips `unit` when `coverage` is selected, because both discover
+`*_test.py`. That was already the rule for `integration` under `unit`, and the skip stays
+pattern-checked, never assumed. Coverage still runs on each interpreter: a matrix job has to run
+the suite once anyway, and running it under coverage costs little more than running it bare. No
+pytest-xdist was added. The runner is standard library plus `coverage`, the dev group gains
+nothing, and the tests are unittest tests run by unittest.
+
+## D-467 — CI refuses versions promoted from a local checkout (CP-35 step 2)
+
+The owner promoted trial artifacts from checkouts on their machine into a Registry that was
+pushed, and asked for a mechanism that makes merging such content into the default branch
+impossible, not merely discouraged.
+
+Three places were considered:
+- A declaration in `aart-cli-registry.json` (local origins allowed or not). Any maintainer could
+  flip it on a branch, and it needed a marker schema change.
+- A new publication gate. `publish` checks its gate names against the same list as CI, so a hard
+  gate there would stop trial Registries, which legitimately hold local checkouts, from
+  committing at all.
+- The audit, in two modes. This was chosen.
+
+The plain `registry audit` that `publish` runs warns. `--require-remote-origins`, which only the
+generated workflow passes, refuses. The rule therefore lives in aart-cli and in the managed
+workflow, not in a value inside the Registry. Turning it off means editing a managed file, which is
+refused, or removing CI, which branch protection prevents.
+
+A version is local when its `provenance.json` origin kind is `local`, or its
+`references/KIND/NAME/VERSION.json` revision is a `local:` pin. Both are already recorded, so the
+check reads committed bytes and needs no network.
+
+Existing Registries get the check by bumping `.aart-cli-version` and replacing the generated
+workflow (`docs/ci/github-enterprise-rollout.md`). Because the audit reads the whole snapshot, the
+pull request that brings the check must already remove any local versions.
