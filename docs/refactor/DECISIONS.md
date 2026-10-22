@@ -11567,3 +11567,29 @@ it reaches the Registry's default branch, while adoption from any branch stays p
   says so to the author rather than at install.
 - **No fallback.** A host whose installer is pip refuses the install (§109). Poetry locks remain
   unsupported (`LOCK_FORMATS` is `uv` only).
+
+## D-472 — Recent promotions are listed by name (CP-36 step 1)
+
+- **The name comes from the approved versions, not the promotion record.** A promotion record
+  holds the candidate id and digests only. Changing its format would leave older Registries
+  unreadable, while the synchronized approved state already maps each candidate id to its
+  coordinate. A candidate no approved version carries is shown as no longer in this Registry, so
+  the count still matches what the promotion published.
+- **Numbered, newest first, without the mode.** "Self-contained" and "pinned reference" decide
+  ownership but do not say what was published. They move to Verbose with the digests, so `v`
+  shows everything the old line had.
+- **The view keeps `candidate_ids`** as a property, so code reading a transaction's candidates
+  does not change.
+
+## D-473 — A Collection's version is not compiled as a package (CP-36 step 2)
+
+- **Skip it where packages are compiled, not where versions are read.** The maintainer checks build
+  `IndexArtifact` values from every self-contained version through `promoted_registry_artifacts`.
+  A Collection's version holds `collection.json` only, so `compile_native_package` refused it for
+  having no `artifact.json`. The function now skips kind `collection`, which is how the consumer
+  readers already tell Collections apart. `validate_promoted_registry` still holds the
+  Collection's bytes to its approval, and the audit's per-package checks key on `artifact.json`,
+  so they never saw it.
+- **The test runs the checks the Registry CI runs.** The Collection CLI test read the Collection
+  back but never ran `validate`, which is how 0.14.0 shipped the defect. The new test runs
+  `validate`, `audit`, `build --check` and `format --check` after `--yes`.

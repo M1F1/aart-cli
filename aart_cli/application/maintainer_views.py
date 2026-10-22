@@ -122,6 +122,7 @@ __all__ = [
     "MaintainerRegistryWorkspaceView",
     "project_registry_workspace",
     "MaintainerWorkingTreeState",
+    "MaintainerPromotedVersionView",
     "MaintainerRegistryTransactionView",
     "MaintainerRegistryView",
     "MaintainerRepositoryArtifactView",
@@ -3417,24 +3418,59 @@ class MaintainerWorkingTreeView:
 
 
 @dataclass(frozen=True, slots=True)
+class MaintainerPromotedVersionView:
+    """One version a promotion published, by name when the Registry still publishes it (§190).
+
+    The promotion record holds only the candidate id. The approved version that candidate became
+    holds its `kind/name@version`, which is what a Maintainer recognises; `artifact` is None for a
+    candidate no approved version carries any more.
+    """
+
+    candidate_id: str
+    artifact: str | None
+
+    def __post_init__(self) -> None:
+        if not self.candidate_id or not (self.artifact is None or self.artifact):
+            raise ValueError("Maintainer promoted version view is invalid")
+
+
+@dataclass(frozen=True, slots=True)
 class MaintainerRegistryTransactionView:
     """One promotion transaction as the registry recorded it, newest first in the chain."""
 
     snapshot_before: str
     snapshot_after: str
     mode: str
-    candidate_ids: tuple[str, ...]
+    versions: tuple[MaintainerPromotedVersionView, ...]
 
     def __post_init__(self) -> None:
         if (
             not self.snapshot_before
             or not self.snapshot_after
             or not self.mode
-            or not self.candidate_ids
-            or any(not isinstance(item, str) or not item for item in self.candidate_ids)
+            or not self.versions
+            or any(not isinstance(item, MaintainerPromotedVersionView) for item in self.versions)
         ):
             raise ValueError("Maintainer registry transaction view is invalid")
-        object.__setattr__(self, "candidate_ids", tuple(sorted(self.candidate_ids)))
+        # Named versions first, alphabetically; any the Registry no longer publishes after them.
+        object.__setattr__(
+            self,
+            "versions",
+            tuple(
+                sorted(
+                    self.versions,
+                    key=lambda item: (
+                        item.artifact is None,
+                        item.artifact or "",
+                        item.candidate_id,
+                    ),
+                )
+            ),
+        )
+
+    @property
+    def candidate_ids(self) -> tuple[str, ...]:
+        return tuple(item.candidate_id for item in self.versions)
 
 
 #: Screen 51's last row: a Collection this registry does not have yet.
@@ -3524,9 +3560,17 @@ class MaintainerRegistryView:
 _MAX_REGISTRY_TRANSACTIONS = 50
 
 
+def _version_label(version: RegistryArtifactVersion) -> str:
+    """`kind/name@version`: the Registry is the row's own, so its alias is not repeated."""
+
+    coordinate = version.coordinate
+    return f"{coordinate.artifact}@{coordinate.version}"
+
+
 def _registry_transactions(
     audits: tuple[PromotionAudit, ...],
     head: str,
+    names: Mapping[str, str],
 ) -> tuple[MaintainerRegistryTransactionView, ...]:
     """Order transactions newest first by walking the snapshot chain back from the head.
 
@@ -3553,7 +3597,15 @@ def _registry_transactions(
         if step is None:
             break
         ordered.append(
-            MaintainerRegistryTransactionView(step[1], step[0], step[2], tuple(grouped[step]))
+            MaintainerRegistryTransactionView(
+                step[1],
+                step[0],
+                step[2],
+                tuple(
+                    MaintainerPromotedVersionView(candidate, names.get(candidate))
+                    for candidate in grouped[step]
+                ),
+            )
         )
         cursor = step[1]
     return tuple(ordered)
@@ -3623,7 +3675,11 @@ def project_maintainer_registry(
             audits = loaded.value
             approved_ids = {item.candidate_id for item in approved.versions}
             recorded = {item.candidate_id for item in audits}
-            missing = sorted(item.value for item in approved_ids - recorded)
+            missing = sorted(
+                _version_label(item)
+                for item in approved.versions
+                if item.candidate_id in approved_ids - recorded
+            )
             if missing:
                 # A published version nobody approved is the failure registry validity exists for.
                 diagnostics.append(
@@ -3657,7 +3713,11 @@ def project_maintainer_registry(
         len(approved.versions),
         artifact_counts,
         working,
-        _registry_transactions(audits, chain),
+        _registry_transactions(
+            audits,
+            chain,
+            {item.candidate_id.value: _version_label(item) for item in approved.versions},
+        ),
         tuple(diagnostics),
         _collections(alias, approved, registry_snapshot),
         _approved_artifacts(alias, approved),

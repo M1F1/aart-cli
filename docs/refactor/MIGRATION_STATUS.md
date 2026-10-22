@@ -4,6 +4,16 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-22, CP-36 step 2 (§191, INV-292, D-473): a published Collection passes the Registry's
+own checks.** In 0.14.0, `registry collection --yes` left the Registry failing `validate`, `audit`,
+`build` and `format` ("required file is missing: artifact.json"). Collection versions are no longer
+compiled as native packages. Evidence: `docs/refactor/slices/CP-36-owner-reported-registry-view.md`.
+
+**2026-10-22, CP-36 step 1 (§190, INV-291, D-472): Recent promotions are listed by name.** The
+Maintainer Registry view numbers each promotion newest first and lists the versions it published as
+`kind/name@version`. Digests moved to Verbose. Evidence:
+`docs/refactor/slices/CP-36-owner-reported-registry-view.md`.
+
 **2026-10-22, CP-35 step 6 (§189, INV-290, D-471): a uv-locked project installs its lock.** A
 `type: uv` artifact was refused at install. aart-cli now runs `uv sync --frozen --no-dev
 --no-editable` with the installation's environment as uv's project environment, so the pinned

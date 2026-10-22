@@ -120,9 +120,9 @@ def promoted_registry_artifacts(
 ) -> Result[tuple[IndexArtifact, ...]]:
     """The registry's own content, compiled from the packages its approvals point at.
 
-    Only vendored versions carry content here: a referenced approval deliberately leaves the bytes
-    upstream, so this snapshot has no package to compile and the maintenance commands have nothing
-    of the registry's own to check.  The object digest is the approval's, not a recomputation --
+    Only vendored artifact versions carry content here: a referenced approval deliberately leaves
+    the bytes upstream, and a Collection's version is a list of members, so neither has a package
+    to compile.  The object digest is the approval's, not a recomputation --
     `validate_promoted_registry` has already held the package to it.
     """
 
@@ -131,6 +131,11 @@ def promoted_registry_artifacts(
         if version.mode is not RegistryContentMode.SELF_CONTAINED:
             continue
         identity = version.coordinate.artifact
+        # A Collection is published as one `collection.json` naming pinned members, not as a native
+        # package, so there is nothing here to compile; `validate_promoted_registry` has already
+        # held its bytes to the approval (§173.3, D-473).
+        if identity.kind == "collection":
+            continue
         entries = _package_entries(snapshot, _version_prefix(version))
         package = compile_native_package(entries, expected_identity=identity)
         if isinstance(package, Err):
