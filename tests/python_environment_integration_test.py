@@ -33,7 +33,6 @@ from aart_cli.domain.python_runtime import (
 from aart_cli.domain.result import Err, Ok
 from aart_cli.io.python_runtime import (
     PYTHON_RUNTIME_REFUSED,
-    PYTHON_RUNTIME_UNSUPPORTED,
     LocalPythonRuntime,
     ProcessOutcome,
     observe_python_installers,
@@ -118,20 +117,6 @@ class RuntimeRefusalTest(unittest.TestCase):
 
         assert isinstance(result, Err), result
         self.assertEqual(result.diagnostics[0].code, PYTHON_RUNTIME_REFUSED)
-        self.assertEqual(self.runner.calls, [])
-
-    def test_it_refuses_a_locked_project_rather_than_quietly_ignoring_the_lock(self) -> None:
-        result = self.runtime.install_dependencies(
-            InstallPythonDependencies(
-                self.environment.environment,
-                self.environment.payload_path("pyproject.toml"),
-                "locked-project",
-                "uv",
-            )
-        )
-
-        assert isinstance(result, Err), result
-        self.assertEqual(result.diagnostics[0].code, PYTHON_RUNTIME_UNSUPPORTED)
         self.assertEqual(self.runner.calls, [])
 
     def test_the_argv_it_builds_names_the_artifact_interpreter_not_the_ambient_one(self) -> None:

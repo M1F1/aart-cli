@@ -29,6 +29,9 @@ EXPECTED_GATES = (
 )
 
 
+QUALITY_GATES_ALL = EXPECTED_GATES
+
+
 def _load_script(name: str):
     path = ROOT / "scripts" / f"{name}.py"
     if not path.is_file():
@@ -302,6 +305,34 @@ class RedundantGateTest(unittest.TestCase):
         quality = _load_script("quality")
 
         self.assertEqual(quality.redundant_gates(("integration",)), {})
+
+    def test_the_unit_gate_is_skipped_when_coverage_runs_the_same_tests(self) -> None:
+        """D-466: the full run ran every test twice, once bare and once under coverage."""
+
+        quality = _load_script("quality")
+
+        redundant = quality.redundant_gates(("unit", "integration", "coverage"))
+
+        self.assertEqual(set(redundant), {"unit", "integration"})
+        self.assertIn("coverage gate", redundant["unit"])
+        self.assertEqual(quality.redundant_gates(("unit",)), {})
+        self.assertEqual(set(quality.redundant_gates(QUALITY_GATES_ALL)), {"unit", "integration"})
+
+    def test_the_test_gates_run_the_parallel_runner_over_the_same_patterns(self) -> None:
+        quality = _load_script("quality")
+        with tempfile.TemporaryDirectory() as raw:
+            gates = {gate.name: gate for gate in quality.build_gates(pathlib.Path(raw))}
+
+        ((unit,),) = (gates["unit"].commands,)
+        ((integration,),) = (gates["integration"].commands,)
+        run, report = gates["coverage"].commands
+        self.assertEqual(unit[1:], ("scripts/parallel_tests.py", "--pattern", "*_test.py"))
+        self.assertEqual(
+            integration[1:], ("scripts/parallel_tests.py", "--pattern", "*e2e_test.py")
+        )
+        self.assertEqual(run[1:4], ("scripts/parallel_tests.py", "--pattern", "*_test.py"))
+        self.assertEqual(run[4], "--coverage")
+        self.assertEqual(report[1:4], ("-m", "coverage", "report"))
 
 
 class PackagingCheckTest(unittest.TestCase):

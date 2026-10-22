@@ -64,17 +64,26 @@ and a real one did not. Run a single gate with `make <gate>`.
 | `format-check` | `ruff format --check aart_cli tests scripts` | `ruff` |
 | `lint` | `ruff check aart_cli tests scripts` | `ruff` |
 | `typecheck` | `mypy` | `mypy` |
-| `unit` | `unittest discover -s tests -p "*_test.py"` | stdlib |
-| `integration` | `unittest discover -s tests -p "*e2e_test.py"` — drives the real CLI over real trees | stdlib |
+| `unit` | `scripts/parallel_tests.py --pattern "*_test.py"` — unittest discovery split across processes | stdlib |
+| `integration` | `scripts/parallel_tests.py --pattern "*e2e_test.py"` — drives the real CLI over real trees | stdlib |
 | `validate` | `scripts/validate.py` | stdlib |
 | `tach` | `tach check` — every import between top-level `aart_cli` modules must be an edge `tach.toml` declares; `domain` may reach only `redaction` | `tach` |
-| `coverage` | `coverage run --branch --source=aart_cli` over the unit suite, then `coverage report` | `coverage` |
+| `coverage` | `scripts/parallel_tests.py --pattern "*_test.py" --coverage` — the unit suite with each process under `coverage run --branch --parallel-mode`, combined, then `coverage report` | `coverage` |
 | `packaging-check` | `scripts/packaging_check.py` — builds the wheel and inspects it | stdlib |
 | `docs-check` | `scripts/docs_check.py` | stdlib |
 | `secret-shape-check` | `scripts/secret_shape_check.py` — refuses credential-shaped literals anywhere in the tracked tree, so the repository stays pushable to an instance with push protection on | stdlib |
 
 Four of the eleven — `unit`, `integration`, `validate`, `docs-check` — need nothing installed beyond
 Python itself.
+
+The test gates keep unittest and its discovery: `scripts/parallel_tests.py` imports every module by
+its top-level name with `tests/` on `sys.path`, as `unittest discover -s tests` does, and only splits
+the modules into chunks that worker processes take in turn. `AART_CLI_TEST_WORKERS` sets the number
+of processes; it defaults to the CPUs the run may use. A run that selects several test gates does
+not run a test twice (D-466): `coverage` runs every `*_test.py` module, so with it selected `unit`
+is skipped, and `integration`, whose `*e2e_test.py` modules are among those, is skipped whenever
+`unit` or `coverage` is selected. The skip is checked against the patterns, not assumed, and the
+run says which gate it skipped and why.
 
 One more gate exists that the full run does not include:
 

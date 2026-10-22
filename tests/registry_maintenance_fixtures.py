@@ -170,8 +170,15 @@ def approved_registry_snapshot(
     names: tuple[str, ...] = ("github-mcp",),
     version: str = "1.0.0",
     registry_alias: str = "company",
+    local: bool = False,
+    mode: str = "self-contained",
+    adoption=None,
 ) -> SourceSnapshot:
     """An initialized Registry holding one approved, vendored version per name.
+
+    `local` promotes from an author's checkout on this machine instead of a Git URL, and `mode`
+    chooses how the Registry holds each version, `self-contained` or `pinned-reference`.
+    `adoption` is the record `upstream adopt` writes into each version's provenance, if any.
 
     Built through the same promotion the maintainer runs, so the fixture cannot claim a shape the
     product does not write: `registry/versions/`, `registry/promotions/`, both derived catalogs and
@@ -186,6 +193,7 @@ def approved_registry_snapshot(
     )
     from aart_cli.domain.candidates import assess_candidate
     from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
+    from aart_cli.domain.registry import RegistryContentMode
     from aart_cli.protocol.authoring import compile_author_snapshot
 
     entries = []
@@ -200,12 +208,17 @@ def approved_registry_snapshot(
         }
         entries.append(_file(f"{name}/aart-cli.json", json.dumps(manifest).encode()))
         entries.append(_file(f"{name}/server.py", f"print('{name}')\n".encode()))
-    revision = "a" * 40
+    revision = f"local:{'b' * 64}" if local else "a" * 40
     compiled = with_fixture_versions(compile_author_snapshot)(
-        SourceSnapshot(SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)),
+        SourceSnapshot(
+            SnapshotOrigin.LOCAL if local else SnapshotOrigin.IMMUTABLE_GIT, tuple(entries)
+        ),
         source_alias=SourceAlias("authors"),
-        source="https://git.example/servers.git",
+        source="/home/author/servers" if local else "https://git.example/servers.git",
         revision=revision,
+        provenance_extensions=(
+            () if adoption is None else (("aart.repository-adoption", adoption),)
+        ),
     )
     assert isinstance(compiled, Ok), compiled
     scanned = reconcile_source_scan(
@@ -234,7 +247,9 @@ def approved_registry_snapshot(
         )
         for bundle in bundles
     )
-    planned = plan_bulk_promotion(base, bundles, evidence=evidence, approved=())
+    planned = plan_bulk_promotion(
+        base, bundles, evidence=evidence, approved=(), mode=RegistryContentMode(mode)
+    )
     assert isinstance(planned, Ok), planned
     projected = project_promotion(base, planned.value)
     assert isinstance(projected, Ok), projected

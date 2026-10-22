@@ -5,6 +5,7 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from aart_cli.application.mcp_smoke import SmokeDeclaration, SmokeOutcome, evaluate_tool_call
 from aart_cli.domain.result import Err, Ok
@@ -179,3 +180,42 @@ class McpSmokeLauncherContractTest(unittest.TestCase):
             # Both halves: what the route observed, and the sentence that explains it.
             self.assertIn("closed before the protocol exchange completed", message)
             self.assertIn("aart: repair the installation", message)
+
+    def test_a_launcher_gone_before_the_first_write_is_reported_as_closed(self) -> None:
+        """The other side of the race above: the process exits before stdin is written."""
+
+        class _Gone:
+            stdout = None
+
+            class stdin:  # noqa: N801 - stands in for the pipe attribute
+                closed = False
+
+                @staticmethod
+                def write(_data: bytes) -> None:
+                    raise BrokenPipeError
+
+                @classmethod
+                def close(cls) -> None:
+                    cls.closed = True
+
+            def __init__(self, *_args: object, **_kwargs: object) -> None:
+                pass
+
+            def poll(self) -> int:
+                return 76
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            launcher = root / "launch.sh"
+            launcher.write_text("#!/bin/sh\nexit 76\n", encoding="utf-8")
+            launcher.chmod(0o700)
+            with mock.patch("aart_cli.io.mcp_smoke.subprocess.Popen", _Gone):
+                run = execute_stdio_smoke(
+                    str(launcher),
+                    SmokeDeclaration("read_identity", JsonObject(()), 15),
+                    cwd=str(root),
+                    harness="tabnine",
+                )
+
+        assert isinstance(run, Err)
+        self.assertIn("closed before the protocol exchange completed", run.diagnostics[0].message)

@@ -369,6 +369,7 @@ def _run_audit(request: Request, workspace: FilesystemRegistryWorkspace) -> int:
         current.value,
         executable_version=_VERSION,
         available_capabilities=_CAPABILITIES,
+        for_default_branch=request.for_default_branch,
     )
     if isinstance(checked, Err):
         return _emit_error(request, "audit", checked)

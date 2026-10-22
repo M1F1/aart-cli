@@ -64,7 +64,11 @@ from aart_cli.protocol.authoring import compile_author_snapshot
 from aart_cli.protocol.json import JsonObject
 from aart_cli.protocol.native_schema import parse_provenance, parse_source_manifest
 from aart_cli.protocol.native_tree import SnapshotEntry, SnapshotEntryKind
-from aart_cli.registry_maintenance.model import NativeReferenceAcquisition
+from aart_cli.registry_maintenance.model import (
+    REPOSITORY_ADOPTION_RECORD,
+    NativeReferenceAcquisition,
+    adoption_record,
+)
 
 __all__ = [
     "REPOSITORY_ADOPTION_REFUSED",
@@ -88,7 +92,6 @@ REPOSITORY_ADOPTION_REFUSED = DiagnosticCode("repository-adoption-refused")
 #: Namespaced immutable provenance metadata that distinguishes the moving upstream name from the
 #: pinned commit observed during adoption. A later check must acquire the former and compare the
 #: latter's declared artifact input, rather than repeatedly acquiring an already-pinned commit.
-REPOSITORY_ADOPTION_RECORD = "aart.repository-adoption"
 
 RepositoryAcquirer = Callable[[str, str], Result[NativeReferenceAcquisition]]
 
@@ -375,7 +378,9 @@ def scan_repository(
         source=url,
         revision=acquired.value.resolved_commit,
         versions=ApprovedRegistryVersions(approved.value, alias.value),
-        provenance_extensions=((REPOSITORY_ADOPTION_RECORD, JsonObject((("ref", ref),))),),
+        provenance_extensions=(
+            (REPOSITORY_ADOPTION_RECORD, adoption_record(ref, acquired.value.default_branch)),
+        ),
         names=names,
     )
     if isinstance(compiled, Err):
@@ -509,7 +514,12 @@ def check_adopted_upstream(
         source=adopted.url,
         revision=acquired.value.resolved_commit,
         versions=ApprovedRegistryVersions(approved.value, alias.value),
-        provenance_extensions=((REPOSITORY_ADOPTION_RECORD, JsonObject((("ref", adopted.ref),))),),
+        provenance_extensions=(
+            (
+                REPOSITORY_ADOPTION_RECORD,
+                adoption_record(adopted.ref, acquired.value.default_branch),
+            ),
+        ),
         names=names,
     )
     if isinstance(compiled, Err):

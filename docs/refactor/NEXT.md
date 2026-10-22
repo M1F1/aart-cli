@@ -1,5 +1,23 @@
 # AART Refactor — Next Work
 
+## Where the work is (2026-10-22, CP-35 in its PR)
+
+**CP-34 is merged (#85) and released as 0.13.0 (#86).** **CP-35** is on
+`feat/cp-35-headless-inputs-and-fast-ci`: `docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
+Step 1 is done (D-466): CI runs the suite once per interpreter, in parallel processes, under
+coverage. Step 2 is done (§185, INV-286, D-467): the generated Registry CI refuses versions promoted
+from a local checkout. Step 3 is done (§186, INV-287, D-468): `consume install` and `update` take
+`--input`, `--secret-env` and `--set-later`. Step 4 is done (§187, INV-288, D-469): 07 asks
+optional inputs, and neither Set later nor `--set-later` ever binds `AART_NOT_SET` to one. Step 5,
+added by the owner, is done (§188, INV-289, D-470): `upstream adopt` records whether the commit is
+on the upstream's default branch, and `registry audit --for-default-branch` (renamed from
+`--require-remote-origins`) refuses every remote version not recorded so. Step 6 is done (§189,
+INV-290, D-471): a `type: uv` artifact installs exactly its `uv.lock` with `uv sync --frozen` into
+the installation's own environment. Step 7 is done: CP-35 is in one PR, released as 0.14.0 on merge. Next is whatever the owner
+reports next. B-220 still awaits the
+owner's decision. B-222 (a Linux credential store), B-223 (optional credentials in 07b) and B-224
+(release branches) are new.
+
 ## Where the work is (2026-10-21, after 0.12.0)
 
 **CP-33 is merged (#83) and released as 0.12.0.** **CP-34**, owner-reported fixes (steps 1–11), is

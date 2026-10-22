@@ -22,6 +22,7 @@ from .identifiers import InputId
 
 __all__ = [
     "SKIPPED_INPUT",
+    "is_input_id",
     "BindingExposure",
     "BoundInput",
     "BoundInputs",
@@ -83,6 +84,12 @@ def _safe(value: str, label: str) -> str:
     if any(unicodedata.category(character) in {"Cc", "Cf", "Cs"} for character in value):
         raise ValueError(f"{label} must not contain terminal control or format characters")
     return value
+
+
+def is_input_id(value: str) -> bool:
+    """Whether `value` is spelled as a declared input id can be."""
+
+    return isinstance(value, str) and _ID_RE.fullmatch(value) is not None
 
 
 def _input_id(value: object, label: str) -> InputId:

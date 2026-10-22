@@ -11684,3 +11684,152 @@ at all.
 line, the next line is a rule under each heading, as wide as its column, and every heading starts
 where its cells start.
 
+
+# 185. The default branch others install from holds only remote upstreams
+
+Status: **ACCEPTED 2026-10-22 (D-467)**, on the owner's request (CP-35). This extends §173.9 and
+§180.
+
+A maintainer tried artifacts out by promoting them from checkouts on their own machine into the
+Registry, and pushed. Each such version records `origin.kind: "local"` and the checkout's absolute
+path (self-contained), or a `local:` revision (pinned reference). Nobody else can check it against
+its upstream, and §180 then holds the name against the real remote upstream. Nothing stopped it
+reaching the default branch.
+
+- **The audit names them.** `aart-cli maintain registry audit` reports every approved version
+  promoted from a local checkout, with its coordinate and the location it records, and says to
+  adopt it from its upstream's Git URL instead.
+- **A trial Registry still works.** Without `--for-default-branch`, the finding is a warning.
+  `publish` runs this audit, so a maintainer's trial Registry still commits and is told.
+- **CI refuses them.** `--for-default-branch` makes the finding an error. The workflow
+  `registry init` generates runs the audit with it, so a pull request whose result holds such a
+  version is red. The Registry has no setting that turns it off: the workflow is managed, and a
+  hand-edited copy is refused.
+- **Branch protection is the Registry owner's part.** The check stops a merge only when it is
+  required on the default branch. The generated README says so; aart-cli does not change
+  repository settings.
+- **Adopt and promote are not refused.** A trial Registry is where local checkouts belong, so the
+  refusal sits where content becomes what others install.
+
+**INV-286 — The default branch holds only remote upstreams.** The generated Registry CI fails for
+every snapshot holding an approved version, self-contained or pinned reference, promoted from a
+local checkout. The plain audit reports each such version as a warning naming its coordinate and
+recorded location.
+
+# 186. `consume install` answers inputs on the command line
+
+Status: **ACCEPTED 2026-10-22 (D-468)**, on the owner's request (CP-35). This applies §169.4's
+non-interactive channel and §172.3-4 to `consume install` and `consume update`.
+
+An agent installing an MCP server without a terminal could not answer a required input. The command
+prepared with no answers and refused, so such artifacts installed only through the TUI.
+
+- **The flags name the artifact.** `--input ALIAS/KIND/NAME:INPUT=VALUE` answers an ordinary input.
+  `--secret-env ALIAS/KIND/NAME:INPUT=VARIABLE` names the environment variable that holds a
+  credential. Both repeat. A generic input id is never read from the environment.
+- **One answer per artifact, as on 07.** The answer is copied into each installation of that
+  artifact this operation creates (§172.4). Each installation still gets its own configuration
+  file and its own credential item.
+- **A declared default is an answer.** An ordinary input no flag answers takes its declared
+  default, as 07's pre-filled field does.
+- **A credential is never an argument.** The variable must be set and non-empty before the review.
+  Its value is read only after the review is confirmed and goes straight to the credential store.
+  It reaches no plan, receipt, file or output.
+- **`--set-later` installs with placeholders.** Every required input left unanswered gets
+  `AART_NOT_SET`, as 07's and 07b's Set later does (§172.3). Credentials and variables sets it
+  later.
+- **Mistakes are refused before anything is written.** The command refuses, all at once:
+  - a malformed flag;
+  - an artifact the operation does not install;
+  - an input the artifact does not declare;
+  - a credential given to `--input`, or a configuration value given to `--secret-env`;
+  - an input answered twice;
+  - an unset variable;
+  - a credential to store when no credential store is available.
+
+  No refusal shows a value.
+- **The refusal says what to type.** When required inputs stay unanswered, the refusal lists the
+  flag that answers each one and mentions `--set-later`. The JSON form gives each input's `flag`.
+
+**INV-287 — A headless install answers each artifact's inputs by name.** `consume install` with
+`--input`, `--secret-env` or `--set-later` installs an artifact that has required inputs, with no
+terminal. Each installation holds its own copy of each answer. A credential's value reaches only
+the credential store, and every refusal happens before anything is written.
+
+# 187. An optional input is asked, and reaches the server only when answered
+
+Status: **ACCEPTED 2026-10-22 (D-469)**, on the owner's request (CP-35). This narrows §172.3-4.
+
+An Enterprise agent found two problems:
+- 07 asked only required inputs, so an optional one could not be given at install.
+- Set later puts `AART_NOT_SET` into every field it is handed. An optional input that reached the
+  server as that text was read as a value. A URL became `AART_NOT_SET/...`.
+
+- **07 shows an artifact's optional inputs** whenever it asks about that artifact. Each is marked
+  optional, follows the required ones, and is pre-filled with its declared default, if any.
+- **An empty optional field is no answer.** It needs no acceptance, the input stays unbound, and the
+  server applies its own default.
+- **Set later never fills an optional input.** It keeps a valid value, empties anything else, and
+  puts `AART_NOT_SET` only into required inputs. The same holds for `consume install --set-later`
+  (§186).
+- **The command line binds an optional input** only when `--input` gives it or it declares a
+  default.
+
+**INV-288 — An optional input is never the placeholder.** No install path, form or command line,
+binds `AART_NOT_SET` to an optional input. An optional input nobody answered is absent from the
+installation's configuration and environment.
+
+# 188. The default branch others install from takes only an upstream's default branch
+
+Status: **ACCEPTED 2026-10-22 (D-470)**, on the owner's request (CP-35). This extends §185.
+
+A maintainer may adopt from any branch or tag of an upstream, which is how a change is tried
+before it lands. A version adopted from a feature branch holds what the upstream has not accepted.
+Once the Registry's default branch has it, everyone installs it.
+
+- **The upstream decides what its default branch is.** It is the branch the upstream's `HEAD`
+  names on its Git host: `main`, `master`, `trunk` or anything else. aart-cli neither assumes a
+  name nor lets a Registry override it.
+- **Adoption records it.** `upstream adopt`, and the next version `upstream check` proposes,
+  record `default_branch` beside the ref in the version's `aart.repository-adoption` provenance
+  record. It is true when the adopted commit is reachable from the upstream's default branch, so a
+  tag on that branch counts. The record is left out when the acquisition cannot tell.
+- **The plain audit warns** about a version recorded as off the default branch, naming its ref and
+  upstream. A trial Registry still publishes.
+- **The CI refuses.** `registry audit --for-default-branch`, which the generated workflow runs, is
+  an error for every remote version not recorded as on the upstream's default branch. That covers:
+  - a version adopted from another branch;
+  - a version adopted with no record;
+  - a version promoted from a Git Source rather than adopted;
+  - every pinned reference, which adoption never writes.
+
+  The audit reads committed bytes only, so Registry CI needs no access to private upstreams.
+
+**INV-289 — The default branch takes only an upstream's default branch.** The generated Registry CI
+fails for every snapshot holding a remote version whose adoption record does not say its commit
+is reachable from the upstream's default branch. `upstream adopt` writes that record from the
+upstream's own `HEAD`.
+
+# 189. A uv-locked project installs exactly its lock
+
+Status: **ACCEPTED 2026-10-22 (D-471)**, from an Enterprise agent's report (CP-35). This makes the
+`type: uv` contract of §108 installable.
+
+An artifact that declared `type: uv` validated and was then refused at install, so the only way to
+ship it was to drop the lock and let each installation resolve its own versions.
+
+- **The lock sits beside the project.** The lock of a `type: uv` contract is the `uv.lock` in the
+  directory of its `pyproject.toml`, the only one `uv sync` reads. A lock declared anywhere else is
+  refused when the manifest is read.
+- **Only uv installs it.** A lock is meaningful to the resolver that wrote it (§109), so a host
+  without uv refuses the install. It never installs the loose project instead.
+- **Exactly the lock, into the installation's own environment.** aart-cli runs `uv sync --frozen
+  --no-dev --no-editable --no-python-downloads` against the payload's project, with the
+  installation's environment (§85, INV-044) as uv's project environment, and `--offline` when the
+  install is offline. uv neither re-resolves nor rewrites the lock, makes no `.venv` in the payload,
+  installs no development dependencies, links nothing back to the payload, and downloads no
+  interpreter.
+
+**INV-290 — A uv-locked project installs exactly its lock.** Installing a `type: uv` artifact puts
+the versions its `uv.lock` pins into that installation's own environment, leaves the payload and
+its lock unchanged, and is refused rather than resolved loosely when uv is not the installer.

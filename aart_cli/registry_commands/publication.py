@@ -30,7 +30,11 @@ REGISTRY_PUBLICATION_GATES = (
     # that requires every command the package names to be one the parser accepts could see it. The
     # byte template had hidden it from that guard for the whole life of the repository (B-156).
     RegistryPublicationGateSpec("validate", ("aart-cli maintain registry validate --source .",)),
-    RegistryPublicationGateSpec("audit", ("aart-cli maintain registry audit --source .",)),
+    # CI is where a Registry becomes what other people install, so CI alone refuses a version from
+    # a local checkout; `publish` runs the plain audit and only warns (INV-286, D-467).
+    RegistryPublicationGateSpec(
+        "audit", ("aart-cli maintain registry audit --source . --for-default-branch",)
+    ),
     RegistryPublicationGateSpec(
         "compatibility",
         (

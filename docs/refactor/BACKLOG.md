@@ -4875,3 +4875,50 @@ planned and reviewed there whatever the launch directory.
 That changes where a reviewed transaction writes, and the workspace identity checks D-103 relies
 on. It needs a specification decision first: which checkout is authoritative when both exist, and
 how the review names it. A Git-URL Registry has no local checkout to choose, and stays as it is.
+
+## B-221 — Publishing a Registry could say which versions came from a local path
+
+Status: **resolved** by CP-35 step 2 (§185, INV-286, D-467). The audit, which `publish` runs, warns;
+the generated Registry CI refuses. Kept below for the reasoning.
+
+A version promoted from a local Source records `origin.kind: local` and the absolute path of the
+author's checkout. Self-contained versions keep it in `artifacts/KIND/NAME/VERSION/provenance.json`,
+pinned references in `references/KIND/NAME/VERSION.json`. That is correct provenance, and INV-207
+never rewrites it. But once the Registry is pushed for other people, the path names one person's
+machine, identifies no upstream anybody else can check, and holds the name against a later remote
+adoption (INV-279, B-219).
+
+A Registry publish review, or `maintain registry check`, could list the approved versions whose
+origin is local before the push, so a Maintainer moving from local trials to a shared remote knows
+to start a fresh Registry or adopt the remote upstream under another name. Today the owner has to
+find them in the checkout. A refusal would need a specification decision, because a local-only
+Registry is legitimate.
+
+## B-222 — A credential store on Linux
+
+Status: **open**, noncritical (CP-35 step 3, D-468).
+
+`MacOsKeychainProvider` is the only credential store. On Linux, `consume install --secret-env`, and
+`--set-later` for an artifact with a credential, refuse with "no credential store is available".
+§169.5 asks Linux and headless runs to use an approved available provider. Candidates are the
+Secret Service API (`secret-tool`) and a provider that only references a CI secret by name. Either
+needs a specification decision on where the item lives and who may read it.
+
+## B-223 — 07b could ask optional credentials
+
+Status: **open**, noncritical (CP-35 step 4, D-469).
+
+07 now shows optional ordinary inputs (§187), but 07b asks only required credentials. An optional
+credential, such as a proxy password, can be given at install only through `consume install
+--secret-env`, or afterwards in Credentials and variables. 07b could list it as optional, with
+Skip leaving it unbound rather than storing the placeholder.
+
+## B-224 — An upstream that releases from a branch other than its default
+
+Status: **open**, noncritical (CP-35 step 5, D-470).
+
+INV-289 accepts only commits reachable from the upstream's own default branch. Some upstreams
+release from a `release/*` or `stable` branch and keep the default branch for development. Such a
+Registry today has to adopt from a tag on the default branch, or ask the upstream to change its
+default. An explicit, reviewed allowance per upstream, recorded where CI reads it but not
+changeable on a pull request branch alone, needs a specification decision.

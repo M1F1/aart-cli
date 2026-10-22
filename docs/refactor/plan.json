@@ -1378,6 +1378,48 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-35",
+      "title": "Headless installation inputs, optional inputs, locked uv projects and a fast CI",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "CI runs the suite once, in parallel processes, and measures coverage once",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "The generated Registry CI refuses versions promoted from a local checkout; the plain audit warns",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "consume install answers inputs on the command line: --input, --secret-env and --set-later (§186, INV-287, D-468)",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Optional inputs are asked, never become AART_NOT_SET, and reach the server only when answered (§187, INV-288, D-469)",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "The Registry CI takes only versions adopted from an upstream's default branch (§188, INV-289, D-470)",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "A uv-locked project installs exactly its lock",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "Focused verification and the PR",
+          "status": "done"
+        }
+      ]
     }
   ]
 }

@@ -206,7 +206,13 @@ aart-cli maintain registry build --source . --check
 aart-cli maintain registry audit --source .
 ```
 
-`build --check` fails when the committed index or snapshot does not match the approved versions. Push the commit,
+`build --check` fails when the committed index or snapshot does not match the approved versions.
+The audit warns about every version promoted from a checkout on your machine, and every version
+adopted from a branch that is not its upstream's default branch. The Registry's CI runs it as
+`aart-cli maintain registry audit --source . --for-default-branch`. That refuses both, and every
+version `upstream adopt` did not record as coming from the upstream's default branch, so none of
+them reach the branch other people install from (INV-286, INV-289). The upstream's default branch
+is the one its Git host names, not always `main`. Make that check required on the default branch. Push the commit,
 open a pull request, and review it like any other repository.
 ## 7. Keeping an adopted copy current
 

@@ -85,9 +85,28 @@ the reason, and moves the cursor to Custom. **Custom** asks each choice in turn.
 A v2 recipe and its package-root `SETUP.md` are compiled before AART plans an installation effect.
 Review shows effects, capabilities, entrypoint, trust, and the manual route without secrets.
 
-A human supplies credentials in an approved interactive session. AART never writes them to a
-registry, state, JSON output, or logs. Registries may use safe placeholders such as
-`${GITHUB_PERSONAL_ACCESS_TOKEN}`; container images should be pinned by digest.
+A human supplies credentials in the TUI, or an agent supplies them on the command line. AART never
+writes them to a registry, state, JSON output, or logs. Registries may use safe placeholders such
+as `${GITHUB_PERSONAL_ACCESS_TOKEN}`; container images should be pinned by digest.
+
+### Answering inputs without a terminal
+
+`consume install` and `consume update` take an artifact's inputs as flags. Each flag names the
+artifact with its Registry alias, and its answer goes into every installation of that artifact
+the command creates. `--input` gives an ordinary value. `--secret-env` gives the name of an
+environment variable that holds a credential; the value is read only after you confirm the review
+and goes straight to the credential store. An input you leave out takes its declared default.
+
+```sh
+export GITHUB_TOKEN_FOR_AART=...
+aart-cli consume install company/mcp/github --profile claude --input company/mcp/github:github-org=platform-team --secret-env company/mcp/github:github-token=GITHUB_TOKEN_FOR_AART
+aart-cli consume install company/mcp/github --profile claude --input company/mcp/github:github-org=platform-team --secret-env company/mcp/github:github-token=GITHUB_TOKEN_FOR_AART --yes
+```
+
+`--set-later` installs with `AART_NOT_SET` in every required input nobody answered; set them later
+in the TUI's Credentials and variables. Without either, a command that is missing a required input
+refuses and lists the exact flag for each one (`inputs[].flag` in `--json`). Credentials need a
+credential store, which today is the macOS Keychain.
 
 ### Checking installed MCPs
 

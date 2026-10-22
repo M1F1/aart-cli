@@ -4,6 +4,42 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-22, CP-35 step 6 (§189, INV-290, D-471): a uv-locked project installs its lock.** A
+`type: uv` artifact was refused at install. aart-cli now runs `uv sync --frozen --no-dev
+--no-editable` with the installation's environment as uv's project environment, so the pinned
+versions land there and the payload keeps no `.venv`. A lock not beside its `pyproject.toml` is
+refused when the manifest is read. Evidence: `docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
+
+**2026-10-22, CP-35 step 5 (§188, INV-289, D-470): CI takes only an upstream's default branch.**
+`upstream adopt` records whether the adopted commit is reachable from the upstream's own `HEAD`.
+The plain audit warns about one that is not; `registry audit --for-default-branch`, which the
+generated workflow runs, refuses it and every remote version without that record. Evidence:
+`docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
+
+**2026-10-22, CP-35 step 4 (§187, INV-288, D-469): optional inputs.** 07 shows an artifact's
+optional inputs, marked and pre-filled with their default. An empty one stays unbound, and neither
+Set later nor `--set-later` puts `AART_NOT_SET` into it. Evidence:
+`docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
+
+**2026-10-22, CP-35 step 3 (§186, INV-287, D-468): headless install inputs.** `consume install`
+and `update` take `--input ALIAS/KIND/NAME:INPUT=VALUE`, `--secret-env ALIAS/KIND/NAME:INPUT=VARIABLE`
+and `--set-later`. One answer covers every installation of its artifact, a declared default stands,
+the credential is read after confirmation and reaches only the store, and every mistake is refused
+before anything is written. Evidence: `docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
+
+**2026-10-22, CP-35 step 2 (§185, INV-286, D-467): Registry CI refuses local origins.** `registry
+audit` warns about every approved version promoted from a local checkout, self-contained or pinned
+reference, and `--for-default-branch` refuses them. The generated Registry workflow passes it;
+`publish` does not, so trial Registries still commit. Evidence:
+`docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
+
+**2026-10-22, CP-35 step 1 (D-466): the suite runs once per interpreter, in parallel.** The test
+gates run `scripts/parallel_tests.py`, which keeps unittest discovery and splits modules across
+processes, under coverage when `coverage` runs. `unit` is skipped when `coverage` runs the same
+tests. Each worker turns Hypothesis's deadline off. Locally, 5,041 tests under coverage took 210 s
+on 10 processes. No dependency was added. Evidence:
+`docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
+
 **2026-10-22, CP-34 step 11 (§184, INV-285, D-464): headings named and ruled off.** Marketplace's
 grid rules its headings off from the offers, and Installed names its columns (Artifact, Health,
 Scope, Project, Configuration) over the same grid with the same rule. Evidence:

@@ -41,12 +41,31 @@ class NativeReferenceDisposition(str, Enum):
     UNREACHABLE = "unreachable"
 
 
+#: The provenance extension `upstream adopt` writes beside each version it copies.
+REPOSITORY_ADOPTION_RECORD = "aart.repository-adoption"
+
+
+def adoption_record(ref: str, default_branch: bool | None) -> JsonObject:
+    """What an adopted version records about where it came from (§188).
+
+    `default_branch` says whether the adopted commit is reachable from the upstream's default
+    branch. It is left out when the acquisition could not tell, which the Registry CI refuses like
+    a `false` (INV-289).
+    """
+
+    known = () if default_branch is None else (("default_branch", default_branch),)
+    return JsonObject((("ref", ref), *known))
+
+
 @dataclass(frozen=True, slots=True)
 class NativeReferenceAcquisition:
     url: str
     requested_ref: str
     resolved_commit: str
     snapshot: SourceSnapshot
+    #: Whether `resolved_commit` is reachable from the upstream's default branch; None when the
+    #: acquisition could not tell. Recorded at adoption for the Registry CI (INV-289).
+    default_branch: bool | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -60,6 +79,7 @@ class NativeReferenceAcquisition:
             or _COMMIT_RE.fullmatch(self.resolved_commit) is None
             or not isinstance(self.snapshot, SourceSnapshot)
             or self.snapshot.origin is not SnapshotOrigin.IMMUTABLE_GIT
+            or not (self.default_branch is None or isinstance(self.default_branch, bool))
         ):
             raise ValueError("native reference acquisition must be immutable pinned Git content")
 

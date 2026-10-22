@@ -22,7 +22,7 @@ from aart_cli.curation.model import (
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ObjectDigest, SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.io.git_acquisition import acquire_git_snapshot
+from aart_cli.io.git_acquisition import acquire_git_snapshot, commit_on_default_branch
 from aart_cli.io.registry_workspace import FilesystemRegistryWorkspace
 from aart_cli.protocol.native_tree import SnapshotEntryKind, SourceSnapshot
 from aart_cli.protocol.semver import SemVer, parse_semver
@@ -166,7 +166,9 @@ def _candidate(
     *,
     alias: str,
     allow_local_transport: bool,
-) -> Result[SourceCandidate]:
+) -> Result[tuple[SourceCandidate, bool | None]]:
+    """The pinned snapshot, and whether its commit is on the upstream's default branch."""
+
     with tempfile.TemporaryDirectory(prefix="aart-curation-source-") as temporary:
         configured = ConfiguredSource(
             SourceAlias(alias),
@@ -175,17 +177,24 @@ def _candidate(
             ref,
             True,
         )
-        return acquire_git_snapshot(
-            GitSnapshotRequest(
-                source_instance_id(configured),
-                configured.alias,
-                configured.location,
-                ref,
-                os.path.join(temporary, "mirror.git"),
-                os.path.join(temporary, "tmp"),
-                SnapshotLimits(),
-                60,
-                allow_local_transport,
+        request = GitSnapshotRequest(
+            source_instance_id(configured),
+            configured.alias,
+            configured.location,
+            ref,
+            os.path.join(temporary, "mirror.git"),
+            os.path.join(temporary, "tmp"),
+            SnapshotLimits(),
+            60,
+            allow_local_transport,
+        )
+        acquired = acquire_git_snapshot(request)
+        if isinstance(acquired, Err):
+            return acquired
+        return Ok(
+            (
+                acquired.value,
+                commit_on_default_branch(request, acquired.value.resolved_revision),
             )
         )
 
@@ -194,13 +203,15 @@ def default_native_acquirer(url: str, ref: str) -> Result[NativeReferenceAcquisi
     acquired = _candidate(url, ref, alias="curation-native", allow_local_transport=False)
     if isinstance(acquired, Err):
         return acquired
+    candidate, default_branch = acquired.value
     try:
         return Ok(
             NativeReferenceAcquisition(
                 url,
                 ref,
-                acquired.value.resolved_revision,
-                acquired.value.snapshot,
+                candidate.resolved_revision,
+                candidate.snapshot,
+                default_branch=default_branch,
             )
         )
     except ValueError as error:

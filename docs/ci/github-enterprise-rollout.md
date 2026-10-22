@@ -152,6 +152,7 @@ Only with a private index or a private image registry:
 | `AART_CLI_IMAGE_USERNAME_SECRET_NAME`, `AART_CLI_IMAGE_PASSWORD_SECRET_NAME` | the image registry needs a login: the **names** of the two secrets. Set both or neither | `IMAGE_REGISTRY_USER`, `IMAGE_REGISTRY_TOKEN` |
 | `AART_CLI_PYTHON` | the interpreter inside the image is not called `python` | `python3` |
 | `AART_CLI_POETRY` | the image keeps Poetry off `PATH`: its full path | `/opt/poetry/bin/poetry` |
+| `AART_CLI_TEST_WORKERS` | the test gates should not use every CPU the job sees, as on a container runner that reports the host's CPUs rather than its quota. A positive whole number; empty uses every CPU (D-466) | `4` |
 
 The rest each turn on one capability, described in the [reference](#variables-the-aart-cli-repository-reads):
 publishing to an index (step 4), a reference registry for the release checklist, a default
@@ -368,6 +369,17 @@ git init /tmp/fresh-registry
 aart-cli maintain registry init --source /tmp/fresh-registry --source-id scratch --display-name Scratch --yes
 cp /tmp/fresh-registry/.github/workflows/aart-cli-registry.yml .github/workflows/aart-cli-registry.yml
 ```
+
+From 0.14.0 the workflow's audit takes only versions that `upstream adopt` recorded as coming from
+their remote upstream's default branch, or a tag on it (§185, §188, INV-286, INV-289). It refuses
+versions promoted from a local checkout, versions adopted from another branch, and versions
+promoted from a Git Source, pinned references or versions adopted with an older aart-cli, none of
+which carry that record. It reads the whole Registry, not the change, so the pull request that
+brings the new workflow and `.aart-cli-version` must also leave no such version behind. Adopt with
+aart-cli 0.14.0 or later. Before you start, `aart-cli maintain registry audit --source .
+--for-default-branch` lists every version it would refuse.
+Then make `registry-quality` a required check on the default branch, because without branch
+protection GitHub merges a pull request whose check is red.
 
 ### Step 1 — Choose how the registry's CI fetches AART
 

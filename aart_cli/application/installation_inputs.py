@@ -335,8 +335,9 @@ def copy_artifact_answers(
 
     This is the one place D-413 narrows the separation of §169.4: within one operation, one answer
     is copied into each of an artifact's new installations, and from then on each copy is that
-    installation's own. With `skip_unanswered` (Set later), an ordinary field nobody answered gets
-    the `AART_NOT_SET` placeholder. Secret fields are left alone; they are 07b's.
+    installation's own. With `skip_unanswered` (Set later), a required ordinary field nobody
+    answered gets the `AART_NOT_SET` placeholder; an optional one stays unbound, so the server never
+    reads the placeholder as a value (§187). Secret fields are left alone; they are 07b's.
     """
 
     by_artifact: dict[tuple[SourceAlias, ArtifactIdentity, InputId], str] = {}
@@ -351,7 +352,7 @@ def copy_artifact_answers(
             continue
         owner = field.owner
         value = by_artifact.get((owner.source, owner.artifact, field.input.id))
-        if value is None and skip_unanswered:
+        if value is None and skip_unanswered and field.input.required:
             value = SKIPPED_INPUT
         if value is not None:
             copied.append(OwnedInputSource(owner, PromptedConfigValue(field.input.id, value)))

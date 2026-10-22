@@ -251,6 +251,32 @@ def _resolved_expressions(ref: str, *, branch_only: bool = False) -> tuple[str, 
     )
 
 
+def commit_on_default_branch(
+    request: GitSnapshotRequest,
+    commit: str,
+    *,
+    runner: GitRunner = run_git_process,
+) -> bool | None:
+    """Whether `commit` is reachable from the upstream's default branch, in a fetched mirror.
+
+    `acquire_git_snapshot` fetches the remote's `HEAD` into `refs/remotes/origin/HEAD`, so this
+    needs no further network. A tag on the default branch is on it; a feature branch is not. None
+    means it could not be answered.
+    """
+
+    if _COMMIT_RE.fullmatch(commit) is None:
+        return None
+    based = _run(
+        runner,
+        _command(
+            request, "-C", request.mirror_path, "merge-base", commit, "refs/remotes/origin/HEAD"
+        ),
+    )
+    if isinstance(based, Err):
+        return None
+    return based.value.stdout.decode("ascii", errors="ignore").strip() == commit
+
+
 def acquire_git_snapshot(
     request: GitSnapshotRequest,
     *,

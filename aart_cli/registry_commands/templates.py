@@ -409,15 +409,21 @@ aart-cli maintain registry publish --source .
 aart-cli maintain registry publish --source . --yes
 ```
 
-Run the gates yourself at any time:
+Run the gates yourself at any time. These are the commands CI runs. CI refuses every version that
+was not adopted from its remote upstream's default branch or a tag on it, such as a version
+promoted from a checkout on someone's machine or adopted from a feature branch. Without
+`--for-default-branch` the audit only warns about those two:
 
 ```sh
 aart-cli maintain registry format --source . --check
 aart-cli maintain registry validate --source .
 aart-cli maintain registry build --source . --check
-aart-cli maintain registry audit --source .
+aart-cli maintain registry audit --source . --for-default-branch
 aart-cli maintain registry test --source . --compatibility latest
 ```
+
+Make the `registry-quality` check required on the default branch (branch protection). Otherwise
+GitHub lets a pull request merge while that check is red.
 
 ## Pointing CI at AART
 

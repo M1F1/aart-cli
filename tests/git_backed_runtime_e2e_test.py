@@ -129,8 +129,8 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
     ) -> None:
         """Why the artifact above declares none, stated as a claim instead of left as a choice.
 
-        The CLI has no flag that answers a declared input; the form belongs to the persistent shell.
-        What matters at this boundary is that the verb says so and stops, because the alternative --
+        Without `--input` or `--secret-env` the verb has nothing to answer a declared input with.
+        What matters at this boundary is that it says so and stops, because the alternative --
         installing a server that cannot start -- is the failure an operator would meet later, at a
         harness, with nothing naming the cause.
         """
@@ -149,9 +149,10 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
             self.assertEqual(
                 [item["code"] for item in payload["diagnostics"]], ["consumer-invalid"]
             )
+            # The organisation's declared default stands as its answer (§172.4, D-468).
             self.assertEqual(
                 sorted((item["id"], item["kind"]) for item in payload["inputs"]),
-                [("github-org", "config"), ("github-token", "credential")],
+                [("github-token", "credential")],
             )
             # Nothing was built for an install that cannot complete.
             self.assertFalse((env.project / ".aart-cli").exists(), payload)

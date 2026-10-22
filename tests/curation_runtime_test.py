@@ -43,7 +43,7 @@ class CurationRuntimeTest(unittest.TestCase):
         with mock.patch.object(
             curation_runtime,
             "_candidate",
-            return_value=native_candidate,
+            return_value=Ok((native_candidate.value, True)),
         ):
             native = curation_runtime.default_native_acquirer(
                 "https://github.com/example/reference-skills.git",
@@ -51,6 +51,7 @@ class CurationRuntimeTest(unittest.TestCase):
             )
         assert isinstance(native, Ok), native
         self.assertEqual(native.value.resolved_commit, "a" * 40)
+        self.assertIs(native.value.default_branch, True)
 
         with mock.patch.object(curation_runtime, "_candidate", return_value=_failure()):
             self.assertIsInstance(
@@ -70,7 +71,7 @@ class CurationRuntimeTest(unittest.TestCase):
         with mock.patch.object(
             curation_runtime,
             "_candidate",
-            return_value=invalid_revision,
+            return_value=Ok((invalid_revision.value, None)),
         ):
             self.assertIsInstance(
                 curation_runtime.default_native_acquirer(
@@ -108,7 +109,10 @@ class CurationRuntimeTest(unittest.TestCase):
                 allow_local_transport=True,
             )
             assert isinstance(acquired, Ok), acquired
-            self.assertRegex(acquired.value.resolved_revision, r"^[0-9a-f]{40}$")
+            candidate, default_branch = acquired.value
+            self.assertRegex(candidate.resolved_revision, r"^[0-9a-f]{40}$")
+            # The fixture's only commit is its `HEAD`, so it is on the default branch.
+            self.assertIs(default_branch, True)
 
     def test_mutation_is_rejected_before_preview_without_a_local_git_checkout(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
