@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import posixpath
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Callable, Iterable, Literal, cast, get_args
 
@@ -2282,6 +2282,7 @@ def compile_author_manifests(
     revision: str,
     versions: RegistryVersions,
     provenance_extensions: tuple[tuple[str, JsonValue], ...] = (),
+    names: tuple[tuple[str, str], ...] = (),
 ) -> Result[tuple[tuple[CompiledAuthorArtifact, ...], tuple[ManifestRefusal, ...]]]:
     """Compile every explicit authoring manifest in one acquired source, each on its own merits.
 
@@ -2293,6 +2294,10 @@ def compile_author_manifests(
     A caller may add namespaced provenance metadata about the acquisition boundary. It becomes
     part of the immutable package but not the author's canonical input digest; the manifest and
     selected payload still decide artifact identity.
+
+    `names` gives the manifest at a path another Registry name, for an artifact whose own name the
+    Registry already holds for another upstream (INV-279). The input digest is the author's bytes
+    either way, so a later upstream check compares like with like.
     """
 
     if (
@@ -2330,6 +2335,7 @@ def compile_author_manifests(
             revision=revision,
             provenance_extensions=provenance_extensions,
             versions=versions,
+            name=dict(names).get(str(item.path)),
         )
         if outcome is None:
             continue
@@ -2355,6 +2361,7 @@ def _compile_manifest(
     revision: str,
     provenance_extensions: tuple[tuple[str, JsonValue], ...],
     versions: RegistryVersions,
+    name: str | None = None,
 ) -> CompiledAuthorArtifact | ManifestRefusal | None:
     """One manifest's own answer: the artifact, why it was refused, or None where it is not one.
 
@@ -2383,6 +2390,21 @@ def _compile_manifest(
     manifest = parse_author_manifest(item)
     if isinstance(manifest, Err):
         return refused(manifest.diagnostics)
+    if name is not None:
+        try:
+            ArtifactIdentity(cast(IdentityKind, manifest.value.kind), name)
+        except ValueError as error:
+            return refused(
+                (
+                    Diagnostic(
+                        AUTHOR_MANIFEST_INVALID,
+                        Severity.ERROR,
+                        f"{name!r} is not a valid Registry name: {error}",
+                        SourceLocation(path=str(item.path)),
+                    ),
+                )
+            )
+        manifest = Ok(replace(manifest.value, name=name))
     selected = _selected_payload(entries, discovered, item, manifest.value)
     if isinstance(selected, Err):
         return refused(selected.diagnostics)
@@ -2407,6 +2429,7 @@ def compile_author_snapshot(
     revision: str,
     versions: RegistryVersions,
     provenance_extensions: tuple[tuple[str, JsonValue], ...] = (),
+    names: tuple[tuple[str, str], ...] = (),
 ) -> Result[tuple[CompiledAuthorArtifact, ...]]:
     """The same compilation, refused whole if any manifest in it refused.
 
@@ -2423,6 +2446,7 @@ def compile_author_snapshot(
         revision=revision,
         versions=versions,
         provenance_extensions=provenance_extensions,
+        names=names,
     )
     if isinstance(compiled, Err):
         return compiled

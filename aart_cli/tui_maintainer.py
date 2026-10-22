@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from aart_cli.application.consumer_ui import ADOPTION_NAME_ROW
 from aart_cli.application.consumer_views import PresentationProfile
 from aart_cli.application.maintainer_promotion import CandidatePromotionRecord
 from aart_cli.application.maintainer_views import (
@@ -1218,12 +1219,14 @@ def render_repository_scan(
     selection: tuple[str, ...],
     *,
     cursor: str = "",
+    names: tuple[tuple[str, str], ...] = (),
 ) -> tuple[str, ...]:
     """Screen 46d's rows: the artifacts one pinned read found that can be adopted.
 
     An artifact that cannot be adopted is not a row Space could tick, so it is part of
     :func:`repository_scan_status` with the reason; what a row is, beyond its manifest and payload,
-    is Verbose's description of it (:func:`repository_scan_detail`).
+    is Verbose's description of it (:func:`repository_scan_detail`). An artifact whose name the
+    Registry took from another upstream says so, and its Registry name row takes another (INV-279).
     """
 
     if (
@@ -1242,6 +1245,16 @@ def render_repository_scan(
             f"{'>' if item.coordinate == cursor else ' '} [{mark}] {item.coordinate}  {item.state}"
         )
         lines.append(f"    {item.summary}")
+        if item.held_by:
+            row = f"{ADOPTION_NAME_ROW}{item.coordinate}"
+            typed = dict(names).get(item.coordinate, "")
+            lines.append(
+                f"    this Registry took {item.kind}/{item.name} from {', '.join(item.held_by)}"
+            )
+            lines.append(
+                f"{'>' if row == cursor else ' '}   Registry name: "
+                f"{typed or '(type another name to adopt it)'}"
+            )
         lines.append(f"    manifest: {item.manifest_path}")
         lines.append("    declared payload:")
         lines.extend(f"      {path}" for path in item.payload_paths)
@@ -1279,9 +1292,16 @@ def repository_scan_status(view: MaintainerRepositoryScanView) -> tuple[str, ...
 def repository_scan_detail(view: MaintainerRepositoryScanView, cursor: str) -> tuple[str, ...]:
     """The scanned artifact under the cursor, as its manifest declares it (Verbose)."""
 
-    item = view.artifact(cursor)
+    named = cursor.startswith(ADOPTION_NAME_ROW)
+    item = view.artifact(cursor.removeprefix(ADOPTION_NAME_ROW))
     if item is None or not item.adoptable:
         return ()
+    if named:
+        return (
+            f"{item.kind}/{item.name} in this Registry comes from {', '.join(item.held_by)}.",
+            "Adopted under the name typed here, this repository's artifact is its own Registry "
+            "artifact beside that one, and its upstream checks follow that name.",
+        )
     return (f"Kind: {item.kind}", f"Name: {item.name}", f"Version: {item.version}")
 
 
@@ -1476,7 +1496,7 @@ def render_maintainer_collections(
     """Screen 51: the registry's Collections, each at its highest version, then a new one."""
 
     if registry is None:
-        return ("Choose a registry on screen 46 first.",)
+        return ("Put the cursor on a Registry on the Registry screen, then press o.",)
     marker = {True: ">", False: " "}
     grid = columns(
         tuple(
@@ -1532,6 +1552,16 @@ def render_maintainer_collection_editor(
     return tuple(lines)
 
 
+_WRITES_WHERE = "Saving writes into the Registry checkout aart-cli was started in."
+"""Where a Collection is written: the launch directory, which must be that Registry (§183)."""
+
+
+def maintainer_collections_status(registry: MaintainerRegistryView) -> tuple[str, ...]:
+    """Whose Collections screen 51 lists, so two Registries are never confused (§183)."""
+
+    return (f"Collections of Registry {registry.alias}", _WRITES_WHERE)
+
+
 def maintainer_collection_editor_status(
     registry: MaintainerRegistryView, collection: MaintainerCollectionView | None
 ) -> tuple[str, ...]:
@@ -1541,4 +1571,5 @@ def maintainer_collection_editor_status(
         f"New Collection in {registry.alias}"
         if collection is None
         else f"{collection.name} {collection.version} in {registry.alias}",
+        _WRITES_WHERE,
     )

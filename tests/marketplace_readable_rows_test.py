@@ -12,13 +12,15 @@ from aart_cli.tui_consumer import frame, run_consumer_shell
 from aart_cli.tui_marketplace_rows import render_marketplace_rows
 from tests.marketplace_cursor_description_test import _distinct, _listed
 
-HEADINGS = ("Artifact", "Status", "Scope", "Harnesses", "Unset")
+HEADINGS = ("Artifact", "Registry", "Upstream", "Status", "Scope", "Harnesses", "Configuration")
 ROW = (
-    "company/mcp/a-very-long-artifact-coordinate@1.2.3",
+    "mcp/a-very-long-artifact-coordinate@1.2.3",
+    "company",
+    "acme/database-server",
     "update available",
     "user + 17 projects",
     "claude ✓, codex ✓, opencode, tabnine",
-    "12 not set",
+    "not configured (12 missing)",
 )
 
 
@@ -55,21 +57,23 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
         def holds(width, value):
             row = (
                 value,
+                "company",
+                "acme/skills",
                 "update available",
                 "user + 17 projects",
                 "codex ✓, opencode",
-                "3 not set",
+                "not configured (3 missing)",
             )
             lines = render_marketplace_rows((row,), current=value, selected=(), width=width)
             self.assertTrue(all(len(line) <= width for line in lines))
-            if width < 67:
+            if width < 78:
                 shown = flat("\n".join(lines))
                 for label, cell in zip(HEADINGS, row, strict=True):
                     self.assertIn(flat(label + ":" + cell), shown)
             else:
                 starts = [lines[0].index(label) for label in HEADINGS]
                 for i, cell in enumerate(row):
-                    end = starts[i + 1] if i < 4 else width
+                    end = starts[i + 1] if i < len(HEADINGS) - 1 else width
                     self.assertEqual(
                         flat("".join(line[starts[i] : end] for line in lines[1:])), flat(cell)
                     )
@@ -87,7 +91,7 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
         lines = render_marketplace_rows(
             (("team/collection/tools@1.0.0", "installed"),), current="", selected=(), width=26
         )
-        for label in ("Scope", "Harnesses", "Unset"):
+        for label in ("Scope", "Harnesses", "Configuration"):
             self.assertIn(label + ": —", "\n".join(lines))
 
     def test_header_gutter_and_left_aligned_cells_match(self):
@@ -202,7 +206,7 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
         self.assertTrue(any(line.startswith(">") for line in screen.frames[0]))
         self.assertIn("PgUp/PgDn", "\n".join(screen.frames[0]))
         self.assertTrue(all(len(line) <= 26 for view in screen.frames for line in view))
-        self.assertIn("Unset: —", "\n".join(screen.frames[-2]))
+        self.assertIn("Configuration: —", "\n".join(screen.frames[-2]))
         self.assertEqual(screen.frames[-3], screen.frames[-2], "the end must clamp")
         self.assertNotEqual(
             screen.frames[-2], screen.frames[-1], "one PageUp must move immediately"

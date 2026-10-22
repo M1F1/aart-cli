@@ -87,8 +87,13 @@ def plan_artifact_placement(
     merges: tuple[ArtifactMerge, ...] = (),
     settings: tuple[ArtifactSettingsEntry, ...] = (),
     owner: InstallationOwner | None = None,
+    shared_payload: bool = False,
 ) -> Result[PlannedPlacement]:
-    """Everything decided about placing `artifact` here, before anything is touched."""
+    """Everything decided about placing `artifact` here, before anything is touched.
+
+    `shared_payload` delivers straight from `payload_source`, the canonical object, rather than
+    copying it into `root` first (D-457): a kind the harness only reads needs no private copy.
+    """
 
     if not isinstance(artifact, ResolvedArtifact) or not isinstance(
         description, InstallDescription
@@ -125,11 +130,12 @@ def plan_artifact_placement(
                 environment,
                 payload_digest,
                 tuple(deliveries),
-                payload_source,
+                None if shared_payload else payload_source,
                 placement_requirements_for(tuple(deliveries), tuple(merges), tuple(settings)),
                 tuple(merges),
                 tuple(settings),
                 owner,
+                payload_source if shared_payload else None,
             )
         )
     except ValueError as error:

@@ -948,6 +948,16 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="KIND/NAME@VERSION",
         help="exact scanned coordinate to adopt (repeatable; omit to scan only)",
     )
+    p_adopt.add_argument(
+        "--rename",
+        action="append",
+        dest="adoption_renames",
+        metavar="KIND/NAME=NEW-NAME",
+        help=(
+            "adopt a selected artifact under another Registry name, needed when this Registry "
+            "already took KIND/NAME from another upstream (repeatable)"
+        ),
+    )
     _add_registry_finalize(p_adopt)
     p_adopt.add_argument(
         "--expect",

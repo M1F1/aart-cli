@@ -149,8 +149,11 @@ class RegistryBaselineDiagnosisTest(TestCase):
 
             words = _words(_prepare(env, candidate_id, wrong))
 
-            self.assertIn("different git repository", words)
-            self.assertIn("configured registry", words)
+            # §183: the refusal names the directory it was started in and the Registry it is not.
+            self.assertIn(str(wrong).casefold(), words)
+            self.assertIn("which is not a checkout of registry", words)
+            self.assertIn("start aart-cli in a checkout of", words)
+            self.assertNotIn("promotion", words)
             self.assertNotIn("aart ", words)
 
 

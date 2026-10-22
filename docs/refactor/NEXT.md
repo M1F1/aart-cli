@@ -1,5 +1,26 @@
 # AART Refactor — Next Work
 
+## Where the work is (2026-10-21, after 0.12.0)
+
+**CP-33 is merged (#83) and released as 0.12.0.** **CP-34**, owner-reported fixes, is done and
+opened as a PR from `feat/cp-34-owner-fixes`; the next work is whatever the owner reports next, and
+B-220 awaits the owner's decision: `docs/refactor/slices/CP-34-owner-reported-fixes.md`. Step 1
+is done (§178, INV-277, D-456): Marketplace draws the cursor's page of ten offers, one line each
+with no gaps, so More info stays on screen. Step 3 is done (§179, INV-278, D-457): a Skill,
+guideline, hook or memory is delivered from the canonical object, with no private `aart-cli/`
+tree beside the harness. Steps 4–5 are done (§180, INV-279, D-458): adopting a name the Registry
+took from another upstream is refused, and the artifact can be adopted under another Registry name
+(`--rename`, or the Registry name row on 46d). Step 6 is done (§181, INV-280, D-459): Marketplace
+has Registry and Upstream columns, the Artifact column is `kind/name@version`, and More info shows
+the redacted whole upstream. Step 7 is done (§182, INV-281, D-460): the `Unset` column is
+`Configuration`, saying `configured` or `not configured (N missing)`. Steps 8–10 are done (§183,
+INV-282–284, D-461–463): the Collection Editor has `/` search, keeps its Collection after a refusal
+or Back, and names its Registry; refusals name the launch directory, and no message names a screen
+number. B-220: writing into a configured local checkout from anywhere. Step 2, the PR, is next when the owner asks for it. B-219: Source promotion is not yet covered by
+INV-279. The owner is still reporting fixes; add each as a step before "Focused
+verification and the PR", which stays last. B-218: INV-192's irreversible half needs new evidence. B-217: two
+`screen_skeleton_test` properties fail locally on `main` too.
+
 ## Where the work is (2026-10-19, after 0.11.0)
 
 **CP-32 is released as 0.11.0.** The active work is **CP-33** on

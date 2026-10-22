@@ -214,19 +214,16 @@ class PlacedInstallationTest(unittest.TestCase):
             "a Skill is delivered as a tree, so what is nested in the payload stays nested",
         )
 
-    def test_what_is_delivered_is_a_copy_of_the_tree_this_install_owns(self) -> None:
-        """Not a link into the store and not the store's object itself: uninstalling this artifact
-        must not be able to take away a tree another installation of the same version shares."""
+    def test_what_is_delivered_is_the_only_copy_beside_the_harness(self) -> None:
+        """A real copy, not a link into the store, and the only one: no private tree holds the
+        same bytes again, because the harness reads only the delivered copy (D-457)."""
 
         prepared, _ = self._install()
         payload = pathlib.Path(self._installed_root(prepared)) / "payload"
 
         self.assertFalse(self.delivered.is_symlink())
-        self.assertEqual(SKILL_BODY, (payload / "SKILL.md").read_text(encoding="utf-8"))
-        self.assertNotEqual(
-            (payload / "SKILL.md").read_bytes(),
-            (self.delivered / "SKILL.md").read_bytes(),
-        )
+        self.assertTrue((self.delivered / "SKILL.md").is_file())
+        self.assertFalse(payload.exists(), "a private copy was written beside the harness")
 
     def test_nothing_is_launched_registered_or_given_an_interpreter(self) -> None:
         """INV-010: kind, package format and runtime protocol are separate dimensions. A Skill

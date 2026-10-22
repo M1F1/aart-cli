@@ -4835,3 +4835,43 @@ copies a fresh one from a scratch `init`, which the rollout docs describe. A `va
 drift, or a `maintain registry init --refresh-workflow`, would make that visible. Not required by
 any invariant today.
 
+## B-217 — Two `screen_skeleton_test` properties fail locally on `main`
+
+On 2026-10-21, with the local Hypothesis database, `test_the_keys_stay_on_the_bottom_rows_whatever_the_terminal_gives`
+(keys `('0', '0')`, height 3) and `test_every_item_is_marked_and_nothing_said_is_lost` (block
+`('0', ' 0')`) fail on a clean `origin/main` (0.12.0) as well as on CP-34. They are about the frame
+and bullet helpers, which CP-34 step 1 does not touch. Reproduce with an empty database, then
+either fix the helper or narrow the strategy if the generated input is outside the contract.
+
+## B-218 — INV-192's irreversible half has no end-to-end evidence after D-457
+
+`doctor_activity_e2e_test` held "a removal cannot be undone" with a Skill uninstall, which deleted
+the private tree. Since D-457 a Skill keeps no tree, its uninstall only withdraws a delivery that
+the retained canonical object can restore, and doctor truthfully offers that undo. The refusal
+branch of `_undo_availability` (`application/consumer_views.py`) is now evidenced only for
+credential deletion. Restore the pair with an MCP or plugin uninstall, whose tree removal is
+irreversible.
+
+
+## B-219 — Source promotion has no stable upstream identity for INV-279
+
+D-458 enforces one-upstream-per-name only for repository adoption. A Source's promotion records
+whatever location its surface used: `--source-url` from `maintain source promote`, the configured
+local path from the TUI's Source sync. Comparing those strings refused three valid
+`local_registry_promotion_e2e_test` promotions of the same Source. Extending INV-279 to Source
+promotion first needs one recorded identity per Source (for example its configured remote URL on
+both surfaces), then the same `upstream_conflicts` check in `plan_bulk_promotion`.
+
+## B-220 — A Registry change could write into the configured local checkout
+
+Status: **open**, noncritical (CP-34 step 10, D-463).
+
+Collections, promotion and bulk promotion write into the checkout `aart-cli` was started in
+(`registry_root=host.project_root`). An owner who starts it elsewhere is now refused clearly
+(INV-283), but still has to `cd` into the Registry checkout and start again. For a Registry
+configured by local path, the configured location is itself a checkout, and the change could be
+planned and reviewed there whatever the launch directory.
+
+That changes where a reviewed transaction writes, and the workspace identity checks D-103 relies
+on. It needs a specification decision first: which checkout is authoritative when both exist, and
+how the review names it. A Git-URL Registry has no local checkout to choose, and stays as it is.

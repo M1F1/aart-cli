@@ -112,6 +112,9 @@ class ArtifactPlacement:
     #: keeps the lower-level callers that never cross that boundary explicit about it, the way
     #: `installed_name` does.
     owner: InstallationOwner | None = None
+    #: Delivered straight from `payload_source`, the canonical object, with no private copy under
+    #: `root` (D-457). Every kind a harness only reads; a plugin is loaded from its tree instead.
+    shared_payload: bool = False
 
     def __post_init__(self) -> None:
         if not (self.owner is None or isinstance(self.owner, InstallationOwner)):
@@ -252,6 +255,7 @@ def offer_installation(
                 merges=placement.merges,
                 settings=placement.settings,
                 owner=placement.owner,
+                shared_payload=placement.shared_payload,
             )
         else:
             planned = plan_artifact_installation(

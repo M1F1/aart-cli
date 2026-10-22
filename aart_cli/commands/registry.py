@@ -1201,6 +1201,7 @@ def _scanned_artifact_data(item: ScannedArtifact) -> dict[str, object]:
         "state": item.state,
         "adoptable": item.adoptable,
         "payload_paths": list(item.payload_paths),
+        "held_by": list(item.held_by),
     }
 
 
@@ -1235,6 +1236,12 @@ def _print_scan(scan: RepositoryScan) -> None:
     for item in sorted(scan.artifacts, key=lambda entry: entry.coordinate):
         mark = " " if item.adoptable else "!"
         print(f"  {mark} {item.state:>8}  {item.coordinate}  {item.manifest_path}")
+        if item.held_by:
+            print(
+                f"             this Registry took {item.kind}/{item.name} from "
+                f"{', '.join(item.held_by)}; adopt it with --rename "
+                f"{item.kind}/{item.name}=NEW-NAME"
+            )
 
 
 def _print_adoption(prepared: PreparedAdoption, *, applied: bool) -> None:
@@ -1282,7 +1289,22 @@ def _run_adopt(request: Request) -> int:
         else:
             _print_scan(scanned.value)
         return _common.OK
-    prepared = prepare_adoption(scanned.value, selected, registry_root=_root(request))
+    renames = tuple(
+        (identity, name)
+        for identity, _equals, name in (item.partition("=") for item in request.adoption_renames)
+    )
+    if any(not identity or not name for identity, name in renames):
+        return _emit_error(
+            request,
+            "adopt",
+            _error(
+                "a new Registry name is given as KIND/NAME=NEW-NAME",
+                ("for example --rename skill/brainstorming=brainstorming-official",),
+            ),
+        )
+    prepared = prepare_adoption(
+        scanned.value, selected, registry_root=_root(request), renames=renames
+    )
     if isinstance(prepared, Err):
         return _emit_error(request, "adopt", prepared)
     digest = prepared.value.review_digest

@@ -4,6 +4,50 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-22, CP-34 step 2: focused verification and the PR.** ruff, format, mypy, docs-check
+and secret-shape-check pass; every test module CP-34 added or changed passes (149 tests). CP-34 is
+done and opened as a PR; CI runs the full suite.
+
+**2026-10-21, CP-34 steps 8–10 (§183, INV-282–284, D-461–463): Collections are found, kept and
+placed plainly.** The Collection Editor filters its artifacts with `/`, keeping hidden ticks. A
+refused Continue or Back returns to the same Collection (the review kept `save` as its focus). A
+launch directory that is another repository is refused naming it, the Registry and its location.
+No message names a screen number (AST-scanned). Collections say which Registry they belong to,
+and `o` needs a Registry row. Evidence: three new test modules, the updated real-Git diagnosis
+test, ten targeted mutations red.
+
+**2026-10-21, CP-34 step 7 (§182, INV-281, D-460): Configuration, not Unset.** Marketplace and
+Installed name the last column `Configuration` and say `configured` or `not configured (N
+missing)`; an offer nothing installs leaves it empty. Column minimums never cut a heading, and the
+grid still fits 80 columns. Evidence: `marketplace_configuration_column_test.py` (with a Hypothesis
+property), five targeted mutations red.
+
+**2026-10-21, CP-34 step 6 (§181, INV-280, D-459): Marketplace names Registry and Upstream.**
+Marketplace columns are Artifact (`kind/name@version`), Registry, Upstream (`owner/repository`
+from the provenance origin, never a credential), Status, Scope, Harnesses, Unset. More info shows
+the whole upstream URL, redacted. Rows stay keyed by the full offer coordinate. Evidence:
+`marketplace_upstream_columns_test.py` (with a Hypothesis property), five targeted mutations red.
+
+**2026-10-21, CP-34 steps 4–5 (§180, INV-279, D-458): an adopted name belongs to its upstream.**
+Adopting a `kind/name` whose versions record another upstream URL is refused before anything is
+written, naming both URLs; the scan reports the holder (`held_by`). The Maintainer adopts it under
+another Registry name with `maintain upstream adopt --rename KIND/NAME=NEW-NAME` or the Registry
+name row on screen 46d. Upstream checks compile the manifest under that name. Source promotion is
+not covered (B-219). Evidence: `registry_upstream_name_test.py`, five targeted mutations red.
+
+**2026-10-21, CP-34 step 3 (§179, INV-278, D-457): one copy where the harness reads.** A Skill,
+guideline, hook or memory is delivered and repaired from the canonical object, and no
+`aart-cli/<kind>/…` tree is written beside the harness. MCP servers and plugins keep theirs. The
+real-CLI install, doctor repair and uninstall pass; three targeted mutations went red. Four tests
+that held the old tree were updated, and the irreversible undo case moves to B-218.
+
+**2026-10-21, CP-34 step 1 (§178, INV-277, D-456): Marketplace lists a page of ten.** The list
+draws the cursor's page of ten offers, so More info for the focused offer is on the first screen.
+Columns are sized to their content over the whole terminal width, so an offer is one line, with
+no blank lines between offers. The Marketplace/TUI/consumer modules pass except two
+`screen_skeleton_test` properties that fail on a clean `main` too (B-217); three targeted
+mutations went red. CP-33 is done (0.12.0). Next: further owner-reported fixes, then the PR.
+
 **2026-10-19, CP-33 steps 6–11 (§177, INV-276, D-453–D-455): the remaining issues.** Secret-name
 variables end in `_SECRET_NAME` (#46). `aart-cli docs` prints the command reference read from the
 parser, every command and argument carries text, `llms.txt` points agents at it, and `docs-check`

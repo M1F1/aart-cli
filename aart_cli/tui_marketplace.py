@@ -152,6 +152,8 @@ class MarketplaceArtifactRow:
     #: install flow can offer the scopes the selection actually supports without re-reading the
     #: index (issue #11a).
     declared_scopes: tuple[str, ...] = ()
+    #: The upstream URL the approved package's provenance records, or empty where it records none.
+    upstream: str = ""
 
     def __post_init__(self) -> None:
         if (
@@ -372,6 +374,7 @@ def project_marketplace_rows(
                 _installed_statuses(item, target, lifecycle),
                 _security(item, evidence),
                 tuple(sorted(set(artifact.install.scopes))),
+                "" if artifact.provenance is None else artifact.provenance.origin_url,
             )
         )
     return tuple(rows)

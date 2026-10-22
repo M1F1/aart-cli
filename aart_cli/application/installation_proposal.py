@@ -306,8 +306,18 @@ class PlannedPlacement:
     #: keyed by: the same artifact in two harnesses is two installations, two trees and two
     #: records, and without this they are one record written twice.
     owner: InstallationOwner | None = None
+    #: The canonical object's payload the deliveries and merges are made from, when this
+    #: installation keeps no private copy of it (D-457). It and `payload_source` are exclusive:
+    #: one names a tree to copy into `root`, the other says there is none to copy.
+    payload: str | None = None
 
     def __post_init__(self) -> None:
+        if self.payload is not None and (
+            not isinstance(self.payload, str)
+            or not self.payload.startswith("/")
+            or self.payload_source is not None
+        ):
+            raise ValueError("a shared placement payload is one absolute path and is not copied")
         if (
             not isinstance(self.artifact, ResolvedArtifact)
             or not isinstance(self.environment, ArtifactEnvironment)
@@ -336,10 +346,11 @@ class PlannedPlacement:
             # The harness resolves nothing on this artifact's behalf: a relative root would be
             # read against whatever working directory the run that repaired it happened to have.
             raise ValueError("a planned placement root must be one absolute path")
-        prefix = self.environment.root.rstrip("/") + "/"
+        base = self.environment.root if self.payload is None else self.payload
+        prefix = base.rstrip("/") + "/"
         placed: tuple[ArtifactDelivery | ArtifactMerge, ...] = (*self.deliveries, *self.merges)
         for item in placed:
-            if item.source != self.environment.root and not item.source.startswith(prefix):
+            if item.source != base and not item.source.startswith(prefix):
                 # A delivery is made from the artifact that owns it, so a repair copies from what
                 # this installation placed rather than from somewhere nobody chose.
                 raise ValueError(
@@ -398,6 +409,7 @@ def intended_placement_receipt(planned: PlannedPlacement) -> PlacedArtifactRecei
         object_digest=planned.artifact.version.object_digest,
         # Which installation this receipt belongs to, so the store can key by it (§169.3).
         owner=planned.owner,
+        payload=planned.payload,
     )
 
 

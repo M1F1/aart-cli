@@ -105,10 +105,11 @@ class DoctorActivityE2ETest(unittest.TestCase):
             self.assertEqual(moments, sorted(moments, reverse=True), actions)
 
     def test_an_undo_is_offered_only_where_the_receipt_records_one(self) -> None:
-        """INV-192, as a pair: what took effect can be reversed, a removal cannot.
+        """INV-192: what took effect, and what retained state can reverse, is offered as an undo.
 
-        The false half is evidence only because the true half sits beside it in the same trail --
-        an absence asserted where nothing could have been present measures nothing (D-138).
+        A Skill's uninstall withdraws only its delivery since D-457; the canonical object it was
+        delivered from is retained, so that removal is reversible too. The irreversible half needs
+        an installation whose removal deletes a private tree (B-218).
         """
 
         with _declaring_setup() as env:
@@ -123,12 +124,13 @@ class DoctorActivityE2ETest(unittest.TestCase):
             placed = by_intent["install"]
             self.assertTrue(placed["available"], by_intent)
             # Named components, not a bare yes: the answer says what it would reverse.
-            self.assertEqual(sorted(placed["components"]), ["delivery:claude", "payload"])
+            # A Skill is delivered from the canonical object, so its payload is not this
+            # installation's to remove and is not offered as an undo (D-457).
+            self.assertEqual(sorted(placed["components"]), ["delivery:claude"])
 
             removed = by_intent["uninstall"]
-            self.assertFalse(removed["available"], by_intent)
-            self.assertEqual(removed["components"], [], "a refusal names nothing to reverse")
-            self.assertIn("nothing retained", removed["reason"])
+            self.assertTrue(removed["available"], by_intent)
+            self.assertEqual(removed["components"], ["delivery:claude"])
 
     def test_the_human_report_names_the_actions_and_invents_no_undo(self) -> None:
         with _declaring_setup() as env:
@@ -139,10 +141,10 @@ class DoctorActivityE2ETest(unittest.TestCase):
 
             self.assertEqual(code, 0, output)
             self.assertIn("Recent activity:", output)
-            # The components too, not just the verdict: with two of them the separator is
-            # observable, and an operator reading this needs to know what would be reversed.
-            self.assertIn(f"{_VERSIONED} (install) can be undone: delivery:claude, payload", output)
-            self.assertIn(f"{_VERSIONED} (uninstall) cannot be undone", output)
+            # The components too, not just the verdict: an operator reading this needs to know
+            # what would be reversed.
+            self.assertIn(f"{_VERSIONED} (install) can be undone: delivery:claude", output)
+            self.assertIn(f"{_VERSIONED} (uninstall) can be undone: delivery:claude", output)
 
 
 if __name__ == "__main__":

@@ -11276,3 +11276,154 @@ Enterprise fork unchanged. §177 and INV-276 state it. The choices:
 - **#24 (Enterprise distribution name) is not implemented.** It was planned as CP-33 step 12, and
   GitHub answers HTTP 410 "This issue was deleted" for it. A deleted issue is the owner's answer;
   B-213 records where its text is if it comes back.
+
+
+## D-456 — Marketplace pages ten offers, sizes columns to content, and drops row gaps (CP-34 step 1)
+
+The owner reported that with many artifacts More info was unreachable: `marketplace_viewport`
+pages actions and the described block as one stream, so the focused offer's details came after
+every offer, below the screen. They also asked for one line per offer and no blank lines between
+offers, since the fixed nine-column Harnesses cell wrapped most rows into two or three lines.
+
+`render_marketplace_rows` now draws only the page of `MARKETPLACE_WINDOW = 10` offers holding the
+cursor. Pages are fixed (the cursor's index rounded down to a multiple of ten) rather than a
+sliding window, because that needs no remembered offset and every position is predictable; a
+counter `Offers a–b of n; ↑/↓ for more.` follows the list when there are more than ten. Column
+widths are each column's widest value over all offers (stable while paging), narrowed one column
+at a time, widest first, down to the old minima only when the sum exceeds the usable width. The
+Marketplace grid uses the whole terminal width instead of `CONTENT_MEASURE`, so a wide terminal
+holds a whole row. The grid has no blank line between offers; the stacked layout keeps one.
+PgUp/PgDn paging (D-450) is unchanged and now pages ten offers plus More info. The window count is
+a constant, not a setting: nothing asked for it to vary.
+
+
+## D-457 — Read-only kinds are delivered from the canonical object (CP-34 step 3)
+
+The owner saw each Skill installed twice in a Tabnine project: `.tabnine/agent/skills/<name>` and
+`.tabnine/agent/aart-cli/skill/<registry>/<name>/payload`. The second came from §169.3's private
+tree, which `placements_for` built for every kind, and from which deliveries copied. The stated
+reason was that a store object "may be pruned"; but installs record an `INSTALLED` object
+reference (`io/installation_apply.py`), and collection deletes only unreferenced digests.
+
+`ArtifactPlacement.shared_payload` is true for every delivered kind except a plugin. Its deliveries
+and merges then name the canonical object's `payload/` as source, the plan carries it as
+`PlannedPlacement.payload` with no `payload_source` (so no copy component), and
+`PlacedArtifactReceipt.payload` records it. Containment checks hold sources inside that payload
+instead of `root`. Observation measures it, so doctor still compares the approved payload digest.
+Removal omits the payload component, because the object is the store's to keep. Setup effect proofs
+spell sources relative to the object, which yields the same `payload/…` paths as before. `root` is
+still recorded and still keys nothing new. An MCP server and a plugin are unchanged.
+
+Under the CP-26 rule there is no migration. A tree left by 0.12.0 stays until its installation is
+reinstalled or the directory is deleted by hand. An uninstall of such an older receipt still removes
+it, because that receipt has no `payload` and keeps the old removal component.
+
+
+## D-458 — Adoption refuses a taken name and adopts under another (CP-34 steps 4 and 5)
+
+The owner adopted `skill/brainstorming` from two repositories; the second became `1.0.1` of the
+first (reproduced with `scan_repository`/`prepare_adoption`/`apply_adoption`). Versions are keyed by
+identity and input digest only (`protocol/registry_versions.py`), so nothing compared upstreams.
+
+`application/promotion.py` gains `recorded_upstreams` (the URLs each approved identity's versions
+record: `provenance.json` origin for self-contained, the reference record's `source` for pinned)
+and `upstream_conflicts`. `prepare_adoption` refuses on a conflict with a CLI remediation
+(`--rename`) and an interactive one (the Registry name row). `ScannedArtifact.held_by` carries the
+holders to the scan output.
+
+The check is in adoption, not in `plan_bulk_promotion`. Putting it in the planner failed three
+`local_registry_promotion_e2e_test` cases: the same Source records `--source-url` from the CLI and
+its configured local path from the TUI, so its URL is not an identity. Source promotion is B-219.
+
+Renaming is `compile_author_manifests(..., names=((manifest_path, name),))`, which replaces the
+parsed manifest's name before compiling. The input digest is computed from the author's bytes, so
+it does not change. `prepare_adoption(..., renames=((kind/name, new),))` compiles the scan's pinned
+acquisition again (`RepositoryScan.acquisition`) with those names and prepares that selection.
+`check_adopted_upstream` always compiles the adopted manifest under its Registry name. This is a
+no-op for an unrenamed artifact and keeps a renamed one comparable. The rename is not stored
+separately: the Registry coordinate and the provenance manifest path are the record.
+
+TUI: screen 46d adds a `name:<coordinate>` row under a held artifact. `_form_text_rows` returns that
+row only while the cursor is on it, so letters type there and stay commands elsewhere. Single-letter
+screen bindings are hidden while typing, so the legend does not offer `a` while `a` types an `a`.
+`ConsumerUiState.adoption_names` and `ConsumerUiCommand.adoption_names` are keyed by scanned
+coordinate. `consumer_actions` maps them to `kind/name` for the port.
+
+## D-459 — Marketplace columns name the Registry and the upstream (CP-34 step 6)
+
+After §180 the owner could hold two copies of one Skill from two upstreams, and Marketplace showed
+both as `alias/kind/name@version` with nothing about their source. §181 splits the coordinate:
+Artifact is `kind/name@version` and Registry is the alias. It also adds Upstream.
+
+Upstream comes from `MarketplaceArtifactRow.upstream`, the provenance `origin_url` the row already
+had. The row shows `short_upstream(url)`: the last two path segments, because `owner/repository`
+is what a reader recognizes on GitHub, GitLab and local checkouts alike. Dropping the host also
+drops any userinfo, so the row needs no redaction and cannot leak. More info shows the whole URL
+through `redact_text`, because a reader comparing two upstreams on one host needs the host.
+
+Drawn rows no longer start with their key, so `render_marketplace_rows` takes `keys=` (the full
+offer coordinates, in row order). Without `keys` it still keys by the first cell, and a count that
+differs from the rows is an error. The Installed screen draws its own rows and still shows the full
+coordinate. The two extra columns raise the grid minimum to 74. A narrower terminal
+stacks as before, and none of it truncates (INV-274).
+
+## D-460 — The Unset column becomes Configuration (CP-34 step 7)
+
+The owner found `Unset` / `3 not set` unclear. §182 names the column `Configuration` and says
+`configured` or `not configured (N missing)`. `consumer_views.configuration_cell(missing,
+installed=)` is the one place that words it, and both `marketplace_cells` and `installed_cells`
+use it. A Marketplace offer with no installation stays empty: "configured" there would claim
+something about inputs nobody has entered.
+
+`configured`, not `ready`, because Installed's health column already says `ready` about files, and
+one word should not mean two things on one row.
+
+`_MINIMUM` for Configuration is 13, its heading. Every minimum was already at least its heading
+except this one would not have been, and a narrower one cuts the header word. To keep the grid
+inside an 80-column terminal, Artifact's minimum drops from 12 to 8, its heading. No decision
+recorded the 12. The grid minimum is 78.
+
+## D-461 — The Collection Editor filters like Marketplace (CP-34 step 8)
+
+`MaintainerScreen.COLLECTION_EDITOR` joins `_SEARCHABLE`, and `CanonicalScreenSource.rows` filters
+the approved artifacts with `_matches`, the Marketplace matcher. The reducer and `_set_rows` were
+already "a filter hides rows, never unticks", so hidden ticks survive and reach
+`COLLECTION_DEFINE` unchanged.
+
+The editor has text rows, so `/` opens the search only off them (`key_event`'s editor branch). The
+`/` legend entry is hidden while typing, because there it is a character. Esc clears an applied
+filter before it means Back, so a stray Esc does not throw away a draft. `_set_rows` moves the
+cursor to the first matching artifact when the filter hides the cursor's row. Otherwise it fell to
+index 0, the Name row, where Space types a space instead of ticking.
+
+## D-462 — The editor keeps its Collection; refusals say where; no screen numbers (CP-34 step 9)
+
+Root cause of the owner's empty editor: `_navigate` sets the next screen's focus to the cursor's
+row unless `keeps_focus`. Continue sits on the `save` row, so Registry Validation's focus became
+`save`. A refusal or Back then returned the editor to focus `save`, which `parse_collection_row`
+cannot read, and the editor drew nothing. The fix is the `_KEEPS_FOCUS` pair (Collection Editor →
+Registry Validation). That set's annotation widens to `ApplicationScreen`, the one type both screen
+enums share.
+
+`io/maintainer_promotion._workspace_refusal` turns a `WRONG_WORKSPACE` classification into a refusal
+naming the launch directory, the Registry alias and its configured location. All three preparation
+paths (Candidate, bulk, Collection) return it before planning. Planning in another repository
+compared versions that are not the Registry's. The application-level fallback wording no longer
+says "promotion". `registry_baseline_diagnosis_test` now pins the new wording.
+
+Seven user-visible strings named screens 39, 40, 43, 46, 47, 51 and 52. They now name the screen
+by its heading, or say what to do. `collection_editor_recovery_test` parses every module and
+fails on any non-docstring string literal matching `screen N`, so this cannot regress silently.
+
+## D-463 — Collections name their Registry, and `o` needs a Registry row (CP-34 step 10)
+
+`o` on the Registry screen already opened the Collections of the cursor's Registry. Nothing said
+so, and on the workspace row it fell back to "the only Registry" or to nothing. `_binding_enabled`
+now offers `o` only on a subscribed Registry row. `maintainer_collections_status` says
+"Collections of Registry ALIAS". The editor's status adds where saving writes: the Registry
+checkout `aart-cli` was started in, which is what `registry_root=host.project_root` means. Each is
+its own statement.
+
+Automatically writing into a configured local Registry checkout, regardless of the launch
+directory, would remove the need to start `aart-cli` there. It changes where a reviewed
+transaction writes, so it is B-220, not part of this step.

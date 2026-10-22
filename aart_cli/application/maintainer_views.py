@@ -260,6 +260,8 @@ class MaintainerRepositoryArtifactView:
     state: str
     payload_paths: tuple[str, ...]
     adoptable: bool
+    #: Upstreams this Registry already took `kind/name` from; adopting needs another name.
+    held_by: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         values = (
@@ -271,6 +273,7 @@ class MaintainerRepositoryArtifactView:
             self.manifest_path,
             self.state,
             *self.payload_paths,
+            *self.held_by,
         )
         if (
             any(
@@ -280,6 +283,7 @@ class MaintainerRepositoryArtifactView:
                 for item in values
             )
             or not isinstance(self.payload_paths, tuple)
+            or not isinstance(self.held_by, tuple)
             or not isinstance(self.adoptable, bool)
         ):
             raise ValueError("repository scan artifact view is invalid")

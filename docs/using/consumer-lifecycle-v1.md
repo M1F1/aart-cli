@@ -53,15 +53,18 @@ the number it has in the full list.
 
 ### What a Marketplace row says
 
-Each row in the TUI's Marketplace is the offer, then: `not installed`, `installed` or
-`update available`; where it is installed (`user`, `2 projects`, or `user + 2 projects`); the
-detected harnesses that can host it, with `✓` on each that holds it; and how many inputs are still
-`AART_NOT_SET`. Installed draws each installation on its own row, with its health, scope, project
-and unset inputs. In Installed, More info adds the project's directory and harness.
+Each row in the TUI's Marketplace is the offer as `kind/name@version`, then: the Registry that
+offers it; its upstream as `owner/repository` (More info shows the whole URL, with credentials
+redacted); `not installed`, `installed` or `update available`; where it is installed (`user`,
+`2 projects`, or `user + 2 projects`); the detected harnesses that can host it, with `✓` on each
+that holds it; and its configuration. Configuration is `configured` when every input has a value,
+`not configured (2 missing)` while inputs still hold `AART_NOT_SET`, and empty when nothing is
+installed. Installed draws each installation on its own row, with its health, scope, project and
+configuration. In Installed, More info adds the project's directory and harness.
 
-Marketplace labels its columns Artifact, Status, Scope, Harnesses and Unset. Long values wrap;
-narrow windows use the same labels as stacked fields. PgUp/PgDn scroll content in short windows
-while the headings and navigation footer remain. Arrows move between logical offers regardless
+Marketplace labels its columns Artifact, Registry, Upstream, Status, Scope, Harnesses and
+Configuration. Long values wrap; narrow windows use the same labels as stacked fields. PgUp/PgDn
+scroll content in short windows while the headings and navigation footer remain. Arrows move between logical offers regardless
 of how many lines each occupies. `v` shows the focused offer's full provenance, security,
 compatibility, digests and declared input guidance in Marketplace; there is no separate Artifact
 Details screen. Search, cursor and marked offers stay intact. `i` installs marked offers, or the

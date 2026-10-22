@@ -86,8 +86,10 @@ from .maintainer_views import MaintainerScreen, maintainer_navigation_targets
 from .removal_proposal import RemovalProposal
 
 __all__ = [
+    "configuration_cell",
     "installed_cells",
     "marketplace_cells",
+    "short_upstream",
     "ALL_ARTIFACTS",
     "ALL_INSTALLATIONS",
     "PLACEHOLDER_WARNING",
@@ -1743,7 +1745,12 @@ def _installed_paths(
         identifier = ComponentId(component, qualifier) if qualifier else ComponentId(component)
         return states.get(identifier, "unobserved")
 
-    paths = [InstalledPathView("payload", receipt.root, state=observed(Component.PAYLOAD))]
+    held = (
+        receipt.payload
+        if isinstance(receipt, PlacedArtifactReceipt) and receipt.payload is not None
+        else receipt.root
+    )
+    paths = [InstalledPathView("payload", held, state=observed(Component.PAYLOAD))]
     if isinstance(receipt, PlacedArtifactReceipt):
         paths.extend(
             InstalledPathView(
@@ -1831,15 +1838,47 @@ def _counted(count: int, noun: str) -> str:
     return f"{count} {noun}{'' if count == 1 else 's'}" if count else ""
 
 
-def marketplace_cells(
-    key: str, installed: tuple[InstalledArtifactView, ...], eligible: tuple[str, ...]
-) -> tuple[str, ...]:
-    """One Marketplace row's columns (§173.8), read off the installations of any version.
+def short_upstream(url: str) -> str:
+    """A Git URL as its last two path segments, `owner/repository` (§181).
 
-    The offer, then: installed or not or with an update available; the scopes it is installed in,
+    Scheme, host, port and any credentials are dropped, so what a row shows is what a reader
+    recognizes and never a secret; the whole URL, redacted, is More info.
+    """
+
+    path = url.strip().rstrip("/")
+    if "://" in path:
+        path = path.split("://", 1)[1].partition("/")[2]
+    elif ":" in path.partition("/")[0]:
+        path = path.split(":", 1)[1]
+    parts = [part for part in path.removesuffix(".git").split("/") if part]
+    return "/".join(parts[-2:])
+
+
+def configuration_cell(missing: int, *, installed: bool) -> str:
+    """The Configuration column (§182): whether every input of what is installed has a value.
+
+    `missing` counts the inputs still holding `AART_NOT_SET`. Nothing installed says nothing.
+    """
+
+    if not installed:
+        return ""
+    return f"not configured ({missing} missing)" if missing else "configured"
+
+
+def marketplace_cells(
+    key: str,
+    installed: tuple[InstalledArtifactView, ...],
+    eligible: tuple[str, ...],
+    *,
+    upstream: str = "",
+) -> tuple[str, ...]:
+    """One Marketplace row's columns (§173.8, §181), read off the installations of any version.
+
+    The artifact as `kind/name@version`, the Registry that offers it and the upstream it was taken
+    from (§181), then: installed or not or with an update available; the scopes it is installed in,
     with how many projects; the harnesses, each detected one that could host it and a `✓` on each
-    that holds it; and the inputs still `AART_NOT_SET`, summed over installations because each
-    keeps its own (§169.4). The two harness facts share one column so a row fits the measure.
+    that holds it; and whether it is configured, with the inputs still `AART_NOT_SET` summed over
+    installations because each keeps its own (§169.4, §182). The two harness facts share one column so a row fits the measure.
     """
 
     artifact = key.partition("@")[0]
@@ -1856,27 +1895,30 @@ def marketplace_cells(
     user = any(item.scope == "user" for item in held)
     holding = {item.harness for item in held if item.harness}
     unset = sum(len(item.placeholders) for item in held)
+    alias, _, artifact_version = key.partition("/")
     return (
-        key,
+        artifact_version,
+        alias,
+        short_upstream(upstream),
         status,
         " + ".join(part for part in ("user" if user else "", projects) if part),
         ", ".join(
             f"{harness} ✓" if harness in holding else harness
             for harness in sorted(holding | set(eligible))
         ),
-        f"{unset} not set" if unset else "",
+        configuration_cell(unset, installed=bool(held)),
     )
 
 
 def installed_cells(view: InstalledArtifactView, health: str) -> tuple[str, ...]:
-    """One Installed row's columns after its key (§173.8): health, scope, project, unset inputs.
+    """One Installed row's columns after its key (§173.8): health, scope, project, configuration.
 
     The project is the root's last name; the whole path is detail, under More info.
     """
 
     project = view.root.rstrip("/").rpartition("/")[2] if view.scope == "project" else ""
     unset = len(view.placeholders)
-    return (health, view.scope, project, f"{unset} not set" if unset else "")
+    return (health, view.scope, project, configuration_cell(unset, installed=True))
 
 
 def project_unadopted_installation(coordinate: str) -> InstalledArtifactView:
@@ -2806,7 +2848,7 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
 }
 
 
-_KEEPS_FOCUS: frozenset[tuple[ConsumerScreen, ConsumerScreen]] = frozenset(
+_KEEPS_FOCUS: frozenset[tuple[ApplicationScreen, ApplicationScreen]] = frozenset(
     {
         (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE),
         (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.INSTALL_PATH),
@@ -2828,6 +2870,9 @@ _KEEPS_FOCUS: frozenset[tuple[ConsumerScreen, ConsumerScreen]] = frozenset(
         (ConsumerScreen.CREDENTIAL_ACTION, ConsumerScreen.CREDENTIAL_REVIEW),
         (ConsumerScreen.CONFIGURATION_TARGETS, ConsumerScreen.CONFIGURATION_VALUE),
         (ConsumerScreen.CONFIGURATION_VALUE, ConsumerScreen.CONFIGURATION_REVIEW),
+        # The Collection Editor's rows are its fields and members, so its review is still about
+        # the Collection; a refusal or Back then returns to it rather than to "save" (§183).
+        (MaintainerScreen.COLLECTION_EDITOR, MaintainerScreen.REGISTRY_VALIDATION),
     }
 )
 

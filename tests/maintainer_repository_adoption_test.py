@@ -326,7 +326,7 @@ class RepositoryAdoptionActionTest(unittest.TestCase):
         calls: list[tuple[object, ...]] = []
 
         class Adoption:
-            def prepare(self, observed, selected):
+            def prepare(self, observed, selected, renames=()):
                 calls.append(("prepare", observed, selected))
                 return Ok(prepared)
 

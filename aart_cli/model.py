@@ -398,6 +398,8 @@ class Request:
     # The Git URL `registry adopt` reads.  Distinct from configured consumer sources: a maintainer
     # reviews an explicit Git package before its registry entry is allowed to name it.
     native_url: Optional[str] = None
+    # `upstream adopt --rename KIND/NAME=NEW-NAME`: Registry names for a name another upstream holds.
+    adoption_renames: Tuple[str, ...] = ()
     registry_action: Optional[str] = None
     # Maintainer Source Scan inputs are separate from both the writable registry checkout and
     # consumer source subscriptions. The command observes one clean pinned author checkout and
