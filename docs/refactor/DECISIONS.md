@@ -11485,3 +11485,27 @@ check reads committed bytes and needs no network.
 Existing Registries get the check by bumping `.aart-cli-version` and replacing the generated
 workflow (`docs/ci/github-enterprise-rollout.md`). Because the audit reads the whole snapshot, the
 pull request that brings the check must already remove any local versions.
+
+## D-468 — `consume install` answers inputs on the command line (CP-35 step 3)
+
+An Enterprise agent could not install an MCP server with a required input without a terminal. The
+owner asked for command-line answers.
+
+- **The flag names the artifact, not the installation.** §169.4 forbids a generic input id, and
+  §172.4 (D-413) already lets one operation copy one answer into every installation of one
+  artifact. `ALIAS/KIND/NAME:INPUT` is the key 07 asks by. Naming each harness and scope would
+  make an agent repeat the same value per target for no gain, and each installation still gets
+  its own file and its own credential item.
+- **A credential is an environment variable's name.** An argument is visible in `ps` and shell
+  history. A file path was considered, but a variable is what CI secret stores provide. The
+  variable is checked before the review and read only after confirmation, straight into a
+  `TransientSecret`.
+- **A declared default stands.** 07 pre-fills defaults and Continue submits them, so an input left
+  at its default is an answer (§172.4). Without that, every artifact with a defaulted input would
+  need a flag the TUI never asks for.
+- **`--set-later` mirrors Set later.** It stores `AART_NOT_SET` for every unanswered required
+  input, ordinary or credential, and still needs a credential store for the placeholder item.
+- **Refusals come before preparation completes and never show a value.** A misplaced `:` can put a
+  credential into the wrong flag.
+- **Only macOS has a store.** `--secret-env` and `--set-later` with a credential refuse elsewhere,
+  by name. A Linux provider is B-222, not this step.

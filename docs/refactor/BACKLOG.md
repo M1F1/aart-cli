@@ -4893,3 +4893,13 @@ origin is local before the push, so a Maintainer moving from local trials to a s
 to start a fresh Registry or adopt the remote upstream under another name. Today the owner has to
 find them in the checkout. A refusal would need a specification decision, because a local-only
 Registry is legitimate.
+
+## B-222 — A credential store on Linux
+
+Status: **open**, noncritical (CP-35 step 3, D-468).
+
+`MacOsKeychainProvider` is the only credential store. On Linux, `consume install --secret-env`, and
+`--set-later` for an artifact with a credential, refuse with "no credential store is available".
+§169.5 asks Linux and headless runs to use an approved available provider. Candidates are the
+Secret Service API (`secret-tool`) and a provider that only references a CI secret by name. Either
+needs a specification decision on where the item lives and who may read it.

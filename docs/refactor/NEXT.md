@@ -2,16 +2,16 @@
 
 ## Where the work is (2026-10-22, after CP-34 merged)
 
-**CP-34 is merged (#85); release PR #86 prepares 0.13.0.** **CP-35** is on
+**CP-34 is merged (#85) and released as 0.13.0 (#86).** **CP-35** is on
 `feat/cp-35-headless-inputs-and-fast-ci`: `docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
 Step 1 is done (D-466): CI runs the suite once per interpreter, in parallel processes, under
 coverage. Step 2 is done (§185, INV-286, D-467): the generated Registry CI refuses versions promoted
-from a local checkout. Next is step 3: `consume install` answers inputs from
-`--input ALIAS/KIND/NAME:ID=VALUE`, `--secret-env ALIAS/KIND/NAME:ID=ENVVAR` and `--set-later`
-(§169.4). A red `tests/command_line_inputs_test.py` does not exist yet; the design is in the slice.
-Then step 4, optional inputs that never become `AART_NOT_SET`, and step 5, installing a `uv.lock`
-project with `uv sync --frozen`. Step 6, the PR, stays last. B-220 still awaits the owner's
-decision.
+from a local checkout. Step 3 is done (§186, INV-287, D-468): `consume install` and `update` take
+`--input`, `--secret-env` and `--set-later`. Next is step 4: `InstallationConfigField` gains
+`required`; `copy_artifact_answers(skip_unanswered=True)` fills only required fields, so an optional
+input never becomes `AART_NOT_SET`; 07 shows optional inputs, marked optional, pre-filled with their
+default. Then step 5, installing a `uv.lock` project with `uv sync --frozen`. Step 6, the PR, stays
+last. B-220 still awaits the owner's decision; B-222 (a Linux credential store) is new.
 
 ## Where the work is (2026-10-21, after 0.12.0)
 

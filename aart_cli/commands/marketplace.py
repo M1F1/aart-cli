@@ -25,6 +25,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from aart_cli import command_outcome as _common
+from aart_cli.application.command_line_inputs import (
+    COMMAND_LINE_INPUT_INVALID,
+    CommandLineInput,
+    declared_defaults,
+    missing_input_flags,
+    parse_command_line_input,
+    resolve_command_line_inputs,
+    secret_references,
+    secret_variables,
+)
 from aart_cli.application.consumer_views import (
     PresentationProfile,
     ReceiptArtifactView,
@@ -36,6 +46,7 @@ from aart_cli.application.credential_guidance import (
     credential_guidance_to_data,
     guidance_by_input,
 )
+from aart_cli.application.installation_inputs import OwnedInputSource, copy_artifact_answers
 from aart_cli.application.installed_setup import declared_setup_to_data
 from aart_cli.configuration.model import SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration
@@ -73,6 +84,7 @@ from aart_cli.consumer.runtime_requirements import (
     runtime_capability_to_data,
     runtime_check_to_data,
 )
+from aart_cli.domain.credentials import ProviderState
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity, diagnostic_to_data
 from aart_cli.domain.effects import effect_to_data
 from aart_cli.domain.harness import Scope
@@ -92,6 +104,7 @@ from aart_cli.domain.selection import (
 )
 from aart_cli.io.configured_installation_action import (
     InstallationHost,
+    PreparedConfiguredInstallation,
     complete_configured_installation,
     prepare_configured_installation,
 )
@@ -104,7 +117,11 @@ from aart_cli.io.consumer_machine import (
     read_consumer_machine,
     read_installed_inspections,
 )
-from aart_cli.io.credentials import MacOsKeychainProvider
+from aart_cli.io.credentials import (
+    CredentialProviderPort,
+    MacOsKeychainProvider,
+    TransientSecret,
+)
 from aart_cli.marketplace.catalog import marketplace_catalog_bytes, render_marketplace
 from aart_cli.marketplace.search import Document, search, summary_line
 from aart_cli.model import Request, SetupManualReference
@@ -834,6 +851,99 @@ def _configured_install(request: Request, selectors: tuple[ArtifactSelector, ...
     return _configured_lifecycle(request, operation, runtime.value, selection)
 
 
+def _credential_providers() -> tuple[CredentialProviderPort, ...]:
+    """The credential stores this machine offers: the macOS Keychain, or none."""
+
+    return (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+
+
+def _command_line_sources(
+    request: Request,
+    prepared: PreparedConfiguredInstallation,
+    credential_providers: tuple[CredentialProviderPort, ...],
+) -> Result[tuple[tuple[OwnedInputSource, ...], tuple[CommandLineInput, ...]]]:
+    """Turn `--input`, `--secret-env` and `--set-later` into this operation's input sources.
+
+    Every flag is checked against what the operation installs before anything else happens, and a
+    variable `--secret-env` names must hold a value now, so a review never promises a credential
+    that the confirmed run could not store. The value itself is read only at completion.
+    """
+
+    parsed: dict[str, list[CommandLineInput]] = {"--input": [], "--secret-env": []}
+    problems: list[Diagnostic] = []
+    for flag, raw in (
+        *(("--input", item) for item in request.install_inputs),
+        *(("--secret-env", item) for item in request.install_secret_envs),
+    ):
+        item = parse_command_line_input(raw, flag=flag)
+        if isinstance(item, Err):
+            problems.extend(item.diagnostics)
+        else:
+            parsed[flag].append(item.value)
+    if problems:
+        return Err(tuple(problems))
+    fields = prepared.draft.inputs.fields
+    resolved = resolve_command_line_inputs(fields, parsed["--input"], parsed["--secret-env"])
+    if isinstance(resolved, Err):
+        return resolved
+    empty = sorted(
+        {item.value for item in resolved.value.secrets if not os.environ.get(item.value)}
+    )
+    if empty:
+        return Err(
+            tuple(
+                Diagnostic(
+                    COMMAND_LINE_INPUT_INVALID,
+                    Severity.ERROR,
+                    f"--secret-env names {variable}, which is not set or is empty",
+                    remediation=(f"export {variable} before running the command",),
+                )
+                for variable in empty
+            )
+        )
+    answers = resolved.value.answers
+    sources = copy_artifact_answers(
+        fields,
+        (*answers, *declared_defaults(fields, answers)),
+        skip_unanswered=request.set_later,
+    )
+    unanswered = prepared.draft.inputs.unanswered
+    needs_store = resolved.value.secrets or (
+        request.set_later and any(isinstance(field.input, SecretInput) for field in unanswered)
+    )
+    if needs_store:
+        provider = next(
+            (item for item in credential_providers if item.available() is ProviderState.AVAILABLE),
+            None,
+        )
+        if provider is None:
+            return Err(
+                (
+                    Diagnostic(
+                        COMMAND_LINE_INPUT_INVALID,
+                        Severity.ERROR,
+                        "no credential store is available on this machine, so a credential "
+                        "cannot be stored or left for later",
+                        remediation=(
+                            "install where a supported credential store is available (macOS "
+                            "Keychain)",
+                        ),
+                    ),
+                )
+            )
+        sources = (
+            *sources,
+            *secret_references(
+                fields,
+                unanswered,
+                resolved.value.secrets,
+                set_later=request.set_later,
+                provider=provider.provider,
+            ),
+        )
+    return Ok((tuple(sources), resolved.value.secrets))
+
+
 def _unchanged(artifact: ReceiptArtifactView) -> bool:
     """Whether this member of a finished transaction left the machine exactly as it found it."""
 
@@ -869,7 +979,7 @@ def _configured_lifecycle(
         tuple(request.profiles),
     )
     policy = EffectivePolicy()
-    credential_providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    credential_providers = _credential_providers()
     prepared = prepare_configured_installation(
         runtime.loaded.effective,
         selection,
@@ -883,8 +993,30 @@ def _configured_lifecycle(
     )
     if isinstance(prepared, Err):
         return _emit_error(request, prepared, operation)
+    secrets: tuple[CommandLineInput, ...] = ()
+    flagged = request.install_inputs or request.install_secret_envs or request.set_later
+    if flagged or not prepared.value.ready:
+        answered = _command_line_sources(request, prepared.value, credential_providers)
+        if isinstance(answered, Err):
+            return _emit_error(request, answered, operation)
+        sources, secrets = answered.value
+        if sources:
+            prepared = prepare_configured_installation(
+                runtime.loaded.effective,
+                selection,
+                host=host,
+                sources=sources,
+                policy=policy,
+                selected_remediations=None,
+                credential_providers=credential_providers,
+                resolvers=credential_providers,
+                previous=previous,
+            )
+            if isinstance(prepared, Err):
+                return _emit_error(request, prepared, operation)
     if not prepared.value.ready:
         composition = prepared.value.draft.inputs
+        flags = missing_input_flags(composition.unanswered)
         # A credential the command line cannot take is still explained here, in the words the TUI
         # and the provider prompt use: what it is, who needs it and how to get it (D-263).
         guidance = guidance_by_input((str(use.owner), use.input) for use in composition.uses)
@@ -893,6 +1025,7 @@ def _configured_lifecycle(
                 "id": field.input.id.value,
                 "kind": "credential" if isinstance(field.input, SecretInput) else "config",
                 "owner": str(field.owner),
+                "flag": missing_input_flags((field,))[0],
                 **(
                     {"guidance": credential_guidance_to_data(guidance[field.input.id.value])}
                     if isinstance(field.input, SecretInput)
@@ -918,7 +1051,10 @@ def _configured_lifecycle(
             CONSUMER_INVALID,
             Severity.ERROR,
             "required installation inputs are unanswered",
-            remediation=("answer the required-input form before confirming this install",),
+            remediation=(
+                "answer each on the command line, or pass --set-later to store the placeholder "
+                "and set it later in Credentials and variables: " + " ".join(flags),
+            ),
         )
         _emit(
             request,
@@ -931,7 +1067,13 @@ def _configured_lifecycle(
                 "diagnostics": [diagnostic_to_data(diagnostic)],
                 "inputs": unanswered,
             },
-            (f"{diagnostic.severity.value}: {diagnostic.message}", *explained),
+            (
+                f"{diagnostic.severity.value}: {diagnostic.message}",
+                *explained,
+                "answer them with:",
+                *(f"  {flag}" for flag in flags),
+                "or pass --set-later to store the AART_NOT_SET placeholder",
+            ),
         )
         return _common.ERROR
 
@@ -986,6 +1128,13 @@ def _configured_lifecycle(
         return _common.ERROR
 
     now = datetime.now(timezone.utc)
+    # Read only now, after the review was confirmed, and held only until the provider stores it.
+    credential_secrets = {
+        reference: TransientSecret(os.environ[variable])
+        for reference, variable in secret_variables(
+            prepared.value.draft.inputs.bound, secrets
+        ).items()
+    }
     completed = complete_configured_installation(
         prepared.value,
         expected_review_digest=prepared.value.review_digest,
@@ -996,6 +1145,8 @@ def _configured_lifecycle(
         recorded_at=now.isoformat(),
         today=now.date(),
         offline=request.offline,
+        credential_secrets=credential_secrets,
+        skipped_secrets_as_placeholders=request.set_later,
     )
     if isinstance(completed, Err):
         return _emit_error(request, completed, operation)
@@ -1100,7 +1251,7 @@ def _configured_update(request: Request, selectors: tuple[ArtifactSelector, ...]
     inspected = read_installed_inspections(
         state_root=os.path.join(runtime.value.paths.data_root, "state"),
         harness_root=project_root if scope is Scope.PROJECT else user_home,
-        credential_providers=(MacOsKeychainProvider(),) if sys.platform == "darwin" else (),
+        credential_providers=_credential_providers(),
         scope=scope,
         profiles=tuple(request.profiles),
     )
@@ -1190,7 +1341,7 @@ def _configured_uninstall(request: Request, selectors: tuple[ArtifactSelector, .
         user_home=request.user_home,
     )
     scope = Scope(request.scope)
-    credential_providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    credential_providers = _credential_providers()
     inspected = read_installed_inspections(
         state_root=os.path.join(runtime.value.paths.data_root, "state"),
         harness_root=project_root if scope is Scope.PROJECT else user_home,
@@ -1376,7 +1527,7 @@ def _configured_status(request: Request, selectors: tuple[ArtifactSelector, ...]
         user_home=request.user_home,
     )
     harness_root = project_root if request.scope == "project" else user_home
-    credential_providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    credential_providers = _credential_providers()
     machine = read_consumer_machine(
         state_root=os.path.join(runtime.value.paths.data_root, "state"),
         harness_root=harness_root,
@@ -1440,7 +1591,7 @@ def _configured_setup(request: Request, selectors: tuple[ArtifactSelector, ...])
         user_home=request.user_home,
     )
     scope = Scope(request.scope)
-    providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    providers = _credential_providers()
     inspected = read_installed_inspections(
         state_root=os.path.join(runtime.value.paths.data_root, "state"),
         harness_root=project_root if scope is Scope.PROJECT else user_home,

@@ -1396,13 +1396,13 @@
         },
         {
           "id": "3",
-          "title": "consume install answers inputs on the command line: --input, --secret-env and --set-later (§169.4)",
-          "status": "todo"
+          "title": "consume install answers inputs on the command line: --input, --secret-env and --set-later (§186, INV-287, D-468)",
+          "status": "done"
         },
         {
           "id": "4",
           "title": "Optional inputs are asked, never become AART_NOT_SET, and reach the server only when answered",
-          "status": "todo"
+          "status": "in_progress"
         },
         {
           "id": "5",

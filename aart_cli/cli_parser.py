@@ -448,6 +448,7 @@ def build_parser() -> argparse.ArgumentParser:
         *,
         coordinates: str,
         prune: bool = False,
+        inputs: bool = False,
     ) -> argparse.ArgumentParser:
         """Declare one canonical lifecycle action over configured sources.
 
@@ -491,6 +492,38 @@ def build_parser() -> argparse.ArgumentParser:
                 action="store_true",
                 help="remove installed entries no longer in the selection",
             )
+        if inputs:
+            # §169.4: each binding names its artifact with its Registry alias; nothing is read
+            # from a generic input-id variable, and a credential is never an argument (D-468).
+            lifecycle.add_argument(
+                "--input",
+                action="append",
+                dest="install_inputs",
+                metavar="ALIAS/KIND/NAME:INPUT=VALUE",
+                help=(
+                    "answer one configuration input of one artifact, for every installation of "
+                    "it this operation creates (repeatable)"
+                ),
+            )
+            lifecycle.add_argument(
+                "--secret-env",
+                action="append",
+                dest="install_secret_envs",
+                metavar="ALIAS/KIND/NAME:INPUT=ENVIRONMENT_VARIABLE",
+                help=(
+                    "store one credential of one artifact from the named environment variable; "
+                    "the value is never printed (repeatable)"
+                ),
+            )
+            lifecycle.add_argument(
+                "--set-later",
+                action="store_true",
+                dest="set_later",
+                help=(
+                    "store every required input nobody answered as the AART_NOT_SET placeholder, "
+                    "to be set later in Credentials and variables"
+                ),
+            )
         lifecycle.add_argument(
             "--yes",
             action="store_true",
@@ -511,12 +544,14 @@ def build_parser() -> argparse.ArgumentParser:
         "install",
         "install configured-source artifacts for the selected harness profiles",
         coordinates="artifact or collection coordinate(s) to install",
+        inputs=True,
     )
     p_marketplace_update = _add_lifecycle(
         "update",
         "update installed artifacts against their configured sources",
         coordinates="artifact or collection coordinate(s) to update; omit for all installed",
         prune=True,
+        inputs=True,
     )
     _add_lifecycle(
         "uninstall",

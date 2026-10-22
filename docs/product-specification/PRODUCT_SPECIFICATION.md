@@ -11715,3 +11715,43 @@ reaching the default branch.
 every snapshot holding an approved version, self-contained or pinned reference, promoted from a
 local checkout. The plain audit reports each such version as a warning naming its coordinate and
 recorded location.
+
+# 186. `consume install` answers inputs on the command line
+
+Status: **ACCEPTED 2026-10-22 (D-468)**, on the owner's request (CP-35). This applies §169.4's
+non-interactive channel and §172.3-4 to `consume install` and `consume update`.
+
+An agent installing an MCP server without a terminal could not answer a required input. The command
+prepared with no answers and refused, so such artifacts installed only through the TUI.
+
+- **The flags name the artifact.** `--input ALIAS/KIND/NAME:INPUT=VALUE` answers an ordinary input.
+  `--secret-env ALIAS/KIND/NAME:INPUT=VARIABLE` names the environment variable that holds a
+  credential. Both repeat. A generic input id is never read from the environment.
+- **One answer per artifact, as on 07.** The answer is copied into each installation of that
+  artifact this operation creates (§172.4). Each installation still gets its own configuration
+  file and its own credential item.
+- **A declared default is an answer.** An ordinary input no flag answers takes its declared
+  default, as 07's pre-filled field does.
+- **A credential is never an argument.** The variable must be set and non-empty before the review.
+  Its value is read only after the review is confirmed and goes straight to the credential store.
+  It reaches no plan, receipt, file or output.
+- **`--set-later` installs with placeholders.** Every required input left unanswered gets
+  `AART_NOT_SET`, as 07's and 07b's Set later does (§172.3). Credentials and variables sets it
+  later.
+- **Mistakes are refused before anything is written.** The command refuses, all at once:
+  - a malformed flag;
+  - an artifact the operation does not install;
+  - an input the artifact does not declare;
+  - a credential given to `--input`, or a configuration value given to `--secret-env`;
+  - an input answered twice;
+  - an unset variable;
+  - a credential to store when no credential store is available.
+
+  No refusal shows a value.
+- **The refusal says what to type.** When required inputs stay unanswered, the refusal lists the
+  flag that answers each one and mentions `--set-later`. The JSON form gives each input's `flag`.
+
+**INV-287 — A headless install answers each artifact's inputs by name.** `consume install` with
+`--input`, `--secret-env` or `--set-later` installs an artifact that has required inputs, with no
+terminal. Each installation holds its own copy of each answer. A credential's value reaches only
+the credential store, and every refusal happens before anything is written.

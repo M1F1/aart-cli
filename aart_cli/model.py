@@ -482,6 +482,10 @@ class Request:
     expect: Optional[str] = None
     # `registry audit --require-remote-origins` (INV-286).
     require_remote_origins: bool = False
+    # `consume install`/`update` inputs (§169.4, D-468): raw `ALIAS/KIND/NAME:INPUT=...` flags.
+    install_inputs: tuple[str, ...] = ()
+    install_secret_envs: tuple[str, ...] = ()
+    set_later: bool = False
     authorize_untrusted_source: bool = False
     authorize_custom_entrypoint: bool = False
     approve_setup_effects: bool = False

@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-22, CP-35 step 3 (§186, INV-287, D-468): headless install inputs.** `consume install`
+and `update` take `--input ALIAS/KIND/NAME:INPUT=VALUE`, `--secret-env ALIAS/KIND/NAME:INPUT=VARIABLE`
+and `--set-later`. One answer covers every installation of its artifact, a declared default stands,
+the credential is read after confirmation and reaches only the store, and every mistake is refused
+before anything is written. Evidence: `docs/refactor/slices/CP-35-headless-inputs-and-fast-ci.md`.
+
 **2026-10-22, CP-35 step 2 (§185, INV-286, D-467): Registry CI refuses local origins.** `registry
 audit` warns about every approved version promoted from a local checkout, self-contained or pinned
 reference, and `--require-remote-origins` refuses them. The generated Registry workflow passes it;

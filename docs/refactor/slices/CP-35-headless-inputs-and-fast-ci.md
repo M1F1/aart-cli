@@ -5,7 +5,7 @@ Status: **in progress** on `feat/cp-35-headless-inputs-and-fast-ci`, at the owne
 an MCP server from an upstream fork with no terminal: required inputs could not be answered on the
 command line, skipped optional inputs reached the server as `AART_NOT_SET`, and a `uv.lock`
 project was refused. The owner added CI speed to the same epic. Authority so far: Product
-Specification §169.4, §185, INV-286, D-466, D-467.
+Specification §169.4, §185, §186, INV-286, INV-287, D-466, D-467, D-468.
 
 ## Steps
 
@@ -15,7 +15,7 @@ See `docs/refactor/plan.json`, epic CP-35.
 2. The generated Registry CI refuses versions promoted from a local checkout; the plain audit
    warns (§185, INV-286, D-467). Done.
 3. `consume install` answers inputs on the command line (`--input`, `--secret-env`,
-   `--set-later`; §169.4). Todo.
+   `--set-later`; §186, INV-287, D-468). Done.
 4. Optional inputs are asked, never become `AART_NOT_SET`, and reach the server only when
    answered. Todo.
 5. A uv-locked project installs exactly its lock. Todo.
@@ -104,34 +104,56 @@ default branch, not merely discouraged.
 - Testing pinned references for `git` instead of `local` turned every pinned-reference subtest
   red.
 
-## Step 3 — design (not started)
+## Step 3 — `consume install` answers inputs on the command line (§186, INV-287, D-468)
 
-§169.4 requires every non-interactive binding to name its installation target, never a generic
-input id. §172.4 lets one operation copy an answer into every installation of one artifact (D-413).
-The flags therefore always name the full artifact key `ALIAS/KIND/NAME` (`artifact_answer_key`),
-with no shorthand.
+**Why.** An agent with no terminal could not install an MCP server with a required input: the
+command prepared with no answers and refused.
 
-- `--input ALIAS/KIND/NAME:ID=VALUE`, repeatable. Split on the first `=`, then `rpartition(":")`.
-  An unknown artifact, an input the artifact does not declare, a credential given to `--input`, or
-  a duplicate is refused before anything is prepared. A refusal never echoes the value.
-- `--secret-env ALIAS/KIND/NAME:ID=ENVVAR` reads the credential from that variable into a
-  `TransientSecret` keyed by `str(reference)`. A missing or empty variable is refused by name. Only
-  `SecretInput`s are accepted.
-- `--set-later`: required ordinary inputs left unanswered get the placeholder (`copy_artifact_answers(...,
-  skip_unanswered=True)`, fixed in step 4 to touch required fields only), and secrets are stored as
-  placeholders (`skipped_secrets_as_placeholders=True`).
-- Flow in `commands/marketplace.py` `_configured_lifecycle`:
-  1. Prepare with `sources=()`.
-  2. Resolve the flags against `draft.inputs.fields` (pure, in a new
-     `application/command_line_inputs.py`, since `TransientSecret` is `io` and stays in the
-     command).
-  3. Copy the answers. Add a `SecretProviderReference(credential_address(owner, id,
-     provider=...))` for each secret field named by `--secret-env`, or for each unanswered one
-     under `--set-later`, as `consumer_actions.py` does for the TUI. With no available provider,
-     refuse by name.
-  4. Re-prepare.
-  5. On `--yes`, pass `credential_secrets` and `skipped_secrets_as_placeholders`.
-- The refusal for unanswered inputs prints the exact flag line for each missing binding.
-- The flags are added to `install` and `update`.
-- Linux has no provider yet (`MacOsKeychainProvider` only), so `--secret-env` refuses there. That
-  is a backlog gap, not this step.
+**Change.**
+- New `application/command_line_inputs.py`, pure:
+  - `parse_command_line_input` splits `ALIAS/KIND/NAME:INPUT=VALUE` on the first `=`, then the
+    target's last `:`. A refusal shows the target, never the value.
+  - `resolve_command_line_inputs` checks every flag against `draft.inputs.fields` and refuses, all
+    at once: an artifact the operation does not install, an undeclared input, a credential given
+    to `--input` or a configuration value given to `--secret-env`, and an input answered twice.
+  - `declared_defaults` gives each ordinary input no flag answered its declared default, as 07's
+    pre-filled field does (§172.4).
+  - `secret_references` points each installation's credential at its own provider item
+    (`credential_address` with the whole owner), for credentials named by `--secret-env` and,
+    under `--set-later`, for every unanswered one.
+  - `secret_variables` maps each bound reference to the variable that holds it.
+  - `missing_input_flags` gives the flag that answers each missing binding.
+- `domain/inputs.py` exports `is_input_id`.
+- `cli_parser.py` adds `--input`, `--secret-env` and `--set-later` to `consume install` and
+  `consume update`; `Request` and `cli.py` carry them.
+- `commands/marketplace.py`:
+  - `_credential_providers()` is the one place that builds the provider tuple, so tests replace it
+    with a fake and never touch the Keychain.
+  - `_command_line_sources` runs when flags are given or the first preparation is not ready. It
+    refuses an unset or empty variable by name and a credential when no store is available, then
+    `_configured_lifecycle` prepares again with the sources.
+  - The environment variable is read only after the review is confirmed, into a `TransientSecret`
+    passed as `credential_secrets`. `--set-later` passes `skipped_secrets_as_placeholders`.
+  - The refusal for unanswered inputs lists each flag, in text and as `flag` per input in JSON, and
+    mentions `--set-later`.
+- `docs/using/consumer-lifecycle-v1.md` documents the flags.
+- A Linux credential store is missing, so `--secret-env` refuses there (B-222).
+
+**Tests.**
+- `tests/command_line_inputs_test.py`: the Hypothesis round-trip of the flag shape, refusals that
+  never echo a value, one answer per artifact across harnesses, defaults, one reference per
+  installation, and the flag lines.
+- `tests/command_line_inputs_e2e_test.py` drives `cli.main` against a published Registry with a
+  recording fake store:
+  - the refusal names the token's flag only, because the organisation has a default;
+  - `--input` and `--secret-env` install, write the answer into the installation's configuration
+    file, store the generated token, and leave it in no file;
+  - `--set-later` stores `AART_NOT_SET` and keeps the default;
+  - an empty variable, an unknown artifact, a credential given to `--input` and a missing store are
+    refused with nothing written.
+
+**Targeted mutations.**
+- Dropping `declared_defaults` from `_command_line_sources` turned the refusal and `--set-later`
+  tests red.
+- Checking only that the variable exists, not that it is non-empty, turned the empty-variable
+  subtest red, and only it.
