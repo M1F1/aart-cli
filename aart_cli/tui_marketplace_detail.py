@@ -1,8 +1,11 @@
 """Complete, read-only offer disclosure for Marketplace's More info region."""
 
-from aart_cli.application.consumer_views import ConfigInputView, CredentialInputView
+from aart_cli.application.consumer_views import (
+    ConfigInputView,
+    CredentialInputView,
+    disclosed_upstream,
+)
 from aart_cli.application.credential_guidance import credential_guidance_lines
-from aart_cli.redaction import redact_text
 from aart_cli.tui_layout import CONTENT_MEASURE, field_block, separate, wrap_lines
 from aart_cli.tui_marketplace import MarketplaceArtifactRow, render_artifact_detail
 
@@ -43,7 +46,7 @@ def artifact_disclosure(
             ("Kind", row.identity.kind.capitalize()),
             ("Version", row.version),
             ("Registry", str(row.source_alias)),
-            *((("Upstream", redact_text(row.upstream)),) if row.upstream else ()),
+            *((("Upstream", disclosed_upstream(row.upstream)),) if row.upstream else ()),
             ("Description", row.summary.strip() or "No description was approved for this offer."),
         ),
         indent=2,

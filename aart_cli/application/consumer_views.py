@@ -60,6 +60,7 @@ from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import Collection, OwnershipReason, ResolvedSelection
 from aart_cli.domain.serialization import CanonicalValue, canonical_json_bytes
 from aart_cli.marketplace.model import MarketplaceCatalog
+from aart_cli.redaction import redact_text
 
 from .credential_guidance import (
     CredentialGuidance,
@@ -90,6 +91,7 @@ __all__ = [
     "installed_cells",
     "marketplace_cells",
     "short_upstream",
+    "disclosed_upstream",
     "ALL_ARTIFACTS",
     "ALL_INSTALLATIONS",
     "PLACEHOLDER_WARNING",
@@ -1852,6 +1854,12 @@ def short_upstream(url: str) -> str:
         path = path.split(":", 1)[1]
     parts = [part for part in path.removesuffix(".git").split("/") if part]
     return "/".join(parts[-2:])
+
+
+def disclosed_upstream(url: str) -> str:
+    """The whole upstream URL as More info shows it, with any credentials redacted (§181)."""
+
+    return redact_text(url)
 
 
 def configuration_cell(missing: int, *, installed: bool) -> str:
