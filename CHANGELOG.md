@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.1](https://github.com/M1F1/aart-cli/compare/v0.16.0...v0.16.1) (2026-10-23)
+
+
+### Fixed
+
+* publish-index names a Release's wheel from its metadata, so a labelled fork wheel reaches the index as X.Y.Z+label instead of the X.Y.Z.label name GitHub gives the asset, which pip refuses ([5275381](https://github.com/M1F1/aart-cli/commit/5275381834c1bbd6b3967fa288a2c5e2889e5dac))
+
 ## [0.16.0](https://github.com/M1F1/aart-cli/compare/v0.15.0...v0.16.0) (2026-10-23)
 
 
