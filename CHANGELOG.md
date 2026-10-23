@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.16.0](https://github.com/M1F1/aart-cli/compare/v0.15.0...v0.16.0) (2026-10-23)
+
+
+### Added
+
+* a first consume command connects the build's default Registry, as the terminal already did; consume registry add and --offline do not seed ([1275a6f](https://github.com/M1F1/aart-cli/commit/1275a6fd6d336dab64a3dcc6f385400bc236e55b))
+* a fork may label its wheel's version with AART_CLI_LOCAL_VERSION_LABEL (X.Y.Z+label), so it never shares a filename with the public wheel on PyPI; aart-cli==X.Y.Z still selects it ([5d85234](https://github.com/M1F1/aart-cli/commit/5d852345c60733d38b1cd7a091403bdc34859dd9))
+
+
+### Documentation
+
+* the public release can be published to PyPI with publish-index.yml; Enterprise installs aart-cli from its hosted repository ([5d85234](https://github.com/M1F1/aart-cli/commit/5d852345c60733d38b1cd7a091403bdc34859dd9))
+
 ## [0.15.0](https://github.com/M1F1/aart-cli/compare/v0.14.0...v0.15.0) (2026-10-22)
 
 
