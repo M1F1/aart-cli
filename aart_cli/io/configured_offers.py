@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import dataclasses
 import time
+from collections.abc import Callable, Mapping
 
 from aart_cli.application.marketplace_resolution import version_constraint_allows
 from aart_cli.application.promotion import (
@@ -51,15 +52,18 @@ from aart_cli.runtime_contract import EXECUTABLE_CAPABILITIES
 from aart_cli.sources.model import (
     CurrentSource,
     CurrentSourceRequest,
+    SourceHealth,
     source_instance_id,
     source_store_paths,
 )
 
+from .source_runtime import observe_configured_source
 from .source_store import read_current_source
 
 __all__ = [
     "CONFIGURED_OFFERS_INVALID",
     "ConfiguredMarketplace",
+    "observe_configured_registries",
     "project_configured_registry",
     "read_configured_marketplace",
 ]
@@ -296,11 +300,36 @@ def _semver(raw: str) -> SemVer:
     return parsed.value
 
 
+def observe_configured_registries(
+    effective: EffectiveConfiguration,
+    *,
+    data_root: str,
+    announce: Callable[[str], None],
+) -> dict[SourceAlias, SourceHealth]:
+    """Look at each enabled Registry's origin under the configured `sync.mode`, as the CLI does.
+
+    `auto` publishes a newer approved snapshot and keeps the last known good one when the origin
+    cannot be reached; `manual` only compares, so a newer origin is reported and nothing moves
+    (§82, §194). A Registry is fetched, so each is announced before it is.
+    """
+
+    observed: dict[SourceAlias, SourceHealth] = {}
+    for configured in effective.configuration.sources:
+        if not configured.enabled or not configured.is_registry:
+            continue
+        announce(f"Checking {configured.alias} for newer approved content…")
+        observed[configured.alias] = observe_configured_source(
+            configured, data_root=data_root, mode=effective.configuration.sync.mode
+        )
+    return observed
+
+
 def read_configured_marketplace(
     effective: EffectiveConfiguration,
     *,
     data_root: str,
     observed_at_epoch_seconds: int | None = None,
+    observed: Mapping[SourceAlias, SourceHealth] | None = None,
 ) -> Result[ConfiguredMarketplace]:
     """Aggregate every enabled configured registry into one catalog, without mutating anything.
 
@@ -320,7 +349,9 @@ def read_configured_marketplace(
         source for source in effective.configuration.sources if source.enabled
     ):
         paths = source_store_paths(data_root, source_instance_id(configured))
-        health = source_status(
+        # What the origin was observed to hold when this application started, where it was looked
+        # at; otherwise what the local snapshot says by itself.
+        health = (observed or {}).get(configured.alias) or source_status(
             SourceStatusRequest(
                 CurrentSourceRequest(paths, configured.alias),
                 now,

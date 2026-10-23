@@ -90,7 +90,7 @@ AART / Dashboard
 
 > Marketplace
   Installed
-  Updates
+  Updates  ● 1
   Registries
   User Variables And Credentials
   Activity
@@ -102,6 +102,7 @@ AART / Dashboard
 - AART
   2 installed — 1 ready, 1 update, 0 attention
   1 registries — 0 credentials need attention
+  ● 1 update available — open Updates
 
 - recent activity
   none yet

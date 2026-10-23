@@ -51,7 +51,7 @@ from .consumer_actions import (
     RegistryConnectionSnapshot,
 )
 from .domain.harness import Scope
-from .domain.identifiers import ArtifactCoordinate
+from .domain.identifiers import ArtifactCoordinate, SourceAlias
 from .domain.result import Err as DomainErr
 from .domain.result import Ok as DomainOk
 from .domain.result import Result as DomainResult
@@ -59,6 +59,7 @@ from .io.configured_installation_action import (
     CompletedConfiguredInstallation,
     InstallationHost,
 )
+from .io.configured_offers import observe_configured_registries
 from .io.consumer_machine import read_consumer_machine
 from .io.consumer_settings import read_consumer_settings
 from .io.credentials import MacOsKeychainProvider
@@ -943,12 +944,17 @@ def _canonical_consumer_actions(
     project: str | None,
     user_home: str | None,
     today: date,
+    observe: Callable[[str], None] | None = None,
 ) -> DomainResult[LocalConsumerActions]:
     """Compose the canonical application from one durable read of the local machine.
 
     Everything an action needs is resolved here, once: where this machine keeps its state, what
     the configured sources offer, and which harnesses were actually measured. Composition is where
     an effect belongs, and a draw must never reach back into any of it (D-051).
+
+    With `observe`, each connected Registry's origin is looked at first under `sync.mode`, as every
+    CLI read does, and `observe` is told before each one is fetched (§194). Without it only the
+    local snapshots are read.
     """
 
     from .configuration.paths import (
@@ -986,7 +992,18 @@ def _canonical_consumer_actions(
     if isinstance(loaded, DomainErr):
         return loaded
     target = _canonical_marketplace_target()
-    offers = read_consumer_offers(loaded.value, data_root=paths.data_root, target=target)
+    # What each origin held when this application started. A Registry somebody then syncs, adds or
+    # removes is read from its own snapshot again, so its entry is dropped here when it changes.
+    observed = (
+        {}
+        if observe is None
+        else observe_configured_registries(
+            loaded.value, data_root=paths.data_root, announce=observe
+        )
+    )
+    offers = read_consumer_offers(
+        loaded.value, data_root=paths.data_root, target=target, observed=observed
+    )
     if isinstance(offers, DomainErr):
         return offers
     # Preferences somebody already chose, not the ones this build happens to default to. An
@@ -1001,7 +1018,7 @@ def _canonical_consumer_actions(
     if isinstance(maintainer, DomainErr):
         return maintainer
 
-    def reread() -> DomainResult[RegistryConnectionSnapshot]:
+    def reread(changed: str = "") -> DomainResult[RegistryConnectionSnapshot]:
         """Re-derive everything a changed subscription changes, in one place.
 
         Connecting a registry, connecting an authoring Source and refreshing a registry all move
@@ -1012,8 +1029,10 @@ def _canonical_consumer_actions(
         refreshed = _canonical_consumer_configuration(paths)
         if isinstance(refreshed, DomainErr):
             return refreshed
+        if changed:
+            observed.pop(SourceAlias(changed), None)
         refreshed_offers = read_consumer_offers(
-            refreshed.value, data_root=paths.data_root, target=target
+            refreshed.value, data_root=paths.data_root, target=target, observed=observed
         )
         if isinstance(refreshed_offers, DomainErr):
             return refreshed_offers
@@ -1051,7 +1070,7 @@ def _canonical_consumer_actions(
         )
         if isinstance(added, DomainErr):
             return added
-        return reread()
+        return reread(draft.alias)
 
     def registry_refresh(alias: str) -> DomainResult[RegistryConnectionSnapshot]:
         # The same authority once more: `consume registry sync` and screen 21c refresh a subscription
@@ -1072,7 +1091,7 @@ def _canonical_consumer_actions(
         )
         if isinstance(synchronized, DomainErr):
             return synchronized
-        return reread()
+        return reread(alias)
 
     def registry_removal(
         source: ConfiguredSource,
@@ -1096,7 +1115,7 @@ def _canonical_consumer_actions(
         )
         if isinstance(removed, DomainErr):
             return removed
-        return reread()
+        return reread(source.alias.value)
 
     def source_connection(draft: SourceDraft) -> DomainResult[RegistryConnectionSnapshot]:
         # The same authority again, with the kind the Maintainer form chose rather than a
@@ -1437,7 +1456,7 @@ def run(
     # half opened it first.
     try:
         composed = _canonical_consumer_actions(
-            project=project, user_home=user_home, today=date.today()
+            project=project, user_home=user_home, today=date.today(), observe=print
         )
         workspace = launch_workspace(project, user_home)
     except Exception as error:

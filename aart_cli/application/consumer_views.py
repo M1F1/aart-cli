@@ -1677,6 +1677,8 @@ class InstalledArtifactView:
     #: The concrete root this installation was made into (§169.3): the project directory for a
     #: project-scope installation. Empty where the record names no owner.
     root: str = ""
+    #: The newer approved version a connected Registry offers, where health is `update` (§83).
+    available: str = ""
 
     @property
     def row(self) -> str:
@@ -1804,7 +1806,6 @@ def project_installed_artifact(
     current: CurrentState,
     *,
     ownership: tuple[OwnershipReason, ...] = (),
-    update_available: bool = False,
     credentials: tuple[CredentialRecordView, ...] = (),
     receipt: ArtifactReceipt | None = None,
     harness: str = "",
@@ -1815,25 +1816,41 @@ def project_installed_artifact(
         not isinstance(item, CredentialRecordView) for item in credentials
     ):
         raise ValueError("installed artifact projection received invalid ownership or credentials")
-    health = installation_health(desired, current, update_available=update_available)
+    health = installation_health(desired, current)
     owner = None if receipt is None else receipt.owner
-    actions = ["details", "verify", "configure", "uninstall"]
-    if health.value == "update":
-        actions.insert(2, "update")
-    if health.value in {"attention", "broken"}:
-        actions.insert(2, "repair")
     return InstalledArtifactView(
         str(desired.artifact),
         health.value,
         _ownership_view(ownership),
         _drift_view(desired, current),
-        tuple(actions),
+        _installed_actions(health.value),
         credentials,
         _installed_paths(receipt, current),
         _recorded_scope(receipt) if owner is None else owner.scope.value,
         harness,
         root="" if owner is None else owner.root,
     )
+
+
+def _installed_actions(health: str) -> tuple[str, ...]:
+    actions = ["details", "verify", "configure", "uninstall"]
+    if health == "update":
+        actions.insert(2, "update")
+    if health in {"attention", "broken"}:
+        actions.insert(2, "repair")
+    return tuple(actions)
+
+
+def offer_update(view: InstalledArtifactView, version: str) -> InstalledArtifactView:
+    """`view` with a newer approved `version` on offer, which only a ready installation shows.
+
+    A measured problem outranks an update, as `installation_health` ranks it: the repair comes
+    first, and an update offered over drift would install over a state nobody has looked at.
+    """
+
+    if view.health != "ready":
+        return view
+    return replace(view, health="update", actions=_installed_actions("update"), available=version)
 
 
 def _counted(count: int, noun: str) -> str:
@@ -1926,6 +1943,8 @@ def installed_cells(view: InstalledArtifactView, health: str) -> tuple[str, ...]
 
     project = view.root.rstrip("/").rpartition("/")[2] if view.scope == "project" else ""
     unset = len(view.placeholders)
+    if view.available:
+        health = f"{health} → {view.available}"
     return (health, view.scope, project, configuration_cell(unset, installed=True))
 
 
@@ -3484,8 +3503,13 @@ def project_registries(catalog: MarketplaceCatalog) -> tuple[RegistryView, ...]:
         if source.kind not in {SourceKind.REGISTRY_GIT, SourceKind.REGISTRY_LOCAL}:
             continue
         source_items = tuple(item for item in catalog.items if item.source.alias == source.alias)
+        # An origin ahead of the snapshot, or one that could not be reached, still leaves that
+        # snapshot connected and offering what it approved (§165.11).
         availability = (
-            "connected" if source.health.value in {"healthy", "stale"} else "not-connected"
+            "connected"
+            if source.health.value in {"healthy", "stale", "not-synchronized"}
+            or (source.health.value == "could-not-check" and source.snapshot_digest is not None)
+            else "not-connected"
         )
         rows.append(
             RegistryView(
@@ -3516,6 +3540,8 @@ class DashboardView:
     registry_count: int
     credential_attention_count: int
     recent_activity: tuple[str, ...]
+    #: Connected Registries whose origin is ahead of the snapshot, or whose snapshot is stale.
+    registries_to_sync: int = 0
 
 
 def project_dashboard(

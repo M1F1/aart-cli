@@ -4935,3 +4935,18 @@ repository, so a branch can be installed with pip before it is released. aart-cl
 released tags. A Registry can already run a branch of the fork through `AART_CLI_REF`. Add a dev
 channel only when someone needs to install unreleased aart-cli with pip; it would need its own
 upload URL variable and a version scheme Release Please does not fight.
+
+## B-226 — Two screen-skeleton properties fail on examples Hypothesis kept
+
+Status: **open**, noncritical (found during CP-41; fails on `main` too).
+
+The local Hypothesis database replays two failing examples in `tests/screen_skeleton_test.py`, and
+both fail on `main` without CP-41. CI starts with an empty database, so it does not see them.
+- `test_the_keys_stay_on_the_bottom_rows_whatever_the_terminal_gives`: a frame with only
+  `keys=('0', '0')`, drawn three rows high, ends in `('', '0')`, so one of two identical key rows is
+  lost.
+- `test_every_item_is_marked_and_nothing_said_is_lost`: the block `('0', ' 0')` keeps the line
+  `' 0'` unmarked.
+
+Real key rows and items are never one digit or identical, so no screen draws this today. Decide
+whether the laws should hold for these inputs, or whether the strategies should exclude them.

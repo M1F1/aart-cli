@@ -480,7 +480,6 @@ def run(request: Request) -> int:
             item.desired,
             item.current,
             ownership=item.record.ownership,
-            update_available=item.update_available,
             receipt=item.record.receipt,
             harness=item.harness,
         )

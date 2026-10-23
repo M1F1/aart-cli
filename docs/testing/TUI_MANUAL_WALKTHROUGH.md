@@ -550,7 +550,22 @@ Expected: Dashboard, lists, help and footer have a readable hierarchy with visib
 - [ ] Break an installed file by hand, then **Doctor** → `r` (**Repair issues**). Minimal repair only.
       The repairable issue is a row with the cursor on it, and healthy artifacts and counts are
       listed below the rule, so it is clear which issue `r` acts on.
-- [ ] Publish a `1.0.1` from the maintainer side and check **Updates** → `i`.
+- [ ] Quit the TUI. From another terminal, publish the next version and a new Collection straight
+      to the lab Registry's remote, as a maintainer's merged promotion would:
+
+      ```bash
+      make manual-test-publish-version
+      make manual-test-publish-collection
+      ```
+
+      Start the consumer TUI again. Before the Dashboard it prints one "Checking lab for newer
+      approved content…" line (CP-41, §194). The Dashboard says `● 1 update available — open
+      Updates`, and the menu marks **Updates** with `● 1`. **Updates** lists the installation as
+      `ready → 1.0.1`; Space ticks it and `i` reviews the update. The new Collection is on
+      **Collections** without pressing `s`.
+- [ ] With `sync.mode` `manual`, publish another version: nothing is checked at launch. Once the
+      snapshot is older than 15 minutes, the **Registries** row says "synced … ago — press s to
+      check for newer content" and the menu marks **Registries** with `● 1 to sync`.
 - [ ] **Installed** → artifact → `u` (**Uninstall**).
 - [ ] **Registries** → `d` (**Disconnect**) — reviewed and bounded (`QA-050`).
 
