@@ -4,6 +4,14 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-23, CP-42 steps 1–3 (§195, INV-296, D-479): one installation is one row.** One MCP
+installed in opencode for the user and in two projects drew three identical rows `…#opencode`. That
+crashed Installed and Doctor, and merged User Variables And Credentials into one entry. Doctor also
+measured each project installation against the session's directory. The key now carries scope and
+root, and every entry names its installation. Each installation is measured under its own root, and
+changing another project's installation is refused. Evidence:
+`docs/refactor/slices/CP-42-installation-identity.md`.
+
 **2026-10-23, CP-41 steps 1–5 (§194, INV-295, D-478): the TUI says what is new.** Updates was
 always empty: nothing in production set `update_available`. The TUI also read only local
 snapshots, so a newly approved Collection appeared only after `s`. Now the application checks each

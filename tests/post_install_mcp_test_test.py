@@ -273,8 +273,8 @@ class PostInstallMcpTestScreenTest(unittest.TestCase):
             )
         )
 
-        self.assertIn('a#opencode: read_identity {"tenant": {"configuration": "tenant"}}', offer)
-        self.assertIn("b#opencode: NOT CONFIGURED", offer)
+        self.assertIn('a · opencode: read_identity {"tenant": {"configuration": "tenant"}}', offer)
+        self.assertIn("b · opencode: NOT CONFIGURED", offer)
         self.assertIn("configured service", offer)
         self.assertNotIn("PASS", offer)
 
@@ -296,7 +296,7 @@ class PostInstallMcpTestScreenTest(unittest.TestCase):
             )
         )
 
-        self.assertIn("✗ a#opencode", drawn)
+        self.assertIn("✗ a · opencode", drawn)
         self.assertIn("FAIL", drawn)
         self.assertIn("installation is unchanged", drawn)
 

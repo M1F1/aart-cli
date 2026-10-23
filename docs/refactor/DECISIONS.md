@@ -11709,3 +11709,45 @@ it reaches the Registry's default branch, while adoption from any branch stays p
 - **The lab can publish.** `scripts/manual_test.py publish version|collection` (and
   `make manual-test-publish-version|collection`) act as author and maintainer against the lab's
   remotes, so the manual walkthrough and an end-to-end test exercise the owner's scenario.
+
+## D-479 — The installation key carries scope and root; another project's installation is read there and changed only there (CP-42)
+
+Supersedes D-361's key shape.
+
+- **What broke.**
+  - The owner installed one MCP in opencode for the user and in two projects. Entering Installed
+    or Doctor ended in `ValueError` from `ConsumerUiEvent` (`tui-stage-internal`).
+  - User Variables And Credentials drew the three installations as one entry holding all three
+    configuration files and credentials.
+  - The Enterprise agent's diagnosis matched: three rows `…#opencode`.
+  - Doctor also said `harness:opencode: missing` for every project installation, and Repair changed
+    nothing.
+- **Cause.**
+  - D-361 composed the key as `coordinate#harness[+profile]`. Its property test pinned that an
+    owner differing only in scope or root is "deliberately not a second row", although §169.3 makes
+    both part of installation identity.
+  - `read_installed_inspections` resolved project registrations against `project_root`, the
+    directory the session was opened in.
+- **The key.**
+  - `compose_installation_key(coordinate, label, scope, root)` gives
+    `coordinate#label#scope#root`. `installation_key` and `InstalledArtifactView.row` both use it.
+  - The root comes last and nothing before it may hold `#`, so a key always splits back into its
+    parts (property-tested).
+  - Keys are never persisted. Credential addresses already separate scope and root and are
+    unchanged.
+- **Read by people as `artifact · harness · user|project <dir>`.**
+  - `describe_installation` turns a key into that text. The TUI uses it wherever it names an
+    installation, and so does the `doctor` text output. JSON keeps the key.
+  - The project is named by its directory's last segment, as the Installed list's Project column
+    does. Verbose already shows full paths.
+- **Measured under its own root.** Each owned installation is observed with
+  `ScopedHarnessRegistry({owner.scope: owner.root})`. Records without an owner keep the session's
+  roots.
+- **Changed only from its own root.**
+  - Repair, uninstall and configuration build their harness registry from the host's roots.
+    Update re-installs through the host.
+  - Acting from another project would write that project's entries here. So `_inspections`, which
+    all four go through, refuses an installation whose owner root is not
+    `host.root_for(owner.scope)`. The code is `consumer-action-elsewhere`, and the message names the
+    installation and the directory to open.
+  - This is the smallest safe choice. Acting in place under the owner's root is B-227.

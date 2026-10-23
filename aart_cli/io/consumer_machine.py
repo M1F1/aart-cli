@@ -406,10 +406,17 @@ def read_installed_inspections(
             (reference.input.value, COMPONENT_STATE[by_reference[reference].state])
             for reference in receipt.credentials
         )
+        # An installation is measured where it was made (§169.3, D-479). Resolved against this
+        # session's root instead, another project's opencode entry reads as missing here, and a
+        # repair offered from that reading would write it into this project.
+        owner = receipt.owner
+        measured_by = (
+            registry if owner is None else ScopedHarnessRegistry({owner.scope: owner.root})
+        )
         current = current_state_from_observation(
             desired,
             receipt,
-            observe_installation(receipt, registry=registry),
+            observe_installation(receipt, registry=measured_by),
             credentials=credential_states,
         )
         inspections.append(InstalledInspection(record, desired, current))

@@ -43,6 +43,7 @@ from aart_cli.consumer.application import CONSUMER_REVIEW_MISMATCH
 from aart_cli.consumer.coordinates import CONSUMER_INVALID, parse_artifact_selector
 from aart_cli.domain.diagnostics import Diagnostic, Severity, diagnostic_to_data
 from aart_cli.domain.harness import Scope
+from aart_cli.domain.installation_owner import describe_installation
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.result import Err
 from aart_cli.io.configured_installation_action import InstallationHost
@@ -234,7 +235,7 @@ def _credential_lines(records: tuple[CredentialRecordView, ...]) -> tuple[str, .
     lines = ["Credentials:"]
     for item in records:
         needed = (
-            "needed by " + ", ".join(item.dependants)
+            "needed by " + ", ".join(map(describe_installation, item.dependants))
             if item.dependants
             else "no installed artifact needs it"
         )

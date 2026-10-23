@@ -17,6 +17,7 @@ from unittest import mock
 
 from aart_cli.application.consumer_ui import ConsumerActionKind, ConsumerUiState
 from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
+from aart_cli.domain.installation_owner import compose_installation_key, describe_installation
 from aart_cli.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import _published_registries
@@ -45,6 +46,16 @@ def _installed():
             yield env
 
 
+def _key(env, coordinate: str, harness: str) -> str:
+    """One installation's key: its project is part of it (§169.3, D-479)."""
+
+    return compose_installation_key(coordinate, harness, "project", str(env.project))
+
+
+def _named(env, coordinate: str, harness: str) -> str:
+    return describe_installation(_key(env, coordinate, harness))
+
+
 class InstalledMcpTestTest(unittest.TestCase):
     def _walk(self, env, *codes: int):
         handler = _actions(env)
@@ -69,20 +80,20 @@ class InstalledMcpTestTest(unittest.TestCase):
     def test_the_row_under_the_cursor_is_reviewed_before_anything_runs(self) -> None:
         with _installed() as env:
             offered, terminal, watched = self._walk(
-                env, *self._to(env, f"{MCP}#opencode"), ord("t")
+                env, *self._to(env, _key(env, MCP, "opencode")), ord("t")
             )
 
         self.assertIs(offered.session.screen, ConsumerScreen.MCP_TEST, terminal.last)
         self.assertIs(offered.action, ConsumerActionKind.MCP_TEST)
-        self.assertIn(f"{MCP}#opencode: read_identity {{}}", terminal.last)
-        self.assertNotIn(f"{MCP}#claude", terminal.last)
+        self.assertIn(f"{_named(env, MCP, 'opencode')}: read_identity {{}}", terminal.last)
+        self.assertNotIn(f"{_named(env, MCP, 'claude')}", terminal.last)
         self.assertIn("configured service", terminal.last)
         self.assertIsNone(watched.before_run)
 
     def test_two_ticked_installations_are_tested_together_and_change_nothing(self) -> None:
         with _installed() as env:
-            down = self._to(env, f"{MCP}#claude")
-            other = len(self._to(env, f"{MCP}#opencode")) - len(down)
+            down = self._to(env, _key(env, MCP, "claude"))
+            other = len(self._to(env, _key(env, MCP, "opencode"))) - len(down)
             codes = (*down, SPACE, *((DOWN,) * other if other > 0 else ()), SPACE)
             assert other > 0, "the opencode row is drawn after the claude one"
             tested, terminal, watched = self._walk(env, *codes, ord("t"), ENTER)
@@ -97,45 +108,48 @@ class InstalledMcpTestTest(unittest.TestCase):
     def test_the_answer_returns_to_installed(self) -> None:
         with _installed() as env:
             back, terminal, _ = self._walk(
-                env, *self._to(env, f"{MCP}#opencode"), ord("t"), ENTER, ENTER
+                env, *self._to(env, _key(env, MCP, "opencode")), ord("t"), ENTER, ENTER
             )
 
         self.assertIs(back.session.screen, ConsumerScreen.INSTALLED, terminal.last)
 
     def test_a_ticked_skill_is_refused_by_name_and_nothing_runs(self) -> None:
         with _installed() as env:
-            mcp = self._to(env, f"{MCP}#opencode")
-            skill = self._to(env, f"{SKILL}#claude")
+            mcp = self._to(env, _key(env, MCP, "opencode"))
+            skill = self._to(env, _key(env, SKILL, "claude"))
             first, second = sorted((mcp, skill), key=len)
             codes = (*first, SPACE, *((DOWN,) * (len(second) - len(first))), SPACE, ord("t"))
             refused, terminal, watched = self._walk(env, *codes)
 
         self.assertIs(refused.session.screen, ConsumerScreen.INSTALLED, terminal.last)
-        self.assertTrue(terminal.screen_containing(f"{SKILL}#claude is not an MCP"), terminal.last)
+        self.assertTrue(
+            terminal.screen_containing(f"{_named(env, SKILL, 'claude')} is not an MCP"),
+            terminal.last,
+        )
         self.assertIsNone(watched.before_run)
 
     def test_installed_artifact_details_tests_its_one_installation(self) -> None:
         with _installed() as env:
             offered, terminal, _ = self._walk(
-                env, *self._to(env, f"{MCP}#claude"), ENTER, ord("t"), ENTER
+                env, *self._to(env, _key(env, MCP, "claude")), ENTER, ord("t"), ENTER
             )
 
         self.assertIs(offered.session.screen, ConsumerScreen.MCP_TEST, terminal.last)
-        self.assertIn(f"✓ {MCP}#claude", terminal.last)
-        self.assertNotIn(f"{MCP}#opencode", terminal.last)
+        self.assertIn(f"✓ {_named(env, MCP, 'claude')}", terminal.last)
+        self.assertNotIn(f"{_named(env, MCP, 'opencode')}", terminal.last)
 
     def test_a_tick_left_on_the_list_does_not_reach_an_open_details_screen(self) -> None:
         with _installed() as env:
-            ticked = self._to(env, f"{MCP}#opencode")
-            opened = self._to(env, f"{MCP}#claude")
+            ticked = self._to(env, _key(env, MCP, "opencode"))
+            opened = self._to(env, _key(env, MCP, "claude"))
             moves = len(ticked) - len(opened)
             assert moves > 0, "the claude row is drawn before the opencode one"
             offered, terminal, _ = self._walk(env, *ticked, SPACE, *(UP,) * moves, ENTER, ord("t"))
 
         self.assertIs(offered.session.screen, ConsumerScreen.MCP_TEST, terminal.last)
         review = terminal.screen_containing("read_identity")
-        self.assertIn(f"{MCP}#claude: read_identity", review)
-        self.assertNotIn(f"{MCP}#opencode", review)
+        self.assertIn(f"{_named(env, MCP, 'claude')}: read_identity", review)
+        self.assertNotIn(f"{_named(env, MCP, 'opencode')}", review)
 
 
 if __name__ == "__main__":  # pragma: no cover - unittest entry point

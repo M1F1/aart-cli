@@ -4950,3 +4950,13 @@ both fail on `main` without CP-41. CI starts with an empty database, so it does 
 
 Real key rows and items are never one digit or identical, so no screen draws this today. Decide
 whether the laws should hold for these inputs, or whether the strategies should exclude them.
+
+## B-227 — Act on another project's installation in place
+
+Status: **open**, noncritical (CP-42, D-479).
+
+The TUI lists every installation on the machine. Repair, update, uninstall and configuration
+changes on another project's installation are refused with the directory to open aart-cli in.
+Doing them in place would need each action to build its harness registry, lock and update target
+from the owner's root rather than from the session's host. Add it only when switching directories
+proves to be a real burden.

@@ -156,6 +156,7 @@ from aart_cli.domain.inputs import (
 )
 from aart_cli.domain.installation_owner import (
     credential_address,
+    describe_installation,
     installation_key,
 )
 from aart_cli.domain.policies import EffectivePolicy
@@ -258,6 +259,10 @@ CONSUMER_ACTION_NOT_OFFERED = DiagnosticCode("consumer-action-not-offered")
 
 #: What a command names has no canonical record on this machine, so nothing here can act on it.
 CONSUMER_ACTION_NOT_INSTALLED = DiagnosticCode("consumer-action-not-installed")
+
+#: What a command names was installed into another project. Its harness files are resolved against
+#: that project's root, so acting on it from here would write into this one (D-479).
+CONSUMER_ACTION_ELSEWHERE = DiagnosticCode("consumer-action-elsewhere")
 
 
 def _installation_of(record: InstalledRecord) -> str:
@@ -2767,6 +2772,36 @@ class LocalConsumerActions:
                     ),
                 )
             )
+        # Every action below resolves harness paths against this session's root for the scope, so
+        # an installation another project owns is refused rather than repaired, reconfigured,
+        # updated or removed in this one (§169.3, D-479).
+        elsewhere = sorted(
+            item
+            for item in coordinates
+            if (owner := by_installation[item].record.receipt.owner) is not None
+            and owner.root != host.root_for(owner.scope)
+        )
+        if elsewhere:
+            roots = sorted(
+                {
+                    owner.root
+                    for item in elsewhere
+                    if (owner := by_installation[item].record.receipt.owner) is not None
+                }
+            )
+            return Err(
+                (
+                    Diagnostic(
+                        CONSUMER_ACTION_ELSEWHERE,
+                        Severity.ERROR,
+                        "installed in another project: "
+                        + ", ".join(describe_installation(item) for item in elsewhere)
+                        + "; open aart-cli in "
+                        + " or ".join(roots)
+                        + " to change it",
+                    ),
+                )
+            )
         return Ok(tuple(by_installation[item] for item in coordinates))
 
     # -- execution ------------------------------------------------------------ #
@@ -3520,7 +3555,10 @@ class LocalConsumerActions:
             return self._declined(
                 command,
                 _lines(
-                    *(f"{key} is not an MCP; only MCP installations are tested" for key in others),
+                    *(
+                        f"{describe_installation(key)} is not an MCP; only MCP installations are tested"
+                        for key in others
+                    ),
                     "untick it and test the MCPs alone",
                 ),
             )

@@ -39,6 +39,7 @@ from aart_cli.domain.inputs import (
     binding_kind,
     validate_config_value,
 )
+from aart_cli.domain.installation_owner import compose_installation_key
 from aart_cli.domain.plans import InstallPlan, install_plan_to_data
 from aart_cli.domain.receipts import (
     RECEIPT_INVALID,
@@ -1688,10 +1689,14 @@ class InstalledArtifactView:
         and is what an action is aimed at. They were the same string until each harness became its
         own installation, and keeping them the same now would make two of three rows unreachable
         -- rows have to be distinct, and an action addressed to the coordinate would reach
-        whichever installation a dictionary happened to keep.
+        whichever installation a dictionary happened to keep. Harness alone did not separate them
+        either: one artifact in one harness for the user and for two projects is three
+        installations, and their scope and root are part of the key (D-479).
         """
 
-        return f"{self.coordinate}#{self.harness}" if self.harness else self.coordinate
+        if not self.harness:
+            return self.coordinate
+        return compose_installation_key(self.coordinate, self.harness, self.scope, self.root)
 
     @property
     def user_facing_paths(self) -> tuple[InstalledPathView, ...]:

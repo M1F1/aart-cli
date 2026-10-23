@@ -78,7 +78,7 @@ class MarketplaceColumnsTest(unittest.TestCase):
         self.assertNotIn("opencode", held + other)
         (row,) = installations
         self.assertIn(COORDINATE, row)
-        self.assertIn("#claude", row)
+        self.assertIn(" · claude", row)
         self.assertIn("project", row)
         self.assertIn(project, row)
         # Header alignment and lossless wrapping are held across generated widths in

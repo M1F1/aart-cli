@@ -11968,3 +11968,31 @@ never listed anything (CP-41). This refines §82, §83, §161.10 and §165.11.
 ready artifact is drawn as an update on Installed, Updates and the Dashboard exactly when a connected
 Registry's current snapshot offers the same artifact at a strictly higher SemVer version, and an
 opened TUI has observed each enabled Registry under `sync.mode` before drawing.
+
+# 195. One installation is one row, measured and changed where it was made
+
+Status: **ACCEPTED 2026-10-23 (D-479)**, on two owner reports: the TUI failed entering Installed and
+Doctor when one MCP was installed in one harness for the user and in two projects, and User
+Variables And Credentials drew those installations as one entry nobody could tell apart (CP-42).
+This refines §169.3, §172 and §173.
+
+- **The key is the whole identity.** A row, a focus and a lookup address an installation by its
+  coordinate, harness and profile, scope, and concrete root (§169.3). Two installations that differ
+  only in scope or root are two rows.
+- **Every entry says which installation it is.** Wherever an installation is named to a person
+  (User Variables And Credentials and its detail, a credential's dependants, Doctor's Collection
+  members, the MCP test), it reads `artifact · harness · user` or
+  `artifact · harness · project <directory>`. User Variables And Credentials has one entry per
+  installation, holding only that installation's configuration file and credentials.
+- **Measured where it was made.** An installation's harness entries are resolved against its own
+  root, not against the directory aart-cli was opened in. Another project's installation therefore
+  reads as it does in its own project.
+- **Changed only where it was made.** Repair, update, uninstall and configuration changes resolve
+  harness paths against this session's root for the scope. On an installation another project owns
+  they refuse, name it, and say which directory to open aart-cli in. Nothing is written.
+
+**INV-296 — One installation is one key, and it is measured and changed only under its own root.**
+Two installation keys are equal exactly when coordinate, harness label, scope and root are. Every
+listed installation is drawn as its own row and named with its harness and scope (and project). Its
+harness state is observed under its recorded root. No lifecycle or configuration action prepared in
+one project writes for an installation recorded under another.
