@@ -1493,6 +1493,23 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-40",
+      "title": "A Release's wheel is published under the name its metadata gives",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "publish-index names the downloaded wheel from its METADATA, not the asset (§193, INV-294, D-477)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Focused verification and the PR",
+          "status": "done"
+        }
+      ]
     }
   ]
 }

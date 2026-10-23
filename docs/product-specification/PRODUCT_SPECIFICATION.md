@@ -11928,9 +11928,13 @@ proxies PyPI then lists two files under one filename. `publish-index` refuses th
   in the variable is the label in the filename.
 - **Checked and recorded.** The release checks the built wheel's filename and metadata against the
   tag plus the label, and the release receipt records the label.
+- **Published under its own name.** GitHub stores `+` in a Release asset name as `.`, so the Release
+  shows `X.Y.Z.corp`. `publish-index` names the wheel from its own metadata, so the index lists
+  `X.Y.Z+corp`, the only name pip installs (D-477).
 
 **INV-294 — A labelled fork wheel is distinct from the public one and still satisfies the pin.**
 With a label set, the released wheel's filename and metadata version are the tag's version plus
 that label, `aart-cli --version` reports the tag's version, and `==` on the tag's version selects
-it over the unlabelled one. With no label set, the build is unchanged byte for byte.
+it over the unlabelled one. The index receives it under that name, whatever the Release calls the
+asset. With no label set, the build is unchanged byte for byte.
 

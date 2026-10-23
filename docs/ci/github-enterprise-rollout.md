@@ -251,7 +251,9 @@ index everything else uses, with credentials the instance already manages.
    and pip picks `X.Y.Z+corp`, because PEP 440 puts a labelled build above the same unlabelled
    version. Only the package version carries the label: `aart-cli --version` still says `X.Y.Z`,
    which is what a registry's `.aart-cli-version` is compared with. Lower-case letters and digits,
-   in segments joined by dots; anything else fails the release.
+   in segments joined by dots; anything else fails the release. GitHub cannot keep `+` in an asset
+   name, so the Release shows `aart_cli-X.Y.Z.corp-py3-none-any.whl`; the index receives it as
+   `X.Y.Z+corp`, the name pip installs.
 
 2. Create the Release at the tag you already pushed. A tag push alone builds the wheel but neither
    creates a Release nor attaches it; `--verify-tag` refuses to invent a new tag.

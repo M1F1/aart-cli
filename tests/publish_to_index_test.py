@@ -32,14 +32,24 @@ Summary: A summary only the wheel knows.
 """
 
 
-def _wheel(directory: Path, name: str = "aart_cli-9.9.9-py3-none-any.whl") -> Path:
+def _wheel(
+    directory: Path, name: str = "aart_cli-9.9.9-py3-none-any.whl", version: str = "9.9.9"
+) -> Path:
     """A wheel is a zip with a `.dist-info/`, and that is all this needs to be one."""
 
     path = directory / name
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("aart_cli/__init__.py", "# nothing\n")
-        archive.writestr("aart_cli-9.9.9.dist-info/METADATA", _METADATA)
+        archive.writestr(
+            f"aart_cli-{version}.dist-info/METADATA",
+            _METADATA.replace("Version: 9.9.9", f"Version: {version}"),
+        )
     return path
+
+
+def _wheel_bytes(version: str = "9.9.9") -> bytes:
+    with TemporaryDirectory() as held:
+        return _wheel(Path(held), version=version).read_bytes()
 
 
 def _parts(payload: bytes, boundary: str) -> dict[str, tuple[str | None, bytes]]:
@@ -321,10 +331,11 @@ class TheWheelComesFromTheReleaseTest(unittest.TestCase):
     }
 
     def test_the_one_wheel_attached_to_the_release_is_downloaded_byte_for_byte(self) -> None:
+        attached = _wheel_bytes()
         index = _Index(
             {
                 _RELEASE: _release("aart_cli-9.9.9-py3-none-any.whl", "notes.txt"),
-                _ASSET: b"the attached bytes",
+                _ASSET: attached,
             }
         )
         with TemporaryDirectory() as held, mock.patch.dict("os.environ", self.ENVIRONMENT):
@@ -333,13 +344,36 @@ class TheWheelComesFromTheReleaseTest(unittest.TestCase):
             content = path.read_bytes()
 
         self.assertEqual(path.name, "aart_cli-9.9.9-py3-none-any.whl")
-        self.assertEqual(content, b"the attached bytes")
+        self.assertEqual(content, attached)
         download = index.seen[-1]
         self.assertEqual(download.get_header("Accept"), "application/octet-stream")
         # The asset API redirects to storage that refuses a second credential, so the token must
         # not follow the redirect.
         self.assertNotIn("Authorization", download.headers)
         self.assertIn("Authorization", download.unredirected_hdrs)
+
+    def test_the_file_is_named_by_its_metadata_not_by_the_asset(self) -> None:
+        # GitHub stores `+` in an asset name as `.`, and pip refuses `9.9.9.corp` as a wheel
+        # version, so a labelled wheel uploaded under its asset name could never be installed
+        # (D-477).
+        attached = _wheel_bytes("9.9.9+corp")
+        index = _Index(
+            {_RELEASE: _release("aart_cli-9.9.9.corp-py3-none-any.whl"), _ASSET: attached}
+        )
+        with TemporaryDirectory() as held, mock.patch.dict("os.environ", self.ENVIRONMENT):
+            with mock.patch.object(publish_to_index.github_api.urllib.request, "urlopen", index):
+                path = publish_to_index.released_wheel("v9.9.9", Path(held))
+            content = path.read_bytes()
+
+        self.assertEqual(path.name, "aart_cli-9.9.9+corp-py3-none-any.whl")
+        self.assertEqual(content, attached)
+
+    def test_the_upload_and_the_index_check_use_the_metadata_name(self) -> None:
+        with TemporaryDirectory() as held:
+            path = _wheel(Path(held), "aart_cli-9.9.9.corp-py3-none-any.whl", version="9.9.9+corp")
+            self.assertEqual(
+                publish_to_index.wheel_filename(path), "aart_cli-9.9.9+corp-py3-none-any.whl"
+            )
 
     def test_a_release_without_exactly_one_wheel_is_refused_by_name(self) -> None:
         for names in ((), ("aart_cli-9.9.9-py3-none-any.whl", "aart_cli-9.9.8-py3-none-any.whl")):

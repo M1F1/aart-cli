@@ -11660,3 +11660,21 @@ it reaches the Registry's default branch, while adoption from any branch stays p
   `__token__` secret. Publishing to PyPI starts with the first release a fork has labelled, so no
   unlabelled fork version ever meets a PyPI file of the same name.
 
+## D-477 — A Release's wheel is published under the name its metadata gives (CP-40)
+
+- **What broke.** The owner's Enterprise fork released 0.16.0 with a label. The build and the release
+  check were right: `aart_cli-0.16.0+<label>-py3-none-any.whl`. GitHub stores `+` in an asset name
+  as `.`, and `publish-index` uploaded the download under the asset's name. pip refuses
+  `0.16.0.<label>` as a wheel version, so `aart-cli==0.16.0` found nothing on the index. CP-39 was
+  checked up to the Release, not through it.
+- **The name comes from the file.** `wheel_filename` reads the distribution and version from the
+  wheel's METADATA and keeps the asset's last three fields, the tags, which hold no `+`. Both the
+  check against the index and the upload use that name.
+- **The Release keeps GitHub's name.** No asset name can carry `+`, so attaching under another name
+  would gain nothing. Only the index has to be installable from. A person downloading straight from
+  the Release gets the right bytes under a name pip refuses; Registries fetch through the index or
+  by `AART_CLI_WHEEL_URL`, which unzips and ignores the name.
+- **Repair needs no new tag.** `publish-index` runs from the default branch, so a fork that takes
+  this fix into `main` runs it again for `v0.16.0`. The index check looks for the right name, does
+  not find it, and uploads. The wrongly named file pip ignores stays until a person removes it.
+
