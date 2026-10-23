@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.17.0](https://github.com/M1F1/aart-cli/compare/v0.16.1...v0.17.0) (2026-10-23)
+
+
+### Added
+
+* the TUI shows newer approved versions and registries to sync ([6dd8b53](https://github.com/M1F1/aart-cli/commit/6dd8b53d4712b25c0bed39f7207728e2c4f7ac74))
+
+
+### Fixed
+
+* an update replaces only the installation chosen, at its own scope ([0c49dcc](https://github.com/M1F1/aart-cli/commit/0c49dccd4f8c8a765f4ab74564574d736e17290b))
+* one installation is one row, measured and changed where it was made ([0c49dcc](https://github.com/M1F1/aart-cli/commit/0c49dccd4f8c8a765f4ab74564574d736e17290b))
+
 ## [0.16.1](https://github.com/M1F1/aart-cli/compare/v0.16.0...v0.16.1) (2026-10-23)
 
 
