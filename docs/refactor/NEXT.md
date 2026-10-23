@@ -1,18 +1,19 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-23, CP-41)
+## Where the work is (2026-10-23, CP-41 and CP-42)
 
 0.16.1 (CP-40) is released. **CP-41** makes the TUI say what is new (§194, INV-295, D-478). On
 launch it checks each Registry under `sync.mode`. Updates lists the installations a connected
 Registry offers newer versions of, and a Registry row says when its snapshot is not current. The
 Dashboard and the menu mark both. Evidence: `docs/refactor/slices/CP-41-tui-updates-and-freshness.md`.
 
-**Next: CP-42.** The owner's TUI crashed entering Installed (`ValueError` in `ConsumerUiEvent`): the
-same artifact installed for the same harness at project and at user scope gives two identical rows
-`coordinate#harness`. `installation_key` and the view `row` properties leave out the scope, which
-§169.3 makes part of installation identity. Add the scope to the row and to the installation key
-everywhere, but not to `owner.label`, which persisted credential addresses use. Add a regression
-test with both scopes installed. B-226 is noncritical.
+**CP-42** (stacked on CP-41) fixes the owner's Installed/Doctor crash and the merged User Variables
+And Credentials entries. The installation key now carries scope and root, and each entry names its
+installation. Another project's installation is measured under its own root, and changing it from
+here is refused (§195, INV-296, D-479): `docs/refactor/slices/CP-42-installation-identity.md`.
+Walking the manual lab then found three more defects, now fixed. An update installed into every
+harness instead of the one it replaced. User rows could not be changed from a project. A user
+MCP's removal was planned at project scope. B-226–B-231 are noncritical.
 
 ## Where the work was (2026-10-23, CP-40)
 

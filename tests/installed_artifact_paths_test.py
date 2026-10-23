@@ -49,10 +49,10 @@ from aart_cli.tui_consumer import render_installed_artifact
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import (
     _INSTALL,
-    INSTALLED,
     _actions,
     _at,
     _drive,
+    _installation_key,
 )
 from tests.credential_fixtures import access_token
 
@@ -279,7 +279,7 @@ class ThePathsSurviveTheSessionThatWroteThemTest(unittest.TestCase):
 
             _, terminal, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=_installation_key(env)),
                 actions=_actions(env),
             )
             drawn = terminal.screen_containing("Installation")
@@ -305,7 +305,7 @@ class ThePathsSurviveTheSessionThatWroteThemTest(unittest.TestCase):
 
             _, terminal, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=_installation_key(env)),
                 actions=_actions(env),
             )
             drawn = terminal.screen_containing("Installation") or ""

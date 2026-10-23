@@ -43,7 +43,9 @@ __all__ = [
     "MAX_CREDENTIAL_SERVICE_LENGTH",
     "MAX_INSTALLED_NAME_LENGTH",
     "InstallationOwner",
+    "compose_installation_key",
     "credential_address",
+    "describe_installation",
     "installation_key",
     "installation_owner",
     "installation_owner_from_data",
@@ -180,25 +182,50 @@ def installation_owner(
     return InstallationOwner(coordinate.source, coordinate.artifact, scope, root, harness, profile)
 
 
+def compose_installation_key(coordinate: object, label: str, scope: str, root: str) -> str:
+    """The one spelling of an installation key, from the parts a view or a record carries.
+
+    `#` separates the parts. No alias, kind, name, version, harness label or scope may contain one,
+    and the root comes last, so a key splits back into the parts it was made of whatever the root
+    holds, and a key can never be read as a coordinate.
+    """
+
+    return f"{coordinate}#{label}#{scope}#{root}"
+
+
 def installation_key(coordinate: object, owner: InstallationOwner | None) -> str:
     """The key that addresses one installation rather than one artifact (§169.3).
 
     The coordinate stopped identifying one thing on this machine when each harness became its own
-    installation: the same artifact in claude and in tabnine is two trees, two configuration files
-    and two records. Everything that selects something to act on -- a row, a focus, a lookup --
-    has to use this, because an action addressed to the coordinate alone would reach whichever of
-    them a dictionary happened to keep.
-
-    `#` separates the two halves, and both are composed of slugs, so the key stays greppable and
-    cannot collide with a coordinate: no alias, kind, name or version may contain one. A record
-    that names no owner falls back to the coordinate, which is what it is.
+    installation, and a harness does not either: one artifact in opencode for the user and in two
+    projects is three trees, three configuration files and three records. Everything that selects
+    something to act on -- a row, a focus, a lookup -- uses this, so the key carries every part of
+    the installation identity the coordinate does not: harness and profile, scope and root (D-479).
+    A record that names no owner falls back to the coordinate, which is what it is.
     """
 
     if owner is None:
         return str(coordinate)
     if not isinstance(owner, InstallationOwner):
         raise ValueError("an installation key needs an installation owner")
-    return f"{coordinate}#{owner.label}"
+    return compose_installation_key(coordinate, owner.label, owner.scope.value, owner.root)
+
+
+def describe_installation(key: str) -> str:
+    """An installation key as a person reads it: artifact, harness, and where it was installed.
+
+    A project installation is named by its project directory, as the Installed list's Project
+    column names it; the full root is what Verbose shows beside a file's path.
+    """
+
+    coordinate, separator, rest = key.partition("#")
+    if not separator:
+        return key
+    label, _, rest = rest.partition("#")
+    scope, _, root = rest.partition("#")
+    project = root.rstrip("/").rpartition("/")[2] or root
+    where = f"project {project}" if scope == "project" and project else scope
+    return " · ".join(part for part in (coordinate, label, where) if part)
 
 
 def credential_address(

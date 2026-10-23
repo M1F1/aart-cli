@@ -11709,3 +11709,67 @@ it reaches the Registry's default branch, while adoption from any branch stays p
 - **The lab can publish.** `scripts/manual_test.py publish version|collection` (and
   `make manual-test-publish-version|collection`) act as author and maintainer against the lab's
   remotes, so the manual walkthrough and an end-to-end test exercise the owner's scenario.
+
+## D-479 — The installation key carries scope and root; another project's installation is read there and changed only there (CP-42)
+
+Supersedes D-361's key shape.
+
+- **What broke.**
+  - The owner installed one MCP in opencode for the user and in two projects. Entering Installed
+    or Doctor ended in `ValueError` from `ConsumerUiEvent` (`tui-stage-internal`).
+  - User Variables And Credentials drew the three installations as one entry holding all three
+    configuration files and credentials.
+  - The Enterprise agent's diagnosis matched: three rows `…#opencode`.
+  - Doctor also said `harness:opencode: missing` for every project installation, and Repair changed
+    nothing.
+- **Cause.**
+  - D-361 composed the key as `coordinate#harness[+profile]`. Its property test pinned that an
+    owner differing only in scope or root is "deliberately not a second row", although §169.3 makes
+    both part of installation identity.
+  - `read_installed_inspections` resolved project registrations against `project_root`, the
+    directory the session was opened in.
+- **The key.**
+  - `compose_installation_key(coordinate, label, scope, root)` gives
+    `coordinate#label#scope#root`. `installation_key` and `InstalledArtifactView.row` both use it.
+  - The root comes last and nothing before it may hold `#`, so a key always splits back into its
+    parts (property-tested).
+  - Keys are never persisted. Credential addresses already separate scope and root and are
+    unchanged.
+- **Read by people as `artifact · harness · user|project <dir>`.**
+  - `describe_installation` turns a key into that text. The TUI uses it wherever it names an
+    installation, and so does the `doctor` text output. JSON keeps the key.
+  - The project is named by its directory's last segment, as the Installed list's Project column
+    does. Verbose already shows full paths.
+- **Measured under its own root.** Each owned installation is observed with
+  `ScopedHarnessRegistry({owner.scope: owner.root})`. Records without an owner keep the session's
+  roots.
+- **Changed only from its own root.**
+  - Repair, uninstall and configuration build their harness registry from the host's roots.
+    Update re-installs through the host.
+  - Acting from another project would write that project's entries here. So `_inspections`, which
+    all four go through, refuses an installation whose owner root is not
+    `host.root_for(owner.scope)`. The code is `consumer-action-elsewhere`, and the message names the
+    installation and the directory to open.
+  - This is the smallest safe choice. Acting in place under the owner's root is B-227.
+- **Found walking the manual lab (same day, same PR).** The setup was a Skill in claude for this
+  project, for the user and in a second project, then a newer version published. Three more
+  defects were found:
+  - Updating this project's row installed the new version into claude, opencode and tabnine. An
+    update re-installs through `_offer_installation`, which places into every profile the host
+    detected.
+  - The user's row, and the second project's Skill row, answered "nothing canonical is installed
+    here" with a raw key. `_inspections` read only the scope Settings prefer, and a placed
+    artifact is filtered by its path under this session's root.
+  - Reaching a user installation from a project still planned its removal at project scope.
+    The user's opencode entry would have been left behind (`harness:opencode` missing from the
+    plan).
+- **Choices.**
+  - `_inspections` reads every installation on the machine with the host's `scope_roots`. The key
+    alone picks the installation out. Missing keys are described.
+  - `_host_of` gives repair, configuration and uninstall the host at the installation's own scope.
+    Rows of both scopes ticked together are refused (`consumer-action-mixed-scopes`), because one
+    plan is prepared for one host.
+  - An update first resolves the versions with no `previous`. It then places the new version with
+    `InstallationAssignment`s taken from the replaced receipts' owners (harness, scope), and
+    narrows the host's profiles to those harnesses. A receipt naming no owner records no harness to
+    keep, so the update is refused.

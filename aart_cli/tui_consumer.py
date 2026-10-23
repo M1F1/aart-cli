@@ -143,6 +143,7 @@ from aart_cli.application.maintainer_views import (
 )
 from aart_cli.authoring.check import AuthorCheckReport
 from aart_cli.domain.inputs import SKIPPED_INPUT, is_skipped_value
+from aart_cli.domain.installation_owner import describe_installation
 from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import (
@@ -385,6 +386,14 @@ _ROW_PREFIX = 6
 _INSTALLED_HEADINGS = ("Artifact", "Health", "Scope", "Project", "Configuration")
 
 
+def _installed_name(view: InstalledArtifactView | None, row: str) -> str:
+    """The Artifact cell: artifact and harness, because Scope and Project have their own columns."""
+
+    if view is None or not view.harness:
+        return row
+    return f"{view.coordinate} · {view.harness}"
+
+
 def _user_config_row(identifier: str) -> str:
     return _USER_CONFIG_ROW_PREFIX + identifier
 
@@ -411,7 +420,7 @@ def render_user_inputs_area(
         configurations = screens.configurations_for(coordinate)
         credentials = screens.credentials_for(coordinate)
         mark = ">" if coordinate == current_row else " "
-        lines.append(f"{mark} {coordinate}")
+        lines.append(f"{mark} {describe_installation(coordinate)}")
         identifiers = _configuration_identifiers(configurations)
         lines.append(
             "    Configuration: "
@@ -500,7 +509,7 @@ def artifact_user_inputs_status(
     """Screen 22a's view state: whose inputs these are, and what is and is not declared."""
 
     return separate(
-        (coordinate,),
+        (describe_installation(coordinate),),
         ()
         if _configuration_identifiers(configurations)
         else ("No ordinary configuration is declared.",),
@@ -576,7 +585,10 @@ def configuration_value_status(
 
     differing = len({value for _harness, value in held}) > 1
     return separate(
-        (f"Change {input_id} for {coordinate}", "Harnesses: " + ", ".join(harnesses)),
+        (
+            f"Change {input_id} for {describe_installation(coordinate)}",
+            "Harnesses: " + ", ".join(harnesses),
+        ),
         (
             (
                 "The chosen harnesses hold different values, so the field starts empty:",
@@ -1066,7 +1078,9 @@ def render_mcp_test(view: McpTestView | None) -> tuple[str, ...]:
         # Each result below opens unindented, so the heading is a statement of its own (D-402).
         lines = ["Test results:", ""]
         for result in view.results:
-            lines.append(f"{'✓' if result.passed else '✗'} {result.installation}")
+            lines.append(
+                f"{'✓' if result.passed else '✗'} {describe_installation(result.installation)}"
+            )
             for stage in result.stages:
                 lines.append(f"  {stage.outcome:<14} {stage.stage}: {stage.reason}")
             lines.append("")
@@ -1076,7 +1090,9 @@ def render_mcp_test(view: McpTestView | None) -> tuple[str, ...]:
         )
         return tuple(lines)
     if not view.plan:
-        return ("Preparing the test of: " + ", ".join(view.installations),)
+        return (
+            "Preparing the test of: " + ", ".join(map(describe_installation, view.installations)),
+        )
     # Blank lines part the statements so each reads on its own, and the heading carries its own
     # marker: over an indented block `bulleted` would leave it bare (D-402).
     lines = [
@@ -1087,9 +1103,14 @@ def render_mcp_test(view: McpTestView | None) -> tuple[str, ...]:
     ]
     for entry in view.plan:
         if entry.tool:
-            lines.append(f"  {entry.installation}: {entry.tool} {entry.arguments}")
+            lines.append(
+                f"  {describe_installation(entry.installation)}: {entry.tool} {entry.arguments}"
+            )
         else:
-            lines.append(f"  {entry.installation}: NOT CONFIGURED (declares no smoke operation)")
+            lines.append(
+                f"  {describe_installation(entry.installation)}: "
+                "NOT CONFIGURED (declares no smoke operation)"
+            )
     lines.append("")
     lines.append(
         "Each call reaches that installation's configured service with its own credentials."
@@ -1138,7 +1159,7 @@ def render_credential(view: CredentialRecordView, profile: PresentationProfile) 
     if view.detail:
         lines.append(view.detail)
     lines.append("Used by")
-    lines.extend(f"  • {item}" for item in view.dependants)
+    lines.extend(f"  • {describe_installation(item)}" for item in view.dependants)
     if not view.dependants:
         lines.append("  • nothing installed")
     if profile is PresentationProfile.MORE_INFO:
@@ -1170,7 +1191,7 @@ def render_credential_action(
     lines = [f"{view.input} in {view.provider}  {mark} {health}"]
     if view.dependants:
         lines.append("Used by")
-        lines.extend(f"  • {item}" for item in view.dependants)
+        lines.extend(f"  • {describe_installation(item)}" for item in view.dependants)
         lines.append("It cannot be removed while these use it.")
     else:
         lines.append("Nothing installed uses it.")
@@ -1232,7 +1253,7 @@ def render_credential_review(
         ]
         if view.dependants:
             lines.append("These use it and will use the new value:")
-            lines.extend(f"  • {item}" for item in view.dependants)
+            lines.extend(f"  • {describe_installation(item)}" for item in view.dependants)
         else:
             lines.append("Nothing installed uses it.")
         lines.append("No copy of the current value is kept, so this cannot be undone.")
@@ -1246,7 +1267,7 @@ def render_credential_review(
         ]
         if view.dependants:
             lines.append("These installations need it:")
-            lines.extend(f"  • {item}" for item in view.dependants)
+            lines.extend(f"  • {describe_installation(item)}" for item in view.dependants)
         else:
             lines.append("Nothing installed uses it.")
         lines.append("The provider is verified immediately after setup.")
@@ -1669,14 +1690,18 @@ def doctor_rows(view: DoctorView, *, leaving_out: tuple[str, ...] = ()) -> tuple
             attention = group.members_requiring_attention
             lines.append(
                 f"{'⚠' if attention else '✓'} {row}"
-                + (f" — needs attention: {', '.join(attention)}" if attention else "")
+                + (
+                    f" — needs attention: {', '.join(map(describe_installation, attention))}"
+                    if attention
+                    else ""
+                )
             )
             continue
         if row in leaving_out:
             continue
         item = artifacts[row]
         healthy = item.health in {"ready", "update"} and not item.placeholders
-        lines.append(f"{indent}{'✓' if healthy else '⚠'} {item.row}")
+        lines.append(f"{indent}{'✓' if healthy else '⚠'} {describe_installation(item.row)}")
         if item.health in {"attention", "broken"}:
             lines.extend(
                 f"{indent}  {drift.component}: {_human(drift.kind)}" for drift in item.drift
@@ -1697,7 +1722,7 @@ def doctor_issue_rows(view: DoctorView, rows: tuple[str, ...], current: str) -> 
     artifacts = {item.row: item for item in view.artifacts}
     lines: list[str] = []
     for row in rows:
-        lines.append(f"{'>' if row == current else ' '} ⚠ {row}")
+        lines.append(f"{'>' if row == current else ' '} ⚠ {describe_installation(row)}")
         item = artifacts.get(row)
         drift = () if item is None else item.drift
         lines.extend(f"    {entry.component}: {_human(entry.kind)}" for entry in drift)
@@ -5106,7 +5131,7 @@ class CanonicalScreenSource:
                 _INSTALLED_HEADINGS,
                 tuple(
                     (
-                        f"{'  ' if row in under else ''}{row}",
+                        f"{'  ' if row in under else ''}{_installed_name(views.get(row), row)}",
                         *(
                             installed_cells(views[row], _human(health[row]))
                             if row in views

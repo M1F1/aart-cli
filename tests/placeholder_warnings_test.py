@@ -100,7 +100,7 @@ class InstalledPlaceholdersWarnE2ETest(BothBackendsMeasured):
 
         doctor = _text(drawn[ConsumerScreen.DOCTOR])
         for harness in ("opencode", "tabnine"):
-            self.assertIn(f"⚠ company/mcp/github@1.5.0#{harness}", doctor)
+            self.assertIn(f"⚠ company/mcp/github@1.5.0 · {harness} · project", doctor)
         self.assertIn(f"github-org: {PLACEHOLDER_WARNING}", doctor)
         self.assertIn(f"github-token: {PLACEHOLDER_WARNING}", doctor)
         self.assertIn(f"2 still hold {SKIPPED_INPUT}", doctor)

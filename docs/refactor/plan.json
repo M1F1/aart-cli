@@ -1547,6 +1547,38 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-42",
+      "title": "One installation is one row, measured and changed where it was made",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "The installation key carries scope and root; one entry per installation, named for people (§195, INV-296, D-479)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Each installation is measured under its own root",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Actions on another project's installation are refused, naming where to open aart-cli",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Focused verification and the PR",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Walk the manual lab; an update replaces exactly the chosen installations, and user rows are changed at user scope from any project",
+          "status": "done"
+        }
+      ]
     }
   ]
 }

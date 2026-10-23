@@ -16,6 +16,7 @@ from unittest import mock
 
 from aart_cli.application.consumer_ui import ConsumerUiState
 from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
+from aart_cli.domain.installation_owner import compose_installation_key
 from aart_cli.domain.result import Ok
 from aart_cli.domain.selection import OwnershipKind
 from aart_cli.io.receipt_store import LocalReceiptStore
@@ -81,15 +82,16 @@ class InstalledCollectionTest(unittest.TestCase):
             finished.rows,
             (
                 STARTER,
-                f"{DUMMY}#claude",
-                f"{DUMMY}#opencode",
-                f"{REVIEW}#claude",
-                f"{REVIEW}#opencode",
+                *(
+                    compose_installation_key(coordinate, harness, "project", str(env.project))
+                    for coordinate in (DUMMY, REVIEW)
+                    for harness in ("claude", "opencode")
+                ),
             ),
         )
         lines = terminal.last.splitlines()
         (collection,) = (line for line in lines if STARTER in line)
-        (member,) = (line for line in lines if f"{DUMMY}#claude" in line)
+        (member,) = (line for line in lines if f"{DUMMY} · claude" in line)
         self.assertGreater(
             member.index(DUMMY), collection.index(STARTER), "a member is not drawn under it"
         )
@@ -107,8 +109,10 @@ class InstalledCollectionTest(unittest.TestCase):
             with self.subTest(drawn=drawn[:40]):
                 lines = drawn.splitlines()
                 (collection,) = (line for line in lines if STARTER in line)
-                self.assertIn(f"{REVIEW}#claude", collection)
-                (member,) = (line for line in lines if line.strip().endswith(f"{DUMMY}#claude"))
+                self.assertIn(f"{REVIEW} · claude · project project", collection)
+                (member,) = (
+                    line for line in lines if f"{DUMMY} · claude" in line and STARTER not in line
+                )
                 self.assertGreater(member.index(DUMMY), collection.index(STARTER))
         self.assertEqual(code, 1)
 

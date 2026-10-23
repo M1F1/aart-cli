@@ -156,6 +156,7 @@ from aart_cli.domain.inputs import (
 )
 from aart_cli.domain.installation_owner import (
     credential_address,
+    describe_installation,
     installation_key,
 )
 from aart_cli.domain.policies import EffectivePolicy
@@ -258,6 +259,14 @@ CONSUMER_ACTION_NOT_OFFERED = DiagnosticCode("consumer-action-not-offered")
 
 #: What a command names has no canonical record on this machine, so nothing here can act on it.
 CONSUMER_ACTION_NOT_INSTALLED = DiagnosticCode("consumer-action-not-installed")
+
+#: What a command names was installed into another project. Its harness files are resolved against
+#: that project's root, so acting on it from here would write into this one (D-479).
+CONSUMER_ACTION_ELSEWHERE = DiagnosticCode("consumer-action-elsewhere")
+
+#: What a command names holds installations of both scopes. Each scope's harness paths resolve
+#: against its own root, and one plan is prepared for one of them (D-479).
+CONSUMER_ACTION_MIXED_SCOPES = DiagnosticCode("consumer-action-mixed-scopes")
 
 
 def _installation_of(record: InstalledRecord) -> str:
@@ -453,6 +462,30 @@ def _assignments(
         )
         for artifact, harness in (
             parsed for parsed in map(pair_from_key, pairs) if parsed is not None
+        )
+    )
+
+
+def _kept_assignments(
+    resolved: tuple[ArtifactCoordinate, ...],
+    receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...],
+) -> tuple[InstallationAssignment, ...]:
+    """The installations an update replaces, as the pairs placement puts the new version into.
+
+    An update replaces what is installed and adds nothing (§169.3, D-479). Left to the session's
+    harnesses, the newer version of a Skill installed in one harness was placed into every harness
+    the machine has. A receipt naming no owner records no harness to keep, so it contributes none.
+    """
+
+    by_artifact = {(item.source, item.artifact): str(item) for item in resolved}
+    return tuple(
+        dict.fromkeys(
+            InstallationAssignment(
+                by_artifact[(owner.source, owner.artifact)], owner.harness, owner.scope
+            )
+            for _, receipt in receipts
+            if (owner := receipt.owner) is not None
+            and (owner.source, owner.artifact) in by_artifact
         )
     )
 
@@ -2218,12 +2251,47 @@ class LocalConsumerActions:
             selected_remediations=None,
             credential_providers=context.credential_providers,
             resolvers=context.credential_providers,
-            previous=previous,
+            # For an update this draft only resolves the versions. What it replaces is matched
+            # once the installations it replaces are placed below, not against the session's scope.
+            previous=() if previous_receipts else previous,
             preferred_installer=preferred,
             assignments=assignments,
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
+        if previous_receipts:
+            # An update goes into exactly the installations it replaces, each at its own scope and
+            # root, and into no harness that did not have it (§169.3, D-479).
+            assignments = _kept_assignments(
+                tuple(item.version.coordinate for item in prepared.value.draft.selection.artifacts),
+                previous_receipts,
+            )
+            if not assignments:
+                return self._declined(
+                    command,
+                    _lines(
+                        "this installation does not record which harness it is",
+                        "uninstall it and install it again",
+                    ),
+                )
+            host = replace(
+                host, profiles=tuple(dict.fromkeys(item.harness for item in assignments))
+            )
+            prepared = prepare_configured_installation(
+                context.effective,
+                selection,
+                host=host,
+                sources=(),
+                policy=context.policy,
+                selected_remediations=None,
+                credential_providers=context.credential_providers,
+                resolvers=context.credential_providers,
+                previous=previous,
+                preferred_installer=preferred,
+                assignments=assignments,
+            )
+            if isinstance(prepared, Err):
+                return self._declined(command, _refusal(prepared.diagnostics))
         # Eligibility is measured over every profile, before anything is narrowed: it is what the
         # harness rows offer, and a choice is judged against it rather than against itself.
         targets = (
@@ -2573,10 +2641,13 @@ class LocalConsumerActions:
             return self._declined(command, _refusal(inspected.diagnostics))
         if len(inspected.value) != 1:
             return self._declined(command, _lines("a repair acts on one installation at a time"))
+        host = self._host_of(inspected.value)
+        if isinstance(host, Err):
+            return self._declined(command, _refusal(host.diagnostics))
         prepared = prepare_configured_repair(inspected.value[0], policy=self._context.policy)
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
-        self._pending_host = self._host()
+        self._pending_host = host.value
         self._pending = prepared.value
         self._pending_action = command.action
         return ConsumerActionUpdate(
@@ -2661,7 +2732,10 @@ class LocalConsumerActions:
         )
         if isinstance(prepared, Err):
             return self._declined(command, _refusal(prepared.diagnostics))
-        self._pending_host = self._host()
+        host = self._host_of(inspected.value)
+        if isinstance(host, Err):
+            return self._declined(command, _refusal(host.diagnostics))
+        self._pending_host = host.value
         self._pending = prepared.value
         self._pending_action = command.action
         return ConsumerActionUpdate(
@@ -2699,7 +2773,10 @@ class LocalConsumerActions:
         )
         if isinstance(inspected, Err):
             return self._declined(command, _refusal(inspected.diagnostics))
-        host = self._host()
+        chosen = self._host_of(inspected.value)
+        if isinstance(chosen, Err):
+            return self._declined(command, _refusal(chosen.diagnostics))
+        host = chosen.value
         prepared = prepare_configured_uninstall(
             tuple(item.record for item in inspected.value),
             host=host,
@@ -2742,12 +2819,14 @@ class LocalConsumerActions:
                 )
             )
         host = self._host()
+        # Every installation on the machine, not only those of the scope Settings prefer: a row is
+        # one installation's key, so the key alone picks it out, and narrowed to one scope the
+        # user's installations read as missing from a project and another project's Skill did too.
         inspected = read_installed_inspections(
             state_root=host.state_root,
             harness_root=host.harness_root,
             credential_providers=self._context.credential_providers,
-            scope=host.scope,
-            profiles=host.profiles,
+            scope_roots=host.scope_roots,
         )
         if isinstance(inspected, Err):
             return inspected
@@ -2762,12 +2841,67 @@ class LocalConsumerActions:
                     Diagnostic(
                         CONSUMER_ACTION_NOT_INSTALLED,
                         Severity.ERROR,
-                        "nothing canonical is installed here as " + ", ".join(sorted(missing)),
+                        "nothing canonical is installed here as "
+                        + ", ".join(describe_installation(item) for item in sorted(missing)),
                         remediation=("open Installed and choose a recorded installation",),
                     ),
                 )
             )
+        # Every action below resolves harness paths against this session's root for the scope, so
+        # an installation another project owns is refused rather than repaired, reconfigured,
+        # updated or removed in this one (§169.3, D-479).
+        elsewhere = sorted(
+            item
+            for item in coordinates
+            if (owner := by_installation[item].record.receipt.owner) is not None
+            and owner.root != host.root_for(owner.scope)
+        )
+        if elsewhere:
+            roots = sorted(
+                {
+                    owner.root
+                    for item in elsewhere
+                    if (owner := by_installation[item].record.receipt.owner) is not None
+                }
+            )
+            return Err(
+                (
+                    Diagnostic(
+                        CONSUMER_ACTION_ELSEWHERE,
+                        Severity.ERROR,
+                        "installed in another project: "
+                        + ", ".join(describe_installation(item) for item in elsewhere)
+                        + "; open aart-cli in "
+                        + " or ".join(roots)
+                        + " to change it",
+                    ),
+                )
+            )
         return Ok(tuple(by_installation[item] for item in coordinates))
+
+    def _host_of(self, inspected: tuple[InstalledInspection, ...]) -> Result[InstallationHost]:
+        """The host at the scope these installations were made at, whatever Settings prefer.
+
+        Repair, configuration and removal resolve harness paths against the host's scope, so a
+        user installation acted on from a project is planned at user scope rather than looked for
+        in the project (§169.3, D-479).
+        """
+
+        scopes = {
+            owner.scope for item in inspected if (owner := item.record.receipt.owner) is not None
+        }
+        if len(scopes) > 1:
+            return Err(
+                (
+                    Diagnostic(
+                        CONSUMER_ACTION_MIXED_SCOPES,
+                        Severity.ERROR,
+                        "user and project installations are changed one scope at a time",
+                        remediation=("tick only user rows, or only project rows",),
+                    ),
+                )
+            )
+        return Ok(self._host(scopes.pop().value if scopes else ""))
 
     # -- execution ------------------------------------------------------------ #
 
@@ -3520,7 +3654,10 @@ class LocalConsumerActions:
             return self._declined(
                 command,
                 _lines(
-                    *(f"{key} is not an MCP; only MCP installations are tested" for key in others),
+                    *(
+                        f"{describe_installation(key)} is not an MCP; only MCP installations are tested"
+                        for key in others
+                    ),
                     "untick it and test the MCPs alone",
                 ),
             )

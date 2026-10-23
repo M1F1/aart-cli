@@ -99,7 +99,9 @@ class AMaintainersPublicationReachesTheConsumersTui(unittest.TestCase):
         self.assertEqual(seen["registries"], [["lab", "healthy"]])
         self.assertEqual(len(seen["said"]), 1)
         self.assertIn("lab", seen["said"][0])
-        self.assertEqual(seen["updates"], [["lab/skill/manual-check@1.0.0#claude", self.published]])
+        ((row, available),) = seen["updates"]
+        self.assertTrue(row.startswith("lab/skill/manual-check@1.0.0#claude#project#"), row)
+        self.assertEqual(available, self.published)
         self.assertEqual(seen["update_count"], 1)
         self.assertIn("lab/collection/lab-starter@1.0.0", seen["collections"])
 

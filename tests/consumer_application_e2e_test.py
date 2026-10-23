@@ -39,6 +39,7 @@ from aart_cli.application.consumer_views import (
     PresentationProfile,
 )
 from aart_cli.domain.inspection import RemediationCapability, RemediationCapabilityKind
+from aart_cli.domain.installation_owner import compose_installation_key
 from aart_cli.domain.result import Ok
 from aart_cli.tui_consumer import run_consumer_shell
 from tests.configured_install_command_e2e_test import _environment
@@ -52,7 +53,12 @@ DRAWN = r"skill/code-review@1\.2\.0\s+company\s"
 #: The same artifact as one installation. Rows and focus address this rather than `OFFERED`: each
 #: harness is its own installation (§169.3), so the artifact alone no longer names one thing to act
 #: on. These tests install into claude only, so there is exactly one.
-INSTALLED = f"{OFFERED}#claude"
+
+
+def _installation_key(env) -> str:
+    """The claude installation's key: its scope and project are part of it (§169.3, D-479)."""
+
+    return compose_installation_key(OFFERED, "claude", "project", str(env.project))
 
 
 def _delivered(env) -> pathlib.Path:
@@ -224,7 +230,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             finished, terminal, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=_installation_key(env)),
                 ord("r"),
                 ENTER,
                 actions=handler,
@@ -241,7 +247,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             finished, terminal, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=_installation_key(env)),
                 ord("r"),
                 actions=handler,
             )
@@ -261,7 +267,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             finished, terminal, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=_installation_key(env)),
                 ord("u"),
                 ENTER,
                 actions=handler,
@@ -279,7 +285,7 @@ class ConsumerApplicationLifecycleTest(unittest.TestCase):
 
             finished, _, _ = _drive(
                 env,
-                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=INSTALLED),
+                _at(ConsumerScreen.INSTALLED_ARTIFACT_DETAILS, focus=_installation_key(env)),
                 ord("u"),
                 actions=handler,
             )

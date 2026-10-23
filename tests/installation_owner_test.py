@@ -275,7 +275,13 @@ class InstallationKeyTest(unittest.TestCase):
             for harness in ("claude", "opencode")
         ]
 
-        self.assertEqual(keys, [f"{coordinate}#claude", f"{coordinate}#opencode"])
+        self.assertEqual(
+            keys,
+            [
+                f"{coordinate}#claude#project#/work/project",
+                f"{coordinate}#opencode#project#/work/project",
+            ],
+        )
 
     def test_two_profiles_of_one_harness_are_two_keys(self) -> None:
         """A profile is part of the installation, so a key that dropped it would address both."""
@@ -283,7 +289,8 @@ class InstallationKeyTest(unittest.TestCase):
         coordinate = "company/mcp/github@1.5.0"
 
         self.assertEqual(
-            installation_key(coordinate, _owner(profile="work")), f"{coordinate}#claude+work"
+            installation_key(coordinate, _owner(profile="work")),
+            f"{coordinate}#claude+work#project#/work/project",
         )
         self.assertNotEqual(
             installation_key(coordinate, _owner(profile="work")),
@@ -298,12 +305,14 @@ class InstallationKeyTest(unittest.TestCase):
         )
 
     def test_a_key_is_never_spelled_like_a_coordinate(self) -> None:
-        """`#` cannot occur in an alias, kind, name or version, so the two never collide."""
+        """`#` cannot occur in an alias, kind, name, version, label or scope, so the two never collide."""
 
         key = installation_key("company/mcp/github@1.5.0", _owner())
 
         self.assertNotIn("#", "company/mcp/github@1.5.0")
-        self.assertEqual(key.count("#"), 1)
+        self.assertEqual(
+            key.split("#", 3), ["company/mcp/github@1.5.0", "claude", "project", "/work/project"]
+        )
 
     def test_only_an_owner_or_nothing_will_do(self) -> None:
         with self.assertRaises(ValueError):
@@ -315,22 +324,25 @@ class InstallationKeyPropertyTest(unittest.TestCase):
 
     @given(first=_owners, second=_owners)
     @settings(max_examples=200, suppress_health_check=(HealthCheck.differing_executors,))
-    def test_two_installations_of_one_artifact_share_a_key_only_when_the_harness_is_the_same(
+    def test_two_installations_of_one_artifact_share_a_key_only_when_they_are_one_installation(
         self, first: InstallationOwner, second: InstallationOwner
     ) -> None:
         """The claim a row list depends on, stated over owners rather than over two examples.
 
-        Only the harness and profile can separate two keys, because the rest of the owner is what
-        the coordinate already says. So the key is the same exactly when the label is -- and an
-        owner differing only in scope or root is deliberately *not* a second row, which is a fact
-        worth pinning rather than discovering from a duplicate row later.
+        The coordinate already says the source and artifact, so the key adds the rest of the
+        owner: harness and profile, scope and root (D-479). D-361 left the last two out and pinned
+        that here, and one artifact in one harness for the user and in a project then drew two
+        identical rows, which the TUI refused with a ValueError.
         """
 
         coordinate = "company/mcp/github@1.5.0"
 
         same = installation_key(coordinate, first) == installation_key(coordinate, second)
 
-        self.assertEqual(same, first.label == second.label)
+        self.assertEqual(
+            same,
+            (first.label, first.scope, first.root) == (second.label, second.scope, second.root),
+        )
 
 
 class InstalledNameTest(unittest.TestCase):
