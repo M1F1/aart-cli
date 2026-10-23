@@ -213,6 +213,7 @@ def _entries(path: pathlib.Path) -> list[str]:
     return sorted(json.loads(path.read_text(encoding="utf-8")).get("mcp", {}))
 
 
+@unittest.skipUnless(sys.platform == "darwin", "the MCP's credential needs the Keychain")
 class AUsersInstallationIsRemovedFromAProjectWhereItLives(_Lab):
     INSTALLS = ((*_MCP, "--scope", "user"),)
 
@@ -228,6 +229,7 @@ class AUsersInstallationIsRemovedFromAProjectWhereItLives(_Lab):
         self.assertEqual(_entries(self.project / "opencode.json"), [])
 
 
+@unittest.skipUnless(sys.platform == "darwin", "the MCP's credential needs the Keychain")
 class UserAndProjectRowsAreChangedOneScopeAtATime(_Lab):
     INSTALLS = (_MCP, (*_MCP, "--scope", "user"))
 

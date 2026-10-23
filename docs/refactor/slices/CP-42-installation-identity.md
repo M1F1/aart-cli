@@ -112,6 +112,8 @@ AART_NOT_SET).
   - the second project's row is refused, says where to go, and changes nothing;
   - a user MCP removed from a project takes its user opencode entry with it;
   - user and project rows ticked together are refused, and nothing is removed.
+  The two MCP cases need the lab Keychain for the credential, so like `manual_test_lab_test.py`
+  they run on macOS only. The Skill cases run everywhere.
 - Tests that spelled keys as `coordinate#harness` now compose them, or assert the described name:
   `consumer_application_e2e_test.py`, `installed_artifact_paths_test.py`,
   `installed_mcp_test_e2e_test.py`, `collection_installed_e2e_test.py`,
