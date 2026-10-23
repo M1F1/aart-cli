@@ -1,6 +1,14 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-23, CP-38)
+## Where the work is (2026-10-23, CP-39)
+
+0.16.0 (CP-38) is released. **CP-39** is done in its PR, which ships as 0.17.0: a fork labels its
+wheel's version (`AART_CLI_LOCAL_VERSION_LABEL`, §193, INV-294, D-476), so the public release can
+go to PyPI: `docs/refactor/slices/CP-39-local-version-label.md`. The owner publishes to PyPI from
+the first release the Enterprise fork has labelled. B-220 awaits the owner's decision; B-225 is
+backlog.
+
+## Where the work was (2026-10-23, CP-38)
 
 0.15.0 is released. **CP-38** closes B-168: a first `consume` command connects the baked default
 Registry, as the terminal already did (D-475):

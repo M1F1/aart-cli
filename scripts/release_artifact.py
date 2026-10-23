@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -107,10 +108,21 @@ def _diagnostic(code: str, message: str) -> ArtifactDiagnostic:
     return ArtifactDiagnostic("artifact", code, message)
 
 
-def verify_artifact(wheel: Path, tag: str) -> tuple[ArtifactDiagnostic, ...]:
-    """Everything the archive itself can be asked, without installing it."""
+def distributed_version(tag: str, label: str = "") -> str:
+    """The version the wheel's filename and metadata carry: the tag's, plus the fork's label.
+
+    `scripts/inject_local_version.py` writes the label into the distribution's version only, so
+    this is what the archive must say while the installed command still says the tag (D-476).
+    """
 
     version = released_version(tag)
+    return f"{version}+{label}" if label else version
+
+
+def verify_artifact(wheel: Path, tag: str, *, label: str = "") -> tuple[ArtifactDiagnostic, ...]:
+    """Everything the archive itself can be asked, without installing it."""
+
+    version = distributed_version(tag, label)
     diagnostics: list[ArtifactDiagnostic] = []
 
     filename = _FILENAME_RE.fullmatch(wheel.name)
@@ -224,10 +236,10 @@ def _clean_environment_runner(wheel: Path, home: Path) -> Runner:
     return run
 
 
-def check_artifact(tag: str, dist: Path) -> dict[str, Any]:
+def check_artifact(tag: str, dist: Path, *, label: str = "") -> dict[str, Any]:
     version = released_version(tag)
     wheel = wheel_in(dist)
-    diagnostics = list(verify_artifact(wheel, tag))
+    diagnostics = list(verify_artifact(wheel, tag, label=label))
     with tempfile.TemporaryDirectory() as raw:
         diagnostics.extend(smoke(version, runner=_clean_environment_runner(wheel, Path(raw))))
     return {
@@ -249,7 +261,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true")
     arguments = parser.parse_args(argv)
     try:
-        receipt = check_artifact(arguments.tag, arguments.dist)
+        receipt = check_artifact(
+            arguments.tag,
+            arguments.dist,
+            label=os.environ.get("AART_CLI_LOCAL_VERSION_LABEL", "").strip(),
+        )
     except (ArtifactError, OSError, subprocess.SubprocessError) as error:
         print(f"release artifact error: {error}", file=sys.stderr)
         return 2

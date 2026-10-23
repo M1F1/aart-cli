@@ -95,6 +95,14 @@ runs:
       shell: bash
       run: ${{ inputs.python }} scripts/inject_default_registry.py
 
+    # Unset means this fork's wheel carries the tag's version, as the public one does.  Set, it is a
+    # PEP 440 local label such as `corp`, and the wheel becomes `X.Y.Z+corp`: a filename of its own
+    # beside the public wheel on PyPI, which `aart-cli==X.Y.Z` still matches and pip prefers.  Only
+    # the distribution's version moves; `aart-cli --version` still says the tag.  See D-476.
+    - name: Inject local version label
+      shell: bash
+      run: ${{ inputs.python }} scripts/inject_local_version.py
+
     - name: Build wheel
       shell: bash
       run: ${{ inputs.python }} scripts/build_wheel.py

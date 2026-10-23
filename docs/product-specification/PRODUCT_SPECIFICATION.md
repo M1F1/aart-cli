@@ -11904,3 +11904,33 @@ only be published by deleting and recreating its Release.
 running the index publication any number of times leaves the index holding exactly the Release's
 wheel, or fails without replacing a different file already there. A failed publication never turns
 the release itself red.
+
+# 193. A fork labels its wheel's version, so it never shares a filename with PyPI
+
+Status: **ACCEPTED 2026-10-23 (D-476)**, on the owner's request to publish the public release to
+PyPI (CP-39). This refines §192 and D-373.
+
+The public `aart-cli` is published to PyPI. An Enterprise fork bakes its own default Registry into
+its wheel, so its `aart_cli-X.Y.Z` holds other bytes than the public one. An index group that
+proxies PyPI then lists two files under one filename. `publish-index` refuses the fork's upload
+(INV-293), and an install from the group may receive the public wheel.
+
+- **A label of the fork's choosing.** `AART_CLI_LOCAL_VERSION_LABEL`, such as `corp`, makes the
+  fork's wheel `X.Y.Z+corp`, a PEP 440 local version. Unset labels nothing, which is the public
+  build.
+- **The pin still matches, and prefers the fork.** `aart-cli==X.Y.Z` matches `X.Y.Z+corp`, and pip
+  prefers it over the public `X.Y.Z`.
+- **Only the distribution's version.** The filename and the wheel metadata carry the label.
+  `aart-cli --version` reports `X.Y.Z`, which is what a Registry's `.aart-cli-version` is compared
+  with, so no Registry changes.
+- **Refused, never normalised.** A label is lower-case letters and digits in dot-joined segments,
+  with no leading zero on a segment of digits only. Anything else fails the release, so the label
+  in the variable is the label in the filename.
+- **Checked and recorded.** The release checks the built wheel's filename and metadata against the
+  tag plus the label, and the release receipt records the label.
+
+**INV-294 — A labelled fork wheel is distinct from the public one and still satisfies the pin.**
+With a label set, the released wheel's filename and metadata version are the tag's version plus
+that label, `aart-cli --version` reports the tag's version, and `==` on the tag's version selects
+it over the unlabelled one. With no label set, the build is unchanged byte for byte.
+

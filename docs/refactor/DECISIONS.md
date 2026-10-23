@@ -11634,3 +11634,29 @@ it reaches the Registry's default branch, while adoption from any branch stays p
   `announce_first_run_seed` writes through the channel a route gives, so the terminal and the CLI
   cannot drift. `load_runtime_configuration` still makes no implicit mutation (D-373).
 
+## D-476 — A fork's wheel carries a PEP 440 local label (CP-39)
+
+- **Why a label and not a check against the hosted repository.** The owner will publish the public
+  release to PyPI under `aart-cli`, a name the owner holds. A fork's wheel carries its default
+  Registry, so it differs from the public one under the same filename. Reading the hosted repository
+  instead of the group would stop `publish-index` refusing, but an install from the group could
+  still receive the public wheel. A label gives the fork's wheel its own filename, and pip prefers
+  it under the same `==` pin.
+- **A distribution name of its own was weighed and rejected.** It changes every install command and
+  `pyproject.toml`, which would make the fork diverge from the public `main`. The label is injected
+  at build time, like the default Registry, so the fork stays a fast-forward.
+- **The label is not in `__version__`.** The Registry CI compares `aart-cli --version` with
+  `.aart-cli-version`. A label there would turn every Registry red that pins through an index and
+  would make every Registry refresh its workflow. Only the filename and the metadata carry it, and
+  nothing in the package reads its own distribution version.
+- **The grammar avoids normalisation.** PEP 440 rewrites `-` and `_` to `.`, and `00` to `0`. A
+  normalised label would give a filename that differs from the variable and fail the release check
+  for a reason nobody typed. These labels are refused instead. Hypothesis found the leading-zero case.
+- **The injector stamps a project file.** Injectors used to stamp only modules under `aart_cli/`.
+  `wheel_digest` now stamps each injector's target at its path relative to the root, so a third
+  kind of target needs no special case.
+- **PyPI needs no new workflow.** `publish-index.yml` already speaks the upload protocol PyPI uses.
+  The public repository sets `AART_CLI_INDEX_PUBLISH_URL=https://upload.pypi.org/legacy/` and a
+  `__token__` secret. Publishing to PyPI starts with the first release a fork has labelled, so no
+  unlabelled fork version ever meets a PyPI file of the same name.
+

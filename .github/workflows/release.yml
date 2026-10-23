@@ -78,6 +78,9 @@ jobs:
       # nothing configured (D-373).  Unset bakes nothing; the alias is in the value because it is
       # stamped into the path of everything installed from that Registry (D-359, INV-253).
       AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL: ${{ vars.AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL }}
+      # A PEP 440 local label, such as `corp`, for this fork's wheel version (D-476).  Unset labels
+      # nothing.  Read by the build and by the check of the built wheel.
+      AART_CLI_LOCAL_VERSION_LABEL: ${{ vars.AART_CLI_LOCAL_VERSION_LABEL }}
       # No `GH_HOST`: the release action attaches the wheel through the REST API at
       # `GITHUB_API_URL`, which the runner sets to this instance, so there is nothing to set.
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -113,6 +116,9 @@ jobs:
       # nothing configured (D-373).  Unset bakes nothing; the alias is in the value because it is
       # stamped into the path of everything installed from that Registry (D-359, INV-253).
       AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL: ${{ vars.AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL }}
+      # A PEP 440 local label, such as `corp`, for this fork's wheel version (D-476).  Unset labels
+      # nothing.  Read by the build and by the check of the built wheel.
+      AART_CLI_LOCAL_VERSION_LABEL: ${{ vars.AART_CLI_LOCAL_VERSION_LABEL }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout

@@ -242,6 +242,16 @@ index everything else uses, with credentials the instance already manages.
    |---|---|
    | `AART_CLI_INDEX_PUBLISH_URL` | the upload endpoint of a **hosted** repository, e.g. `https://nexus.corp/repository/pypi-internal/`. A proxy or group repository refuses uploads |
    | `AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET_NAME` | the **name** of a secret holding `user:token` for an account that may upload to that repository. It may be the same secret `AART_CLI_PIP_INDEX_CREDENTIALS_SECRET_NAME` names, when that account can also write |
+   | `AART_CLI_LOCAL_VERSION_LABEL` | a short label of your own, such as `corp`. The wheel becomes `aart_cli-X.Y.Z+corp-py3-none-any.whl` |
+
+   Set the label before you push the next tag. The public `aart-cli` is published to PyPI, and a
+   group that proxies PyPI lists that public wheel too. Without a label, your wheel and the public
+   one share a filename with different bytes, because yours carries your default Registry, and
+   `publish-index` refuses yours. With it, the filenames differ, `aart-cli==X.Y.Z` matches both,
+   and pip picks `X.Y.Z+corp`, because PEP 440 puts a labelled build above the same unlabelled
+   version. Only the package version carries the label: `aart-cli --version` still says `X.Y.Z`,
+   which is what a registry's `.aart-cli-version` is compared with. Lower-case letters and digits,
+   in segments joined by dots; anything else fails the release.
 
 2. Create the Release at the tag you already pushed. A tag push alone builds the wheel but neither
    creates a Release nor attaches it; `--verify-tag` refuses to invent a new tag.
@@ -283,12 +293,17 @@ Skip this step if the instance has no index you can publish to. Part 4 has other
 
 ### Step 5 — Install `aart-cli` on your own machine
 
-You need it locally to create the registry. CI fetches its own copy. From the internal index, if
-you did step 4:
+You need it locally to create the registry. CI fetches its own copy. From the hosted repository
+you publish to, if you did step 4:
 
 ```bash
-pipx install --index-url https://nexus.corp/repository/pypi-group/simple aart-cli==X.Y.Z
+pipx install --index-url https://nexus.corp/repository/pypi-internal/simple aart-cli==X.Y.Z
 ```
+
+Install `aart-cli` from the hosted repository, not the group. It has no dependencies, so the hosted
+repository is enough, and it holds only your builds. The group also offers PyPI, where a newer
+public version without your default Registry can appear before your copy releases it, and an
+install with no `==` would take that one.
 
 Or straight from the copy, with your own Git credentials:
 
@@ -300,8 +315,8 @@ pipx install "git+https://ghe.corp/platform/aart-cli.git@vX.Y.Z"
 aart-cli --version
 ```
 
-The command and the package are both `aart-cli`. `agent-artifacts` on a public index is somebody
-else's project.
+The command and the package are both `aart-cli`. `aart-cli` on PyPI is the public build, without
+your default Registry. `agent-artifacts` on a public index is somebody else's project.
 
 ## Part 3 — Create the company registry
 
@@ -560,6 +575,7 @@ Read by `.github/workflows/pr-check.yml`, `.github/workflows/release.yml` and
 | `AART_CLI_POETRY` | `poetry` | how to invoke Poetry, which builds the wheel |
 | `AART_CLI_INDEX_PUBLISH_URL` | unset | upload endpoint of a hosted index. Set, `publish-index.yml` uploads each published release's wheel there, and can be run again by tag; unset, a release only attaches it |
 | `AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET_NAME` | unset | **name** of a secret holding `user:token` for the publishing account |
+| `AART_CLI_LOCAL_VERSION_LABEL` | unset | a PEP 440 local label, such as `corp`, for the version of the wheel built here: `X.Y.Z+corp`. It keeps your wheel's filename apart from the public one on PyPI; `aart-cli==X.Y.Z` still matches it and pip prefers it. `aart-cli --version` keeps `X.Y.Z`. Lower-case letters and digits in dot-joined segments, no leading zero on a number; anything else fails the release |
 | `AART_CLI_REFERENCE_REGISTRY_URL` | unset | registry the release checklist reconciles against. Unset, those checks report `skipped` with a warning. It has no default: one naming a github.com repository reproduces nothing on an instance that cannot reach it |
 | `AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL` | unset | `<alias>=<url>` for the one Registry a wheel built here connects on a first run that has nothing configured: the first `aart-cli` terminal session or `consume` command, except `consume registry add` and `--offline`. Unset bakes nothing, which is what the public build does. The alias is part of the value because it appears in the path of everything installed from that Registry, so it is chosen once and not changed. A malformed value fails the release rather than somebody's first run |
 

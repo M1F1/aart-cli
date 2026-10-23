@@ -19,7 +19,8 @@ from aart_cli.model import Request
 
 UPGRADE_INVALID = DiagnosticCode("upgrade-invalid")
 _WHEEL_NAME_RE = re.compile(
-    r"^aart_cli-[0-9]+\.[0-9]+\.[0-9]+(?:(?:a|b|rc)[0-9]+)?-py3-none-any\.whl$"
+    r"^aart_cli-[0-9]+\.[0-9]+\.[0-9]+(?:(?:a|b|rc)[0-9]+)?(?:\+[a-z0-9]+(?:\.[a-z0-9]+)*)?"
+    r"-py3-none-any\.whl$"
 )
 
 
