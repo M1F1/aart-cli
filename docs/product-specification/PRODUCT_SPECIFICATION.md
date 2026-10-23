@@ -11938,3 +11938,33 @@ that label, `aart-cli --version` reports the tag's version, and `==` on the tag'
 it over the unlabelled one. The index receives it under that name, whatever the Release calls the
 asset. With no label set, the build is unchanged byte for byte.
 
+
+# 194. The TUI says what is new, and where to go for it
+
+Status: **ACCEPTED 2026-10-23 (D-478)**, on the owner's report that a Collection approved in the
+Registry stayed invisible until `s` was pressed, that nothing said a sync was due, and that Updates
+never listed anything (CP-41). This refines §82, §83, §161.10 and §165.11.
+
+- **The TUI looks at its Registries when it opens.** Before it takes the screen, the application
+  observes each connected Registry under `sync.mode`, as every CLI read already does. `auto`, the
+  default, publishes a newer approved snapshot and keeps the last known good one when the origin
+  cannot be reached. `manual` only compares. Each Registry is named on the terminal before it is
+  fetched.
+- **Updates lists what has a newer approved version.** An installation is an update when a
+  connected Registry now offers its artifact at a strictly newer SemVer version. The offers and the
+  machine are joined where the screens are composed, so a sync shows its updates at once. A measured
+  problem outranks an update. Installed and Updates show the version it moves to, as `Update → 1.0.1`.
+  An Updates row is the installation, which is what the update action addresses (§169.3).
+- **A Registry row says when its snapshot is not current.** It stays `connected` and keeps offering
+  what it approved. Under it the row says, as applicable, that the origin has newer approved content
+  and `s` syncs it; that the snapshot is stale, and how old; or that the origin could not be reached
+  and the snapshot from that age is used (§165.11).
+- **The Dashboard points at it.** The Updates entry carries `● N` and the Registries entry `● N to
+  sync`; the Dashboard's counts are followed by a line naming each and where to go. Screen 28's
+  *Show available updates* governs the Updates announcement only; Updates itself still lists them.
+- **Sync is still not update** (§161.7). Nothing installed moves without a reviewed update.
+
+**INV-295 — What the TUI calls an update is what a connected Registry offers newer.** An installed,
+ready artifact is drawn as an update on Installed, Updates and the Dashboard exactly when a connected
+Registry's current snapshot offers the same artifact at a strictly higher SemVer version, and an
+opened TUI has observed each enabled Registry under `sync.mode` before drawing.

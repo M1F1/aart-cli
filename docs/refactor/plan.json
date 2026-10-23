@@ -1510,6 +1510,43 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-41",
+      "title": "The TUI says what is new, and where to go for it",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Updates lists installations a connected Registry offers newer; rows are installations (§194, INV-295, D-478)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "The TUI observes each Registry under sync.mode on launch (§194, D-478)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "A Registry row says when its snapshot is not current (§194, §165.11)",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Dashboard and menu marks for updates and Registries to sync; Show available updates governs them",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Lab publish commands, end-to-end test, manual walkthrough",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "Focused verification and the PR",
+          "status": "done"
+        }
+      ]
     }
   ]
 }

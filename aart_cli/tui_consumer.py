@@ -10,10 +10,14 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, replace
-from typing import Callable, Protocol, TypeAlias, runtime_checkable
+from typing import Callable, Mapping, Protocol, TypeAlias, runtime_checkable
 
 from aart_cli.application.author_views import manifest_lines
-from aart_cli.application.consumer_session import ConsumerMachine
+from aart_cli.application.consumer_session import (
+    ConsumerMachine,
+    highest_offered,
+    with_offered_versions,
+)
 from aart_cli.application.consumer_ui import (
     ACTION_ANSWER_SCREENS,
     ACTION_REQUEST_SCREENS,
@@ -1434,7 +1438,57 @@ def render_lifecycle_outcome(
     return tuple(lines)
 
 
-def render_dashboard(view: DashboardView) -> tuple[str, ...]:
+#: What marks something new to look at: a newer approved version, or a Registry ahead of its snapshot.
+NEW_MARK = "●"
+
+
+def _badge(target: ApplicationScreen, view: DashboardView, *, show_updates: bool) -> str:
+    """What a Dashboard entry adds after its title when there is something new behind it (§194)."""
+
+    if target is ConsumerScreen.UPDATES and show_updates and view.update_count:
+        return f"  {NEW_MARK} {view.update_count}"
+    if target is ConsumerScreen.REGISTRIES and view.registries_to_sync:
+        return f"  {NEW_MARK} {view.registries_to_sync} to sync"
+    return ""
+
+
+def elapsed(seconds: int) -> str:
+    """A snapshot's age as a person reads it: minutes, hours or days, never seconds."""
+
+    if seconds < 60:
+        return "under a minute"
+    if seconds < 3600:
+        return f"{seconds // 60} min"
+    if seconds < 86400:
+        return f"{seconds // 3600} h"
+    days = seconds // 86400
+    return f"{days} {'day' if days == 1 else 'days'}"
+
+
+def registry_state(view: RegistryView) -> str:
+    """What a connected Registry's row adds when its snapshot is not known to be current (§194)."""
+
+    synced = (
+        ""
+        if view.last_sync_age_seconds is None
+        else f"synced {elapsed(view.last_sync_age_seconds)} ago"
+    )
+    if view.health == "not-synchronized":
+        return "newer approved content on its origin — press s to sync"
+    if view.health == "stale":
+        return f"{synced} — press s to check for newer content"
+    if view.health == "could-not-check" and view.availability == "connected":
+        # §165.11: offline, using the last synced snapshot.
+        return "could not reach its origin — using the snapshot " + (synced or "synced earlier")
+    return ""
+
+
+def render_dashboard(view: DashboardView, *, show_updates: bool = True) -> tuple[str, ...]:
+    """The counts, then what is new and where to go for it (§194).
+
+    `show_updates` is screen 28's switch. It governs the announcement; Updates still lists them.
+    """
+
     if not isinstance(view, DashboardView):
         raise ValueError("dashboard rendering needs a dashboard view")
     lines = [
@@ -1443,6 +1497,19 @@ def render_dashboard(view: DashboardView) -> tuple[str, ...]:
         f"{view.update_count} update, {view.attention_count} attention",
         f"{view.registry_count} registries — "
         f"{view.credential_attention_count} credentials need attention",
+    ]
+    if show_updates and view.update_count:
+        lines.append(
+            f"{NEW_MARK} {view.update_count} "
+            f"{'update' if view.update_count == 1 else 'updates'} available — open Updates"
+        )
+    if view.registries_to_sync:
+        lines.append(
+            f"{NEW_MARK} {view.registries_to_sync} "
+            f"{'registry has' if view.registries_to_sync == 1 else 'registries have'} newer content"
+            " — open Registries and press s"
+        )
+    lines += [
         "",
         # One marked statement like AART's above, its entries the lines under it (D-402).
         "Recent activity",
@@ -1472,6 +1539,9 @@ def render_registry(
         f"{'> ' if focused else '  '}{view.alias} — {_human(view.availability)}",
         f"    {view.artifact_count} {noun}",
     ]
+    state = registry_state(view)
+    if state:
+        lines.append(f"    {NEW_MARK if registry_needs_sync(view) else '⚠'} {state}")
     if not view.is_registry:
         # An empty row with no explanation reads as a registry that approved nothing, which is a
         # fault; this one is configured, healthy and simply not a registry (INV-026, B-038).
@@ -3132,6 +3202,7 @@ def read_consumer_offers(
     *,
     data_root: str,
     target: MarketplaceTarget,
+    observed: Mapping | None = None,
 ) -> Result[ConsumerOffers]:
     """Read the configured Marketplace once, so a draw never reaches the source store (D-051).
 
@@ -3147,7 +3218,7 @@ def read_consumer_offers(
 
     from aart_cli.io.configured_offers import read_configured_marketplace
 
-    read = read_configured_marketplace(effective, data_root=data_root)
+    read = read_configured_marketplace(effective, data_root=data_root, observed=observed)
     if isinstance(read, Err):
         return read
     rows = project_marketplace_rows(read.value.catalog, target)
@@ -3173,6 +3244,21 @@ def read_consumer_offers(
             project_registries(read.value.catalog),
         )
     )
+
+
+def offered_versions(marketplace: tuple[MarketplaceEntry, ...]) -> dict[str, str]:
+    """The highest version offered for each artifact, keyed `alias/kind/name`."""
+
+    return highest_offered(
+        (f"{entry.row.source_alias}/{entry.row.identity}", entry.row.version)
+        for entry in marketplace
+    )
+
+
+def registry_needs_sync(view: RegistryView) -> bool:
+    """Whether a connected Registry has newer approved content than its snapshot, or may have."""
+
+    return view.availability == "connected" and view.health in {"not-synchronized", "stale"}
 
 
 def screens_from(
@@ -3220,10 +3306,14 @@ def screens_from(
     # here rather than in the machine -- and the dashboard counts the registries among them, since
     # an authoring Source is not one and saying "2 registries" over one would be a false count.
     composed = registries or machine.registries
+    # §83: what is offered now, against what this machine has installed.
+    machine = with_offered_versions(machine, offered_versions(marketplace))
     dashboard = machine.dashboard
     if registries:
         dashboard = replace(
-            dashboard, registry_count=sum(1 for item in registries if item.is_registry)
+            dashboard,
+            registry_count=sum(1 for item in registries if item.is_registry),
+            registries_to_sync=sum(1 for item in registries if registry_needs_sync(item)),
         )
     return ConsumerScreens(
         dashboard,
@@ -3605,10 +3695,9 @@ class CanonicalScreenSource:
             # §173.6: a Collection, then its members under it.
             return tuple(row for row, _ in under_collections(collections, installations))
         if screen is ConsumerScreen.UPDATES:
+            # The installation, as on Installed: the update action looks it up by its row (§169.3).
             return tuple(
-                item.coordinate
-                for item in self._screens.updatable
-                if _matches(query, item.coordinate)
+                item.row for item in self._screens.updatable if _matches(query, item.coordinate)
             )
         if screen is ConsumerScreen.CREDENTIALS:
             return tuple(
@@ -4324,7 +4413,11 @@ class CanonicalScreenSource:
         if screen is ConsumerScreen.DASHBOARD:
             # `QA-087`: first-run guidance and the counts are both answers to "what state is this
             # in", so they belong here rather than above the rows, inside the rows' own block.
-            return _FIRST_RUN_LINES if self._first_run() else render_dashboard(screens.dashboard)
+            return (
+                _FIRST_RUN_LINES
+                if self._first_run()
+                else render_dashboard(screens.dashboard, show_updates=state.settings.show_updates)
+            )
         if screen is MaintainerScreen.REGISTRY:
             present = (
                 True
@@ -4713,6 +4806,7 @@ class CanonicalScreenSource:
             )
             menu = tuple(
                 f"{'>' if row == state.current_row else ' '} {_title(target)}"
+                + _badge(target, screens.dashboard, show_updates=state.settings.show_updates)
                 for row, target in zip(
                     state.rows,
                     targets,

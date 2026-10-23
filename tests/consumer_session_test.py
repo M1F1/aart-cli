@@ -13,6 +13,7 @@ import unittest
 from aart_cli.application.consumer_session import (
     InstalledInspection,
     assemble_consumer_machine,
+    with_offered_versions,
 )
 from aart_cli.application.consumer_views import ActivityRecord, project_receipt_detail
 from aart_cli.domain.credentials import (
@@ -103,13 +104,11 @@ def inspection(
     ownership: tuple[OwnershipReason, ...] = (),
     state: ComponentState = ComponentState.MATCHED,
     credentials=(TOKEN,),
-    update_available: bool = False,
 ) -> InstalledInspection:
     return InstalledInspection(
         InstalledRecord(coordinate(name), receipt(name, credentials), ownership),
         desired(name),
         current(name, state),
-        update_available,
     )
 
 
@@ -191,11 +190,14 @@ class ConsumerMachineTest(unittest.TestCase):
             project_receipt_detail(ActivityRecord("2026-08-31T14:32:00Z", lifecycle_outcome())),
         )
 
-        machine = assemble_consumer_machine(
-            (inspection(), inspection("jira", update_available=True)),
-            actions=receipts,
-            registries=(),
-            today=TODAY,
+        machine = with_offered_versions(
+            assemble_consumer_machine(
+                (inspection(), inspection("jira")),
+                actions=receipts,
+                registries=(),
+                today=TODAY,
+            ),
+            {"public/mcp/jira": "1.7.0"},
         )
 
         self.assertEqual(machine.dashboard.installed_count, 2)

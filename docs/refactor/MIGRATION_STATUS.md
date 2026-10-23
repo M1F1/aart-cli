@@ -4,6 +4,14 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-23, CP-41 steps 1–5 (§194, INV-295, D-478): the TUI says what is new.** Updates was
+always empty: nothing in production set `update_available`. The TUI also read only local
+snapshots, so a newly approved Collection appeared only after `s`. Now the application checks each
+Registry under `sync.mode` before it opens. Updates lists the installations that a connected
+Registry's snapshot offers a higher SemVer of, and its rows are installations. A Registry row says
+when its snapshot is behind, old or unreachable. The Dashboard and the menu count both. Evidence:
+`docs/refactor/slices/CP-41-tui-updates-and-freshness.md`.
+
 **2026-10-23, CP-40 step 1 (§193, INV-294, D-477): the index gets the name pip installs.** GitHub
 stores `+` in an asset name as `.`, and `publish-index` uploaded the fork's labelled wheel under that
 name, which pip refuses. It now names the wheel from its METADATA. Evidence:

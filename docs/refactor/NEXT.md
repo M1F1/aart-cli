@@ -1,6 +1,20 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-23, CP-40)
+## Where the work is (2026-10-23, CP-41)
+
+0.16.1 (CP-40) is released. **CP-41** makes the TUI say what is new (§194, INV-295, D-478). On
+launch it checks each Registry under `sync.mode`. Updates lists the installations a connected
+Registry offers newer versions of, and a Registry row says when its snapshot is not current. The
+Dashboard and the menu mark both. Evidence: `docs/refactor/slices/CP-41-tui-updates-and-freshness.md`.
+
+**Next: CP-42.** The owner's TUI crashed entering Installed (`ValueError` in `ConsumerUiEvent`): the
+same artifact installed for the same harness at project and at user scope gives two identical rows
+`coordinate#harness`. `installation_key` and the view `row` properties leave out the scope, which
+§169.3 makes part of installation identity. Add the scope to the row and to the installation key
+everywhere, but not to `owner.label`, which persisted credential addresses use. Add a regression
+test with both scopes installed. B-226 is noncritical.
+
+## Where the work was (2026-10-23, CP-40)
 
 0.16.0 (CP-38, CP-39) is released. The Enterprise fork's labelled 0.16.0 reached Nexus under the
 asset name GitHub gave it, `0.16.0.<label>`, which pip refuses. **CP-40** fixes `publish-index` to

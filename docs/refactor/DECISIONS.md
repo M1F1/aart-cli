@@ -11678,3 +11678,34 @@ it reaches the Registry's default branch, while adoption from any branch stays p
   this fix into `main` runs it again for `v0.16.0`. The index check looks for the right name, does
   not find it, and uploads. The wrongly named file pip ignores stays until a person removes it.
 
+
+## D-478 — The TUI observes its Registries on launch and shows what is newer (CP-41)
+
+- **What broke.** The owner approved a Collection, opened the TUI, and saw nothing until `s` on
+  Registries; the row said `connected` throughout, and Updates was empty. Three causes. Nothing in
+  the application computed update availability: `InstalledInspection.update_available` was only
+  ever set by tests. The TUI read only local snapshots, while every CLI read observes the origin
+  under `sync.mode` (default `auto`). `render_registry` drew `connected` for every health.
+- **Joined where the screens are composed.** `with_offered_versions` marks a ready installation an
+  update when the Marketplace offers a strictly newer SemVer version of the same `alias/kind/name`.
+  It runs in `screens_from`, which holds both the machine and the offers, so a sync's updates show
+  without measuring the machine again. The dead `update_available` plumbing is removed rather than
+  wired, so one mechanism answers.
+- **Strictly newer.** `consume update` replaces whenever the offered package differs. The Updates
+  screen promises "newer approved versions", so an equal or older offer is not an update there.
+- **Updates rows are installations.** `_prepare_update` looks installations up by row
+  (`coordinate#harness`); the Updates list returned coordinates, which would have drawn `Unknown`
+  health and addressed nothing.
+- **Observed on launch, announced first.** `tui.run` composes with `observe=print`;
+  `observe_configured_registries` applies `observe_configured_source` per enabled Registry. The
+  observation is kept for the session; a Registry that is synced, added or removed afterwards is
+  read from its own snapshot again. Composition without `observe` stays local, so the 19 tests that
+  compose the application touch no origin.
+- **Connected while behind or unreachable.** `not-synchronized`, and `could-not-check` with a
+  snapshot, are `connected`: the snapshot still offers what it approved (§165.11).
+- **The announcement follows screen 28.** *Show available updates* existed and governed nothing. It
+  now governs the Updates mark and Dashboard line; a Registry to sync is always marked, because it
+  is the precondition for seeing anything new.
+- **The lab can publish.** `scripts/manual_test.py publish version|collection` (and
+  `make manual-test-publish-version|collection`) act as author and maintainer against the lab's
+  remotes, so the manual walkthrough and an end-to-end test exercise the owner's scenario.

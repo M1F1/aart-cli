@@ -9,7 +9,7 @@ PYTHON ?= python
 REGISTRY ?=
 QUALITY = $(PYTHON) scripts/quality.py
 
-.PHONY: check test unit integration system-matrix release-freeze release-check wheel validate tach clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality mutants manual-test-setup manual-test-setup-empty manual-test-reset manual-test-maintainer manual-test-consumer manual-test-shell-maintainer manual-test-shell-consumer
+.PHONY: check test unit integration system-matrix release-freeze release-check wheel validate tach clean lint format format-check typecheck coverage packaging-check docs-check secret-shape-check quality mutants manual-test-setup manual-test-setup-empty manual-test-reset manual-test-maintainer manual-test-consumer manual-test-shell-maintainer manual-test-shell-consumer manual-test-publish-version manual-test-publish-collection
 
 # Aggregate. The Python discovery is the broad unit/regression gate; integration is end to end.
 test: unit integration
@@ -118,6 +118,14 @@ manual-test-maintainer:
 
 manual-test-consumer:
 	$(PYTHON) scripts/manual_test.py open consumer
+
+# Act as author and maintainer: a new approved version, or a new Collection, reaches the lab
+# Registry's remote while the consumer is left alone, so the TUI's Updates can be watched (CP-41).
+manual-test-publish-version:
+	$(PYTHON) scripts/manual_test.py publish version
+
+manual-test-publish-collection:
+	$(PYTHON) scripts/manual_test.py publish collection
 
 # Live harness evidence for installed-MCP smoke verification. Opt-in and local only: it spends a
 # real model call and needs a provider that answers, which CI has neither of. Name the harnesses

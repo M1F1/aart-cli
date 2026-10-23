@@ -617,6 +617,93 @@ Reset only this lab:
     return ManualLab(root, run_id, branch)
 
 
+def _tree(repo: Path) -> SourceSnapshot:
+    """A checkout's files as a snapshot, which is what a promotion is planned against."""
+
+    return SourceSnapshot(
+        SnapshotOrigin.LOCAL,
+        tuple(
+            _entry(
+                path.relative_to(repo).as_posix(),
+                path.read_text(encoding="utf-8"),
+                executable=bool(path.stat().st_mode & stat.S_IXUSR),
+            )
+            for path in sorted(repo.rglob("*"))
+            if path.is_file() and ".git" not in path.relative_to(repo).parts
+        ),
+    )
+
+
+def publish_version(raw_root: Path) -> str:
+    """The author revises `manual-check`; the maintainer promotes the next version and pushes it.
+
+    Everything a consumer then sees arrives through the Registry's remote, exactly as a merged
+    Registry change does, so the consumer side of the lab is left untouched (CP-41).
+    """
+
+    root = _safe_root(raw_root)
+    _marker(root)
+    skill, registry = root / "repositories/skill", root / "repositories/registry"
+    count = _git(skill, "rev-list", "--count", "HEAD")
+    _write(
+        skill / "manual-check/SKILL.md",
+        f"# Manual check\n\nA disposable AART test skill, revision {count}.\n",
+    )
+    revision = _commit(skill, f"fix: revise the manual skill ({count})")
+    _git(skill, "push", "origin", "HEAD")
+    authored = tuple(
+        entry for entry in _tree(skill).entries if str(entry.path).startswith("manual-check/")
+    )
+    promoted = _promote(
+        _tree(registry),
+        alias="manual-skill",
+        url="https://manual.aart.test/skill.git",
+        revision=revision,
+        authored=authored,
+    )
+    _write_snapshot(registry, promoted)
+    _commit(registry, "feat: promote the next manual-check version")
+    _git(registry, "push", "origin", "HEAD")
+    versions = registry / "registry/versions/skill/manual-check"
+    return max(
+        (path.stem for path in versions.glob("*.json")),
+        key=lambda item: tuple(int(part) for part in item.split(".")),
+    )
+
+
+def publish_collection(raw_root: Path, name: str = "lab-starter") -> None:
+    """The maintainer approves a new Collection of both fixtures and pushes it."""
+
+    root = _safe_root(raw_root)
+    _marker(root)
+    registry = root / "repositories/registry"
+    environment, _project = shell_environment(root, "maintainer")
+    _run(
+        (
+            sys.executable,
+            "-m",
+            "aart_cli.cli",
+            "maintain",
+            "registry",
+            "collection",
+            name,
+            "--source",
+            str(registry),
+            "--summary",
+            "Both lab fixtures",
+            "--include",
+            "skill/manual-check",
+            "--include",
+            "mcp/dummy-mcp",
+            "--yes",
+        ),
+        cwd=CHECKOUT,
+        env=environment,
+    )
+    _commit(registry, f"feat: approve the {name} Collection")
+    _git(registry, "push", "origin", "HEAD")
+
+
 _ROLE_PROJECTS = {
     "maintainer": "repositories/registry",
     "consumer": "consumer-project",
@@ -682,6 +769,11 @@ def _parser() -> argparse.ArgumentParser:
     shell = sub.add_parser("shell")
     shell.add_argument("role", choices=("maintainer", "consumer"))
     shell.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    publish = sub.add_parser(
+        "publish", help="publish a Registry change to the lab remote, as a merged change would"
+    )
+    publish.add_argument("what", choices=("version", "collection"))
+    publish.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     return parser
 
 
@@ -702,6 +794,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.action == "shell":
         return _shell(root, args.role)
+    if args.action == "publish":
+        if args.what == "version":
+            print(f"Published manual-check {publish_version(root)} to the lab Registry")
+        else:
+            publish_collection(root)
+            print("Published the lab-starter Collection to the lab Registry")
+        return 0
     return _open(root, args.role)
 
 

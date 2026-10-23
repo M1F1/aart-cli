@@ -20,6 +20,7 @@ scrolled would not be the review they confirmed.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from datetime import date
 
@@ -35,6 +36,7 @@ from aart_cli.domain.reconciliation import CurrentState, DesiredState
 from aart_cli.domain.remediations import Remediation
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import OwnershipReason, ResolvedSelection
+from aart_cli.protocol.semver import SemVer, parse_semver
 
 from .consumer_views import (
     ActivityView,
@@ -48,6 +50,7 @@ from .consumer_views import (
     ReceiptDetailView,
     RegistryView,
     activity_from_receipts,
+    offer_update,
     project_credential_record,
     project_dashboard,
     project_doctor,
@@ -74,8 +77,10 @@ __all__ = [
     "UnadoptedInstallation",
     "assemble_consumer_machine",
     "begin_installation",
+    "highest_offered",
     "installed_collections",
     "record_installation",
+    "with_offered_versions",
 ]
 
 FLOW_INVALID = DiagnosticCode("consumer-flow-invalid")
@@ -92,14 +97,12 @@ class InstalledInspection:
     record: InstalledRecord
     desired: DesiredState
     current: CurrentState
-    update_available: bool = False
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.record, InstalledRecord)
             or not isinstance(self.desired, DesiredState)
             or not isinstance(self.current, CurrentState)
-            or not isinstance(self.update_available, bool)
         ):
             raise ValueError("an installed inspection is invalid")
 
@@ -246,7 +249,6 @@ def assemble_consumer_machine(
             item.desired,
             item.current,
             ownership=item.record.ownership,
-            update_available=item.update_available,
             credentials=tuple(
                 by_reference[str(reference)]
                 for reference in item.record.credential_references
@@ -307,6 +309,84 @@ def assemble_consumer_machine(
         project_doctor(views, collections),
         tuple(sorted(configurations, key=lambda item: (item.coordinate, item.harness))),
     )
+
+
+def highest_offered(offers: Iterable[tuple[str, str]]) -> dict[str, str]:
+    """The highest of each artifact's offered versions, from `(artifact, version)` pairs.
+
+    A version that is not SemVer is not comparable, so it is left out rather than guessed at.
+    """
+
+    highest: dict[str, tuple[SemVer, str]] = {}
+    for artifact, version in offers:
+        parsed = parse_semver(version)
+        if not isinstance(parsed, Ok):
+            continue
+        if artifact not in highest or highest[artifact][0] < parsed.value:
+            highest[artifact] = (parsed.value, version)
+    return {artifact: version for artifact, (_parsed, version) in highest.items()}
+
+
+def with_offered_versions(machine: ConsumerMachine, offered: Mapping[str, str]) -> ConsumerMachine:
+    """`machine` with every ready installation a Registry now offers a newer version of an update.
+
+    `offered` maps an artifact, `alias/kind/name`, to the highest version its Registry offers now.
+    The machine is measured from this computer and the offers are read from the snapshots, at
+    different times (§83), so they are joined here, where the screens are composed, rather than when
+    either is read. A sync then shows its updates without measuring the machine again.
+
+    Only a strictly newer version is an update: a Registry offering the installed version, or an
+    older one, offers nothing to move to.
+    """
+
+    if not offered:
+        return machine
+    views = tuple(_with_offer(view, offered) for view in machine.installed)
+    if views == machine.installed:
+        return machine
+    health = {view.row: view.health for view in views}
+    collections = tuple(
+        project_installed_collection(
+            item.collection,
+            tuple(
+                MemberHealth(
+                    member.artifact,
+                    InstalledHealth(health.get(member.artifact, member.health.value)),
+                )
+                for member in item.members
+            ),
+        )
+        for item in machine.collections
+    )
+    dashboard = machine.dashboard
+    return replace(
+        machine,
+        dashboard=replace(
+            project_dashboard(
+                views,
+                registry_count=dashboard.registry_count,
+                credential_attention_count=dashboard.credential_attention_count,
+                recent_activity=dashboard.recent_activity,
+            ),
+            registries_to_sync=dashboard.registries_to_sync,
+        ),
+        installed=views,
+        collections=collections,
+        doctor=None if machine.doctor is None else project_doctor(views, collections),
+    )
+
+
+def _with_offer(view: InstalledArtifactView, offered: Mapping[str, str]) -> InstalledArtifactView:
+    artifact, _, version = view.coordinate.rpartition("@")
+    newer = offered.get(artifact)
+    if not artifact or newer is None:
+        return view
+    installed, available = parse_semver(version), parse_semver(newer)
+    if not isinstance(installed, Ok) or not isinstance(available, Ok):
+        return view
+    if not installed.value < available.value:
+        return view
+    return offer_update(view, newer)
 
 
 @dataclass(frozen=True, slots=True)
