@@ -86,6 +86,23 @@ def metadata(path: Path) -> dict[str, str]:
     return dict(email.parser.Parser().parsestr(raw).items())
 
 
+def wheel_filename(path: Path) -> str:
+    """The name this wheel must be published under: its own METADATA, then the asset's tags.
+
+    GitHub stores a `+` in an asset name as `.`, so a fork's labelled wheel comes back from its
+    Release as `aart_cli-1.4.0.corp-…`, which pip refuses as a wheel version. The distribution and
+    the version are therefore read out of the file (D-477). The tags after them hold no `+`, so the
+    asset's own are kept.
+    """
+
+    found = metadata(path)
+    parts = path.stem.split("-")
+    if len(parts) < 5 or "Name" not in found or "Version" not in found:
+        raise PublishError(f"{path.name} is not a wheel this can name")
+    distribution = re.sub(r"[-_.]+", "_", found["Name"]).lower()
+    return "-".join((distribution, found["Version"], *parts[-3:])) + ".whl"
+
+
 def form(path: Path) -> list[tuple[str, str]]:
     """The metadata fields for one wheel, in the shape the upload API asks for."""
 
@@ -153,7 +170,7 @@ def credentials() -> str:
 
 
 def released_wheel(tag: str, directory: Path) -> Path:
-    """Download the one wheel attached to the Release at `tag` into `directory`."""
+    """Download the one wheel attached to the Release at `tag`, named as its METADATA says."""
 
     api, repository = github_api.origin()
     try:
@@ -166,9 +183,9 @@ def released_wheel(tag: str, directory: Path) -> Path:
         content = github_api.request(asset["url"], accept="application/octet-stream")
     except github_api.GitHubError as error:
         raise PublishError(str(error)) from None
-    path = directory / asset["name"]
-    path.write_bytes(content)
-    return path
+    downloaded = directory / asset["name"]
+    downloaded.write_bytes(content)
+    return downloaded.rename(directory / wheel_filename(downloaded))
 
 
 class _Links(html.parser.HTMLParser):

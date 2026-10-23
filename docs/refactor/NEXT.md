@@ -1,6 +1,13 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-23, CP-39)
+## Where the work is (2026-10-23, CP-40)
+
+0.16.0 (CP-38, CP-39) is released. The Enterprise fork's labelled 0.16.0 reached Nexus under the
+asset name GitHub gave it, `0.16.0.<label>`, which pip refuses. **CP-40** fixes `publish-index` to
+name the wheel from its METADATA (D-477): `docs/refactor/slices/CP-40-released-wheel-name.md`. The
+fork repairs 0.16.0 by taking the fix into `main` and running `publish-index` for `v0.16.0` again.
+
+## Where the work was (2026-10-23, CP-39)
 
 0.16.0 (CP-38) is released. **CP-39** is done in its PR, which ships as 0.17.0: a fork labels its
 wheel's version (`AART_CLI_LOCAL_VERSION_LABEL`, §193, INV-294, D-476), so the public release can
