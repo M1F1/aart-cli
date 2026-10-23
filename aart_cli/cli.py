@@ -250,6 +250,31 @@ def _to_request(args: argparse.Namespace) -> Request:
 # --------------------------------------------------------------------------- #
 # Entry point                                                                  #
 # --------------------------------------------------------------------------- #
+def _seeds_first_run(args: argparse.Namespace, request: Request) -> bool:
+    """Whether this command connects the Registry the build carried, on a first run (B-168).
+
+    Only `consume` reads Registries; a maintainer works in a checkout and an author in a workspace.
+    `consume registry add` is the person choosing a Registry, which the seed must not pre-empt, and
+    `--offline` forbids the fetch a connection needs.
+    """
+
+    if args.command != "consume" or request.offline:
+        return False
+    return not (request.source_family == "registry" and request.source_action == "add")
+
+
+def _seed_first_run(request: Request) -> None:
+    """Connect the baked Registry before the command reads its configuration.
+
+    Said on stderr: stdout belongs to the command, and a `--json` reader must get only the document.
+    """
+
+    from .commands.first_run import announce_first_run_seed, seed_first_run
+
+    report = seed_first_run(request.command, request.user_home)
+    announce_first_run_seed(report, lambda line: print(line, file=sys.stderr))
+
+
 def _run_bare(parser: argparse.ArgumentParser, args: Optional[argparse.Namespace] = None) -> int:
     """Bare invocation: launch the TUI on a TTY, else print help."""
     if sys.stdin.isatty() and sys.stdout.isatty():
@@ -275,6 +300,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             parser, args.docs_path, as_json=args.json, out=sys.stdout, err=sys.stderr
         )
     request = _to_request(args)
+    if _seeds_first_run(args, request):
+        _seed_first_run(request)
     return DISPATCH[request.command](request)
 
 

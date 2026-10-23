@@ -104,4 +104,39 @@ def connect_baked_default_registry(
     return FirstRunSeedReport(added.value, seed.announcement, ())
 
 
-__all__ = ["FirstRunSeedReport", "connect_baked_default_registry"]
+def seed_first_run(command: str, user_home: str | None) -> FirstRunSeedReport:
+    """Seed if this is the first run, and never let a defect in doing so stop the run.
+
+    The one entry both routes take: the terminal before it composes, and a `consume` command before
+    it dispatches (B-168). A convenience may not stop the tool starting, so whatever went wrong,
+    the run continues as it would have with no baked Registry at all.
+    """
+
+    try:
+        return connect_baked_default_registry(Request(command=command, user_home=user_home))
+    except Exception:
+        return FirstRunSeedReport(None, (), ())
+
+
+def announce_first_run_seed(report: FirstRunSeedReport, write: Callable[[str], None]) -> None:
+    """Say what was connected, or why nothing was, through the channel the route gives.
+
+    The person did not choose this Registry, so a run that connected one silently could never
+    answer where it came from. A warning is said for the same reason: what follows will ask for a
+    Registry without being able to say that this build named one and it did not work.
+    """
+
+    for line in report.lines:
+        write(line)
+    for diagnostic in report.diagnostics:
+        write(f"warning: {diagnostic.message}")
+        for remediation in diagnostic.remediation:
+            write(f"  {remediation}")
+
+
+__all__ = [
+    "FirstRunSeedReport",
+    "announce_first_run_seed",
+    "connect_baked_default_registry",
+    "seed_first_run",
+]

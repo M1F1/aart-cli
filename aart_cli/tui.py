@@ -1384,32 +1384,17 @@ def _seed_first_run(user_home: Optional[str]) -> "FirstRunSeedReport":
     the application is composed so that what is composed already has the Registry in it.
     """
 
-    from .commands.first_run import FirstRunSeedReport, connect_baked_default_registry
-    from .model import Request
+    from .commands.first_run import seed_first_run
 
-    try:
-        return connect_baked_default_registry(Request(command="tui", user_home=user_home))
-    except Exception:
-        # A convenience may not stop the tool starting. Whatever went wrong, the run continues
-        # into the same first-run screen it would have reached with no baked Registry at all.
-        return FirstRunSeedReport(None, (), ())
+    return seed_first_run("tui", user_home)
 
 
 def _announce(report: "FirstRunSeedReport") -> None:
-    """Say what was connected, or why nothing was, before the terminal takes the screen.
+    """Say what was connected, or why nothing was, before the terminal takes the screen."""
 
-    The person did not choose this Registry, so a run that connected one silently could never
-    answer where it came from. A warning is printed for the same reason: the screen that follows
-    will ask for a Registry without being able to say that this build named one and it did not
-    work.
-    """
+    from .commands.first_run import announce_first_run_seed
 
-    for line in report.lines:
-        print(line)
-    for diagnostic in report.diagnostics:
-        print(f"warning: {diagnostic.message}")
-        for remediation in diagnostic.remediation:
-            print(f"  {remediation}")
+    announce_first_run_seed(report, print)
 
 
 def run(

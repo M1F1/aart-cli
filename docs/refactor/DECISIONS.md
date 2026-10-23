@@ -11616,3 +11616,21 @@ it reaches the Registry's default branch, while adoption from any branch stays p
 - **A dev channel is backlog (B-225).** Publishing `X.Y.Z.devN` builds of branches to a dev
   repository is useful only once someone installs unreleased versions with pip; `AART_CLI_REF`
   already lets a Registry run a branch.
+
+## D-475 — A first `consume` command connects the baked Registry too (CP-38, B-168)
+
+- **`consume`, not every command.** The owner's first run was a flag-form command, and it refused
+  with `no-source-configured` although the build named a Registry. Seeding every command was
+  weighed and rejected: the generated Registry CI runs `maintain registry …` on a fresh runner each
+  time, so it would clone the baked Registry on every pull request, needing Git credentials it
+  does not have. `author` and `reset` do not read a Registry either. `consume` is the family that
+  does, so a person's first command there is the one that seeds.
+- **Two `consume` commands do not seed.** `consume registry add` is the person choosing a Registry;
+  seeding first would connect another one and make it the default. `--offline` forbids the fetch a
+  connection needs.
+- **The report goes to stderr.** Stdout belongs to the command, and a `--json` reader must get only
+  the document. The terminal route keeps printing before curses starts.
+- **One entry for both routes.** `commands/first_run.seed_first_run` never raises and
+  `announce_first_run_seed` writes through the channel a route gives, so the terminal and the CLI
+  cannot drift. `load_runtime_configuration` still makes no implicit mutation (D-373).
+

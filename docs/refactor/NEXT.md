@@ -1,6 +1,13 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-22, CP-36 and CP-37 in PR #89)
+## Where the work is (2026-10-23, CP-38)
+
+0.15.0 is released. **CP-38** closes B-168: a first `consume` command connects the baked default
+Registry, as the terminal already did (D-475):
+`docs/refactor/slices/CP-38-first-consume-seeds.md`. Both steps are done, in one PR that ships as 0.16.0. Next is whatever the owner reports next. B-220
+awaits the owner's decision; B-225 is backlog.
+
+## Where the work was (2026-10-22, CP-36 and CP-37 in PR #89)
 
 CP-36 and CP-37 are done in PR #89, which ships as 0.15.0. Nothing critical is open. B-220 awaits
 the owner's decision; B-225 (development builds to an internal index) is backlog.

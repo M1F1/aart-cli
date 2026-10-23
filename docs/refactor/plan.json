@@ -1459,6 +1459,23 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-38",
+      "title": "A first consume command connects the baked default Registry",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Every consume command except registry add and --offline seeds on a first run (B-168, D-475)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Focused verification and the PR",
+          "status": "done"
+        }
+      ]
     }
   ]
 }

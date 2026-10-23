@@ -4269,6 +4269,9 @@ Deliberately not folded into CP-27: it is a product change, and the slice is the
 
 ## B-168 — the baked default Registry is connected by the terminal route only
 
+Status: CLOSED (2026-10-23) by CP-38 / D-475: every `consume` command seeds too, except
+`consume registry add` and `--offline`.
+
 **Found 2026-09-21, CP-27.3; noncritical.** `tui.run` seeds the baked Registry before it composes
 the application, because that is where an implicit configuration mutation is allowed to happen --
 `load_runtime_configuration` promises not to make one, and it is the path every command shares. So
