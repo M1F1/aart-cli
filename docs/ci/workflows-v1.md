@@ -43,6 +43,12 @@ When `AART_CLI_INDEX_PUBLISH_URL` is set, the `index` job then calls `publish-in
 separate workflow so that an index that refuses does not turn the release red, and so that any tag
 can be published again by hand. It checks nothing itself: it uploads the wheel the Release carries.
 
+The public repository publishes to PyPI the same way, with no other workflow. It sets
+`AART_CLI_INDEX_PUBLISH_URL` to `https://upload.pypi.org/legacy/` and names a secret holding
+`__token__:<PyPI API token>`; `AART_CLI_PIP_INDEX_URL` is unset there, so the check before the
+upload reads `https://pypi.org/simple`. A fork that bakes its own default Registry sets
+`AART_CLI_LOCAL_VERSION_LABEL`, so its wheel never shares a filename with the one on PyPI (D-476).
+
 Everything else is left to `pr-check`: a release is cut from a commit that reached `main`, and
 nothing reaches `main` except through a pull request that passed all ten gates.
 

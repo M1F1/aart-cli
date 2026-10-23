@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-23, CP-39 step 1 (§193, INV-294, D-476): a fork's wheel carries a local version label.**
+`AART_CLI_LOCAL_VERSION_LABEL` makes the fork's wheel `X.Y.Z+<label>`, so it never shares a filename
+with the public wheel on PyPI. `aart-cli==X.Y.Z` still matches it and prefers it, and `--version`
+stays `X.Y.Z`. A labelled wheel built with poetry-core passed the release check. Evidence:
+`docs/refactor/slices/CP-39-local-version-label.md`.
+
 **2026-10-23, CP-38 step 1 (D-475, B-168): a first `consume` command connects the baked
 Registry.** Only the terminal seeded, so a first flag-form command refused with
 `no-source-configured`. Every `consume` command now seeds too, except `consume registry add` and

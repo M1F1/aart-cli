@@ -188,7 +188,8 @@ def wheel_digest(root: Path = ROOT, *, output_dir: Path | None = None) -> tuple[
         # action applies and this build does not would make the published digest describe a file
         # nobody has.
         for script in injectors():
-            _script(script.stem).stamp(source_copy / "aart_cli" / _script(script.stem).TARGET.name)
+            module = _script(script.stem)
+            module.stamp(source_copy / module.TARGET.relative_to(ROOT))
         subprocess.run(
             [PYTHON, "scripts/build_wheel.py"],
             cwd=source_copy,
@@ -446,6 +447,17 @@ def baked_default_registry_value() -> str | None:
     """
 
     return os.environ.get("AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL", "").strip() or None
+
+
+def local_version_label_value() -> str | None:
+    """The local version label this release puts on its wheel, or ``None`` when it puts none.
+
+    Recorded for the reason the default Registry is: two wheels of one tag may now carry different
+    versions, and the receipt says which (D-476). Trimmed as `scripts/inject_local_version.py`
+    trims it.
+    """
+
+    return os.environ.get("AART_CLI_LOCAL_VERSION_LABEL", "").strip() or None
 
 
 def _remote_head_commit(result: subprocess.CompletedProcess[str] | None) -> str | None:
@@ -711,6 +723,7 @@ def check_release(
         "registry_commit": registry_evidence.commit,
         "registry_reconciliation": "skipped" if registry is None else "performed",
         "default_registry": baked_default_registry_value(),
+        "local_version_label": local_version_label_value(),
         "checks": [
             {
                 "name": name,

@@ -152,7 +152,10 @@ class EveryInjectorReachesBothBuilds(unittest.TestCase):
         return {path.name for path in (ROOT / "scripts").glob("inject_*.py")}
 
     def test_there_is_more_than_one_injector_to_keep_together(self) -> None:
-        self.assertEqual(self._injectors(), {"inject_commit.py", "inject_default_registry.py"})
+        self.assertEqual(
+            self._injectors(),
+            {"inject_commit.py", "inject_default_registry.py", "inject_local_version.py"},
+        )
 
     def test_the_release_action_runs_every_injector(self) -> None:
         action = (ROOT / ".github" / "actions" / "release" / "action.yml").read_text(
@@ -166,12 +169,15 @@ class EveryInjectorReachesBothBuilds(unittest.TestCase):
         release = _load("release")
         self.assertEqual({path.name for path in release.injectors()}, self._injectors())
 
-    def test_each_injector_stamps_a_module_the_package_carries(self) -> None:
+    def test_each_injector_stamps_a_file_the_wheel_is_built_from(self) -> None:
+        # A module the package carries, or the project file whose version names the wheel (D-476).
         release = _load("release")
         for path in release.injectors():
             with self.subTest(injector=path.name):
                 target = _load(path.stem).TARGET
-                self.assertTrue(target.is_relative_to(ROOT / "aart_cli"))
+                self.assertTrue(
+                    target.is_relative_to(ROOT / "aart_cli") or target == ROOT / "pyproject.toml"
+                )
                 self.assertTrue(target.exists())
 
 

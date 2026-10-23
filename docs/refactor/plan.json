@@ -1476,6 +1476,23 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-39",
+      "title": "A fork labels its wheel's version, so it never shares a filename with PyPI",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "AART_CLI_LOCAL_VERSION_LABEL labels the wheel's version; the release checks and records it (§193, INV-294, D-476)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Focused verification and the PR",
+          "status": "done"
+        }
+      ]
     }
   ]
 }
