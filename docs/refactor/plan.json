@@ -1572,6 +1572,11 @@
           "id": "4",
           "title": "Focused verification and the PR",
           "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Walk the manual lab; an update replaces exactly the chosen installations, and user rows are changed at user scope from any project",
+          "status": "done"
         }
       ]
     }

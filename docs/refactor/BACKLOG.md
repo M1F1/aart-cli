@@ -4960,3 +4960,37 @@ changes on another project's installation are refused with the directory to open
 Doing them in place would need each action to build its harness registry, lock and update target
 from the owner's root rather than from the session's host. Add it only when switching directories
 proves to be a real burden.
+
+## B-228 — Reviews name the artifact, not the installation
+
+Status: **open**, noncritical (CP-42 lab walk, D-479).
+
+The uninstall review says "review uninstall for lab/mcp/dummy-mcp@1.0.0". The configuration review
+says "change dummy-user for lab/mcp/dummy-mcp@1.0.0". Neither says which harness, scope or project
+the change is for. The screen before the review does name the installation (§195). The fix is to
+describe the installation in `project_lifecycle_plan`'s headings.
+
+## B-229 — `i` on Updates with nothing ticked does nothing visible
+
+Status: **open**, noncritical (CP-42 lab walk).
+
+On Updates, `i` with no row ticked redraws the same frame with no notice. Space then `i` works, as
+the walkthrough says. Either act on the row under the cursor, or say "tick an update with Space".
+
+## B-230 — `--project` elsewhere and a TUI update print "setup completion is unavailable"
+
+Status: **open**, noncritical (CP-42 lab walk). It may share B-188's cause.
+
+From a git Registry, `consume install … --project <another directory>` and a TUI update both print
+`setup completion is unavailable; the installed payload is unchanged`. The same install into the
+current directory does not. The payload is installed and works. Find why
+`configured_consumer_completion` fails for those hosts.
+
+## B-231 — Screen 22 shows a credential as Ready while it holds AART_NOT_SET
+
+Status: **open**, noncritical (CP-42 lab walk).
+
+After `--set-later`, an entry reads `Credentials: ✓ dummy-token  Ready  Used by 1`. The line under
+it says the credential is still the AART_NOT_SET placeholder. The provider reports the item
+present, so the check mark is about presence, not value. Draw the placeholder state in the
+credential summary.

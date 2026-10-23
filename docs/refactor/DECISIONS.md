@@ -11751,3 +11751,25 @@ Supersedes D-361's key shape.
     `host.root_for(owner.scope)`. The code is `consumer-action-elsewhere`, and the message names the
     installation and the directory to open.
   - This is the smallest safe choice. Acting in place under the owner's root is B-227.
+- **Found walking the manual lab (same day, same PR).** The setup was a Skill in claude for this
+  project, for the user and in a second project, then a newer version published. Three more
+  defects were found:
+  - Updating this project's row installed the new version into claude, opencode and tabnine. An
+    update re-installs through `_offer_installation`, which places into every profile the host
+    detected.
+  - The user's row, and the second project's Skill row, answered "nothing canonical is installed
+    here" with a raw key. `_inspections` read only the scope Settings prefer, and a placed
+    artifact is filtered by its path under this session's root.
+  - Reaching a user installation from a project still planned its removal at project scope.
+    The user's opencode entry would have been left behind (`harness:opencode` missing from the
+    plan).
+- **Choices.**
+  - `_inspections` reads every installation on the machine with the host's `scope_roots`. The key
+    alone picks the installation out. Missing keys are described.
+  - `_host_of` gives repair, configuration and uninstall the host at the installation's own scope.
+    Rows of both scopes ticked together are refused (`consumer-action-mixed-scopes`), because one
+    plan is prepared for one host.
+  - An update first resolves the versions with no `previous`. It then places the new version with
+    `InstallationAssignment`s taken from the replaced receipts' owners (harness, scope), and
+    narrows the host's profiles to those harnesses. A receipt naming no owner records no harness to
+    keep, so the update is refused.

@@ -11988,11 +11988,16 @@ This refines §169.3, §172 and §173.
   root, not against the directory aart-cli was opened in. Another project's installation therefore
   reads as it does in its own project.
 - **Changed only where it was made.** Repair, update, uninstall and configuration changes resolve
-  harness paths against this session's root for the scope. On an installation another project owns
-  they refuse, name it, and say which directory to open aart-cli in. Nothing is written.
+  harness paths against this session's root for the installation's own scope, whatever scope
+  Settings prefer. A user installation is therefore changed from any project, at user scope. On an
+  installation another project owns they refuse, name it, and say which directory to open aart-cli
+  in. Nothing is written. User and project rows ticked together are changed one scope at a time.
+- **An update replaces, and adds nothing.** The newer version goes into exactly the installations
+  chosen, each in its own harness, scope and root, and into no harness that did not have it.
 
 **INV-296 — One installation is one key, and it is measured and changed only under its own root.**
 Two installation keys are equal exactly when coordinate, harness label, scope and root are. Every
 listed installation is drawn as its own row and named with its harness and scope (and project). Its
 harness state is observed under its recorded root. No lifecycle or configuration action prepared in
-one project writes for an installation recorded under another.
+one project writes for an installation recorded under another. An update creates no installation
+that the installations it replaces did not already make up.

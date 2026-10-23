@@ -12,6 +12,7 @@ See `docs/refactor/plan.json`, epic CP-42.
 2. Each installation is measured under its own root. Done.
 3. Actions on another project's installation are refused. Done.
 4. Focused verification and the PR. Done: one PR.
+5. Walk the manual lab and fix what it finds. Done (see below).
 
 ## Why
 
@@ -45,6 +46,47 @@ One MCP installed in opencode for the user and in two projects had three keys
   refuses an owner root that is not this session's root for its scope. The code is
   `consumer-action-elsewhere`, and the message names the directory to open.
 
+## Manual lab walk
+
+The lab walk was driven through the real `aart-cli` application in its text terminal. Setup:
+`manual-check` in claude for this project, for the user and in `second-project`, and `dummy-mcp`
+in opencode in the same three places.
+
+Confirmed working:
+- Installed draws six rows and does not crash.
+- Doctor opens and reports no false `harness:opencode: missing`.
+- Screen 22 has one entry per installation, each named.
+- `u`, `r` and a configuration change on `second-project` are refused from the first project, and
+  nothing is written.
+- With `second-project`'s opencode entry removed by hand:
+  - Doctor flags only that installation;
+  - repair from the first project is refused;
+  - repair from `second-project` restores the file byte for byte.
+- A configuration change for this project's installation writes only this project's file.
+- After `publish version` and `publish collection`:
+  - the "Checking lab…" line appears;
+  - the Dashboard shows `● 3 updates available`;
+  - Updates has three rows `update → 1.0.1`;
+  - the Collection is in the Marketplace without `s`.
+
+Found, then fixed:
+- Updating this project's row installed 1.0.1 into claude, opencode and tabnine.
+- The user's row, and the second project's Skill row, answered "nothing canonical is installed
+  here" with a raw key.
+- Once user rows were reachable, a user MCP's removal was planned at project scope and left out
+  `harness:opencode`.
+
+Code (`consumer_actions.py`):
+- `_inspections` reads the whole machine and describes missing keys.
+- `_host_of` gives repair, configuration and uninstall the installation's own scope. Mixed scopes
+  are refused (`consumer-action-mixed-scopes`).
+- `_kept_assignments` makes an update place the new version into exactly the replaced
+  installations.
+
+Noted for later: B-228 (reviews name the artifact only), B-229 (`i` with nothing ticked),
+B-230 (setup warning for `--project` elsewhere and TUI updates), B-231 (`✓ Ready` beside
+AART_NOT_SET).
+
 ## Tests
 
 - `tests/installation_identity_rows_test.py` covers the owner's machine (user, `alpha` and `beta`
@@ -63,6 +105,13 @@ One MCP installed in opencode for the user and in two projects had three keys
     and writes nothing;
   - from B, the repair is prepared.
 
+- `tests/installation_changed_where_made_lab_e2e_test.py` uses the manual lab's real Git remotes
+  and the application `aart-cli` launches, driven in its text terminal. It checks that:
+  - this project's row updates only in claude;
+  - the user's row updates from a project, only in claude;
+  - the second project's row is refused, says where to go, and changes nothing;
+  - a user MCP removed from a project takes its user opencode entry with it;
+  - user and project rows ticked together are refused, and nothing is removed.
 - Tests that spelled keys as `coordinate#harness` now compose them, or assert the described name:
   `consumer_application_e2e_test.py`, `installed_artifact_paths_test.py`,
   `installed_mcp_test_e2e_test.py`, `collection_installed_e2e_test.py`,
@@ -80,3 +129,8 @@ One MCP installed in opencode for the user and in two projects had three keys
 | Screen 22 heading prints the raw key | only the screen-22 naming test |
 | Observation back to the session's registry | both measured-where-made tests |
 | `_inspections` refusal disabled | the four refusal subtests |
+| Update placement not narrowed to the replaced installations | this project's and the user's update |
+| `_inspections` narrowed back to the session's scope | user update, other-project refusal, user removal, mixed scopes |
+| `_host_of` ignores the installation's scope | user MCP removal (plan lacked `harness:opencode`) |
+| First update draft keeps `previous` | user update ("a previous version was named … not being installed") |
+| Mixed-scope refusal disabled | the mixed-scope test |

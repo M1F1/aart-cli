@@ -11,7 +11,9 @@ Dashboard and the menu mark both. Evidence: `docs/refactor/slices/CP-41-tui-upda
 And Credentials entries. The installation key now carries scope and root, and each entry names its
 installation. Another project's installation is measured under its own root, and changing it from
 here is refused (§195, INV-296, D-479): `docs/refactor/slices/CP-42-installation-identity.md`.
-B-226 and B-227 are noncritical.
+Walking the manual lab then found three more defects, now fixed. An update installed into every
+harness instead of the one it replaced. User rows could not be changed from a project. A user
+MCP's removal was planned at project scope. B-226–B-231 are noncritical.
 
 ## Where the work was (2026-10-23, CP-40)
 
