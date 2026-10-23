@@ -4,6 +4,11 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-23, CP-38 step 1 (D-475, B-168): a first `consume` command connects the baked
+Registry.** Only the terminal seeded, so a first flag-form command refused with
+`no-source-configured`. Every `consume` command now seeds too, except `consume registry add` and
+`--offline`; the report goes to stderr. Evidence: `docs/refactor/slices/CP-38-first-consume-seeds.md`.
+
 **2026-10-22, CP-37 step 1 (§192, INV-293, D-474): publishing to an internal index can be
 retried.** The upload left the release job for `publish-index.yml`, which `release.yml` calls after
 attaching the wheel and anyone can run by tag. It downloads the Release's wheel and skips a file the

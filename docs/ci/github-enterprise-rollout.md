@@ -500,8 +500,10 @@ after fetching and fails on a mismatch, on purpose. Take the release into the co
 
 ## Part 5 — Point consumers at the registry
 
-Each person installs `aart-cli` as in [Part 2, step 5](#step-5--install-aart-cli-on-your-own-machine), then
-adds the registry once:
+Each person installs `aart-cli` as in [Part 2, step 5](#step-5--install-aart-cli-on-your-own-machine). A wheel
+built with `AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL` connects that registry on its own, the first
+time the person opens the terminal UI or runs a `consume` command. Without it, each person adds the
+registry once:
 
 ```bash
 aart-cli consume registry add --alias company --kind git \
@@ -559,7 +561,7 @@ Read by `.github/workflows/pr-check.yml`, `.github/workflows/release.yml` and
 | `AART_CLI_INDEX_PUBLISH_URL` | unset | upload endpoint of a hosted index. Set, `publish-index.yml` uploads each published release's wheel there, and can be run again by tag; unset, a release only attaches it |
 | `AART_CLI_INDEX_PUBLISH_CREDENTIALS_SECRET_NAME` | unset | **name** of a secret holding `user:token` for the publishing account |
 | `AART_CLI_REFERENCE_REGISTRY_URL` | unset | registry the release checklist reconciles against. Unset, those checks report `skipped` with a warning. It has no default: one naming a github.com repository reproduces nothing on an instance that cannot reach it |
-| `AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL` | unset | `<alias>=<url>` for the one Registry a wheel built here connects on a first run that has nothing configured. Unset bakes nothing, which is what the public build does. The alias is part of the value because it appears in the path of everything installed from that Registry, so it is chosen once and not changed. A malformed value fails the release rather than somebody's first run |
+| `AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL` | unset | `<alias>=<url>` for the one Registry a wheel built here connects on a first run that has nothing configured: the first `aart-cli` terminal session or `consume` command, except `consume registry add` and `--offline`. Unset bakes nothing, which is what the public build does. The alias is part of the value because it appears in the path of everything installed from that Registry, so it is chosen once and not changed. A malformed value fails the release rather than somebody's first run |
 
 ### Variables a registry reads
 

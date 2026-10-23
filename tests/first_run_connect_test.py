@@ -261,6 +261,78 @@ class TheTerminalStartupSeedsBeforeItComposes(unittest.TestCase):
         self.assertIn("open Registries and choose Add Registry", joined)
 
 
+class TheFlagFormSeedsAConsumerToo(unittest.TestCase):
+    """B-168: a first run that is a `consume` command connects the baked Registry as well.
+
+    Only `consume`, because that is the family that reads Registries; a maintainer works in a
+    checkout and an author in a workspace, and neither should reach the network for a Registry it
+    never asked for. `consume registry add` is the person choosing a Registry, and `--offline`
+    forbids the fetch a connection needs, so neither seeds.
+    """
+
+    def _main(self, *argv: str) -> tuple[list[Request], list[str], str, str]:
+        from io import StringIO
+
+        from aart_cli import cli
+
+        seeded: list[Request] = []
+        dispatched: list[str] = []
+
+        def record(request: Request, **_: object) -> FirstRunSeedReport:
+            seeded.append(request)
+            return FirstRunSeedReport(None, ("Connected company (" + URL + ").",), ())
+
+        def handler(request: Request) -> int:
+            dispatched.append("seeded" if seeded else "unseeded")
+            return 0
+
+        out, err = StringIO(), StringIO()
+        with (
+            mock.patch.object(first_run, "connect_baked_default_registry", record),
+            mock.patch.dict(cli.DISPATCH, {name: handler for name in cli.DISPATCH}),
+            mock.patch("sys.stdout", out),
+            mock.patch("sys.stderr", err),
+        ):
+            cli.main(list(argv))
+        return seeded, dispatched, out.getvalue(), err.getvalue()
+
+    def test_a_consume_command_seeds_before_it_runs(self) -> None:
+        seeded, dispatched, _, _ = self._main("consume", "list", "--json")
+        self.assertEqual(len(seeded), 1)
+        self.assertEqual(dispatched, ["seeded"])
+
+    def test_what_was_connected_goes_to_stderr_so_json_stays_clean(self) -> None:
+        _, _, out, err = self._main("consume", "list", "--json")
+        self.assertNotIn(URL, out)
+        self.assertIn(URL, err)
+
+    def test_adding_a_registry_is_a_choice_and_seeds_nothing(self) -> None:
+        seeded, dispatched, _, _ = self._main(
+            "consume", "registry", "add", "--alias", "mine", "--kind", "git", "--location", URL
+        )
+        self.assertEqual((seeded, dispatched), ([], ["unseeded"]))
+
+    def test_offline_forbids_the_fetch_and_seeds_nothing(self) -> None:
+        seeded, _, _, _ = self._main("consume", "install", "x", "--offline", "--yes")
+        self.assertEqual(seeded, [])
+
+    def test_a_maintainer_command_seeds_nothing(self) -> None:
+        seeded, _, _, _ = self._main("maintain", "registry", "validate")
+        self.assertEqual(seeded, [])
+
+    def test_a_defect_in_seeding_never_stops_the_command(self) -> None:
+        from aart_cli import cli
+
+        def explode(*_: object, **__: object):
+            raise RuntimeError("something nobody predicted")
+
+        with (
+            mock.patch.object(first_run, "connect_baked_default_registry", explode),
+            mock.patch.dict(cli.DISPATCH, {name: (lambda _: 0) for name in cli.DISPATCH}),
+        ):
+            self.assertEqual(cli.main(["consume", "list"]), 0)
+
+
 class ARegistryThatCannotBeReachedLeavesNothingBehind(unittest.TestCase):
     """The claim end to end, on a real home, with a real clone that really fails.
 
