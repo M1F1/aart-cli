@@ -11773,3 +11773,42 @@ Supersedes D-361's key shape.
     `InstallationAssignment`s taken from the replaced receipts' owners (harness, scope), and
     narrows the host's profiles to those harnesses. A receipt naming no owner records no harness to
     keep, so the update is refused.
+
+## D-480 — Marketplace draws Artifact and Type; `d` shows the other columns (CP-43)
+
+Refines D-456, D-458 (§181) and D-460 (§182). Product Specification §196, INV-297.
+
+- **What was reported.** A colleague of the owner found Marketplace's seven columns overwhelming,
+  to read and to move through. The owner asked for the offer's `name@version` and a new Type column
+  by default, with the rest behind a key of its own, separate from Verbose.
+- **Choices.**
+  - Type words: `Skill`, `MCP`, `Guideline`, `Hook`, `Memory`, `Plugin`, `Collection`
+    (`OFFER_TYPES` in `consumer_views.py`). The Artifact column drops the kind, which Type now
+    carries.
+  - `d` is free on Marketplace. It is offered as two bindings, `Details` and `Hide details`, of
+    which only the one that changes something is enabled, so the footer names what `d` does next.
+    `_SCREEN_BINDINGS` stays the one authority for the key and its label (QA-026).
+  - The choice is session state (`ConsumerUiState.marketplace_details`), not a Settings value.
+    The owner wanted the details available but not the default, so every start begins without
+    them. Persisting the choice is not asked for.
+  - The cells are always computed in full, and the renderer draws the first two or all of them. The
+    renderer's default draws all, as it always has. The product default, without details, lives in
+    the state.
+  - One line per offer (the owner, after seeing the lab, where `team-glossary@1.0.` wrapped onto
+    a second line): there is no wrapping and no stacked form. When the window is too narrow:
+    - details narrow widest-first down to their heading;
+    - values are cut with `…`;
+    - columns that still do not fit are left off from the right and named under the list ("Widen
+      the window to see: …");
+    - Type is left off before Artifact narrows.
+    A drawn heading is never cut. The narrowing range is one rule,
+    `range(min(_BRIEF, len(sizes) - 1), len(sizes))`, so whichever columns are past Artifact and
+    Type (or Type, or Artifact alone) give up width. Leaving a column off is preferred to narrowing
+    Artifact, because the owner named an unreadable offer name as the worst case. §182's "fits 80
+    columns" no longer applies.
+  - The headings and rule are drawn even with no offers, so "Nothing here yet." stays a message
+    under them rather than becoming the screen's bulleted status.
+  - The toggle resets Marketplace paging to follow the cursor, as `v` does, because the line
+    count changes.
+  - Two Registries' copies of one `name@version` look alike without the details. That is the
+    owner's trade: Registry is one `d` away, and `v` names the source of the offer under the cursor.

@@ -86,7 +86,7 @@ class MarketplaceShellTest(unittest.TestCase):
 
         self.assertEqual(state.rows, (*self.keys(), str(COLLECTION)))
         # The Artifact column is `kind/name@version`; the alias is the Registry column (§181).
-        self.assertRegex(terminal.last, r"skill/review@1\.0\.0\s+company\s")
+        self.assertRegex(terminal.last, r"review@1\.0\.0\s+Skill\n")
 
     def test_a_row_is_the_offer_alone_and_its_description_is_verbose(self):
         """A summary on the row ran past the width and was cut off; Description holds it whole."""
@@ -97,8 +97,8 @@ class MarketplaceShellTest(unittest.TestCase):
         _, verbose = drive(UP, state=verbose_at)
 
         self.assertNotIn("Everything a developer needs", fast.last)
-        alias, _, collection = str(COLLECTION).partition("/")
-        self.assertRegex(fast.last, rf"> \[ \] {collection}\s+{alias}\s+not installed\n")
+        name = str(COLLECTION).rpartition("/")[2]
+        self.assertRegex(fast.last, rf"> \[ \] {name}\s+Collection\n")
         self.assertRegex(verbose.last, r"Description\s+Everything a developer needs")
 
     def test_enter_on_an_artifact_keeps_the_marketplace_and_its_controls(self):
@@ -106,7 +106,7 @@ class MarketplaceShellTest(unittest.TestCase):
 
         self.assertEqual(state.session.screen, ConsumerScreen.MARKETPLACE)
         # The Artifact column is `kind/name@version`; the alias is the Registry column (§181).
-        self.assertRegex(terminal.last, r"skill/review@1\.0\.0\s+company\s")
+        self.assertRegex(terminal.last, r"review@1\.0\.0\s+Skill\n")
         self.assertIn("[i] Install", terminal.last)
         self.assertIn("[Space] Select", terminal.last)
         self.assertIn("[v] More info", terminal.last)

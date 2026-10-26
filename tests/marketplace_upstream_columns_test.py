@@ -2,8 +2,8 @@
 
 The owner adopted the same Skill name from two repositories under two Registry names, and the
 Marketplace could not tell them apart at a glance: the Artifact column carried the Registry alias
-and nothing said where the work came from. Registry and Upstream are columns now; the Artifact
-column is `kind/name@version`.
+and nothing said where the work came from. Registry and Upstream are columns now, drawn with the
+details `d` shows (§196); the Artifact column is `name@version` and the kind is its Type.
 """
 
 from __future__ import annotations
@@ -71,7 +71,8 @@ class MarketplaceUpstreamColumnsTest(unittest.TestCase):
                 upstream="https://github.com/obra/superpowers.git",
             ),
             (
-                "skill/review@1.2.0",
+                "review@1.2.0",
+                "Skill",
                 "company",
                 "obra/superpowers",
                 "not installed",
@@ -82,18 +83,36 @@ class MarketplaceUpstreamColumnsTest(unittest.TestCase):
         )
 
     def test_the_rows_are_keyed_by_offer_while_the_artifact_column_drops_the_alias(self) -> None:
-        cells = ("skill/review@1.2.0", "company", "obra/superpowers", "not installed", "", "", "")
+        cells = (
+            "review@1.2.0",
+            "Skill",
+            "company",
+            "obra/superpowers",
+            "not installed",
+            "",
+            "",
+            "",
+        )
         key = "company/skill/review@1.2.0"
 
         lines = render_marketplace_rows(
-            (cells,), current=key, selected=(key,), keys=(key,), width=120
+            (cells,), current=key, selected=(key,), keys=(key,), width=120, details=True
         )
 
         self.assertEqual(
             lines[0].split(),
-            ["Artifact", "Registry", "Upstream", "Status", "Scope", "Harnesses", "Configuration"],
+            [
+                "Artifact",
+                "Type",
+                "Registry",
+                "Upstream",
+                "Status",
+                "Scope",
+                "Harnesses",
+                "Configuration",
+            ],
         )
-        self.assertTrue(lines[2].startswith("> [x] skill/review@1.2.0"), lines)
+        self.assertTrue(lines[2].startswith("> [x] review@1.2.0"), lines)
         self.assertNotIn("company/skill", lines[2])
 
     def test_the_marketplace_frame_shows_the_columns_and_more_info_the_whole_upstream(self) -> None:
@@ -104,7 +123,9 @@ class MarketplaceUpstreamColumnsTest(unittest.TestCase):
         source, state = _listed(
             dataclasses.replace(composed, marketplace=(offer, *composed.marketplace[1:]))
         )
-        state = dataclasses.replace(state, cursor=0, viewport_columns=160, viewport_rows=60)
+        state = dataclasses.replace(
+            state, cursor=0, viewport_columns=160, viewport_rows=60, marketplace_details=True
+        )
 
         drawn = "\n".join(frame(source, state))
 
@@ -112,7 +133,7 @@ class MarketplaceUpstreamColumnsTest(unittest.TestCase):
         self.assertIn("Registry", drawn)
         self.assertIn("Upstream", drawn)
         line = next(item for item in drawn.splitlines() if item.startswith(">"))
-        self.assertIn(f"{row.identity}@{row.version}", line)
+        self.assertIn(f"{row.identity.name}@{row.version}", line)
         self.assertIn(str(row.source_alias), line)
         self.assertIn("acme/superpowers", line)
         self.assertNotIn(row.key, line)

@@ -48,8 +48,8 @@ from tests.consumer_shell_test import DOWN, ENTER, ESCAPE, INSTALL_CUSTOM, SPACE
 
 TODAY = dt.date(2026, 9, 1)
 OFFERED = "company/skill/code-review@1.2.0"
-#: How Marketplace's grid draws OFFERED: the Artifact column, then the Registry column (§181).
-DRAWN = r"skill/code-review@1\.2\.0\s+company\s"
+#: How Marketplace's grid draws OFFERED: `name@version`, then its Type (§196).
+DRAWN = r"code-review@1\.2\.0\s+Skill\n"
 #: The same artifact as one installation. Rows and focus address this rather than `OFFERED`: each
 #: harness is its own installation (§169.3), so the artifact alone no longer names one thing to act
 #: on. These tests install into claude only, so there is exactly one.

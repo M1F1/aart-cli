@@ -86,6 +86,7 @@ from aart_cli.application.consumer_views import (
     matrix_from_row,
     matrix_rows,
     navigation_targets,
+    offer_cells,
     pair_choice_problems,
     pair_from_key,
     pair_key,
@@ -5092,8 +5093,7 @@ class CanonicalScreenSource:
                     )
                 elif entry is not None:
                     status = "installed" if key.partition("@")[0] in held else "not installed"
-                    alias, _, collection = key.partition("/")
-                    cells.append((collection, alias, "", status))
+                    cells.append((*offer_cells(key), "", status))
             return render_marketplace_rows(
                 cells,
                 current=state.current_row,
@@ -5101,6 +5101,7 @@ class CanonicalScreenSource:
                 keys=tuple(key for key in state.rows if key in offered),
                 # The whole terminal, not the measure, so a row fits on one line (D-456).
                 width=state.viewport_columns,
+                details=state.marketplace_details,
             )
         if screen in (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE):
             preview = screens.offered_collection(state.focus)

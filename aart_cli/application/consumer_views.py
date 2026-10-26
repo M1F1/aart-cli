@@ -1895,6 +1895,26 @@ def configuration_cell(missing: int, *, installed: bool) -> str:
     return f"not configured ({missing} missing)" if missing else "configured"
 
 
+#: The Type column's word for each kind an offer can be (§196); a Collection is an offer, not a kind.
+OFFER_TYPES: dict[str, str] = {
+    "skill": "Skill",
+    "mcp": "MCP",
+    "guideline": "Guideline",
+    "hook": "Hook",
+    "memory": "Memory",
+    "plugin": "Plugin",
+    "collection": "Collection",
+}
+
+
+def offer_cells(key: str) -> tuple[str, str, str]:
+    """An offer's Artifact, Type and Registry cells from its `alias/kind/name@version` (INV-297)."""
+
+    alias, _, offered = key.partition("/")
+    kind, _, name_version = offered.partition("/")
+    return name_version, OFFER_TYPES.get(kind, kind), alias
+
+
 def marketplace_cells(
     key: str,
     installed: tuple[InstalledArtifactView, ...],
@@ -1902,10 +1922,10 @@ def marketplace_cells(
     *,
     upstream: str = "",
 ) -> tuple[str, ...]:
-    """One Marketplace row's columns (§173.8, §181), read off the installations of any version.
+    """One Marketplace row's columns (§173.8, §181, §196), read off the installations of any version.
 
-    The artifact as `kind/name@version`, the Registry that offers it and the upstream it was taken
-    from (§181), then: installed or not or with an update available; the scopes it is installed in,
+    The artifact as `name@version` and its Type, the Registry that offers it and the upstream it was
+    taken from (§181), then: installed or not or with an update available; the scopes it is installed in,
     with how many projects; the harnesses, each detected one that could host it and a `✓` on each
     that holds it; and whether it is configured, with the inputs still `AART_NOT_SET` summed over
     installations because each keeps its own (§169.4, §182). The two harness facts share one column so a row fits the measure.
@@ -1925,10 +1945,8 @@ def marketplace_cells(
     user = any(item.scope == "user" for item in held)
     holding = {item.harness for item in held if item.harness}
     unset = sum(len(item.placeholders) for item in held)
-    alias, _, artifact_version = key.partition("/")
     return (
-        artifact_version,
-        alias,
+        *offer_cells(key),
         short_upstream(upstream),
         status,
         " + ".join(part for part in ("user" if user else "", projects) if part),

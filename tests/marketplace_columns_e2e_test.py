@@ -28,20 +28,35 @@ from tests.configured_install_command_e2e_test import COORDINATE
 from tests.consumer_application_e2e_test import _actions
 from tests.installed_multi_uninstall_e2e_test import SECOND, _two_skills
 
-_HEADINGS = ("Artifact", "Registry", "Upstream", "Status", "Scope", "Harnesses", "Configuration")
+_HEADINGS = (
+    "Artifact",
+    "Type",
+    "Registry",
+    "Upstream",
+    "Status",
+    "Scope",
+    "Harnesses",
+    "Configuration",
+)
 
 
 def _offered(coordinate: str) -> str:
-    """The Artifact column: the offer without its Registry alias, which has its own (§181)."""
+    """The Artifact column: the offer's `name@version`; Type and Registry have their own (§196)."""
 
-    return coordinate.partition("/")[2]
+    return coordinate.rpartition("/")[2]
 
 
 def _rows(env, screen: ConsumerScreen) -> list[str]:
     with mock.patch.dict(os.environ, env.xdg, clear=False):
         source = _actions(env).source()
         empty = ConsumerUiState(ConsumerSession(screen))
-        state = ConsumerUiState(ConsumerSession(screen), rows=source.rows(empty))
+        # The details are what this test reads, and `d` shows them (§196).
+        state = ConsumerUiState(
+            ConsumerSession(screen),
+            rows=source.rows(empty),
+            marketplace_details=True,
+            viewport_columns=160,
+        )
         if screen is not ConsumerScreen.MARKETPLACE:
             return [line for line in frame(source, state) if "[ ]" in line]
         lines = source.actions(state)
@@ -111,7 +126,8 @@ class CellsTest(unittest.TestCase):
         self.assertEqual(
             marketplace_cells("company/skill/review@1.2.0", installed, ("claude", "opencode")),
             (
-                "skill/review@1.2.0",
+                "review@1.2.0",
+                "Skill",
                 "company",
                 "",
                 "update available",
@@ -122,7 +138,7 @@ class CellsTest(unittest.TestCase):
         )
         self.assertEqual(
             marketplace_cells("company/skill/lint@1.0.0", installed, ()),
-            ("skill/lint@1.0.0", "company", "", "not installed", "", "", ""),
+            ("lint@1.0.0", "Skill", "company", "", "not installed", "", "", ""),
         )
 
     def test_an_installation_names_its_scope_and_project(self) -> None:
@@ -172,12 +188,12 @@ class CellsTest(unittest.TestCase):
             if any(health == "update" for *_, health in made)
             else "installed"
         )
-        self.assertEqual(cells[3], expected_status)
+        self.assertEqual(cells[4], expected_status)
         user = any(scope == "user" for _, scope, _, _ in made)
         count = f"{len(projects)} project{'s' if len(projects) != 1 else ''}" if projects else ""
-        self.assertEqual(cells[4], " + ".join(part for part in ("user" * user, count) if part))
+        self.assertEqual(cells[5], " + ".join(part for part in ("user" * user, count) if part))
         holding = {harness for harness, *_ in made}
-        self.assertEqual(cells[5].count("✓"), len(holding))
+        self.assertEqual(cells[6].count("✓"), len(holding))
 
 
 if __name__ == "__main__":

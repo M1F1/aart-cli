@@ -1,6 +1,17 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-23, CP-41 and CP-42)
+## Where the work is (2026-10-23, CP-43)
+
+0.17.0 (CP-41, CP-42) is released. **CP-43** answers a colleague's report that Marketplace's seven
+columns were overwhelming. A row now shows the offer's `name@version` and its Type. `d` shows
+Registry, Upstream, Status, Scope, Harnesses and Configuration after them, for the session, and
+`d` again hides them. Each offer is one line at any width: values are cut with `…`, and columns
+with no room are left off and named (§196, INV-297, D-480):
+`docs/refactor/slices/CP-43-marketplace-details-columns.md`.
+Steps 1–2 are done and verified; the PR waits for the owner. PyPI publication waits for the
+Enterprise fork to confirm the labelled 0.17.0 wheel installs from Nexus.
+
+## Where the work was (2026-10-23, CP-41 and CP-42)
 
 0.16.1 (CP-40) is released. **CP-41** makes the TUI say what is new (§194, INV-295, D-478). On
 launch it checks each Registry under `sync.mode`. Updates lists the installations a connected
