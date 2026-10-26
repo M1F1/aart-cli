@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.0](https://github.com/M1F1/aart-cli/compare/v0.17.0...v0.18.0) (2026-10-26)
+
+
+### Added
+
+* an artifact can point to its documentation, shown wherever it is explained ([1fb3841](https://github.com/M1F1/aart-cli/commit/1fb38413f187abf795e7dc3de8b050ef2ba07892))
+* Marketplace shows Artifact and Type, with the other columns one key away ([dbf2bb3](https://github.com/M1F1/aart-cli/commit/dbf2bb3f5957a5196c47cbe07742c720a531d013))
+
 ## [0.17.0](https://github.com/M1F1/aart-cli/compare/v0.16.1...v0.17.0) (2026-10-23)
 
 
