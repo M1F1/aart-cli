@@ -1171,7 +1171,7 @@ def _configured_lifecycle(
             remediation=(
                 "run the same command in a terminal, where the credential store asks for each",
                 "pass --set-later instead, then set each with aart-cli consume inputs "
-                "set-credential",
+                "set-credential COORDINATE INPUT --yes",
             ),
         )
         _emit(

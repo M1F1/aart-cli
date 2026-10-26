@@ -106,7 +106,8 @@ def parse_command_line_input(text: str, *, flag: str) -> Result[CommandLineInput
 CREDENTIAL_REMEDIATION = (
     "run the command with --yes in a terminal: the credential store asks for it, and aart-cli "
     "never sees it",
-    "pass --set-later instead, then set it with aart-cli consume inputs set-credential",
+    "pass --set-later instead, then set it with aart-cli consume inputs set-credential "
+    "COORDINATE INPUT --yes",
 )
 
 
