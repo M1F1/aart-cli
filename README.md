@@ -116,8 +116,10 @@ AART / Dashboard
 Press **Enter** on **Marketplace**. That is the catalog your organization approved: press `/` and
 keep typing to narrow it. More info (`v`) shows the focused artifact's complete details in
 Marketplace. Press `i` to install the focused offer, or Space to mark several before Install.
-Collections open a member preview with Enter. Labeled columns wrap instead of cutting values;
-small terminal windows use stacked fields and PgUp/PgDn scrolling. Installation shows its plan
+Collections open a member preview with Enter. Each offer is one line: Artifact and Type, and `d`
+shows the other columns. A value too long for a narrow window is cut and marked `…`, and a column
+with no room is named under the list; widen the window to see it whole. PgUp/PgDn scroll short
+windows. Installation shows its plan
 before you confirm it.
 
 **If you see `SETUP REQUIRED` instead**, your copy was not built with a Registry, which is true of

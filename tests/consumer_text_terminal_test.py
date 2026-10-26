@@ -161,7 +161,7 @@ class TextRouteEndToEndTest(unittest.TestCase):
                     write=written.append,
                 )
 
-        self.assertRegex("\n".join(written), r"skill/code-review@1\.2\.0\s+company\s")
+        self.assertRegex("\n".join(written), r"code-review@1\.2\.0\s+Skill\n")
 
 
 if __name__ == "__main__":

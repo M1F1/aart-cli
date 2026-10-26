@@ -1579,6 +1579,28 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-43",
+      "title": "Marketplace leads with Artifact and Type; `d` shows the other columns",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Artifact is name@version and Type is a column; `d` toggles the details for the session (§196, INV-297, D-480)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Existing column tests read the details; user documents and the manual walkthrough say so",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Focused verification, targeted mutations and the PR",
+          "status": "done"
+        }
+      ]
     }
   ]
 }

@@ -11432,7 +11432,9 @@ screen showed is available under More info on the focused Marketplace artifact, 
 Marketplace state or introducing another details screen.
 
 **INV-274 — Marketplace columns remain named and complete.** Every Marketplace field has a
-visible heading or label, and narrowing the terminal never truncates its heading or value.
+visible heading or label, and narrowing the terminal never truncates its heading or value. (§196:
+a value may be cut and marked `…` and a column left off and named, so that every offer stays one
+line; a drawn heading is never cut, and a window wide enough shows every value whole.)
 
 # 176. Default says which Settings values do not fit
 
@@ -11574,9 +11576,9 @@ the row did not say where the work came from. Two Registries' copies of one name
 copies of two upstreams adopted under different names (§180), could not be told apart.
 
 - **Columns.** A Marketplace offer's columns are, in order: Artifact, Registry, Upstream, Status,
-  Scope, Harnesses, Unset.
+  Scope, Harnesses, Unset. (§196: Artifact and Type are drawn by default, and the rest with `d`.)
 - **Artifact column.** It is `kind/name@version`, and the Registry column is the alias that offers
-  it. A Collection's row shows the Collection in Artifact and its alias in Registry, and leaves
+  it. (§196: it is `name@version`, and the kind is the Type column.) A Collection's row shows the Collection in Artifact and its alias in Registry, and leaves
   Upstream empty.
 - **Upstream column.** It is the last two path segments of the URL the version's provenance
   records, read as `owner/repository`. Scheme, host, port, credentials and a trailing `.git` are
@@ -11589,8 +11591,8 @@ copies of two upstreams adopted under different names (§180), could not be told
   line wraps as §178 says, and INV-274 still forbids truncation.
 
 **INV-280 — An offer's row names where it is offered and where it came from.** Every Marketplace
-artifact row shows its Registry alias and its upstream as their own columns, never a credential, and
-More info shows the redacted whole upstream URL.
+artifact row shows, with details (§196), its Registry alias and its upstream as their own columns,
+never a credential, and More info shows the redacted whole upstream URL.
 
 
 # 182. Configuration, not Unset
@@ -12001,3 +12003,43 @@ listed installation is drawn as its own row and named with its harness and scope
 harness state is observed under its recorded root. No lifecycle or configuration action prepared in
 one project writes for an installation recorded under another. An update creates no installation
 that the installations it replaces did not already make up.
+
+# 196. Marketplace leads with what an offer is; the rest is one key away
+
+Status: **ACCEPTED 2026-10-23 (D-480)**, on a colleague's report, passed on by the owner: with seven
+columns Marketplace was overwhelming to read and to move through (CP-43). This refines §173.8,
+§178, §181 and §182.
+
+- **Two columns by default.** A Marketplace row shows `Artifact` and `Type`. Artifact is the offer's
+  `name@version`. Type says what it is: `Skill`, `MCP`, `Guideline`, `Hook`, `Memory`, `Plugin` or
+  `Collection`. Both columns are always drawn.
+- **`d` shows the details.** On Marketplace, `d` (Details) adds the other columns after these two,
+  in order: Registry, Upstream, Status, Scope, Harnesses, Configuration, with the values §173.8,
+  §181 and §182 give them. `d` again (Hide details) returns to the two columns. The footer names
+  what `d` does next.
+- **For this session.** The choice holds while aart-cli runs, across screens. It is not a Settings
+  value, and each start begins with two columns.
+- **Separate from More info.** `v` still shows or hides the More info block for the offer under the
+  cursor (§175). The two keys are independent.
+- **Nothing else moves.** Search, selection, the cursor, paging and installation still name the
+  offer by its full coordinate. Showing or hiding columns never changes what is selected, what a
+  search matches, or which offer is under the cursor.
+- **One line per offer, always.** On the owner's request a Marketplace offer never takes a second
+  line, and there is no stacked form. Each column is as wide as its widest value when the window
+  has room. In a narrower window:
+  - the detail columns give up width first, widest first, but never below their heading;
+  - a value longer than its column is cut and ends in `…`;
+  - a column with no room even at its heading's width is left off whole, from the right, and a
+    line under the list says "Widen the window to see:" and names each one;
+  - Type is left off before Artifact is narrowed, so an offer's name is cut only when it is the one
+    column left.
+  Every heading drawn is whole, and a window wide enough for every value shows each one whole.
+  This replaces §175's wrapping and stacking and §178's wrapping for Marketplace. §184's headings
+  and rules stay.
+
+**INV-297 — Marketplace leads with what an offer is.** Without details every Marketplace row shows
+exactly its `name@version` and its Type. With details it shows, after them, Registry, Upstream,
+Status, Scope, Harnesses and Configuration. Toggling details never changes the selection, the search
+or the offer under the cursor. Every offer is one line at every window width: a value is cut and
+marked `…` rather than wrapped, a column with no room is left off and named under the list, and
+Artifact is whole while any other column is drawn.

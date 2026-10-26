@@ -56,7 +56,8 @@ class ConfigurationCellTest(unittest.TestCase):
 
     def test_the_heading_is_configuration_and_unset_is_gone(self) -> None:
         cells = (
-            "skill/review@1.2.0",
+            "review@1.2.0",
+            "Skill",
             "company",
             "",
             "installed",
@@ -65,14 +66,19 @@ class ConfigurationCellTest(unittest.TestCase):
             "not configured (2 missing)",
         )
 
-        wide = render_marketplace_rows((cells,), current=_KEY, selected=(), keys=(_KEY,), width=160)
+        wide = render_marketplace_rows(
+            (cells,), current=_KEY, selected=(), keys=(_KEY,), width=160, details=True
+        )
         narrow = render_marketplace_rows(
-            (cells,), current=_KEY, selected=(), keys=(_KEY,), width=40
+            (cells,), current=_KEY, selected=(), keys=(_KEY,), width=40, details=True
         )
 
         self.assertIn("Configuration", wide[0])
         self.assertIn("not configured (2 missing)", wide[2])
-        self.assertIn("Configuration: not configured", " ".join(" ".join(narrow).split()))
+        # Too narrow for the column, it is named as one a wider window shows (§196).
+        self.assertRegex(
+            " ".join(" ".join(narrow).split()), r"Widen the window to see: .*Configuration\."
+        )
         self.assertNotIn("Unset", "\n".join((*wide, *narrow)))
 
 

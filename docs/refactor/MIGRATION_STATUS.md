@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-23, CP-43 steps 1–2 (§196, INV-297, D-480): Marketplace leads with Artifact and Type.**
+A colleague found seven columns overwhelming. By default a row is now `name@version` and its Type;
+`d` adds the other six columns for the session and `d` again removes them, without moving the
+selection, the search or the cursor. Each offer is one line at any width: a value is cut with `…`,
+and a column with no room is left off and named under the list. Evidence:
+`docs/refactor/slices/CP-43-marketplace-details-columns.md`.
+
 **2026-10-23, CP-42 step 5 (§195, INV-296, D-479): the manual lab walk.** The walk drove the real
 application in its text terminal, and most of the scenario held. It found three defects:
 - updating one claude Skill installed it into opencode and tabnine too;

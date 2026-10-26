@@ -404,6 +404,10 @@ escapability of these flows).
 
 ## 11 — Install
 
+- [ ] On **Marketplace**, the list has two columns, Artifact (`manual-check@1.0.0`) and Type
+      (`Skill`), and the footer offers `[d] Details`. Press `d`: Registry, Upstream, Status, Scope,
+      Harnesses and Configuration follow, and the footer says `[d] Hide details`. Press `d` again
+      and only the two columns remain. The cursor and any tick stay where they were.
 - [ ] On **Marketplace**, press `v` for Verbose. Below the list's rule, the row under the cursor is
       described: Artifact, Kind, Version, Source and its approved Description (a Collection row
       shows what it Includes). Move the cursor and it follows; search it away and nothing stale

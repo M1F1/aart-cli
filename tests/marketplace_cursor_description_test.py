@@ -111,7 +111,7 @@ class FocusedOfferIsDescribedTest(unittest.TestCase):
 
         drawn = "\n".join(frame(source, state))
 
-        self.assertIn(state.current_row.partition("/")[2], drawn)
+        self.assertIn(state.current_row.rpartition("/")[2], drawn)
         for label in ("Artifact", "Kind", "Description"):
             self.assertNotRegex(drawn, rf"(?m)^  {label}\b")
 

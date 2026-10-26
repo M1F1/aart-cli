@@ -9,7 +9,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from aart_cli.tui_consumer import MarketplaceEntry, frame
-from aart_cli.tui_marketplace_rows import MARKETPLACE_WINDOW, render_marketplace_rows
+from aart_cli.tui_marketplace_rows import _HEADINGS, MARKETPLACE_WINDOW, render_marketplace_rows
 from tests.marketplace_cursor_description_test import _distinct, _listed
 
 
@@ -19,7 +19,7 @@ def _keys(count: int) -> tuple[str, ...]:
 
 def _shown(keys: tuple[str, ...], lines: tuple[str, ...]) -> tuple[str, ...]:
     drawn = "".join("".join(lines).split())
-    return tuple(key for key in keys if key.partition("/")[2] in drawn)
+    return tuple(key for key in keys if key.rpartition("/")[2] in drawn)
 
 
 def _many(count: int):
@@ -41,19 +41,25 @@ def _many(count: int):
 
 class MarketplaceListWindowTest(unittest.TestCase):
     def test_the_list_is_the_page_of_ten_that_holds_the_cursor(self):
-        @given(st.integers(min_value=0, max_value=60), st.data(), st.sampled_from((26, 120)))
-        def holds(count, data, width):
+        @given(
+            st.integers(min_value=0, max_value=60),
+            st.data(),
+            st.sampled_from((25, 120)),
+            st.booleans(),
+        )
+        def holds(count, data, width, details):
             keys = _keys(count)
             current = data.draw(st.sampled_from(keys)) if keys else ""
             lines = render_marketplace_rows(
                 tuple(
-                    (key.partition("/")[2], "company", "acme/skills", "not installed")
+                    (key.rpartition("/")[2], "Skill", "company", "acme/skills", "not installed")
                     for key in keys
                 ),
                 current=current,
                 selected=(),
                 width=width,
                 keys=keys,
+                details=details,
             )
             shown = _shown(keys, lines)
             self.assertLessEqual(len(shown), MARKETPLACE_WINDOW)
@@ -72,7 +78,8 @@ class MarketplaceListWindowTest(unittest.TestCase):
     def test_each_offer_is_one_line_under_the_headings_when_the_terminal_has_room(self):
         rows = (
             (
-                "mcp/database@1.2.3",
+                "database@1.2.3",
+                "MCP",
                 "company",
                 "acme/database-server",
                 "update available",
@@ -81,7 +88,8 @@ class MarketplaceListWindowTest(unittest.TestCase):
                 "not configured (3 missing)",
             ),
             (
-                "skill/review@1.0.0",
+                "review@1.0.0",
+                "Skill",
                 "company",
                 "obra/superpowers",
                 "not installed",
@@ -89,33 +97,28 @@ class MarketplaceListWindowTest(unittest.TestCase):
                 "claude, codex",
                 "",
             ),
-            ("collection/tools@1.0.0", "team", "", "installed"),
+            ("tools@1.0.0", "Collection", "team", "", "installed"),
         )
         widest = [
             max(len(heading), *(len(row[i]) for row in rows if i < len(row)))
-            for i, heading in enumerate(
-                (
-                    "Artifact",
-                    "Registry",
-                    "Upstream",
-                    "Status",
-                    "Scope",
-                    "Harnesses",
-                    "Configuration",
-                )
-            )
+            for i, heading in enumerate(_HEADINGS)
         ]
-        natural = 6 + sum(widest) + 2 * 6
+        natural = 6 + sum(widest) + 2 * 7
         for width in (natural, 180):
-            lines = render_marketplace_rows(rows, current=rows[1][0], selected=(), width=width)
+            lines = render_marketplace_rows(
+                rows, current=rows[1][0], selected=(), width=width, details=True
+            )
             self.assertEqual(len(lines), 2 + len(rows), lines)
             self.assertTrue(lines[0].startswith("      Artifact"))
             for line, row in zip(lines[2:], rows, strict=True):
                 for cell in row:
                     self.assertIn(cell, line)
-        wrapped = render_marketplace_rows(rows, current="", selected=(), width=natural - 1)
-        self.assertGreater(len(wrapped), 1 + len(rows))
-        self.assertNotIn("", wrapped)
+        # Narrower, a value is cut and marked rather than wrapped onto a second line (§196).
+        cut = render_marketplace_rows(
+            rows, current="", selected=(), width=natural - 1, details=True
+        )
+        self.assertEqual(len(cut), 2 + len(rows), cut)
+        self.assertIn("…", "\n".join(cut))
 
     def test_more_info_of_a_late_offer_is_on_the_first_screen(self):
         source, state = _listed(_many(60))

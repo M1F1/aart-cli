@@ -53,8 +53,11 @@ the number it has in the full list.
 
 ### What a Marketplace row says
 
-Each row in the TUI's Marketplace is the offer as `kind/name@version`, then: the Registry that
-offers it; its upstream as `owner/repository` (More info shows the whole URL, with credentials
+Each row in the TUI's Marketplace starts with the offer as `name@version` and its Type: Skill,
+MCP, Guideline, Hook, Memory, Plugin or Collection. Those two columns are all it shows until you
+press `d` (Details); `d` again hides the rest. The choice lasts until you quit, and it never
+changes what is ticked, what a search matches or where the cursor is. The details are: the Registry
+that offers it; its upstream as `owner/repository` (More info shows the whole URL, with credentials
 redacted); `not installed`, `installed` or `update available`; where it is installed (`user`,
 `2 projects`, or `user + 2 projects`); the detected harnesses that can host it, with `✓` on each
 that holds it; and its configuration. Configuration is `configured` when every input has a value,
@@ -62,10 +65,13 @@ that holds it; and its configuration. Configuration is `configured` when every i
 installed. Installed draws each installation on its own row, under the headings Artifact, Health,
 Scope, Project and Configuration. Both screens draw a rule under each heading. In Installed, More info adds the project's directory and harness.
 
-Marketplace labels its columns Artifact, Registry, Upstream, Status, Scope, Harnesses and
-Configuration. Long values wrap; narrow windows use the same labels as stacked fields. PgUp/PgDn
-scroll content in short windows while the headings and navigation footer remain. Arrows move between logical offers regardless
-of how many lines each occupies. `v` shows the focused offer's full provenance, security,
+Marketplace labels its columns Artifact and Type, and with `d` also Registry, Upstream, Status,
+Scope, Harnesses and Configuration. Each offer is always one line, and the headings drawn are
+always whole. In a window too narrow for a value, the value is cut and ends in `…`; a column with no
+room at all is left off, and a line under the list names it, as in "Widen the window to see:
+Harnesses, Configuration." The offer's name is the last thing cut. Widen the window and everything
+is shown whole. PgUp/PgDn scroll content in short windows while the headings and navigation footer
+remain. `v` shows the focused offer's full provenance, security,
 compatibility, digests and declared input guidance in Marketplace; there is no separate Artifact
 Details screen. Search, cursor and marked offers stay intact. `i` installs marked offers, or the
 focused offer if none is marked. Enter on a Collection still opens its member preview.

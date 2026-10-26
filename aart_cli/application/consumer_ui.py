@@ -140,6 +140,7 @@ class ConsumerUiEventKind(str, Enum):
     TOGGLE_SETTING = "toggle-setting"
     TOGGLE_CANDIDATE_FILTER = "toggle-candidate-filter"
     TOGGLE_PROMOTION_MODE = "toggle-promotion-mode"
+    TOGGLE_MARKETPLACE_DETAILS = "toggle-marketplace-details"
     SEARCH = "search"
     SEARCH_OPEN = "search-open"
     SEARCH_CLOSE = "search-close"
@@ -739,6 +740,8 @@ class ConsumerUiState:
     viewport_columns: int = 100
     viewport_rows: int = 0
     marketplace_scroll: int = -1
+    #: Whether Marketplace draws its columns after Artifact and Type; for this session only (§196).
+    marketplace_details: bool = False
     focus: str = ""
     searching: bool = False
     help_visible: bool = False
@@ -838,6 +841,7 @@ class ConsumerUiState:
             or not isinstance(self.marketplace_scroll, int)
             or isinstance(self.marketplace_scroll, bool)
             or self.marketplace_scroll < -1
+            or not isinstance(self.marketplace_details, bool)
             or not isinstance(self.cursor, int)
             or isinstance(self.cursor, bool)
             or not 0 <= self.cursor < max(len(self.rows), 1)
@@ -2402,6 +2406,7 @@ def reduce_consumer_ui(
             ConsumerUiEventKind.NAVIGATE,
             ConsumerUiEventKind.BACK,
             ConsumerUiEventKind.TOGGLE_PROFILE,
+            ConsumerUiEventKind.TOGGLE_MARKETPLACE_DETAILS,
         )
     ):
         reduced = replace(reduced, marketplace_scroll=-1)
@@ -2629,6 +2634,10 @@ def _reduce(
         return replace(state, adoption_names=names, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.TOGGLE_PROFILE:
         return _apply_setting(state, state.settings.toggled("detail-level"))
+    if event.kind is ConsumerUiEventKind.TOGGLE_MARKETPLACE_DETAILS:
+        if state.session.screen is not ConsumerScreen.MARKETPLACE or event.accepted is None:
+            return state, ()
+        return replace(state, marketplace_details=event.accepted, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.TOGGLE_SETTING:
         if state.session.screen is not ConsumerScreen.SETTINGS or (
             event.key not in SETTING_ROWS and default_harness_from_row(event.key) is None
@@ -2724,6 +2733,15 @@ def _event_binding(key: str, label: str, kind: ConsumerUiEventKind) -> _ScreenBi
     return _ScreenBinding(KeyBinding(key, label), ConsumerUiEvent(kind))
 
 
+def _details_binding(label: str, *, shown: bool) -> _ScreenBinding:
+    """`d` on Marketplace, as the binding that shows the details or the one that hides them."""
+
+    return _ScreenBinding(
+        KeyBinding("d", label),
+        ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_MARKETPLACE_DETAILS, accepted=shown),
+    )
+
+
 #: The contextual letter keys have one authority: :func:`key_event` translates this table and the
 #: footer displays it. Adding a route without its explanation, or explaining a key that routes
 #: nowhere, is therefore not representable (`QA-026`). Structural keys such as Space and Enter are
@@ -2740,7 +2758,12 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     ConsumerScreen.AUTHOR_MANIFEST: (
         _action_binding("r", "Re-run check", ConsumerActionKind.AUTHOR_CHECK),
     ),
-    ConsumerScreen.MARKETPLACE: (_action_binding("i", "Install", ConsumerActionKind.INSTALL),),
+    ConsumerScreen.MARKETPLACE: (
+        _action_binding("i", "Install", ConsumerActionKind.INSTALL),
+        # One key, two bindings: the footer names what `d` does next, and only that one is on.
+        _details_binding("Details", shown=True),
+        _details_binding("Hide details", shown=False),
+    ),
     ConsumerScreen.COLLECTION_PREVIEW: (
         _action_binding("i", "Install", ConsumerActionKind.INSTALL),
     ),
@@ -3022,6 +3045,8 @@ def _binding_enabled(binding: _ScreenBinding, state: ConsumerUiState) -> bool:
         ConsumerActionKind.SOURCE_REMOVE,
     ):
         return state.current_row not in ("", "add-registry")
+    if binding.event.kind is ConsumerUiEventKind.TOGGLE_MARKETPLACE_DETAILS:
+        return binding.event.accepted is not state.marketplace_details
     if binding.event.action is ConsumerActionKind.REGISTRY_PUSH:
         return state.current_row == REGISTRY_WORKSPACE_READY_ROW
     if binding.event.screen is MaintainerScreen.COLLECTIONS:

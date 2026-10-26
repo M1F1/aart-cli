@@ -1,4 +1,9 @@
-"""INV-274: Marketplace fields stay named and complete at every usable width."""
+"""INV-274: Marketplace fields stay named at every width, and complete in a window wide enough.
+
+§196 revised it on the owner's request: an offer is one line, so a value too long for its column is
+cut and marked `…` instead of wrapping, and a column with no room is left off whole and named under
+the list. `marketplace_one_line_test` holds that across generated rows and widths.
+"""
 
 from __future__ import annotations
 
@@ -9,12 +14,15 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from aart_cli.tui_consumer import frame, run_consumer_shell
-from aart_cli.tui_marketplace_rows import render_marketplace_rows
+from aart_cli.tui_marketplace_rows import _HEADINGS, render_marketplace_rows
 from tests.marketplace_cursor_description_test import _distinct, _listed
 
-HEADINGS = ("Artifact", "Registry", "Upstream", "Status", "Scope", "Harnesses", "Configuration")
+HEADINGS = _HEADINGS
+#: Wide enough for every value of `ROW` on one line.
+WIDE = 200
 ROW = (
-    "mcp/a-very-long-artifact-coordinate@1.2.3",
+    "a-very-long-artifact-coordinate@1.2.3",
+    "MCP",
     "company",
     "acme/database-server",
     "update available",
@@ -29,56 +37,28 @@ def flat(text):
 
 
 class ReadableMarketplaceRowsTest(unittest.TestCase):
-    def test_grid_wraps_cells_on_their_headings_and_keeps_full_values(self):
-        lines = render_marketplace_rows((ROW,), current=ROW[0], selected=(ROW[0],), width=80)
+    def test_a_wide_window_draws_every_value_whole_on_one_line(self):
+        lines = render_marketplace_rows(
+            (ROW,), current=ROW[0], selected=(ROW[0],), width=WIDE, details=True
+        )
         header = lines[0]
         starts = [header.index(label) for label in HEADINGS]
-        ends = starts[1:] + [80]
+        ends = starts[1:] + [WIDE]
+        self.assertEqual(len(lines), 3)
         self.assertTrue(lines[2].startswith("> [x] "))
         for value, start, end in zip(ROW, starts, ends, strict=True):
-            recovered = "".join(line[start:end].strip() for line in lines[2:])
-            self.assertEqual(flat(recovered), flat(value))
-        self.assertTrue(all(len(line) <= 80 for line in lines))
+            self.assertEqual(lines[2][start:end].strip(), value)
 
-    def test_narrow_layout_stacks_labeled_fields_without_ellipsis(self):
-        lines = render_marketplace_rows((ROW,), current=ROW[0], selected=(), width=26)
-        shown = flat("\n".join(lines))
-        for label, value in zip(HEADINGS, ROW, strict=True):
-            self.assertIn(flat(label + ":" + value), shown)
-        self.assertIn("> [ ]", "\n".join(lines))
-        self.assertTrue(all(len(line) <= 26 for line in lines))
-        self.assertNotIn("…", "\n".join(lines))
+    def test_a_narrow_window_cuts_values_and_leaves_whole_columns_off(self):
+        lines = render_marketplace_rows((ROW,), current=ROW[0], selected=(), width=80, details=True)
 
-    def test_every_generated_width_preserves_all_labels_and_values(self):
-        @given(
-            st.integers(min_value=1, max_value=140),
-            st.text(alphabet="abcdef0123456789-_/", min_size=1, max_size=180),
+        self.assertEqual(lines[0].split(), ["Artifact", "Type", "Registry", "Upstream", "Status"])
+        self.assertEqual(lines[2].split()[3:6], [ROW[0], "MCP", "company"], lines)
+        self.assertIn("…", lines[2])
+        self.assertIn(
+            "Widen the window to see: Scope, Harnesses, Configuration.", " ".join(lines[3:])
         )
-        def holds(width, value):
-            row = (
-                value,
-                "company",
-                "acme/skills",
-                "update available",
-                "user + 17 projects",
-                "codex ✓, opencode",
-                "not configured (3 missing)",
-            )
-            lines = render_marketplace_rows((row,), current=value, selected=(), width=width)
-            self.assertTrue(all(len(line) <= width for line in lines))
-            if width < 78:
-                shown = flat("\n".join(lines))
-                for label, cell in zip(HEADINGS, row, strict=True):
-                    self.assertIn(flat(label + ":" + cell), shown)
-            else:
-                starts = [lines[0].index(label) for label in HEADINGS]
-                for i, cell in enumerate(row):
-                    end = starts[i + 1] if i < len(HEADINGS) - 1 else width
-                    self.assertEqual(
-                        flat("".join(line[starts[i] : end] for line in lines[2:])), flat(cell)
-                    )
-
-        holds()
+        self.assertTrue(all(len(line) <= 80 for line in lines))
 
     def test_empty_rows_and_absent_collection_cells_are_explicit(self):
         for width in (1, 26, 80):
@@ -88,14 +68,11 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
             )
         with self.assertRaises(ValueError):
             render_marketplace_rows((), current="", selected=(), width=0)
-        lines = render_marketplace_rows(
-            (("team/collection/tools@1.0.0", "installed"),), current="", selected=(), width=26
-        )
-        for label in ("Scope", "Harnesses", "Configuration"):
-            self.assertIn(label + ": —", "\n".join(lines))
 
     def test_header_gutter_and_left_aligned_cells_match(self):
-        lines = render_marketplace_rows((ROW,), current=ROW[0], selected=(), width=80)
+        lines = render_marketplace_rows(
+            (ROW,), current=ROW[0], selected=(), width=WIDE, details=True
+        )
         self.assertTrue(lines[0].startswith("      Artifact"))
         for label, value in zip(HEADINGS, ROW, strict=True):
             self.assertTrue(lines[2][lines[0].index(label) :].startswith(value.split()[0][:5]))
@@ -106,7 +83,9 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
 
         @given(st.integers(min_value=15, max_value=120), st.integers(min_value=20, max_value=60))
         def holds(width, height):
-            actions = render_marketplace_rows((ROW,), current=ROW[0], selected=(), width=width)
+            actions = render_marketplace_rows(
+                (ROW,), current=ROW[0], selected=(), width=width, details=True
+            )
             details = tuple(f"Detail {n:02d}: evidence" for n in range(15))
             view = Frame(
                 trail=("Marketplace",), actions=actions, described=details, keys=("[q] Quit",)
@@ -158,14 +137,22 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
         )
         self.assertEqual(shown.count("Nothing here yet."), 1)
         lines = render_marketplace_rows(
-            (("team/collection/tools@1.0.0", "installed"),), current="", selected=(), width=80
+            (("tools@1.0.0", "Collection", "team", "", "installed"),),
+            current="",
+            selected=(),
+            width=WIDE,
+            details=True,
         )
         start = lines[0].index("Scope")
         self.assertTrue(all(not line[start:].strip() for line in lines[2:]))
 
     def test_collection_rows_keep_all_column_labels(self):
         lines = render_marketplace_rows(
-            (("company/collection/team@1.0.0", "installed"),), current="", selected=(), width=80
+            (("team@1.0.0", "Collection", "company", "", "installed"),),
+            current="",
+            selected=(),
+            width=WIDE,
+            details=True,
         )
         for label in HEADINGS:
             self.assertIn(label, lines[0])
@@ -176,7 +163,7 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
         from aart_cli.tui import _CursesTerminal
 
         source, state = _listed(_distinct(), profile=PresentationProfile.LESS_INFO)
-        state = dataclasses.replace(state, cursor=len(state.rows) - 1)
+        state = dataclasses.replace(state, cursor=len(state.rows) - 1, marketplace_details=True)
 
         class Screen:
             def __init__(self):
@@ -206,7 +193,7 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
         self.assertTrue(any(line.startswith(">") for line in screen.frames[0]))
         self.assertIn("PgUp/PgDn", "\n".join(screen.frames[0]))
         self.assertTrue(all(len(line) <= 26 for view in screen.frames for line in view))
-        self.assertIn("Configuration: —", "\n".join(screen.frames[-2]))
+        self.assertIn("Configuration.", "\n".join(screen.frames[-2]))
         self.assertEqual(screen.frames[-3], screen.frames[-2], "the end must clamp")
         self.assertNotEqual(
             screen.frames[-2], screen.frames[-1], "one PageUp must move immediately"
@@ -236,7 +223,7 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
 
     def test_shell_uses_resized_terminal_width_without_changing_offer_state(self):
         source, state = _listed(_distinct())
-        state = dataclasses.replace(state, selection=(state.current_row,))
+        state = dataclasses.replace(state, selection=(state.current_row,), marketplace_details=True)
 
         class Terminal:
             columns = 64
@@ -261,5 +248,6 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
             (state.rows, state.cursor, state.selection, state.search),
         )
         self.assertIn("Artifact", "\n".join(terminal.frames[0]))
-        self.assertIn("Status:", "\n".join(terminal.frames[1]))
-        self.assertIn("Harnesses:", "\n".join(terminal.frames[1]))
+        narrow = " ".join(" ".join(terminal.frames[1]).split())
+        self.assertIn("Widen the window to see:", narrow)
+        self.assertIn("Harnesses", narrow)
