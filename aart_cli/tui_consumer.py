@@ -77,7 +77,8 @@ from aart_cli.application.consumer_views import (
     RunningInstallationView,
     default_harness_row,
     install_path_label,
-    installed_cells,
+    installed_collection_cells,
+    installed_row_cells,
     installer_from_row,
     installer_row,
     marketplace_cells,
@@ -107,6 +108,12 @@ from aart_cli.application.consumer_views import (
     under_collections,
 )
 from aart_cli.application.credential_guidance import credential_guidance_lines
+from aart_cli.application.credentials_and_variables import (
+    InstallationInputs,
+    configuration_identifiers,
+    credential_state,
+    installation_inputs,
+)
 from aart_cli.application.installed_setup import DeclaredArtifactSetup
 from aart_cli.application.maintainer_views import (
     REGISTRY_MAINTENANCE_STAGES,
@@ -153,6 +160,7 @@ from aart_cli.domain.selection import (
     CollectionMember,
     VersionConstraint,
 )
+from aart_cli.runtime_contract import EXECUTABLE_VERSION
 from aart_cli.tui_layout import (
     CONTENT_MEASURE,
     STAGE_CONFIRMED,
@@ -164,7 +172,6 @@ from aart_cli.tui_layout import (
     bulleted,
     cards,
     field_block,
-    headed_columns,
     is_action_prompt,
     list_item,
     listed,
@@ -228,7 +235,12 @@ from aart_cli.tui_marketplace import (
     render_artifact_detail,
 )
 from aart_cli.tui_marketplace_detail import artifact_disclosure
-from aart_cli.tui_marketplace_rows import marketplace_viewport, render_marketplace_rows
+from aart_cli.tui_marketplace_rows import (
+    ColumnLayout,
+    marketplace_viewport,
+    render_columns,
+    render_marketplace_rows,
+)
 
 __all__ = [
     "DETAIL_LEVEL_NAMES",
@@ -384,15 +396,24 @@ def _credential_row(view: CredentialRecordView) -> str:
 _USER_CONFIG_ROW_PREFIX = "configuration:"
 #: The cursor and the tick a list draws before each entry: `> [x] `.
 _ROW_PREFIX = 6
-_INSTALLED_HEADINGS = ("Artifact", "Health", "Scope", "Project", "Configuration")
-
-
-def _installed_name(view: InstalledArtifactView | None, row: str) -> str:
-    """The Artifact cell: artifact and harness, because Scope and Project have their own columns."""
-
-    if view is None or not view.harness:
-        return row
-    return f"{view.coordinate} · {view.harness}"
+#: Installed and Updates on Marketplace's grid (§199): what an installation is and whether it is
+#: healthy without details, and where it came from and lives with them.
+_INSTALLED_COLUMNS = ColumnLayout(
+    (
+        "Artifact",
+        "Type",
+        "Harness",
+        "Health",
+        "Registry",
+        "Scope",
+        "Project",
+        "Configuration",
+    ),
+    4,
+    "Installations",
+)
+#: How far a Collection's member is drawn under it.
+_MEMBER_INDENT = 2
 
 
 def _user_config_row(identifier: str) -> str:
@@ -422,7 +443,7 @@ def render_user_inputs_area(
         credentials = screens.credentials_for(coordinate)
         mark = ">" if coordinate == current_row else " "
         lines.append(f"{mark} {describe_installation(coordinate)}")
-        identifiers = _configuration_identifiers(configurations)
+        identifiers = configuration_identifiers(configurations)
         lines.append(
             "    Configuration: "
             + (", ".join(identifiers) if identifiers else "none")
@@ -432,27 +453,12 @@ def render_user_inputs_area(
             lines.append("    Credentials: none")
         for credential in credentials:
             lines.append(f"    Credentials: {_credential_row(credential)}")
-        left = sorted(
-            {
-                *(name for file in configurations for name in file.placeholders),
-                *(item.input for item in credentials if item.placeholder),
-            }
-        )
+        left = installation_inputs(coordinate, configurations, credentials).placeholders
         lines.extend(f"    {name}: {PLACEHOLDER_WARNING}" for name in left)
         documentation = screens.documentation_for(coordinate)
         if documentation:
             lines.append(f"    Documentation: {documentation}")
     return tuple(lines) if rows else ("No installed artifact has runtime inputs.",)
-
-
-def _configuration_identifiers(configurations: tuple[ConfigurationFileView, ...]) -> list[str]:
-    return sorted(
-        {
-            identifier
-            for file in configurations
-            for identifier in (*file.inputs, *(item[0] for item in file.values))
-        }
-    )
 
 
 def render_artifact_user_inputs(
@@ -472,7 +478,7 @@ def render_artifact_user_inputs(
 
     del coordinate, profile
     lines: list[str] = []
-    identifiers = _configuration_identifiers(configurations)
+    identifiers = configuration_identifiers(configurations)
     # Layout only, and only between things (issue #16): a heading stands off its own rows, and a
     # completed Configuration block stands off the Credentials heading. No blank opens or closes
     # the view, and none of them is a row -- `rows` is built from the identifiers and references
@@ -494,13 +500,7 @@ def render_artifact_user_inputs(
         lines.extend(("Credentials", ""))
     for credential in credentials:
         row = _user_credential_row(credential.reference)
-        status = (
-            PLACEHOLDER_WARNING
-            if credential.placeholder
-            else "Configured securely"
-            if credential.health == "present"
-            else _human(credential.health).title()
-        )
+        status = PLACEHOLDER_WARNING if credential.placeholder else credential_state(credential)
         lines.append(f"{'>' if current_row == row else ' '} {credential.input}: {status}")
     return tuple(lines)
 
@@ -517,7 +517,7 @@ def artifact_user_inputs_status(
         (describe_installation(coordinate),),
         (f"Documentation: {documentation}",) if documentation else (),
         ()
-        if _configuration_identifiers(configurations)
+        if configuration_identifiers(configurations)
         else ("No ordinary configuration is declared.",),
         ("Credentials stay with their providers; AART never reads or displays them.",)
         if credentials
@@ -902,7 +902,7 @@ _MATERIAL_RISKS: tuple[tuple[str, str], ...] = (
 
 
 def render_ready(
-    view: ConsumerPlanView, profile: PresentationProfile, *, entered: tuple[str, ...] = ()
+    view: ConsumerPlanView, profile: PresentationProfile, *, asked: tuple[str, ...] = ()
 ) -> tuple[str, ...]:
     """Screen 09. Outcomes in Fast; the same InstallPlan, undiminished, in Verbose.
 
@@ -911,7 +911,7 @@ def render_ready(
 
     if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
         raise ValueError("ready rendering needs a consumer plan and presentation profile")
-    left = _placeholders_block(view, entered)
+    left = (*_asked_block(view, asked), *_placeholders_block(view, asked))
     if profile is PresentationProfile.MORE_INFO:
         return (*_verbose_plan(view), *left)
     outcomes = Counter(_OUTCOMES.get(item.outcome, "other change") for item in view.effects)
@@ -957,8 +957,24 @@ def render_ready(
     return tuple(lines)
 
 
-def _placeholders_block(view: ConsumerPlanView, entered: tuple[str, ...]) -> tuple[str, ...]:
-    left = placeholders_left(view, entered)
+def _asked_block(view: ConsumerPlanView, asked: tuple[str, ...]) -> tuple[str, ...]:
+    """What the credential store will ask for while installing, so its prompt is no surprise."""
+
+    named = tuple(
+        f"{item.artifact}: {item.input}" for item in secrets_to_ask(view) if item.row in asked
+    )
+    if not named:
+        return ()
+    return (
+        "",
+        "While installing, the credential store asks you for each of these; AART never sees them:",
+        *listed(named),
+        "",
+    )
+
+
+def _placeholders_block(view: ConsumerPlanView, asked: tuple[str, ...]) -> tuple[str, ...]:
+    left = placeholders_left(view, asked)
     if not left:
         return ()
     return (
@@ -2163,8 +2179,8 @@ class ConsumerActionUpdate:
             # An attempt that stopped is a third thing an action establishes, and the one it used
             # to have to disguise as an empty recording (`QA-033`).
             ConsumerUiEventKind.ACTION_FAILED,
-            # 07b's answer: whether a secret was entered for a row, and never the secret (§172.6).
-            ConsumerUiEventKind.SECRET_ENTERED,
+            # 07b's answer: whether the store will ask for a row's secret, never a secret (§172.6).
+            ConsumerUiEventKind.SECRET_ASKED,
         ):
             raise ValueError(
                 "a consumer action update needs a prepared, recorded, failed or entered event"
@@ -2376,23 +2392,24 @@ def _after_scope(plan: ConsumerPlanView) -> ConsumerScreen:
 
 
 def render_install_credentials(
-    secrets: tuple[InstallSecretView, ...], entered: tuple[str, ...], current_row: str | None
+    secrets: tuple[InstallSecretView, ...], asked: tuple[str, ...], current_row: str | None
 ) -> tuple[str, ...]:
-    """Screen 07b's rows: each secret once per artifact, and whether a value is waiting for it.
+    """Screen 07b's rows: each secret once per artifact, and whether the store will ask for it.
 
-    Nothing typed is ever drawn -- the state knows only which rows have a value (§172.6). A secret
-    every installation already holds is no question, so it is said in the status, not drawn here.
+    Nothing is typed on this screen: a marked row is asked for by the credential store's own prompt
+    during the install (§172.6). A secret every installation already holds is no question, so it is
+    said in the status, not drawn here.
     """
 
-    asked = tuple(item for item in secrets if not item.configured)
+    questions = tuple(item for item in secrets if not item.configured)
     lines = [f"{'>' if current_row == CONFIG_SET_LATER_ROW else ' '} Set later"]
-    artifacts = tuple(dict.fromkeys(item.artifact for item in asked))
+    artifacts = tuple(dict.fromkeys(item.artifact for item in questions))
     heading = ""
-    for item in asked:
+    for item in questions:
         if len(artifacts) > 1 and item.artifact != heading:
             heading = item.artifact
             lines.extend(("", heading))
-        state = "entered, hidden" if item.row in entered else "not set"
+        state = "asked when installing" if item.row in asked else "not set"
         mark = ">" if current_row == item.row else " "
         lines.extend(("", f"{mark} {item.label} ({item.input}): {state}"))
     lines.extend(("", f"{'>' if current_row == CONFIG_CONTINUE_ROW else ' '} Continue"))
@@ -2408,7 +2425,8 @@ def install_credentials_status(secrets: tuple[InstallSecretView, ...]) -> tuple[
             for item in secrets
             if item.configured
         ),
-        "Nothing typed is shown. Anything not entered is stored as AART_NOT_SET.",
+        "Nothing is typed here. When installing, the credential store asks you for each one "
+        "marked, and AART never sees it. Anything not marked is stored as AART_NOT_SET.",
     )
 
 
@@ -2694,7 +2712,10 @@ def compose_frame(source: ConsumerScreenSource, state: ConsumerUiState) -> Frame
     # `QA-086`: the launch directory is the footer's caption -- the last line before the keys'
     # rule and flush on it, with the terminal's padding above it rather than under it (revising
     # `QA-069`/`D-235`, which had it as a section of its own; `QA-066` had moved it off the title).
-    workspace = f"working at {state.workspace}" if state.workspace else ""
+    # §200: beside where it works, which aart-cli is drawing, so a report of a screen names both.
+    workspace = (
+        f"working at {state.workspace} · aart-cli {EXECUTABLE_VERSION}" if state.workspace else ""
+    )
     return Frame(
         trail=header,
         actions=source.actions(state),
@@ -2893,7 +2914,7 @@ def run_consumer_shell(
             if command.kind not in (
                 ConsumerUiCommandKind.PREPARE_ACTION,
                 ConsumerUiCommandKind.EXECUTE_ACTION,
-                ConsumerUiCommandKind.ENTER_SECRET,
+                ConsumerUiCommandKind.ASK_SECRET,
                 ConsumerUiCommandKind.RUN_AUTHOR,
             ):
                 continue
@@ -2925,8 +2946,8 @@ def run_consumer_shell(
             expected = (
                 (ConsumerUiEventKind.ACTION_PREPARED,)
                 if command.kind is ConsumerUiCommandKind.PREPARE_ACTION
-                else (ConsumerUiEventKind.SECRET_ENTERED,)
-                if command.kind is ConsumerUiCommandKind.ENTER_SECRET
+                else (ConsumerUiEventKind.SECRET_ASKED,)
+                if command.kind is ConsumerUiCommandKind.ASK_SECRET
                 else (ConsumerUiEventKind.ACTION_RECORDED, ConsumerUiEventKind.ACTION_FAILED)
             )
             if update.event.kind not in expected or update.event.action is not command.action:
@@ -3492,6 +3513,63 @@ def marketplace_offer_description(
     else:
         raise ValueError("a Marketplace description needs an offered artifact or Collection")
     return field_block(fields, indent=2, width=CONTENT_MEASURE)
+
+
+def installed_description(
+    view: InstalledArtifactView, inputs: InstallationInputs
+) -> tuple[str, ...]:
+    """The installation under the cursor, for More info on Installed and Updates (§199).
+
+    What the row's columns cut short is said whole: the artifact, where it came from, which
+    installation this is and where it lives, its health, and each input by name with its state.
+    A credential is a state, never a value, because aart-cli never has one. The documentation link
+    is the last line and is never wrapped, so it can be copied (§197).
+    """
+
+    artifact, kind, registry = offer_cells(view.coordinate)
+    name, _, version = artifact.partition("@")
+    health = _human(view.health) + (f" → {view.available}" if view.available else "")
+    fields = (
+        ("Artifact", name),
+        ("Version", version),
+        ("Type", kind),
+        ("Registry", registry),
+        *((("Harness", view.harness),) if view.harness else ()),
+        *((("Scope", view.scope.title()),) if view.scope else ()),
+        *((("Project", view.root),) if view.scope == "project" and view.root else ()),
+        ("Health", health),
+        *(
+            (item.input, "not set" if item.value is None else item.value)
+            for item in inputs.configuration
+        ),
+        *((item.input, credential_state(item)) for item in inputs.credentials),
+        *((("Documentation", inputs.documentation),) if inputs.documentation else ()),
+    )
+    return field_block(fields, indent=2, width=CONTENT_MEASURE, whole=("Documentation",))
+
+
+def installed_collection_description(group: InstalledCollectionView) -> tuple[str, ...]:
+    """The Collection under the cursor: what it is, and which of its members need attention."""
+
+    artifact, _, registry = offer_cells(group.collection)
+    name, _, version = artifact.partition("@")
+    count = len(group.members)
+    return field_block(
+        (
+            ("Collection", name),
+            ("Version", version),
+            ("Registry", registry),
+            ("Health", _human(group.health)),
+            ("Includes", f"{count} artifact{'' if count == 1 else 's'}"),
+            *(
+                (("Needs attention", ", ".join(group.members_requiring_attention)),)
+                if group.members_requiring_attention
+                else ()
+            ),
+        ),
+        indent=2,
+        width=CONTENT_MEASURE,
+    )
 
 
 def _matches(query: str, *fields: str) -> bool:
@@ -4319,6 +4397,23 @@ class CanonicalScreenSource:
                 None,
             )
             return () if focused is None else marketplace_offer_description(focused)
+        if state.session.screen in (ConsumerScreen.INSTALLED, ConsumerScreen.UPDATES):
+            # §199: the installation under the cursor, whole, as Marketplace describes its offer.
+            screens = self._screens
+            view = screens.artifact(state.current_row) if state.current_row else None
+            if view is not None:
+                key = view.row
+                return installed_description(
+                    view,
+                    installation_inputs(
+                        key,
+                        screens.configurations_for(key),
+                        screens.credentials_for(key),
+                        screens.documentation_for(key),
+                    ),
+                )
+            group = screens.installed_collection(state.current_row) if state.current_row else None
+            return () if group is None else installed_collection_description(group)
         if state.session.screen is MaintainerScreen.CANDIDATES:
             # CP-23 task 02: the table is the actions block; the Candidate it points at is this
             # description, read from the same filtered list the rows were, so a row the search
@@ -4775,9 +4870,7 @@ class CanonicalScreenSource:
         if screen is ConsumerScreen.INSTALL_CREDENTIALS and self.rows(state):
             plan = screens.plan
             assert plan is not None
-            return render_install_credentials(
-                plan.secrets, state.entered_secrets, state.current_row
-            )
+            return render_install_credentials(plan.secrets, state.asked_secrets, state.current_row)
         if screen is ConsumerScreen.CONFIGURATION_TARGETS:
             return tuple(
                 f"{'>' if row == state.current_row else ' '} "
@@ -5156,24 +5249,22 @@ class CanonicalScreenSource:
             views = {item.row: item for item in screens.installed}
             if not state.rows:
                 return self._list(state, ())
-            heading, rule, entries = headed_columns(
-                _INSTALLED_HEADINGS,
+            return render_columns(
+                _INSTALLED_COLUMNS,
                 tuple(
-                    (
-                        f"{'  ' if row in under else ''}{_installed_name(views.get(row), row)}",
-                        *(
-                            installed_cells(views[row], _human(health[row]))
-                            if row in views
-                            else (_human(health.get(row, "unknown")),)
-                        ),
-                    )
+                    installed_row_cells(views[row], _human(health[row]))
+                    if row in views
+                    else installed_collection_cells(row, _human(health.get(row, "unknown")))
                     for row in state.rows
                 ),
-                width=CONTENT_MEASURE - _ROW_PREFIX,
+                current=state.current_row,
+                selected=state.selection,
+                keys=state.rows,
+                # The whole terminal, as Marketplace's, so a row fits on one line (D-456).
+                width=state.viewport_columns,
+                details=state.installed_details,
+                indents=tuple(_MEMBER_INDENT if row in under else 0 for row in state.rows),
             )
-            # Named and ruled off like Marketplace's, so a cell says which column it is (D-464).
-            gutter = " " * _ROW_PREFIX
-            return (gutter + heading.rstrip(), gutter + rule, *self._list(state, entries))
         if screen is ConsumerScreen.INSTALLED_COLLECTION_DETAILS:
             group = screens.installed_collection(state.focus)
             return (
@@ -5404,7 +5495,7 @@ class CanonicalScreenSource:
             return render_inspection(plan, profile)
         if screen in (ConsumerScreen.REQUIRED_INPUTS, ConsumerScreen.UPDATE_INPUTS):
             return render_required_inputs(plan.inputs, profile)
-        return render_ready(plan, profile, entered=state.entered_secrets)
+        return render_ready(plan, profile, asked=state.asked_secrets)
 
     def _list(self, state: ConsumerUiState, entries: tuple[str, ...]) -> tuple[str, ...]:
         """Each entry after its cursor and tick, which take :data:`_ROW_PREFIX` columns."""

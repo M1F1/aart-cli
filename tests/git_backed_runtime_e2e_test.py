@@ -15,9 +15,11 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from aart_cli.domain.result import Ok
 from aart_cli.io.receipt_store import LocalReceiptStore
+from tests.command_line_inputs_e2e_test import _RecordingCredentialStore
 from tests.configured_installation_draft_e2e_test import AUTHORED_MCP
 from tests.git_backed_consumer_e2e_test import _Environment
 from tests.mcp_stdio_e2e_test import SERVER_SOURCE, speak
@@ -129,19 +131,27 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
     ) -> None:
         """Why the artifact above declares none, stated as a claim instead of left as a choice.
 
-        Without `--input` or `--secret-env` the verb has nothing to answer a declared input with.
-        What matters at this boundary is that it says so and stops, because the alternative --
-        installing a server that cannot start -- is the failure an operator would meet later, at a
-        harness, with nothing naming the cause.
+        The credential it declares is asked for by the credential store's own prompt, which needs a
+        person at a terminal (§201). Without one, what matters at this boundary is that the verb
+        says so and stops, because the alternative -- installing a server that cannot start -- is
+        the failure an operator would meet later, at a harness, with nothing naming the cause. The
+        store is a fake, so the real Keychain is never touched.
         """
 
         with tempfile.TemporaryDirectory() as raw:
             env = _Environment(Path(raw).resolve(), AUTHORED_MCP)
             env.run("consume", "registry", "sync", source_transport=True)
 
-            code, payload = env.run(
-                "consume", "install", "company/mcp/github", "--profile", "claude", "--yes"
-            )
+            with (
+                mock.patch(
+                    "aart_cli.commands.marketplace._credential_providers",
+                    return_value=(_RecordingCredentialStore(),),
+                ),
+                mock.patch("aart_cli.commands.marketplace._terminal_present", return_value=False),
+            ):
+                code, payload = env.run(
+                    "consume", "install", "company/mcp/github", "--profile", "claude", "--yes"
+                )
 
             self.assertEqual(code, 1, payload)
             self.assertFalse(payload["ok"])
@@ -149,10 +159,11 @@ class GitBackedRuntimeE2ETest(unittest.TestCase):
             self.assertEqual(
                 [item["code"] for item in payload["diagnostics"]], ["consumer-invalid"]
             )
-            # The organisation's declared default stands as its answer (§172.4, D-468).
+            # The organisation's declared default stands as its answer (§172.4, D-468); only the
+            # credential is left, and it is named.
             self.assertEqual(
-                sorted((item["id"], item["kind"]) for item in payload["inputs"]),
-                [("github-token", "credential")],
+                [item["input"] for item in payload["review"]["asked_by_credential_store"]],
+                ["company/mcp/github:github-token"],
             )
             # Nothing was built for an install that cannot complete.
             self.assertFalse((env.project / ".aart-cli").exists(), payload)

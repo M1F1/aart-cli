@@ -4,6 +4,30 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-26, CP-45 step 6 (§172.6, INV-302, D-487): 07b marks what the store asks.** 07b no
+longer reads a credential. Enter marks it `asked when installing`, Set later unmarks everything,
+and the transaction lends the terminal to the store's own prompt for each marked credential. Every
+unmarked one is stored as `AART_NOT_SET`. B-237 is done. Evidence:
+`docs/refactor/slices/CP-45-credentials-and-variables-cli.md`.
+
+**2026-10-26, CP-45 step 5 (§201, INV-302, D-486): `consume install` asks the credential
+store.** `--secret-env` is removed: it read a credential inside aart-cli. The review names each
+credential the store will ask for, with its guidance. `--yes` in a terminal hands the terminal to
+the store's own prompt during the transaction. Without a terminal it refuses before anything is
+written, and points to `--set-later` and `consume inputs set-credential`. B-236 is done, and B-237
+(07b) is left to the owner. Evidence:
+`docs/refactor/slices/CP-45-credentials-and-variables-cli.md`.
+
+**2026-10-26, CP-45 steps 1–4 (§198–§200, INV-299–INV-301, D-483–D-485): Credentials and
+variables from the command line; Installed reads like Marketplace.** `consume inputs list`, `set`
+and `set-credential` configure an installed artifact without the TUI, through the TUI's own consumer
+actions and one shared inputs module. A configuration value may be an argument. A credential is
+never one: the command lends the terminal to the store's prompt, or refuses without a terminal and
+prints the command. Installed and Updates now draw on Marketplace's grid (Artifact, Type, Harness,
+Health, with `d` for the details), and More info describes the installation under the cursor. The
+footer names the aart-cli version. Evidence:
+`docs/refactor/slices/CP-45-credentials-and-variables-cli.md`.
+
 **2026-10-26, CP-44 steps 1–3 (§197, INV-298, D-481): an artifact points to its own
 documentation.** A summary and an input's `help` have no room for a manual or the steps to get a
 credential. `artifact.documentation` is now an optional manifest field. It is checked like

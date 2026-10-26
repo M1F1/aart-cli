@@ -90,11 +90,14 @@ from .removal_proposal import RemovalProposal
 __all__ = [
     "configuration_cell",
     "installed_cells",
+    "installed_collection_cells",
+    "installed_row_cells",
     "marketplace_cells",
     "short_upstream",
     "disclosed_upstream",
     "ALL_ARTIFACTS",
     "ALL_INSTALLATIONS",
+    "PLACEHOLDER_STATE",
     "PLACEHOLDER_WARNING",
     "InstallSecretView",
     "choose_pair_scope",
@@ -246,8 +249,9 @@ class ConsumerScreen(str, Enum):
     # 07a puts each artifact×harness pair on one scope (§172.5). It follows the configuration form
     # and appears only when some pair is offered more than one scope.
     INSTALL_SCOPE = "07a-scope"
-    # 07b asks each secret once per artifact, into a hidden prompt, before Ready (§172.6). It
-    # appears only when some new installation holds no value for a secret it reads.
+    # 07b lists each secret once per artifact, to be asked by the credential store's own prompt
+    # while installing or left for later (§172.6). It appears only when some new installation
+    # holds no value for a secret it reads.
     INSTALL_CREDENTIALS = "07b-credentials"
     READY = "09-ready"
     INSTALLING = "10-installing"
@@ -1176,17 +1180,18 @@ def secrets_to_ask(view: ConsumerPlanView) -> tuple[InstallSecretView, ...]:
 
 #: What Doctor, Installed and Credentials and variables say about a value still left by a skip
 #: (§172.3). The words are the specification's.
-PLACEHOLDER_WARNING = f"Still the {SKIPPED_INPUT} placeholder — set it in Credentials and variables"
+PLACEHOLDER_STATE = f"Still the {SKIPPED_INPUT} placeholder"
+PLACEHOLDER_WARNING = f"{PLACEHOLDER_STATE} — set it in Credentials and variables"
 
 
-def placeholders_left(view: ConsumerPlanView, entered: tuple[str, ...]) -> tuple[str, ...]:
+def placeholders_left(view: ConsumerPlanView, asked: tuple[str, ...]) -> tuple[str, ...]:
     """Every `<artifact>\t<input>` this plan will store as `AART_NOT_SET`, for Ready (§172.6).
 
-    The ordinary ones are in the plan. A secret is one 07b asked for and nobody entered: which were
-    entered is the screen's to know, and only as row keys.
+    The ordinary ones are in the plan. A secret is one 07b lists and nobody marked for the store to
+    ask: which were marked is the screen's to know, and only as row keys.
     """
 
-    secrets = tuple(item.row for item in secrets_to_ask(view) if item.row not in entered)
+    secrets = tuple(item.row for item in secrets_to_ask(view) if item.row not in asked)
     return tuple(sorted({*view.config_placeholders, *secrets}))
 
 
@@ -1977,6 +1982,23 @@ def installed_cells(view: InstalledArtifactView, health: str) -> tuple[str, ...]
     if view.available:
         health = f"{health} → {view.available}"
     return (health, view.scope, project, configuration_cell(unset, installed=True))
+
+
+def installed_row_cells(view: InstalledArtifactView, health: str) -> tuple[str, ...]:
+    """One Installed row's columns on Marketplace's grid (§199): Artifact, Type, Harness and Health,
+    then Registry, Scope, Project and Configuration, which `d` adds.
+    """
+
+    artifact, kind, registry = offer_cells(view.coordinate)
+    health, scope, project, configuration = installed_cells(view, health)
+    return (artifact, kind, view.harness, health, registry, scope, project, configuration)
+
+
+def installed_collection_cells(collection: str, health: str) -> tuple[str, ...]:
+    """A Collection's row in the same columns: it has no harness, scope or inputs of its own."""
+
+    artifact, kind, registry = offer_cells(collection)
+    return (artifact, kind, "", health, registry, "", "", "")
 
 
 def project_unadopted_installation(coordinate: str) -> InstalledArtifactView:

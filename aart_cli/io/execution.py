@@ -951,11 +951,11 @@ class CredentialEffectInterpreter:
     is given what the credential is, who needs it and how to get it (D-263). A reference nobody
     described is still briefed, with the honest fallback.
 
-    An install captures its secrets before Ready instead (§172.4). `secrets` holds what was entered,
-    one single-use carrier per reference, and it is written with no prompt and no terminal. With
-    `skipped_as_placeholder`, a reference stored with nothing entered gets the `AART_NOT_SET` placeholder,
-    so nothing blocks. A replacement is never filled that way: a placeholder stands in for a value
-    nobody gave, never for one somebody did, so such an item is left as it is and the run goes on.
+    An install says on 07b which credentials the store's prompt fills during the run (§172.6):
+    those are `prompted`. With `skipped_as_placeholder`, every other reference being stored gets the
+    `AART_NOT_SET` placeholder, so nothing else blocks. A replacement is never filled that way: a
+    placeholder stands in for a value nobody gave, never for one somebody did, so such an item is
+    left as it is and the run goes on.
     """
 
     def __init__(
@@ -966,7 +966,7 @@ class CredentialEffectInterpreter:
         interactive_store: bool = False,
         terminal_handover: TerminalHandover | None = None,
         guidance: Mapping[str, tuple[CredentialGuidance, ...]] | None = None,
-        secrets: Mapping[str, TransientSecret] | None = None,
+        prompted: frozenset[str] = frozenset(),
         skipped_as_placeholder: bool = False,
     ) -> None:
         self.provider = provider
@@ -974,7 +974,7 @@ class CredentialEffectInterpreter:
         self.interactive_store = interactive_store
         self.terminal_handover = terminal_handover
         self.guidance = dict(guidance or {})
-        self.secrets = dict(secrets or {})
+        self.prompted = frozenset(prompted)
         self.skipped_as_placeholder = skipped_as_placeholder
 
     def supports(self, effect: Effect) -> bool:
@@ -998,25 +998,18 @@ class CredentialEffectInterpreter:
             )
             else None
         )
-        if isinstance(effect, (StoreCredential, ReplaceCredential)) and reference is not None:
-            carrier = self.secrets.pop(effect.reference, None)
-            if (
-                carrier is None
-                and self.skipped_as_placeholder
-                and isinstance(effect, StoreCredential)
-            ):
-                carrier = TransientSecret(SKIPPED_INPUT)
-            if carrier is not None:
-                written = self.provider.store(
-                    reference, carrier, replace=isinstance(effect, ReplaceCredential)
-                )
+        if (
+            isinstance(effect, (StoreCredential, ReplaceCredential))
+            and reference is not None
+            and effect.reference not in self.prompted
+            and self.skipped_as_placeholder
+        ):
+            if isinstance(effect, StoreCredential):
+                written = self.provider.store(reference, TransientSecret(SKIPPED_INPUT))
                 if isinstance(written, Err):
                     return written
                 return Ok(f"{effect.reference} is {written.value.state.value}")
-            if self.skipped_as_placeholder:
-                return Ok(
-                    f"{effect.reference} was left as it is; set it in Credentials and variables"
-                )
+            return Ok(f"{effect.reference} was left as it is; set it in Credentials and variables")
         if isinstance(effect, (StoreCredential, ReplaceCredential)) and not self.interactive_store:
             return _error(
                 EXECUTION_NEEDS_A_PERSON,

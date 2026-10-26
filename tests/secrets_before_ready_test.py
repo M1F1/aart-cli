@@ -1,9 +1,9 @@
-"""§172.4, INV-259: a secret is captured before Ready and written by the transaction, never asked for.
+"""§172.4, §172.6, INV-259, D-487: the transaction asks the store only for what 07b marked.
 
-The person enters a value on 07b, or skips it. The transaction then holds a single-use carrier per
-reference. It writes the value to the provider through stdin, so the value never reaches the process
-table. A skipped secret is written as the `AART_NOT_SET` placeholder. In neither case is there a prompt
-mid-transaction, and nothing blocks.
+The person marks a credential on 07b for the credential store to ask while installing, or leaves it.
+A marked one is stored by the store's own prompt on the lent terminal, so no value passes through
+aart-cli. Anything else is written as the `AART_NOT_SET` placeholder through stdin, so even that
+never reaches the process table, and nothing else blocks.
 """
 
 from __future__ import annotations
@@ -14,6 +14,9 @@ import sys
 import tempfile
 import unittest
 import uuid
+
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from aart_cli.domain.credentials import (
     CredentialObservation,
@@ -128,48 +131,81 @@ class _Provider:
         return Ok(CredentialObservation(reference, ProviderState.AVAILABLE, CredentialState.ABSENT))
 
 
-class TheTransactionNeverPromptsTest(unittest.TestCase):
+class TheTransactionAsksOnlyForWhatWasMarkedTest(unittest.TestCase):
     def setUp(self) -> None:
         self.provider = _Provider()
         self.handed_over: list[object] = []
 
-    def _interpreter(self, secrets) -> CredentialEffectInterpreter:
+    def _interpreter(self, prompted=frozenset(), references=(REFERENCE,)):
         return CredentialEffectInterpreter(
             self.provider,
-            (REFERENCE,),
-            secrets=secrets,
+            references,
+            interactive_store=bool(prompted),
+            prompted=frozenset(prompted),
             skipped_as_placeholder=True,
-            terminal_handover=lambda briefing=(): self.handed_over.append(briefing),  # type: ignore[arg-type,return-value]
+            terminal_handover=lambda briefing=(): _lent(self.handed_over, briefing),
         )
 
-    def test_an_entered_value_is_written_once_without_the_terminal(self) -> None:
-        carrier = TransientSecret(VALUE)
-        interpreter = self._interpreter({str(REFERENCE): carrier})
+    def test_a_marked_credential_is_asked_by_the_store_on_the_lent_terminal(self) -> None:
+        interpreter = self._interpreter({str(REFERENCE)})
 
         applied = interpreter.apply(StoreCredential(str(REFERENCE), "macos-keychain"))
 
         self.assertIsInstance(applied, Ok, getattr(applied, "diagnostics", ()))
-        self.assertEqual(self.provider.journal, ["carried"])
-        self.assertTrue(carrier.consumed)
-        self.assertEqual(self.handed_over, [])
+        self.assertEqual(self.provider.journal, ["prompted"])
+        self.assertEqual(len(self.handed_over), 1)
 
-    def test_a_skipped_secret_is_written_as_the_placeholder(self) -> None:
-        applied = self._interpreter({}).apply(StoreCredential(str(REFERENCE), "macos-keychain"))
+    def test_an_unmarked_secret_is_written_as_the_placeholder(self) -> None:
+        applied = self._interpreter().apply(StoreCredential(str(REFERENCE), "macos-keychain"))
 
         self.assertIsInstance(applied, Ok, getattr(applied, "diagnostics", ()))
         self.assertEqual(self.provider.journal, ["placeholder"])
         self.assertEqual(self.handed_over, [])
 
-    def test_a_replacement_with_nothing_entered_keeps_the_value_it_would_overwrite(self) -> None:
+    def test_a_replacement_nobody_marked_keeps_the_value_it_would_overwrite(self) -> None:
         """A placeholder stands in for a value nobody gave; it never displaces one somebody did."""
 
-        applied = self._interpreter({}).apply(ReplaceCredential(str(REFERENCE), "macos-keychain"))
+        applied = self._interpreter().apply(ReplaceCredential(str(REFERENCE), "macos-keychain"))
 
         # Nothing blocks either: the item is left as it is, and nothing is asked for.
         self.assertIsInstance(applied, Ok, getattr(applied, "diagnostics", ()))
         self.assertIn("Credentials and variables", applied.value)  # type: ignore[union-attr]
         self.assertEqual(self.provider.journal, [])
         self.assertEqual(self.handed_over, [])
+
+    @given(st.lists(st.booleans(), min_size=1, max_size=6))
+    @settings(suppress_health_check=(HealthCheck.differing_executors,))
+    def test_each_reference_is_asked_exactly_when_marked_and_no_value_is_carried(
+        self, marks
+    ) -> None:
+        references = tuple(
+            CredentialReference(
+                InputId("token"),
+                CredentialProviderRef("macos-keychain", "aart-test", f"token-{index}"),
+            )
+            for index in range(len(marks))
+        )
+        self.provider, self.handed_over = _Provider(), []
+        interpreter = self._interpreter(
+            {str(item) for item, marked in zip(references, marks, strict=True) if marked},
+            references,
+        )
+
+        for reference in references:
+            applied = interpreter.apply(StoreCredential(str(reference), "macos-keychain"))
+            self.assertIsInstance(applied, Ok, getattr(applied, "diagnostics", ()))
+
+        self.assertEqual(
+            self.provider.journal, ["prompted" if marked else "placeholder" for marked in marks]
+        )
+        self.assertEqual(len(self.handed_over), sum(marks))
+
+
+def _lent(journal: list[object], briefing):
+    import contextlib
+
+    journal.append(briefing)
+    return contextlib.nullcontext()
 
 
 @unittest.skipUnless(sys.platform == "darwin", "the macOS Keychain is measured only on macOS")

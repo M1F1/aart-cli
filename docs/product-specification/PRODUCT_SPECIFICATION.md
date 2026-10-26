@@ -11093,19 +11093,25 @@ order), and each harness configuration is written under its own scope's root.
 
 ## 172.6 07b Credentials
 
-Credentials are settled before installation, so the transaction never waits for a person. A
-person who cannot find a credential skips it, and the install still completes.
+**Amended 2026-10-26 by D-487 (CP-45, §201):** 07b no longer reads a credential. It decides which
+credentials the credential store's own prompt asks for while installing, as `consume install` does.
+A person who cannot find a credential leaves it, and the install still completes.
 
 - The screen lists each secret input once per artifact. A secret already stored for the same
   existing owner shows `Configured securely` and asks nothing.
-- Entering a secret hands the terminal to a hidden prompt, after the input's guidance. The value
-  is held in process memory only, in a single-use carrier, until the transaction stores it. It is
-  never part of UI state, a frame, the plan, a receipt, a log or argv.
-- The transaction stores the value, or the placeholder, in each installation's own provider item
-  without prompting, and removes them again if it rolls back. On macOS the value reaches the
-  Keychain over standard input, never on the command line.
-- Leaving before confirming on Ready discards every entered value.
-- Ready lists, in every mode, which inputs are being left as the `AART_NOT_SET` placeholder.
+- Nothing is typed on 07b. Enter on a secret marks it `asked when installing`, and Enter again
+  unmarks it. Set later unmarks every row. The UI state holds only which rows are marked. No
+  value of a credential is held in the process, a frame, the plan, a receipt, a log or argv.
+- While installing, the transaction lends the terminal to the store's own prompt for each marked
+  credential, once per installation's own provider item, after the input's guidance. The person
+  types into the store, and aart-cli never sees the value. Every unmarked secret is stored as the
+  placeholder without prompting, over standard input on macOS. Both are removed again if the
+  transaction rolls back.
+- If the person cancels the store's prompt, the install finishes as partial, and the credential
+  is set in Credentials and variables.
+- Leaving before confirming on Ready forgets the marks.
+- Ready lists, in every mode, which credentials the store will ask for, and which inputs are being
+  left as the `AART_NOT_SET` placeholder.
 
 ## 172.7 Acceptance invariants
 
@@ -11721,22 +11727,22 @@ recorded location.
 # 186. `consume install` answers inputs on the command line
 
 Status: **ACCEPTED 2026-10-22 (D-468)**, on the owner's request (CP-35). This applies §169.4's
-non-interactive channel and §172.3-4 to `consume install` and `consume update`.
+non-interactive channel and §172.3-4 to `consume install` and `consume update`. **Amended
+2026-10-26 by §201 (D-486):** `--secret-env` is removed, and a credential is asked for by the
+credential store's own prompt.
 
 An agent installing an MCP server without a terminal could not answer a required input. The command
 prepared with no answers and refused, so such artifacts installed only through the TUI.
 
-- **The flags name the artifact.** `--input ALIAS/KIND/NAME:INPUT=VALUE` answers an ordinary input.
-  `--secret-env ALIAS/KIND/NAME:INPUT=VARIABLE` names the environment variable that holds a
-  credential. Both repeat. A generic input id is never read from the environment.
+- **The flag names the artifact.** `--input ALIAS/KIND/NAME:INPUT=VALUE` answers an ordinary input,
+  and repeats. A generic input id is never read from the environment.
 - **One answer per artifact, as on 07.** The answer is copied into each installation of that
   artifact this operation creates (§172.4). Each installation still gets its own configuration
   file and its own credential item.
 - **A declared default is an answer.** An ordinary input no flag answers takes its declared
   default, as 07's pre-filled field does.
-- **A credential is never an argument.** The variable must be set and non-empty before the review.
-  Its value is read only after the review is confirmed and goes straight to the credential store.
-  It reaches no plan, receipt, file or output.
+- **A credential is never an argument.** The credential store's own prompt takes it when the
+  reviewed run is applied (§201). Its value reaches no plan, receipt, file or output.
 - **`--set-later` installs with placeholders.** Every required input left unanswered gets
   `AART_NOT_SET`, as 07's and 07b's Set later does (§172.3). Credentials and variables sets it
   later.
@@ -11744,19 +11750,19 @@ prepared with no answers and refused, so such artifacts installed only through t
   - a malformed flag;
   - an artifact the operation does not install;
   - an input the artifact does not declare;
-  - a credential given to `--input`, or a configuration value given to `--secret-env`;
+  - a credential given to `--input`;
   - an input answered twice;
-  - an unset variable;
   - a credential to store when no credential store is available.
 
   No refusal shows a value.
-- **The refusal says what to type.** When required inputs stay unanswered, the refusal lists the
-  flag that answers each one and mentions `--set-later`. The JSON form gives each input's `flag`.
+- **The refusal says what to type.** When required ordinary inputs stay unanswered, the refusal
+  lists the flag that answers each one and mentions `--set-later`. The JSON form gives each input's
+  `flag`, which is `null` for a credential.
 
 **INV-287 — A headless install answers each artifact's inputs by name.** `consume install` with
-`--input`, `--secret-env` or `--set-later` installs an artifact that has required inputs, with no
-terminal. Each installation holds its own copy of each answer. A credential's value reaches only
-the credential store, and every refusal happens before anything is written.
+`--input` or `--set-later` installs an artifact that has required inputs, with no terminal. Each
+installation holds its own copy of each answer. A credential's value reaches only the credential
+store, and every refusal happens before anything is written.
 
 # 187. An optional input is asked, and reaches the server only when answered
 
@@ -12086,3 +12092,155 @@ authoring and at reading unless it is a plain `http(s)` URL with no control char
 redaction would hide. Every surface that shows it shows it exactly as approved, and none shows a
 link for an artifact that declares none. Each credential and configuration input an artifact declares carries
 that artifact's link wherever the input is explained.
+
+---
+
+# 198. Credentials and variables from the command line
+
+Status: **ACCEPTED 2026-10-26 (D-483)**, on the owner's request (CP-45). An agent or a script could
+set an installed artifact's configuration only through the TUI's Credentials and variables. This
+refines §161.8, §169.4 and §186, and leaves §186's install-time flags as they are.
+
+- **Three commands, one service.** `aart-cli consume inputs` has three actions:
+  - `list` reads;
+  - `set` changes one ordinary value;
+  - `set-credential` stores or replaces one credential.
+
+  Each action prepares and executes through the same consumer actions as the TUI screens. What an
+  installation's inputs are, and which of them are still `AART_NOT_SET`, is decided by one module
+  that the TUI and the CLI share. The checks, the review digest and the writes are therefore the
+  TUI's own.
+- **An installation is named, never guessed.** A command names an artifact as
+  `ALIAS/KIND/NAME`, with or without `@VERSION`. `--harness` and `--scope` narrow it, and
+  `--project` names the project root. The artifact name must match whole, so `alias/mcp/git` never
+  names `alias/mcp/github`.
+
+  `set` and `set-credential` change exactly one installation (§169.3). When the name matches more
+  than one, nothing changes, and the refusal lists each match with the flags that select it. Every
+  other installation, including the same artifact in another harness, keeps its own values (§169.4).
+- **`list` only reads.** For each installation it shows:
+  - its harness, scope and root;
+  - each ordinary value, or `not set`, and where it is kept;
+  - the state of each credential, never a value;
+  - the artifact's documentation link (§197);
+  - the exact command that sets each value that is missing or `AART_NOT_SET`.
+
+  `--json` gives the same as data. Reading the result again is how a change is verified.
+- **`set INPUT=VALUE` is for configuration only.** A configuration value is not a credential, so
+  it may be an argument and may be pasted to an agent.
+
+  Naming a credential input is refused. The refusal does not repeat the value and gives the
+  `set-credential` command instead.
+- **`set-credential` never reads the value.** It takes no value, and refuses one given as
+  `INPUT=VALUE` without repeating it. A configuration input is refused, and the refusal gives the
+  `set` command.
+
+  The terminal is lent to the credential store's own prompt, the same handover the TUI uses (§161.8,
+  D-371). The briefing goes to standard error, the person types into the store, and the value never
+  passes through aart-cli. An agent may run the command or hand it to a person. It can never supply
+  the value.
+- **No terminal, no change.** Without a terminal on standard input, `set-credential` refuses before
+  touching the store and prints the command to run in a terminal. The refusal comes first because
+  replacing an item removes the old one before it asks.
+- **Review, then `--yes`.** Without `--yes` a change is only reviewed: it prints what would change
+  and the review digest. `--yes` executes, and `--expect DIGEST` refuses a change that differs from
+  the one reviewed. Every refusal says what was refused and how to proceed, with `--json` giving
+  `{"ok": false, "diagnostics": [...]}`.
+- **What stays elsewhere.** Deleting a retained credential stays in the TUI, which names its sole
+  owner (INV-057, B-235). `consume install` asks for a credential in the same way (§201).
+
+**INV-299 — An installation's inputs are set from the command line through the TUI's own service,
+and a credential's value never passes through aart-cli.** `consume inputs set` changes exactly one
+ordinary value of exactly one named installation, after the review its `--expect` digest names.
+`consume inputs set-credential` takes no value: it lends the terminal to the credential store or
+refuses with nothing changed. No argument, output, plan, receipt or refusal of either command
+carries a credential's value.
+
+---
+
+# 199. Installed reads like Marketplace
+
+Status: **ACCEPTED 2026-10-26 (D-484)**, on the owner's request (CP-45). Installed and Updates
+listed the whole coordinate and the harness in one cell, wrapped long cells, and had no More info
+for the row under the cursor. This refines §173.6, §173.8 and §184, and applies §196 to them.
+
+- **Four columns by default:**
+  - `Artifact` is `name@version`;
+  - `Type` is the same word Marketplace uses, and `Collection` for a Collection;
+  - `Harness` is the installation's harness;
+  - `Health` is the measured health, with `→ VERSION` when an update is offered.
+- **`d` shows the details:** Registry, Scope, Project (the root's last name) and Configuration
+  (§182). `d` again hides them. The choice holds while aart-cli runs. It is kept apart from
+  Marketplace's choice, so each list keeps its own.
+- **One line per row, on Marketplace's grid.** The same rules as §196 apply:
+  - columns narrow in the same order;
+  - a cut value is marked `…`;
+  - a column with no room is named under the list;
+  - the headings are ruled off (§184).
+
+  A Collection's members stay indented under it (§173.6).
+- **More info describes the row under the cursor.** `v` shows the installation whole:
+  - artifact, version, Type and Registry;
+  - harness, scope and the whole project root;
+  - health and any offered update;
+  - each ordinary value, or `not set`, and each credential's state, never its value;
+  - the documentation link, whole and last (§197).
+
+  For a Collection, More info shows its version, Registry, health, how many artifacts it includes,
+  and which of them need attention.
+- **Nothing else moves.** Rows, keys, selection, search and every action still address the
+  installation by its full key (§169.3).
+
+**INV-300 — Installed and Updates draw one line per installation on Marketplace's grid.** Without
+details a row shows exactly Artifact `name@version`, Type, Harness and Health. With details it adds
+Registry, Scope, Project and Configuration. No line exceeds the window. Toggling details never
+changes the rows, the selection or the cursor. More info for an installation names its harness,
+scope, root and the state of each input, and never a credential's value.
+
+---
+
+# 200. The TUI names its version
+
+Status: **ACCEPTED 2026-10-26 (D-485)**, on the owner's request (CP-45). A screenshot or a report
+of a screen did not say which aart-cli drew it.
+
+- The footer caption that names the launch directory (QA-086) ends with ` · aart-cli X.Y.Z`. The
+  version is the one the executable reports (`aart-cli --version`).
+- A session with no launch directory still draws no caption, as before.
+
+**INV-301 — Every screen with a launch directory names the running aart-cli's version beside it.**
+
+---
+
+# 201. `consume install` asks the credential store, never the environment
+
+Status: **ACCEPTED 2026-10-26 (D-486)**, on the owner's request (CP-45, B-236). This amends §186.
+`--secret-env` read a credential from an environment variable inside aart-cli. That broke the rule
+§198 set: aart-cli never reads a credential, and the store's own prompt takes it.
+
+- **`--secret-env` is removed.** A credential is never a flag, an argument or an environment
+  variable that aart-cli reads. `--input` naming a credential is refused, without repeating the
+  value. The refusal says to apply in a terminal, or to use `--set-later` and then
+  `consume inputs set-credential`.
+- **The review says what the store will ask for.** Without `--yes`, `consume install` and `consume
+  update` list each credential the store will ask for, once per artifact, as
+  `ALIAS/KIND/NAME:INPUT`. Each is explained as on 07b and in the store's briefing: what it is, who
+  needs it and how to get it (D-263). The JSON review gives them as `asked_by_credential_store`,
+  each with its `input` and `guidance`.
+- **Applying in a terminal hands the terminal to the store.** With `--yes` and a terminal on
+  standard input, the reviewed run is applied. Each installation's credential is stored in its own
+  item by the store's own prompt, during the transaction, after a briefing on standard error. The
+  value never passes through aart-cli. This is the same handover as `set-credential` (§198) and the
+  TUI's Credentials and variables (§161.8, D-371).
+- **No terminal, no change.** With `--yes` and no terminal, the command refuses before anything is
+  written or locked. The refusal names each credential, and says to run the same command in a
+  terminal, or to pass `--set-later` and set each one later with `consume inputs set-credential`.
+- **`--set-later` is unchanged.** It stores the `AART_NOT_SET` placeholder in each credential's item
+  and asks nothing (§172.3).
+- **The TUI does the same.** 07b marks which credentials the store asks for while installing, and
+  never reads one (§172.6, D-487).
+
+**INV-302 — Installing never reads a credential.** No flag, argument, environment variable or
+screen gives `consume install`, `consume update` or the TUI's install flow a credential's value. Each credential the run
+needs is either stored by the credential store's own prompt in a terminal, or left as the
+placeholder under `--set-later`. Without a terminal, a run that needs the prompt changes nothing.

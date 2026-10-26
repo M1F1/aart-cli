@@ -27,7 +27,7 @@ from tests.install_credentials_test import _Keeping
 _TO_FORM = (SPACE, *INSTALL_CUSTOM, RIGHT, SPACE, RIGHT, SPACE, ENTER)
 #: 07: the declared default cleared, then Set later; 07a passed; 07b: Set later.
 _SKIP_ALL = (*_TO_FORM, *((BACKSPACE,) * len("acme")), UP, ENTER, ENTER, ENTER, UP, ENTER)
-#: 07 answered; 07a passed; 07b: the credential entered, then Continue.
+#: 07 answered; 07a passed; 07b: the credential asked of the store when installing, then Continue.
 _ANSWER_ALL = (*_TO_FORM, "platform-team", ENTER, ENTER, ENTER, ENTER, ENTER, DOWN, ENTER)
 
 
@@ -60,7 +60,6 @@ def _installed(keys):
         base = _actions(env)
         handler = type(base)(
             replace(base._context, credential_providers=(provider,)),  # noqa: SLF001
-            secret_reader=lambda prompt: "typed-on-07b",
         )
         finished, install, _ = _drive(
             env, _at(ConsumerScreen.MARKETPLACE), *keys, ENTER, actions=handler

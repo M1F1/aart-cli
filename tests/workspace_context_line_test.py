@@ -32,10 +32,17 @@ from aart_cli.application.consumer_views import (
     ConsumerSettings,
 )
 from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.runtime_contract import EXECUTABLE_VERSION
 from aart_cli.tui import launch_workspace
 from aart_cli.tui_consumer import CanonicalScreenSource, frame
 from aart_cli.tui_layout import CONTENT_MEASURE, abbreviate_path, footer_start
 from tests.consumer_shell_test import screens
+
+
+def _caption(workspace: str) -> str:
+    """§200: the directory, then which aart-cli is drawing it, so a report of a screen names both."""
+
+    return f"working at {workspace} · aart-cli {EXECUTABLE_VERSION}"
 
 
 def _state(screen, *, workspace: str) -> ConsumerUiState:
@@ -55,7 +62,7 @@ class WorkspaceContextLineTest(unittest.TestCase):
 
         self.assertTrue(lines[0].startswith("AART / "))
         self.assertNotIn("aart-cli", lines[0])
-        self.assertEqual("working at ~/code/aart-cli", lines[footer_start(lines)])
+        self.assertEqual(_caption("~/code/aart-cli"), lines[footer_start(lines)])
 
     def test_every_screen_carries_the_same_context(self) -> None:
         for screen in (
@@ -67,7 +74,7 @@ class WorkspaceContextLineTest(unittest.TestCase):
             with self.subTest(screen=screen):
                 lines = frame(self.source, _state(screen, workspace="~/lab/seven"))
 
-                self.assertEqual("working at ~/lab/seven", lines[footer_start(lines)])
+                self.assertEqual(_caption("~/lab/seven"), lines[footer_start(lines)])
 
     def test_a_session_without_a_directory_prints_no_context_line(self) -> None:
         lines = frame(self.source, _state(ConsumerScreen.DASHBOARD, workspace=""))

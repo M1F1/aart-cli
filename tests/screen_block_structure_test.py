@@ -44,6 +44,7 @@ from aart_cli.application.maintainer_views import (
     project_maintainer_candidates,
     project_maintainer_dashboard,
 )
+from aart_cli.runtime_contract import EXECUTABLE_VERSION
 from aart_cli.tui_consumer import (
     CanonicalScreenSource,
     ConsumerScreens,
@@ -922,7 +923,9 @@ class NoticeBlockTest(TestCase):
         )
 
         self.assertLess(status, notice)
-        self.assertIn("working at /lab/registry", blocks[notice + 1])
+        self.assertIn(
+            f"working at /lab/registry · aart-cli {EXECUTABLE_VERSION}", blocks[notice + 1]
+        )
 
     def test_a_screen_with_no_rows_gives_its_notice_the_same_block(self) -> None:
         """`QA-091` had folded it into view status, which is a different question again."""

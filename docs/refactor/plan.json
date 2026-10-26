@@ -1628,6 +1628,48 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-45",
+      "title": "Credentials and variables from the command line; Installed reads like Marketplace",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "`consume inputs list|set|set-credential` through the TUI's consumer actions and the shared `credentials_and_variables` module (§198, INV-299, D-483)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Installed and Updates on Marketplace's grid, `d` details, More info under the cursor (§199, INV-300, D-484)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The footer names the aart-cli version (§200, INV-301, D-485)",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Focused verification, targeted mutations and documents",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "`consume install` hands the terminal to the credential store; `--secret-env` removed (§201, INV-302, D-486, B-236)",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "07b marks what the credential store asks while installing; no credential read in the process (§172.6, INV-302, D-487, B-237)",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "Commit, push, PR and release, at the owner's request",
+          "status": "in_progress"
+        }
+      ]
     }
   ]
 }

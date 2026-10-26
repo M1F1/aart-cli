@@ -33,7 +33,6 @@ from aart_cli.application.command_line_inputs import (
     parse_command_line_input,
     resolve_command_line_inputs,
     secret_references,
-    secret_variables,
 )
 from aart_cli.application.consumer_views import (
     PresentationProfile,
@@ -42,11 +41,17 @@ from aart_cli.application.consumer_views import (
     receipt_detail_to_data,
 )
 from aart_cli.application.credential_guidance import (
+    CredentialGuidance,
     credential_guidance_lines,
     credential_guidance_to_data,
+    gather_credential_guidance,
     guidance_by_input,
 )
-from aart_cli.application.installation_inputs import OwnedInputSource, copy_artifact_answers
+from aart_cli.application.installation_inputs import (
+    OwnedInputSource,
+    artifact_answer_key,
+    copy_artifact_answers,
+)
 from aart_cli.application.installed_setup import declared_setup_to_data
 from aart_cli.configuration.model import SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration
@@ -89,7 +94,7 @@ from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity, di
 from aart_cli.domain.effects import effect_to_data
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import ArtifactCoordinate, SourceAlias
-from aart_cli.domain.inputs import RuntimeInput, SecretInput
+from aart_cli.domain.inputs import InputGuidance, RuntimeInput, SecretInput
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.receipts import ArtifactReceipt
 from aart_cli.domain.reconciliation import DesiredState
@@ -120,8 +125,8 @@ from aart_cli.io.consumer_machine import (
 from aart_cli.io.credentials import (
     CredentialProviderPort,
     MacOsKeychainProvider,
-    TransientSecret,
 )
+from aart_cli.io.terminal_briefing import BriefingHandover, terminal_present
 from aart_cli.marketplace.catalog import marketplace_catalog_bytes, render_marketplace
 from aart_cli.marketplace.search import Document, search, summary_line
 from aart_cli.model import Request, SetupManualReference
@@ -861,46 +866,29 @@ def _command_line_sources(
     request: Request,
     prepared: PreparedConfiguredInstallation,
     credential_providers: tuple[CredentialProviderPort, ...],
-) -> Result[tuple[tuple[OwnedInputSource, ...], tuple[CommandLineInput, ...]]]:
-    """Turn `--input`, `--secret-env` and `--set-later` into this operation's input sources.
+) -> Result[tuple[OwnedInputSource, ...]]:
+    """Turn `--input` and `--set-later` into this operation's input sources.
 
-    Every flag is checked against what the operation installs before anything else happens, and a
-    variable `--secret-env` names must hold a value now, so a review never promises a credential
-    that the confirmed run could not store. The value itself is read only at completion.
+    Every flag is checked against what the operation installs before anything else happens. Each
+    credential nobody has stored yet is pointed at its own provider item, which the credential
+    store's prompt fills when the reviewed run is applied, or `--set-later` fills with the
+    placeholder; no value of a credential passes through aart-cli (§201).
     """
 
-    parsed: dict[str, list[CommandLineInput]] = {"--input": [], "--secret-env": []}
+    parsed: list[CommandLineInput] = []
     problems: list[Diagnostic] = []
-    for flag, raw in (
-        *(("--input", item) for item in request.install_inputs),
-        *(("--secret-env", item) for item in request.install_secret_envs),
-    ):
-        item = parse_command_line_input(raw, flag=flag)
+    for raw in request.install_inputs:
+        item = parse_command_line_input(raw, flag="--input")
         if isinstance(item, Err):
             problems.extend(item.diagnostics)
         else:
-            parsed[flag].append(item.value)
+            parsed.append(item.value)
     if problems:
         return Err(tuple(problems))
     fields = prepared.draft.inputs.fields
-    resolved = resolve_command_line_inputs(fields, parsed["--input"], parsed["--secret-env"])
+    resolved = resolve_command_line_inputs(fields, parsed)
     if isinstance(resolved, Err):
         return resolved
-    empty = sorted(
-        {item.value for item in resolved.value.secrets if not os.environ.get(item.value)}
-    )
-    if empty:
-        return Err(
-            tuple(
-                Diagnostic(
-                    COMMAND_LINE_INPUT_INVALID,
-                    Severity.ERROR,
-                    f"--secret-env names {variable}, which is not set or is empty",
-                    remediation=(f"export {variable} before running the command",),
-                )
-                for variable in empty
-            )
-        )
     answers = resolved.value.answers
     sources = copy_artifact_answers(
         fields,
@@ -908,10 +896,8 @@ def _command_line_sources(
         skip_unanswered=request.set_later,
     )
     unanswered = prepared.draft.inputs.unanswered
-    needs_store = resolved.value.secrets or (
-        request.set_later and any(isinstance(field.input, SecretInput) for field in unanswered)
-    )
-    if needs_store:
+    credentials = _unanswered_credentials(prepared)
+    if credentials:
         provider = next(
             (item for item in credential_providers if item.available() is ProviderState.AVAILABLE),
             None,
@@ -922,8 +908,9 @@ def _command_line_sources(
                     Diagnostic(
                         COMMAND_LINE_INPUT_INVALID,
                         Severity.ERROR,
-                        "no credential store is available on this machine, so a credential "
-                        "cannot be stored or left for later",
+                        "no credential store is available on this machine, so "
+                        + ", ".join(credentials)
+                        + " cannot be stored or left for later",
                         remediation=(
                             "install where a supported credential store is available (macOS "
                             "Keychain)",
@@ -931,17 +918,43 @@ def _command_line_sources(
                     ),
                 )
             )
-        sources = (
-            *sources,
-            *secret_references(
-                fields,
-                unanswered,
-                resolved.value.secrets,
-                set_later=request.set_later,
-                provider=provider.provider,
-            ),
+        sources = (*sources, *secret_references(unanswered, provider=provider.provider))
+    return Ok(tuple(sources))
+
+
+def _unanswered_credentials(prepared: PreparedConfiguredInstallation) -> tuple[str, ...]:
+    """Each credential nobody has stored yet, as `ALIAS/KIND/NAME:INPUT`, once per artifact."""
+
+    return tuple(
+        dict.fromkeys(
+            f"{artifact_answer_key(field.owner)}:{field.input.id}"
+            for field in prepared.draft.inputs.unanswered
+            if isinstance(field.input, SecretInput)
         )
-    return Ok((tuple(sources), resolved.value.secrets))
+    )
+
+
+def _asked_by_the_store(
+    prepared: PreparedConfiguredInstallation, request: Request
+) -> dict[str, tuple[CredentialGuidance, ...]]:
+    """Each credential the store will ask a person for when this run is applied, once per artifact.
+
+    Each is explained in the words the TUI and the store's briefing use: what it is, who needs it
+    and how to get it (D-263), so the person can have it ready before applying.
+    """
+
+    if request.set_later:
+        return {}
+    declared: dict[str, tuple[str, list[tuple[str, InputGuidance | None]]]] = {}
+    for field in prepared.draft.inputs.unanswered:
+        if isinstance(field.input, SecretInput):
+            key = f"{artifact_answer_key(field.owner)}:{field.input.id}"
+            _, owners = declared.setdefault(key, (field.input.id.value, []))
+            owners.append((str(field.owner), field.input.guidance))
+    return {
+        key: gather_credential_guidance(input_id, owners)
+        for key, (input_id, owners) in declared.items()
+    }
 
 
 def _unchanged(artifact: ReceiptArtifactView) -> bool:
@@ -993,13 +1006,14 @@ def _configured_lifecycle(
     )
     if isinstance(prepared, Err):
         return _emit_error(request, prepared, operation)
-    secrets: tuple[CommandLineInput, ...] = ()
-    flagged = request.install_inputs or request.install_secret_envs or request.set_later
+    asked: dict[str, tuple[CredentialGuidance, ...]] = {}
+    flagged = request.install_inputs or request.set_later
     if flagged or not prepared.value.ready:
+        asked = _asked_by_the_store(prepared.value, request)
         answered = _command_line_sources(request, prepared.value, credential_providers)
         if isinstance(answered, Err):
             return _emit_error(request, answered, operation)
-        sources, secrets = answered.value
+        sources = answered.value
         if sources:
             prepared = prepare_configured_installation(
                 runtime.loaded.effective,
@@ -1025,7 +1039,8 @@ def _configured_lifecycle(
                 "id": field.input.id.value,
                 "kind": "credential" if isinstance(field.input, SecretInput) else "config",
                 "owner": str(field.owner),
-                "flag": missing_input_flags((field,))[0],
+                # A credential has no flag: the credential store asks for it (§201).
+                "flag": next(iter(missing_input_flags((field,))), None),
                 **(
                     {"guidance": credential_guidance_to_data(guidance[field.input.id.value])}
                     if isinstance(field.input, SecretInput)
@@ -1092,6 +1107,12 @@ def _configured_lifecycle(
     if documentation:
         review_data["documentation"] = _documentation_data(documentation)
     digest = str(prepared.value.review_digest)
+    if asked:
+        review_data["asked_by_credential_store"] = [
+            {"input": key, "guidance": credential_guidance_to_data(groups)}
+            for key, groups in asked.items()
+        ]
+    asking = _asking_lines(asked)
     if not request.yes:
         _emit(
             request,
@@ -1106,6 +1127,7 @@ def _configured_lifecycle(
             },
             render_install_plan(view, PresentationProfile.LESS_INFO)
             + _documentation_lines(documentation)
+            + asking
             + ("Reviewed only; re-run with --yes to apply this exact plan.",),
         )
         return _common.OK
@@ -1138,14 +1160,40 @@ def _configured_lifecycle(
         )
         return _common.ERROR
 
+    if asked and not _terminal_present():
+        # Refused before the lock is taken: the store would ask a terminal nobody is at.
+        refusal = Diagnostic(
+            CONSUMER_INVALID,
+            Severity.ERROR,
+            "the credential store asks a person for "
+            + ", ".join(asked)
+            + ", and there is no terminal; nothing was changed",
+            remediation=(
+                "run the same command in a terminal, where the credential store asks for each",
+                "pass --set-later instead, then set each with aart-cli consume inputs "
+                "set-credential",
+            ),
+        )
+        _emit(
+            request,
+            operation,
+            {
+                "schema_version": 1,
+                "ok": False,
+                "operation": operation,
+                "finalized": False,
+                "diagnostics": [diagnostic_to_data(refusal)],
+                "review_digest": digest,
+                "review": review_data,
+            },
+            (
+                f"{refusal.severity.value}: {refusal.message}",
+                *(f"  remediation: {item}" for item in refusal.remediation),
+            ),
+        )
+        return _common.ERROR
+
     now = datetime.now(timezone.utc)
-    # Read only now, after the review was confirmed, and held only until the provider stores it.
-    credential_secrets = {
-        reference: TransientSecret(os.environ[variable])
-        for reference, variable in secret_variables(
-            prepared.value.draft.inputs.bound, secrets
-        ).items()
-    }
     completed = complete_configured_installation(
         prepared.value,
         expected_review_digest=prepared.value.review_digest,
@@ -1156,7 +1204,9 @@ def _configured_lifecycle(
         recorded_at=now.isoformat(),
         today=now.date(),
         offline=request.offline,
-        credential_secrets=credential_secrets,
+        # The store's own prompt takes each credential, on stderr's terminal, after its briefing.
+        interactive_credentials=bool(asked),
+        credential_handover=BriefingHandover(stream=sys.stderr) if asked else None,
         skipped_secrets_as_placeholders=request.set_later,
     )
     if isinstance(completed, Err):
@@ -1225,6 +1275,27 @@ def _configured_lifecycle(
         lines,
     )
     return _common.OK if successful else _common.ERROR
+
+
+#: Looked up when called, so a test can say whether a person is at the terminal.
+_terminal_present = terminal_present
+
+
+def _asking_lines(asked: dict[str, tuple[CredentialGuidance, ...]]) -> tuple[str, ...]:
+    if not asked:
+        return ()
+    return (
+        "When applied, the credential store asks you for each of these on this terminal; "
+        "aart-cli never sees them:",
+        *(
+            line
+            for key, groups in asked.items()
+            for line in (
+                f"  - {key}",
+                *(f"    {text}" for text in credential_guidance_lines(groups)),
+            )
+        ),
+    )
 
 
 def _documentation(item: RuntimeInput) -> str | None:

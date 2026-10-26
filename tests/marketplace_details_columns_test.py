@@ -144,7 +144,7 @@ class DTogglesTheDetails(unittest.TestCase):
 
         event = key_event("d", state)
 
-        self.assertIsNot(event.kind, ConsumerUiEventKind.TOGGLE_MARKETPLACE_DETAILS)
+        self.assertIsNot(event.kind, ConsumerUiEventKind.TOGGLE_DETAILS)
 
     def test_the_choice_holds_across_screens(self) -> None:
         state = _marketplace(marketplace_details=True)
@@ -158,8 +158,8 @@ class DTogglesTheDetails(unittest.TestCase):
         self.assertIs(state.session.screen, ConsumerScreen.MARKETPLACE)
         self.assertTrue(state.marketplace_details)
 
-    def test_d_means_nothing_elsewhere(self) -> None:
-        state = ConsumerUiState(ConsumerSession(ConsumerScreen.INSTALLED))
+    def test_d_means_nothing_off_the_lists(self) -> None:
+        state = ConsumerUiState(ConsumerSession(ConsumerScreen.SETTINGS))
 
         self.assertIsNone(key_event("d", state))
         self.assertNotIn("d", [item.key for item in key_bindings(state)])

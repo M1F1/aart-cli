@@ -11848,3 +11848,136 @@ Refines §154, §161 and §175. Product Specification §197, INV-298.
   - The CLI install result JSON gains `documentation: [{artifact, url}]`, and the review gains
     the same list. The refusal for unanswered inputs gains a `documentation` key on each input
     (`null` when there is none), because an agent filling the inputs reads that JSON.
+
+## D-483 — Credentials and variables from the command line (CP-45)
+
+Refines §161.8, §169.4 and §186. Product Specification §198, INV-299.
+
+- **What was asked.** The owner wants an agent to configure an installed artifact without the TUI,
+  with code shared with the TUI. Their rule: an agent may at most run, or give a person, the command
+  that passes a credential safely to the store, as the TUI does. The process never reads the value.
+  Configuration values may be pasted to an agent, because they are not credentials.
+- **Choices.**
+  - `consume inputs list|set|set-credential` lives in `aart_cli/cli_inputs.py`. It is a top-level
+    module, not under `commands/`, because it composes the TUI's consumer actions
+    (`tui._canonical_consumer_actions`), and `tests/tui_dispatch_test.py` keeps `commands` free of
+    `tui`. `cli.main` routes `inputs` before `DISPATCH`.
+  - `_canonical_consumer_actions` accepts `credential_providers` and `handover`. The CLI injects
+    `marketplace._credential_providers()`, which tests replace, and a `BriefingHandover` on stderr
+    (D-486; it was a `_CursesHandover`, which is now that class plus lending the drawn screen).
+    The CLI therefore gets the TUI's credential flow exactly, with the briefing kept off stdout.
+  - What an installation's inputs are moves to `application/credentials_and_variables.py`, read by
+    the TUI and the CLI:
+    - `installation_parts`, `select_installations` and `installation_inputs`;
+    - `credential_state`, and `credential_setting`, which decides set or replace from the actions
+      offered.
+
+    `tui_consumer` drops its private copy of `_configuration_identifiers`.
+  - `set` reuses CONFIGURE with one answer and one target harness. `set-credential` reuses
+    CREDENTIAL_SET or CREDENTIAL_REPLACE on the credential reference. Both prepare first and print
+    the review digest. `--yes --expect` executes only the reviewed change.
+  - Without a TTY on stdin, `set-credential --yes` refuses before the store is touched. Keychain
+    replace deletes before it prompts, so a run with no terminal would lose the old item and store
+    nothing.
+  - Deleting a retained credential is not offered here, because a CLI address for a reference that
+    no installation names yet is open (B-235).
+- **Settled with the owner.** `consume install --secret-env` (§186, D-468) read a credential from
+  an environment variable inside the process, which is weaker than the owner's CP-45 rule. The owner
+  chose to have install hand the terminal to the store as well (D-486, B-236 done).
+
+## D-484 — Installed reads like Marketplace (CP-45)
+
+Refines §173.6, §173.8 and §184. Product Specification §199, INV-300.
+
+- `tui_marketplace_rows.render_columns(layout, rows, ..., indents=)` is the grid behind both lists,
+  and `ColumnLayout` names the headings, how many are brief, and the noun in the counter.
+  `render_marketplace_rows` is now that grid with Marketplace's layout. The fitting rules are
+  §196's, now parameterized by layout instead of reading Marketplace's headings.
+- Installed and Updates use `_INSTALLED_COLUMNS`:
+  - brief: Artifact, Type, Harness, Health;
+  - details: Registry, Scope, Project, Configuration.
+
+  The cells come from `consumer_views.installed_row_cells` and `installed_collection_cells`, which
+  are built from `offer_cells`. A Collection's members are indented by 2 inside the Artifact cell,
+  and the indent counts toward the column's width.
+- The details choice is a separate state field, `installed_details`, so Marketplace and Installed
+  each keep their own. The event is renamed `TOGGLE_DETAILS` and acts on the list being shown.
+  `consumer_ui.details_shown(state)` answers for the footer.
+- More info on Installed and Updates is `installed_description` or
+  `installed_collection_description`. These read the installation's inputs through the shared
+  `installation_inputs`, the same projection `consume inputs list` prints.
+- The old `headed_columns` Installed rendering and `_installed_name` (`coordinate · harness`) are
+  removed. Tests now assert `name@version` and the column a value is under.
+
+## D-485 — The footer names the aart-cli version (CP-45)
+
+Product Specification §200, INV-301. The caption becomes `working at DIR · aart-cli X.Y.Z`, with
+`runtime_contract.EXECUTABLE_VERSION` as the only source. It joins the existing caption rather than
+taking a new line, so the footer keeps its layout (QA-086). A session without a launch directory
+still draws no caption: the skeleton tests that hold the footer for such a session are unchanged,
+and production always has one (`tui.launch_workspace`).
+
+## D-486 — `consume install` hands the terminal to the credential store (CP-45 step 5)
+
+Amends §186 and D-468. Product Specification §201, INV-302. Closes B-236.
+
+- **What was asked.** The owner's CP-45 rule is that aart-cli never reads a credential, and
+  `--secret-env` read one from the environment. Of the three options in B-236, the owner chose:
+  "zrobić tak, żeby install też oddawał terminal promptowi Keychaina".
+- **Choices.**
+  - `--secret-env` is removed from the parser, `Request` (`install_secret_envs`) and
+    `application/command_line_inputs.py` (`secret_variables`, the `--secret-env` shape and the
+    secrets argument of `resolve_command_line_inputs`). No alias is kept (CP-26 rule).
+  - `secret_references(unanswered, provider=)` points every credential still unanswered at its own
+    provider item, one per installation. The existing `CredentialEffectInterpreter` path stores
+    each with `provider.store(reference)` and no carrier, so the store's own prompt takes it. That
+    is the path `set-credential` and Credentials and variables already use, and no new effect was
+    needed. `complete_configured_installation` gets `interactive_credentials=True` and a
+    `BriefingHandover(stream=sys.stderr)` only when the store will ask.
+  - `aart_cli/io/terminal_briefing.py` (new) holds `BriefingHandover`, which writes the D-263
+    briefing wrapped to the terminal, and `terminal_present()`. `tui._CursesHandover` now subclasses
+    it and adds lending the drawn screen. `cli_inputs` and `commands/marketplace` use it directly,
+    so `commands` still does not import `tui`.
+  - The review lists `asked_by_credential_store` as `{input, guidance}` per `ALIAS/KIND/NAME:INPUT`,
+    and the text review explains each with `credential_guidance_lines`. An agent can tell the person
+    what to have ready before handing them the command.
+  - `--yes` with no TTY on stdin refuses before `complete_configured_installation`, so no lock is
+    taken and nothing is written. The check is `marketplace._terminal_present`, looked up when
+    called so tests can say whether a person is there.
+  - `missing_input_flags` gives no flag for a credential, and the unanswered refusal's JSON `flag` is
+    `null` for one. With a store available, a credential is never left unanswered there anyway; it
+    is asked for or refused for lack of a terminal.
+  - With no store available, the refusal now names each credential it could not store.
+- **Consequences.**
+  - A credential can no longer be given to an unattended `consume install`. An agent runs it with
+    `--set-later`, and a person runs `consume inputs set-credential` afterwards, or the person runs
+    the install itself in a terminal.
+  - An optional credential can no longer be given at install from the command line (B-223 updated).
+  - The TUI's 07b still held a credential in the process before Ready (§172.6). The owner chose
+    to change it too (D-487, B-237 done).
+
+## D-487 — 07b marks what the credential store asks while installing (CP-45 step 6)
+
+Amends §172.6 and D-419. Product Specification §172.6, §201, INV-302. Closes B-237.
+
+- **What was asked.** 07b read a credential with its own hidden prompt and held it in the process
+  until Ready. That broke the owner's CP-45 rule. Of B-237's options, the owner chose the store's
+  prompt during the transaction ("wariant 2"), the same path `consume install` now takes (D-486).
+- **Choices.**
+  - Enter on a 07b row marks or unmarks it (`ASK_SECRET` and `SECRET_ASKED`, renamed from
+    `ENTER_SECRET` and `SECRET_ENTERED`). The state field is `asked_secrets`, and the adapter keeps
+    `_asked_rows`. Nothing is read, so the `secret_reader` and `getpass` hook is gone, and so is
+    `credential_entry_briefing`, which spoke only for aart-cli's own prompt.
+  - Unmarked is the default, so an untouched 07b still stores placeholders and nothing blocks, as
+    before. Set later unmarks every row. It used to keep a mark, which would have prompted after
+    the person chose "later".
+  - `complete_configured_installation(..., prompted_credentials=)` replaces `credential_secrets`.
+    `CredentialEffectInterpreter(prompted=)` asks the store, on the lent terminal, for each prompted
+    reference. Every other store is the placeholder. No parameter left in the install path can carry
+    a credential's value: the carrier path is removed, not merely unused.
+  - The TUI lends its screen through the existing `_CursesHandover`, which reaches the interpreter
+    as `credential_handover`, the same handover a repair uses.
+  - Ready lists what the store will ask for before the placeholders, so the prompt is no surprise.
+- **Consequences.** A cancelled prompt leaves the install partial, with the credential missing and
+  repairable. §172.6 had kept the transaction from waiting for a person. It now waits only for
+  credentials the person chose to be asked.

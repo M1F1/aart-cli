@@ -62,8 +62,16 @@ redacted); `not installed`, `installed` or `update available`; where it is insta
 `2 projects`, or `user + 2 projects`); the detected harnesses that can host it, with `✓` on each
 that holds it; and its configuration. Configuration is `configured` when every input has a value,
 `not configured (2 missing)` while inputs still hold `AART_NOT_SET`, and empty when nothing is
-installed. Installed draws each installation on its own row, under the headings Artifact, Health,
-Scope, Project and Configuration. Both screens draw a rule under each heading. In Installed, More info adds the project's directory and harness.
+installed. Both screens draw a rule under each heading.
+
+Installed and Updates use the same grid. Each installation is one row. It shows the artifact as
+`name@version`, its Type, the harness it is installed in, and its health. Health is followed by
+`→ VERSION` when a newer version is offered. A Collection's members are indented under it.
+
+`d` adds Registry, Scope, Project and Configuration, and `d` again hides them. Installed remembers
+this separately from Marketplace. `v` (More info) describes the installation under the cursor in
+full: its Registry, harness, scope, the whole project directory, health, each configuration value
+(or `not set`), each credential's state (never its value), and the artifact's documentation.
 
 Marketplace labels its columns Artifact and Type, and with `d` also Registry, Upstream, Status,
 Scope, Harnesses and Configuration. Each offer is always one line, and the headings drawn are
@@ -97,28 +105,77 @@ the reason, and moves the cursor to Custom. **Custom** asks each choice in turn.
 A v2 recipe and its package-root `SETUP.md` are compiled before AART plans an installation effect.
 Review shows effects, capabilities, entrypoint, trust, and the manual route without secrets.
 
-A human supplies credentials in the TUI, or an agent supplies them on the command line. AART never
-writes them to a registry, state, JSON output, or logs. Registries may use safe placeholders such
+A person types each credential into the credential store's own prompt, in the TUI or in a terminal.
+An agent never supplies one. AART never writes credentials to a registry, state, JSON output, or
+logs. Registries may use safe placeholders such
 as `${GITHUB_PERSONAL_ACCESS_TOKEN}`; container images should be pinned by digest.
 
-### Answering inputs without a terminal
+### Answering inputs on the command line
 
-`consume install` and `consume update` take an artifact's inputs as flags. Each flag names the
-artifact with its Registry alias, and its answer goes into every installation of that artifact
-the command creates. `--input` gives an ordinary value. `--secret-env` gives the name of an
-environment variable that holds a credential; the value is read only after you confirm the review
-and goes straight to the credential store. An input you leave out takes its declared default.
+`consume install` and `consume update` take an artifact's ordinary inputs as flags. Each flag
+names the artifact with its Registry alias, and its answer goes into every installation of that
+artifact the command creates. An input you leave out takes its declared default.
+
+A credential is never a flag. The review lists each credential the credential store will ask for,
+with what it is and where to get it (`review.asked_by_credential_store` in `--json`). When you
+apply the review with `--yes` in a terminal, the store's own prompt asks for each one, and AART
+never sees what you type.
 
 ```sh
-export GITHUB_TOKEN_FOR_AART=...
-aart-cli consume install company/mcp/github --profile claude --input company/mcp/github:github-org=platform-team --secret-env company/mcp/github:github-token=GITHUB_TOKEN_FOR_AART
-aart-cli consume install company/mcp/github --profile claude --input company/mcp/github:github-org=platform-team --secret-env company/mcp/github:github-token=GITHUB_TOKEN_FOR_AART --yes
+aart-cli consume install company/mcp/github --profile claude --input company/mcp/github:github-org=platform-team
+aart-cli consume install company/mcp/github --profile claude --input company/mcp/github:github-org=platform-team --yes
 ```
 
-`--set-later` installs with `AART_NOT_SET` in every required input nobody answered; set them later
-in the TUI's Credentials and variables. Without either, a command that is missing a required input
-refuses and lists the exact flag for each one (`inputs[].flag` in `--json`). Credentials need a
+Without a terminal, for example when an agent runs it, `--yes` refuses and changes nothing. The
+agent can install with `--set-later` instead. That stores `AART_NOT_SET` in every required input
+nobody answered. You then set each credential yourself with `consume inputs set-credential`
+(below), or in the TUI's Credentials and variables.
+
+```sh
+aart-cli consume install company/mcp/github --profile claude --input company/mcp/github:github-org=platform-team --set-later --yes
+```
+
+If a required ordinary input is missing and there is no `--set-later`, the command refuses. It
+lists the exact flag for each missing input (`inputs[].flag` in `--json`). Credentials need a
 credential store, which today is the macOS Keychain.
+
+### Setting values after install, from the command line
+
+`consume inputs` changes an installed artifact's configuration and credentials without the TUI.
+It uses the same steps as Credentials and variables. Each command names one installation by the
+artifact, the harness, and the scope. For a project installation, `--project` gives its
+directory.
+
+`list` shows each installation's values and credential states. It also prints, for each missing
+value, the exact command that sets it. Add `--json` for an agent.
+
+```sh
+aart-cli consume inputs list company/mcp/github
+```
+
+`set` changes one ordinary value. Run it first without `--yes` to review the change and get its
+`review_digest`. Then run it again with `--yes --expect` and that digest to apply exactly that
+change. Configuration is not a credential, so it may be given on the command line or pasted to an
+agent.
+
+```sh
+aart-cli consume inputs set company/mcp/github github-org=platform-team --harness claude --scope project
+aart-cli consume inputs set company/mcp/github github-org=platform-team --harness claude --scope project --yes --expect DIGEST
+```
+
+`set-credential` stores or replaces a credential, and never takes its value. Run it in a terminal.
+aart-cli hands the terminal to the credential store, and you type the value into the store's own
+prompt. An agent can run it or give it to you, but it can never supply the value. Without a
+terminal it changes nothing and prints the command to run.
+
+```sh
+aart-cli consume inputs set-credential company/mcp/github github-token --harness claude --scope project
+aart-cli consume inputs set-credential company/mcp/github github-token --harness claude --scope project --yes --expect DIGEST
+```
+
+When the name matches more than one installation, nothing changes. The command lists each match
+with the flags that select it. Run `consume inputs list` again to check a change. Deleting a
+credential nothing uses any more is done in the TUI.
 
 ### Checking installed MCPs
 

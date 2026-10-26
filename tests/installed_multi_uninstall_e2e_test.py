@@ -153,8 +153,9 @@ class InstalledMultiUninstallTest(unittest.TestCase):
 
                 self.assertIs(finished.session.screen, ConsumerScreen.INSTALLED, terminal.last)
                 self.assertEqual(finished.session.history, (), finished.session.history)
-                self.assertNotIn(COORDINATE, terminal.last)
-                self.assertIn(SECOND, terminal.last)
+                # §199: a row names the artifact as `name@version`.
+                self.assertNotIn(f"{COORDINATE.rpartition('/')[2]}@", terminal.last)
+                self.assertIn(f"{SECOND.rpartition('/')[2]}@", terminal.last)
 
     def test_an_uninstall_from_details_also_returns_to_installed(self) -> None:
         with _two_skills() as env:

@@ -1,4 +1,4 @@
-"""Answer an installation's inputs on the command line (§169.4, §172.4, §186, D-468).
+"""Answer an installation's inputs on the command line (§169.4, §172.4, §186, §201, D-486).
 
 `consume install` prepared with no input sources and refused whenever an artifact required one,
 so an agent without a terminal could not install it at all. §169.4 allows non-interactive channels
@@ -6,13 +6,14 @@ when every binding names its installation target and nothing reads a generic inp
 environment. These flags name the artifact with its Registry alias, the key 07 asks by, and §172.4
 copies one answer into each of that artifact's new installations within the operation.
 
-Only the pieces that decide something live here. Reading an environment variable and holding the
-secret it yields stay in the command, because a `TransientSecret` must never reach `application`.
+A credential is never answered here. It is pointed at its own provider item, and the credential
+store's own prompt fills it when the reviewed run is applied in a terminal, or `--set-later` stores
+the placeholder there. No value of a credential passes through aart-cli (§201).
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -36,6 +37,7 @@ from .installation_inputs import (
 
 __all__ = [
     "COMMAND_LINE_INPUT_INVALID",
+    "CREDENTIAL_REMEDIATION",
     "CommandLineAnswers",
     "CommandLineInput",
     "declared_defaults",
@@ -43,23 +45,18 @@ __all__ = [
     "parse_command_line_input",
     "resolve_command_line_inputs",
     "secret_references",
-    "secret_variables",
 ]
 
 COMMAND_LINE_INPUT_INVALID = DiagnosticCode("command-line-input-invalid")
 
-_SHAPES = {
-    "--input": "--input ALIAS/KIND/NAME:INPUT=VALUE",
-    "--secret-env": "--secret-env ALIAS/KIND/NAME:INPUT=ENVIRONMENT_VARIABLE",
-}
+_SHAPES = {"--input": "--input ALIAS/KIND/NAME:INPUT=VALUE"}
 
 
 @dataclass(frozen=True, slots=True)
 class CommandLineInput:
     """One flag: the artifact it answers for, the declared input, and what it gives.
 
-    `value` is the answer for `--input` and the name of an environment variable for
-    `--secret-env`; a credential itself is never a command-line argument, where `ps` could read it.
+    `value` is the answer. A credential is never a command-line argument, where `ps` could read it.
     """
 
     artifact: str
@@ -70,7 +67,6 @@ class CommandLineInput:
 @dataclass(frozen=True, slots=True)
 class CommandLineAnswers:
     answers: tuple[ArtifactAnswer, ...]
-    secrets: tuple[CommandLineInput, ...]
 
 
 def _refusal(*messages: str, remediation: tuple[str, ...] = ()) -> Err:
@@ -106,14 +102,17 @@ def parse_command_line_input(text: str, *, flag: str) -> Result[CommandLineInput
     return Ok(CommandLineInput(artifact, InputId(identifier), value))
 
 
-def _kind(declared: RuntimeInput) -> str:
-    return "credential" if isinstance(declared, SecretInput) else "configuration value"
+#: What to do instead when a credential is given to `--input`. The value is not repeated.
+CREDENTIAL_REMEDIATION = (
+    "run the command with --yes in a terminal: the credential store asks for it, and aart-cli "
+    "never sees it",
+    "pass --set-later instead, then set it with aart-cli consume inputs set-credential",
+)
 
 
 def resolve_command_line_inputs(
     fields: Iterable[InstallationInputField],
     values: Iterable[CommandLineInput],
-    secrets: Iterable[CommandLineInput],
 ) -> Result[CommandLineAnswers]:
     """Check every flag against what this operation installs, and say every mistake at once."""
 
@@ -122,47 +121,39 @@ def resolve_command_line_inputs(
         owner, inputs = declared.setdefault(artifact_answer_key(field.owner), (field.owner, {}))
         inputs.setdefault(field.input.id, field.input)
     problems: list[str] = []
+    credential = False
     seen: set[tuple[str, InputId]] = set()
     answers: list[ArtifactAnswer] = []
-    named: list[CommandLineInput] = []
-    for flag, items, wanted in (
-        ("--input", tuple(values), ConfigInput),
-        ("--secret-env", tuple(secrets), SecretInput),
-    ):
-        for item in items:
-            held = declared.get(item.artifact)
-            if held is None:
-                installs = ", ".join(sorted(declared)) or "nothing that takes inputs"
-                problems.append(
-                    f"{flag} names {item.artifact}, which this operation does not install; "
-                    f"it installs {installs}"
-                )
-                continue
-            owner, inputs = held
-            runtime = inputs.get(item.input)
-            if runtime is None:
-                problems.append(
-                    f"{item.artifact} declares no input {item.input}; it declares "
-                    + ", ".join(sorted(str(key) for key in inputs))
-                )
-            elif not isinstance(runtime, wanted):
-                other = "--secret-env" if flag == "--input" else "--input"
-                problems.append(
-                    f"{item.artifact}:{item.input} is a {_kind(runtime)}; give it with {other}"
-                )
-            elif (item.artifact, item.input) in seen:
-                problems.append(f"{item.artifact}:{item.input} was answered twice")
-            else:
-                seen.add((item.artifact, item.input))
-                if flag == "--input":
-                    answers.append(
-                        ArtifactAnswer(owner.source, owner.artifact, item.input, item.value)
-                    )
-                else:
-                    named.append(item)
+    for item in values:
+        held = declared.get(item.artifact)
+        if held is None:
+            installs = ", ".join(sorted(declared)) or "nothing that takes inputs"
+            problems.append(
+                f"--input names {item.artifact}, which this operation does not install; "
+                f"it installs {installs}"
+            )
+            continue
+        owner, inputs = held
+        runtime = inputs.get(item.input)
+        if runtime is None:
+            problems.append(
+                f"{item.artifact} declares no input {item.input}; it declares "
+                + ", ".join(sorted(str(key) for key in inputs))
+            )
+        elif isinstance(runtime, SecretInput):
+            credential = True
+            problems.append(
+                f"{item.artifact}:{item.input} is a credential, and a credential is never an "
+                "argument"
+            )
+        elif (item.artifact, item.input) in seen:
+            problems.append(f"{item.artifact}:{item.input} was answered twice")
+        else:
+            seen.add((item.artifact, item.input))
+            answers.append(ArtifactAnswer(owner.source, owner.artifact, item.input, item.value))
     if problems:
-        return _refusal(*problems)
-    return Ok(CommandLineAnswers(tuple(answers), tuple(named)))
+        return _refusal(*problems, remediation=CREDENTIAL_REMEDIATION if credential else ())
+    return Ok(CommandLineAnswers(tuple(answers)))
 
 
 def declared_defaults(
@@ -193,69 +184,38 @@ def declared_defaults(
 
 
 def secret_references(
-    fields: Iterable[InstallationInputField],
     unanswered: Iterable[InstallationInputField],
-    secrets: Iterable[CommandLineInput],
     *,
-    set_later: bool,
     provider: str,
 ) -> tuple[OwnedInputSource, ...]:
-    """Point each installation's credential at its own provider item (§169.4-6).
+    """Point each unanswered credential of each installation at its own provider item (§169.4-6).
 
-    A credential named by `--secret-env` gets an item on every installation of its artifact; with
-    `set_later`, so does every required credential nobody named, and the install stores the
-    placeholder there. Each address carries the whole owner, so two harnesses never share one.
+    The item is filled when the reviewed run is applied: by the credential store's own prompt, or
+    with the placeholder under `--set-later`. Each address carries the whole owner, so two harnesses
+    never share one.
     """
 
-    named = {(item.artifact, item.input) for item in secrets}
-    waiting = {field.key for field in unanswered} if set_later else set()
-    references: list[OwnedInputSource] = []
-    for field in fields:
-        if not isinstance(field.input, SecretInput):
-            continue
-        if (artifact_answer_key(field.owner), field.input.id) in named or field.key in waiting:
-            references.append(
-                OwnedInputSource(
-                    field.owner,
-                    SecretProviderReference(
-                        field.input.id,
-                        credential_address(field.owner, field.input.id, provider=provider),
-                    ),
-                )
-            )
-    return tuple(references)
-
-
-def secret_variables(
-    bound: Iterable[tuple[InstallationOwner, object]],
-    secrets: Iterable[CommandLineInput],
-) -> Mapping[str, str]:
-    """Each bound credential reference a `--secret-env` names, with the variable that holds it."""
-
-    by_input = {(item.artifact, item.input): item.value for item in secrets}
-    variables: dict[str, str] = {}
-    for owner, value in bound:
-        for item in getattr(value, "inputs", ()):
-            source = item.source
-            if not isinstance(item.input, SecretInput) or not isinstance(
-                source, SecretProviderReference
-            ):
-                continue
-            variable = by_input.get((artifact_answer_key(owner), item.input.id))
-            if variable is not None:
-                variables[str(source.reference)] = variable
-    return variables
+    return tuple(
+        OwnedInputSource(
+            field.owner,
+            SecretProviderReference(
+                field.input.id,
+                credential_address(field.owner, field.input.id, provider=provider),
+            ),
+        )
+        for field in unanswered
+        if isinstance(field.input, SecretInput)
+    )
 
 
 def missing_input_flags(unanswered: Iterable[InstallationInputField]) -> tuple[str, ...]:
-    """The flag that answers each missing binding, once per artifact and input."""
+    """The flag that answers each missing ordinary input, once per artifact and input.
+
+    A credential has none: the credential store asks for it (§201).
+    """
 
     lines: dict[str, None] = {}
     for field in unanswered:
-        target = f"{artifact_answer_key(field.owner)}:{field.input.id}"
-        lines[
-            f"--secret-env {target}=ENVIRONMENT_VARIABLE"
-            if isinstance(field.input, SecretInput)
-            else f"--input {target}=VALUE"
-        ] = None
+        if not isinstance(field.input, SecretInput):
+            lines[f"--input {artifact_answer_key(field.owner)}:{field.input.id}=VALUE"] = None
     return tuple(lines)

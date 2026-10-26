@@ -763,13 +763,15 @@ class SourceToPromptE2ETest(unittest.TestCase):
 
 
 class CommandLineGuidanceE2ETest(unittest.TestCase):
-    def test_an_unanswered_credential_is_explained_by_the_cli_too(self) -> None:
+    def test_the_credential_the_store_will_ask_for_is_explained_by_the_cli_too(self) -> None:
+        """§201: the review says the store will ask for it, and how to get it ready first."""
+
         journal = _Journal()
         with (
             _environment(authored=_authored("github", TOKEN_HELP)) as env,
             mock.patch(
-                "aart_cli.commands.marketplace.MacOsKeychainProvider",
-                lambda: _Resolving(journal),
+                "aart_cli.commands.marketplace._credential_providers",
+                return_value=(_Resolving(journal),),
             ),
         ):
             text_code, text = env.run_text(
@@ -785,13 +787,15 @@ class CommandLineGuidanceE2ETest(unittest.TestCase):
         expected = gather_credential_guidance(
             "github-token", ((installation, _guidance(TOKEN_HELP)),)
         )
-        self.assertNotEqual(text_code, 0)
+        self.assertEqual(text_code, 0, text)
+        self.assertIn("the credential store asks you for each of these", text)
         for line in credential_guidance_lines(expected):
             self.assertIn(line, text)
-        self.assertNotEqual(json_code, 0)
-        self.assertEqual(payload["inputs"][0]["owner"], installation)
+        self.assertEqual(json_code, 0, payload)
+        asked = payload["review"]["asked_by_credential_store"]
+        self.assertEqual([item["input"] for item in asked], ["company/mcp/github:github-token"])
         self.assertEqual(
-            payload["inputs"][0]["guidance"],
+            asked[0]["guidance"],
             [
                 {
                     "owners": [installation],
