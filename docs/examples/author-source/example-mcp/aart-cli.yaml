@@ -9,6 +9,7 @@ artifact:
   name: example-mcp          # lowercase slug, unique within this repository
   kind: mcp                  # no version: the Registry assigns one to every approved change
   summary: Example MCP server exposing internal tools
+  documentation: "https://docs.example.com/example-mcp"  # optional: the longer manual
 
 # Files (relative to this directory) that make up the installed payload.
 payload:

@@ -43,6 +43,8 @@ class CredentialGuidance:
     obtain_url: str | None = None
     format_hint: str | None = None
     validation_hint: str = ""
+    #: The owning artifact's documentation link (§197), where its help can say more than here.
+    documentation: str | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -62,7 +64,7 @@ class CredentialGuidance:
 
 def _explanation(input_id: str, guidance: InputGuidance | None) -> tuple:
     if guidance is None:
-        return (input_id, "", None, None, None, "")
+        return (input_id, "", None, None, None, "", None)
     obtain = guidance.obtain_from
     return (
         guidance.label,
@@ -72,6 +74,7 @@ def _explanation(input_id: str, guidance: InputGuidance | None) -> tuple:
         # A secret's example is never shown: §156.1/INV-168 keep plausible values out of help.
         guidance.format_hint,
         guidance.validation_hint,
+        guidance.documentation,
     )
 
 
@@ -130,6 +133,8 @@ def credential_guidance_lines(groups: tuple[CredentialGuidance, ...]) -> tuple[s
         if group.obtain_label is not None:
             link = "" if group.obtain_url is None else f" → {group.obtain_url}"
             lines.append(f"  Get it: {group.obtain_label}{link}")
+        elif group.documentation is not None:
+            lines.append("  Where to get it is not stated here; see the documentation.")
         else:
             maintainer = _owners(group) or "the artifact that needs it"
             lines.append(f"  Where to get it is not stated; ask the maintainer of {maintainer}.")
@@ -137,6 +142,8 @@ def credential_guidance_lines(groups: tuple[CredentialGuidance, ...]) -> tuple[s
             lines.append(f"  Format: {group.format_hint}")
         if group.validation_hint:
             lines.append(f"  {group.validation_hint}")
+        if group.documentation is not None:
+            lines.append(f"  Documentation: {group.documentation}")
     return tuple(lines)
 
 
@@ -203,6 +210,7 @@ def credential_guidance_to_data(groups: tuple[CredentialGuidance, ...]) -> list[
             ),
             "format_hint": group.format_hint,
             "validation_hint": group.validation_hint,
+            "documentation": group.documentation,
         }
         for group in groups
     ]

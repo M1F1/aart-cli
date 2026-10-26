@@ -17,6 +17,7 @@ from aart_cli.compiler.graph import (
     evaluate_compatibility,
 )
 from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
+from aart_cli.domain.inputs import documentation_url
 from aart_cli.install_state.model import InstallScope
 from aart_cli.installation.model import InstallMode
 from aart_cli.lifecycle.model import LifecycleItem
@@ -154,8 +155,12 @@ class MarketplaceArtifactRow:
     declared_scopes: tuple[str, ...] = ()
     #: The upstream URL the approved package's provenance records, or empty where it records none.
     upstream: str = ""
+    #: The approved manifest's documentation link (§197), or empty where it declares none.
+    documentation: str = ""
 
     def __post_init__(self) -> None:
+        if self.documentation:
+            documentation_url(self.documentation)
         if (
             self.key != f"{self.source_alias}/{self.identity}@{self.version}"
             or self.identity.kind not in _KINDS
@@ -375,6 +380,7 @@ def project_marketplace_rows(
                 _security(item, evidence),
                 tuple(sorted(set(artifact.install.scopes))),
                 "" if artifact.provenance is None else artifact.provenance.origin_url,
+                artifact.documentation or "",
             )
         )
     return tuple(rows)

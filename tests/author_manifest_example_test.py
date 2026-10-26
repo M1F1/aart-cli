@@ -49,6 +49,7 @@ class AuthorManifestExampleTest(unittest.TestCase):
 
         self.assertEqual(manifest.schema, "aart-cli.dev/mcp/v1")
         self.assertEqual((manifest.kind, manifest.name), ("mcp", "example-mcp"))
+        self.assertEqual(manifest.documentation, "https://docs.example.com/example-mcp")
         self.assertEqual(manifest.transport, "stdio")
         self.assertEqual(manifest.runtime, "python")
         self.assertEqual(manifest.contract.entrypoint, "server.py")

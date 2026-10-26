@@ -73,3 +73,5 @@ class IndexArtifact:
     collections: tuple[str, ...] = ()
     requires_aart: VersionBounds = VersionBounds()
     requires: tuple[ArtifactSelector, ...] = ()
+    #: The approved manifest's documentation link (§197), offered beside its summary.
+    documentation: str | None = None

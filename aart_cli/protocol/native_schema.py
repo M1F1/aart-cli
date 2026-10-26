@@ -8,6 +8,7 @@ from typing import Iterable, Literal, cast
 
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity, SourceLocation
 from aart_cli.domain.identifiers import ArtifactIdentity, SourceId, source_revision_kind
+from aart_cli.domain.inputs import documentation_url
 from aart_cli.domain.result import Err, Ok, Result
 
 from .capabilities import Capability, parse_capability
@@ -494,7 +495,9 @@ def parse_artifact_manifest(
             "install",
         }
     )
-    optional = frozenset({"setup", "authors", "license", "homepage", "requires_aart", "requires"})
+    optional = frozenset(
+        {"setup", "authors", "license", "homepage", "documentation", "requires_aart", "requires"}
+    )
     validated = validate_object_fields(
         document.value,
         required=required,
@@ -606,6 +609,17 @@ def parse_artifact_manifest(
         if not _safe_https_url(parsed_homepage.value):
             return _error(ARTIFACT_INVALID, "homepage must use credential-free HTTPS", path=path)
         homepage = parsed_homepage.value
+    documentation: str | None = None
+    if "documentation" in value.keys():
+        parsed_documentation = _string(
+            _field(value, "documentation"), ARTIFACT_INVALID, "documentation", path=path
+        )
+        if isinstance(parsed_documentation, Err):
+            return parsed_documentation
+        try:
+            documentation = documentation_url(parsed_documentation.value)
+        except ValueError as error:
+            return _error(ARTIFACT_INVALID, str(error), path=path)
     return Ok(
         ArtifactManifest(
             schema_version.value,
@@ -622,6 +636,7 @@ def parse_artifact_manifest(
             _extensions(value, required | optional),
             requires_aart,
             requires,
+            documentation,
         )
     )
 
@@ -972,6 +987,8 @@ def artifact_manifest_to_json(manifest: ArtifactManifest) -> JsonObject:
         entries.append(("license", manifest.license))
     if manifest.homepage is not None:
         entries.append(("homepage", manifest.homepage))
+    if manifest.documentation is not None:
+        entries.append(("documentation", manifest.documentation))
     if (
         manifest.requires_aart.min_inclusive is not None
         or manifest.requires_aart.max_exclusive is not None

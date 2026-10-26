@@ -11812,3 +11812,39 @@ Refines D-456, D-458 (§181) and D-460 (§182). Product Specification §196, INV
     count changes.
   - Two Registries' copies of one `name@version` look alike without the details. That is the
     owner's trade: Registry is one `d` away, and `v` names the source of the offer under the cursor.
+
+## D-481 — An artifact points to its own documentation (CP-44)
+
+Refines §154, §161 and §175. Product Specification §197, INV-298.
+
+- **What was asked.** The owner wants an artifact to name a page with its longer manual, how to get
+  its credentials and how to configure it. The page is declared in the manifest, not hardcoded, and
+  shown wherever a credential or configuration value is asked or explained, when installing from the
+  CLI, and in Marketplace, where it can be copied while browsing.
+- **Choices.**
+  - A new optional `artifact.documentation`, kept apart from the existing informational
+    `homepage`. A homepage is where a project lives, and `documentation` is where the steps to
+    install and configure it live. B-232 asks whether to merge or drop `homepage`.
+  - The canonical `artifact.json` writes `documentation` only when it is set. Every existing
+    package keeps its bytes and digest, and nothing needs migrating.
+  - The rule is `help.obtain_from.url`'s rule (D-263) plus one more condition: nothing
+    `redact_text` would change. The link is printed whole, so a link that redaction would change
+    could never be shown as approved. `obtain_from.url` does not check this yet (B-233).
+  - The link reaches inputs through `InputGuidance.documentation`. When a package is read
+    (`read_package_description`, `describe_installation`), `documented()` copies it onto each of
+    the artifact's inputs, creating guidance for an input that declares none. Every place that
+    already explains an input gets the link without being given the manifest separately. The
+    domain stays free of I/O, and an input of one artifact can never carry another's link.
+  - Credentials and variables (screen 22) reads the link from the Marketplace entry for the
+    installation's exact `name@version`. When no connected Registry still offers that version,
+    it shows no link rather than one borrowed from another version.
+  - The link is never cut. Marketplace's More info names it with `field_block(..., whole=)`, so it
+    is one line outside the content measure. Only a terminal narrower than the link wraps it.
+  - The configuration form prints the link once per installation rather than under every field,
+    so a long form is not repeated noise. Screen 07 prints it under each input, as it does for
+    the input's own help.
+  - The credential fallback "ask the maintainer" becomes "see the documentation" when the
+    artifact names one.
+  - The CLI install result JSON gains `documentation: [{artifact, url}]`, and the review gains
+    the same list. The refusal for unanswered inputs gains a `documentation` key on each input
+    (`null` when there is none), because an agent filling the inputs reads that JSON.

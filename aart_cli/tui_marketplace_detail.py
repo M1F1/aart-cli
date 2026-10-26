@@ -9,6 +9,8 @@ from aart_cli.application.credential_guidance import credential_guidance_lines
 from aart_cli.tui_layout import CONTENT_MEASURE, field_block, separate, wrap_lines
 from aart_cli.tui_marketplace import MarketplaceArtifactRow, render_artifact_detail
 
+_DOCUMENTATION = "Documentation"
+
 
 def _input_guidance(view: ConfigInputView | CredentialInputView) -> tuple[str, ...]:
     fields = [
@@ -48,10 +50,17 @@ def artifact_disclosure(
             ("Registry", str(row.source_alias)),
             *((("Upstream", disclosed_upstream(row.upstream)),) if row.upstream else ()),
             ("Description", row.summary.strip() or "No description was approved for this offer."),
+            *((("Documentation", row.documentation),) if row.documentation else ()),
         ),
         indent=2,
         width=CONTENT_MEASURE,
+        whole=(_DOCUMENTATION,),
     )
+    # §197: the link is the last identity line and is never wrapped here, so it can be copied.
+    head, link = (identity[:-1], identity[-1:]) if row.documentation else (identity, ())
     evidence = render_artifact_detail(row, include_identity=False)
     guidance = separate(*(_input_guidance(view) for view in inputs))
-    return wrap_lines(separate(identity, evidence, guidance), width=CONTENT_MEASURE)
+    return separate(
+        (*wrap_lines(head, width=CONTENT_MEASURE), *link),
+        wrap_lines(separate(evidence, guidance), width=CONTENT_MEASURE),
+    )

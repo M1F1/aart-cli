@@ -44,6 +44,9 @@ install scopes/modes/effects, and an optional package-relative setup recipe. It 
 omitting it adds no restriction, and maintainers raise it only when the artifact actually depends
 on newer executable behavior. A routine AART release never changes it automatically. Optional
 authors, license, and HTTPS homepage fields are informational only and never assign trust.
+An optional `documentation` field is the `http(s)` link to the artifact's own manual. It is
+serialized only when set, approved with the package, and shown whole wherever the artifact or its
+inputs are explained (§197, INV-298).
 
 ## What installation delivers
 

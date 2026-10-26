@@ -76,6 +76,7 @@ def index_artifact_from_package(
         tuple(sorted(set(collections))),
         package.manifest.requires_aart,
         package.manifest.requires,
+        package.manifest.documentation,
     )
 
 

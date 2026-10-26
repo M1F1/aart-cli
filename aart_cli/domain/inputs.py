@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import IntEnum
 from typing import TypeAlias
 
-from aart_cli.redaction import contains_credential_shape
+from aart_cli.redaction import contains_credential_shape, redact_text
 
 from .credentials import CredentialProviderRef, CredentialReference, credential_provider_to_data
 from .identifiers import InputId
@@ -45,6 +45,8 @@ __all__ = [
     "StdinBinding",
     "binding_kind",
     "bound_inputs_to_data",
+    "documentation_url",
+    "documented",
     "input_to_data",
     "is_skipped_value",
     "validate_config_value",
@@ -201,6 +203,10 @@ class InputGuidance:
     format_hint: str | None = None
     obtain_from: ObtainFrom | None = None
     validation_hint: str = ""
+    #: The declaring artifact's documentation (§197). An author does not write it per input: it is
+    #: the artifact's `documentation`, attached when the package is read, so every place that
+    #: explains an input can point to the page that explains it at length.
+    documentation: str | None = None
 
     def __post_init__(self) -> None:
         _safe(_line(self.label, "guidance label"), "guidance label")
@@ -215,6 +221,8 @@ class InputGuidance:
                 _safe(_line(value, f"guidance {name}"), f"guidance {name}")
         if self.obtain_from is not None and not isinstance(self.obtain_from, ObtainFrom):
             raise ValueError("guidance obtain-from is invalid")
+        if self.documentation is not None:
+            documentation_url(self.documentation)
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,6 +294,32 @@ def _url_host(value: str) -> str | None:
 #: What a skipped input is stored as, ordinary or secret, in each installation it belongs to
 #: (§172.3). It is something to set later, never a refusal: nothing blocks on it.
 SKIPPED_INPUT = "AART_NOT_SET"
+
+
+def documentation_url(value: object) -> str:
+    """`value` when it is a link an artifact may give as its documentation (§197, INV-298).
+
+    It follows `help.obtain_from.url`'s rules -- one plain http(s) URL a terminal can show as
+    written, with nothing credential-shaped and nothing a terminal would read as a command -- and
+    one more: nothing redaction would hide, such as a token in the query. The link is printed
+    whole wherever the artifact is explained, so it must be safe to print whole.
+    """
+
+    url = _safe(_line(value, "documentation url"), "documentation url")
+    if _url_host(url) is None:
+        raise ValueError("documentation url must be a plain http or https url")
+    if redact_text(url) != url:
+        raise ValueError("documentation url must not carry a credential")
+    return url
+
+
+def documented(item: RuntimeInput, documentation: str | None) -> RuntimeInput:
+    """`item` carrying its artifact's documentation link, which only the artifact declares."""
+
+    if documentation is None:
+        return item
+    guidance = item.guidance or InputGuidance(item.id.value)
+    return replace(item, guidance=replace(guidance, documentation=documentation))
 
 
 def is_skipped_value(value: str) -> bool:
@@ -489,6 +523,7 @@ def _guidance_data(guidance: InputGuidance | None) -> dict[str, object] | None:
             else {"label": guidance.obtain_from.label, "url": guidance.obtain_from.url}
         ),
         "validation_hint": guidance.validation_hint,
+        "documentation": guidance.documentation,
     }
 
 

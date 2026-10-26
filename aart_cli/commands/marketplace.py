@@ -89,7 +89,7 @@ from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity, di
 from aart_cli.domain.effects import effect_to_data
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import ArtifactCoordinate, SourceAlias
-from aart_cli.domain.inputs import SecretInput
+from aart_cli.domain.inputs import RuntimeInput, SecretInput
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.receipts import ArtifactReceipt
 from aart_cli.domain.reconciliation import DesiredState
@@ -1029,7 +1029,7 @@ def _configured_lifecycle(
                 **(
                     {"guidance": credential_guidance_to_data(guidance[field.input.id.value])}
                     if isinstance(field.input, SecretInput)
-                    else {}
+                    else {"documentation": _documentation(field.input)}
                 ),
             }
             for field in composition.unanswered
@@ -1044,7 +1044,14 @@ def _configured_lifecycle(
                     for text in credential_guidance_lines(guidance[field.input.id.value])
                 )
                 if isinstance(field.input, SecretInput)
-                else (f"  - {field.input.id.value} (config)",)
+                else (
+                    f"  - {field.input.id.value} (config)",
+                    *(
+                        (f"    Documentation: {_documentation(field.input)}",)
+                        if _documentation(field.input)
+                        else ()
+                    ),
+                )
             )
         )
         diagnostic = Diagnostic(
@@ -1081,6 +1088,9 @@ def _configured_lifecycle(
     view = prepared.value.action.flow.plan
     review_data = consumer_plan_to_data(view)
     review_data["items"] = _configured_review_items(prepared.value)
+    documentation = _placed_documentation(prepared.value.draft.placements)
+    if documentation:
+        review_data["documentation"] = _documentation_data(documentation)
     digest = str(prepared.value.review_digest)
     if not request.yes:
         _emit(
@@ -1095,6 +1105,7 @@ def _configured_lifecycle(
                 "review": review_data,
             },
             render_install_plan(view, PresentationProfile.LESS_INFO)
+            + _documentation_lines(documentation)
             + ("Reviewed only; re-run with --yes to apply this exact plan.",),
         )
         return _common.OK
@@ -1175,7 +1186,10 @@ def _configured_lifecycle(
         ],
         "receipt": receipt_data,
     }
+    if documentation:
+        payload["documentation"] = _documentation_data(documentation)
     lines = render_transaction_success(receipt, PresentationProfile.LESS_INFO)
+    lines += _documentation_lines(documentation)
     setup_payload: dict | None = None
     projected = configured_consumer_completion(
         completed.value,
@@ -1211,6 +1225,31 @@ def _configured_lifecycle(
         lines,
     )
     return _common.OK if successful else _common.ERROR
+
+
+def _documentation(item: RuntimeInput) -> str | None:
+    return None if item.guidance is None else item.guidance.documentation
+
+
+def _placed_documentation(placements) -> tuple[tuple[str, str], ...]:
+    """Each placed artifact's documentation link (§197), once per artifact, in placement order."""
+
+    found: dict[str, str] = {}
+    for placement in placements:
+        link = placement.description.documentation
+        if link is not None:
+            found.setdefault(str(placement.coordinate), link)
+    return tuple(found.items())
+
+
+def _documentation_lines(documentation: tuple[tuple[str, str], ...]) -> tuple[str, ...]:
+    if not documentation:
+        return ()
+    return ("Documentation:", *(f"  {artifact}: {link}" for artifact, link in documentation))
+
+
+def _documentation_data(documentation: tuple[tuple[str, str], ...]) -> list[dict[str, str]]:
+    return [{"artifact": artifact, "url": link} for artifact, link in documentation]
 
 
 def _configured_update(request: Request, selectors: tuple[ArtifactSelector, ...]) -> int | None:

@@ -941,6 +941,8 @@ class ConfigInputView:
     #: Which installation is being asked (D-353). Two rows may share `id` -- one artifact on two
     #: harnesses is two installations and therefore two questions -- so `id` is no longer a row key.
     owner: str = ""
+    #: The declaring artifact's documentation link (§197), shown wherever this value is asked for.
+    documentation: str | None = None
 
     @property
     def row(self) -> str:
@@ -978,6 +980,8 @@ class CredentialInputView:
     guidance: tuple[CredentialGuidance, ...] = ()
     #: Which installation is being asked (D-353). See `ConfigInputView.owner`.
     owner: str = ""
+    #: See `ConfigInputView.documentation`.
+    documentation: str | None = None
 
     @property
     def row(self) -> str:
@@ -1045,6 +1049,7 @@ def project_required_inputs(
             if guidance is None or guidance.obtain_from is None
             else (guidance.obtain_from.label, guidance.obtain_from.url)
         )
+        documentation = None if guidance is None else guidance.documentation
         binding = binding_kind(runtime_input.binding)
         exposure = runtime_input.binding.exposure.name.lower().replace("_", "-")
         bound = bound_by_id.get(runtime_input.id)
@@ -1074,6 +1079,7 @@ def project_required_inputs(
                         runtime_input.id.value, (("", runtime_input.guidance),)
                     ),
                     owner,
+                    documentation,
                 )
             )
             continue
@@ -1095,6 +1101,7 @@ def project_required_inputs(
                 None if bound is None else _source_name(bound.source),
                 runtime_input.validation,
                 owner,
+                documentation,
             )
         )
     return tuple(projected)
@@ -1307,6 +1314,7 @@ def _input_to_data(input_view: InputView) -> dict[str, object]:
         "label": input_view.label,
         "obtain_from": input_view.obtain_from,
         "required": input_view.required,
+        "documentation": input_view.documentation,
     }
     if isinstance(input_view, CredentialInputView):
         return {

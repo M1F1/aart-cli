@@ -1,6 +1,16 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-23, CP-43)
+## Where the work is (2026-10-26, CP-44)
+
+**CP-44** (stacked on CP-43, PR #100) lets an artifact name its own documentation in
+`artifact.documentation`: a longer manual, how to get its credentials, how to configure it. The link
+is approved with the package and printed whole wherever the artifact or its inputs are explained:
+Marketplace More info, beside every credential and configuration value, Credentials and variables,
+and the CLI listing, review and install result (§197, INV-298, D-481):
+`docs/refactor/slices/CP-44-artifact-documentation.md`. Steps 1–3 are done and verified; the PR
+waits for the owner. B-232 and B-233 are noncritical.
+
+## Where the work was (2026-10-23, CP-43)
 
 0.17.0 (CP-41, CP-42) is released. **CP-43** answers a colleague's report that Marketplace's seven
 columns were overwhelming. A row now shows the offer's `name@version` and its Type. `d` shows

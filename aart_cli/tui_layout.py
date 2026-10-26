@@ -17,7 +17,7 @@ import dataclasses
 import re
 import textwrap
 from dataclasses import dataclass
-from typing import Iterable, Mapping, Sequence, Tuple
+from typing import Collection, Iterable, Mapping, Sequence, Tuple
 
 # --------------------------------------------------------------------------- #
 # Frozen vocabulary.                                                            #
@@ -167,8 +167,14 @@ def headed_columns(
     return lines[0], rule, lines[1:]
 
 
-def field_block(fields: Sequence[Tuple[str, str]], *, indent: int, width: int) -> Tuple[str, ...]:
-    """Render ``label   value`` lines on one label column, wrapping values under the value column."""
+def field_block(
+    fields: Sequence[Tuple[str, str]], *, indent: int, width: int, whole: Collection[str] = ()
+) -> Tuple[str, ...]:
+    """Render ``label   value`` lines on one label column, wrapping values under the value column.
+
+    A field labelled in ``whole`` is one line however long its value: a link split across lines
+    or cut with ``…`` can be neither opened nor copied (§197). Only the terminal wraps it.
+    """
 
     if not fields:
         return ()
@@ -179,6 +185,9 @@ def field_block(fields: Sequence[Tuple[str, str]], *, indent: int, width: int) -
     available = max(budget - value_column, 1)
     lines = []
     for label, value in fields:
+        if label in whole:
+            lines.append(f"{pad}{label.ljust(label_width)}{' ' * _LABEL_GAP}{value}".rstrip())
+            continue
         wrapped = wrap(value, width=available) if value else ("",)
         head = f"{pad}{label.ljust(label_width)}{' ' * _LABEL_GAP}{wrapped[0]}"
         lines.append(_ellipsize(head.rstrip(), budget))

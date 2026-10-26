@@ -235,6 +235,7 @@ def _validate_object_evidence(stored: StoredObject, indexed) -> Result[None]:
         manifest.identity != indexed.identity
         or manifest.version != indexed.version
         or manifest.summary != indexed.summary
+        or manifest.documentation != indexed.documentation
         or manifest.compatibility != indexed.compatibility
         or manifest.install != indexed.install
         or manifest.requires_aart != indexed.requires_aart

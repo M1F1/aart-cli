@@ -439,6 +439,9 @@ def render_user_inputs_area(
             }
         )
         lines.extend(f"    {name}: {PLACEHOLDER_WARNING}" for name in left)
+        documentation = screens.documentation_for(coordinate)
+        if documentation:
+            lines.append(f"    Documentation: {documentation}")
     return tuple(lines) if rows else ("No installed artifact has runtime inputs.",)
 
 
@@ -506,11 +509,13 @@ def artifact_user_inputs_status(
     coordinate: str,
     configurations: tuple[ConfigurationFileView, ...],
     credentials: tuple[CredentialRecordView, ...],
+    documentation: str = "",
 ) -> tuple[str, ...]:
     """Screen 22a's view state: whose inputs these are, and what is and is not declared."""
 
     return separate(
         (describe_installation(coordinate),),
+        (f"Documentation: {documentation}",) if documentation else (),
         ()
         if _configuration_identifiers(configurations)
         else ("No ordinary configuration is declared.",),
@@ -577,6 +582,7 @@ def configuration_value_status(
     input_id: str,
     harnesses: tuple[str, ...],
     held: tuple[tuple[str, str | None], ...] = (),
+    documentation: str = "",
 ) -> tuple[str, ...]:
     """Screen 22c's state: which value of which artifact, for which harnesses, and what it is.
 
@@ -598,6 +604,7 @@ def configuration_value_status(
             if differing
             else ()
         ),
+        (f"Documentation: {documentation}",) if documentation else (),
         (
             "This is ordinary configuration stored beside the artifact.",
             "Credentials stay with their provider and are not accepted here.",
@@ -1808,6 +1815,8 @@ def render_required_inputs(
             lines.append(f"  (e.g. {item.example})")
         if item.validation_hint:
             lines.append(f"  {item.validation_hint}")
+        if item.documentation:
+            lines.append(f"  Documentation: {item.documentation}")
         if profile is PresentationProfile.MORE_INFO:
             lines.extend(
                 (
@@ -1845,6 +1854,7 @@ def render_installation_config_form(
     # §172.4: one group per artifact, headed by it only when there is more than one to tell apart.
     artifacts = tuple(dict.fromkeys(field.owner for field in draft.fields))
     heading = ""
+    documented: set[str] = set()
     for field in draft.fields:
         if len(artifacts) > 1 and field.owner != heading:
             heading = field.owner
@@ -1868,6 +1878,10 @@ def render_installation_config_form(
             lines.append(f"    Problem: {problem}")
         elif view is not None and view.validation_hint:
             lines.append(f"    {view.validation_hint}")
+        # §197: once per installation, under its first value, rather than repeated under each.
+        if view is not None and view.documentation and field.owner not in documented:
+            documented.add(field.owner)
+            lines.append(f"    Documentation: {view.documentation}")
     mark = ">" if current_row == CONFIG_CONTINUE_ROW else " "
     readiness = "Continue" if draft.ready else "Continue: Accept every configuration value first"
     lines.extend(("", f"{mark} {readiness}"))
@@ -3099,6 +3113,18 @@ class ConsumerScreens:
         configured = {item.row for item in self.configurations}
         dependants = {owner for item in self.credentials for owner in item.dependants}
         return tuple(sorted(configured | dependants))
+
+    def documentation_for(self, installation: str) -> str:
+        """The documentation link the approved offer of this installation's version carries (§197).
+
+        Empty when no connected Registry offers that exact version any longer, or it declares none:
+        a link is only ever the approved one, never borrowed from another version.
+        """
+
+        coordinate = installation.partition("#")[0]
+        return next(
+            (entry.row.documentation for entry in self.marketplace if entry.key == coordinate), ""
+        )
 
     def configurations_for(self, installation: str) -> tuple[ConfigurationFileView, ...]:
         """The configuration this installation has -- one file, not one per harness (§169.3)."""
@@ -4406,6 +4432,7 @@ class CanonicalScreenSource:
                 state.configuration_input,
                 state.configuration_targets,
                 self._held(state, state.configuration_targets),
+                screens.documentation_for(state.user_inputs_artifact),
             )
         if screen in _REVIEW_SCREENS:
             return _review_facts(state, screens)
@@ -4415,6 +4442,7 @@ class CanonicalScreenSource:
                 coordinate,
                 screens.configurations_for(coordinate),
                 screens.credentials_for(coordinate),
+                screens.documentation_for(coordinate),
             )
         if screen in (ConsumerScreen.COLLECTION_PREVIEW, ConsumerScreen.COLLECTION_CUSTOMIZE):
             preview = screens.offered_collection(state.focus)

@@ -246,7 +246,8 @@ class DescriptionRulesTest(unittest.TestCase):
         secret, config = cast(list[dict[str, object]], data["inputs"])
 
         self.assertEqual(
-            sorted(data), ["dependencies", "inputs", "launch", "runtime", "runtime_version"]
+            sorted(data),
+            ["dependencies", "documentation", "inputs", "launch", "runtime", "runtime_version"],
         )
         self.assertEqual(secret["kind"], "secret")
         self.assertEqual(sorted(secret), ["binding", "guidance", "id", "kind", "required"])

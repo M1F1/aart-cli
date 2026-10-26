@@ -4994,3 +4994,28 @@ After `--set-later`, an entry reads `Credentials: ✓ dummy-token  Ready  Used b
 it says the credential is still the AART_NOT_SET placeholder. The provider reports the item
 present, so the check mark is about presence, not value. Draw the placeholder state in the
 credential summary.
+
+## B-232 — `homepage` and `documentation` overlap
+
+Status: **open**, noncritical (CP-44, D-481).
+
+An artifact can name both an informational HTTPS `homepage` and `artifact.documentation`. Only the
+second is shown to a consumer. Decide whether `homepage` should be dropped or shown too. No
+compatibility is owed (CP-26).
+
+## B-233 — `help.obtain_from.url` should also refuse what redaction would change
+
+Status: **open**, noncritical (CP-44, D-481).
+
+`documentation_url` refuses a link that `redact_text` would change, because the link is printed
+whole. `help.obtain_from.url` is printed whole as well, but follows only D-263's rule. Apply the
+same check there.
+
+## B-234 — The CLI's refusal names a configuration input by its id alone
+
+Status: **open**, noncritical (CP-44 lab).
+
+For an unanswered credential, `consume install` prints its label, where to get it, its format and
+the documentation. For a configuration input it prints only `- tracker-user (config)`, and since
+CP-44 the documentation, but never the input's `help.label` or description. Print the same help a
+configuration input has on screen 07.
