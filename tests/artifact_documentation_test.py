@@ -401,13 +401,21 @@ def _reader(*lines: str):
 
 
 def _no_keychain():
-    """A recording provider in place of the Keychain: no test ever reaches the real one."""
+    """A recording provider in place of the Keychain: no test ever reaches the real one.
+
+    The CLI's store is replaced where it is chosen, so a machine without a Keychain has one too.
+    """
 
     stack = contextlib.ExitStack()
-    for target in ("aart_cli.commands.marketplace", "aart_cli.tui"):
-        stack.enter_context(
-            mock.patch(f"{target}.MacOsKeychainProvider", lambda: _Resolving(_Journal()))
+    stack.enter_context(
+        mock.patch(
+            "aart_cli.commands.marketplace._credential_providers",
+            lambda: (_Resolving(_Journal()),),
         )
+    )
+    stack.enter_context(
+        mock.patch("aart_cli.tui.MacOsKeychainProvider", lambda: _Resolving(_Journal()))
+    )
     return stack
 
 
