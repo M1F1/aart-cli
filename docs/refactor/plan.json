@@ -1601,6 +1601,33 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-44",
+      "title": "An artifact points to its own documentation, shown wherever it is explained",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "`artifact.documentation` parsed, approved in the canonical manifest and carried to the index (§197, INV-298, D-481)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Shown in Marketplace More info, with every credential and configuration input, in Credentials and variables, and by the CLI listing, review and install result",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Author skeleton, documents and the manual walkthrough name the field",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Focused verification, targeted mutations and the PR",
+          "status": "done"
+        }
+      ]
     }
   ]
 }

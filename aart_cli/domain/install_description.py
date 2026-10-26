@@ -6,7 +6,8 @@ separately -- a missing interpreter, an unresolvable dependency and an unanswere
 three different conversations with the person installing -- and because only one of them is ever
 confidential.
 
-This value holds all three and nothing else. It says nothing about where the artifact will live,
+This value holds all three, and the one link the artifact gives to its own documentation (§197) so
+whatever explains an installation can point to it. Nothing else. It says nothing about where the artifact will live,
 which interpreter will be found, or what any input's value is: those are facts about a machine and a
 person, and they arrive later. Keeping them out is what lets the same description be read from a
 package once and reused for an install here, a repair there and a report that touches neither.
@@ -16,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .inputs import RuntimeInput, SecretInput, input_to_data
+from .inputs import RuntimeInput, SecretInput, documentation_url, input_to_data
 from .launch import LaunchContract, launch_contract_to_data
 from .python_runtime import PythonDependencySpec, dependency_spec_to_data
 
@@ -42,8 +43,11 @@ class InstallDescription:
     runtime_version: str | None = None
     inputs: tuple[RuntimeInput, ...] = ()
     dependencies: PythonDependencySpec | None = None
+    documentation: str | None = None
 
     def __post_init__(self) -> None:
+        if self.documentation is not None:
+            documentation_url(self.documentation)
         if self.contract is not None and not isinstance(self.contract, LaunchContract):
             raise ValueError("an install description holds a launch contract or nothing")
         if self.runtime is not None:
@@ -89,4 +93,5 @@ def install_description_to_data(description: InstallDescription) -> dict[str, ob
         ),
         "runtime": description.runtime,
         "runtime_version": description.runtime_version,
+        "documentation": description.documentation,
     }

@@ -454,6 +454,7 @@ def _item_json(
         (
             ("collections", JsonArray(tuple(artifact.collections))),
             ("coordinate", str(item.coordinate)),
+            ("documentation", artifact.documentation),
             ("lifecycle", item.artifact.lifecycle.value),
             ("manifest_digest", str(artifact.manifest_digest)),
             ("object_digest", str(artifact.object_digest)),
@@ -585,10 +586,13 @@ def render_marketplace(
             if provenance is not None
             else f"{redact_text(item.source.origin)}@{item.source.resolved_revision or 'missing'}"
         )
+        documentation = (
+            "" if artifact.documentation is None else f" documentation={artifact.documentation}"
+        )
         lines.append(
             f"{item.coordinate} [{item.trust.kind.value}] [{item.source.health.value}] "
             f"{redact_text(artifact.summary)}{requirement} object={artifact.object_digest} "
-            f"origin={origin}"
+            f"origin={origin}{documentation}"
         )
     for collection in catalog.collections:
         lines.append(

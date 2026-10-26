@@ -36,6 +36,32 @@ ok    github-mcp/aart-cli.yaml  ->  mcp/github-mcp
 
 It is the command to run in a loop while editing; `--json` makes the verdict machine-readable.
 
+## Pointing to your documentation
+
+A summary is one line and an input's `help` a few. When installing your artifact takes more than
+that, such as a manual, the steps to get a credential, or a configuration walkthrough, put it on a
+page and name the page in `artifact.documentation`:
+
+```yaml
+artifact:
+  documentation: "https://docs.example.com/github-mcp"
+  kind: mcp
+  name: github-mcp
+```
+
+The link must be a plain `http` or `https` URL, at most 2048 characters, with no user information,
+no space, and nothing that looks like a credential, such as a token in the query. `author check`
+refuses anything else. The link is approved with the package. aart-cli never fetches it and prints
+it whole wherever your artifact or its inputs are explained:
+
+- Marketplace's More info;
+- next to every credential and configuration value the artifact asks for;
+- Credentials and variables;
+- `consume list`, the install review and the install result.
+
+When a credential's `help` does not say where to get it, the reader is sent to this page
+(Product Specification §197).
+
 ## Author Mode in the TUI
 
 Open `aart-cli`, enable **Author Mode** in Settings, then open **Author**. This preference is

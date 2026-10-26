@@ -97,6 +97,9 @@ class ArtifactManifest:
     extensions: tuple[tuple[str, JsonValue], ...] = ()
     requires_aart: VersionBounds = VersionBounds()
     requires: tuple[ArtifactSelector, ...] = ()
+    #: Where the artifact's own documentation is (§197): a manual longer than a summary, or how to
+    #: obtain and configure what it needs. Metadata only; nothing reads the page.
+    documentation: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

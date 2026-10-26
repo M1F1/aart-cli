@@ -471,6 +471,12 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
 - [ ] Installing `dummy-mcp`: **Required Inputs** shows, in Fast, `Disposable dummy credential —
       needed by manual-registry/mcp/dummy-mcp@1.0.0`, what it is for, `Get it: Nothing issues it;
       make up disposable text …` and its format (D-263).
+- [ ] Give one artifact `artifact.documentation` (e.g. `"https://docs.example.com/dummy-mcp"`),
+      promote it and sync (§197, INV-298). Its Marketplace More info shows `Documentation:` with
+      the link whole on one line. **Required Inputs** prints `Documentation: <link>` under each of
+      its inputs, the configuration form once, and Credentials and variables once for its
+      installation. `consume list` and `consume install` print the same link. An artifact without
+      the field shows no `Documentation` line anywhere.
 - [ ] When the Keychain asks, the same lines appear just above its prompt. The screen is released,
       nothing is drawn over the footer, and it ends with `macos-keychain asks for it next. Type it
       there; AART never sees or keeps it.` Type disposable text only.

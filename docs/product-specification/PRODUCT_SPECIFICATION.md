@@ -12043,3 +12043,46 @@ Status, Scope, Harnesses and Configuration. Toggling details never changes the s
 or the offer under the cursor. Every offer is one line at every window width: a value is cut and
 marked `…` rather than wrapped, a column with no room is left off and named under the list, and
 Artifact is whole while any other column is drawn.
+
+---
+
+# 197. An artifact points to its own documentation
+
+Status: **ACCEPTED 2026-10-26 (D-481)**, on the owner's request (CP-44). A summary is one line, and
+an input's `help` is a few. Neither has room for a longer manual, the steps to obtain a credential,
+or a configuration walkthrough. An author can now point to a page that has room. This refines §154,
+§161 and §175.
+
+- **One optional manifest field.** `artifact.documentation` in `aart-cli.json` is the URL of the
+  artifact's documentation. It is a plain `http` or `https` URL, at most 2048 characters, with no
+  user information. It has no credential-shaped text, no space and no terminal control or format
+  character. These are the rules `help.obtain_from.url` already follows (D-263). It also has
+  nothing aart-cli's redaction would hide, such as a token in the query, because the link is
+  printed whole. An artifact without it shows no link, and aart-cli never invents one.
+- **Approved with the package.** The compiler writes it into the canonical `artifact.json` as
+  `documentation`. That makes it part of the approved package, reviewed when the artifact is
+  promoted (§154.3, INV-160, INV-165). It is metadata (INV-159): aart-cli never fetches it, and it
+  changes nothing about what is installed or how a value reaches the artifact.
+- **Shown wherever the artifact or its inputs are explained:**
+  - in Marketplace's More info, as `Documentation` after the Description, so someone browsing can
+    copy it;
+  - with every credential and configuration value the artifact asks for, wherever it is asked or
+    explained: screen 07, the briefing on the terminal lent to a credential prompt, and the CLI's
+    refusal for unanswered inputs;
+  - in Credentials and variables, for each installed artifact whose approved offer carries one;
+  - in the CLI: the Marketplace listing (text and JSON), the install review's "What you will
+    need", and the result of an install, which names the documentation of each artifact it
+    installed.
+- **Where to get a credential.** When a credential's `help` does not say where to get it, the
+  artifact's documentation is where to look. The fallback names the documentation instead of
+  sending the reader to the maintainer.
+- **Whole, as plain text.** The link is printed as written, on its own line or after its label, with
+  no escape sequence. A terminal that recognizes URLs can open it, and any terminal can copy it.
+  aart-cli never cuts it or puts it in a column. Only a window narrower than the link wraps it.
+
+**INV-298 — An artifact's documentation link is approved metadata, shown whole.** An artifact's
+documentation link comes only from its approved manifest's `documentation`. It is refused at
+authoring and at reading unless it is a plain `http(s)` URL with no control character and nothing
+redaction would hide. Every surface that shows it shows it exactly as approved, and none shows a
+link for an artifact that declares none. Each credential and configuration input an artifact declares carries
+that artifact's link wherever the input is explained.

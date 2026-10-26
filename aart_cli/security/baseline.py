@@ -492,6 +492,7 @@ def _metadata_findings(
         manifest.identity != request.artifact.identity
         or manifest.version != request.artifact.version
         or manifest.summary != request.artifact.summary
+        or manifest.documentation != request.artifact.documentation
         or manifest.compatibility != request.artifact.compatibility
         or manifest.install != request.artifact.install
         or manifest.requires_aart != request.artifact.requires_aart

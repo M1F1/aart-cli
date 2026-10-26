@@ -49,6 +49,8 @@ from aart_cli.domain.inputs import (
     RuntimeInput,
     SecretInput,
     StdinBinding,
+    documentation_url,
+    documented,
 )
 from aart_cli.domain.install_description import InstallDescription
 from aart_cli.domain.launch import LaunchContract, Transport
@@ -195,6 +197,8 @@ class AuthorManifest:
     smoke_test: JsonObject | None = None
     #: The module a plugin's harness loads, relative to the payload root (§171.1).
     plugin_entry: SafeRelativePath | None = None
+    #: `artifact.documentation`: where the artifact's longer documentation is (§197).
+    documentation: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -954,8 +958,9 @@ def describe_installation(manifest: AuthorManifest) -> InstallDescription:
         manifest.contract,
         manifest.runtime,
         manifest.runtime_version,
-        manifest.inputs,
+        tuple(documented(item, manifest.documentation) for item in manifest.inputs),
         manifest.dependencies,
+        manifest.documentation,
     )
 
 
@@ -1417,7 +1422,19 @@ def read_package_description(entries: tuple[SnapshotEntry, ...]) -> Result[Insta
             f"{AUTHORING_EXTENSION!r}, so what it needs is unknown rather than nothing",
             path=PACKAGE_MANIFEST_FILENAME,
         )
-    return read_install_description(extension, path=PACKAGE_MANIFEST_FILENAME)
+    described = read_install_description(extension, path=PACKAGE_MANIFEST_FILENAME)
+    if isinstance(described, Err):
+        return described
+    # §197: every input is explained with a link to the artifact's documentation, so the screen,
+    # prompt or refusal that asks for it can point to the page that explains it at length.
+    link = manifest.value.documentation
+    return Ok(
+        replace(
+            described.value,
+            inputs=tuple(documented(item, link) for item in described.value.inputs),
+            documentation=link,
+        )
+    )
 
 
 def _declared_payload_files(manifest: AuthorManifest) -> tuple[str, ...]:
@@ -1674,7 +1691,7 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
     artifact_fields = _fields(
         artifact_object.value,
         required=frozenset({"name", "kind"}),
-        optional=frozenset({"summary"}),
+        optional=frozenset({"summary", "documentation"}),
         path=raw_path,
         label="artifact",
         extensions=True,
@@ -1713,6 +1730,21 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
         if isinstance(parsed_summary, Err):
             return parsed_summary
         summary = parsed_summary.value
+    documentation: str | None = None
+    if "documentation" in raw_artifact:
+        parsed_documentation = _string(
+            raw_artifact["documentation"], "artifact.documentation", path=raw_path
+        )
+        if isinstance(parsed_documentation, Err):
+            return parsed_documentation
+        try:
+            documentation = documentation_url(parsed_documentation.value)
+        except ValueError as error:
+            return _error(
+                AUTHOR_MANIFEST_INVALID,
+                f"artifact.documentation is invalid: {error}",
+                path=raw_path,
+            )
 
     payload_object = _object(root["payload"], "payload", path=raw_path)
     if isinstance(payload_object, Err):
@@ -1974,6 +2006,7 @@ def parse_author_manifest(manifest: DiscoveredAuthorManifest) -> Result[AuthorMa
             JsonObject(tuple(intent_entries)),
             smoke_test,
             plugin_entry,
+            documentation,
         )
     )
 
@@ -2193,6 +2226,7 @@ def _compile_one(
         CompatibilitySpec(manifest.harnesses, manifest.platforms),
         InstallSpec(("project", "user"), ("copy",), _INSTALL_EFFECTS[manifest.kind]),
         extensions=((AUTHORING_EXTENSION, manifest.canonical_intent),),
+        documentation=manifest.documentation,
     )
     revision_kind = source_revision_kind(revision)
     assert revision_kind is not None

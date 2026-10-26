@@ -137,6 +137,7 @@ def _mcp_blueprint(name: str) -> _Blueprint:
         (
             "artifact",
             _object(
+                ("documentation", f"https://docs.example.com/{name}"),
                 ("kind", "mcp"),
                 ("name", name),
                 ("summary", f"{_humanized(name)} MCP server."),
@@ -186,13 +187,18 @@ def _mcp_blueprint(name: str) -> _Blueprint:
             ),
         ),
     )
-    # `summary`, `exclude` and `arguments` are optional inside blocks the parser requires, so they
-    # are commented individually rather than with their parent.
+    # `documentation`, `summary`, `exclude` and `arguments` are optional inside blocks the parser
+    # requires, so they are commented individually rather than with their parent.
     return _Blueprint(
         "mcp",
         document,
         optional=("compatibility", "inputs", "python", "smoke_test"),
-        nested_optional=(("artifact", "summary"), ("launch", "arguments"), ("payload", "exclude")),
+        nested_optional=(
+            ("artifact", "documentation"),
+            ("artifact", "summary"),
+            ("launch", "arguments"),
+            ("payload", "exclude"),
+        ),
         notes=(*_PLUGIN_NOT_GENERATED, *_UNREAD_NOTE),
         payload=_mcp_payload(entrypoint),
     )
@@ -288,6 +294,7 @@ def _guidance() -> JsonObject:
 _EXPLANATIONS: dict[str, str] = {
     "arguments": "Extra arguments the server is started with, after the entrypoint.",
     "compatibility": "Narrow the artifact to the harnesses and platforms it actually runs on.",
+    "documentation": "A link to the artifact's own manual: how to get its credentials and set it up.",
     "exclude": "Payload files to leave out of the package, applied after `include`.",
     "inputs": "Values AART collects from the installer and keeps for this artifact.",
     "python": "How the payload's Python dependencies are resolved at install time.",
@@ -516,6 +523,7 @@ def _skill_blueprint(name: str) -> _Blueprint:
         (
             "artifact",
             _object(
+                ("documentation", f"https://docs.example.com/{name}"),
                 ("kind", "skill"),
                 ("name", name),
                 ("summary", f"{_humanized(name)} skill."),
@@ -541,7 +549,11 @@ def _skill_blueprint(name: str) -> _Blueprint:
         "skill",
         document,
         optional=("compatibility", "inputs"),
-        nested_optional=(("artifact", "summary"), ("payload", "exclude")),
+        nested_optional=(
+            ("artifact", "documentation"),
+            ("artifact", "summary"),
+            ("payload", "exclude"),
+        ),
         notes=(*_SKILL_NOT_GENERATED, *_SMOKE_NOT_GENERATED, *_PLUGIN_NOT_GENERATED, *_UNREAD_NOTE),
         payload=_skill_payload(name),
     )
@@ -657,6 +669,7 @@ def _document_blueprint(
             (
                 "artifact",
                 _object(
+                    ("documentation", f"https://docs.example.com/{name}"),
                     ("kind", kind),
                     ("name", name),
                     ("summary", summary),
@@ -679,7 +692,11 @@ def _document_blueprint(
             ("inputs", _inputs()),
         ),
         optional=("compatibility", "inputs"),
-        nested_optional=(("artifact", "summary"), ("payload", "exclude")),
+        nested_optional=(
+            ("artifact", "documentation"),
+            ("artifact", "summary"),
+            ("payload", "exclude"),
+        ),
         notes=(
             *_DOCUMENT_NOT_GENERATED,
             *_SMOKE_NOT_GENERATED,
@@ -751,6 +768,7 @@ def _hook_blueprint(name: str) -> _Blueprint:
             (
                 "artifact",
                 _object(
+                    ("documentation", f"https://docs.example.com/{name}"),
                     ("kind", "hook"),
                     ("name", name),
                     ("summary", f"{_humanized(name)} hook."),
@@ -773,7 +791,11 @@ def _hook_blueprint(name: str) -> _Blueprint:
             ("inputs", _inputs()),
         ),
         optional=("compatibility", "inputs"),
-        nested_optional=(("artifact", "summary"), ("payload", "exclude")),
+        nested_optional=(
+            ("artifact", "documentation"),
+            ("artifact", "summary"),
+            ("payload", "exclude"),
+        ),
         notes=(*_HOOK_NOT_GENERATED, *_SMOKE_NOT_GENERATED, *_PLUGIN_NOT_GENERATED, *_UNREAD_NOTE),
         payload=_hook_payload(name),
     )
@@ -878,6 +900,7 @@ def _plugin_blueprint(name: str) -> _Blueprint:
             (
                 "artifact",
                 _object(
+                    ("documentation", f"https://docs.example.com/{name}"),
                     ("kind", "plugin"),
                     ("name", name),
                     ("summary", f"{_humanized(name)} plugin."),
@@ -900,7 +923,11 @@ def _plugin_blueprint(name: str) -> _Blueprint:
             ),
         ),
         optional=("compatibility",),
-        nested_optional=(("artifact", "summary"), ("payload", "exclude")),
+        nested_optional=(
+            ("artifact", "documentation"),
+            ("artifact", "summary"),
+            ("payload", "exclude"),
+        ),
         notes=(
             *_PLUGIN_LAUNCH_NOT_GENERATED,
             *_plugin_inputs_refused(),

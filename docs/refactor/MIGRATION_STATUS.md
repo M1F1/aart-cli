@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-26, CP-44 steps 1–3 (§197, INV-298, D-481): an artifact points to its own
+documentation.** A summary and an input's `help` have no room for a manual or the steps to get a
+credential. `artifact.documentation` is now an optional manifest field. It is checked like
+`obtain_from.url` and also refused when redaction would change it. It is written into the approved
+`artifact.json` only when set, and every place that explains the artifact or its inputs prints it
+whole. Evidence: `docs/refactor/slices/CP-44-artifact-documentation.md`.
+
 **2026-10-23, CP-43 steps 1–2 (§196, INV-297, D-480): Marketplace leads with Artifact and Type.**
 A colleague found seven columns overwhelming. By default a row is now `name@version` and its Type;
 `d` adds the other six columns for the session and `d` again removes them, without moving the

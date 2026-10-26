@@ -76,6 +76,12 @@ compatibility, digests and declared input guidance in Marketplace; there is no s
 Details screen. Search, cursor and marked offers stay intact. `i` installs marked offers, or the
 focused offer if none is marked. Enter on a Collection still opens its member preview.
 
+An artifact may name its own documentation: a longer manual, how to get its credentials, or how to
+configure it. When it does, More info shows the link as `Documentation`, whole on one line so it
+can be copied. The same link is printed next to each credential and configuration value the
+artifact asks for, in Credentials and variables, and by `consume list` and `consume install`. An
+artifact that names none shows no link.
+
 ### Default or Custom
 
 After Install, the TUI asks for a path. **Default** takes the harnesses, the scope and the Python

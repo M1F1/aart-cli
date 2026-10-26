@@ -803,6 +803,7 @@ class CommandLineGuidanceE2ETest(unittest.TestCase):
                     },
                     "format_hint": "fine-grained personal access token",
                     "validation_hint": "Grant read-only access to Contents and Metadata.",
+                    "documentation": None,
                 }
             ],
         )
