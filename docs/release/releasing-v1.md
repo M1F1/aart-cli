@@ -161,11 +161,36 @@ exact commands come from `scripts/install_commands.py` and the release page.
 This is the part that catches people. GitHub loads workflow files from the ref
 that triggered the run, so a release runs `release.yml` **as it was at the tag**. A fix merged to
 `main` after tagging is not in that run, and re-running the failed job replays the same commit
-rather than picking the fix up. Move the tag and publish again:
+rather than picking the fix up.
 
-```sh
-git tag -f vX.Y.Z main && git push -f origin vX.Y.Z
-```
+**A tag is never moved.** Moving it would be a force push, which rewrites a published ref that
+registries pin and forks copy. What to do depends on what failed:
 
-Re-publishing is safe: the attach step replaces an asset of the same name instead of colliding
-with it.
+- **Something outside the tagged files**, such as a runner, an image, a variable, a secret or the
+  index. Fix that, then re-run the failed jobs. The re-run uses the same commit and today's
+  settings:
+
+  ```sh
+  gh run rerun <run-id> --failed
+  ```
+
+- **Publishing to the internal index.** `publish-index.yml` started by hand runs as it is on
+  `main`, so a fix merged there applies to an existing tag:
+
+  ```sh
+  gh workflow run publish-index.yml -f tag=vX.Y.Z
+  ```
+
+- **`release.yml` or anything else in the tagged tree.** Merge the fix as a `fix:` pull request.
+  Release Please then opens the next patch release, and that release is the one that ships. Leave
+  `vX.Y.Z` and its Release where they are. Say on the Release page that it has no wheel and which
+  version replaces it:
+
+  ```sh
+  gh release edit vX.Y.Z --notes "No wheel was built for this tag. Use the next patch release."
+  ```
+
+  Delete a tag or a Release only when the repository owner asks for it.
+
+Re-publishing a Release is safe: the attach step replaces an asset of the same name instead of
+colliding with it.
