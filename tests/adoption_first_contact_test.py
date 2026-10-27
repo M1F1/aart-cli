@@ -543,6 +543,11 @@ class ReleaseDocumentTest(unittest.TestCase):
         for retired in ("prepare_release", "cut_release", "changelog.py", "scripts/version.py"):
             with self.subTest(retired=retired):
                 self.assertNotIn(retired, section)
+        # A published tag is never moved: the page offers a re-run or the next patch release instead.
+        self.assertIn("A tag is never moved.", section)
+        for forced in ("push -f", "push --force", "tag -f", "--force-with-lease"):
+            with self.subTest(forced=forced):
+                self.assertNotIn(forced, section)
 
 
 class RegistryDocumentTest(unittest.TestCase):

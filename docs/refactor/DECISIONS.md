@@ -11849,6 +11849,23 @@ Refines §154, §161 and §175. Product Specification §197, INV-298.
     the same list. The refusal for unanswered inputs gains a `documentation` key on each input
     (`null` when there is none), because an agent filling the inputs reads that JSON.
 
+## D-482 — A published release tag is never moved
+
+Refines `docs/release/releasing-v1.md`. The owner does not want force pushes.
+
+- **Before.** When `release.yml` at a tag was broken, the page said to move the tag to `main` with
+  `git tag -f` and `git push -f`.
+- **Now.** A published tag is never moved. Registries pin it and forks copy it, so moving it
+  rewrites a ref other people already read. Instead:
+  - a failure outside the tagged files (runner, image, variable, secret, index) is fixed and the
+    failed jobs are re-run, with `gh run rerun --failed`;
+  - publishing to an internal index is re-run with `publish-index.yml`, which runs as it is on
+    `main`;
+  - a defect in the tagged tree ships as the next patch release through an ordinary `fix:` pull
+    request. The broken Release stays, and its notes name the version that replaces it.
+  - Deleting a tag or a Release needs the owner's request.
+- `tests/adoption_first_contact_test.py` holds that the page says so and names no forced push.
+
 ## D-483 — Credentials and variables from the command line (CP-45)
 
 Refines §161.8, §169.4 and §186. Product Specification §198, INV-299.
