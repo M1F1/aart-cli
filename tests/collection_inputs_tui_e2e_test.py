@@ -66,7 +66,6 @@ def _with_starter(_authored, **keywords):
 class CollectionInputsShellTest(unittest.TestCase):
     def test_07_and_07b_ask_each_member_once_and_set_later_blocks_nothing(self) -> None:
         provider = _Keeping()
-        asked: list[str] = []
         with (
             mock.patch(
                 "tests.configured_install_command_e2e_test._published_registry", _with_starter
@@ -81,7 +80,6 @@ class CollectionInputsShellTest(unittest.TestCase):
             handler = type(base)(
                 replace(base._context, credential_providers=(provider,)),  # noqa: SLF001
                 terminal_handover=_Journal().handover,
-                secret_reader=lambda prompt: asked.append(prompt) or "",
             )
             finished, terminal, _ = _drive(
                 env,
@@ -133,7 +131,6 @@ class CollectionInputsShellTest(unittest.TestCase):
         ):
             self.assertIn(item, ready)
         self.assertNotIn("company/mcp/jira: jira-site", ready)
-        self.assertEqual(asked, [])
         # Asked once per member, written into that member's installation on each harness.
         self.assertEqual(provider.handed, [SKIPPED_INPUT] * 4)
         self.assertEqual(len(provider.stored), 4)

@@ -494,7 +494,8 @@ def build_parser() -> argparse.ArgumentParser:
             )
         if inputs:
             # §169.4: each binding names its artifact with its Registry alias; nothing is read
-            # from a generic input-id variable, and a credential is never an argument (D-468).
+            # from a generic input-id variable. A credential is never an argument: the credential
+            # store asks for it when the run is applied in a terminal (§201, D-486).
             lifecycle.add_argument(
                 "--input",
                 action="append",
@@ -503,16 +504,6 @@ def build_parser() -> argparse.ArgumentParser:
                 help=(
                     "answer one configuration input of one artifact, for every installation of "
                     "it this operation creates (repeatable)"
-                ),
-            )
-            lifecycle.add_argument(
-                "--secret-env",
-                action="append",
-                dest="install_secret_envs",
-                metavar="ALIAS/KIND/NAME:INPUT=ENVIRONMENT_VARIABLE",
-                help=(
-                    "store one credential of one artifact from the named environment variable; "
-                    "the value is never printed (repeatable)"
                 ),
             )
             lifecycle.add_argument(
@@ -640,6 +631,112 @@ def build_parser() -> argparse.ArgumentParser:
     _add_scope(p_mcp_test)
     _add_project(p_mcp_test)
     _add_json(p_mcp_test)
+
+    # Credentials and variables without the TUI (§198, D-483) ----------------- #
+    p = consume_sub.add_parser(
+        "inputs",
+        formatter_class=_HELP_FORMATTER,
+        help="read and set the configuration values and credentials of installed artifacts",
+        description=(
+            "What Credentials and variables does in the TUI, through the same service. Each "
+            "installation keeps its own values: an artifact in two harnesses is two "
+            "installations, and changing one leaves the other as it is. A credential's value is "
+            "never an argument and never passes through aart-cli: set-credential hands the "
+            "terminal to the credential store's own prompt."
+        ),
+    )
+    inputs_sub = p.add_subparsers(dest="inputs_action", metavar="ACTION", required=True)
+
+    def _add_installation(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--harness",
+            dest="profile",
+            action="append",
+            metavar="NAME",
+            help="the installation's harness, where the artifact is installed in more than one",
+        )
+        parser.add_argument(
+            "--scope",
+            dest="inputs_scope",
+            choices=_INSTALL_SCOPES,
+            help="the installation's scope, where the artifact is installed in both",
+        )
+        _add_project(parser)
+
+    def _add_confirmation(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--yes",
+            action="store_true",
+            help="make the reviewed change (without this the command only reviews)",
+        )
+        parser.add_argument(
+            "--expect",
+            metavar="DIGEST",
+            help="make it only if the recomputed review digest equals DIGEST",
+        )
+
+    p_inputs_list = inputs_sub.add_parser(
+        "list",
+        formatter_class=_HELP_FORMATTER,
+        help="show each installation's values, credential states and what is still unset",
+        description=(
+            "For each installation with inputs: its ordinary values as its configuration file "
+            "holds them, each credential's store and state, every input still AART_NOT_SET, the "
+            "artifact's documentation, and the command that sets each input. A credential's "
+            "value is never shown; aart-cli never has it. This only reads."
+        ),
+    )
+    p_inputs_list.add_argument(
+        "names",
+        nargs="*",
+        metavar="COORDINATE",
+        help="ALIAS/KIND/NAME[@VERSION] of the artifact(s) to show (default: every one)",
+    )
+    _add_installation(p_inputs_list)
+    _add_json(p_inputs_list)
+
+    p_inputs_set = inputs_sub.add_parser(
+        "set",
+        formatter_class=_HELP_FORMATTER,
+        help="change one ordinary configuration value of one installation",
+        description=(
+            "Change one ordinary value of exactly one installation, validated as the artifact "
+            "declares. Ordinary configuration is not secret, so the value is an argument. A "
+            "credential is refused here; use set-credential. Without --yes the command prints "
+            "the review and changes nothing."
+        ),
+    )
+    p_inputs_set.add_argument(
+        "names", nargs=1, metavar="COORDINATE", help="ALIAS/KIND/NAME[@VERSION] of the artifact"
+    )
+    p_inputs_set.add_argument(
+        "inputs_argument", metavar="INPUT=VALUE", help="the input to change and its new value"
+    )
+    _add_installation(p_inputs_set)
+    _add_confirmation(p_inputs_set)
+    _add_json(p_inputs_set)
+
+    p_inputs_credential = inputs_sub.add_parser(
+        "set-credential",
+        formatter_class=_HELP_FORMATTER,
+        help="hand the terminal to the credential store to set one credential of one installation",
+        description=(
+            "Set or replace one credential of exactly one installation. It takes no value: with "
+            "--yes it says what the credential is, then the credential store asks for the value "
+            "itself, on this terminal, and aart-cli never reads, prints or stores it. It needs a "
+            "terminal; without one it changes nothing and prints the command for a person to "
+            "run. Without --yes the command prints the review and that command."
+        ),
+    )
+    p_inputs_credential.add_argument(
+        "names", nargs=1, metavar="COORDINATE", help="ALIAS/KIND/NAME[@VERSION] of the artifact"
+    )
+    p_inputs_credential.add_argument(
+        "inputs_argument", metavar="INPUT", help="the credential input to set"
+    )
+    _add_installation(p_inputs_credential)
+    _add_confirmation(p_inputs_credential)
+    _add_json(p_inputs_credential)
 
     # `receipt` lives under `marketplace` rather than under a top-level `setup` group, because
     # `marketplace setup` already owns that word: a second `aart setup` would name two different

@@ -64,8 +64,10 @@ _PROBE = textwrap.dedent(
     """
 )
 
-UPDATES = ("down", "down", "enter")
-INSTALLED = ("down", "enter")
+#: `d` adds the Scope and Project columns a row is found by (§199). In the text terminal's 64 columns
+#: the Project cell is cut, so a row is found by the start of its project's name.
+UPDATES = ("down", "down", "enter", "d")
+INSTALLED = ("down", "enter", "d")
 
 
 class _Lab(unittest.TestCase):
@@ -155,7 +157,7 @@ class AnUpdateChangesTheInstallationItWasAskedFor(_Lab):
     def test_this_projects_row_is_updated_in_its_own_harness_alone(self) -> None:
         before = self._skills(self.project)
 
-        seen = self._update(r"project\s+consumer-proj")
+        seen = self._update(r"project\s+consume")
 
         self.assertIn(
             ["lab/skill/manual-check@1.0.1", "claude", "project", str(self.project)],
@@ -186,7 +188,7 @@ class AnUpdateChangesTheInstallationItWasAskedFor(_Lab):
     def test_another_projects_row_says_where_to_change_it_and_changes_nothing(self) -> None:
         files = sorted(str(path) for path in self.second.rglob("*"))
 
-        seen = self._update(r"second-project")
+        seen = self._update(r"project\s+second-")
 
         self.assertIn(
             "installed in another project: lab/skill/manual-check@1.0.0 · claude · project "

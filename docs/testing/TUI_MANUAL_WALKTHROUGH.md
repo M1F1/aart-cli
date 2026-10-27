@@ -80,7 +80,7 @@ AART / Registry Maintainer / Sources
 
   …the screen…
 
-working at /private/tmp/aart-cli-manual-lab/repositories/registry
+working at /private/tmp/aart-cli-manual-lab/repositories/registry · aart-cli X.Y.Z
 ────────────────────────────────────────────────────────────────
 [↑↓] Move  [Enter] Open  [s] Sync  [v] Fast / Verbose  [Esc] Back  [?] Help  [q] Quit
 ```
@@ -89,7 +89,8 @@ The footer lists the keys that screen actually accepts, and the terminal pins it
 scrolls under it instead of pushing it off, and a short one is padded **above** the `working at`
 line so the whole block — directory, rule, keys — sits on the bottom rows (`QA-086`). Blank space
 between `working at` and the keys is a finding. `Esc` is always Back, `?` is always Help, `q` is always
-Quit. If a key is in the footer and does nothing, that is a finding — and so is the other way round,
+Quit. The caption ends with the running version, which must match `aart-cli --version` (§200). If
+a key is in the footer and does nothing, that is a finding — and so is the other way round,
 a key a screen tells you to press that the footer never offers (`QA-058`).
 
 Three behaviours are new since the run that produced `QA-058`…`QA-084`, and each is worth one
@@ -503,6 +504,25 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
 ## 12 — Inspect
 
 - [ ] **Installed** → artifact details. **Credentials** → the reference and its dependants.
+- [ ] **Installed** reads like Marketplace (§199, INV-300). Each row is `name@version`, Type,
+      Harness and Health, on one line. A Collection's members are indented under it. `d` adds
+      Registry, Scope, Project and Configuration, and `d` again hides them. Marketplace keeps its
+      own choice. Narrow the window: values end in `…`, and the columns with no room are named
+      under the list. `v` on a row shows its harness, scope, the whole project directory, each
+      value or `not set`, and each credential's state, never a value.
+- [ ] `aart-cli consume inputs list` prints each installation's values, credential states, and the
+      command for each missing one (§198, INV-299). Run `set` without `--yes`, then with
+      `--yes --expect` and the printed digest. `list` shows the new value in that harness only.
+- [ ] In a real terminal, run `aart-cli consume inputs set-credential … --yes --expect DIGEST`. The
+      Keychain prompt appears under the briefing, and you type disposable text into it. `list`
+      then says `Configured securely`. Run the same command from a pipe (`… < /dev/null`): it
+      refuses, changes nothing, and prints the command.
+- [ ] Uninstall an MCP with a credential, then run `aart-cli consume install … --profile claude`
+      without `--yes`. The review lists the credential the store will ask for, with where to get it
+      (§201, INV-302). In a real terminal add `--yes`: the briefing appears on standard error, then
+      the Keychain prompt, and you type disposable text into it. `consume inputs list` then says
+      `Configured securely`. Run the same `--yes` from a pipe (`… < /dev/null`): it refuses, names
+      the credential, and nothing is installed.
 - [ ] **Credentials** → a credential → Enter (**Credential Action**). Verify and Replace are rows,
       and Delete is absent while something uses it. The `[Enter]` label follows the cursor, and
       `v` describes the focused row below the list.
@@ -607,6 +627,11 @@ and II in order and check these links of the chain, each at the step that owns i
   - Ready lists the changes AART will make (Remediation folded into it, D-403).
 - [ ] **Guided credential entry (step 11).** Screen 07 and the lent terminal show the author's help
       in the same words. The value never appears on screen or in AART's data.
+- [ ] **07b marks, the store asks (§172.6, D-487).** On 07b nothing is typed: Enter marks the token
+      `asked when installing`, and Enter again unmarks it. Ready lists it under `the credential
+      store asks you for each of these`. On Confirm, the screen is lent, the briefing shows, and
+      the Keychain prompt asks once per installation; type disposable text. Set later instead
+      unmarks everything, and Ready lists the token as `AART_NOT_SET`.
 - [ ] **Success and receipt (step 11).** `View installed`, `View receipt` and `Done` are rows that
       work.
 - [ ] **Credential lifecycle (step 12).**

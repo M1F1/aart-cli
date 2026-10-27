@@ -4901,8 +4901,9 @@ Registry is legitimate.
 
 Status: **open**, noncritical (CP-35 step 3, D-468).
 
-`MacOsKeychainProvider` is the only credential store. On Linux, `consume install --secret-env`, and
-`--set-later` for an artifact with a credential, refuse with "no credential store is available".
+`MacOsKeychainProvider` is the only credential store. On Linux, `consume install` for an artifact
+with a credential, with or without `--set-later`, refuses with "no credential store is available"
+and names the credential (§201).
 §169.5 asks Linux and headless runs to use an approved available provider. Candidates are the
 Secret Service API (`secret-tool`) and a provider that only references a CI secret by name. Either
 needs a specification decision on where the item lives and who may read it.
@@ -4912,8 +4913,8 @@ needs a specification decision on where the item lives and who may read it.
 Status: **open**, noncritical (CP-35 step 4, D-469).
 
 07 now shows optional ordinary inputs (§187), but 07b asks only required credentials. An optional
-credential, such as a proxy password, can be given at install only through `consume install
---secret-env`, or afterwards in Credentials and variables. 07b could list it as optional, with
+credential, such as a proxy password, can be given only afterwards, in Credentials and variables:
+`consume install --secret-env` was removed (§201, D-486). 07b could list it as optional, with
 Skip leaving it unbound rather than storing the placeholder.
 
 ## B-224 — An upstream that releases from a branch other than its default
@@ -5019,3 +5020,56 @@ For an unanswered credential, `consume install` prints its label, where to get i
 the documentation. For a configuration input it prints only `- tracker-user (config)`, and since
 CP-44 the documentation, but never the input's `help.label` or description. Print the same help a
 configuration input has on screen 07.
+
+## B-235 — Deleting a retained credential from the command line
+
+Status: **open**, noncritical (CP-45, D-483).
+
+`consume inputs` sets and replaces a credential that an installation declares. A retained
+credential that no installation names any more can be deleted only in the TUI, which names its sole
+owner (INV-057). A CLI form needs an address for such a reference and the same sole-owner check.
+
+## B-236 — `consume install --secret-env` reads the credential inside the process
+
+Status: **done** (CP-45 step 5, §201, INV-302, D-486). The owner chose the third option: install
+hands the terminal to the store as well, and `--secret-env` is removed.
+
+`--secret-env` (§186, D-468) reads the value from an environment variable, inside aart-cli, after
+the review and straight into the store. The owner's CP-45 rule is stricter: aart-cli never reads a
+credential, and the store's own prompt takes it. The options are:
+
+- keep `--secret-env`;
+- replace it with `--set-later` followed by `consume inputs set-credential`;
+- hand the terminal to the store during install as well.
+
+## B-237 — 07b reads a credential into the process before the transaction
+
+Status: **done** (CP-45 step 6, D-487). The owner chose the store's prompt during the transaction.
+
+The TUI's 07b asks for each required credential on its own hidden-input screen, holds it as a
+`TransientSecret` until Ready, and gives it to the store over standard input (§172.6,
+`consumer_actions._entered_secrets`). Only Credentials and variables, `consume inputs
+set-credential` and now `consume install` hand the terminal to the store's own prompt. §172.6 settled
+credentials before the transaction on purpose, so the transaction never waits for a person. The
+options are:
+
+- keep 07b as it is;
+- have 07b hand over to the store's prompt, before Ready or during the transaction;
+- have 07b offer only Set later, and send the person to Credentials and variables.
+
+## B-238 — `parse_command_line_input` and `declared_defaults` survivors
+
+Status: **open**, noncritical (CP-45 step 5, D-486).
+
+`make mutants` on `application/command_line_inputs.py` killed 131 of 150. The step-5 survivors were
+killed, or are equivalent. The rest predate CP-45 (CP-35, D-468):
+
+- `parse_command_line_input`:
+  - `partition("=")` → `rpartition`, which only a value holding `=` tells apart;
+  - `or` → `and` and `split("/")` mutants, which a two-segment or empty-segment artifact
+    (`company/github:org=…`, `company//github:org=…`) would catch;
+  - the `the argument` wording.
+- `declared_defaults`: `continue` → `break`, and one key for every default. Two artifacts with
+  defaults, a credential declared before the default, and nothing answered, would catch both.
+- `resolve_command_line_inputs`: the wording of the "it installs …" list.
+

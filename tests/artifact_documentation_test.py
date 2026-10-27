@@ -463,6 +463,14 @@ class FromTheManifestToEverySurfaceE2ETest(unittest.TestCase):
             refused_json_code, refused_json = env.run(
                 "consume", "install", coordinate, "--profile", "claude"
             )
+            # §201: a credential is never unanswered; the review says the store will ask for it.
+            answered = ("--input", f"{coordinate}:github-org=platform-team")
+            asked_code, asked = env.run_text(
+                "consume", "install", coordinate, "--profile", "claude", *answered
+            )
+            asked_json_code, asked_json = env.run(
+                "consume", "install", coordinate, "--profile", "claude", *answered
+            )
             review_code, review = env.run_text(
                 "consume", "install", coordinate, "--profile", "claude", "--set-later"
             )
@@ -480,11 +488,20 @@ class FromTheManifestToEverySurfaceE2ETest(unittest.TestCase):
         self.assertRegex(
             refused, rf"(?m)^  - github-org \(config\)\n    Documentation: {re.escape(DOCS)}$"
         )
-        self.assertRegex(refused, rf"(?m)^      Documentation: {re.escape(DOCS)}$")
         self.assertNotEqual(refused_json_code, 0)
-        by_kind = {item["kind"]: item for item in refused_json["inputs"]}
-        self.assertEqual(by_kind["config"]["documentation"], DOCS)
-        self.assertEqual(by_kind["credential"]["guidance"][0]["documentation"], DOCS)
+        self.assertEqual(
+            [(item["kind"], item["documentation"]) for item in refused_json["inputs"]],
+            [("config", DOCS)],
+        )
+        self.assertEqual(asked_code, 0, asked)
+        self.assertRegex(
+            asked,
+            rf"(?m)^  - {re.escape(coordinate)}:github-token\n(.*\n)*?"
+            rf"      Documentation: {re.escape(DOCS)}$",
+        )
+        self.assertEqual(asked_json_code, 0, asked_json)
+        store_asks = asked_json["review"]["asked_by_credential_store"]
+        self.assertEqual(store_asks[0]["guidance"][0]["documentation"], DOCS)
         self.assertEqual(review_code, 0, review)
         self.assertRegex(
             review, rf"Documentation:\n  company/mcp/github@1\.5\.0: {re.escape(DOCS)}\n"

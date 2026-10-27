@@ -24,7 +24,6 @@ from aart_cli.domain.inputs import InputGuidance, RuntimeInput, SecretInput
 __all__ = [
     "CredentialGuidance",
     "credential_guidance_lines",
-    "credential_entry_briefing",
     "credential_guidance_to_data",
     "credential_prompt_briefing",
     "gather_credential_guidance",
@@ -166,34 +165,6 @@ def credential_prompt_briefing(
     # A blank line before, between and after the statements (D-399): written on a bare terminal
     # with no frame around it, the lines ran together into the shell's last output and into the
     # provider's own prompt.
-    return ("", *(line for statement in said for line in (statement, "")))
-
-
-def credential_entry_briefing(
-    groups: tuple[CredentialGuidance, ...], *, provider: str, installations: int
-) -> tuple[str, ...]:
-    """What 07b writes on the lent terminal before its own hidden prompt (§172.6).
-
-    Unlike the provider's prompt, this one is AART's: the value passes through this process, held
-    in memory only until the install stores it, so the briefing says where it goes and that
-    nothing is echoed.
-    """
-
-    if not isinstance(provider, str) or not provider:
-        raise ValueError("a credential briefing names the provider that keeps the value")
-    if not isinstance(installations, int) or installations < 1:
-        raise ValueError("a credential briefing names at least one installation")
-    where = (
-        "this installation"
-        if installations == 1
-        else f"each of these {installations} installations"
-    )
-    said = (
-        "AART needs a credential.",
-        *credential_guidance_lines(groups),
-        f"Type it below; nothing is shown. The install stores it in {provider} for {where}.",
-        "Leave it empty to set it later.",
-    )
     return ("", *(line for statement in said for line in (statement, "")))
 
 

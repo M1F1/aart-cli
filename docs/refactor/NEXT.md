@@ -1,6 +1,30 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-26, CP-44)
+## Where the work is (2026-10-26, CP-45)
+
+0.18.0 (CP-43, CP-44) is released. **CP-45** lets an agent or a script configure an installed
+artifact without the TUI, with `consume inputs list`, `set` and `set-credential`. All three go
+through the TUI's own service and one shared module, `application/credentials_and_variables.py`.
+A credential's value never passes through aart-cli: `set-credential` lends the terminal to the
+store's prompt or refuses (§198, INV-299, D-483).
+
+Installed and Updates now read like Marketplace: Artifact, Type, Harness and Health, with `d` for
+Registry, Scope, Project and Configuration, and More info for the row under the cursor (§199,
+INV-300, D-484). The footer names the version (§200, INV-301, D-485).
+
+`consume install` now asks for a credential the same way. The review names each credential the
+store will ask for, with its guidance. `--yes` in a terminal hands the terminal to the store's
+prompt, and without a terminal it refuses and changes nothing. `--secret-env` is removed (§201,
+INV-302, D-486, B-236 done).
+
+The TUI's 07b now does the same: Enter marks a credential, and the store's prompt asks for each
+marked one while installing. Nothing is typed into aart-cli (§172.6, D-487, B-237 done).
+
+Evidence: `docs/refactor/slices/CP-45-credentials-and-variables-cli.md`. Steps 1–6 are done. Step 7
+is the commit, PR and release. The owner's runs of `set-credential --yes`, `consume install --yes`
+and a 07b marked install in a real terminal remain theirs. B-235 and B-238 are noncritical.
+
+## Where the work was (2026-10-26, CP-44)
 
 **CP-44** (stacked on CP-43, PR #100) lets an artifact name its own documentation in
 `artifact.documentation`: a longer manual, how to get its credentials, how to configure it. The link
@@ -85,7 +109,7 @@ the owner's decision.
 Step 1 is done (D-466): CI runs the suite once per interpreter, in parallel processes, under
 coverage. Step 2 is done (§185, INV-286, D-467): the generated Registry CI refuses versions promoted
 from a local checkout. Step 3 is done (§186, INV-287, D-468): `consume install` and `update` take
-`--input`, `--secret-env` and `--set-later`. Step 4 is done (§187, INV-288, D-469): 07 asks
+`--input`, `--secret-env` (removed by §201) and `--set-later`. Step 4 is done (§187, INV-288, D-469): 07 asks
 optional inputs, and neither Set later nor `--set-later` ever binds `AART_NOT_SET` to one. Step 5,
 added by the owner, is done (§188, INV-289, D-470): `upstream adopt` records whether the commit is
 on the upstream's default branch, and `registry audit --for-default-branch` (renamed from

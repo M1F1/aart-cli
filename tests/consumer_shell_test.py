@@ -214,7 +214,7 @@ class ConsumerShellTest(unittest.TestCase):
 
         self.assertEqual(moved.rows, ("public/mcp/github@1.6.0", "public/mcp/jira@2.2.0"))
         self.assertEqual(moved.current_row, "public/mcp/jira@2.2.0")
-        self.assertRegex(terminal.last, r"> \[ \] public/mcp/jira@2\.2\.0\s+broken")
+        self.assertRegex(terminal.last, r"> \[ \] jira@2\.2\.0\s+MCP\s+broken")
 
     def test_a_filter_narrows_the_rows_the_screen_shows(self):
         state, terminal = drive(
@@ -366,7 +366,7 @@ class ConsumerShellTest(unittest.TestCase):
 
         helped = terminal.screen_containing("More info / less info")
         self.assertIn("AART / Installed", helped)
-        self.assertIn("public/mcp/github@1.6.0", helped)
+        self.assertIn("github@1.6.0", helped)
         self.assertTrue(state.exited)
 
     def test_quitting_with_a_selection_draws_the_question_before_leaving(self):

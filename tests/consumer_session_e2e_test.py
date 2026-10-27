@@ -30,6 +30,7 @@ from aart_cli.application.consumer_views import (
     ConsumerSession,
     ConsumerSettings,
     navigation_targets,
+    offer_cells,
 )
 from aart_cli.application.execution import execute_lifecycle
 from aart_cli.application.installed_state import (
@@ -191,8 +192,8 @@ class ConsumerSessionTest(InstalledFixture):
     def test_installed_lists_the_collection_that_asked_for_the_artifact_and_the_artifact(self):
         drawn = self.drawn(ConsumerScreen.INSTALLED)
 
-        self.assertIn(KIT.owner, drawn)
-        self.assertIn(str(COORDINATE), drawn)
+        self.assertIn(offer_cells(KIT.owner)[0], drawn)
+        self.assertIn(offer_cells(str(COORDINATE))[0], drawn)
 
     def test_a_launcher_broken_after_the_install_is_what_the_screen_says(self):
         pathlib.Path(self.receipt.launcher).write_text("#!/bin/sh\nexit 9\n", encoding="utf-8")

@@ -19,6 +19,7 @@ from aart_cli.application.consumer_views import (
     project_dashboard,
 )
 from aart_cli.application.maintainer_views import MaintainerScreen
+from aart_cli.runtime_contract import EXECUTABLE_VERSION
 from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
 from aart_cli.tui_layout import SECTION_RULE, footer_start
 
@@ -68,7 +69,7 @@ class LaunchDirectoryPlacementTest(TestCase):
 
         lines = self._frame()
 
-        directory = lines.index("working at /work/project")
+        directory = lines.index(f"working at /work/project · aart-cli {EXECUTABLE_VERSION}")
 
         self.assertEqual(directory, footer_start(lines))
         self.assertEqual(lines[directory + 1], SECTION_RULE)

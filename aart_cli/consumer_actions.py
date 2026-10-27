@@ -24,10 +24,8 @@ reads as "nothing was established", which leaves the session exactly where it wa
 
 from __future__ import annotations
 
-import getpass
 import hashlib
 import json
-from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Callable, Literal, Protocol
@@ -88,7 +86,6 @@ from aart_cli.application.consumer_views import (
 )
 from aart_cli.application.credential_guidance import (
     CredentialGuidance,
-    credential_entry_briefing,
     gather_credential_guidance,
 )
 from aart_cli.application.credential_lifecycle import (
@@ -197,7 +194,7 @@ from aart_cli.io.configured_uninstall_action import (
 )
 from aart_cli.io.consumer_machine import read_consumer_machine, read_installed_inspections
 from aart_cli.io.consumer_settings import write_consumer_settings
-from aart_cli.io.credentials import CredentialProviderPort, TransientSecret
+from aart_cli.io.credentials import CredentialProviderPort
 from aart_cli.io.execution import CredentialEffectInterpreter, TerminalHandover
 from aart_cli.io.installed_smoke import LocalMcpTest, SmokePlanEntry, SmokeTargetResult
 from aart_cli.io.maintainer_promotion import (
@@ -875,7 +872,6 @@ class LocalConsumerActions:
         repository_adopted_list: RepositoryAdoptedListPort | None = None,
         terminal_handover: TerminalHandover | None = None,
         mcp_test: McpTestPort | None = None,
-        secret_reader: Callable[[str], str] | None = None,
     ) -> None:
         if not isinstance(context, ConsumerActionContext):
             raise ValueError("consumer actions need a composed action context")
@@ -907,18 +903,16 @@ class LocalConsumerActions:
         #: keyboard.  A credential prompt belongs to the provider, not to AART (161.8/161.9), and
         #: under the TUI it would otherwise be spoken over a drawn frame (`QA-081`).
         self._terminal_handover = terminal_handover
-        #: Secrets entered before Ready, one single-use carrier per credential reference (§172.4).
-        #: They live here and never in a view or a plan; the install that follows consumes them.
-        self._entered_secrets: dict[str, TransientSecret] = {}
-        #: The plan 07b redraws after each entry; it says what is asked, never what was typed.
+        #: The 07b rows whose credential the store's own prompt asks for during the install
+        #: (§172.6). Row keys only: no value of a credential is ever held in this process.
+        self._asked_rows: set[str] = set()
+        #: The plan 07b redraws after each choice; it says what is asked, never a value.
         self._pending_plan: ConsumerPlanView | None = None
         #: What each 07b row answers: the references it fills, what the artifact says about the
         #: credential, and the provider that will keep it. References and guidance only.
         self._secret_rows: dict[
             str, tuple[tuple[CredentialReference, ...], tuple[CredentialGuidance, ...], str]
         ] = {}
-        #: The hidden prompt 07b reads with; injected so a test never touches the real terminal.
-        self._secret_reader = secret_reader if secret_reader is not None else getpass.getpass
         self._scanned_repository: RepositoryScan | None = None
         self._adoption_review: MaintainerAdoptionReviewView | None = None
         self._adoption_upstream: AdoptionUpstreamCheck | None = None
@@ -1153,8 +1147,8 @@ class LocalConsumerActions:
             return self._prepare(command)
         if command.kind is ConsumerUiCommandKind.EXECUTE_ACTION:
             return self._execute(command)
-        if command.kind is ConsumerUiCommandKind.ENTER_SECRET:
-            return self._enter_secret(command)
+        if command.kind is ConsumerUiCommandKind.ASK_SECRET:
+            return self._ask_secret(command)
         raise ValueError(f"{command.kind.value} is not a consumer action")
 
     def _run_author(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
@@ -1227,51 +1221,41 @@ class LocalConsumerActions:
         )
 
     def discard_secrets(self) -> None:
-        """Forget every value 07b took; the session left the screens that may hold one."""
+        """Forget which credentials 07b marked; the session left the screens that hold the choice."""
 
-        self._entered_secrets = {}
+        self._asked_rows = set()
 
-    def _enter_secret(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
-        """Read one 07b secret with a hidden prompt and keep it for this artifact's installations.
+    def _ask_secret(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Mark or unmark one 07b row: the store's own prompt asks for it during the install.
 
-        The value goes into one single-use carrier per credential reference and nowhere else: the
-        answer to the screen says only whether something was entered (§172.6). An empty answer
-        withdraws whatever was entered before, so the install stores the placeholder.
+        Nothing is read here and nothing is lent: the person types the value into the credential
+        store when the reviewed install reaches that credential, and aart-cli never sees it
+        (§172.6, §201). An unmarked row is stored as the `AART_NOT_SET` placeholder.
         """
 
         row = command.focus
-        held = self._secret_rows.get(row)
-        if held is None or not isinstance(self._pending, _PendingInstall):
+        if row not in self._secret_rows or not isinstance(self._pending, _PendingInstall):
             return ConsumerActionUpdate(
                 self.source(notice=_lines("this credential is not part of the reviewed install")),
                 ConsumerUiEvent(
-                    ConsumerUiEventKind.SECRET_ENTERED,
+                    ConsumerUiEventKind.SECRET_ASKED,
                     action=ConsumerActionKind.INSTALL,
                     key=row,
                     accepted=False,
                 ),
             )
-        references, guidance, provider = held
-        briefing = credential_entry_briefing(
-            guidance, provider=provider, installations=len(references)
-        )
-        handover = self._terminal_handover
-        with handover(briefing) if handover is not None else nullcontext():
-            value = self._secret_reader("Value: ")
-        for reference in references:
-            self._entered_secrets.pop(str(reference), None)
-        entered = bool(value)
-        if entered:
-            for reference in references:
-                self._entered_secrets[str(reference)] = TransientSecret(value)
-        del value
+        asked = row not in self._asked_rows
+        if asked:
+            self._asked_rows.add(row)
+        else:
+            self._asked_rows.discard(row)
         return ConsumerActionUpdate(
             self.source(plan=self._pending_plan),
             ConsumerUiEvent(
-                ConsumerUiEventKind.SECRET_ENTERED,
+                ConsumerUiEventKind.SECRET_ASKED,
                 action=ConsumerActionKind.INSTALL,
                 key=row,
-                accepted=entered,
+                accepted=asked,
             ),
         )
 
@@ -2233,7 +2217,7 @@ class LocalConsumerActions:
         groups = groups or {}
         if command.action is ConsumerActionKind.INSTALL:
             # A new review is a new set of questions; nothing entered for the last one carries over.
-            self._entered_secrets, self._secret_rows = {}, {}
+            self._asked_rows, self._secret_rows = set(), {}
         host = self._host(command.install_scope)
         preferred = PythonInstaller(command.python_installer or context.settings.python_installer)
         # Until screen 05 has been answered there are no pairs, and placement measures every harness.
@@ -3484,6 +3468,11 @@ class LocalConsumerActions:
             if report is not None:
                 report(project_running_installation(tuple(reports)))
 
+        prompted = frozenset(
+            str(reference)
+            for row in self._asked_rows
+            for reference in self._secret_rows.get(row, ((), (), ""))[0]
+        )
         completed = complete_configured_installation(
             pending.prepared,
             expected_review_digest=pending.prepared.review_digest,
@@ -3494,13 +3483,15 @@ class LocalConsumerActions:
             recorded_at=recorded_at,
             today=today,  # type: ignore[arg-type]
             offline=self._context.offline,
-            # Nothing is asked for mid-transaction and nothing blocks: what was entered before
-            # Ready is written, and every other secret is stored as the AART_NOT_SET placeholder.
-            credential_secrets=self._entered_secrets,
+            # The store's own prompt takes each credential marked on 07b, on the lent terminal,
+            # after its briefing; every other secret is stored as the AART_NOT_SET placeholder.
+            interactive_credentials=bool(prompted),
+            credential_handover=self._terminal_handover if prompted else None,
+            prompted_credentials=prompted,
             skipped_secrets_as_placeholders=True,
             observe=None if self._progress is None else observe,
         )
-        self._entered_secrets = {}
+        self._asked_rows = set()
         if isinstance(completed, Err):
             return self._failed(command, _refusal(completed.diagnostics))
         self._machine = completed.value.machine

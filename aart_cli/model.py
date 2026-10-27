@@ -484,8 +484,12 @@ class Request:
     for_default_branch: bool = False
     # `consume install`/`update` inputs (§169.4, D-468): raw `ALIAS/KIND/NAME:INPUT=...` flags.
     install_inputs: tuple[str, ...] = ()
-    install_secret_envs: tuple[str, ...] = ()
     set_later: bool = False
+    # `consume inputs` (§198, D-483): which action, the scope that narrows an installation (none
+    # means either), and the `INPUT=VALUE` or `INPUT` the action was given.
+    inputs_action: Optional[str] = None
+    inputs_scope: Optional[str] = None
+    inputs_argument: Optional[str] = None
     authorize_untrusted_source: bool = False
     authorize_custom_entrypoint: bool = False
     approve_setup_effects: bool = False
