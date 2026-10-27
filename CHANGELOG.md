@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.19.0](https://github.com/M1F1/aart-cli/compare/v0.18.0...v0.19.0) (2026-10-27)
+
+
+### Added
+
+* aart-cli consume inputs list, set and set-credential configure an installed artifact from the command line, and a credential is only ever typed into the credential store ([e3760e8](https://github.com/M1F1/aart-cli/commit/e3760e827a1cf8dfb18ea9d000642c5cbe3ec526))
+* consume install lets the credential store ask for each credential in a terminal, and refuses without one; --secret-env is removed ([e3760e8](https://github.com/M1F1/aart-cli/commit/e3760e827a1cf8dfb18ea9d000642c5cbe3ec526))
+* Installed and Updates read like Marketplace, with d for details and More info for the row under the cursor ([e3760e8](https://github.com/M1F1/aart-cli/commit/e3760e827a1cf8dfb18ea9d000642c5cbe3ec526))
+* the footer shows the aart-cli version beside the working directory ([e3760e8](https://github.com/M1F1/aart-cli/commit/e3760e827a1cf8dfb18ea9d000642c5cbe3ec526))
+* the TUI's credentials screen marks which credentials the store asks for while installing, and never reads one ([e3760e8](https://github.com/M1F1/aart-cli/commit/e3760e827a1cf8dfb18ea9d000642c5cbe3ec526))
+
+
+### Documentation
+
+* a published release tag is never moved ([96d3200](https://github.com/M1F1/aart-cli/commit/96d320098ce0d48ae1b4872cc6470b1eb8d4cf98))
+
 ## [0.18.0](https://github.com/M1F1/aart-cli/compare/v0.17.0...v0.18.0) (2026-10-26)
 
 
