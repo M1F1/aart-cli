@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import os
 import sys
-from collections.abc import Mapping
+from collections.abc import Collection
 from dataclasses import dataclass, replace
 from datetime import date
 
@@ -63,7 +63,7 @@ from .configured_installation import (
     prepare_configured_installation_draft,
 )
 from .consumer_machine import read_consumer_machine
-from .credentials import CredentialProviderPort, TransientSecret
+from .credentials import CredentialProviderPort
 from .environment_inspection import LocalEnvironmentInspector, platform_name
 from .execution import CompositeMutationLock, LocalMutationLock, TerminalHandover
 from .harness import ScopedHarnessRegistry
@@ -398,7 +398,7 @@ def complete_configured_installation(
     offline: bool = False,
     interactive_credentials: bool = False,
     credential_handover: TerminalHandover | None = None,
-    credential_secrets: Mapping[str, TransientSecret] | None = None,
+    prompted_credentials: Collection[str] = (),
     skipped_secrets_as_placeholders: bool = False,
     observe: ProgressObserver | None = None,
 ) -> Result[CompletedConfiguredInstallation]:
@@ -409,8 +409,9 @@ def complete_configured_installation(
     receipt the version being replaced wrote -- so a caller that supplies `previous` states to
     preparation supplies the matching receipts here.
 
-    `credential_secrets` are the values entered before Ready, one carrier per credential reference;
-    with `skipped_secrets_as_placeholders` every other secret is stored as `AART_NOT_SET` (§172.4).
+    `prompted_credentials` are the references the credential store's own prompt fills during the
+    run (§172.6); with `skipped_secrets_as_placeholders` every other secret is stored as
+    `AART_NOT_SET` (§172.4). No value of a credential is ever handed to this function.
     """
 
     if not isinstance(prepared, PreparedConfiguredInstallation) or not isinstance(
@@ -433,7 +434,7 @@ def complete_configured_installation(
         offline=offline,
         interactive_credentials=interactive_credentials,
         credential_handover=credential_handover,
-        credential_secrets=credential_secrets,
+        prompted_credentials=prompted_credentials,
         skipped_secrets_as_placeholders=skipped_secrets_as_placeholders,
     )
     if isinstance(interpreters, Err):

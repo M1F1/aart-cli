@@ -15,7 +15,7 @@ import unittest
 from unittest import mock
 
 from aart_cli.application.consumer_ui import ConsumerUiState
-from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession
+from aart_cli.application.consumer_views import ConsumerScreen, ConsumerSession, offer_cells
 from aart_cli.domain.installation_owner import compose_installation_key
 from aart_cli.domain.result import Ok
 from aart_cli.domain.selection import OwnershipKind
@@ -90,10 +90,13 @@ class InstalledCollectionTest(unittest.TestCase):
             ),
         )
         lines = terminal.last.splitlines()
-        (collection,) = (line for line in lines if STARTER in line)
-        (member,) = (line for line in lines if f"{DUMMY} · claude" in line)
+        # §199: the row names the artifact as `name@version`; the Type and Harness columns say the rest.
+        starter, dummy = offer_cells(STARTER)[0], offer_cells(DUMMY)[0]
+        (collection,) = (line for line in lines if starter in line)
+        (member,) = (line for line in lines if dummy in line and "claude" in line)
+        self.assertIn("Collection", collection)
         self.assertGreater(
-            member.index(DUMMY), collection.index(STARTER), "a member is not drawn under it"
+            member.index(dummy), collection.index(starter), "a member is not drawn under it"
         )
 
     def test_doctor_draws_the_collection_and_names_the_member_that_needs_attention(self) -> None:

@@ -37,6 +37,7 @@ from aart_cli.application.consumer_views import (
     ConsumerScreen,
     ConsumerSession,
     PresentationProfile,
+    offer_cells,
 )
 from aart_cli.domain.inspection import RemediationCapability, RemediationCapabilityKind
 from aart_cli.domain.installation_owner import compose_installation_key
@@ -200,7 +201,7 @@ class ConsumerApplicationInstallTest(unittest.TestCase):
                     self.assertEqual(finished.focus, recorded)
                     self.assertTrue(terminal.screen_containing(f"Recorded: {recorded}"))
                 elif screen is ConsumerScreen.INSTALLED:
-                    self.assertIn(OFFERED, terminal.last)
+                    self.assertIn(offer_cells(OFFERED)[0], terminal.last)
                 else:
                     # Marketplace is where this drive began, so leaving rewinds to it: Back from
                     # here can no longer reach the wizard that already ran.

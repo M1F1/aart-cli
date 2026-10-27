@@ -64,6 +64,7 @@ from .io.consumer_machine import read_consumer_machine
 from .io.consumer_settings import read_consumer_settings
 from .io.credentials import MacOsKeychainProvider
 from .io.maintainer_views import read_maintainer_views
+from .io.terminal_briefing import BriefingHandover
 from .model import (
     Request,
 )
@@ -656,7 +657,7 @@ def _ellipsize(text: str, width: int) -> str:
     return one_line[: width - 1] + "…"
 
 
-class _CursesHandover:
+class _CursesHandover(BriefingHandover):
     """The drawn screen, lent out to an effect that needs a person, and taken back (`QA-081`).
 
     Storing a credential is the provider's own conversation with the operator: `security` prompts,
@@ -668,18 +669,12 @@ class _CursesHandover:
     Lending is the whole of the fix, and it is deliberately not a redraw: the shell repaints at the
     top of its own loop, so this only has to give the terminal back in the mode a subprocess can
     use and restore curses' idea of it afterwards.  Unbound -- the text terminal, the CLI, a test
-    -- it lends nothing, because there is no screen to lend.
-
-    What the provider says is only that it wants a password. So whatever the loan is handed to say
-    -- what the credential is, who needs it, how to get it -- is written on the released terminal
-    before the provider speaks, bound or not, wrapped to the terminal's width without ever breaking
-    a link (D-263).
+    -- it lends nothing, because there is no screen to lend, and only says the briefing.
     """
 
     def __init__(self, *, stream=None, columns=None) -> None:
+        super().__init__(stream=stream, columns=columns)
         self._stdscr = None
-        self._stream = stream
-        self._columns = columns
 
     def bind(self, stdscr) -> None:
         """Name the screen this will lend out; called once, by whoever drew it."""
@@ -690,33 +685,6 @@ class _CursesHandover:
         if self._stdscr is None:
             return self._briefed(briefing)
         return self._lent(self._stdscr, briefing)
-
-    def _say(self, briefing: Tuple[str, ...]) -> None:
-        if not briefing:
-            return
-        import shutil
-        import sys
-        import textwrap
-
-        stream = self._stream if self._stream is not None else sys.stdout
-        width = self._columns() if self._columns is not None else shutil.get_terminal_size().columns
-        for line in briefing:
-            indent = line[: len(line) - len(line.lstrip(" "))]
-            wrapped = textwrap.wrap(
-                line.strip(),
-                width=max(width - 1, 20),
-                initial_indent=indent,
-                subsequent_indent=indent + "  ",
-                break_long_words=False,
-                break_on_hyphens=False,
-            )
-            stream.write("\n".join(wrapped or [""]) + "\n")
-        stream.flush()
-
-    @contextmanager
-    def _briefed(self, briefing: Tuple[str, ...]):
-        self._say(briefing)
-        yield
 
     @contextmanager
     def _lent(self, stdscr, briefing: Tuple[str, ...] = ()):
@@ -945,6 +913,8 @@ def _canonical_consumer_actions(
     user_home: str | None,
     today: date,
     observe: Callable[[str], None] | None = None,
+    credential_providers: tuple | None = None,
+    handover: "BriefingHandover | None" = None,
 ) -> DomainResult[LocalConsumerActions]:
     """Compose the canonical application from one durable read of the local machine.
 
@@ -955,6 +925,9 @@ def _canonical_consumer_actions(
     With `observe`, each connected Registry's origin is looked at first under `sync.mode`, as every
     CLI read does, and `observe` is told before each one is fetched (§194). Without it only the
     local snapshots are read.
+
+    The command line composes the same application (§198): it names the credential stores its
+    other commands use, and a loan that briefs on stderr, because its stdout is the command's.
     """
 
     from .configuration.paths import (
@@ -973,10 +946,16 @@ def _canonical_consumer_actions(
     project_root = os.path.abspath(project or os.getcwd())
     # One set of adapters for the whole application. Measuring a credential through a provider the
     # actions could not act on would report an attention nothing here is able to close.
-    providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    providers = (
+        credential_providers
+        if credential_providers is not None
+        else (MacOsKeychainProvider(),)
+        if sys.platform == "darwin"
+        else ()
+    )
     # Composed here and bound by whichever terminal ends up drawing, so the actions hold one loan
     # rather than reaching for a screen that may never exist (`QA-081`).
-    handover = _CursesHandover()
+    handover = handover if handover is not None else _CursesHandover()
     machine = read_consumer_machine(
         state_root=os.path.join(paths.data_root, "state"),
         harness_root=project_root,

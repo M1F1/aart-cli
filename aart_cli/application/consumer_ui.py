@@ -140,7 +140,7 @@ class ConsumerUiEventKind(str, Enum):
     TOGGLE_SETTING = "toggle-setting"
     TOGGLE_CANDIDATE_FILTER = "toggle-candidate-filter"
     TOGGLE_PROMOTION_MODE = "toggle-promotion-mode"
-    TOGGLE_MARKETPLACE_DETAILS = "toggle-marketplace-details"
+    TOGGLE_DETAILS = "toggle-details"
     SEARCH = "search"
     SEARCH_OPEN = "search-open"
     SEARCH_CLOSE = "search-close"
@@ -163,9 +163,9 @@ class ConsumerUiEventKind(str, Enum):
     EDIT_PUBLICATION_BRANCH = "edit-publication-branch"
     EDIT_INSTALL_CONFIG = "edit-install-config"
     EDIT_CONFIGURATION = "edit-configuration"
-    #: Enter on a 07b secret row, and the adapter's answer: whether a value is now held for it.
+    #: Enter on a 07b secret row, and the adapter's answer: whether the store now asks for it.
     REQUEST_SECRET = "request-secret"
-    SECRET_ENTERED = "secret-entered"
+    SECRET_ASKED = "secret-asked"
 
 
 @dataclass(frozen=True, slots=True)
@@ -462,10 +462,10 @@ class ConsumerUiCommandKind(str, Enum):
     PREPARE_ACTION = "prepare-action"
     EXECUTE_ACTION = "execute-action"
     PERSIST_SETTINGS = "persist-settings"
-    #: 07b: lend the terminal to a hidden prompt for one secret row (§172.6). The value never
-    #: comes back; the answer says only whether one was entered.
-    ENTER_SECRET = "enter-secret"
-    #: Leaving the install before Ready was confirmed: forget every secret entered on 07b.
+    #: 07b: mark or unmark one secret row for the credential store to ask while installing
+    #: (§172.6). Nothing is typed or read; the answer says only whether it is now marked.
+    ASK_SECRET = "ask-secret"
+    #: Leaving the install before Ready was confirmed: forget what 07b marked.
     DISCARD_SECRETS = "discard-secrets"
 
 
@@ -742,6 +742,8 @@ class ConsumerUiState:
     marketplace_scroll: int = -1
     #: Whether Marketplace draws its columns after Artifact and Type; for this session only (§196).
     marketplace_details: bool = False
+    #: Whether Installed and Updates draw theirs after Artifact, Type, Harness and Health (§199).
+    installed_details: bool = False
     focus: str = ""
     searching: bool = False
     help_visible: bool = False
@@ -793,8 +795,9 @@ class ConsumerUiState:
     #: (§172.2). `targets` follows the pairs: it is the harnesses some pair goes into.
     pairs: tuple[str, ...] = ()
     pair_scopes: tuple[str, ...] = ()
-    #: The 07b rows a value was entered for. Row keys only: the values stay in the adapter.
-    entered_secrets: tuple[str, ...] = ()
+    #: The 07b rows the credential store asks for while installing (§172.6). Row keys only: no
+    #: value of a credential is ever held, here or in the adapter.
+    asked_secrets: tuple[str, ...] = ()
     harness_column: int = 0
     #: Non-secret text lives only in this session until it is reviewed and written beside the
     #: artifact. ``config_form_active`` distinguishes the pre-review form from screen 07's later
@@ -842,6 +845,7 @@ class ConsumerUiState:
             or isinstance(self.marketplace_scroll, bool)
             or self.marketplace_scroll < -1
             or not isinstance(self.marketplace_details, bool)
+            or not isinstance(self.installed_details, bool)
             or not isinstance(self.cursor, int)
             or isinstance(self.cursor, bool)
             or not 0 <= self.cursor < max(len(self.rows), 1)
@@ -852,7 +856,7 @@ class ConsumerUiState:
             or not _rows_valid(self.targets)
             or not _rows_valid(self.pairs)
             or not _rows_valid(self.pair_scopes)
-            or not _rows_valid(self.entered_secrets)
+            or not _rows_valid(self.asked_secrets)
             or not isinstance(self.harness_column, int)
             or isinstance(self.harness_column, bool)
             or self.harness_column < 0
@@ -1878,7 +1882,7 @@ def _install_by_default(
         targets=(),
         pairs=(),
         pair_scopes=(),
-        entered_secrets=(),
+        asked_secrets=(),
         harness_column=0,
         config_draft=InstallationConfigDraft(),
         config_form_active=False,
@@ -1978,9 +1982,9 @@ def _action_prepared(
         # and the matrix agree and Continue can go on without a keypress that changes nothing.
         state = replace(state, pairs=event.pairs, targets=pairs_harnesses(event.pairs))
     if action is ConsumerActionKind.INSTALL:
-        # A new plan names new provider items, so whatever 07b held was for another one; the
-        # adapter has already let those values go.
-        state = replace(state, entered_secrets=())
+        # A new plan names new provider items, so whatever 07b marked was for another one; the
+        # adapter has already forgotten it.
+        state = replace(state, asked_secrets=())
     if action is ConsumerActionKind.INSTALL and event.pair_scopes:
         # §172.5: the adapter merged what 07a chose with each pair's starting scope; that merge is
         # what the plan was prepared for, so it is what 07a shows.
@@ -2406,15 +2410,22 @@ def reduce_consumer_ui(
             ConsumerUiEventKind.NAVIGATE,
             ConsumerUiEventKind.BACK,
             ConsumerUiEventKind.TOGGLE_PROFILE,
-            ConsumerUiEventKind.TOGGLE_MARKETPLACE_DETAILS,
+            ConsumerUiEventKind.TOGGLE_DETAILS,
         )
     ):
         reduced = replace(reduced, marketplace_scroll=-1)
-    if reduced.entered_secrets and (
-        reduced.session.screen not in _SECRET_HOLDING_SCREENS or reduced.exited
+    if reduced.asked_secrets and (
+        reduced.session.screen not in _SECRET_HOLDING_SCREENS
+        or reduced.exited
+        or (
+            # Set later on 07b means every credential there: none is asked while installing.
+            event.kind is ConsumerUiEventKind.NAVIGATE
+            and state.session.screen is ConsumerScreen.INSTALL_CREDENTIALS
+            and state.current_row == CONFIG_SET_LATER_ROW
+        )
     ):
-        # §172.6: leaving before Ready was confirmed discards every value entered on 07b.
-        return replace(reduced, entered_secrets=()), (
+        # §172.6: leaving before Ready was confirmed forgets what 07b marked.
+        return replace(reduced, asked_secrets=()), (
             *commands,
             ConsumerUiCommand(ConsumerUiCommandKind.DISCARD_SECRETS),
         )
@@ -2472,16 +2483,16 @@ def _reduce(
             return state, ()
         return replace(state, quit_pending=False), (
             ConsumerUiCommand(
-                ConsumerUiCommandKind.ENTER_SECRET,
+                ConsumerUiCommandKind.ASK_SECRET,
                 action=ConsumerActionKind.INSTALL,
                 focus=event.key,
             ),
         )
-    if event.kind is ConsumerUiEventKind.SECRET_ENTERED:
+    if event.kind is ConsumerUiEventKind.SECRET_ASKED:
         if state.session.screen is not ConsumerScreen.INSTALL_CREDENTIALS:
             return state, ()
-        held = tuple(item for item in state.entered_secrets if item != event.key)
-        return replace(state, entered_secrets=(*held, event.key) if event.accepted else held), ()
+        held = tuple(item for item in state.asked_secrets if item != event.key)
+        return replace(state, asked_secrets=(*held, event.key) if event.accepted else held), ()
     if event.kind is ConsumerUiEventKind.EDIT_INSTALL_CONFIG:
         if (
             state.session.screen is ConsumerScreen.REQUIRED_INPUTS
@@ -2634,10 +2645,14 @@ def _reduce(
         return replace(state, adoption_names=names, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.TOGGLE_PROFILE:
         return _apply_setting(state, state.settings.toggled("detail-level"))
-    if event.kind is ConsumerUiEventKind.TOGGLE_MARKETPLACE_DETAILS:
-        if state.session.screen is not ConsumerScreen.MARKETPLACE or event.accepted is None:
+    if event.kind is ConsumerUiEventKind.TOGGLE_DETAILS:
+        if event.accepted is None:
             return state, ()
-        return replace(state, marketplace_details=event.accepted, quit_pending=False), ()
+        if state.session.screen is ConsumerScreen.MARKETPLACE:
+            return replace(state, marketplace_details=event.accepted, quit_pending=False), ()
+        if state.session.screen in _INSTALLATION_LISTS:
+            return replace(state, installed_details=event.accepted, quit_pending=False), ()
+        return state, ()
     if event.kind is ConsumerUiEventKind.TOGGLE_SETTING:
         if state.session.screen is not ConsumerScreen.SETTINGS or (
             event.key not in SETTING_ROWS and default_harness_from_row(event.key) is None
@@ -2733,12 +2748,24 @@ def _event_binding(key: str, label: str, kind: ConsumerUiEventKind) -> _ScreenBi
     return _ScreenBinding(KeyBinding(key, label), ConsumerUiEvent(kind))
 
 
+#: The lists of installations, whose details `d` shows together (§199).
+_INSTALLATION_LISTS = frozenset({ConsumerScreen.INSTALLED, ConsumerScreen.UPDATES})
+
+
+def details_shown(state: ConsumerUiState) -> bool:
+    """Whether the list on this screen draws its detail columns (§196, §199)."""
+
+    if state.session.screen in _INSTALLATION_LISTS:
+        return state.installed_details
+    return state.marketplace_details
+
+
 def _details_binding(label: str, *, shown: bool) -> _ScreenBinding:
-    """`d` on Marketplace, as the binding that shows the details or the one that hides them."""
+    """`d` on a list, as the binding that shows the details or the one that hides them."""
 
     return _ScreenBinding(
         KeyBinding("d", label),
-        ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_MARKETPLACE_DETAILS, accepted=shown),
+        ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_DETAILS, accepted=shown),
     )
 
 
@@ -2770,10 +2797,16 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     ConsumerScreen.COLLECTION_CUSTOMIZE: (
         _action_binding("i", "Install", ConsumerActionKind.INSTALL),
     ),
-    ConsumerScreen.UPDATES: (_action_binding("i", "Update", ConsumerActionKind.UPDATE),),
+    ConsumerScreen.UPDATES: (
+        _action_binding("i", "Update", ConsumerActionKind.UPDATE),
+        _details_binding("Details", shown=True),
+        _details_binding("Hide details", shown=False),
+    ),
     ConsumerScreen.INSTALLED: (
         _action_binding("u", "Uninstall", ConsumerActionKind.UNINSTALL),
         _action_binding("t", "Test MCP", ConsumerActionKind.MCP_TEST),
+        _details_binding("Details", shown=True),
+        _details_binding("Hide details", shown=False),
     ),
     ConsumerScreen.INSTALLED_ARTIFACT_DETAILS: (
         _action_binding("r", "Repair", ConsumerActionKind.VERIFY_REPAIR),
@@ -3045,8 +3078,8 @@ def _binding_enabled(binding: _ScreenBinding, state: ConsumerUiState) -> bool:
         ConsumerActionKind.SOURCE_REMOVE,
     ):
         return state.current_row not in ("", "add-registry")
-    if binding.event.kind is ConsumerUiEventKind.TOGGLE_MARKETPLACE_DETAILS:
-        return binding.event.accepted is not state.marketplace_details
+    if binding.event.kind is ConsumerUiEventKind.TOGGLE_DETAILS:
+        return binding.event.accepted is not details_shown(state)
     if binding.event.action is ConsumerActionKind.REGISTRY_PUSH:
         return state.current_row == REGISTRY_WORKSPACE_READY_ROW
     if binding.event.screen is MaintainerScreen.COLLECTIONS:
@@ -3145,7 +3178,7 @@ def key_bindings(
             elif row == CONFIG_CONTINUE_ROW:
                 bindings.append(KeyBinding("Enter", "Continue"))
             elif row:
-                label = "Enter again" if row in state.entered_secrets else "Enter value"
+                label = "Don't ask" if row in state.asked_secrets else "Ask when installing"
                 bindings.append(KeyBinding("Enter", label))
         elif _answered_in_place(state) and "enter" not in keys:
             bindings.append(KeyBinding("Enter", "Credential details"))
@@ -3357,7 +3390,7 @@ def key_event(
         and key == "enter"
         and (cursor or state.current_row) not in ("", CONFIG_SET_LATER_ROW, CONFIG_CONTINUE_ROW)
     ):
-        # §172.6: a secret row is answered in a hidden prompt, never typed into a frame.
+        # §172.6: a secret row is marked for the store to ask while installing; nothing is typed.
         return ConsumerUiEvent(ConsumerUiEventKind.REQUEST_SECRET, key=cursor or state.current_row)
 
     if state.session.screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:

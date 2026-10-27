@@ -55,6 +55,7 @@ def _rows(env, screen: ConsumerScreen) -> list[str]:
             ConsumerSession(screen),
             rows=source.rows(empty),
             marketplace_details=True,
+            installed_details=True,
             viewport_columns=160,
         )
         if screen is not ConsumerScreen.MARKETPLACE:
@@ -92,10 +93,9 @@ class MarketplaceColumnsTest(unittest.TestCase):
         self.assertTrue(other.endswith("  claude"), other)
         self.assertNotIn("opencode", held + other)
         (row,) = installations
-        self.assertIn(COORDINATE, row)
-        self.assertIn(" · claude", row)
-        self.assertIn("project", row)
-        self.assertIn(project, row)
+        # §199: Installed draws on the same grid, its details shown by the same key.
+        for cell in (f"{_offered(COORDINATE)}@", "Skill", "claude", "company", "project", project):
+            self.assertIn(cell, row)
         # Header alignment and lossless wrapping are held across generated widths in
         # marketplace_readable_rows_test; here the installed facts come from real receipts.
 

@@ -626,7 +626,8 @@ class AuthoredInstallationTest(unittest.TestCase):
             self._drawn(screen, flow, machine)
             for screen in (ConsumerScreen.INSTALLED, ConsumerScreen.ACTIVITY)
         )
-        self.assertIn(str(self.package.coordinate), drawn)
+        # Installed names the artifact as `name@version` (§199).
+        self.assertIn(str(self.package.coordinate).rpartition("/")[2], drawn)
         self.assertNotIn(self.token, json.dumps(asdict(machine), default=str))
         self.assertNotIn(self.token, drawn)
         self.assertEqual([item.input for item in machine.credentials], ["github-token"])

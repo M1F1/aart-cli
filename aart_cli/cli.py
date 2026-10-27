@@ -81,6 +81,18 @@ def _run_mcp(request: Request) -> int:
     return mcp.run(request)
 
 
+def _run_inputs(request: Request) -> int:
+    """`consume inputs` (§198): the TUI's own application, so it is not a `commands` module.
+
+    `commands` may not depend on the TUI, which depends on it; every `DISPATCH` entry is a
+    `commands` module's `run`, so this one is routed before the table is read.
+    """
+
+    from . import cli_inputs
+
+    return cli_inputs.run(request)
+
+
 # Command name -> handler. Value-keyed dispatch, not a class hierarchy.
 DISPATCH: dict[str, Callable[[Request], int]] = {
     "upgrade": upgrade.run,
@@ -135,6 +147,8 @@ def _route(args: argparse.Namespace) -> tuple[str, dict[str, object]]:
             return "source", {"source_family": "registry"}
         if action == "mcp":
             return "mcp", {}
+        if action == "inputs":
+            return "inputs", {}
         return "marketplace", {"marketplace_action": action}
     if command == "maintain":
         action = args.maintain_action
@@ -178,8 +192,10 @@ def _to_request(args: argparse.Namespace) -> Request:
         expect=getattr(args, "expect", None),
         for_default_branch=bool(getattr(args, "for_default_branch", False)),
         install_inputs=tuple(getattr(args, "install_inputs", None) or ()),
-        install_secret_envs=tuple(getattr(args, "install_secret_envs", None) or ()),
         set_later=bool(getattr(args, "set_later", False)),
+        inputs_action=getattr(args, "inputs_action", None),
+        inputs_scope=getattr(args, "inputs_scope", None),
+        inputs_argument=getattr(args, "inputs_argument", None),
         force=bool(getattr(args, "force", False)),
         dry_run=bool(getattr(args, "dry_run", False)),
         json=bool(getattr(args, "json", False)),
@@ -302,6 +318,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     request = _to_request(args)
     if _seeds_first_run(args, request):
         _seed_first_run(request)
+    if request.command == "inputs":
+        return _run_inputs(request)
     return DISPATCH[request.command](request)
 
 

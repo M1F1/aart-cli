@@ -350,7 +350,7 @@ def _consumer_cases() -> dict[ConsumerScreen, ScreenCase]:
     secrets_state = ConsumerUiState(
         ConsumerSession(ConsumerScreen.INSTALL_CREDENTIALS, review_digest=base.plan.review_digest),
         action=ConsumerActionKind.INSTALL,
-        entered_secrets=("company/mcp/jira\tjira-token",),
+        asked_secrets=("company/mcp/jira\tjira-token",),
     )
     cases[ConsumerScreen.INSTALL_CREDENTIALS] = ScreenCase(
         "07b:two-artifacts",

@@ -41,7 +41,11 @@ depends_on = ["aart_cli.protocol", "aart_cli.domain"]
 
 [[modules]]
 path = "aart_cli.cli"
-depends_on = ["aart_cli.tui", "aart_cli.command_outcome", "aart_cli.outcomes", "aart_cli.commands", "aart_cli.model", "aart_cli.cli_parser", "aart_cli.cli_docs"]
+depends_on = ["aart_cli.cli_inputs", "aart_cli.tui", "aart_cli.command_outcome", "aart_cli.outcomes", "aart_cli.commands", "aart_cli.model", "aart_cli.cli_parser", "aart_cli.cli_docs"]
+
+[[modules]]
+path = "aart_cli.cli_inputs"
+depends_on = ["aart_cli.command_outcome", "aart_cli.application", "aart_cli.consumer_actions", "aart_cli.domain", "aart_cli.model", "aart_cli.redaction", "aart_cli.tui", "aart_cli.commands", "aart_cli.io"]
 
 [[modules]]
 path = "aart_cli.cli_docs"
@@ -189,7 +193,7 @@ depends_on = ["aart_cli.application", "aart_cli.tui_marketplace", "aart_cli.tui_
 
 [[modules]]
 path = "aart_cli.tui_consumer"
-depends_on = ["aart_cli.tui_marketplace_rows", "aart_cli.tui_marketplace_detail", "aart_cli.authoring", "aart_cli.tui_layout", "aart_cli.io", "aart_cli.domain", "aart_cli.tui_maintainer", "aart_cli.application", "aart_cli.tui_marketplace"]
+depends_on = ["aart_cli.runtime_contract", "aart_cli.tui_marketplace_rows", "aart_cli.tui_marketplace_detail", "aart_cli.authoring", "aart_cli.tui_layout", "aart_cli.io", "aart_cli.domain", "aart_cli.tui_maintainer", "aart_cli.application", "aart_cli.tui_marketplace"]
 
 [[modules]]
 path = "aart_cli.tui_failures"
