@@ -181,6 +181,38 @@ class McpSmokeLauncherContractTest(unittest.TestCase):
             self.assertIn("closed before the protocol exchange completed", message)
             self.assertIn("aart: repair the installation", message)
 
+    def test_a_refusal_is_said_alone_whatever_the_server_logged(self) -> None:
+        """§205: FastMCP prints a banner on stderr, and it buried the keyword a refusal names."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            launcher = root / "launch"
+            launcher.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, sys\n"
+                "print('FastMCP banner', file=sys.stderr, flush=True)\n"
+                "for line in sys.stdin:\n"
+                " message=json.loads(line); method=message.get('method')\n"
+                " if method=='initialize': print(json.dumps({'jsonrpc':'2.0','id':1,'result':{'protocolVersion':'2025-11-25'}}), flush=True)\n"
+                " elif method=='tools/list': print(json.dumps({'jsonrpc':'2.0','id':2,'result':{'tools':[{'name':'read','inputSchema':{'type':'object','properties':{'v':{'not':{}}}}}]}}), flush=True)\n",
+                encoding="utf-8",
+            )
+            launcher.chmod(0o700)
+
+            run = execute_stdio_smoke(
+                str(launcher),
+                SmokeDeclaration("read", JsonObject((("v", 1),)), 30),
+                cwd=str(root),
+                harness="claude",
+            )
+
+            assert isinstance(run, Err)
+            self.assertEqual(
+                run.diagnostics[0].message,
+                "declared MCP call was refused before invocation: "
+                "unsupported JSON Schema keyword 'not' at $.v",
+            )
+
     def test_a_launcher_gone_before_the_first_write_is_reported_as_closed(self) -> None:
         """The other side of the race above: the process exits before stdin is written."""
 

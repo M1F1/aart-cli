@@ -89,9 +89,10 @@ class CollectionInstallShellTest(unittest.TestCase):
             RIGHT,
             SPACE,
             ENTER,
-            # 07a: past "All installations" to the Collection on claude. The column 05 left on,
-            # the second, is User here (B-195).
+            # 07a: past "All installations" to the Collection on claude, then to User: 07a opens
+            # on its first column (§209, B-195).
             DOWN,
+            RIGHT,
             SPACE,
             ENTER,
             ENTER,

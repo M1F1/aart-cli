@@ -186,7 +186,6 @@ def prepare_configured_uninstall(
     policy: EffectivePolicy,
     credential_providers: tuple[CredentialProviderPort, ...] = (),
     release: tuple[OwnershipReason, ...] | None = None,
-    delete_credentials: bool = False,
 ) -> Result[PreparedConfiguredUninstall]:
     """Plan taking these recorded installations out, measuring the machine and mutating nothing.
 
@@ -194,6 +193,10 @@ def prepare_configured_uninstall(
     an artifact directly means. A Collection removal passes the claims it is giving up, and each
     record gives up those it has, so an artifact something else still wants stays installed and the
     record narrows instead. A record holding none of them is not this removal's to plan.
+
+    Each installation has its own credential items (D-334), so a record that is removed takes its
+    items with it, the `AART_NOT_SET` placeholders included (§208). A record that narrows is still
+    installed and keeps them.
     """
 
     if not isinstance(host, InstallationHost):
@@ -212,12 +215,12 @@ def prepare_configured_uninstall(
         )
         if release is not None and not released:
             return _error(f"{record.coordinate} is not owned by what this uninstall gives up")
-        planned = plan_removal(record, release=released, delete_credentials=delete_credentials)
+        # What something else still owns stays: its removal converges on the installed state.
+        retained = bool(set(record.ownership) - set(released))
+        planned = plan_removal(record, release=released, delete_credentials=not retained)
         if isinstance(planned, Err):
             return planned
         removals.append(planned.value)
-        # What something else still owns stays: its removal converges on the installed state.
-        retained = bool(set(record.ownership) - set(released))
         observed.append(
             (
                 planned.value.key,

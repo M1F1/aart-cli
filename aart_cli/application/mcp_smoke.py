@@ -7,8 +7,11 @@ call. Neither is presented as proof that the service behind the server was reach
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
+from fractions import Fraction
+from functools import lru_cache
 from typing import Iterable
 
 from aart_cli.domain.harness import Scope
@@ -43,6 +46,23 @@ class SmokeDeclaration:
     tool: str
     arguments: JsonObject
     timeout_seconds: int
+
+
+@dataclass(frozen=True, slots=True)
+class McpNumber:
+    """A number an MCP server wrote with a fraction, or beyond the protocol's integers, exactly.
+
+    aart-cli's own documents carry no such number (protocol JSON forbids them), but a server's
+    schemas and answers do: FastMCP writes a `float` parameter's bounds and default as `0.0` and
+    `1.0` (§205). The smoke reads them into the trees it validates and nowhere else; protocol
+    code never sees one. A whole number is never one of these: `2.0` is read as the integer 2.
+    """
+
+    value: Fraction
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, Fraction):
+            raise ValueError("an MCP number is an exact fraction")
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,7 +175,43 @@ def _python(value: JsonValue) -> object:
 #: a constraint that would otherwise go unapplied, and validating less than a schema states is the
 #: failure worth stopping for.
 _SUPPORTED_SCHEMA_KEYS = frozenset(
-    {"type", "properties", "required", "additionalProperties", "items", "enum", "const"}
+    {
+        "type",
+        "properties",
+        "required",
+        "additionalProperties",
+        "items",
+        "enum",
+        "const",
+        # The bounds a generated schema puts on a number, a string, an array or an object (§203).
+        # Each is applied below, so allowing it validates no less than the schema states.
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+        "minLength",
+        "maxLength",
+        "minItems",
+        "maxItems",
+        "uniqueItems",
+        "minProperties",
+        "maxProperties",
+        # How a generated schema says "optional" or "one of these shapes": each branch is
+        # validated, and a keyword this does not implement in a branch is still refused.
+        "anyOf",
+        "oneOf",
+        "allOf",
+        # What FastMCP writes for Pydantic's constrained strings, dicts, tuples and nested or
+        # recursive models (§205). Each is applied below; `$defs` only holds what `$ref` reaches.
+        "pattern",
+        "patternProperties",
+        "propertyNames",
+        "prefixItems",
+        "$ref",
+        "$defs",
+        "definitions",
+    }
 )
 
 #: Annotations constrain nothing. JSON Schema files these under basic meta-data: they describe a
@@ -178,15 +234,313 @@ _ANNOTATION_SCHEMA_KEYS = frozenset(
         "readOnly",
         "title",
         "writeOnly",
+        # Annotations too: in JSON Schema 2020-12 a format and a content type are described, not
+        # asserted, unless a vocabulary says otherwise, and no MCP schema declares one (§203).
+        "format",
+        "contentEncoding",
+        "contentMediaType",
+        # OpenAPI's hint for a Pydantic tagged union. JSON Schema does not know it, and the
+        # `oneOf` beside it decides which branch a value is, so reading it would decide nothing.
+        "discriminator",
     }
 )
 
 
-def _validate_schema(value: JsonValue, schema: JsonObject, pointer: str = "$") -> str | None:
+def _annotation(key: str) -> bool:
+    """A keyword that constrains nothing: a basic annotation, or a vendor extension.
+
+    `x-` is how a schema producer marks its own keywords (fastmcp writes `x-fastmcp-wrap-result` on
+    every output schema). JSON Schema ignores a keyword it does not know, and an `x-` one is never
+    a constraint, so it is passed over rather than refused like an unimplemented one (§203).
+    """
+
+    return key in _ANNOTATION_SCHEMA_KEYS or key.startswith("x-")
+
+
+def _number(value: object) -> int | Fraction | None:
+    """The value as a number, or None when it is not one; a boolean is never a number."""
+
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, McpNumber):
+        return value.value
+    return None
+
+
+def _ecma_ends(pattern: str) -> str:
+    """The pattern with each `$` outside a class made `\\Z`, as ECMA-262 reads it.
+
+    Python's `$` also matches before a final newline, so `^[A-Z]+$` would take `"PROJ\\n"`, which
+    JSON Schema's ECMA-262 pattern refuses. A `$` escaped or inside `[...]` is a literal and stays.
+    """
+
+    written: list[str] = []
+    escaped = in_class = False
+    for index, character in enumerate(pattern):
+        if escaped:
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        elif in_class:
+            in_class = character != "]" or pattern[index - 1] == "["
+        elif character == "[":
+            in_class = True
+        elif character == "$":
+            written.append("\\Z")
+            continue
+        written.append(character)
+    return "".join(written)
+
+
+@lru_cache(maxsize=256)
+def _compiled(pattern: str) -> re.Pattern[str] | None:
+    """A JSON Schema pattern as Python reads it, or None when Python cannot read it the same way.
+
+    `re.ASCII` gives `\\d`, `\\w` and `\\b` their ECMA-262 meaning. ECMA-only syntax such as `\\p{L}`
+    or `(?<name>...)` does not compile, so it is refused rather than read as something else.
+    """
+
+    try:
+        return re.compile(_ecma_ends(pattern), re.ASCII)
+    except re.error:
+        return None
+
+
+def _bound(value: JsonValue, pointer: str, fields: dict[str, JsonValue]) -> str | None:
+    """The numeric, length and size bounds a schema states, applied to the value."""
+
+    for key in ("minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf"):
+        if key in fields and _number(fields[key]) is None:
+            return f"{key} at {pointer} is unsupported"
+    for key in ("minLength", "maxLength", "minItems", "maxItems", "minProperties", "maxProperties"):
+        limit = fields.get(key)
+        if key in fields and (isinstance(limit, bool) or not isinstance(limit, int)):
+            return f"{key} at {pointer} is unsupported"
+    number = _number(value)
+    if number is not None:
+        checks = (
+            ("minimum", lambda limit: number >= limit, "is below minimum"),
+            ("maximum", lambda limit: number <= limit, "is above maximum"),
+            ("exclusiveMinimum", lambda limit: number > limit, "is not above exclusiveMinimum"),
+            ("exclusiveMaximum", lambda limit: number < limit, "is not below exclusiveMaximum"),
+            ("multipleOf", lambda limit: limit > 0 and number % limit == 0, "is not a multipleOf"),
+        )
+        for key, holds, failure in checks:
+            if key in fields and not holds(_number(fields[key])):
+                return f"value at {pointer} {failure}"
+    if isinstance(value, str):
+        noun, measured = "Length", len(value)
+    elif isinstance(value, JsonArray):
+        noun, measured = "Items", len(value.items)
+    elif isinstance(value, JsonObject):
+        noun, measured = "Properties", len(value.entries)
+    else:
+        noun, measured = "", 0
+    if noun:
+        low, high = fields.get(f"min{noun}"), fields.get(f"max{noun}")
+        if isinstance(low, int) and measured < low:
+            return f"value at {pointer} is shorter than min{noun}"
+        if isinstance(high, int) and measured > high:
+            return f"value at {pointer} is longer than max{noun}"
+    if fields.get("uniqueItems") is True and isinstance(value, JsonArray):
+        seen: list[JsonValue] = []
+        for item in value.items:
+            if item in seen:
+                return f"items at {pointer} are not unique"
+            seen.append(item)
+    elif "uniqueItems" in fields and not isinstance(fields["uniqueItems"], bool):
+        return f"uniqueItems at {pointer} is unsupported"
+    if "pattern" in fields:
+        written = fields["pattern"]
+        compiled = _compiled(written) if isinstance(written, str) else None
+        if compiled is None:
+            return f"unsupported JSON Schema pattern at {pointer}: {written!r}"
+        if isinstance(value, str) and compiled.search(value) is None:
+            return f"value at {pointer} does not match pattern"
+    return None
+
+
+@dataclass(frozen=True, slots=True)
+class _Reading:
+    """What validation carries down a schema: its root, for `$ref`, and the references followed
+    since the value last moved, so a reference that leads back to itself is caught."""
+
+    root: JsonObject
+    followed: frozenset[str] = frozenset()
+
+    def moved(self) -> "_Reading":
+        return _Reading(self.root)
+
+
+def _resolved(reference: str, root: JsonObject) -> JsonValue | None:
+    """What a `#/...` JSON Pointer reaches inside the tool's own schema, or None."""
+
+    node: JsonValue = root
+    for raw in reference.removeprefix("#").split("/")[1:]:
+        part = raw.replace("~1", "/").replace("~0", "~")
+        if isinstance(node, JsonObject) and part in node.keys():
+            node = node.get(part)
+        elif isinstance(node, JsonArray) and part.isdigit() and int(part) < len(node.items):
+            node = node.items[int(part)]
+        else:
+            return None
+    return node
+
+
+def _reference(
+    value: JsonValue, pointer: str, fields: dict[str, JsonValue], reading: _Reading
+) -> str | None:
+    """`$ref` into the tool's own schema, followed; one anywhere else is never fetched (§205)."""
+
+    if "$ref" not in fields:
+        return None
+    reference = fields["$ref"]
+    if not isinstance(reference, str) or not (reference == "#" or reference.startswith("#/")):
+        return (
+            f"unsupported JSON Schema $ref {reference!r} at {pointer}: only a reference into "
+            "the tool's own schema is read"
+        )
+    if reference in reading.followed:
+        return f"unsupported JSON Schema $ref {reference!r} at {pointer} leads back to itself"
+    target = _resolved(reference, reading.root)
+    if not isinstance(target, JsonObject):
+        return f"$ref {reference!r} at {pointer} does not resolve to a schema"
+    return _validate_schema(
+        value, target, pointer, _Reading(reading.root, reading.followed | {reference})
+    )
+
+
+def _branches(
+    value: JsonValue, pointer: str, fields: dict[str, JsonValue], reading: _Reading
+) -> str | None:
+    """`allOf`, `anyOf` and `oneOf`: every, at least one, or exactly one branch holds."""
+
+    for key in ("allOf", "anyOf", "oneOf"):
+        if key not in fields:
+            continue
+        branches = fields[key]
+        if (
+            not isinstance(branches, JsonArray)
+            or not branches.items
+            or any(not isinstance(item, JsonObject) for item in branches.items)
+        ):
+            return f"{key} at {pointer} is malformed"
+        failures = [
+            _validate_schema(value, branch, pointer, reading)
+            for branch in branches.items
+            if isinstance(branch, JsonObject)
+        ]
+        # A branch this cannot read is not a branch that failed: refusing keeps it from deciding.
+        unsupported = next(
+            (item for item in failures if item and item.startswith("unsupported JSON Schema")),
+            None,
+        )
+        if unsupported is not None:
+            return unsupported
+        held = sum(item is None for item in failures)
+        if key == "allOf" and held != len(failures):
+            return next(item for item in failures if item is not None)
+        if key == "anyOf" and not held:
+            return f"value at {pointer} matches no anyOf branch"
+        if key == "oneOf" and held != 1:
+            return f"value at {pointer} matches {held} oneOf branches, not one"
+    return None
+
+
+def _members(
+    members: dict[str, JsonValue], pointer: str, fields: dict[str, JsonValue], reading: _Reading
+) -> str | None:
+    """An object's members against `properties`, `patternProperties`, `additionalProperties` and
+    `propertyNames`: a member that no property or pattern names is an additional one."""
+
+    properties = fields.get("properties", JsonObject(()))
+    if not isinstance(properties, JsonObject):
+        return f"properties at {pointer} is malformed"
+    property_schemas = dict(properties.entries)
+    patterned = fields.get("patternProperties", JsonObject(()))
+    if not isinstance(patterned, JsonObject) or any(
+        not isinstance(schema, JsonObject) for _, schema in patterned.entries
+    ):
+        return f"patternProperties at {pointer} is malformed"
+    patterns: list[tuple[re.Pattern[str], JsonObject]] = []
+    for written, schema in patterned.entries:
+        compiled = _compiled(written)
+        if compiled is None:
+            return f"unsupported JSON Schema patternProperties pattern at {pointer}: {written!r}"
+        if isinstance(schema, JsonObject):
+            patterns.append((compiled, schema))
+    additional = fields.get("additionalProperties", True)
+    if not isinstance(additional, (bool, JsonObject)):
+        return f"additionalProperties at {pointer} is unsupported"
+    names = fields.get("propertyNames")
+    if names is not None and not isinstance(names, JsonObject):
+        return f"propertyNames at {pointer} is malformed"
+    for name, member in members.items():
+        if isinstance(names, JsonObject):
+            failure = _validate_schema(name, names, pointer, reading.moved())
+            if failure is not None:
+                return f"property name {name!r} at {pointer} is not allowed: {failure}"
+        place = f"{pointer}.{name}"
+        child = property_schemas.get(name)
+        if child is not None and not isinstance(child, JsonObject):
+            return f"schema for {place} is malformed"
+        matched = [schema for compiled, schema in patterns if compiled.search(name)]
+        if child is None and not matched:
+            if additional is False:
+                return f"field {name!r} is not allowed at {pointer}"
+            if isinstance(additional, JsonObject):
+                matched = [additional]
+        for schema in (*((child,) if isinstance(child, JsonObject) else ()), *matched):
+            failure = _validate_schema(member, schema, place, reading.moved())
+            if failure is not None:
+                return failure
+    return None
+
+
+def _items(
+    items: tuple[JsonValue, ...], pointer: str, fields: dict[str, JsonValue], reading: _Reading
+) -> str | None:
+    """`prefixItems` for the leading positions and `items` for every one after them (2020-12)."""
+
+    prefix = fields.get("prefixItems", JsonArray(()))
+    if not isinstance(prefix, JsonArray) or any(
+        not isinstance(schema, JsonObject) for schema in prefix.items
+    ):
+        return f"prefixItems at {pointer} is malformed"
+    rest = fields.get("items")
+    if rest is not None and not isinstance(rest, JsonObject):
+        return f"items at {pointer} is malformed"
+    for index, item in enumerate(items):
+        schema = prefix.items[index] if index < len(prefix.items) else rest
+        if not isinstance(schema, JsonObject):
+            continue
+        failure = _validate_schema(item, schema, f"{pointer}[{index}]", reading.moved())
+        if failure is not None:
+            return failure
+    return None
+
+
+def _validate_schema(
+    value: JsonValue, schema: JsonObject, pointer: str = "$", reading: _Reading | None = None
+) -> str | None:
+    reading = _Reading(schema) if reading is None else reading
     fields = dict(schema.entries)
-    unsupported = sorted(fields.keys() - _SUPPORTED_SCHEMA_KEYS - _ANNOTATION_SCHEMA_KEYS)
+    unsupported = sorted(
+        key for key in fields.keys() - _SUPPORTED_SCHEMA_KEYS if not _annotation(key)
+    )
     if unsupported:
         return f"unsupported JSON Schema keyword {unsupported[0]!r} at {pointer}"
+    referred = _reference(value, pointer, fields, reading)
+    if referred is not None:
+        return referred
+    branched = _branches(value, pointer, fields, reading)
+    if branched is not None:
+        return branched
+    bounded = _bound(value, pointer, fields)
+    if bounded is not None:
+        return bounded
     if "const" in fields and value != fields["const"]:
         return f"value at {pointer} does not equal const"
     if "enum" in fields:
@@ -196,26 +550,32 @@ def _validate_schema(value: JsonValue, schema: JsonObject, pointer: str = "$") -
         if value not in choices.items:
             return f"value at {pointer} is outside enum"
     expected = fields.get("type")
+    number = _number(value)
     matches = {
         "object": isinstance(value, JsonObject),
         "array": isinstance(value, JsonArray),
         "string": isinstance(value, str),
-        "integer": isinstance(value, int) and not isinstance(value, bool),
-        "number": isinstance(value, int) and not isinstance(value, bool),
+        # 2020-12: a number whose fraction is zero is an integer, however it was written.
+        "integer": number is not None and number.denominator == 1,
+        "number": number is not None,
         "boolean": isinstance(value, bool),
         "null": value is None,
     }
+    # One type, or a list of them, which is how a schema producer often says "or null" (§203).
+    named = (
+        (expected,)
+        if isinstance(expected, str)
+        else tuple(expected.items)
+        if isinstance(expected, JsonArray) and expected.items
+        else None
+    )
     if expected is not None:
-        if not isinstance(expected, str) or expected not in matches:
+        if named is None or any(not isinstance(item, str) or item not in matches for item in named):
             return f"schema type at {pointer} is unsupported"
-        if not matches[expected]:
-            return f"value at {pointer} is not {expected}"
+        if not any(matches[item] for item in named if isinstance(item, str)):
+            return f"value at {pointer} is not {' or '.join(str(item) for item in named)}"
     if isinstance(value, JsonObject):
         members = dict(value.entries)
-        properties = fields.get("properties", JsonObject(()))
-        if not isinstance(properties, JsonObject):
-            return f"properties at {pointer} is malformed"
-        property_schemas = dict(properties.entries)
         required = fields.get("required", JsonArray(()))
         if not isinstance(required, JsonArray) or any(
             not isinstance(item, str) for item in required.items
@@ -224,30 +584,11 @@ def _validate_schema(value: JsonValue, schema: JsonObject, pointer: str = "$") -
         for name in required.items:
             if name not in members:
                 return f"required field {name!r} is missing at {pointer}"
-        additional = fields.get("additionalProperties", True)
-        if not isinstance(additional, bool):
-            return f"additionalProperties at {pointer} is unsupported"
-        if not additional:
-            unknown = sorted(members.keys() - property_schemas.keys())
-            if unknown:
-                return f"field {unknown[0]!r} is not allowed at {pointer}"
-        for name, member in members.items():
-            child = property_schemas.get(name)
-            if child is None:
-                continue
-            if not isinstance(child, JsonObject):
-                return f"schema for {pointer}.{name} is malformed"
-            failure = _validate_schema(member, child, f"{pointer}.{name}")
-            if failure is not None:
-                return failure
-    if isinstance(value, JsonArray) and "items" in fields:
-        item_schema = fields["items"]
-        if not isinstance(item_schema, JsonObject):
-            return f"items at {pointer} is malformed"
-        for index, item in enumerate(value.items):
-            failure = _validate_schema(item, item_schema, f"{pointer}[{index}]")
-            if failure is not None:
-                return failure
+        membered = _members(members, pointer, fields, reading)
+        if membered is not None:
+            return membered
+    if isinstance(value, JsonArray):
+        return _items(value.items, pointer, fields, reading)
     return None
 
 
@@ -346,6 +687,7 @@ def aggregate_success(results: Iterable[SmokeStageResult]) -> bool:
 
 __all__ = [
     "McpCallResult",
+    "McpNumber",
     "McpTool",
     "SmokeDeclaration",
     "SmokeOutcome",

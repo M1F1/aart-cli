@@ -11998,3 +11998,352 @@ Amends §172.6 and D-419. Product Specification §172.6, §201, INV-302. Closes 
 - **Consequences.** A cancelled prompt leaves the install partial, with the credential missing and
   repairable. §172.6 had kept the transaction from waiting for a person. It now waits only for
   credentials the person chose to be asked.
+
+## D-488 — A Registry's history opens with the Registry (CP-46)
+
+Product Specification §202, INV-303. Refines §164.8 and §190 (D-472).
+
+- **What was reported.** With a large terminal font, one Registry's Recent promotions on screen 46
+  pushed the next Registry off the screen. The owner asked for the promotions to be shown once a
+  Registry is entered, with its commands available there.
+- **Choices.**
+  - Screen 46k (`46k-registry-details`) is a lettered sub-screen of 46, as 46a–46j are, so the
+    catalog keeps its 24 numbers. Its row is the Registry's alias, named by the focus, and its
+    title is that alias: `AART / Registry / company`.
+  - The list row (`render_maintainer_registry(..., brief=True)`) keeps validity, diagnostics,
+    approved versions by kind, the working tree's state and `Promotions recorded: N`. Revision,
+    snapshot, the observed digest and the promotions move to 46k. The row's Verbose description
+    keeps its digests and drops the promotions (`maintainer_registry_detail(..., promotions=False)`).
+  - Enter on a Registry row now opens 46k. Bulk Promotion moves one key deeper: Enter on 46k opens it
+    when Ready Candidates wait, as Enter on the row did. `c` Candidates still reaches it from the
+    list in one key.
+  - 46k binds `c`, `n`, `b`, `s`, `u` and `o`, the row's keys. Push is not offered there: it acts on
+    the local workspace row, which opens nothing.
+  - Back to 46k keeps its Registry: `_back_focus` reduces the child's focus to the alias, including a
+    Collection's row. Back to 46 needs no rule: the cursor stays on the row it stood on.
+- **Consequences.** A finished promotion still lands on screen 46. One more Enter separates the list
+  from Bulk Promotion.
+
+## D-489 — Only the Registry here opens, and its commands are there (CP-46)
+
+Product Specification §202, INV-304. Refines D-488, §164.7 and B-042.
+
+- **What was reported.** Testing D-488 in the lab, the owner asked for every command on screen 46
+  to be possible only inside a Registry. The commands on a subscribed Registry's row and on its 46k
+  acted on the Registry in the directory aart-cli runs in, whichever row was chosen. The owner then
+  set the rule: only the Registry whose checkout aart-cli runs in can be entered, any other says to
+  run aart-cli there, and the Registry here is marked.
+- **Choices.**
+  - The Registry here is the workspace row (`QA-098`), marked `● you are here`
+    (`tui_maintainer.HERE`). Its contents are read from its checkout by
+    `io/maintainer_views._registry_here` into `MaintainerViews.registry_here`, with the checkout as
+    its own approved state, so promotions not pushed yet are in its history. A subscription and
+    the checkout are not matched to each other (B-042): a subscription with the checkout's name
+    stays a row of its own, and its status points to the marked row.
+  - Screen 46 binds only `n` Initialize, offered while no row is the workspace. The navigation graph
+    from 46 is reduced to Initialize and 46k, so no binding can reach the rest from the list.
+  - 46k is the workspace: its rows are the workspace row, so Push's readiness reads as on the list.
+    It binds `c`, `b`, `s`, `u`, `p` and `o`. Its title is `This Registry`, and no focus is needed:
+    `_back_focus`'s 46k rule is removed. Collections (51, 52) are the Registry here's.
+  - The workflow routes for Bulk Promotion, Collections, Rebuild and Scan start at 46k.
+  - The list's status says to open the Registry here instead of pointing to Rebuild.
+- **Consequences.** A finished promotion, rebuild, push or adoption still lands on screen 46, and
+  the next command is one Enter away. A subscribed Registry's history is seen from its own checkout.
+
+## D-490 — A running action beats, and `mcp test` reads generated schemas (CP-46)
+
+Product Specification §203, INV-305, INV-306. Refines `QA-082`, §170.3 and B-174.
+
+- **What was reported.**
+  - The owner asked for a sign that an install is still working. The running-installation frame
+    (`QA-082`) is redrawn only when the action reports a step, so a long step looked hung.
+  - An enterprise agent ran `consume mcp test local-sooperset/mcp/sooperset-mcp-atlassian@1.0.0`
+    and got `unsupported JSON Schema keyword 'minimum' at $.limit` from a working fastmcp server.
+    Every fastmcp output schema also carries `x-fastmcp-wrap-result`.
+- **Choices.**
+  - `tui_consumer.Heartbeat` is a context manager around `action_handler.handle` for
+    PREPARE_ACTION and EXECUTE_ACTION. Its own thread calls `terminal.tick` every 0.2 s with
+    `heartbeat_frame`, which appends `<mark> working <s>s` to the heading. `_progress_redraw` hands
+    it each reported frame (`show`), so it beats over the step reached. A terminal without `tick`
+    (the text terminal, test doubles) is left alone.
+  - `tui._CursesTerminal` and `tui._CursesHandover` share one lock. Every draw takes it. The
+    handover holds it for the whole loan, and `tick` draws only on a non-blocking acquire, so a beat
+    during a credential prompt is skipped, never queued.
+  - `application/mcp_smoke` applies the numeric, length, item and property bounds. It applies
+    `anyOf`, `oneOf` (exactly one) and `allOf`, and a list of types. A non-integer count limit is
+    reported as unsupported. `format`, `contentEncoding`, `contentMediaType` and any `x-` keyword
+    are annotations. `pattern` and `$ref` stay unsupported: a regular-expression dialect and
+    reference resolution are not in a zero-dependency validator. An unsupported keyword inside a
+    branch is reported as unsupported, not as a failed branch.
+- **Not addressed.** The same report showed opencode failing with ENOENT on `posix_spawn` of
+  `…/.opencode/aart-cli/mcp/…/launch.sh` for other MCPs (B-239).
+
+## D-491 — Test MCP finds a user installation from a project, and says why it failed (CP-46)
+
+Product Specification §203 addendum, INV-307. Refines §170.4 and D-395.
+
+- **What was reported.** In the TUI, started in a project, `t` on an MCP installed for the user said
+  `local-sooperset/mcp/sooperset-mcp-atlassian@1.0.0#opencode#user#/Users/… has no recorded MCP
+  installation to test`. A test whose preparation or run raised said only that it could not run.
+- **Choices.**
+  - `LocalConsumerActions._prepare_installed_mcp_test` groups the chosen keys by the scope and root
+    each key names and asks `McpTestPort.installations` once per group. It no longer uses the
+    session host's scope and harness root.
+  - `consumer_actions._why(error)` renders an exception as `Type: message` on one line of at most
+    200 characters. It is appended to the three MCP test notices that caught an exception. The
+    messages come from aart-cli's own readers and the launcher's spawn; no value is in them.
+- **Not addressed.** Nothing new: B-239 still covers opencode's ENOENT on spawning `launch.sh`.
+
+## D-492 — A credential may declare its length; a cut value is entered another way (CP-46)
+
+Product Specification §204, INV-308, INV-309. Refines §91, §172, §201 and B-015.
+
+- **What was reported.** An enterprise agent found `jira-api-token` stored as 128 characters, where
+  Atlassian tokens start `ATATT` and have about 190. `confluence-api-token` held 1 character.
+- **What was measured.** `/usr/bin/security add-generic-password -w` imports `_getpass`. In a pty,
+  values of 129 and 190 characters were stored as 128. The rest of the line is discarded, not
+  carried into the next prompt, so the 1-character value has another cause (B-241).
+- **Choices.**
+  - The check is a length, not a pattern. A length is measured by the provider in child processes
+    (`stored_length`), and a pattern would need the value. `domain.credentials.CredentialLength`
+    holds `min_length`, `max_length` and `message`. `checked_observation` turns a PRESENT, measured,
+    non-placeholder observation outside the bounds into INVALID with the reason as its detail.
+  - `SecretInput.validation` holds it, and `input_to_data` writes it only when declared, so no
+    published digest moves. `protocol/authoring._parse_credential_length` refuses an empty object,
+    a bound below 1 or not an integer, `min_length` above `max_length`, and unknown fields.
+  - `InstallationReceipt.credential_checks` records it per credential reference, written only when
+    non-empty and refused when it names a credential the receipt does not record.
+    `PlannedInstallation.credential_checks` fills it from the declared and bound secret inputs.
+  - `CredentialObservation` gains `length` and `clipped`. `MacOsKeychainProvider.inspect` sets them
+    from `stored_length`, with `clipped` meaning exactly `PROMPT_CEILING_BYTES`.
+    `read_installed_inspections` applies each receipt's checks, so the installation is DIVERGENT and
+    the credential invalid everywhere the machine is read. `credential_state` says
+    `Not configured: …`, and doctor says `… is not configured: …`.
+  - `io/credential_entry` is the port: `CredentialEntryFallback.enter(reference, reason=) ->
+    EntryOutcome` (ENTERED, CANCELLED, UNAVAILABLE). `enter_another_way` tries each until one is not
+    UNAVAILABLE.
+    - `MacOsDialogEntry` runs `osascript -l JavaScript -` with the script on stdin. The script shows
+      a hidden-answer dialog, hex encodes the UTF-8 answer, and writes `delete-generic-password …`
+      then `add-generic-password … -X <hex>` to `/usr/bin/security -i` through an `NSPipe`.
+      Everything aart-cli puts in the script is a JSON literal. `-U` is not used (it raises an
+      authorization dialog). The item is made by `security`, like the prompt path's. A real run
+      against a temporary keychain stored 190 ASCII characters and one two-byte character whole.
+    - `KeychainAccessInstructions` writes the steps, opens Keychain Access, and waits for Enter or
+      `s`.
+  - `CredentialEffectInterpreter` takes `lengths` and `fallbacks`. After `provider.store`, inside
+    the terminal loan, it runs the chain when the value fails its declared length or, with none
+    declared, is clipped. Then it inspects again. A value still unfit is returned as
+    `… is invalid: <why>`, so an install goes on. `_execute_credential_action` fails by name instead.
+  - The real chain is composed where the real Keychain is: `tui._canonical_consumer_actions` when no
+    providers were injected, and `commands.marketplace._credential_entry` (stderr) for the CLI.
+    Injected providers get no chain unless one is passed, so no test can open a dialog. Doctor now
+    reads stores through `marketplace._credential_providers`, as the other commands do.
+
+## D-493 — `mcp test` reads every schema FastMCP generates (CP-46)
+
+Product Specification §205, INV-310. Refines §170.3, §203 and D-490.
+
+- **What was reported.** After D-490 the enterprise run still refused `jira_get_issue`:
+  `unsupported JSON Schema keyword 'pattern' at $.issue_key`. The owner asked for FastMCP
+  compatibility, and for sooperset's mcp-atlassian exactly.
+- **What was measured.** `tools/list` was read over stdio from mcp-atlassian 0.23.1 (FastMCP 3.4.11,
+  98 tools) and 0.21.1 (FastMCP 2.14.7, 73 tools), installed in a scratch venv. Their schemas use
+  `type`, `description`, `properties`, `required`, `default`, `additionalProperties`,
+  `x-fastmcp-wrap-result`, `minimum`, `maximum`, `items` and `pattern` (two patterns, 36 places).
+  A FastMCP server written for the test, taking the Pydantic shapes real servers use, added
+  `$ref`/`$defs`, `discriminator`, `prefixItems`, `propertyNames`, `patternProperties`,
+  `additionalProperties` as a schema, and numbers with a fraction (`minimum: 0.0`). FastMCP 2.14
+  itself fails on a recursive model (`Circular reference detected`), so that tool is 3.4 only.
+- **Choices.**
+  - `pattern` uses Python `re` with `re.ASCII`, searched, not anchored. `_ecma_ends` makes each `$`
+    outside a class `\Z`, because Python's `$` also matches before a final newline. What Python
+    cannot compile (`\p{L}`, `(?<name>…)`) is refused as unsupported rather than read differently.
+    Other ECMA-262 differences (`.` and `\r`, a Unicode `\s`) are left: no generated schema uses
+    them.
+  - `$ref` reads only `#` and `#/…` JSON Pointers into the tool's own schema. `_Reading` carries the
+    root and the references followed since the value last moved; a reference met again before the
+    value moves is refused, so a self-reference cannot loop, and a recursive model is checked at
+    every depth of the value.
+  - `_members` applies `properties`, `patternProperties`, `additionalProperties` (bool or schema) and
+    `propertyNames`; `_items` applies `prefixItems`, then `items` to the rest.
+  - `McpNumber(Fraction)` holds a server's number with a fraction, or a whole one beyond the
+    protocol's 64-bit integers. `io/mcp_smoke._freeze` no longer round-trips through `parse_json`,
+    which forbids every float: it reads `json.loads` output itself, with the same depth and string
+    bounds, `Fraction(repr(value))` for the decimal written, a whole fitting number as `int`, and a
+    non-finite one refused. The trees carry it with one `cast`; only the validator and
+    `installed_smoke._plain` (as `float`) read it. Protocol JSON is unchanged.
+  - A refusal before invocation is returned without `_annotate`: FastMCP's banner on stderr buried
+    the line naming the keyword. Every process failure still carries stderr.
+  - No dependency is added: `re`, `fractions` and `functools` are standard library.
+- **Fixtures.** `tests/fixtures/mcp/` keeps the four `tools/list` answers (name and schemas only).
+  A test builds, for every tool, arguments that fill every property and an answer for every output
+  schema; a pattern without an example in its table fails, so a refreshed fixture cannot add one
+  nothing exercises.
+- **Live evidence (2026-10-28, local).** aart-cli's own `execute_stdio_smoke` against the real
+  servers, with a stand-in Jira Server on 127.0.0.1: `jira_search`, `jira_get_issue` and
+  `jira_get_project_issues` PASS on both versions; `jira_get_issue` with `proj-1` is refused with
+  `value at $.issue_key does not match pattern`. The FastMCP shapes server PASSes a call through
+  `$ref`, a tagged union and a tuple, and its answer's `0.25` is read exactly.
+
+## D-494 — Every screen taller than the terminal scrolls (CP-46)
+
+Product Specification §206, INV-311. Extends §175 (Marketplace paging) to every screen.
+
+- **What was reported.** The owner asked for PgUp/PgDn scrolling on screen 07 with many settings,
+  07b with many credentials, the Ready summary and every screen with many items. On a 20-row
+  terminal, 07 with fifteen settings was cut after the third.
+- **Choices.**
+  - `tui_layout.screen_viewport(view, columns, height, offset, follow) -> Viewport(frame, offset,
+    paged)` is pure. It returns the frame untouched when it fits or `height` is 0. Otherwise the body
+    (`actions`, `described`, `status`, `notice` and `help`, rendered and wrapped as curses wraps
+    them) becomes the page, between `↑ N more lines above; PgUp` and `↓ N more lines below; PgDn`.
+    The room for those two lines is measured at their longest, so the frame never passes `height`.
+  - `tui_layout.scroll_window(lines, budget, offset, follow, margin)` is shared with
+    `marketplace_viewport`. It clamps to the last full page, and when following it moves the page
+    only if the `>` line is out of view, placing it `margin` lines from the top. Marketplace uses
+    margin 0, the focused offer at the top so More info stands under it, as before. Other screens
+    use 1.
+  - The state is `scroll` (≥ 0), `scroll_follows` and `scrollable`. They replace
+    `marketplace_scroll` and its -1 sentinel, with no compatibility kept. `ConsumerUiEventKind.SCROLL`
+    replaces `SCROLL_MARKETPLACE`. Page keys map to it on every screen, and searching still
+    swallows them. The step is `max(viewport_rows // 2, 1)`.
+  - `reduce_consumer_ui` resets `scroll` to 0 and follows again when the screen changes. Any other
+    event that changes the state turns following back on, except `SCROLL`, `SET_ROWS` and
+    `SET_SELECTION` (`_KEEPS_THE_PAGE`).
+  - The shell loop measures the page first without the legend's scroll key. If that already
+    overflows, it measures again with the key, because offering it makes the legend longer. It
+    stores the clamped offset and whether the frame paged. `frame()` draws `viewport()`, which picks
+    Marketplace's paging or the shared one.
+- **Evidence.** `tests/screen_scrolling_test.py` holds:
+  - a Hypothesis property: the frame fits, keeps its trail and footer, and its pages are runs of
+    the body that together cover all of it;
+  - the reducer, key and legend tests;
+  - an end-to-end run through the shared loop at 20 rows that pages screen 07's fifteen settings to
+    the last, clamps, and moves at once on PgUp.
+  - the same at screen 22a, User Variables and Credentials, after a real install; the owner reported
+    it did not scroll.
+
+  The Marketplace paging tests were moved to the new signature, and the short curses test now uses
+  22 rows: at 26, its content fits once the legend no longer always offers scrolling.
+
+
+## D-495 — A credential is entered on 07b (CP-46)
+
+Product Specification §207, INV-312. Amends §172.6 and D-487.
+
+- **What was asked.** The owner wanted the store's prompt to open on 07b when a row is chosen, with
+  the macOS dialog only for a value the prompt cut, rather than marking rows for the install to ask.
+- **Choices.**
+  - `LocalConsumerActions._ask_secret` builds the install's interpreters with `interpreters_for`
+    (interactive, the lent terminal, the row's references as `prompted_credentials`, the dialog
+    fallbacks) and applies `StoreCredential`, or `ReplaceCredential` for a row entered before in
+    this review, through each `CredentialEffectInterpreter`. It then inspects the item and asks the
+    now-public `CredentialEffectInterpreter.unfit` whether it is the credential. The same code path
+    the install would have used is reused, so the briefing, the length check and the dialog are
+    unchanged.
+  - An item `PRESENT` before this review is skipped, so 07b never overwrites or deletes somebody
+    else's value. `_entered` (raw reference → `CredentialReference`) holds only what this review
+    stored. References only: no value is held.
+  - A cancelled prompt, a value still unfit, or a refused prepare deletes every item the row stored
+    (`_forget_entered`), and `SECRET_ASKED` carries `accepted=False`.
+  - After a stored row the install is prepared again from `_install_command`, the command the held
+    review was prepared from. `SECRET_ASKED` carries the new `semantic_identity`,
+    `selection_identity` and `review_digest`, and the reducer moves the session to them. The
+    alternative, excluding 07b's items from the preflight comparison, would weaken the stale-review
+    check for every other credential.
+  - `_install_secrets` keeps an entered reference as not configured, so its row stays on 07b and can
+    be entered again.
+  - The install passes no prompted references and no handover. Every secret not entered is stored
+    as `AART_NOT_SET` (`skipped_secrets_as_placeholders=True`). On `Err` the entered items are
+    deleted; on `Ok` they are released to the installation (§208 removes them with it).
+  - `discard_secrets` (called when the session leaves the review's screens or exits) deletes the
+    entered items. Set later no longer discards anything: what was entered is kept, and the rest is
+    stored as the placeholder.
+  - Legend: `Enter value` / `Enter again`. Row state: `stored` / `not set`. Ready says the values
+    were stored on the previous screen.
+  - The CLI's `consume install` keeps §201: the store asks during the transaction.
+- **Evidence.** `tests/install_credentials_test.py` (`EnteredOn07bE2ETest`, 10 end-to-end runs on
+  both backends, and the reducer tests) and `tests/credential_terminal_handover_test.py` (the
+  install lends the terminal to nobody; a failed install deletes what 07b entered).
+
+## D-496 — Uninstall deletes the credentials of the installations it removes (CP-46)
+
+Product Specification §208, INV-313. Amends INV-185.
+
+- **What was asked.** The owner wanted an uninstall to take its credentials with it, rather than
+  leave items in the Keychain that no installation owns.
+- **Choices.**
+  - The machinery existed: `plan_removal(..., delete_credentials=True)` adds a `DeleteCredential`
+    component per receipt reference, and `configured_uninstall_action` already builds a
+    `CredentialEffectInterpreter` for deletions. `prepare_configured_uninstall` loses its
+    `delete_credentials` keyword and passes `not retained` per record. A record a Collection
+    removal narrows converges on its installed state and plans no deletion.
+  - Both callers (TUI `_prepare_uninstall`, CLI `consume uninstall`) therefore delete.
+    No flag to keep them was added: each item belongs to that installation only (D-334), so there
+    is nobody to keep it for. A machine with no adapter for the receipt's provider refuses the
+    uninstall by name, as any credential mutation does; any receipt with credentials was written
+    where that provider existed.
+  - The CLI review replaces `"credentials": "retained"` with `"credentials": {"deleted": [...]}`
+    (`ARTIFACT: INPUT`, from the `DeleteCredential` effects matched to the receipts), with no
+    compatibility kept. The TUI review already lists `credential:INPUT` among the components.
+  - The lower-level `removal_state_from_receipt` keeps its `False` default; its other callers are
+    reconciliation tests.
+- **Evidence.** `tests/install_credentials_test.py` (`UninstallDeletesTheInstallationsCredentialsE2ETest`:
+  uninstalling opencode's installation deletes its item and keeps tabnine's; placeholders leave too)
+  and `tests/credential_contract_migration_e2e_test.py` (`RemovalDeletesCredentialsTest`: the
+  review JSON and text, `consume uninstall --yes` empties the store, every receipt reference planned,
+  a narrowed record plans none).
+
+## D-497 — Scope is chosen before configuration and credentials (CP-46)
+
+Product Specification §209. Amends the order of §172.1.
+
+- **What was asked.** The owner asked for scope before configuration and credentials during an
+  install.
+- **Choices.**
+  - `install_flow_screens` and `_NAVIGATION` put 07a before 07: 05 → 07a → 07 → 07b → Ready.
+    `REQUIRED_INPUTS` no longer leads to `INSTALL_SCOPE`; `INSTALL_SCOPE` may lead to it.
+  - 07a needs no plan. `LocalConsumerActions._prepare_install` returns the form with
+    `install_scope_offers` (the pairs' scope-matrix rows, already computed by `_pair_scope_offers`
+    before preparation) and the event carries `pair_scopes`, so 07a marks each pair's starting
+    scope. `ConsumerScreens.install_scope_offers` is drawn when no plan exists.
+  - A scope chosen on 07a before the form sends the usual `PREPARE_ACTION`; the reducer now takes a
+    form event on 07a, keeping what was typed into fields that are asked again (by row).
+  - Entering 07 from 07a opens the form (`config_form_active`), as from 05.
+  - `tui_consumer._after_harnesses` replaces `_after_configuration`: 07a while a scope choice
+    exists, then 07 while inputs are unanswered, then 07b or Ready; once 07 was submitted, straight
+    to 07b or Ready. `_after_inputs` in the adapter no longer leads to 07a.
+  - `harness_column` resets to 0 when 07a is entered. It used to carry 05's harness column into
+    07a's scope columns, which the new order made visible on every install.
+- **Evidence.** `tests/install_credentials_test.py` `ScopeComesBeforeConfigurationE2ETest` (both
+  backends): the screens come in the order 05, 07a, 07, 07b with each pair marked on 07a; a scope
+  chosen before the form is where the credentials are entered; what was typed survives going back
+  to 07a and choosing another scope.
+
+## D-498 — Installed shows what an agent here reaches, and `a` shows every project (CP-46)
+
+Product Specification §210, INV-315.
+
+- **What was asked.** The owner asked for Installed, by default, to show the artifacts an agent
+  can use in the current context (the user's and this project's), with a toggle to show every
+  project's. The message was cut off after that; this is the reading reported to them.
+- **Choices.**
+  - `consumer_views.reached_from(view, project_root)` is the rule: anything but a project
+    installation is reached, and a project installation only from its own root. An empty project
+    root or an unnamed scope hides nothing, so nothing that cannot be placed disappears.
+  - `ConsumerScreens.project_root` carries `host.project_root` from `LocalConsumerActions.source`.
+    `reached` and `collections_reached` give Installed's and Updates' rows. The machine is still
+    read whole; only what is listed narrows, so `a` needs no new read.
+  - `ConsumerUiState.installed_everywhere` and `TOGGLE_EVERYWHERE` follow `d`'s pattern: two
+    bindings on `a`, `All projects` and `This project`, only the one that changes something on.
+    The shell re-reads rows after the toggle.
+  - The view status says how many are left out, and on Updates only updates are counted.
+  - `screens_from` recounts Home's installed/ready/update/attention from the reached
+    installations, so Home and the default Installed agree.
+  - Marketplace is unchanged: it lists offers. Doctor and Credentials and variables are left for
+    B-243 so this step stays the list the owner named.
+- **Evidence.** `tests/installed_reach_test.py`: Hypothesis over scope, root and project for
+  `reached_from`; rows, status and legend before and after `a` on Installed and Updates; a
+  Collection whose members are all elsewhere; a real install with one installation to the user and
+  one to the project, then Installed opened from another project lists the user's only, `a` lists
+  both, and Home counts one.

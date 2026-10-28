@@ -92,9 +92,10 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
             )
             seen = []
             for offset in range(0, 250):
-                paged, actual = marketplace_viewport(
-                    view, columns=width, height=height, offset=offset
+                shown = marketplace_viewport(
+                    view, columns=width, height=height, offset=offset, follow=False
                 )
+                paged, actual = shown.frame, shown.offset
                 lines = wrap_lines(render(paged), width=width + 1)
                 self.assertLessEqual(len(lines), height)
                 self.assertTrue(all(len(line) <= width for line in lines))
@@ -104,26 +105,26 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
             shown = flat("".join(seen))
             for detail in details:
                 self.assertIn(flat(detail), shown)
-            empty, offset = marketplace_viewport(
-                Frame(keys=("[q] Quit",)), columns=width, height=height, offset=-1
+            empty = marketplace_viewport(
+                Frame(keys=("[q] Quit",)), columns=width, height=height, offset=0, follow=True
             )
-            self.assertEqual(offset, 0)
-            self.assertIn("[q] Quit", render(empty))
+            self.assertEqual(empty.offset, 0)
+            self.assertIn("[q] Quit", render(empty.frame))
 
         holds()
 
-    def test_explicit_top_offset_does_not_refollow_a_later_focused_row(self):
+    def test_a_turned_page_does_not_refollow_a_later_focused_row(self):
         from aart_cli.tui_layout import Frame
         from aart_cli.tui_marketplace_rows import marketplace_viewport
 
         actions = tuple((">" if i == 25 else " ") + f" [ ] offer-{i:02d}" for i in range(40))
         view = Frame(trail=("Marketplace",), actions=actions, keys=("[q] Quit",))
-        automatic, at = marketplace_viewport(view, columns=80, height=20, offset=-1)
-        top, offset = marketplace_viewport(view, columns=80, height=20, offset=0)
-        self.assertEqual(offset, 0)
-        self.assertGreater(at, 0)
-        self.assertTrue(automatic.actions[0].startswith(">"))
-        self.assertEqual(top.actions[0], actions[0])
+        automatic = marketplace_viewport(view, columns=80, height=20, offset=0, follow=True)
+        top = marketplace_viewport(view, columns=80, height=20, offset=0, follow=False)
+        self.assertEqual(top.offset, 0)
+        self.assertGreater(automatic.offset, 0)
+        self.assertTrue(automatic.frame.actions[0].startswith(">"))
+        self.assertEqual(top.frame.actions[0], actions[0])
 
     def test_empty_marketplace_has_one_message_and_grid_absent_facts_are_blank(self):
         from aart_cli.application.consumer_views import PresentationProfile
@@ -175,7 +176,7 @@ class ReadableMarketplaceRowsTest(unittest.TestCase):
                 self.painted = []
 
             def getmaxyx(self):
-                return 26, 27
+                return 22, 27
 
             def addstr(self, row, column, text):
                 self.painted.append(text)

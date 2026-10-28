@@ -94,11 +94,12 @@ class CollectionInputsShellTest(unittest.TestCase):
                 RIGHT,
                 SPACE,
                 ENTER,
+                # 07a as it is (§209).
+                ENTER,
                 # 07: GitHub's default cleared, Jira's kept; Set later, above the first value; the
-                # dependency manager and 07a as they are.
+                # dependency manager as it is.
                 *((BACKSPACE,) * len("acme")),
                 UP,
-                ENTER,
                 ENTER,
                 ENTER,
                 # 07b: Set later, above the first credential; then Ready.

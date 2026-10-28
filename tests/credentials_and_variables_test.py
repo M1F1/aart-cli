@@ -113,7 +113,7 @@ class CredentialWordsTest(unittest.TestCase):
             (_credential(), "Configured securely"),
             (_credential(placeholder=True), PLACEHOLDER_STATE),
             (_credential("absent", ("verify", "set")), "Absent"),
-            (_credential("invalid"), "Invalid"),
+            (_credential("invalid"), "Not configured"),
             (_credential("unknown", ("verify",)), "Unknown"),
         ):
             with self.subTest(health=view.health, placeholder=view.placeholder):

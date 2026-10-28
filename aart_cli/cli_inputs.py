@@ -111,6 +111,7 @@ def run(request: Request) -> int:
         today=date.today(),
         credential_providers=marketplace._credential_providers(),
         handover=BriefingHandover(stream=sys.stderr),
+        credential_entry=marketplace._credential_entry(),
     )
     try:
         if isinstance(composed, Err):

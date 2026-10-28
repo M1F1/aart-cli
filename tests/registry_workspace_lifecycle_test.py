@@ -37,6 +37,7 @@ from aart_cli.application.maintainer_views import (
 )
 from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, frame
 from aart_cli.tui_maintainer import (
+    HERE,
     maintainer_workspace_detail,
     maintainer_workspace_row,
 )
@@ -123,13 +124,14 @@ class RegistryWorkspaceFrameTest(TestCase):
 
     def test_the_row_is_the_name_and_the_sha_that_tells_two_checkouts_apart(self) -> None:
         self.assertEqual(
-            maintainer_workspace_row(self._view(), selected=True), "> manual-registry  eed6c4f"
+            maintainer_workspace_row(self._view(), selected=True),
+            f"> manual-registry  eed6c4f  {HERE}",
         )
 
     def test_a_checkout_with_no_commit_still_has_a_row_to_stand_on(self) -> None:
         row = maintainer_workspace_row(project_registry_workspace("manual-registry"))
 
-        self.assertEqual(row, "  manual-registry")
+        self.assertEqual(row, f"  manual-registry  {HERE}")
 
     def test_the_description_names_the_repository_and_the_branch(self) -> None:
         described = maintainer_workspace_detail(self._view())
@@ -242,7 +244,7 @@ class RegistryMaintainerScreenTest(TestCase):
         source, state = self._state()
 
         self.assertEqual(state.rows[0], REGISTRY_WORKSPACE_ROW)
-        self.assertEqual(source.actions(state)[0], "> manual-registry  eed6c4f")
+        self.assertEqual(source.actions(state)[0], f"> manual-registry  eed6c4f  {HERE}")
 
     def test_a_project_that_publishes_nothing_has_no_such_row(self) -> None:
         source, state = self._state(workspace=False)
@@ -266,12 +268,12 @@ class RegistryMaintainerScreenTest(TestCase):
         self.assertNotIn("Repository:", drawn)
         self.assertIn("> manual-registry  eed6c4f", drawn)
 
-    def test_enter_on_the_registry_row_opens_nothing_it_is_not(self) -> None:
-        """Screen 46's Enter assembles a bulk promotion, which this row is not the subject of."""
+    def test_enter_on_the_registry_row_opens_the_registry_here(self) -> None:
+        """INV-303: the row aart-cli stands on is the one Registry that opens, as screen 46k."""
 
         source, state = self._state()
 
-        self.assertIsNone(source.detail(state))
+        self.assertIs(source.detail(state), MaintainerScreen.REGISTRY_DETAILS)
 
     def test_only_a_ready_workspace_row_carries_the_push_identity(self) -> None:
         source, state = self._state()
@@ -352,10 +354,12 @@ class ThreeFactsScreen46KeepsApartTest(TestCase):
         source, accepted = self._source()
 
         drawn = "\n".join(frame(source, self._state(source)))
+        listed = self._state(source)
+        subscribed = replace(listed, cursor=listed.rows.index("company"))
 
-        # The approved state read from the registry's default branch, abbreviated as the row
-        # describes it.
-        self.assertIn(accepted.snapshot[: len("sha256:") + 12], drawn)
+        # The approved state read from the registry's default branch, which the subscription's
+        # row describes (§202): it is never the one opened as the Registry here.
+        self.assertIn(accepted.snapshot, "\n".join(frame(source, subscribed)))
         # The worktree currently under maintenance: a different commit and a different digest,
         # which it states rather than borrowing either of the accepted ones.
         self.assertIn("sha256:" + "b" * 64, drawn)

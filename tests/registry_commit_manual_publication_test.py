@@ -153,8 +153,8 @@ class RegistryMaintainerOwnsPushTest(unittest.TestCase):
 
     def test_p_on_a_ready_local_workspace_opens_the_separate_push_review(self) -> None:
         state = dataclasses.replace(
-            _on(MaintainerScreen.REGISTRY),
-            rows=(REGISTRY_WORKSPACE_READY_ROW, "connected-registry"),
+            _on(MaintainerScreen.REGISTRY_DETAILS),
+            rows=(REGISTRY_WORKSPACE_READY_ROW,),
             cursor=0,
         )
 
@@ -174,9 +174,15 @@ class RegistryMaintainerOwnsPushTest(unittest.TestCase):
         self.assertIs(commands[0].action, ConsumerActionKind.REGISTRY_PUSH)
 
     def test_p_is_absent_on_a_connected_snapshot_or_unready_workspace(self) -> None:
-        for row in ("connected-registry", "registry-workspace"):
-            with self.subTest(row=row):
-                state = dataclasses.replace(_on(MaintainerScreen.REGISTRY), rows=(row,), cursor=0)
+        # INV-304: the list pushes nothing, ready or not; the Registry here pushes once ready.
+        cases = (
+            (MaintainerScreen.REGISTRY, "connected-registry"),
+            (MaintainerScreen.REGISTRY, REGISTRY_WORKSPACE_READY_ROW),
+            (MaintainerScreen.REGISTRY_DETAILS, "registry-workspace"),
+        )
+        for screen, row in cases:
+            with self.subTest(screen=screen, row=row):
+                state = dataclasses.replace(_on(screen), rows=(row,), cursor=0)
                 self.assertIsNone(key_event("p", state))
                 self.assertNotIn("Push", {item.label for item in key_bindings(state)})
 
@@ -262,7 +268,9 @@ class RegistryMaintainerOwnsPushTest(unittest.TestCase):
                 self.assertEqual(recorded.registry_commit_subject, subject)
                 ready = dataclasses.replace(
                     recorded,
-                    session=dataclasses.replace(recorded.session, screen=MaintainerScreen.REGISTRY),
+                    session=dataclasses.replace(
+                        recorded.session, screen=MaintainerScreen.REGISTRY_DETAILS
+                    ),
                     rows=(REGISTRY_WORKSPACE_READY_ROW,),
                     cursor=0,
                 )

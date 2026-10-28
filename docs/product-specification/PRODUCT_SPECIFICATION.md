@@ -246,13 +246,7 @@ Describes **which artifacts, requirements, remediations, and effects are permitt
 Conceptually:
 
 ```python
-type Artifact = (
-    SkillArtifact
-    | McpArtifact
-    | GuidelineArtifact
-    | HookArtifact
-    | MemoryArtifact
-)
+type Artifact = SkillArtifact | McpArtifact | GuidelineArtifact | HookArtifact | MemoryArtifact
 ```
 
 Keep semantic kind separate from concrete format and protocol:
@@ -349,10 +343,7 @@ Distribution/runtime strategy remains separate.
 Suggested decomposition:
 
 ```python
-type McpTransport = (
-    StdioTransport
-    | StreamableHttpTransport
-)
+type McpTransport = StdioTransport | StreamableHttpTransport
 
 type McpDistribution = (
     SourceTreeDistribution
@@ -640,10 +631,7 @@ Potential credential mutations:
 
 ```python
 type CredentialEffect = (
-    StoreCredential
-    | ReplaceCredential
-    | DeleteCredential
-    | VerifyCredentialAvailability
+    StoreCredential | ReplaceCredential | DeleteCredential | VerifyCredentialAvailability
 )
 ```
 
@@ -699,9 +687,7 @@ VerifyCredential
 or one algebraic operation:
 
 ```python
-CredentialMutation(
-    mode=Create | Replace | Delete
-)
+CredentialMutation(mode=Create | Replace | Delete)
 ```
 
 The explicit ADT variants are likely clearer.
@@ -933,13 +919,7 @@ Avoid making arbitrary shell transformation the only model.
 Possible future ADT:
 
 ```python
-type CredentialTransform = (
-    Identity
-    | Prefix
-    | JsonField
-    | Base64Decode
-    | Template
-)
+type CredentialTransform = Identity | Prefix | JsonField | Base64Decode | Template
 ```
 
 For example:
@@ -1589,8 +1569,9 @@ entries and four distinct provider items, even when the user types identical sec
 neither compares secret values nor requires the upstream service to issue four different tokens.
 
 Replacement, verification and deletion address exactly one installation's credential. The UI shows
-its artifact, harness, scope and target root before mutation. A retained credential after uninstall
-keeps that owner; it does not become a globally selectable credential for another installation.
+its artifact, harness, scope and target root before mutation. Uninstall deletes the removed
+installation's credentials with it (§208); a credential never becomes a globally selectable
+credential for another installation.
 Compatible inputs may be retained during update or repair only within the same complete identity.
 
 Non-interactive execution supplies separate target-qualified input bindings through an approved
@@ -1706,8 +1687,7 @@ def plan_install(
     policy: EffectivePolicy,
     platform: PlatformFacts,
     requirement_status: RequirementStatusSet,
-) -> Result[InstallPlan, PlanningError]:
-    ...
+) -> Result[InstallPlan, PlanningError]: ...
 ```
 
 Environment inspection may be effectful.
@@ -1912,20 +1892,17 @@ Possible interface:
 
 ```python
 class ArtifactImporter(Protocol):
-    def probe(self, source: SourceSnapshot) -> ProbeResult:
-        ...
+    def probe(self, source: SourceSnapshot) -> ProbeResult: ...
 
     def discover(
         self,
         source: SourceSnapshot,
-    ) -> tuple[ForeignArtifact, ...]:
-        ...
+    ) -> tuple[ForeignArtifact, ...]: ...
 
     def compile(
         self,
         artifact: ForeignArtifact,
-    ) -> CanonicalArtifact:
-        ...
+    ) -> CanonicalArtifact: ...
 ```
 
 ---
@@ -4119,10 +4096,7 @@ aart-cli builds the installation projection.
 aart-cli should model runtime inputs as at least two separate classes:
 
 ```python
-type RuntimeInput = (
-    SecretInput
-    | ConfigInput
-)
+type RuntimeInput = SecretInput | ConfigInput
 ```
 
 ## 92.1 SecretInput
@@ -4269,18 +4243,10 @@ Conceptually:
 
 ```python
 type InputValueSource = (
-    SecretProviderReference
-    | PersistedConfigValue
-    | PromptedValue
-    | PolicyProvidedValue
+    SecretProviderReference | PersistedConfigValue | PromptedValue | PolicyProvidedValue
 )
 
-type ProcessBinding = (
-    CliArgumentBinding
-    | EnvironmentBinding
-    | FileBinding
-    | StdinBinding
-)
+type ProcessBinding = CliArgumentBinding | EnvironmentBinding | FileBinding | StdinBinding
 ```
 
 Example:
@@ -4593,6 +4559,7 @@ Possible type sketch:
 class SecretReference:
     input_id: str
     provider: CredentialProviderRef
+
 
 @dataclass(frozen=True)
 class ConfigValue:
@@ -4910,18 +4877,9 @@ For example, `requirements.txt` describes dependency input. It does not require 
 Conceptually:
 
 ```python
-type PythonDependencySpec = (
-    RequirementsFile
-    | PyProjectSpec
-    | PoetryProjectSpec
-    | UvProjectSpec
-)
+type PythonDependencySpec = RequirementsFile | PyProjectSpec | PoetryProjectSpec | UvProjectSpec
 
-type PythonDependencyInstaller = (
-    PipInstaller
-    | UvInstaller
-    | PoetryInstaller
-)
+type PythonDependencyInstaller = PipInstaller | UvInstaller | PoetryInstaller
 ```
 
 The artifact declares the dependency specification. The aart-cli environment/platform/profile/policy selects a compatible installer.
@@ -5288,15 +5246,13 @@ type InstallStage = (
 The preferred transition shape is:
 
 ```python
-def transition(state: AppState, event: UiEvent) -> AppState:
-    ...
+def transition(state: AppState, event: UiEvent) -> AppState: ...
 ```
 
 or, where commands/effects must be emitted:
 
 ```python
-def transition(state: AppState, event: UiEvent) -> tuple[AppState, tuple[UiCommand, ...]]:
-    ...
+def transition(state: AppState, event: UiEvent) -> tuple[AppState, tuple[UiCommand, ...]]: ...
 ```
 
 The transition itself should remain pure. Commands are interpreted at the edge.
@@ -8685,9 +8641,9 @@ Uninstall planning must respect the ownership graph. Removing a Collection remov
 longer required by any reason for that exact installation owner. Retained installations carry a
 user-facing explanation; other targets remain independent.
 
-Credentials are retained by default when their owning installation is removed unless the user
-explicitly chooses credential deletion or policy requires another outcome. Retention does not
-allow another installation to adopt the item.
+**Amended 2026-10-28 by D-496 (§208):** removing an installation deletes its own credential
+items with it. An installation that a Collection removal narrows, rather than removes, keeps them.
+No other installation can adopt an item.
 
 ---
 
@@ -8745,9 +8701,9 @@ Ready/Update/Attention/Broken while detailed technical assessment remains progre
 compensatable, update failure should attempt to restore the previous verified working state and
 report whether restoration succeeded.
 
-**INV-185 — Credential cleanup is explicit.** Uninstall must not silently delete credentials merely
-because their final known artifact dependency disappeared; deletion is a separate explicit/policy
-governed mutation.
+**INV-185 — Credential cleanup is explicit.** *Amended by §208 (D-496).* An uninstall review
+names every credential it deletes. It deletes exactly the items of the installations it removes,
+and no other.
 
 **INV-186 — Collection health derives from member state.** Collection status must reflect relevant
 member health without hiding which member requires attention.
@@ -8977,7 +8933,7 @@ Updates support multi-selection. Major updates receive extra attention. New inpu
 
 ### 18–19 Uninstall
 
-Uninstall respects ownership. Collection removal deletes only artifacts no longer required/owned elsewhere and explains what is retained and why. Credentials are retained by default unless explicitly deleted or policy says otherwise.
+Uninstall respects ownership. Collection removal deletes only artifacts no longer required/owned elsewhere and explains what is retained and why. An uninstall deletes the removed installations' own credentials, and its review says so (§208).
 
 ### 20 Verify / Repair
 
@@ -10606,8 +10562,8 @@ There is no global input pool, automatic value propagation, cross-target prefill
 button, shared credential picker or explicit sharing option. Input guidance may be displayed once,
 but each target's fields and owner remain visible. A single bulk review preserves all four owners.
 Compatible values may be retained during update/repair of an existing identical owner; that never
-satisfies another installation's new-input requirements. Uninstall credential retention follows
-the existing explicit cleanup policy while preserving the original owner.
+satisfies another installation's new-input requirements. Uninstall deletes only the
+removed installation's own credentials (§208).
 
 In non-interactive CI, each required binding must be supplied separately with its installation
 identity through approved configuration input channels and secret providers. No secret enters the
@@ -11012,14 +10968,16 @@ go through the artifacts one at a time.
 
 ## 172.1 The flow
 
+**Amended 2026-10-28 by D-497 (CP-46, §209):** 07a Scope comes before 07 Configuration.
+
 ```text
 Marketplace
    ↓
 05 Harnesses            one set of harnesses per artifact
    ↓
-07 Configuration        [only if needed, optional]  one set of answers per artifact
-   ↓
 07a Scope               [only if a choice exists]  project or user per artifact and harness
+   ↓
+07 Configuration        [only if needed, optional]  one set of answers per artifact
    ↓
 07b Credentials         [only if needed, optional]  entered once per artifact, or skipped
    ↓
@@ -11092,6 +11050,10 @@ one review digest. It holds the mutation lease of every scope root it writes (ac
 order), and each harness configuration is written under its own scope's root.
 
 ## 172.6 07b Credentials
+
+**Amended 2026-10-28 by D-495 (CP-46, §207):** Enter on a credential lets the store's prompt ask
+for it on 07b, at once, not while installing. The bullets below on marking and on prompting during
+the transaction are superseded by §207.
 
 **Amended 2026-10-26 by D-487 (CP-45, §201):** 07b no longer reads a credential. It decides which
 credentials the credential store's own prompt asks for while installing, as `consume install` does.
@@ -11432,6 +11394,7 @@ Details screen and extends §173.8.
   artifact remain clear; nothing requires opening another view to recover a truncated cell.
   When wrapping exceeds the terminal height, PgUp/PgDn scroll the content while headings and
   the navigation footer remain available; moving between offers keeps the focused row visible.
+  §206 gives every other screen the same paging.
 
 **INV-273 — Marketplace details stay with the offer.** Everything the retired Artifact Details
 screen showed is available under More info on the focused Marketplace artifact, without losing
@@ -12164,6 +12127,9 @@ Status: **ACCEPTED 2026-10-26 (D-484)**, on the owner's request (CP-45). Install
 listed the whole coordinate and the harness in one cell, wrapped long cells, and had no More info
 for the row under the cursor. This refines §173.6, §173.8 and §184, and applies §196 to them.
 
+**Amended 2026-10-28 by D-498 (CP-46, §210):** Installed and Updates list by default what an
+agent here reaches, the user's installations and this project's; `a` lists every project's.
+
 - **Four columns by default:**
   - `Artifact` is `name@version`;
   - `Type` is the same word Marketplace uses, and `Collection` for a Collection;
@@ -12237,10 +12203,324 @@ Status: **ACCEPTED 2026-10-26 (D-486)**, on the owner's request (CP-45, B-236). 
   terminal, or to pass `--set-later` and set each one later with `consume inputs set-credential`.
 - **`--set-later` is unchanged.** It stores the `AART_NOT_SET` placeholder in each credential's item
   and asks nothing (§172.3).
-- **The TUI does the same.** 07b marks which credentials the store asks for while installing, and
-  never reads one (§172.6, D-487).
+- **The TUI does the same.** 07b lets the store ask for a credential when its row is chosen, and
+  never reads one (§172.6, §207, D-495).
 
 **INV-302 — Installing never reads a credential.** No flag, argument, environment variable or
 screen gives `consume install`, `consume update` or the TUI's install flow a credential's value. Each credential the run
 needs is either stored by the credential store's own prompt in a terminal, or left as the
 placeholder under `--set-later`. Without a terminal, a run that needs the prompt changes nothing.
+
+# 202. Only the Registry here opens, and its commands are there
+
+Status: **ACCEPTED 2026-10-27 (D-488, D-489)**, on the owner's report and their review of it
+(CP-46). This refines §164.7, §164.8 and §190.
+
+With a large terminal font, the Recent promotions of one Registry on screen 46 pushed the next
+Registry off the screen, so the list of Registries could not be read as a list. And the commands on
+the list looked as if they acted on the Registry under the cursor, when Initialize, Rebuild, Scan
+Repository, Check upstream, Push and Collections act on the Registry in the directory aart-cli runs
+in, whichever row is chosen.
+
+- **The list is short.** Screen 46 shows each Registry in a few lines: its validity, its
+  diagnostics, its approved versions by kind and how many promotions it has recorded, and for a
+  subscribed Registry its working tree. Its revision, snapshot and Recent promotions are not on the
+  list.
+- **The Registry here is marked.** The Registry in the directory aart-cli runs in is the first row,
+  marked `● you are here`. What it holds is read from its checkout, promotions not pushed yet
+  included.
+- **The list acts on nothing.** Screen 46 offers no command, with one exception: where the
+  directory holds no Registry, `n` Initialize creates one, since there is nothing to open.
+- **Only the Registry here opens.** Enter on its row opens screen 46k, titled `This Registry`: its
+  row, its validity, revision, snapshot, approved versions and Recent promotions (§190), and in
+  Verbose where its checkout stands (§164.7) and every digest.
+- **Its commands are there.** Screen 46k offers `c` Candidates, `b` Rebuild, `s` Scan Repository,
+  `u` Check upstream, `p` Push when ready (§164.7) and `o` its Collections. Enter opens Bulk
+  Promotion when Ready Candidates wait. Initialize is not offered: the Registry exists.
+- **Any other Registry says where to work on it.** A subscribed Registry does not open. With the
+  cursor on it, the screen says to run aart-cli in its Registry checkout to work on it. When the
+  subscription has the name of the Registry here, the screen says so and points to the marked row.
+- **Back keeps the Registry.** Esc from 46k returns to screen 46 on the marked row. Esc from a
+  screen opened on 46k returns to 46k.
+
+**INV-303 — The Registry list holds no promotion history.** No line of screen 46 is a promotion.
+Recent promotions appear on screen 46k, the Registry in this directory opened from its row.
+
+**INV-304 — Only the Registry here is acted on.** Screen 46 offers no command acting on a Registry
+and opens no Registry but the one in the directory aart-cli runs in. Every command acting on a
+Registry is offered on screen 46k, which is that Registry.
+
+# 203. A running action shows it is working, and `mcp test` reads generated schemas
+
+Status: **ACCEPTED 2026-10-27 (D-490)**, on the owner's request and an enterprise run of
+`consume mcp test` (CP-46). This refines `QA-082` and §170.3.
+
+An install that took a while held its last frame until it finished, so a slow install could not be
+told from a hung one. Separately, `consume mcp test` refused a working fastmcp server before calling
+it, because its schemas used keywords the validator did not implement.
+
+- **A running action beats.** While an action is prepared or run, its frame's heading carries a
+  turning mark and the whole seconds taken, for example `⠹ working 12s`. The heartbeat redraws the
+  step the action last reported, so the frame keeps showing how far it got. It stops when the action
+  returns.
+- **A heartbeat never draws over a prompt.** While the terminal is lent to the credential store's
+  prompt (§201), no beat is drawn. A beat that falls during the loan is skipped, not drawn after it.
+- **`mcp test` applies a generated schema's bounds.** It applies:
+  - the bounds a schema puts on a value: `minimum`, `maximum`, `exclusiveMinimum`,
+    `exclusiveMaximum`, `multipleOf`, `minLength`, `maxLength`, `minItems`, `maxItems`,
+    `uniqueItems`, `minProperties` and `maxProperties`;
+  - the branches `anyOf`, `oneOf` and `allOf`;
+  - `type` as a list of types.
+- **Annotations and extensions are read past.** These constrain no value, so they are passed over:
+  - `format`, `contentEncoding` and `contentMediaType`, which JSON Schema 2020-12 treats as
+    annotations unless a vocabulary asserts them;
+  - every keyword starting with `x-`, which a schema producer uses for its own purposes (fastmcp
+    writes `x-fastmcp-wrap-result`).
+- **What it does not implement is still refused.** A keyword it does not apply, such as `not` or
+  `if`, is still reported as unsupported validation (§170.3), including inside a branch. §205 adds
+  `pattern`, `$ref` and the other keywords FastMCP generates.
+
+**INV-305 — A running action is never silent.** While an action is prepared or run in the TUI, its
+frame's heading shows a mark that turns and the seconds taken. No beat is drawn while the terminal
+is lent to a prompt.
+
+**INV-306 — A schema keyword is applied, read past, or refused.** `consume mcp test` applies every
+keyword it implements. It passes over an annotation or an `x-` extension, and refuses any other
+keyword as unsupported validation. No keyword is silently skipped.
+
+**Addendum (D-491).** The owner then tested an MCP installed for the user from the TUI, started in a
+project, and was told `…#opencode#user#/Users/… has no recorded MCP installation to test`. A test
+that could not run had also said only that it could not run.
+
+- **A test reads each installation where it was made.** The installation key names its scope and
+  root (§169.3). Test MCP reads the records in those, not in the scope and root of the session, so
+  an MCP installed for the user is tested from any project.
+- **A test that cannot be prepared or run says why.** The notice names what failed, for example
+  `the MCP test could not be run: OSError: …`, on one bounded line.
+
+**INV-307 — A failed MCP test says what failed.** Test MCP finds a chosen installation in the scope
+and root its key names. A test that cannot be prepared or run names the error on the screen it was
+asked on.
+
+# 204. A credential may declare its length, and a cut value is entered another way
+
+Status: **ACCEPTED 2026-10-27 (D-492)**, on an enterprise report (CP-46). This refines §91, §172
+and §201.
+
+An Atlassian API token of about 190 characters was stored as 128. macOS's
+`security add-generic-password -w` reads the value through libc `getpass`, which keeps at most 128
+characters and drops the rest without a word. Nothing reported the stored value as wrong.
+
+- **A secret may declare its length.** A secret input may carry an optional `validation` with
+  `min_length`, `max_length`, or both, and an optional one-line `message`. Each bound is a whole
+  number of at least 1, and `min_length` is not above `max_length`. A secret declares no `pattern`:
+  judging a pattern needs the value, and aart-cli never reads it.
+- **The length is measured, never the value.** The provider measures the stored value in child
+  processes (`MacOsKeychainProvider.stored_length`). Only the number reaches aart-cli. A length is
+  counted in bytes, which for the ASCII tokens services issue is characters.
+- **The receipt keeps the declaration.** An installation's receipt records each credential's
+  declared length as `credential_checks`, written only when one is declared.
+- **A value of the wrong length is not configured.** A stored value outside its declared length is
+  reported as invalid, with why, wherever credentials are read:
+  - Credentials and variables and `consume inputs list` say `Not configured: …`;
+  - `doctor` says `… is not configured: …` and is not ok;
+  - the installation needs attention.
+  The skip placeholder (§172.3) and a value whose length cannot be measured are not judged.
+- **A cut value is entered another way.** After the store's prompt, the value is checked against
+  its declared length. Without a declaration, a value exactly 128 characters long, as many as the
+  prompt keeps, is treated as cut. Such a value is entered another way while the terminal is still
+  lent. Then the provider is asked again.
+- **The other ways are adapters, tried in order.** Each is behind one port, so CI exercises the chain
+  with fakes and a way can be replaced later:
+  1. a macOS dialog with a hidden field (`osascript`). Its script UTF-8 hex encodes what was typed and
+     writes it to `security -i` through a pipe. The value is on no argv, in no file and never in
+     aart-cli;
+  2. where no dialog can be shown, instructions to add the item in Keychain Access, which is opened.
+     aart-cli waits for Enter, or `s` to leave it for now.
+- **An install is not failed by a cut value; a set is.** An install goes on and reports the
+  credential as invalid, with why. `Set credential` (TUI) and `consume inputs set-credential` fail by
+  name while the value is still the wrong length.
+
+**INV-308 — A declared credential length is judged without the value.** A secret's declared length
+is recorded on its receipt. The stored value's length is measured outside aart-cli. A value outside
+it is reported as not configured, with why, in Credentials and variables, `consume inputs list` and
+`doctor`.
+
+**INV-309 — A credential the prompt cut is entered another way.** When a stored value fails its
+declared length, or sits on the prompt's 128-character ceiling with none declared, the configured
+fallback ways are tried in order. Then the provider is asked again. No way hands the value to
+aart-cli.
+
+# 205. `mcp test` reads every schema FastMCP generates
+
+Status: **ACCEPTED 2026-10-28 (D-493)**, on the owner's request after the enterprise run of
+`consume mcp test` against sooperset's mcp-atlassian (CP-46). This refines §170.3 and §203.
+
+After §203, `jira_get_issue` was still refused before the call:
+`unsupported JSON Schema keyword 'pattern' at $.issue_key`. mcp-atlassian 0.23.1 (FastMCP 3.4) and
+0.21.1 (FastMCP 2.14) use only one keyword §203 did not apply, `pattern`, in 36 places. FastMCP
+writes more for other Pydantic types. The owner asked for aart-cli to work with FastMCP, and with
+this server exactly.
+
+- **The keywords FastMCP writes are applied.** These, with JSON Schema 2020-12 meaning:
+  - `pattern`, searched for in a string, not anchored. A pattern is ECMA-262: `\d`, `\w` and `\b`
+    are ASCII, and `$` is the end of the string, never before a final newline. A pattern Python
+    cannot read the same way, such as `\p{L}` or `(?<name>…)`, is refused as unsupported;
+  - `patternProperties`, `propertyNames`, and `additionalProperties` as a schema. A member that no
+    property or pattern names is an additional one;
+  - `prefixItems` for the leading positions of an array, with `items` for every one after them;
+  - `$ref` into the tool's own schema, as a JSON Pointer from `#`, with `$defs` and `definitions`
+    holding what it reaches. A reference anywhere else is never fetched and is refused as
+    unsupported. A reference that leads back to itself without the value moving is refused too.
+- **`discriminator` is read past.** It is OpenAPI's hint for a tagged union, and the `oneOf` beside
+  it decides which branch a value is.
+- **A server's numbers are read exactly.** aart-cli's own documents carry no number with a fraction
+  (protocol JSON forbids it). A server's schemas and answers do: FastMCP writes a `float`
+  parameter's bounds as `0.0` and `1.0`. `mcp test` reads such a number as the exact decimal the
+  server wrote, a whole one as an integer, and refuses one that is not finite. The response preview
+  shows it as written. The number never reaches protocol code.
+- **A refusal is said alone.** A call refused before invocation says only why. What the server wrote
+  to stderr while starting, such as FastMCP's banner, is added only when the process itself failed.
+
+**INV-310 — FastMCP's schemas are read.** For every tool that mcp-atlassian 0.23.1 and 0.21.1
+advertise, and for each Pydantic shape FastMCP 3.4 and 2.14 generate, a call meeting the schema is
+allowed and an answer meeting the output schema passes. A value outside a keyword FastMCP writes
+fails, naming that keyword's verdict.
+
+# 206. Every screen taller than the terminal scrolls
+
+Status: **ACCEPTED 2026-10-28 (D-494)**, on the owner's request during CP-46: "żeby można było
+scrollować" screen 07 with many settings, screen 07b with many credentials, the Ready summary, and
+every screen with many items, in both the consumer and the maintainer TUI. This extends §175's
+Marketplace paging to every screen.
+
+Only Marketplace paged. Any other screen taller than the terminal was cut at the bottom row, so
+what stood below it could be neither read nor reached.
+
+- **The body pages; the trail and the keys stay.** On a screen taller than the terminal, the trail
+  stays at the top and the footer with its keys at the bottom. Between them, a page of everything
+  else is drawn: rows, what the cursor is on, status, notices and help. Marketplace keeps its column
+  headings above its page as before.
+- **What a page leaves out is said.** A line above the page says how many lines are above it and
+  that PgUp shows them. A line below says the same of what is below and PgDn.
+- **PgUp and PgDn turn half a terminal.** Each moves the page by half the terminal's rows, at least
+  one line. The last page is clamped, so PgDn at the end changes nothing and one PgUp moves at once.
+- **The cursor is followed until a page is turned.** Moving the cursor, or any other key that
+  changes the screen, brings the focused row back into view with a line of what follows it.
+  A turned page stays where it was until then. Another screen opens at its top.
+- **The legend offers it only when it applies.** `[PgUp/PgDn] Scroll` is in the legend when the
+  screen does not fit without it, and never while searching.
+- Both TUIs run one loop, so this holds on every consumer and maintainer screen. A terminal whose
+  height is unknown pages nothing.
+
+**INV-311 — A screen taller than the terminal can be read whole.** Paging from the top with PgDn
+shows every line of the screen's body, in order, and never draws more lines than the terminal has.
+The trail and the keys are drawn on every page.
+
+# 207. A credential is entered on 07b
+
+Status: **ACCEPTED 2026-10-28 (D-495)**, on the owner's request during CP-46: the store's prompt
+opens on 07b when the row is chosen, not later during the install. This amends §172.6 and D-487.
+§201's terminal handover and §204's length check and dialog are unchanged; only when they run moves.
+
+Marking a row and being asked minutes later, inside the install, put the prompt where nobody
+expected it. A cut or cancelled value was found only after the transaction had begun.
+
+- **Enter on a row asks now.** Enter on a 07b credential lends the terminal to the credential
+  store's own prompt at once. The briefing comes first, and the prompt asks once for each
+  installation's own item (D-334). A value the prompt cut, or one that fails its declared length,
+  is asked again in the macOS dialog (§204). aart-cli never sees a value.
+- **A row is stored whole or not at all.** If a prompt is cancelled or a value still does not fit,
+  every item that row stored is deleted. The row stays `not set`, and a notice says why.
+- **An item somebody stored before this review is left alone.** It is not asked for and not
+  deleted. Enter on a row already entered in this review asks again, and replaces those items.
+- **The install is prepared again.** Storing changes the machine the review measured, so after
+  each stored row the same install is prepared again. Ready confirms that review. Without this,
+  Ready's preflight would refuse the install as changed after Review.
+- **The install asks nothing.** Every secret not entered on 07b is stored as `AART_NOT_SET` without
+  prompting (INV-261). Ready says which credentials were stored on 07b.
+- **What was entered belongs to the review until it is installed.** Leaving the review's screens,
+  quitting, or a failed install deletes what 07b stored. Set later and a successful install keep it.
+- `consume install` keeps §201's flow: the store asks during the transaction.
+
+**INV-312 — 07b's values live only as long as their install.** Every item 07b's store prompt
+created exists after the session only if the reviewed install that it was entered for completed.
+Every item that existed before the review is unchanged by 07b.
+
+# 208. Uninstall deletes the credentials of the installations it removes
+
+Status: **ACCEPTED 2026-10-28 (D-496)**, on the owner's request during CP-46: credentials that
+outlive their installation are clutter in the Keychain nobody owns. This amends INV-185 and every
+statement that an uninstall retains credentials.
+
+Every installation has its own credential items (D-334). No other installation can use them, so
+keeping them after an uninstall protected nobody.
+
+- **An uninstall deletes the removed installations' own items.** These are the values entered and
+  the `AART_NOT_SET` placeholders alike. They are deleted in the same reviewed transaction as the
+  files and the harness registration.
+- **Only what is removed.** An installation that a Collection removal narrows, because something
+  else still owns it, stays installed and keeps its credentials. Another harness's or scope's
+  installation of the same artifact is not touched.
+- **The review says so first.** The TUI's Uninstall Review lists each `credential:INPUT` among the
+  components changing, with the credential-mutation risk. `consume uninstall` reviews
+  `"credentials": {"deleted": ["ARTIFACT: INPUT", ...]}`, and as text `Credentials deleted with
+  their installations:` followed by each, or `none.`
+- A credential whose installation is already gone is still deleted from Credentials and variables,
+  as before.
+
+**INV-313 — An uninstall deletes exactly the credentials of what it removes.** After an uninstall
+completes, no credential item of an installation it removed remains. Every item of an installation
+it did not remove is unchanged.
+
+# 209. Scope is chosen before configuration and credentials
+
+Status: **ACCEPTED 2026-10-28 (D-497)**, on the owner's request during CP-46: "w trakcie instalacji
+niech scope będzie przed konfiguracją i credentialami". This amends the order of §172.1.
+
+A pair becomes one installation once its scope is known (§172.1). Its credential item is addressed
+by that scope and root (§169.4), so a credential entered on 07b (§207) should be entered for an
+installation whose place is already decided.
+
+- **The order is 05, 07a, 07, 07b, Ready.** 07a still appears only when some pair may go to more
+  than one scope, and 07 and 07b only when something is asked. The Default path still takes its
+  scope from Settings and never shows 07a (§173.7).
+- **07a needs no plan.** Its rows are the pairs' offered scopes, known once 05 is answered. Each
+  pair starts on the Settings scope, as before. Choosing a scope prepares the install again; while
+  07 is still unanswered, that preparation returns the form, and what was already typed into it
+  is kept.
+- **07a opens on its first column.** Its columns are scopes, not 05's harnesses.
+- **After 07, 07a is not asked again.** 07 goes on to 05 only while a choice of Python installer is
+  still open (D-380), then to 07b or Ready. Going back to 05 asks the scope, then the form, again.
+
+**INV-314 — A credential is entered for an installation whose place is chosen.** On every TUI
+install path, 07a, when shown, comes before 07 and 07b, and each item 07b asks for is addressed by
+the scope chosen there.
+
+# 210. Installed shows what an agent here reaches
+
+Status: **ACCEPTED 2026-10-28 (D-498)**, on the owner's request during CP-46: Installed should show
+by default the artifacts an agent has access to in the current context, with a toggle to see every
+project's. This amends §199's Installed and Updates lists and Home's counts.
+
+A project-scope installation is made into one project's root (§169.3). An agent working in another
+project cannot use it, so listing it beside this project's own read as if it could.
+
+- **By default, what is reached here.** Installed and Updates list the user's installations and
+  those of the project aart-cli runs in. An installation whose record names no scope is listed,
+  since nobody can say it is elsewhere. A session that knows no project leaves nothing out.
+- **What is left out is said.** The view's status says how many installations in other projects
+  are not shown, and that `a` shows them. Updates counts only the updates it leaves out.
+- **`a` shows every project.** The legend offers `[a] All projects`. Pressed, Installed and
+  Updates list every installation on the machine, the status says `Showing installations in every
+  project`, and the legend offers `[a] This project`. The choice lasts for the session, like `d`.
+- **A Collection goes with its members.** A Collection is listed by default when one of its
+  installed members is reached here, or when none of its members is installed at all.
+- **Home counts what Installed lists by default.** Its installed, ready, update and attention
+  counts are of the installations reached here, so its `open Updates` matches Updates.
+- Marketplace lists offers, not installations, so it is unchanged. Doctor and Credentials and
+  variables still read the whole machine (B-243).
+
+**INV-315 — Installed lists by default exactly what an agent here reaches.** Without `a`, every
+user installation and every installation of this project is listed, and no other project's
+installation is. With `a`, every installation on the machine is listed.

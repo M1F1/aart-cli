@@ -37,11 +37,12 @@ from aart_cli.application.installation_proposal import (
     PlannedPlacement,
     intended_receipt,
 )
-from aart_cli.domain.credentials import CredentialReference
+from aart_cli.domain.credentials import CredentialLength, CredentialReference
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.inputs import InputGuidance, SecretProviderReference
 from aart_cli.domain.result import Err, Ok, Result
 
+from .credential_entry import CredentialEntryFallback
 from .credentials import CredentialProviderPort
 from .execution import (
     CredentialEffectInterpreter,
@@ -77,6 +78,7 @@ def interpreters_for(
     credential_handover: TerminalHandover | None = None,
     prompted_credentials: Collection[str] = (),
     skipped_secrets_as_placeholders: bool = False,
+    credential_entry: tuple[CredentialEntryFallback, ...] = (),
 ) -> Result[tuple[EffectInterpreter, ...]]:
     """Build the interpreters `installations` are executed through, or say what is missing.
 
@@ -101,6 +103,8 @@ def interpreters_for(
     references: dict[str, list[CredentialReference]] = {}
     # What every artifact needing a reference says about it, so the prompt can be briefed (D-263).
     declared: dict[CredentialReference, list[tuple[str, InputGuidance | None]]] = {}
+    # The length each credential's artifact declares, judged as soon as it is stored (§204).
+    lengths: dict[str, CredentialLength] = {}
     for installation in installations:
         if isinstance(installation, PlannedPlacement):
             interpreters.append(FileEffectInterpreter(installation.environment))
@@ -151,7 +155,9 @@ def interpreters_for(
                 declared.setdefault(bound.source.reference, []).append(
                     (owner, bound.input.guidance)
                 )
-        for reference in intended_receipt(installation).credentials:
+        intended = intended_receipt(installation)
+        lengths.update((str(item.reference), item.length) for item in intended.credential_checks)
+        for reference in intended.credentials:
             held = references.setdefault(reference.provider.provider, [])
             if reference not in held:
                 held.append(reference)
@@ -176,6 +182,8 @@ def interpreters_for(
             guidance=guidance,
             prompted=frozenset(prompted_credentials),
             skipped_as_placeholder=skipped_secrets_as_placeholders,
+            lengths=lengths,
+            fallbacks=credential_entry,
         )
         for name in sorted(references)
     )

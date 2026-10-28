@@ -22,7 +22,7 @@ from dataclasses import dataclass, replace
 from typing import TypeAlias
 
 from aart_cli.domain.configuration_files import parse_configuration_file
-from aart_cli.domain.credentials import CredentialReference
+from aart_cli.domain.credentials import CredentialCheck, CredentialReference
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.effects import Effect
 from aart_cli.domain.harness import McpRegistration
@@ -130,6 +130,21 @@ class PlannedInstallation:
         """
 
         return self.credential_addresses or self.bound.credential_references
+
+    @property
+    def credential_checks(self) -> tuple[CredentialCheck, ...]:
+        """Each credential with the length its artifact declares for it, where one does (§204)."""
+
+        lengths = {
+            item.id: item.validation
+            for item in (*self.declared, *(bound.input for bound in self.bound.inputs))
+            if isinstance(item, SecretInput) and item.validation is not None
+        }
+        return tuple(
+            CredentialCheck(reference, lengths[reference.input])
+            for reference in self.credentials
+            if reference.input in lengths
+        )
 
     def __post_init__(self) -> None:
         if (
@@ -259,6 +274,8 @@ def intended_receipt(planned: PlannedInstallation) -> InstallationReceipt:
         configuration_files=tuple(item.record for item in planned.configuration),
         # Which installation this receipt belongs to, so the store can key by it (§169.3).
         owner=planned.owner,
+        # The lengths its artifact declares, so a later reading judges what is stored (§204).
+        credential_checks=planned.credential_checks,
     )
 
 

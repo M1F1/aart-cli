@@ -91,12 +91,12 @@ from aart_cli.consumer.runtime_requirements import (
 )
 from aart_cli.domain.credentials import ProviderState
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity, diagnostic_to_data
-from aart_cli.domain.effects import effect_to_data
+from aart_cli.domain.effects import DeleteCredential, effect_to_data
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import ArtifactCoordinate, SourceAlias
 from aart_cli.domain.inputs import InputGuidance, RuntimeInput, SecretInput
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.receipts import ArtifactReceipt
+from aart_cli.domain.receipts import ArtifactReceipt, InstallationReceipt
 from aart_cli.domain.reconciliation import DesiredState
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import (
@@ -121,6 +121,11 @@ from aart_cli.io.configured_uninstall_action import (
 from aart_cli.io.consumer_machine import (
     read_consumer_machine,
     read_installed_inspections,
+)
+from aart_cli.io.credential_entry import (
+    CredentialEntryFallback,
+    KeychainAccessInstructions,
+    MacOsDialogEntry,
 )
 from aart_cli.io.credentials import (
     CredentialProviderPort,
@@ -862,6 +867,17 @@ def _credential_providers() -> tuple[CredentialProviderPort, ...]:
     return (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
 
 
+def _credential_entry() -> tuple[CredentialEntryFallback, ...]:
+    """The other ways to enter a credential the Keychain prompt cut (§204), speaking on stderr."""
+
+    if sys.platform != "darwin":
+        return ()
+    return (
+        MacOsDialogEntry(),
+        KeychainAccessInstructions(write=lambda text: print(text, file=sys.stderr, flush=True)),
+    )
+
+
 def _command_line_sources(
     request: Request,
     prepared: PreparedConfiguredInstallation,
@@ -1208,6 +1224,7 @@ def _configured_lifecycle(
         interactive_credentials=bool(asked),
         credential_handover=BriefingHandover(stream=sys.stderr) if asked else None,
         skipped_secrets_as_placeholders=request.set_later,
+        credential_entry=_credential_entry() if asked else (),
     )
     if isinstance(completed, Err):
         return _emit_error(request, completed, operation)
@@ -1522,18 +1539,32 @@ def _configured_uninstall(request: Request, selectors: tuple[ArtifactSelector, .
         {"key": str(item.coordinate), "status": "planned", "detail": ""}
         for item in prepared.value.removals
     ]
+    # Each removed installation takes its own credential items with it (§208). Said either way,
+    # because a reader deciding about a token would otherwise have to guess.
+    deleting = {
+        effect.reference for effect in proposal.effects if isinstance(effect, DeleteCredential)
+    }
+    deleted = [
+        f"{item.coordinate}: {reference.input}"
+        for item in prepared.value.removals
+        if isinstance(item.record.receipt, InstallationReceipt)
+        for reference in item.record.receipt.credentials
+        if str(reference) in deleting
+    ]
     review_data: dict[str, object] = {
         "items": removing,
         "effects": [effect_to_data(effect) for effect in proposal.effects],
         "risks": [risk.name.lower().replace("_", "-") for risk in proposal.risks],
-        # Credentials are retained unless somebody says otherwise, and a review that stayed silent
-        # about that would leave the reader to assume the opposite.
-        "credentials": "retained",
+        "credentials": {"deleted": deleted},
     }
     review_lines = (
         f"Removing {len(removing)} artifact(s):",
         *(f"  - {item['key']}" for item in removing),
-        "Credentials: retained.",
+        *(
+            ("Credentials deleted with their installations:", *(f"  - {item}" for item in deleted))
+            if deleted
+            else ("Credentials deleted with their installations: none.",)
+        ),
     )
     if not request.yes:
         _emit(

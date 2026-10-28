@@ -152,5 +152,97 @@ class InstalledMcpTestTest(unittest.TestCase):
         self.assertNotIn(f"{_named(env, MCP, 'opencode')}", review)
 
 
+@contextlib.contextmanager
+def _installed_for_the_user():
+    """One MCP installed for the user in opencode, while aart-cli runs in a project."""
+
+    def mcp(_authored, **keywords):
+        return _published_registries(_manifest(_DECLARED), **keywords)
+
+    with mock.patch("tests.configured_install_command_e2e_test._published_registry", mcp):
+        with _environment() as env:
+            code, said = env.run(
+                "consume", "install", MCP, "--profile", "opencode", "--scope", "user", "--yes"
+            )
+            assert code == 0, said
+            yield env
+
+
+class AUserInstallationIsTestedFromAProjectTest(unittest.TestCase):
+    """§203, INV-307, D-491: the installation key says where it was installed, not where aart-cli runs.
+
+    The owner reported `…#opencode#user#/Users/… has no recorded MCP installation to test`: the
+    test looked for its records in the scope and root of the TUI's own project, so an MCP installed
+    for the user was never found, whichever row was ticked.
+    """
+
+    def test_a_user_installation_is_reviewed_and_run(self) -> None:
+        with _installed_for_the_user() as env:
+            key = compose_installation_key(MCP, "opencode", "user", str(env.home))
+            walk = InstalledMcpTestTest()
+            tested, terminal, watched = walk._walk(env, *walk._to(env, key), ord("t"), ENTER)
+
+        self.assertIs(tested.session.screen, ConsumerScreen.MCP_TEST, terminal.last)
+        self.assertNotIn("no recorded MCP installation", terminal.last)
+        self.assertIn(f"✓ {describe_installation(key)}", terminal.last)
+        self.assertIsNotNone(watched.before_run)
+
+
+class _Breaking:
+    """A tester whose `step` raises, as a launcher or a reader the test cannot use would."""
+
+    def __init__(self, real, step: str) -> None:
+        self._real, self._step = real, step
+        self.before_run = None
+
+    def __getattr__(self, name: str):
+        if name == self._step:
+
+            def broken(*_args, **_kwargs):
+                raise OSError("launch.sh: No such file or directory")
+
+            return broken
+        return getattr(self._real, name)
+
+
+class AFailedTestSaysWhyTest(unittest.TestCase):
+    """§203, INV-307, D-491: a test that cannot be prepared or run says why, on the screen it was asked on.
+
+    Only "could not be run" was drawn, so the owner saw an error with nothing to act on.
+    """
+
+    def _broken(self, env, step: str, *codes: int):
+        walk = InstalledMcpTestTest()
+        handler = _actions(env)
+        handler._mcp_test = _Breaking(_Watched(env), step)
+        terminal = _Terminal(*walk._to(env, _key(env, MCP, "opencode")), *codes)
+        with mock.patch.dict(os.environ, env.xdg, clear=False):
+            source = handler.source()
+            empty = ConsumerUiState(ConsumerSession(ConsumerScreen.INSTALLED))
+            state = ConsumerUiState(
+                ConsumerSession(ConsumerScreen.INSTALLED), rows=source.rows(empty)
+            )
+            run_consumer_shell(source, terminal, state=state, action_handler=handler)
+        return terminal
+
+    def test_a_run_that_raises_names_the_error(self) -> None:
+        with _installed() as env:
+            terminal = self._broken(env, "run", ord("t"), ENTER)
+
+        self.assertTrue(
+            terminal.screen_containing("the MCP test could not be run: OSError: launch.sh"),
+            terminal.last,
+        )
+
+    def test_a_plan_that_raises_names_the_error(self) -> None:
+        with _installed() as env:
+            terminal = self._broken(env, "plan", ord("t"))
+
+        self.assertTrue(
+            terminal.screen_containing("could not be read for a test: OSError: launch.sh"),
+            terminal.last,
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover - unittest entry point
     unittest.main()

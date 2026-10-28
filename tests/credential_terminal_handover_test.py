@@ -256,12 +256,12 @@ class HandoverReachesTheInterpreterTest(unittest.TestCase):
             with self.subTest(hop=function.__qualname__):
                 self.assertIn(parameter, inspect.signature(function).parameters)
 
-    def _install_hop(self, asked: set[str]) -> tuple[dict, object, object]:
-        """What `_execute_installation` hands `complete_configured_installation`, with 07b's marks.
+    def _install_hop(self) -> tuple[dict, object, list[str]]:
+        """What `_execute_installation` hands `complete_configured_installation` after 07b.
 
         Everything an install needs is stubbed except the hop under test: the recorder stops the
-        call the moment it has read what it was handed, so this holds the forwarding and nothing
-        about installing.
+        call the moment it has read what it was handed, so this holds the forwarding, and what a
+        failed install does with what 07b entered, and nothing about installing.
         """
 
         import types
@@ -282,17 +282,27 @@ class HandoverReachesTheInterpreterTest(unittest.TestCase):
         actions_module.complete_configured_installation = _recorder
         self.addCleanup(setattr, actions_module, "complete_configured_installation", original)
 
+        deleted: list[str] = []
+
+        class _Keeper:
+            provider = "test-keychain"
+
+            def delete(self, reference):
+                deleted.append(reference.name)
+
         loan = _Journal().handover
         actions = LocalConsumerActions.__new__(LocalConsumerActions)
         actions._terminal_handover = loan
-        actions._asked_rows = set(asked)
-        # Two rows, each answering two installations' references; only the marked ones are asked.
-        actions._secret_rows = {
-            "a/mcp/x\ttoken": (("ref-x-claude", "ref-x-opencode"), (), "test-keychain"),
-            "a/mcp/y\ttoken": (("ref-y-claude",), (), "test-keychain"),
+        actions._credential_entry = ()
+        # What 07b stored for this review: two installations' references.
+        actions._entered = {
+            name: types.SimpleNamespace(
+                name=name, provider=types.SimpleNamespace(provider="test-keychain")
+            )
+            for name in ("ref-x-claude", "ref-x-opencode")
         }
         actions._context = types.SimpleNamespace(
-            policy=None, credential_providers=(), offline=False
+            policy=None, credential_providers=(_Keeper(),), offline=False
         )
         actions._now = lambda: datetime(2026, 9, 10, tzinfo=timezone.utc)
         actions._reviewed_host = lambda: None  # type: ignore[method-assign]
@@ -309,33 +319,27 @@ class HandoverReachesTheInterpreterTest(unittest.TestCase):
         outcome = actions._execute_installation(command, pending)  # type: ignore[arg-type]
 
         self.assertEqual("refused", outcome)
-        # The marks are used once: nothing marked for this install is held for the next one.
-        self.assertEqual(set(), actions._asked_rows)
-        return recorded, loan, actions
+        self.assertEqual({}, actions._entered)
+        return recorded, loan, deleted
 
-    def test_an_install_lends_the_terminal_only_for_what_07b_marked(self) -> None:
-        """§172.6, D-487: the store's prompt asks for each marked credential while installing.
+    def test_an_install_lends_the_terminal_to_nobody(self) -> None:
+        """§207: 07b's store prompts already ran, so the install asks nobody anything.
 
-        No value is handed over in either case: there is no parameter that could carry one.
+        No value is handed over either: there is no parameter that could carry one.
         """
 
-        recorded, loan, _ = self._install_hop({"a/mcp/x\ttoken"})
+        recorded, _, _ = self._install_hop()
 
-        self.assertEqual(
-            frozenset({"ref-x-claude", "ref-x-opencode"}), recorded.get("prompted_credentials")
-        )
-        self.assertTrue(recorded.get("interactive_credentials"))
-        self.assertIs(loan, recorded.get("credential_handover"))
-        self.assertTrue(recorded.get("skipped_secrets_as_placeholders"))
-        self.assertNotIn("credential_secrets", recorded)
-
-    def test_an_install_with_nothing_marked_prompts_for_nothing(self) -> None:
-        recorded, _, _ = self._install_hop(set())
-
-        self.assertEqual(frozenset(), recorded.get("prompted_credentials"))
+        self.assertFalse(recorded.get("prompted_credentials"))
         self.assertFalse(recorded.get("interactive_credentials"))
         self.assertIsNone(recorded.get("credential_handover"))
         self.assertTrue(recorded.get("skipped_secrets_as_placeholders"))
+        self.assertNotIn("credential_secrets", recorded)
+
+    def test_a_failed_install_deletes_what_07b_entered(self) -> None:
+        _, _, deleted = self._install_hop()
+
+        self.assertEqual(sorted(deleted), ["ref-x-claude", "ref-x-opencode"])
 
 
 if __name__ == "__main__":

@@ -160,6 +160,9 @@ def credential_state(view: CredentialRecordView) -> str:
         return PLACEHOLDER_STATE
     if view.health == "present":
         return "Configured securely"
+    if view.health == "invalid":
+        # Stored, but not the credential its artifact declared: unusable is unconfigured (§204).
+        return f"Not configured: {view.detail}" if view.detail else "Not configured"
     return view.health.title()
 
 

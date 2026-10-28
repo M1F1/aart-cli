@@ -171,6 +171,7 @@ on the callee name, which is exactly why it catches the `_nested_type` cases:
 ```python
 import ast, pathlib
 
+
 def accepted_fields(module="aart_cli/protocol/authoring.py") -> dict[tuple[str, str], list]:
     tree = ast.parse(pathlib.Path(module).read_text(encoding="utf-8"))
     owner = {}
@@ -179,11 +180,18 @@ def accepted_fields(module="aart_cli/protocol/authoring.py") -> dict[tuple[str, 
             owner[id(sub)] = fn.name
     found: dict[tuple[str, str], list] = {}
     for call in (n for n in ast.walk(tree) if isinstance(n, ast.Call)):
-        callee = call.func.id if isinstance(call.func, ast.Name) else getattr(call.func, "attr", "?")
+        callee = (
+            call.func.id if isinstance(call.func, ast.Name) else getattr(call.func, "attr", "?")
+        )
         for kw in call.keywords:
             if kw.arg in ("required", "optional"):
-                values = sorted({s.value for s in ast.walk(kw.value)
-                                 if isinstance(s, ast.Constant) and isinstance(s.value, str)})
+                values = sorted(
+                    {
+                        s.value
+                        for s in ast.walk(kw.value)
+                        if isinstance(s, ast.Constant) and isinstance(s.value, str)
+                    }
+                )
                 found.setdefault((owner.get(id(call), "?"), callee), []).append((kw.arg, values))
     return found
 ```

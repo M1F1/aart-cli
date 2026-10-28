@@ -16,6 +16,7 @@ from pathlib import Path
 
 from aart_cli.application.mcp_smoke import (
     McpCallResult,
+    McpNumber,
     SmokeDeclaration,
     SmokeOutcome,
     SmokeStage,
@@ -81,6 +82,9 @@ def _plain(value: JsonValue) -> object:
         return {key: _plain(item) for key, item in value.entries}
     if isinstance(value, JsonArray):
         return [_plain(item) for item in value.items]
+    if isinstance(value, McpNumber):
+        # Shown as the server wrote it: the float whose shortest text is that decimal.
+        return float(value.value)
     return value
 
 

@@ -107,7 +107,7 @@ def _scan() -> RepositoryScan:
 
 class RepositoryAdoptionInteractionTest(unittest.TestCase):
     def test_registry_screen_opens_the_scan_form_with_s(self) -> None:
-        state = _state(MaintainerScreen.REGISTRY)
+        state = _state(MaintainerScreen.REGISTRY_DETAILS)
         event = key_event("s", state)
 
         self.assertIsNotNone(event)
@@ -119,7 +119,7 @@ class RepositoryAdoptionInteractionTest(unittest.TestCase):
     def test_the_lettered_route_is_in_the_accepted_navigation_map(self) -> None:
         self.assertIn(
             MaintainerScreen.REPOSITORY_SCAN,
-            maintainer_navigation_targets(MaintainerScreen.REGISTRY),
+            maintainer_navigation_targets(MaintainerScreen.REGISTRY_DETAILS),
         )
         self.assertEqual(
             maintainer_navigation_targets(MaintainerScreen.REPOSITORY_SCAN),
@@ -221,7 +221,7 @@ class RepositoryAdoptionInteractionTest(unittest.TestCase):
         from aart_cli.consumer_actions import _project_adopted_artifact
         from aart_cli.tui_consumer import ConsumerScreens
 
-        registry = _state(MaintainerScreen.REGISTRY)
+        registry = _state(MaintainerScreen.REGISTRY_DETAILS)
         event = key_event("u", registry)
         self.assertIsNotNone(event)
         assert event is not None

@@ -149,7 +149,7 @@ class ChoosingAScopeTest(unittest.TestCase):
 
 
 class ContinuingFromTheScopeScreenTest(unittest.TestCase):
-    def test_enter_goes_to_ready_only_once_the_plan_is_the_one_prepared_for_these_scopes(
+    def test_enter_goes_on_only_once_the_plan_is_the_one_prepared_for_these_scopes(
         self,
     ) -> None:
         from dataclasses import replace
@@ -162,9 +162,28 @@ class ContinuingFromTheScopeScreenTest(unittest.TestCase):
             case.state.rows, case.state.pair_scopes, case.state.rows[1], "user"
         )
 
-        self.assertIs(case.source.detail(case.state), ConsumerScreen.READY)
+        # §209: the scope comes before configuration, so a plan still asking inputs goes to 07.
+        self.assertIs(case.source.detail(case.state), ConsumerScreen.REQUIRED_INPUTS)
+        self.assertIs(
+            case.source.detail(replace(case.state, inputs_submitted=True)), ConsumerScreen.READY
+        )
         # The choice is made but its plan is still being prepared: Ready would review the old one.
         self.assertIsNone(case.source.detail(replace(case.state, pair_scopes=moved)))
+
+    def test_05_goes_to_07_when_no_scope_is_to_choose_and_past_it_once_answered(self) -> None:
+        from dataclasses import replace
+
+        from aart_cli.application.consumer_views import ConsumerScreen
+        from tests.screen_cases import screen_cases
+
+        case = next(
+            item for item in screen_cases() if item.label == "05-review-selection:dashboard-route"
+        )
+
+        self.assertIs(case.source.detail(case.state), ConsumerScreen.REQUIRED_INPUTS)
+        self.assertIs(
+            case.source.detail(replace(case.state, inputs_submitted=True)), ConsumerScreen.READY
+        )
 
 
 if __name__ == "__main__":

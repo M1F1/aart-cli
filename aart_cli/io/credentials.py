@@ -349,12 +349,15 @@ class MacOsKeychainProvider:
                         placeholder=True,
                     )
                 )
+            stored = self.stored_length(reference)
             return Ok(
                 CredentialObservation(
                     reference,
                     ProviderState.AVAILABLE,
                     CredentialState.PRESENT,
-                    self._presence_detail(reference),
+                    self._presence_detail(stored),
+                    length=stored,
+                    clipped=stored == PROMPT_CEILING_BYTES,
                 )
             )
         if outcome.returncode == ITEM_NOT_FOUND:
@@ -367,8 +370,8 @@ class MacOsKeychainProvider:
             f"{outcome.stderr.strip()}",
         )
 
-    def _presence_detail(self, reference: CredentialReference) -> str:
-        stored = self.stored_length(reference)
+    @staticmethod
+    def _presence_detail(stored: int | None) -> str:
         if stored is None:
             return "a value is present"
         if stored == PROMPT_CEILING_BYTES:

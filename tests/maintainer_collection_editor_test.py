@@ -33,6 +33,7 @@ from aart_cli.application.maintainer_views import (
     collection_row,
     parse_collection_row,
     project_maintainer_dashboard,
+    project_registry_workspace,
 )
 from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
 
@@ -57,7 +58,14 @@ def _registry() -> MaintainerRegistryView:
 
 
 def _source() -> CanonicalScreenSource:
-    views = MaintainerViews(project_maintainer_dashboard(()), (), registries=(_registry(),))
+    views = MaintainerViews(
+        project_maintainer_dashboard(()),
+        (),
+        registries=(_registry(),),
+        registry_workspace_present=True,
+        registry_workspace=project_registry_workspace("company", commit="abc1234"),
+        registry_here=_registry(),
+    )
     return CanonicalScreenSource(
         ConsumerScreens(project_dashboard((), registry_count=0), maintainer=views)
     )
@@ -125,17 +133,20 @@ class CollectionsScreenTest(unittest.TestCase):
         self.assertIn("New Collection", drawn)
         self.assertIs(state.session.screen, MaintainerScreen.COLLECTION_EDITOR)
 
-    def test_46_reaches_51_with_o(self) -> None:
-        state = ConsumerUiState(
-            ConsumerSession(MaintainerScreen.REGISTRY),
-            settings=ConsumerSettings().with_maintainer_mode(True),
-            rows=("company",),
+    def test_46k_reaches_51_with_o(self) -> None:
+        state = _reload(
+            _source(),
+            ConsumerUiState(
+                ConsumerSession(MaintainerScreen.REGISTRY_DETAILS),
+                settings=ConsumerSettings().with_maintainer_mode(True),
+            ),
+            entering=True,
         )
 
-        moved = _press(state, "o")
+        moved = _reload(_source(), _press(state, "o"), entering=True)
 
         self.assertIs(moved.session.screen, MaintainerScreen.COLLECTIONS)
-        self.assertEqual(moved.focus, "company")
+        self.assertEqual(moved.rows, ("company/starter", "company/+"))
 
 
 class CollectionEditorTest(unittest.TestCase):

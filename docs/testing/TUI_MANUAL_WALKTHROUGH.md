@@ -310,7 +310,8 @@ screen saying the run did not happen, offering `Enter` back to the list — neve
 confirmation (`QA-033`).
 
 - [ ] After the commit, **Registry commit** stays on screen with its receipt; `Enter` goes on to
-      **Registry Workspace**, one key from the next promotion.
+      **Registry Workspace**; `Enter` on the row marked `● you are here`, then `c`, starts the next
+      promotion (§202).
 - [ ] Go back to **Candidates**. The Candidate you just committed reads **Promoted locally**, not
       New, Ready or Published (CP-23 task 09, `D-259`).
 - [ ] Open its promotion review. It refuses: already promoted in the local checkout, so publish
@@ -318,6 +319,14 @@ confirmation (`QA-033`).
       Bulk promotion's Candidates are `> ` cursor rows under their registry; what cannot be
       promoted reads `Not promotable: …` in the status, never as a row (D-271).
 - [ ] Quit and reopen the TUI. The same Candidate still reads **Promoted locally**.
+- [ ] **Only the Registry here opens (§202, D-488, D-489).** With a large terminal font, open
+      **Registry Workspace**. Each Registry is a few lines: validity, approved versions by kind and
+      `Promotions recorded: N`, never the promotions themselves, so a second Registry stays on
+      screen. The first row is this checkout, marked `● you are here`. The footer offers no
+      command, only Enter and `v`. On a subscribed Registry, Enter does nothing and the status says
+      to run aart-cli in its Registry checkout. `Enter` on the marked row opens `This Registry`, with
+      Recent promotions; `c`, `b`, `s`, `u` and `o` work there, and `p` when a push is ready. `Esc`
+      returns to the list on the marked row.
 
 ## 8 — Publish the promotion yourself, in Git
 
@@ -459,6 +468,9 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
 - [ ] While the installation runs, the screen names the step running (`▸`) and the ones already
       done (`✓`), counting `(n of m done)`, inside the same frame as every other screen (D-285).
       A short install may pass quickly; `dummy-mcp` into two harnesses is the one to watch.
+- [ ] **A running install beats (§203, D-490).** While it runs, the heading ends with a turning
+      mark and the seconds taken (`⠹ working 4s`), even while a step reports nothing new. At the
+      credential store's prompt nothing is drawn over the prompt, and the mark returns after it.
 - [ ] After the Skill install, inspect the project: both
       `.opencode/skills/manual-check/SKILL.md` and
       `.tabnine/agent/skills/manual-check/SKILL.md` exist; `.claude/skills/manual-check` does not.
@@ -510,6 +522,10 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
       own choice. Narrow the window: values end in `…`, and the columns with no room are named
       under the list. `v` on a row shows its harness, scope, the whole project directory, each
       value or `not set`, and each credential's state, never a value.
+- [ ] **Installed shows what an agent here reaches (§210, INV-315).** Install one artifact for the
+      user and one into another project. Start the TUI in this project: Installed lists the user's
+      and this project's, the status says how many in other projects are not shown, and Home counts
+      the same. `a` (**All projects**) lists every project's; `a` (**This project**) again narrows.
 - [ ] `aart-cli consume inputs list` prints each installation's values, credential states, and the
       command for each missing one (§198, INV-299). Run `set` without `--yes`, then with
       `--yes --expect` and the printed digest. `list` shows the new value in that harness only.
@@ -560,6 +576,20 @@ Harness delivery must be one answer everywhere it is said (`QA-078`…`QA-080`, 
       offers `Verify` and `Set`, not `Replace`. `Set` → review → confirm lends the terminal to the
       Keychain with the authored briefing above its prompt. Type disposable text only; it lands
       with `Set <input> in <provider>.` and verifies (D-267).
+- [ ] **A cut credential is caught (§204, D-492).** Install the lab's `length-mcp`, whose token
+      declares `min_length: 150`. At the Keychain prompt paste 190 characters of disposable text:
+      the prompt keeps 128. A macOS dialog then asks for the token with the reason
+      (`… 128 characters, expected at least 150 …`); paste the 190 again and Save. `consume inputs
+      list` says `Configured securely`. Repeat with Cancel in the dialog: the install finishes, and
+      **Credentials and variables**, `consume inputs list` and `aart-cli doctor` say `Not
+      configured: the stored value has 128 characters, expected at least 150 …`. Set it again from
+      **Credential Action**: it fails by name until the dialog stores the whole value.
+- [ ] Over SSH, with no desktop, the dialog cannot open: Keychain Access instructions name the
+      item and wait for Enter, or `s` to leave it for now.
+- [ ] **Test MCP from a project tests a user installation (§203, D-491).** Install an MCP with
+      `--scope user`, start the TUI in a project, and press `t` on its row in **Installed**. The
+      review lists it and Enter runs it. A test that cannot run names the error, never only
+      `could not be run`.
 - [ ] **Doctor** → health, offline readiness, activity, configuration.
 - [ ] **Activity** → what actually happened, with real provenance. Each entry is a row under its
       day with the cursor on one. `v` shows that entry's review identity below the rows rather
@@ -596,7 +626,9 @@ Expected: Dashboard, lists, help and footer have a readable hierarchy with visib
 - [ ] With `sync.mode` `manual`, publish another version: nothing is checked at launch. Once the
       snapshot is older than 15 minutes, the **Registries** row says "synced … ago — press s to
       check for newer content" and the menu marks **Registries** with `● 1 to sync`.
-- [ ] **Installed** → artifact → `u` (**Uninstall**).
+- [ ] **Installed** → artifact → `u` (**Uninstall**). For an MCP with a credential, the review lists
+      `credential:INPUT` among the components changing; after Confirm, Keychain Access no longer
+      holds that installation's item, and the other harness's item is still there (§208).
 - [ ] **Registries** → `d` (**Disconnect**) — reviewed and bounded (`QA-050`).
 
 Checkpoint for Act II:
@@ -627,11 +659,15 @@ and II in order and check these links of the chain, each at the step that owns i
   - Ready lists the changes AART will make (Remediation folded into it, D-403).
 - [ ] **Guided credential entry (step 11).** Screen 07 and the lent terminal show the author's help
       in the same words. The value never appears on screen or in AART's data.
-- [ ] **07b marks, the store asks (§172.6, D-487).** On 07b nothing is typed: Enter marks the token
-      `asked when installing`, and Enter again unmarks it. Ready lists it under `the credential
-      store asks you for each of these`. On Confirm, the screen is lent, the briefing shows, and
-      the Keychain prompt asks once per installation; type disposable text. Set later instead
-      unmarks everything, and Ready lists the token as `AART_NOT_SET`.
+- [ ] **Scope before configuration (§209, D-497).** Installing an MCP with a setting into two
+      harnesses in a project goes 05 → Scope → Configuration → Credentials → Ready. Scope opens on
+      the Project column with each installation marked on the Settings scope.
+- [ ] **07b: the store asks there (§207, D-495).** Enter on the token lends the screen: the
+      briefing shows and the Keychain prompt asks once per installation; type disposable text. The
+      row reads `stored`, and Enter again asks again. Ready lists it under `Stored by the credential
+      store on the previous screen`; Confirm asks nothing. Esc back from 07b, or `q` on Ready,
+      deletes what was entered. Set later keeps what was entered and lists the rest as
+      `AART_NOT_SET`.
 - [ ] **Success and receipt (step 11).** `View installed`, `View receipt` and `Done` are rows that
       work.
 - [ ] **Credential lifecycle (step 12).**

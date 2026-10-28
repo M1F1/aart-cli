@@ -29,7 +29,13 @@ from aart_cli.application.credential_guidance import (
 )
 from aart_cli.application.execution import MutationLockPort
 from aart_cli.application.skill_projection import project_skill_document
-from aart_cli.domain.credentials import CredentialReference
+from aart_cli.domain.credentials import (
+    CredentialLength,
+    CredentialObservation,
+    CredentialReference,
+    CredentialState,
+    checked_observation,
+)
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.effects import (
     ConfigureHarness,
@@ -70,6 +76,7 @@ from aart_cli.domain.receipts import (
     ArtifactSettingsEntry,
 )
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.io.credential_entry import CredentialEntryFallback, enter_another_way
 from aart_cli.io.credentials import CredentialProviderPort, TransientSecret
 from aart_cli.io.fs import write_atomic
 from aart_cli.io.harness import HarnessRegistryPort, LocalHarnessRegistry, ScopedHarnessRegistry
@@ -968,6 +975,8 @@ class CredentialEffectInterpreter:
         guidance: Mapping[str, tuple[CredentialGuidance, ...]] | None = None,
         prompted: frozenset[str] = frozenset(),
         skipped_as_placeholder: bool = False,
+        lengths: Mapping[str, CredentialLength] | None = None,
+        fallbacks: tuple[CredentialEntryFallback, ...] = (),
     ) -> None:
         self.provider = provider
         self.references = tuple(references)
@@ -976,6 +985,28 @@ class CredentialEffectInterpreter:
         self.guidance = dict(guidance or {})
         self.prompted = frozenset(prompted)
         self.skipped_as_placeholder = skipped_as_placeholder
+        #: The length each reference's artifact declares, keyed by reference (§204).
+        self.lengths = dict(lengths or {})
+        #: Other ways to enter a value, tried when what the prompt stored is not it (§204).
+        self.fallbacks = tuple(fallbacks)
+
+    def unfit(self, reference: str, observed: CredentialObservation) -> str | None:
+        """Why what was just stored is not the credential, or None when nothing says so.
+
+        A declared length decides. Without one, a value exactly as long as the prompt keeps is
+        all the evidence there is that a longer one was cut, so it is offered another way too.
+        """
+
+        declared = self.lengths.get(reference)
+        if declared is not None:
+            checked = checked_observation(observed, declared)
+            return checked.detail if checked.state is CredentialState.INVALID else None
+        if observed.clipped and observed.state is CredentialState.PRESENT:
+            return (
+                f"the stored value has exactly {observed.length} characters, as many as the "
+                "Keychain prompt keeps, so a longer one was probably cut"
+            )
+        return None
 
     def supports(self, effect: Effect) -> bool:
         """Whether this interpreter was given the reference `effect` names (see the harness one)."""
@@ -1043,8 +1074,23 @@ class CredentialEffectInterpreter:
                     reference,
                     replace=isinstance(effect, ReplaceCredential),
                 )
+                unfit = (
+                    None if isinstance(stored, Err) else self.unfit(effect.reference, stored.value)
+                )
+                if unfit is not None and self.fallbacks:
+                    # Still on the lent terminal: the instructions may need somebody to press Enter.
+                    enter_another_way(self.fallbacks, reference, reason=unfit)
+                    stored = self.provider.inspect(reference)
+                    unfit = (
+                        None
+                        if isinstance(stored, Err)
+                        else self.unfit(effect.reference, stored.value)
+                    )
             if isinstance(stored, Err):
                 return stored
+            if unfit is not None:
+                # The install goes on; the credential reads as not configured until it is set.
+                return Ok(f"{effect.reference} is invalid: {unfit}")
             return Ok(f"{effect.reference} is {stored.value.state.value}")
         if isinstance(effect, VerifyCredential):
             observed = self.provider.inspect(reference)

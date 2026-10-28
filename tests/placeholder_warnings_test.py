@@ -24,11 +24,12 @@ from tests.consumer_application_e2e_test import BothBackendsMeasured, _actions, 
 from tests.consumer_shell_test import BACKSPACE, DOWN, ENTER, INSTALL_CUSTOM, RIGHT, SPACE, UP
 from tests.install_credentials_test import _Keeping
 
-_TO_FORM = (SPACE, *INSTALL_CUSTOM, RIGHT, SPACE, RIGHT, SPACE, ENTER)
-#: 07: the declared default cleared, then Set later; 07a passed; 07b: Set later.
-_SKIP_ALL = (*_TO_FORM, *((BACKSPACE,) * len("acme")), UP, ENTER, ENTER, ENTER, UP, ENTER)
-#: 07 answered; 07a passed; 07b: the credential asked of the store when installing, then Continue.
-_ANSWER_ALL = (*_TO_FORM, "platform-team", ENTER, ENTER, ENTER, ENTER, ENTER, DOWN, ENTER)
+#: 05 answered, then 07a as it is: the scope comes before the form (§209).
+_TO_FORM = (SPACE, *INSTALL_CUSTOM, RIGHT, SPACE, RIGHT, SPACE, ENTER, ENTER)
+#: 07: the declared default cleared, then Set later; the installer as it is; 07b: Set later.
+_SKIP_ALL = (*_TO_FORM, *((BACKSPACE,) * len("acme")), UP, ENTER, ENTER, UP, ENTER)
+#: 07 answered; the installer as it is; 07b: the credential entered through the store, then Continue.
+_ANSWER_ALL = (*_TO_FORM, "platform-team", ENTER, ENTER, ENTER, ENTER, DOWN, ENTER)
 
 
 class _Comparing(_Keeping):
@@ -84,6 +85,11 @@ class ReadyListsWhatWillBePlaceholderE2ETest(BothBackendsMeasured):
         self.assertIn(f"as {SKIPPED_INPUT}, to set later in Credentials and variables:", ready)
         self.assertIn("company/mcp/github: github-org", ready)
         self.assertIn("company/mcp/github: github-token", ready)
+        # A blank line between the heading and its list, so the list reads as the heading's.
+        lines = ready.splitlines()
+        heading = next(i for i, line in enumerate(lines) if "to set later in Credentials" in line)
+        self.assertEqual(lines[heading + 1].strip(), "")
+        self.assertIn("company/mcp/github:", lines[heading + 2])
 
     def test_nothing_is_listed_when_everything_was_answered(self) -> None:
         install, _ = _installed(_ANSWER_ALL)

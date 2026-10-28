@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from datetime import datetime, timezone
 
 from aart_cli import command_outcome as _common
@@ -52,7 +51,7 @@ from aart_cli.io.configured_repair_action import (
     prepare_configured_repair,
 )
 from aart_cli.io.consumer_machine import read_installed_inspections
-from aart_cli.io.credentials import MacOsKeychainProvider
+from aart_cli.io.credentials import CredentialProviderPort
 from aart_cli.io.maintainer_views import read_unbound_candidate_histories
 from aart_cli.io.offline_readiness import read_offline_readiness
 from aart_cli.io.orphaned_runs import read_orphaned_runs
@@ -239,7 +238,11 @@ def _credential_lines(records: tuple[CredentialRecordView, ...]) -> tuple[str, .
             if item.dependants
             else "no installed artifact needs it"
         )
-        lines.append(f"  {item.reference} is {item.health} ({needed})")
+        if item.health == "invalid":
+            # Stored, but not what its artifact declares, so it is said why (§204).
+            lines.append(f"  {item.reference} is not configured: {item.detail} ({needed})")
+        else:
+            lines.append(f"  {item.reference} is {item.health} ({needed})")
     return tuple(lines)
 
 
@@ -286,7 +289,7 @@ def _run_repair(
     data_root: str,
     project_root: str,
     user_home: str,
-    credential_providers: tuple[MacOsKeychainProvider, ...],
+    credential_providers: tuple[CredentialProviderPort, ...],
 ) -> int:
     """Review or execute one exact repair through the configured lifecycle adapter."""
 
@@ -430,7 +433,10 @@ def run(request: Request) -> int:
         project=request.project,
         user_home=request.user_home,
     )
-    providers = (MacOsKeychainProvider(),) if sys.platform == "darwin" else ()
+    from . import marketplace
+
+    # The stores every other command reads credentials through, so doctor agrees with them.
+    providers = marketplace._credential_providers()
     if request.names:
         return _run_repair(
             request,

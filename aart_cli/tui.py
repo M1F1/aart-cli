@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import traceback
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -62,6 +63,7 @@ from .io.configured_installation_action import (
 from .io.configured_offers import observe_configured_registries
 from .io.consumer_machine import read_consumer_machine
 from .io.consumer_settings import read_consumer_settings
+from .io.credential_entry import default_entry_fallbacks
 from .io.credentials import MacOsKeychainProvider
 from .io.maintainer_views import read_maintainer_views
 from .io.terminal_briefing import BriefingHandover
@@ -675,11 +677,18 @@ class _CursesHandover(BriefingHandover):
     def __init__(self, *, stream=None, columns=None) -> None:
         super().__init__(stream=stream, columns=columns)
         self._stdscr = None
+        self._screen = threading.Lock()
 
-    def bind(self, stdscr) -> None:
-        """Name the screen this will lend out; called once, by whoever drew it."""
+    def bind(self, stdscr, screen: Optional[threading.Lock] = None) -> None:
+        """Name the screen this will lend out; called once, by whoever drew it.
+
+        `screen` is the lock every drawing takes, so a running action's heartbeat (§203) never
+        paints over the prompt while the terminal is lent.
+        """
 
         self._stdscr = stdscr
+        if screen is not None:
+            self._screen = screen
 
     def __call__(self, briefing: Tuple[str, ...] = ()):
         if self._stdscr is None:
@@ -690,17 +699,18 @@ class _CursesHandover(BriefingHandover):
     def _lent(self, stdscr, briefing: Tuple[str, ...] = ()):
         import curses  # stdlib; only reachable once a curses screen exists to lend.
 
-        curses.def_prog_mode()
-        curses.endwin()
-        try:
-            self._say(briefing)
-            yield
-        finally:
-            curses.reset_prog_mode()
-            # The prompt wrote wherever it liked; curses believes the screen is still its own, so
-            # say plainly that all of it has to be painted again.
-            stdscr.clear()
-            stdscr.refresh()
+        with self._screen:
+            curses.def_prog_mode()
+            curses.endwin()
+            try:
+                self._say(briefing)
+                yield
+            finally:
+                curses.reset_prog_mode()
+                # The prompt wrote wherever it liked; curses believes the screen is still its own,
+                # so say plainly that all of it has to be painted again.
+                stdscr.clear()
+                stdscr.refresh()
 
 
 class _CursesTerminal:
@@ -710,8 +720,10 @@ class _CursesTerminal:
     what a screen shows, when to reload rows -- lives in code that never touches a terminal.
     """
 
-    def __init__(self, stdscr) -> None:
+    def __init__(self, stdscr, screen: Optional[threading.Lock] = None) -> None:
         self._stdscr = stdscr
+        # Shared with the handover: whoever holds it owns the terminal (§203).
+        self._screen = threading.Lock() if screen is None else screen
 
     @property
     def rows(self) -> int:
@@ -722,6 +734,25 @@ class _CursesTerminal:
         return max(self._stdscr.getmaxyx()[1] - 1, 1)
 
     def draw(self, lines: Tuple[str, ...]) -> None:
+        with self._screen:
+            self._draw(lines)
+
+    def tick(self, lines: Tuple[str, ...]) -> None:
+        """A heartbeat's redraw, from its own thread, skipped while anyone else holds the screen.
+
+        Skipping is the point: while the terminal is lent to a credential prompt the lock is held
+        for the whole loan, and a heartbeat that waited would paint over the prompt the moment it
+        ended rather than never during it (§203).
+        """
+
+        if not self._screen.acquire(blocking=False):
+            return
+        try:
+            self._draw(lines)
+        finally:
+            self._screen.release()
+
+    def _draw(self, lines: Tuple[str, ...]) -> None:
         self._stdscr.clear()
         height, width = self._stdscr.getmaxyx()
         drawable = max(height - 1, 0)
@@ -883,11 +914,12 @@ def run_consumer(actions: LocalConsumerActions, *, workspace: str = "") -> Consu
         # The screen exists only from here.  Binding it is what turns the composed handover from
         # an inert one into the real loan a credential prompt needs (`QA-081`).
         loan = actions.terminal_handover
+        screen = threading.Lock()
         if isinstance(loan, _CursesHandover):
-            loan.bind(stdscr)
+            loan.bind(stdscr, screen)
         captured["state"] = run_consumer_shell(
             actions.source(),
-            _CursesTerminal(stdscr),
+            _CursesTerminal(stdscr, screen),
             state=opening_state(actions.settings, workspace=workspace),
             action_handler=actions,
             settings_writer=actions.save_settings,
@@ -915,6 +947,7 @@ def _canonical_consumer_actions(
     observe: Callable[[str], None] | None = None,
     credential_providers: tuple | None = None,
     handover: "BriefingHandover | None" = None,
+    credential_entry: tuple | None = None,
 ) -> DomainResult[LocalConsumerActions]:
     """Compose the canonical application from one durable read of the local machine.
 
@@ -951,6 +984,15 @@ def _canonical_consumer_actions(
         if credential_providers is not None
         else (MacOsKeychainProvider(),)
         if sys.platform == "darwin"
+        else ()
+    )
+    # The other ways to enter a credential the Keychain prompt cut (§204) go with the real store;
+    # stores a caller injected get none unless it names them too, so no test opens a dialog.
+    entry = (
+        credential_entry
+        if credential_entry is not None
+        else default_entry_fallbacks()
+        if credential_providers is None and sys.platform == "darwin"
         else ()
     )
     # Composed here and bound by whichever terminal ends up drawing, so the actions hold one loan
@@ -1256,6 +1298,7 @@ def _canonical_consumer_actions(
             ),
             data_root=paths.data_root,
             terminal_handover=handover,
+            credential_entry=entry,
             completion_factory=completion_factory,
             registry_connection=registry_connection,
             registry_refresh=registry_refresh,

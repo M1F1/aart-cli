@@ -24,6 +24,7 @@ from aart_cli.domain.artifacts import (
 from aart_cli.domain.artifacts import (
     Provenance as ArtifactProvenance,
 )
+from aart_cli.domain.credentials import CredentialLength
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity, SourceLocation
 from aart_cli.domain.effects import DeliveryKind
 from aart_cli.domain.identifiers import (
@@ -667,6 +668,49 @@ def _parse_validation(value: JsonValue, *, path: str) -> Result[InputValidation]
     return _built(lambda: InputValidation(kind, pattern, hosts, message), "validation", path=path)
 
 
+def _parse_credential_length(value: JsonValue, *, path: str) -> Result[CredentialLength]:
+    """A secret's optional check: the length its value has, never a pattern over the value (§204).
+
+    A pattern would have to read the credential to judge it, and the value is never read here.
+    Its length can be measured by the provider without anybody holding it.
+    """
+
+    parsed = _object(value, "validation", path=path)
+    if isinstance(parsed, Err):
+        return parsed
+    fields = _fields(
+        parsed.value,
+        required=frozenset(),
+        optional=frozenset({"min_length", "max_length", "message"}),
+        path=path,
+        label="secret validation",
+        extensions=True,
+    )
+    if isinstance(fields, Err):
+        return fields
+    bounds: dict[str, int | None] = {}
+    for name in ("min_length", "max_length"):
+        bound = fields.value.get(name)
+        if bound is not None and (type(bound) is not int or bound < 1):
+            return _error(
+                AUTHOR_MANIFEST_INVALID,
+                f"validation.{name} must be a whole number of at least 1",
+                path=path,
+            )
+        bounds[name] = bound
+    message = ""
+    if "message" in fields.value:
+        parsed_message = _string(fields.value["message"], "validation.message", path=path)
+        if isinstance(parsed_message, Err):
+            return parsed_message
+        message = parsed_message.value
+    return _built(
+        lambda: CredentialLength(bounds["min_length"], bounds["max_length"], message),
+        "validation",
+        path=path,
+    )
+
+
 def _parse_injection(value: JsonValue, *, path: str) -> Result[ProcessBinding]:
     """Which delivery an author asked for, refused by name when this build has no such delivery.
 
@@ -724,8 +768,8 @@ def _parse_input(value: JsonValue, *, path: str) -> Result[RuntimeInput]:
     secret = kind_value == "secret"
     # A secret takes no `default` and no `value`: §91 keeps the confidential class free of any
     # field a real credential could be written into, and the omission is the enforcement.
-    optional = frozenset({"required", "help"}) | (
-        frozenset() if secret else frozenset({"default", "validation"})
+    optional = frozenset({"required", "help", "validation"}) | (
+        frozenset() if secret else frozenset({"default"})
     )
     fields = _fields(
         parsed.value,
@@ -760,8 +804,16 @@ def _parse_input(value: JsonValue, *, path: str) -> Result[RuntimeInput]:
         guidance = parsed_guidance.value
     label = f"input {identifier.value!r}"
     if secret:
+        length: CredentialLength | None = None
+        if "validation" in fields.value:
+            parsed_length = _parse_credential_length(fields.value["validation"], path=path)
+            if isinstance(parsed_length, Err):
+                return parsed_length
+            length = parsed_length.value
         return _built(
-            lambda: SecretInput(InputId(identifier.value), binding.value, required, guidance),
+            lambda: SecretInput(
+                InputId(identifier.value), binding.value, required, guidance, length
+            ),
             label,
             path=path,
         )

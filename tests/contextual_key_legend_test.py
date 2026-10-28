@@ -47,17 +47,22 @@ class ContextualKeyLegendTest(unittest.TestCase):
         return "\n".join(lines[boundary + 1 :])
 
     def test_registry_actions_are_in_the_footer_before_the_global_keys(self) -> None:
-        drawn = frame(self.source, _state(MaintainerScreen.REGISTRY))
-        footer = self._footer(_state(MaintainerScreen.REGISTRY))
+        # INV-304: the Registry list initializes one; the Registry here holds the rest.
+        listed = self._footer(_state(MaintainerScreen.REGISTRY))
+        here = _state(MaintainerScreen.REGISTRY_DETAILS)
+        drawn = frame(self.source, here)
+        footer = self._footer(here)
 
+        self.assertLess(listed.index("[n] Initialize"), listed.index("[↑/↓]"))
         for shortcut, action in (
-            ("n", "Initialize"),
+            ("c", "Candidates"),
             ("b", "Rebuild"),
             ("s", "Scan Repository"),
             ("u", "Check upstream"),
         ):
             self.assertIn(f"[{shortcut}] {action}", footer)
-        self.assertLess(footer.index("[n] Initialize"), footer.index("[↑/↓]"))
+            self.assertNotIn(f"[{shortcut}] {action}", listed)
+        self.assertLess(footer.index("[b] Rebuild"), footer.index("[↑/↓]"))
         self.assertFalse(any(line.startswith("Actions:") for line in drawn), drawn)
 
     def test_an_advertised_registry_key_opens_the_screen_it_names(self) -> None:
@@ -66,7 +71,7 @@ class ContextualKeyLegendTest(unittest.TestCase):
         finished = run_consumer_shell(
             self.source,
             terminal,
-            state=_state(MaintainerScreen.REGISTRY),
+            state=_state(MaintainerScreen.REGISTRY_DETAILS),
         )
 
         self.assertTrue(finished.exited)
@@ -74,7 +79,7 @@ class ContextualKeyLegendTest(unittest.TestCase):
             # `QA-071`: a nested view names the parent it was reached through, so the heading is
             # the trail rather than the screen alone.
             any(
-                frame_lines[0] == "AART / Registry / Rebuild Registry"
+                frame_lines[0] == "AART / This Registry / Rebuild Registry"
                 for frame_lines in terminal.frames
             )
         )
@@ -83,8 +88,8 @@ class ContextualKeyLegendTest(unittest.TestCase):
         expected = {
             MaintainerScreen.SOURCES: ("[a] Add upstream", "[s] Sync"),
             MaintainerScreen.CANDIDATES: ("[f] Filters",),
-            # D-430: the Registry owns its Collections, so they are reached from its workspace.
-            MaintainerScreen.REGISTRY: ("[c] Candidates", "[o] Collections"),
+            # D-430, INV-304: the Registry here owns its Collections and its commands.
+            MaintainerScreen.REGISTRY_DETAILS: ("[c] Candidates", "[o] Collections"),
             MaintainerScreen.CANDIDATE_DIFF: ("[v] More info",),
             MaintainerScreen.SCAN_RESULT: ("[a] Adopt",),
             MaintainerScreen.ADOPTED_ARTIFACTS: ("[Enter] Check upstream",),
@@ -93,12 +98,9 @@ class ContextualKeyLegendTest(unittest.TestCase):
             MaintainerScreen.VALIDATION_DETAILS: ("[Enter] Policy",),
         }
 
-        # INV-284: `o` names the Collections of the Registry under the cursor, so the Registry
-        # screen is drawn with the cursor on one.
-        rows = {MaintainerScreen.REGISTRY: ("company",)}
         for screen, labels in expected.items():
             with self.subTest(screen=screen):
-                footer = self._footer(_state(screen, rows=rows.get(screen, ())))
+                footer = self._footer(_state(screen))
                 for label in labels:
                     self.assertIn(label, footer)
 

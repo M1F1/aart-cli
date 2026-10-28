@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import select
 import subprocess
 import tempfile
 import time
 from dataclasses import dataclass
-from typing import IO
+from fractions import Fraction
+from typing import IO, cast
 
 from aart_cli.application.mcp_smoke import (
     McpCallResult,
+    McpNumber,
     McpTool,
     SmokeDeclaration,
     SmokeOutcome,
@@ -20,7 +23,13 @@ from aart_cli.application.mcp_smoke import (
 )
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.protocol.json import JsonArray, JsonObject, JsonValue, parse_json
+from aart_cli.protocol.json import (
+    MAX_PROTOCOL_INTEGER,
+    MIN_PROTOCOL_INTEGER,
+    JsonArray,
+    JsonObject,
+    JsonValue,
+)
 
 MCP_SMOKE_EXECUTION_FAILED = DiagnosticCode("mcp-smoke-execution-failed")
 _MAX_OUTPUT_BYTES = 1024 * 1024
@@ -46,15 +55,60 @@ def _thaw(value: JsonValue) -> object:
     return value
 
 
+#: The bounds `parse_json` keeps on aart-cli's own documents, kept on what a server says too.
+_MAX_DEPTH = 64
+_MAX_STRING_LENGTH = 1_000_000
+
+
+class _NotJson(ValueError):
+    pass
+
+
+def _number(value: float | int) -> JsonValue:
+    """A server's number: an integer when it is whole and fits, else exactly what was written.
+
+    FastMCP writes a `float` parameter's bounds as `0.0` and `1.0` and its answers carry ratios,
+    so refusing every fraction refused the whole `tools/list` (§205). `repr` is the shortest text
+    that reads back as the same float, which is the decimal the server wrote.
+    """
+
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise _NotJson("MCP returned a number that is not finite")
+        exact = Fraction(repr(value))
+    else:
+        exact = Fraction(value)
+    if exact.denominator == 1 and MIN_PROTOCOL_INTEGER <= exact <= MAX_PROTOCOL_INTEGER:
+        return int(exact)
+    # Only the smoke's validator and preview read these trees; see `McpNumber`.
+    return cast(JsonValue, McpNumber(exact))
+
+
+def _frozen(value: object, depth: int) -> JsonValue:
+    if depth > _MAX_DEPTH:
+        raise _NotJson("MCP returned JSON nested beyond the supported depth")
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return _number(value)
+    if isinstance(value, str):
+        if len(value) > _MAX_STRING_LENGTH:
+            raise _NotJson("MCP returned a string beyond the supported length")
+        return value
+    if isinstance(value, list):
+        return JsonArray(tuple(_frozen(item, depth + 1) for item in value))
+    if isinstance(value, dict) and all(isinstance(key, str) for key in value):
+        return JsonObject(tuple((key, _frozen(item, depth + 1)) for key, item in value.items()))
+    raise _NotJson("MCP returned a value that is not JSON")
+
+
 def _freeze(value: object) -> Result[JsonValue]:
     try:
-        encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    except (TypeError, ValueError):
-        return _error("MCP returned a value that is not JSON")
-    parsed = parse_json(encoded)
-    if isinstance(parsed, Err):
-        return _error("MCP returned JSON outside the supported bounded protocol")
-    return parsed
+        return Ok(_frozen(value, 0))
+    except _NotJson as error:
+        return _error(str(error))
+    except RecursionError:
+        return _error("MCP returned JSON nested beyond the supported depth")
 
 
 def _messages(values: tuple[dict[str, object], ...]) -> bytes:
@@ -202,6 +256,7 @@ def _call(response: dict[str, object] | None) -> Result[McpCallResult]:
 #: because it reaches a diagnostic a person reads, and a server that logs freely would otherwise
 #: put a megabyte there.
 _MAX_STDERR_BYTES = 2048
+_REFUSED = "declared MCP call was refused before invocation"
 
 
 def _annotate(failure: Err, errors: IO[bytes]) -> Err:
@@ -248,7 +303,11 @@ def execute_stdio_smoke(
 
     with tempfile.TemporaryFile() as errors:
         outcome = _execute(launcher, declaration, cwd=cwd, harness=harness, errors=errors)
-        return _annotate(outcome, errors) if isinstance(outcome, Err) else outcome
+        if isinstance(outcome, Ok) or outcome.diagnostics[0].message.startswith(_REFUSED):
+            # A refusal is the schema's verdict, not the process's: what the server logged while
+            # starting (FastMCP prints a banner) would bury the one line that names the keyword.
+            return outcome
+        return _annotate(outcome, errors)
 
 
 def _execute(
@@ -297,7 +356,7 @@ def _execute(
             return tools
         preflight = evaluate_tool_call(declaration, tools.value, None)
         if preflight.outcome is not SmokeOutcome.NOT_RUN:
-            return _error(f"declared MCP call was refused before invocation: {preflight.reason}")
+            return _error(f"{_REFUSED}: {preflight.reason}")
         process.stdin.write(_call_message(declaration))
         process.stdin.flush()
         called = _read_responses(process, frozenset({3}), deadline=deadline)

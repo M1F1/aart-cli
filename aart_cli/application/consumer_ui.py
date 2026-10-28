@@ -127,7 +127,8 @@ class ConsumerActionKind(str, Enum):
 
 
 class ConsumerUiEventKind(str, Enum):
-    SCROLL_MARKETPLACE = "scroll-marketplace"
+    #: PgUp/PgDn on a screen taller than the terminal: half a terminal up or down (§206).
+    SCROLL = "scroll"
     NAVIGATE = "navigate"
     BACK = "back"
     MOVE = "move"
@@ -141,6 +142,7 @@ class ConsumerUiEventKind(str, Enum):
     TOGGLE_CANDIDATE_FILTER = "toggle-candidate-filter"
     TOGGLE_PROMOTION_MODE = "toggle-promotion-mode"
     TOGGLE_DETAILS = "toggle-details"
+    TOGGLE_EVERYWHERE = "toggle-everywhere"
     SEARCH = "search"
     SEARCH_OPEN = "search-open"
     SEARCH_CLOSE = "search-close"
@@ -739,11 +741,20 @@ class ConsumerUiState:
     #: Usable terminal columns, sampled by the shell; never persisted as a preference.
     viewport_columns: int = 100
     viewport_rows: int = 0
-    marketplace_scroll: int = -1
+    #: The first body line drawn when the screen is taller than the terminal (§206). The shell
+    #: stores back the viewport's clamp, so it never runs past the last page.
+    scroll: int = 0
+    #: Whether the page follows the cursor's row; PgUp/PgDn turn it off, moving turns it on.
+    scroll_follows: bool = True
+    #: Whether the last frame drawn was taller than the terminal, so PgUp/PgDn are offered.
+    scrollable: bool = False
     #: Whether Marketplace draws its columns after Artifact and Type; for this session only (§196).
     marketplace_details: bool = False
     #: Whether Installed and Updates draw theirs after Artifact, Type, Harness and Health (§199).
     installed_details: bool = False
+    #: Whether Installed and Updates list every project's installations, not only those an agent
+    #: here reaches; for this session only (§210).
+    installed_everywhere: bool = False
     focus: str = ""
     searching: bool = False
     help_visible: bool = False
@@ -841,11 +852,14 @@ class ConsumerUiState:
             or not isinstance(self.viewport_rows, int)
             or isinstance(self.viewport_rows, bool)
             or self.viewport_rows < 0
-            or not isinstance(self.marketplace_scroll, int)
-            or isinstance(self.marketplace_scroll, bool)
-            or self.marketplace_scroll < -1
+            or not isinstance(self.scroll, int)
+            or isinstance(self.scroll, bool)
+            or self.scroll < 0
+            or not isinstance(self.scroll_follows, bool)
+            or not isinstance(self.scrollable, bool)
             or not isinstance(self.marketplace_details, bool)
             or not isinstance(self.installed_details, bool)
+            or not isinstance(self.installed_everywhere, bool)
             or not isinstance(self.cursor, int)
             or isinstance(self.cursor, bool)
             or not 0 <= self.cursor < max(len(self.rows), 1)
@@ -933,13 +947,13 @@ _WORKFLOW_ROUTES: tuple[tuple[ApplicationScreen, ...], ...] = (
         MaintainerScreen.REGISTRY_COMMIT,
     ),
     (
-        MaintainerScreen.REGISTRY,
+        MaintainerScreen.REGISTRY_DETAILS,
         MaintainerScreen.BULK_PROMOTION,
         MaintainerScreen.REGISTRY_VALIDATION,
         MaintainerScreen.REGISTRY_COMMIT,
     ),
     (
-        MaintainerScreen.REGISTRY,
+        MaintainerScreen.REGISTRY_DETAILS,
         MaintainerScreen.COLLECTIONS,
         MaintainerScreen.COLLECTION_EDITOR,
         MaintainerScreen.REGISTRY_VALIDATION,
@@ -961,12 +975,12 @@ _WORKFLOW_ROUTES: tuple[tuple[ApplicationScreen, ...], ...] = (
         MaintainerScreen.REGISTRY_INIT_REVIEW,
     ),
     (
-        MaintainerScreen.REGISTRY,
+        MaintainerScreen.REGISTRY_DETAILS,
         MaintainerScreen.REGISTRY_REBUILD,
         MaintainerScreen.REGISTRY_REBUILD_REVIEW,
     ),
     (
-        MaintainerScreen.REGISTRY,
+        MaintainerScreen.REGISTRY_DETAILS,
         MaintainerScreen.REPOSITORY_SCAN,
         MaintainerScreen.SCAN_RESULT,
         MaintainerScreen.ADOPTION_REVIEW,
@@ -1200,10 +1214,17 @@ def _navigate(
         configuration_input=configuration_input,
         configuration_targets=configuration_targets,
         configuration_draft=configuration_draft,
-        # #50: 05 -> 07 before any plan exists is the way into the form; once a plan has been
-        # reviewed, 07 is its summary instead.
+        # 07a's columns are scopes, not 05's harnesses: it opens on the first (§209).
+        harness_column=(0 if screen is ConsumerScreen.INSTALL_SCOPE else state.harness_column),
+        # #50: 05 -> 07 before any plan exists is the way into the form, through 07a when a scope
+        # is chosen first (§209); once a plan has been reviewed, 07 is its summary instead.
         config_form_active=(
-            state.session.screen in (ConsumerScreen.REVIEW_SELECTION, ConsumerScreen.INSTALL_PATH)
+            state.session.screen
+            in (
+                ConsumerScreen.REVIEW_SELECTION,
+                ConsumerScreen.INSTALL_PATH,
+                ConsumerScreen.INSTALL_SCOPE,
+            )
             and screen is ConsumerScreen.REQUIRED_INPUTS
             and state.session.review_digest is None
             and bool(state.config_draft.fields)
@@ -1479,7 +1500,7 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     ): MaintainerScreen.REGISTRY_REBUILD_REVIEW,
     (
         ConsumerActionKind.REGISTRY_PUSH,
-        MaintainerScreen.REGISTRY,
+        MaintainerScreen.REGISTRY_DETAILS,
     ): MaintainerScreen.REGISTRY_PUSH,
     (
         ConsumerActionKind.REPOSITORY_SCAN,
@@ -2010,6 +2031,18 @@ def _action_prepared(
             if event.config_draft.fields
             else ConsumerScreen.REVIEW_SELECTION,
         )
+    if (
+        action is ConsumerActionKind.INSTALL
+        and event.config_draft is not None
+        and state.session.screen is ConsumerScreen.INSTALL_SCOPE
+    ):
+        # §209: a scope chosen before the form is prepared again and still needs the form. The
+        # questions are the same, so what was already typed into them is kept.
+        typed = {item.row: item for item in state.config_draft.fields}
+        draft = InstallationConfigDraft(
+            tuple(typed.get(item.row, item) for item in event.config_draft.fields)
+        )
+        return replace(state, config_draft=draft, quit_pending=False), ()
     if action is ConsumerActionKind.INSTALL and event.config_draft is not None:
         if state.session.screen is not ConsumerScreen.REVIEW_SELECTION:
             return state, ()
@@ -2388,6 +2421,16 @@ _SECRET_HOLDING_SCREENS = frozenset(
 )
 
 
+#: Events that change the state without the reader moving: the page somebody turned stays put.
+_KEEPS_THE_PAGE = frozenset(
+    {
+        ConsumerUiEventKind.SCROLL,
+        ConsumerUiEventKind.SET_ROWS,
+        ConsumerUiEventKind.SET_SELECTION,
+    }
+)
+
+
 def reduce_consumer_ui(
     state: ConsumerUiState,
     event: ConsumerUiEvent,
@@ -2399,30 +2442,13 @@ def reduce_consumer_ui(
     if state.exited:
         return state, ()
     reduced, commands = _reduce(state, event)
-    if (
-        reduced is not state
-        and reduced.marketplace_scroll != -1
-        and event.kind
-        in (
-            ConsumerUiEventKind.MOVE,
-            ConsumerUiEventKind.SEARCH,
-            ConsumerUiEventKind.SEARCH_CLOSE,
-            ConsumerUiEventKind.NAVIGATE,
-            ConsumerUiEventKind.BACK,
-            ConsumerUiEventKind.TOGGLE_PROFILE,
-            ConsumerUiEventKind.TOGGLE_DETAILS,
-        )
-    ):
-        reduced = replace(reduced, marketplace_scroll=-1)
+    if reduced.session.screen != state.session.screen:
+        # Another screen is read from its top (§206).
+        reduced = replace(reduced, scroll=0, scroll_follows=True, scrollable=False)
+    elif reduced is not state and event.kind not in _KEEPS_THE_PAGE:
+        reduced = replace(reduced, scroll_follows=True)
     if reduced.asked_secrets and (
-        reduced.session.screen not in _SECRET_HOLDING_SCREENS
-        or reduced.exited
-        or (
-            # Set later on 07b means every credential there: none is asked while installing.
-            event.kind is ConsumerUiEventKind.NAVIGATE
-            and state.session.screen is ConsumerScreen.INSTALL_CREDENTIALS
-            and state.current_row == CONFIG_SET_LATER_ROW
-        )
+        reduced.session.screen not in _SECRET_HOLDING_SCREENS or reduced.exited
     ):
         # §172.6: leaving before Ready was confirmed forgets what 07b marked.
         return replace(reduced, asked_secrets=()), (
@@ -2435,11 +2461,10 @@ def reduce_consumer_ui(
 def _reduce(
     state: ConsumerUiState, event: ConsumerUiEvent
 ) -> tuple[ConsumerUiState, tuple[ConsumerUiCommand, ...]]:
-    if event.kind is ConsumerUiEventKind.SCROLL_MARKETPLACE:
-        if state.session.screen is not ConsumerScreen.MARKETPLACE:
-            return state, ()
-        delta = -1 if event.text == "up" else 1
-        return replace(state, marketplace_scroll=max(state.marketplace_scroll + delta, 0)), ()
+    if event.kind is ConsumerUiEventKind.SCROLL:
+        step = max(state.viewport_rows // 2, 1)
+        delta = -step if event.text == "up" else step
+        return replace(state, scroll=max(state.scroll + delta, 0), scroll_follows=False), ()
     if event.kind is ConsumerUiEventKind.NAVIGATE:
         return _navigate(state, event.screen)
     if event.kind is ConsumerUiEventKind.BACK:
@@ -2492,7 +2517,19 @@ def _reduce(
         if state.session.screen is not ConsumerScreen.INSTALL_CREDENTIALS:
             return state, ()
         held = tuple(item for item in state.asked_secrets if item != event.key)
-        return replace(state, asked_secrets=(*held, event.key) if event.accepted else held), ()
+        if not event.accepted:
+            return replace(state, asked_secrets=held), ()
+        # Storing changed the machine, so the install was prepared again: its review is the one
+        # Ready confirms now (§207).
+        session = state.session
+        if event.review_digest:
+            session = replace(
+                session,
+                semantic_identity=event.semantic_identity or None,
+                selection_identity=event.selection_identity or None,
+                review_digest=event.review_digest,
+            )
+        return replace(state, session=session, asked_secrets=(*held, event.key)), ()
     if event.kind is ConsumerUiEventKind.EDIT_INSTALL_CONFIG:
         if (
             state.session.screen is ConsumerScreen.REQUIRED_INPUTS
@@ -2653,6 +2690,10 @@ def _reduce(
         if state.session.screen in _INSTALLATION_LISTS:
             return replace(state, installed_details=event.accepted, quit_pending=False), ()
         return state, ()
+    if event.kind is ConsumerUiEventKind.TOGGLE_EVERYWHERE:
+        if event.accepted is None or state.session.screen not in _INSTALLATION_LISTS:
+            return state, ()
+        return replace(state, installed_everywhere=event.accepted, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.TOGGLE_SETTING:
         if state.session.screen is not ConsumerScreen.SETTINGS or (
             event.key not in SETTING_ROWS and default_harness_from_row(event.key) is None
@@ -2769,6 +2810,15 @@ def _details_binding(label: str, *, shown: bool) -> _ScreenBinding:
     )
 
 
+def _everywhere_binding(label: str, *, shown: bool) -> _ScreenBinding:
+    """`a` on Installed and Updates: every project's installations, or only those reached here."""
+
+    return _ScreenBinding(
+        KeyBinding("a", label),
+        ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_EVERYWHERE, accepted=shown),
+    )
+
+
 #: The contextual letter keys have one authority: :func:`key_event` translates this table and the
 #: footer displays it. Adding a route without its explanation, or explaining a key that routes
 #: nowhere, is therefore not representable (`QA-026`). Structural keys such as Space and Enter are
@@ -2801,12 +2851,16 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _action_binding("i", "Update", ConsumerActionKind.UPDATE),
         _details_binding("Details", shown=True),
         _details_binding("Hide details", shown=False),
+        _everywhere_binding("All projects", shown=True),
+        _everywhere_binding("This project", shown=False),
     ),
     ConsumerScreen.INSTALLED: (
         _action_binding("u", "Uninstall", ConsumerActionKind.UNINSTALL),
         _action_binding("t", "Test MCP", ConsumerActionKind.MCP_TEST),
         _details_binding("Details", shown=True),
         _details_binding("Hide details", shown=False),
+        _everywhere_binding("All projects", shown=True),
+        _everywhere_binding("This project", shown=False),
     ),
     ConsumerScreen.INSTALLED_ARTIFACT_DETAILS: (
         _action_binding("r", "Repair", ConsumerActionKind.VERIFY_REPAIR),
@@ -2848,10 +2902,13 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
         _event_binding("m", "Toggle mode", ConsumerUiEventKind.TOGGLE_PROMOTION_MODE),
     ),
     MaintainerScreen.REGISTRY: (
-        # Where a finished promotion lands, so the next one starts one key away instead of behind
-        # an Esc for every screen of the journey just completed (`QA-027`).
-        _navigate_binding("c", "Candidates", MaintainerScreen.CANDIDATES),
+        # §202: the list acts on no Registry. Initialize is for a directory that holds none, so it
+        # is the one command offered here, and only while there is no Registry to open.
         _navigate_binding("n", "Initialize", MaintainerScreen.REGISTRY_INIT),
+    ),
+    # The Registry in this directory, opened from its row, and every command acting on it (§202).
+    MaintainerScreen.REGISTRY_DETAILS: (
+        _navigate_binding("c", "Candidates", MaintainerScreen.CANDIDATES),
         _navigate_binding("b", "Rebuild", MaintainerScreen.REGISTRY_REBUILD),
         _navigate_binding("s", "Scan Repository", MaintainerScreen.REPOSITORY_SCAN),
         _navigate_binding("u", "Check upstream", MaintainerScreen.ADOPTED_ARTIFACTS),
@@ -3080,12 +3137,15 @@ def _binding_enabled(binding: _ScreenBinding, state: ConsumerUiState) -> bool:
         return state.current_row not in ("", "add-registry")
     if binding.event.kind is ConsumerUiEventKind.TOGGLE_DETAILS:
         return binding.event.accepted is not details_shown(state)
+    if binding.event.kind is ConsumerUiEventKind.TOGGLE_EVERYWHERE:
+        return binding.event.accepted is not state.installed_everywhere
     if binding.event.action is ConsumerActionKind.REGISTRY_PUSH:
         return state.current_row == REGISTRY_WORKSPACE_READY_ROW
-    if binding.event.screen is MaintainerScreen.COLLECTIONS:
-        # The Collections opened are the cursor's Registry's, so a row that is no Registry opens
-        # none (§183).
-        return state.current_row not in ("", REGISTRY_WORKSPACE_ROW, REGISTRY_WORKSPACE_READY_ROW)
+    if binding.event.screen is MaintainerScreen.REGISTRY_INIT:
+        # A directory that already holds a Registry opens it instead (§202).
+        return not any(
+            row in (REGISTRY_WORKSPACE_ROW, REGISTRY_WORKSPACE_READY_ROW) for row in state.rows
+        )
     return True
 
 
@@ -3178,7 +3238,7 @@ def key_bindings(
             elif row == CONFIG_CONTINUE_ROW:
                 bindings.append(KeyBinding("Enter", "Continue"))
             elif row:
-                label = "Don't ask" if row in state.asked_secrets else "Ask when installing"
+                label = "Enter again" if row in state.asked_secrets else "Enter value"
                 bindings.append(KeyBinding("Enter", label))
         elif _answered_in_place(state) and "enter" not in keys:
             bindings.append(KeyBinding("Enter", "Credential details"))
@@ -3216,7 +3276,7 @@ def key_bindings(
             bindings.append(KeyBinding("Enter", "Registry"))
     if state.session.screen in _SEARCHABLE and not typing:
         bindings.append(KeyBinding("/", "Search"))
-    if state.session.screen is ConsumerScreen.MARKETPLACE and state.viewport_rows:
+    if state.scrollable and not state.searching:
         bindings.append(KeyBinding("PgUp/PgDn", "Scroll"))
     if not typing:
         bindings.append(KeyBinding("v", state.session.profile.toggle_label))
@@ -3270,9 +3330,9 @@ def key_event(
             return ConsumerUiEvent(ConsumerUiEventKind.SEARCH, text=state.search + key)
         return None
 
-    if state.session.screen is ConsumerScreen.MARKETPLACE and key in ("page-up", "page-down"):
+    if key in ("page-up", "page-down"):
         return ConsumerUiEvent(
-            ConsumerUiEventKind.SCROLL_MARKETPLACE, text="up" if key == "page-up" else "down"
+            ConsumerUiEventKind.SCROLL, text="up" if key == "page-up" else "down"
         )
 
     text_rows = _form_text_rows(state)

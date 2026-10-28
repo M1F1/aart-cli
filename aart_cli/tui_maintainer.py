@@ -922,21 +922,44 @@ def render_maintainer_registry(
     *,
     selected: bool = False,
     show_working_tree: bool = True,
+    brief: bool = False,
+    named: bool = True,
 ) -> tuple[str, ...]:
     """One subscribed registry as a row, with what it holds said under it.
 
     Digests are shortened in both profiles so `v` never redraws the row; they are spelt out in full
     by :func:`maintainer_registry_detail`, the description of the row under the cursor.
+
+    `brief` is the row on screen 46's list (§202): a few lines that do not grow with the
+    Registry's history, which screen 46k, the Registry in this directory, shows in full. Without
+    `named` the block goes under the workspace's row, which already names it.
     """
 
-    if not isinstance(view, MaintainerRegistryView) or not isinstance(selected, bool):
+    if (
+        not isinstance(view, MaintainerRegistryView)
+        or not isinstance(selected, bool)
+        or not isinstance(brief, bool)
+        or not isinstance(named, bool)
+    ):
         raise ValueError("Maintainer registry rendering needs a typed view")
     fast = PresentationProfile.LESS_INFO
-    lines = [
-        f"{'>' if selected else ' '} {view.alias}  {'✓ Valid' if view.valid else '⚠ Attention'}",
-    ]
+    validity = "✓ Valid" if view.valid else "⚠ Attention"
+    lines = [f"{'>' if selected else ' '} {view.alias}  {validity}" if named else f"    {validity}"]
     lines.extend(listed(view.diagnostics, indent="    "))
     if view.snapshot is None:
+        return tuple(lines)
+    if brief:
+        kinds = "  ".join(f"{kind.value} {count}" for kind, count in view.artifact_counts)
+        lines.append(
+            f"    Approved versions: {view.version_count}" + (f"  ({kinds})" if kinds else "")
+        )
+        if show_working_tree:
+            lines.append(f"    Working tree: {_WORKING_TREE_LABELS[view.working_tree.state]}")
+        lines.append(
+            f"    Promotions recorded: {len(view.transactions)}"
+            if view.transactions
+            else "    No promotion has been recorded in this registry yet."
+        )
         return tuple(lines)
     lines.append(f"    Revision: {_short(view.revision or '', fast)}")
     lines.append(f"    Snapshot: {_short(view.snapshot, fast)}")
@@ -968,8 +991,13 @@ def render_maintainer_registry(
     return tuple(lines)
 
 
-def maintainer_registry_detail(view: MaintainerRegistryView) -> tuple[str, ...]:
-    """The registry under the cursor with every digest in full (Verbose)."""
+def maintainer_registry_detail(
+    view: MaintainerRegistryView, *, promotions: bool = True
+) -> tuple[str, ...]:
+    """The registry under the cursor with every digest in full (Verbose).
+
+    Screen 46's list leaves the promotions to the Registry opened from the row (§202, INV-303).
+    """
 
     if not isinstance(view, MaintainerRegistryView):
         raise ValueError("Maintainer registry detail needs a typed view")
@@ -978,7 +1006,7 @@ def maintainer_registry_detail(view: MaintainerRegistryView) -> tuple[str, ...]:
     lines = [f"Revision: {view.revision or 'none'}", f"Snapshot: {view.snapshot}"]
     if view.working_tree.digest is not None:
         lines.append(f"Working tree observed: {view.working_tree.digest}")
-    for number, item in enumerate(view.transactions, start=1):
+    for number, item in enumerate(view.transactions if promotions else (), start=1):
         lines.append(f"Promotion {number} ({item.mode}) produced {item.snapshot_after}")
         lines.extend(
             f"  {version.artifact or 'no longer in this Registry'}  candidate {version.candidate_id}"
@@ -1011,9 +1039,14 @@ def maintainer_registry_rows(
                 view,
                 selected=view.alias == cursor,
                 show_working_tree=registry_workspace_present,
+                brief=True,
             )
         )
     return tuple(lines)
+
+
+#: The mark on the Registry this run stands in, the only one screen 46 opens (§202).
+HERE = "● you are here"
 
 
 def maintainer_workspace_row(
@@ -1031,7 +1064,8 @@ def maintainer_workspace_row(
     if not isinstance(view, MaintainerRegistryWorkspaceView) or not isinstance(selected, bool):
         raise ValueError("a registry workspace row needs a workspace view")
     marker = "> " if selected else "  "
-    return f"{marker}{view.name}" + (f"  {view.commit}" if view.commit else "")
+    # §202: the one Registry this run can open and act on is the one it stands in.
+    return f"{marker}{view.name}" + (f"  {view.commit}" if view.commit else "") + f"  {HERE}"
 
 
 #: 164.7 in the words the decision is made in: a maintainer may point a subscription at the branch
@@ -1198,8 +1232,11 @@ def maintainer_registry_status(
     views: tuple[MaintainerRegistryView, ...],
     *,
     registry_workspace_present: bool = True,
+    listed: bool = False,
 ) -> tuple[str, ...]:
     """The state of this project, said once each (`QA-094`).
+
+    On screen 46's list, which acts on nothing, the Registry here is to be opened (§202).
 
     Two standing facts and no headings: what the local checkout is, and whether anything is
     subscribed here. `QA-075` is why the second is phrased about *subscribed* registries -- "No
@@ -1210,11 +1247,12 @@ def maintainer_registry_status(
 
     if not isinstance(views, tuple):
         raise ValueError("Maintainer registries rendering needs typed views")
-    local = (
-        "Current project contains a Registry. Rebuild updates its generated files."
-        if registry_workspace_present
-        else "Current project is not a Registry. Initialize creates one here."
-    )
+    if not registry_workspace_present:
+        local = "Current project is not a Registry. Initialize creates one here."
+    elif listed:
+        local = f"Current project contains a Registry ({HERE}): open it to work on it."
+    else:
+        local = "Current project contains a Registry. Rebuild updates its generated files."
     if views:
         return (local,)
     return separate((local,), ("No Registry is subscribed in this project yet.",))

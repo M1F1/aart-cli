@@ -613,11 +613,12 @@ class InstallTimeConfigPreparationE2ETest(BothBackendsMeasured):
                 RIGHT,
                 SPACE,
                 ENTER,
+                # 07a the scope, before the form (§209).
+                ENTER,
                 value,
                 ENTER,
                 # Submit. The plan still offers a choice of backend, so 05 shows only that (D-380);
-                # then 07a the scope, then Ready (which holds Remediation's changes since D-403).
-                ENTER,
+                # then Ready (which holds Remediation's changes since D-403).
                 ENTER,
                 ENTER,
                 # 07b: Set later, above the credential the cursor opens on (§172.6).
@@ -689,11 +690,12 @@ class InstallTimeConfigPreparationE2ETest(BothBackendsMeasured):
                 RIGHT,
                 SPACE,
                 ENTER,
+                # 07a the scope, before the form (§209).
+                ENTER,
                 # The form opens on its field. Its declared default would be an answer (§172.4),
                 # so it is cleared first; Set later is the row above it.
                 *((BACKSPACE,) * len("acme")),
                 UP,
-                ENTER,
                 ENTER,
                 ENTER,
                 # 07b: Set later, above the credential the cursor opens on (§172.6).
