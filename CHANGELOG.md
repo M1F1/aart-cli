@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.20.0](https://github.com/M1F1/aart-cli/compare/v0.19.0...v0.20.0) (2026-10-28)
+
+
+### Added
+
+* a credential is entered on the TUI's credentials screen, and deleted again if the install does not happen ([f81e918](https://github.com/M1F1/aart-cli/commit/f81e918cf91ab4f7d470ffe82f7b18e85a917d58))
+* a credential may declare its length, and a value the Keychain prompt cut is entered through a macOS dialog ([f81e918](https://github.com/M1F1/aart-cli/commit/f81e918cf91ab4f7d470ffe82f7b18e85a917d58))
+* a running action shows that it is working, and Test MCP finds a user installation from a project and says why a test failed ([f81e918](https://github.com/M1F1/aart-cli/commit/f81e918cf91ab4f7d470ffe82f7b18e85a917d58))
+* an install asks the scope before configuration and credentials ([f81e918](https://github.com/M1F1/aart-cli/commit/f81e918cf91ab4f7d470ffe82f7b18e85a917d58))
+* consume mcp test reads every schema FastMCP generates ([f81e918](https://github.com/M1F1/aart-cli/commit/f81e918cf91ab4f7d470ffe82f7b18e85a917d58))
+* every screen taller than the terminal scrolls with PgUp and PgDn ([f81e918](https://github.com/M1F1/aart-cli/commit/f81e918cf91ab4f7d470ffe82f7b18e85a917d58))
+* Installed shows the user's and this project's installations, and every project's on request ([f81e918](https://github.com/M1F1/aart-cli/commit/f81e918cf91ab4f7d470ffe82f7b18e85a917d58))
+* screen 46 lists each Registry in a few lines, and only the Registry here opens, with its promotions and commands ([f81e918](https://github.com/M1F1/aart-cli/commit/f81e918cf91ab4f7d470ffe82f7b18e85a917d58))
+* uninstall deletes the credentials of the installations it removes ([f81e918](https://github.com/M1F1/aart-cli/commit/f81e918cf91ab4f7d470ffe82f7b18e85a917d58))
+
 ## [0.19.0](https://github.com/M1F1/aart-cli/compare/v0.18.0...v0.19.0) (2026-10-27)
 
 
