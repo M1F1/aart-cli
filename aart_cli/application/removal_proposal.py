@@ -12,9 +12,9 @@ module does the rest -- one absent desired state per member, one plan against wh
 there, and one review digest over all of them, so a person confirms the whole removal rather than
 each step of it.
 
-Nothing here reads a secret value. Credentials are retained by default: the last dependant
-disappearing is not authority to delete somebody's token, so deleting one is a separate mutation a
-caller asks for explicitly.
+Nothing here reads a secret value. Each installation's credential items are its own (D-334), so
+the uninstall that removes it asks for them to be deleted with it (§208); nothing here decides that
+on its own.
 """
 
 from __future__ import annotations
@@ -111,9 +111,8 @@ def plan_removal(
 ) -> Result[PlannedRemoval]:
     """Derive what removing one recorded installation would converge on.
 
-    `delete_credentials` reaches only the launched shape, because a placed artifact has none. It
-    defaults to False everywhere: a credential outliving its last dependant is the documented
-    behaviour, not an oversight to be corrected by whoever calls this.
+    `delete_credentials` reaches only the launched shape, because a placed artifact has none. An
+    uninstall asks for it for every record it removes (§208); a record that narrows keeps them.
     """
 
     if not isinstance(record, InstalledRecord):

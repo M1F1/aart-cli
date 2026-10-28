@@ -78,7 +78,6 @@ from aart_cli.application.consumer_views import (
     pairs_harnesses,
     project_lifecycle_plan,
     project_running_installation,
-    scope_choice_offered,
     scope_matrix_rows,
     secrets_to_ask,
     settings_pairs,
@@ -130,12 +129,14 @@ from aart_cli.configuration.schema import configured_source_from_input
 from aart_cli.domain.candidates import CandidateId
 from aart_cli.domain.credentials import (
     CredentialIntent,
+    CredentialLength,
     CredentialReference,
     CredentialState,
     ProviderState,
+    checked_observation,
 )
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
-from aart_cli.domain.effects import VerifyCredential
+from aart_cli.domain.effects import ReplaceCredential, StoreCredential, VerifyCredential
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import (
     ArtifactCoordinate,
@@ -194,8 +195,11 @@ from aart_cli.io.configured_uninstall_action import (
 )
 from aart_cli.io.consumer_machine import read_consumer_machine, read_installed_inspections
 from aart_cli.io.consumer_settings import write_consumer_settings
+from aart_cli.io.credential_entry import CredentialEntryFallback
 from aart_cli.io.credentials import CredentialProviderPort
 from aart_cli.io.execution import CredentialEffectInterpreter, TerminalHandover
+from aart_cli.io.harness import ScopedHarnessRegistry
+from aart_cli.io.installation_execution import interpreters_for
 from aart_cli.io.installed_smoke import LocalMcpTest, SmokePlanEntry, SmokeTargetResult
 from aart_cli.io.maintainer_promotion import (
     PreparedConfiguredCandidatePromotion,
@@ -270,6 +274,14 @@ def _installation_of(record: InstalledRecord) -> str:
     owner = record.receipt.owner
     assert owner is not None
     return installation_key(record.coordinate, owner)
+
+
+def _why(error: BaseException) -> str:
+    """An exception as one bounded line a screen can draw, so a failure says what failed (D-491)."""
+
+    said = " ".join(str(error).split())
+    named = f"{type(error).__name__}: {said}" if said else type(error).__name__
+    return named if len(named) <= 200 else named[:199] + "…"
 
 
 def _lines(*messages: str) -> tuple[str, ...]:
@@ -507,19 +519,17 @@ def _per_artifact(views: tuple[InputView, ...], artifacts: dict[str, str]) -> tu
 
 
 def _after_inputs(plan: ConsumerPlanView, *, default_path: bool = False) -> ConsumerScreen:
-    """Where a reviewed install goes once its form was submitted (D-380, §161.5, §172.5).
+    """Where a reviewed install goes once its form was submitted (D-380, §161.5, §209).
 
-    05 again only while the plan still offers a real choice of backend, then 07a while some pair
-    may go to more than one scope; otherwise Ready. The Default path asks neither: Settings has
-    answered both (§173.7), so only the secrets are left.
+    05 again only while the plan still offers a real choice of backend; otherwise 07b or Ready.
+    07a was passed before the form (§209). The Default path has its backend from Settings
+    (§173.7), so only the secrets are left.
     """
 
     if default_path:
         return ConsumerScreen.INSTALL_CREDENTIALS if secrets_to_ask(plan) else ConsumerScreen.READY
     if plan.installer_choice is not None and plan.installer_choice.is_a_choice:
         return ConsumerScreen.REVIEW_SELECTION
-    if scope_choice_offered(plan.scope_offers):
-        return ConsumerScreen.INSTALL_SCOPE
     if secrets_to_ask(plan):
         return ConsumerScreen.INSTALL_CREDENTIALS
     return ConsumerScreen.READY
@@ -658,6 +668,8 @@ class _PendingCredentialAction:
     provider: CredentialProviderPort
     review_digest: str
     guidance: tuple[CredentialGuidance, ...] = ()
+    #: The length an artifact needing it declares, judged once the value is stored (§204).
+    length: CredentialLength | None = None
 
 
 class McpTestPort(Protocol):
@@ -872,6 +884,7 @@ class LocalConsumerActions:
         repository_adopted_list: RepositoryAdoptedListPort | None = None,
         terminal_handover: TerminalHandover | None = None,
         mcp_test: McpTestPort | None = None,
+        credential_entry: tuple[CredentialEntryFallback, ...] = (),
     ) -> None:
         if not isinstance(context, ConsumerActionContext):
             raise ValueError("consumer actions need a composed action context")
@@ -903,9 +916,15 @@ class LocalConsumerActions:
         #: keyboard.  A credential prompt belongs to the provider, not to AART (161.8/161.9), and
         #: under the TUI it would otherwise be spoken over a drawn frame (`QA-081`).
         self._terminal_handover = terminal_handover
-        #: The 07b rows whose credential the store's own prompt asks for during the install
-        #: (§172.6). Row keys only: no value of a credential is ever held in this process.
-        self._asked_rows: set[str] = set()
+        #: Other ways to enter a credential when what the store's prompt kept is not it (§204).
+        self._credential_entry = tuple(credential_entry)
+        #: What the store's own prompt took on 07b for the review held now, by reference (§207).
+        #: References only: no value of a credential is ever held in this process. They are
+        #: deleted when that review is abandoned or its install fails.
+        self._entered: dict[str, CredentialReference] = {}
+        #: The command the held install review was prepared from, to prepare it again after 07b
+        #: stored something, because the machine it measured has changed (§207).
+        self._install_command: ConsumerUiCommand | None = None
         #: The plan 07b redraws after each choice; it says what is asked, never a value.
         self._pending_plan: ConsumerPlanView | None = None
         #: What each 07b row answers: the references it fills, what the artifact says about the
@@ -1086,6 +1105,7 @@ class LocalConsumerActions:
         installation_inputs=(),
         install_targets: tuple[HarnessTargetView, ...] = (),
         mcp_test: McpTestView | None = None,
+        install_scope_offers: tuple[str, ...] = (),
     ) -> CanonicalScreenSource:
         """The screens for the machine as it currently stands, plus whatever a flow is holding."""
 
@@ -1133,6 +1153,8 @@ class LocalConsumerActions:
                 mcp_test=mcp_test,
                 harnesses=self._context.host.profiles,
                 author_report=self._author_report,
+                install_scope_offers=install_scope_offers,
+                project_root=self._context.host.project_root,
             )
         )
 
@@ -1221,22 +1243,48 @@ class LocalConsumerActions:
         )
 
     def discard_secrets(self) -> None:
-        """Forget which credentials 07b marked; the session left the screens that hold the choice."""
+        """Delete what 07b entered: the session left the review it was entered for (§207)."""
 
-        self._asked_rows = set()
+        self._forget_entered(tuple(self._entered))
+
+    def _forget_entered(self, references: tuple[str, ...]) -> None:
+        """Delete these items 07b stored, and stop holding them."""
+
+        for raw in references:
+            reference = self._entered.pop(raw, None)
+            if reference is None:
+                continue
+            keeper = next(
+                (
+                    item
+                    for item in self._context.credential_providers
+                    if item.provider == reference.provider.provider
+                ),
+                None,
+            )
+            if keeper is not None:
+                # A deletion that fails leaves an item Credentials and variables still lists, so
+                # it can be deleted there; nothing here could say more about it.
+                keeper.delete(reference)
 
     def _ask_secret(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
-        """Mark or unmark one 07b row: the store's own prompt asks for it during the install.
+        """Let the credential store take one 07b row's value now, then prepare the install again.
 
-        Nothing is read here and nothing is lent: the person types the value into the credential
-        store when the reviewed install reaches that credential, and aart-cli never sees it
-        (§172.6, §201). An unmarked row is stored as the `AART_NOT_SET` placeholder.
+        Each installation the row reaches has its own item (D-334), so the store's own prompt asks
+        once for each, on the lent terminal after its briefing, and the macOS dialog follows only
+        when what the prompt kept is not the credential (§204). aart-cli never sees a value. An
+        item somebody stored before this review is left alone. Storing changes the machine the
+        review measured, so the install is prepared again from the same command, or its preflight
+        would refuse it as changed after Review (§207).
         """
 
         row = command.focus
-        if row not in self._secret_rows or not isinstance(self._pending, _PendingInstall):
+        pending = self._pending
+        held = self._secret_rows.get(row)
+
+        def refused(reason: tuple[str, ...]) -> ConsumerActionUpdate:
             return ConsumerActionUpdate(
-                self.source(notice=_lines("this credential is not part of the reviewed install")),
+                self.source(plan=self._pending_plan, notice=reason),
                 ConsumerUiEvent(
                     ConsumerUiEventKind.SECRET_ASKED,
                     action=ConsumerActionKind.INSTALL,
@@ -1244,18 +1292,88 @@ class LocalConsumerActions:
                     accepted=False,
                 ),
             )
-        asked = row not in self._asked_rows
-        if asked:
-            self._asked_rows.add(row)
-        else:
-            self._asked_rows.discard(row)
+
+        if (
+            held is None
+            or not isinstance(pending, _PendingInstall)
+            or pending.prepared.action is None
+            or self._install_command is None
+        ):
+            return refused(_lines("this credential is not part of the reviewed install"))
+        references = held[0]
+        interpreters = interpreters_for(
+            pending.prepared.action.installations,
+            registry=ScopedHarnessRegistry(self._reviewed_host().scope_roots),
+            credential_providers=self._context.credential_providers,
+            interactive_credentials=True,
+            credential_handover=self._terminal_handover,
+            prompted_credentials=frozenset(str(reference) for reference in references),
+            credential_entry=self._credential_entry,
+        )
+        if isinstance(interpreters, Err):
+            return refused(_refusal(interpreters.diagnostics))
+        keepers = tuple(
+            item for item in interpreters.value if isinstance(item, CredentialEffectInterpreter)
+        )
+        why: tuple[str, ...] = ()
+        for reference in references:
+            raw, name = str(reference), reference.provider.provider
+            keeper = next(
+                (item for item in keepers if item.supports(StoreCredential(raw, name))), None
+            )
+            if keeper is None:
+                why = _lines(f"nothing here can store {reference.input}")
+                break
+            if raw not in self._entered:
+                before = keeper.provider.inspect(reference)
+                if isinstance(before, Ok) and before.value.state is CredentialState.PRESENT:
+                    continue
+            replacing = raw in self._entered
+            # Whatever the prompt leaves behind is this review's, to delete if it is abandoned.
+            self._entered[raw] = reference
+            applied = keeper.apply(
+                ReplaceCredential(raw, name) if replacing else StoreCredential(raw, name)
+            )
+            if isinstance(applied, Err):
+                why = _refusal(applied.diagnostics)
+                break
+            observed = keeper.provider.inspect(reference)
+            unfit = (
+                "nothing was stored"
+                if not isinstance(observed, Ok)
+                or observed.value.state is not CredentialState.PRESENT
+                else keeper.unfit(raw, observed.value)
+            )
+            if unfit is not None:
+                why = _lines(f"{reference.input} is not configured: {unfit}")
+                break
+        if why:
+            # A row is stored whole or not at all: what it left is deleted, and 07b says why.
+            self._forget_entered(tuple(str(reference) for reference in references))
+            return refused(why)
+        prepared = self._prepare_install(self._install_command)
+        event = prepared.event
+        if event.kind is not ConsumerUiEventKind.ACTION_PREPARED or not event.review_digest:
+            self._forget_entered(tuple(str(reference) for reference in references))
+            return ConsumerActionUpdate(
+                prepared.source,
+                ConsumerUiEvent(
+                    ConsumerUiEventKind.SECRET_ASKED,
+                    action=ConsumerActionKind.INSTALL,
+                    key=row,
+                    accepted=False,
+                ),
+            )
         return ConsumerActionUpdate(
-            self.source(plan=self._pending_plan),
+            prepared.source,
             ConsumerUiEvent(
                 ConsumerUiEventKind.SECRET_ASKED,
                 action=ConsumerActionKind.INSTALL,
                 key=row,
-                accepted=asked,
+                accepted=True,
+                semantic_identity=event.semantic_identity,
+                selection_identity=event.selection_identity,
+                review_digest=event.review_digest,
             ),
         )
 
@@ -1296,6 +1414,8 @@ class LocalConsumerActions:
                 if (
                     not isinstance(observed, Ok)
                     or observed.value.state is not CredentialState.PRESENT
+                    # What 07b stored for this review is still its question, answered (§207).
+                    or str(reference) in self._entered
                 ):
                     configured = False
             first = members[0][1]
@@ -1514,17 +1634,22 @@ class LocalConsumerActions:
                 return self._declined(command, refreshed)
         else:
             declared: list[tuple[str, InputGuidance | None]] = []
+            lengths: list[CredentialLength] = []
             for installation in inspected.value.inspections:
                 if observation.reference not in installation.record.credential_references:
                     continue
                 inputs = self._installed_inputs(installation.record)
                 if isinstance(inputs, Err):
                     continue
-                declared.extend(
-                    (str(installation.record.coordinate), item.guidance)
+                needing = tuple(
+                    item
                     for item in inputs.value
                     if isinstance(item, SecretInput) and item.id == observation.reference.input
                 )
+                declared.extend(
+                    (str(installation.record.coordinate), item.guidance) for item in needing
+                )
+                lengths.extend(item.validation for item in needing if item.validation is not None)
             guidance = gather_credential_guidance(
                 observation.reference.input.value,
                 declared,
@@ -1534,6 +1659,7 @@ class LocalConsumerActions:
                 provider,
                 review_digest,
                 guidance,
+                lengths[0] if lengths else None,
             )
             self._pending_action = command.action
         return ConsumerActionUpdate(
@@ -2132,6 +2258,7 @@ class LocalConsumerActions:
         return Ok(tuple(entries))
 
     def _prepare_install(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        self._install_command = command
         keys = self._targets(command)
         if not keys:
             return self._declined(command, _lines("nothing is selected to install"))
@@ -2216,8 +2343,9 @@ class LocalConsumerActions:
         context = self._context
         groups = groups or {}
         if command.action is ConsumerActionKind.INSTALL:
-            # A new review is a new set of questions; nothing entered for the last one carries over.
-            self._asked_rows, self._secret_rows = set(), {}
+            # A new review is a new set of questions. What 07b entered stays held: it is deleted
+            # when the session leaves the screens of this review (§207).
+            self._secret_rows = {}
         host = self._host(command.install_scope)
         preferred = PythonInstaller(command.python_installer or context.settings.python_installer)
         # Until screen 05 has been answered there are no pairs, and placement measures every harness.
@@ -2499,11 +2627,14 @@ class LocalConsumerActions:
                             },
                         ),
                         install_targets=targets,
+                        # §209: 07a is drawn from these before the form, while no plan exists.
+                        install_scope_offers=scope_matrix_rows(scope_offers),
                     ),
                     ConsumerUiEvent(
                         ConsumerUiEventKind.ACTION_PREPARED,
                         action=command.action,
                         pairs=pairs,
+                        pair_scopes=pair_scopes,
                         config_draft=draft,
                     ),
                 )
@@ -3468,11 +3599,6 @@ class LocalConsumerActions:
             if report is not None:
                 report(project_running_installation(tuple(reports)))
 
-        prompted = frozenset(
-            str(reference)
-            for row in self._asked_rows
-            for reference in self._secret_rows.get(row, ((), (), ""))[0]
-        )
         completed = complete_configured_installation(
             pending.prepared,
             expected_review_digest=pending.prepared.review_digest,
@@ -3483,17 +3609,18 @@ class LocalConsumerActions:
             recorded_at=recorded_at,
             today=today,  # type: ignore[arg-type]
             offline=self._context.offline,
-            # The store's own prompt takes each credential marked on 07b, on the lent terminal,
-            # after its briefing; every other secret is stored as the AART_NOT_SET placeholder.
-            interactive_credentials=bool(prompted),
-            credential_handover=self._terminal_handover if prompted else None,
-            prompted_credentials=prompted,
+            # 07b's store prompts already ran (§207); every secret not entered there is stored as
+            # the AART_NOT_SET placeholder, so the install asks nobody anything.
             skipped_secrets_as_placeholders=True,
             observe=None if self._progress is None else observe,
+            credential_entry=self._credential_entry,
         )
-        self._asked_rows = set()
         if isinstance(completed, Err):
+            # The values were entered for this install, and it did not happen (§207).
+            self._forget_entered(tuple(self._entered))
             return self._failed(command, _refusal(completed.diagnostics))
+        # They belong to the installations now, and leave with them (§208).
+        self._entered = {}
         self._machine = completed.value.machine
         receipt = completed.value.action.flow.outcome
         assert receipt is not None
@@ -3602,10 +3729,11 @@ class LocalConsumerActions:
             )
         try:
             planned = self._mcp_tester(self._reviewed_host()).plan(after.records)
-        except Exception:  # noqa: BLE001 - the offer is withheld, the install is untouched
+        except Exception as error:  # noqa: BLE001 - the offer is withheld, the install is untouched
             return ConsumerActionUpdate(
                 self._after_install_source(
-                    after.test, _lines("the installed MCPs could not be read for a test")
+                    after.test,
+                    _lines(f"the installed MCPs could not be read for a test: {_why(error)}"),
                 ),
                 ConsumerUiEvent(ConsumerUiEventKind.ACTION_PREPARED, action=command.action),
             )
@@ -3654,14 +3782,25 @@ class LocalConsumerActions:
             )
         host = self._host()
         views = {item.row: item for item in self.source().screens.installed}
+        # Each key says where its installation is: an MCP installed for the user is tested from a
+        # project too, so the records are read in the key's scope and root, never the session's.
+        places: dict[tuple[str, str], list[str]] = {}
+        for key in targets:
+            _, _, scope, root = (key.split("#", 3) + ["", "", ""])[:4]
+            places.setdefault((scope, root), []).append(key)
         try:
-            records = self._mcp_tester(host).installations(
-                scope=host.scope,
-                root=host.harness_root,
-                harnesses=frozenset(
-                    views[key].harness.partition("+")[0] for key in targets if key in views
-                ),
-                coordinates=frozenset(key.partition("#")[0] for key in targets),
+            records = tuple(
+                record
+                for (scope, root), keys in sorted(places.items())
+                if scope in (Scope.PROJECT.value, Scope.USER.value)
+                for record in self._mcp_tester(host).installations(
+                    scope=Scope(scope),
+                    root=root,
+                    harnesses=frozenset(
+                        views[key].harness.partition("+")[0] for key in keys if key in views
+                    ),
+                    coordinates=frozenset(key.partition("#")[0] for key in keys),
+                )
             )
             chosen = tuple(record for record in records if _installation_of(record) in targets)
             missing = tuple(
@@ -3673,9 +3812,10 @@ class LocalConsumerActions:
                     _lines(*(f"{key} has no recorded MCP installation to test" for key in missing)),
                 )
             planned = self._mcp_tester(host).plan(chosen)
-        except Exception:  # noqa: BLE001 - a test that cannot be prepared changes nothing
+        except Exception as error:  # noqa: BLE001 - a test that cannot be prepared changes nothing
             return self._declined(
-                command, _lines("the installed MCPs could not be read for a test")
+                command,
+                _lines(f"the installed MCPs could not be read for a test: {_why(error)}"),
             )
         plan = tuple(
             McpTestEntryView(item.installation, item.tool, item.arguments) for item in planned
@@ -3718,9 +3858,15 @@ class LocalConsumerActions:
 
         try:
             ran = self._mcp_tester(self._reviewed_host()).run(pending.records)
-        except Exception:  # noqa: BLE001 - a test that cannot run is reported, not escalated
+        except Exception as error:  # noqa: BLE001 - a test that cannot run is reported, not escalated
             return ConsumerActionUpdate(
-                drawn(test, _lines("the MCP test could not be run; the installation is unchanged")),
+                drawn(
+                    test,
+                    _lines(
+                        f"the MCP test could not be run: {_why(error)}",
+                        "the installation is unchanged",
+                    ),
+                ),
                 ConsumerUiEvent(ConsumerUiEventKind.ACTION_FAILED, action=command.action),
             )
         results = tuple(
@@ -3760,6 +3906,8 @@ class LocalConsumerActions:
             interactive_store=True,
             terminal_handover=self._terminal_handover,
             guidance={str(reference): pending.guidance} if pending.guidance else None,
+            lengths=None if pending.length is None else {str(reference): pending.length},
+            fallbacks=self._credential_entry,
         )
         for effect in plan.effects:
             if isinstance(effect, VerifyCredential):
@@ -3788,6 +3936,19 @@ class LocalConsumerActions:
                     "choose Verify to ask it again",
                 ),
             )
+        if expected is CredentialState.PRESENT:
+            checked = checked_observation(observed.value, pending.length)
+            if checked.state is CredentialState.INVALID:
+                # Stored, and still not the credential: said as a failure, with why (§204).
+                return self._failed(
+                    command,
+                    _lines(
+                        f"{reference.input} is not configured: {checked.detail}",
+                        "set it again and paste the whole value",
+                    ),
+                )
+            if pending.length is None and observed.value.clipped:
+                done = f"{done} {observed.value.detail}; if it is longer, set it again."
         return self._recorded(command, str(reference), notice=(done, *unread))
 
     def _execute_repair(

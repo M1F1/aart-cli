@@ -1632,7 +1632,7 @@
     {
       "id": "CP-45",
       "title": "Credentials and variables from the command line; Installed reads like Marketplace",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -1667,7 +1667,74 @@
         {
           "id": "7",
           "title": "Commit, push, PR and release, at the owner's request",
-          "status": "in_progress"
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-46",
+      "title": "Only the Registry here opens, and its commands are there; a running action beats, mcp test reads generated schemas and says why it failed; a credential may declare its length; mcp test reads every schema FastMCP generates; every long screen scrolls; credentials are entered on 07b and leave with their installation; scope is chosen before configuration; Installed shows what this context reaches",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Screen 46 keeps each Registry to a few lines and acts on nothing; only the Registry here, marked, opens as 46k with its checkout's promotions and every command acting on it (§202, INV-303, INV-304, D-488, D-489)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "A running action shows a turning mark and its seconds, never over a credential prompt; consume mcp test applies generated schemas' bounds and branches and reads past annotations and x- extensions (§203, INV-305, INV-306, D-490)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Test MCP finds an installation in the scope and root its key names, and a failed test names the error (§203 addendum, INV-307, D-491)",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "A secret may declare min_length/max_length; a stored value of another length is not configured in Credentials and variables, inputs list and doctor; a value the Keychain prompt cut is entered through a macOS dialog, else Keychain Access instructions (§204, INV-308, INV-309, D-492)",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Focused verification, targeted mutations, documents",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "consume mcp test reads every schema FastMCP generates: pattern, $ref/$defs, prefixItems, patternProperties, propertyNames, additionalProperties as a schema, numbers with a fraction; a refusal is said alone (§205, INV-310, D-493)",
+          "status": "done"
+        },
+        {
+          "id": "7",
+          "title": "Every screen taller than the terminal scrolls with PgUp/PgDn and follows the cursor, in the consumer and maintainer TUIs (§206)",
+          "status": "done"
+        },
+        {
+          "id": "8",
+          "title": "A credential is entered on 07b: Enter opens the store's prompt there (the macOS dialog only for a value the prompt cut), the plan is prepared again, and what was entered is deleted when the install is abandoned or fails (§207, INV-312, D-495)",
+          "status": "done"
+        },
+        {
+          "id": "9",
+          "title": "Uninstall deletes the credentials of exactly the installations it removes (§208, INV-313, D-496)",
+          "status": "done"
+        },
+        {
+          "id": "10",
+          "title": "Scope is chosen before configuration and credentials: 05, 07a, 07, 07b, Ready (§209, INV-314, D-497)",
+          "status": "done"
+        },
+        {
+          "id": "11",
+          "title": "Installed and Updates show by default what an agent here reaches (the user's and this project's installations), a shows every project's, Home counts the same (§210, INV-315, D-498)",
+          "status": "done"
+        },
+        {
+          "id": "12",
+          "title": "The owner's run in the lab, and the PR",
+          "status": "todo"
         }
       ]
     }

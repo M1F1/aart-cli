@@ -76,7 +76,7 @@ class TerminalResultReturnTest(unittest.TestCase):
         """The other half of the finding: the completed Candidate journey had no way back."""
 
         registry = ConsumerUiState(
-            ConsumerSession(MaintainerScreen.REGISTRY),
+            ConsumerSession(MaintainerScreen.REGISTRY_DETAILS),
             settings=ConsumerSettings().with_maintainer_mode(True),
         )
 
@@ -88,7 +88,7 @@ class TerminalResultReturnTest(unittest.TestCase):
         self.assertIs(event.screen, MaintainerScreen.CANDIDATES)
         self.assertIn(
             MaintainerScreen.CANDIDATES,
-            maintainer_navigation_targets(MaintainerScreen.REGISTRY),
+            maintainer_navigation_targets(MaintainerScreen.REGISTRY_DETAILS),
         )
 
     def test_the_registry_commit_still_goes_on_to_the_registry(self) -> None:

@@ -8,7 +8,10 @@ and the curses adapter stays as thin as a `getch`.
 
 from __future__ import annotations
 
+import threading
+import time
 from collections import Counter
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from typing import Callable, Mapping, Protocol, TypeAlias, runtime_checkable
 
@@ -95,7 +98,9 @@ from aart_cli.application.consumer_views import (
     pairs_confirmed,
     placeholders_left,
     project_collection,
+    project_dashboard,
     project_registries,
+    reached_from,
     render_default_path_mismatches,
     scope_choice_offered,
     scope_matrix_columns,
@@ -168,6 +173,7 @@ from aart_cli.tui_layout import (
     STAGE_JOIN,
     STAGE_PENDING,
     Frame,
+    Viewport,
     action_prompt,
     bulleted,
     cards,
@@ -177,10 +183,12 @@ from aart_cli.tui_layout import (
     listed,
     lowercase_first,
     render,
+    screen_viewport,
     separate,
     stated,
 )
 from aart_cli.tui_maintainer import (
+    HERE,
     adopted_artifact_detail,
     maintainer_bulk_promotion_status,
     maintainer_candidate_detail,
@@ -212,6 +220,7 @@ from aart_cli.tui_maintainer import (
     render_maintainer_policy_review,
     render_maintainer_promotion_review,
     render_maintainer_provenance,
+    render_maintainer_registry,
     render_maintainer_registry_commit,
     render_maintainer_registry_diff,
     render_maintainer_registry_push,
@@ -958,7 +967,7 @@ def render_ready(
 
 
 def _asked_block(view: ConsumerPlanView, asked: tuple[str, ...]) -> tuple[str, ...]:
-    """What the credential store will ask for while installing, so its prompt is no surprise."""
+    """What the credential store took on 07b, so the review says the values are in place."""
 
     named = tuple(
         f"{item.artifact}: {item.input}" for item in secrets_to_ask(view) if item.row in asked
@@ -967,7 +976,7 @@ def _asked_block(view: ConsumerPlanView, asked: tuple[str, ...]) -> tuple[str, .
         return ()
     return (
         "",
-        "While installing, the credential store asks you for each of these; AART never sees them:",
+        "Stored by the credential store on the previous screen; AART never saw them:",
         *listed(named),
         "",
     )
@@ -980,6 +989,7 @@ def _placeholders_block(view: ConsumerPlanView, asked: tuple[str, ...]) -> tuple
     return (
         "",
         f"Left as {SKIPPED_INPUT}, to set later in Credentials and variables:",
+        "",
         *listed(row.replace("\t", ": ", 1) for row in left),
         "",
     )
@@ -2371,18 +2381,21 @@ _TITLES: dict[ApplicationScreen, str] = {
     MaintainerScreen.SOURCE_SYNC: "Upstream sync",
     MaintainerScreen.SOURCE_SYNC_RESULT: "Upstream sync result",
     MaintainerScreen.REGISTRY: "Registry",
+    MaintainerScreen.REGISTRY_DETAILS: "This Registry",
 }
 
 
-def _after_configuration(plan: ConsumerPlanView, *, default_path: bool = False) -> ConsumerScreen:
-    """07a once configuration is settled, while some pair may go to two scopes; then 07b.
+def _after_harnesses(plan: ConsumerPlanView, *, inputs_submitted: bool) -> ConsumerScreen:
+    """Where 05 goes with a plan: 07a while some pair may go to two scopes, then 07, then 07b.
 
-    The Default path has its scope from Settings, so 07a is never asked on it (§173.7).
+    The scope comes first (§209). Once 07 was submitted, both were passed on the way to it.
     """
 
-    if not default_path and scope_choice_offered(plan.scope_offers):
+    if inputs_submitted:
+        return _after_scope(plan)
+    if scope_choice_offered(plan.scope_offers):
         return ConsumerScreen.INSTALL_SCOPE
-    return _after_scope(plan)
+    return ConsumerScreen.REQUIRED_INPUTS if plan.inputs else _after_scope(plan)
 
 
 def _after_scope(plan: ConsumerPlanView) -> ConsumerScreen:
@@ -2394,10 +2407,10 @@ def _after_scope(plan: ConsumerPlanView) -> ConsumerScreen:
 def render_install_credentials(
     secrets: tuple[InstallSecretView, ...], asked: tuple[str, ...], current_row: str | None
 ) -> tuple[str, ...]:
-    """Screen 07b's rows: each secret once per artifact, and whether the store will ask for it.
+    """Screen 07b's rows: each secret once per artifact, and whether the store took it here.
 
-    Nothing is typed on this screen: a marked row is asked for by the credential store's own prompt
-    during the install (§172.6). A secret every installation already holds is no question, so it is
+    Nothing is typed into aart-cli: Enter lends the terminal to the credential store's own prompt
+    (§207). A secret every installation already held before this review is no question, so it is
     said in the status, not drawn here.
     """
 
@@ -2409,7 +2422,7 @@ def render_install_credentials(
         if len(artifacts) > 1 and item.artifact != heading:
             heading = item.artifact
             lines.extend(("", heading))
-        state = "asked when installing" if item.row in asked else "not set"
+        state = "stored" if item.row in asked else "not set"
         mark = ">" if current_row == item.row else " "
         lines.extend(("", f"{mark} {item.label} ({item.input}): {state}"))
     lines.extend(("", f"{'>' if current_row == CONFIG_CONTINUE_ROW else ' '} Continue"))
@@ -2425,8 +2438,11 @@ def install_credentials_status(secrets: tuple[InstallSecretView, ...]) -> tuple[
             for item in secrets
             if item.configured
         ),
-        "Nothing is typed here. When installing, the credential store asks you for each one "
-        "marked, and AART never sees it. Anything not marked is stored as AART_NOT_SET.",
+        "On a row, Enter lets the credential store ask you for the value now, once for each "
+        "installation; AART never sees it. A value the prompt cuts is asked again in a macOS "
+        "dialog.",
+        "Anything not entered is stored as AART_NOT_SET. Leaving the install deletes what was "
+        "entered.",
     )
 
 
@@ -2645,15 +2661,27 @@ def _key_legend(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[s
 def frame(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[str, ...]:
     """One drawn screen: heading, body, prompts, and the persistent navigation footer."""
 
-    view = compose_frame(source, state)
-    if state.session.screen is ConsumerScreen.MARKETPLACE:
-        view, _ = marketplace_viewport(
-            view,
-            columns=state.viewport_columns,
-            height=state.viewport_rows,
-            offset=state.marketplace_scroll,
-        )
-    return render(view)
+    return render(viewport(source, state).frame)
+
+
+def viewport(source: ConsumerScreenSource, state: ConsumerUiState) -> Viewport:
+    """The page of the screen a terminal this tall shows (§206).
+
+    Marketplace keeps its column headings above the page; every other screen keeps its trail.
+    """
+
+    page = (
+        marketplace_viewport
+        if state.session.screen is ConsumerScreen.MARKETPLACE
+        else screen_viewport
+    )
+    return page(
+        compose_frame(source, state),
+        columns=state.viewport_columns,
+        height=state.viewport_rows,
+        offset=state.scroll,
+        follow=state.scroll_follows,
+    )
 
 
 def _matrix_label(artifact: str) -> str:
@@ -2829,17 +2857,89 @@ def _progress_redraw(
     terminal: ConsumerTerminal,
     source: "CanonicalScreenSource",
     state: ConsumerUiState,
+    heartbeat: "Heartbeat | None" = None,
 ) -> "ProgressReporter":
     """Draw the frame this execution was started from, with the step it has reached.
 
     Bound to the source and state the loop is holding, so the running report lands inside the same
-    shared frame as every other screen -- heading, body, footer -- with no skeleton of its own.
+    shared frame as every other screen -- heading, body, footer -- with no skeleton of its own. The
+    heartbeat goes on beating over the step reached (§203).
     """
 
     def redraw(view: RunningInstallationView) -> None:
-        terminal.draw(frame(source.with_running(view), state))
+        lines = frame(source.with_running(view), state)
+        if heartbeat is not None:
+            heartbeat.show(lines)
+        terminal.draw(lines)
 
     return redraw
+
+
+#: A running action's mark, one per beat: it turns, so a long run reads as working (§203).
+HEARTBEAT_MARKS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
+def heartbeat_frame(lines: tuple[str, ...], beat: int, elapsed: float) -> tuple[str, ...]:
+    """The frame of a running action, its heading carrying a turning mark and its seconds (§203)."""
+
+    if not lines:
+        return lines
+    mark = HEARTBEAT_MARKS[beat % len(HEARTBEAT_MARKS)]
+    return (f"{lines[0]}   {mark} working {int(elapsed)}s", *lines[1:])
+
+
+class Heartbeat:
+    """Redraws a running action's frame from its own thread until the action returns (§203).
+
+    An action runs on the loop's thread, so without this the screen held its last frame for as long
+    as an install took, and a slow one could not be told from a hung one. Only a terminal that can
+    `tick` -- draw from another thread, and skip while the screen is lent to a prompt -- gets one;
+    a line terminal is left as it was.
+    """
+
+    def __init__(
+        self,
+        terminal: ConsumerTerminal,
+        lines: tuple[str, ...],
+        *,
+        interval: float = 0.2,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._tick: Callable[[tuple[str, ...]], None] | None = getattr(terminal, "tick", None)
+        self._lines = lines
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._interval = interval
+        self._clock = clock
+        self._started = clock()
+        self._thread: threading.Thread | None = None
+
+    def show(self, lines: tuple[str, ...]) -> None:
+        """The frame to beat over from now on: the step the action has reached."""
+
+        with self._lock:
+            self._lines = lines
+
+    def __enter__(self) -> Heartbeat:
+        if self._tick is not None:
+            self._thread = threading.Thread(target=self._beat, name="aart-heartbeat", daemon=True)
+            self._thread.start()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join()
+
+    def _beat(self) -> None:
+        tick = self._tick
+        assert tick is not None
+        beat = 0
+        while not self._stop.wait(self._interval):
+            beat += 1
+            with self._lock:
+                lines = self._lines
+            tick(heartbeat_frame(lines, beat, self._clock() - self._started))
 
 
 def run_consumer_shell(
@@ -2865,6 +2965,7 @@ def run_consumer_shell(
         {
             ConsumerUiEventKind.SEARCH,
             ConsumerUiEventKind.SEARCH_CLOSE,
+            ConsumerUiEventKind.TOGGLE_EVERYWHERE,
         }
     )
     current = _reload(active_source, current, entering=True)
@@ -2875,16 +2976,14 @@ def run_consumer_shell(
             current,
             viewport_columns=dimensions[0],
             viewport_rows=dimensions[1],
-            marketplace_scroll=-1 if resized else current.marketplace_scroll,
+            scroll_follows=resized or current.scroll_follows,
         )
-        if current.session.screen is ConsumerScreen.MARKETPLACE:
-            _, offset = marketplace_viewport(
-                compose_frame(active_source, current),
-                columns=current.viewport_columns,
-                height=current.viewport_rows,
-                offset=current.marketplace_scroll,
-            )
-            current = replace(current, marketplace_scroll=offset)
+        # The page drawn is stored back, clamped (§206). PgUp/PgDn are offered when the screen
+        # does not fit without them; offering them lengthens the legend, so it is asked first.
+        page = viewport(active_source, replace(current, scrollable=False))
+        if page.paged:
+            page = viewport(active_source, replace(current, scrollable=True))
+        current = replace(current, scroll=page.offset, scrollable=page.paged)
         terminal.draw(frame(active_source, current))
         # A paste arrives whole on a text field, and the reducer, not a second list here, knows
         # which rows are text fields (D-269).
@@ -2928,13 +3027,22 @@ def run_consumer_shell(
             )
             if command.kind is ConsumerUiCommandKind.EXECUTE_ACTION:
                 terminal.draw(frame(active_source, current))
+            # Preparing reads Registries and executing changes the machine; either can take long
+            # enough to look hung, so both beat (§203).
+            heartbeat = (
+                Heartbeat(terminal, frame(active_source, current))
+                if command.kind
+                in (ConsumerUiCommandKind.PREPARE_ACTION, ConsumerUiCommandKind.EXECUTE_ACTION)
+                else None
+            )
             if reporting and isinstance(active_source, CanonicalScreenSource):
                 running_source, running_state = active_source, current
                 action_handler.observe_progress(  # type: ignore[attr-defined]
-                    _progress_redraw(terminal, running_source, running_state)
+                    _progress_redraw(terminal, running_source, running_state, heartbeat)
                 )
             try:
-                update = action_handler.handle(command)
+                with heartbeat if heartbeat is not None else nullcontext():
+                    update = action_handler.handle(command)
             finally:
                 if reporting:
                     action_handler.observe_progress(None)  # type: ignore[attr-defined]
@@ -3090,12 +3198,18 @@ class ConsumerScreens:
     #: Why 05 does not offer a harness for a Collection: each line names the first member that
     #: harness cannot host (§173.5).
     install_unhosted: tuple[str, ...] = ()
+    #: The 07a rows while no plan exists yet: the scope is chosen before 07 is answered (§209),
+    #: and an install with unanswered inputs has no plan until they are.
+    install_scope_offers: tuple[str, ...] = ()
     #: The optional test after an install (§170.4): present only when the committed transaction
     #: made at least one MCP installation, and drawn beside Success rather than in it.
     mcp_test: McpTestView | None = None
     #: The harnesses this machine measured, which Settings offers for the Default path (§173.7).
     harnesses: tuple[str, ...] = ()
     author_report: AuthorCheckReport | None = None
+    #: The project this session was opened in. Installed and Updates show the user's installations
+    #: and this project's unless every project is asked for (§210); empty leaves nothing out.
+    project_root: str = ""
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -3249,6 +3363,30 @@ class ConsumerScreens:
     def updatable(self) -> tuple[InstalledArtifactView, ...]:
         return tuple(item for item in self.installed if item.health == "update")
 
+    def reached(self, *, everywhere: bool) -> tuple[InstalledArtifactView, ...]:
+        """The installations Installed lists: those an agent here reaches, or every one (§210)."""
+
+        if everywhere:
+            return self.installed
+        return tuple(item for item in self.installed if reached_from(item, self.project_root))
+
+    def collections_reached(self, *, everywhere: bool) -> tuple[InstalledCollectionView, ...]:
+        """The Collections Installed lists: each with a member reached here, or with none installed.
+
+        A Collection whose installed members are all in other projects is theirs, not this one's.
+        """
+
+        if everywhere:
+            return self.installed_collections
+        installed = {item.row for item in self.installed}
+        reached = {item.row for item in self.reached(everywhere=False)}
+        return tuple(
+            group
+            for group in self.installed_collections
+            if any(member.artifact in reached for member in group.members)
+            or not any(member.artifact in installed for member in group.members)
+        )
+
 
 _DEFAULT_SETTINGS = ConsumerSettings()
 
@@ -3363,6 +3501,8 @@ def screens_from(
     mcp_test: McpTestView | None = None,
     harnesses: tuple[str, ...] = (),
     author_report: AuthorCheckReport | None = None,
+    install_scope_offers: tuple[str, ...] = (),
+    project_root: str = "",
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -3382,6 +3522,18 @@ def screens_from(
     # §83: what is offered now, against what this machine has installed.
     machine = with_offered_versions(machine, offered_versions(marketplace))
     dashboard = machine.dashboard
+    # §210: Home counts what Installed lists by default, the installations an agent here reaches.
+    reached = project_dashboard(
+        tuple(item for item in machine.installed if reached_from(item, project_root)),
+        registry_count=dashboard.registry_count,
+    )
+    dashboard = replace(
+        dashboard,
+        installed_count=reached.installed_count,
+        ready_count=reached.ready_count,
+        update_count=reached.update_count,
+        attention_count=reached.attention_count,
+    )
     if registries:
         dashboard = replace(
             dashboard,
@@ -3420,9 +3572,11 @@ def screens_from(
         running,
         install_targets,
         install_unhosted,
+        install_scope_offers,
         mcp_test,
         harnesses,
         author_report,
+        project_root,
     )
 
 
@@ -3658,7 +3812,7 @@ class CanonicalScreenSource:
             return (*matrix, *installers)
         if screen is ConsumerScreen.INSTALL_SCOPE:
             plan = self._screens.plan
-            return () if plan is None else plan.scope_offers
+            return self._screens.install_scope_offers if plan is None else plan.scope_offers
         if screen is ConsumerScreen.INSTALL_CREDENTIALS:
             plan = self._screens.plan
             asked = () if plan is None else tuple(item.row for item in secrets_to_ask(plan))
@@ -3727,6 +3881,14 @@ class CanonicalScreenSource:
             )
             return (() if workspace is None else (workspace_row,)) + tuple(
                 item.alias for item in self._screens.maintainer_registries()
+            )
+        if screen is MaintainerScreen.REGISTRY_DETAILS:
+            # The workspace's own row, so Push reads the same readiness here as on the list.
+            workspace = self._registry_workspace()
+            if workspace is None:
+                return ()
+            return (
+                REGISTRY_WORKSPACE_READY_ROW if workspace.push_ready else REGISTRY_WORKSPACE_ROW,
             )
         if screen is MaintainerScreen.COLLECTIONS:
             registry = self._collection_registry(state)
@@ -3809,9 +3971,10 @@ class CanonicalScreenSource:
             preview = self._screens.offered_collection(state.focus)
             return () if preview is None else preview.members
         if screen is ConsumerScreen.INSTALLED:
+            everywhere = state.installed_everywhere
             collections = tuple(
                 item
-                for item in self._screens.installed_collections
+                for item in self._screens.collections_reached(everywhere=everywhere)
                 if _matches(query, item.collection, item.health)
             )
             installations = tuple(
@@ -3819,7 +3982,7 @@ class CanonicalScreenSource:
                 # be distinct or the second one is unreachable (§169.3). The filter still matches
                 # on the coordinate a person would type.
                 item.row
-                for item in self._screens.installed
+                for item in self._screens.reached(everywhere=everywhere)
                 if _matches(query, item.coordinate, item.health)
             )
             # §173.6: a Collection, then its members under it.
@@ -3827,7 +3990,9 @@ class CanonicalScreenSource:
         if screen is ConsumerScreen.UPDATES:
             # The installation, as on Installed: the update action looks it up by its row (§169.3).
             return tuple(
-                item.row for item in self._screens.updatable if _matches(query, item.coordinate)
+                item.row
+                for item in self._screens.reached(everywhere=state.installed_everywhere)
+                if item.health == "update" and _matches(query, item.coordinate)
             )
         if screen is ConsumerScreen.CREDENTIALS:
             return tuple(
@@ -3933,19 +4098,31 @@ class CanonicalScreenSource:
         entry = self._screens.offered_collection(state.focus)
         return None if entry is None else entry.members
 
-    def _collection_registry(self, state: ConsumerUiState) -> MaintainerRegistryView | None:
-        """The registry screens 51 and 52 are about: the one opened from 46, or the only one."""
+    def _registry_here(self) -> MaintainerRegistryView | None:
+        """The Registry this run stands in, read from its checkout: the one 46k opens (§202)."""
 
-        registries = self._screens.maintainer_registries()
-        if state.session.screen is MaintainerScreen.COLLECTION_EDITOR:
-            opened = parse_collection_row(state.focus)
-            alias = None if opened is None else opened[0]
-        else:
-            alias = state.focus
-        found = next((item for item in registries if item.alias == alias), None)
-        if found is None and state.session.screen is MaintainerScreen.COLLECTIONS:
-            return registries[0] if len(registries) == 1 else None
-        return found
+        maintainer = self._screens.maintainer
+        return None if maintainer is None else maintainer.registry_here
+
+    def _elsewhere(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """Why the subscribed Registry under the cursor does not open, and where it would (§202)."""
+
+        row = state.current_row
+        if row in {"", REGISTRY_WORKSPACE_ROW, REGISTRY_WORKSPACE_READY_ROW}:
+            return ()
+        here = self._registry_here()
+        if here is not None and here.alias == row:
+            return (f"{row} is the Registry in this directory: open it from the row {HERE}.",)
+        return (f"To work on {row}, run aart-cli in its Registry checkout.",)
+
+    def _registry_workspace_present(self) -> bool:
+        maintainer = self._screens.maintainer
+        return True if maintainer is None else maintainer.registry_workspace_present
+
+    def _collection_registry(self, state: ConsumerUiState) -> MaintainerRegistryView | None:
+        """The registry screens 51 and 52 are about: the one this run stands in (§202)."""
+
+        return self._registry_here()
 
     def _opened_collection(self, state: ConsumerUiState) -> MaintainerCollectionView | None:
         """The Collection screen 52 edits, or None for a new one."""
@@ -4022,8 +4199,12 @@ class CanonicalScreenSource:
             # Screen 46's rows are registries; opening one is where its transaction is assembled.
             # The registry this project *publishes* is not one of them: it has no candidates to
             # promote through it, so Enter on it opens nothing (`QA-098`).
+            # §202: only the Registry this run stands in opens, with its history and its
+            # commands. Any other is worked on from its own checkout.
             if row in {REGISTRY_WORKSPACE_ROW, REGISTRY_WORKSPACE_READY_ROW}:
-                return None
+                return MaintainerScreen.REGISTRY_DETAILS
+            return None
+        if screen is MaintainerScreen.REGISTRY_DETAILS:
             return MaintainerScreen.BULK_PROMOTION if self._screens.bulk_promotions() else None
         if screen is MaintainerScreen.SOURCES:
             maintainer = self._screens.maintainer
@@ -4121,44 +4302,45 @@ class CanonicalScreenSource:
             if plan is None:
                 # The harness is chosen; what those installations need is asked next, and only
                 # for them (#50). The preparation answering the choice built the form.
+                if (
+                    not self._screens.install_targets
+                    or self._harness_choice_problems(state)
+                    or not state.config_draft.fields
+                ):
+                    return None
+                # §209: where each installation goes is chosen before the form is answered.
                 return (
-                    ConsumerScreen.REQUIRED_INPUTS
-                    if self._screens.install_targets
-                    and not self._harness_choice_problems(state)
-                    and state.config_draft.fields
-                    else None
+                    ConsumerScreen.INSTALL_SCOPE
+                    if scope_choice_offered(self._screens.install_scope_offers)
+                    else ConsumerScreen.REQUIRED_INPUTS
                 )
             if not pairs_confirmed(plan, state.pairs):
                 return None
             # Inspection has already happened to produce this immutable plan. It remains
             # available as a detailed projection, but is not a mandatory click-through step.
             # Once the form was submitted its answers are in the plan, so 07 is not asked again.
-            if plan.inputs and not state.inputs_submitted:
-                return ConsumerScreen.REQUIRED_INPUTS
-            return _after_configuration(plan)
+            return _after_harnesses(plan, inputs_submitted=state.inputs_submitted)
         if screen is ConsumerScreen.AUTOMATIC_INSPECTION:
             plan = self._screens.plan
             if plan is None:
                 return None
-            if plan.inputs:
-                return ConsumerScreen.REQUIRED_INPUTS
-            return _after_configuration(plan)
+            return _after_harnesses(plan, inputs_submitted=False)
         if screen is ConsumerScreen.REQUIRED_INPUTS:
+            # 07a came before (§209), so what is left is 07b or Ready.
             plan = self._screens.plan
-            return (
-                None
-                if plan is None
-                else _after_configuration(plan, default_path=state.install_default)
-            )
+            return None if plan is None else _after_scope(plan)
         if screen is ConsumerScreen.INSTALL_SCOPE:
+            plan = self._screens.plan
+            if plan is None:
+                # The form waits behind the scope: no plan exists until it is answered (§209).
+                return ConsumerScreen.REQUIRED_INPUTS if state.config_draft.fields else None
             # Ready reviews the plan prepared for these scopes; a choice still being re-prepared
             # is not that plan yet.
-            plan = self._screens.plan
-            return (
-                _after_scope(plan)
-                if plan is not None and set(state.pair_scopes) == set(plan.chosen_pair_scopes)
-                else None
-            )
+            if set(state.pair_scopes) != set(plan.chosen_pair_scopes):
+                return None
+            if plan.inputs and not state.inputs_submitted:
+                return ConsumerScreen.REQUIRED_INPUTS
+            return _after_scope(plan)
         if screen is ConsumerScreen.INSTALL_CREDENTIALS:
             # Set later and Continue both go on: whatever was not entered becomes AART_NOT_SET.
             return (
@@ -4368,7 +4550,16 @@ class CanonicalScreenSource:
             )
             return separate(
                 maintainer_registry_descriptor(registries, registry_workspace_present=present),
-                () if subscribed is None else maintainer_registry_detail(subscribed),
+                ()
+                if subscribed is None
+                else maintainer_registry_detail(subscribed, promotions=False),
+            )
+        if state.session.screen is MaintainerScreen.REGISTRY_DETAILS:
+            workspace = self._registry_workspace()
+            entered = self._registry_here()
+            return separate(
+                () if workspace is None else maintainer_workspace_detail(workspace),
+                () if entered is None else maintainer_registry_detail(entered),
             )
         if state.session.screen is MaintainerScreen.COLLECTIONS:
             collections_of = self._collection_registry(state)
@@ -4480,6 +4671,27 @@ class CanonicalScreenSource:
         # the state of the view. The refusal is not: `QA-093` gives it its own block above.
         return separate(self._body(state), spoken)
 
+    def _reach_status(self, state: ConsumerUiState) -> tuple[str, ...]:
+        """Which projects' installations Installed and Updates list, and what that leaves out (§210)."""
+
+        if state.installed_everywhere:
+            return ("Showing installations in every project.",)
+        listed = set(self._screens.reached(everywhere=False))
+        left_out = tuple(
+            item
+            for item in self._screens.installed
+            if item not in listed
+            and (state.session.screen is ConsumerScreen.INSTALLED or item.health == "update")
+        )
+        if not left_out:
+            return ()
+        said = (
+            "1 installation in other projects is not shown"
+            if len(left_out) == 1
+            else f"{len(left_out)} installations in other projects are not shown"
+        )
+        return (f"{said}; [a] shows every project.",)
+
     def _view_status(self, state: ConsumerUiState) -> tuple[str, ...]:
         """What this particular screen has to say about itself."""
 
@@ -4509,6 +4721,8 @@ class CanonicalScreenSource:
             )
         if prose:
             return prose
+        if screen in (ConsumerScreen.INSTALLED, ConsumerScreen.UPDATES):
+            return self._reach_status(state)
         if screen is MaintainerScreen.REGISTRY_PUSH and self.rows(state):
             # What is being pushed is the state of the view; the branch field and Continue are the
             # only things the cursor acts on. With no rows there is no actions block at all, so
@@ -4573,8 +4787,11 @@ class CanonicalScreenSource:
                 if screens.maintainer is None
                 else screens.maintainer.registry_workspace_present
             )
-            status = maintainer_registry_status(
-                screens.maintainer_registries(), registry_workspace_present=present
+            status = separate(
+                self._elsewhere(state),
+                maintainer_registry_status(
+                    screens.maintainer_registries(), registry_workspace_present=present, listed=True
+                ),
             )
             if state.rows or state.session.profile is not PresentationProfile.MORE_INFO:
                 return status
@@ -4585,6 +4802,13 @@ class CanonicalScreenSource:
                     screens.maintainer_registries(), registry_workspace_present=present
                 ),
                 status,
+            )
+        if screen is MaintainerScreen.REGISTRY_DETAILS:
+            chosen = self._registry_here()
+            if chosen is None:
+                return ("This directory holds no Registry that could be read.",)
+            return maintainer_registry_status(
+                (chosen,), registry_workspace_present=self._registry_workspace_present()
             )
         if screen is ConsumerScreen.DOCTOR:
             if screens.doctor is None:
@@ -5115,6 +5339,7 @@ class CanonicalScreenSource:
                 else screens.maintainer.registry_workspace_present
             )
             workspace = self._registry_workspace()
+            here = self._registry_here()
             published = (
                 ()
                 if workspace is None
@@ -5124,6 +5349,13 @@ class CanonicalScreenSource:
                         selected=state.current_row
                         in {REGISTRY_WORKSPACE_ROW, REGISTRY_WORKSPACE_READY_ROW},
                     ),
+                    *(
+                        ()
+                        if here is None
+                        else render_maintainer_registry(
+                            here, show_working_tree=False, brief=True, named=False
+                        )
+                    ),
                 )
             )
             return separate(
@@ -5132,6 +5364,19 @@ class CanonicalScreenSource:
                     screens.maintainer_registries(),
                     cursor=state.current_row,
                     registry_workspace_present=present,
+                ),
+            )
+        if screen is MaintainerScreen.REGISTRY_DETAILS:
+            workspace = self._registry_workspace()
+            chosen = self._registry_here()
+            if workspace is None:
+                return ()
+            return (
+                maintainer_workspace_row(workspace, selected=True),
+                *(
+                    ()
+                    if chosen is None
+                    else render_maintainer_registry(chosen, show_working_tree=False, named=False)
                 ),
             )
         if screen is MaintainerScreen.SCAN_RESULT:

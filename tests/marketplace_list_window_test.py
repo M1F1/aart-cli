@@ -122,9 +122,7 @@ class MarketplaceListWindowTest(unittest.TestCase):
 
     def test_more_info_of_a_late_offer_is_on_the_first_screen(self):
         source, state = _listed(_many(60))
-        state = dataclasses.replace(
-            state, cursor=37, viewport_columns=100, viewport_rows=60, marketplace_scroll=-1
-        )
+        state = dataclasses.replace(state, cursor=37, viewport_columns=100, viewport_rows=60)
         drawn = "\n".join(frame(source, state))
         self.assertIn("Offers 31–40 of 60", drawn)
         self.assertIn("offer-037", drawn)

@@ -362,7 +362,9 @@ class MaintainerRegistryShellTest(unittest.TestCase):
         self.assertIn("company", drawn)
         self.assertIn("Approved versions: 1", drawn)
         self.assertIn("matches the approved snapshot", drawn)
-        self.assertIn("Recent promotions", drawn)
+        # §202: the list counts the promotions; the Registry opened from its row lists them.
+        self.assertIn("Promotions recorded: 1", drawn)
+        self.assertNotIn("Recent promotions", drawn)
 
     def test_connected_registry_is_not_presented_as_the_current_project_workspace(self) -> None:
         views = replace(self.views, registry_workspace_present=False)

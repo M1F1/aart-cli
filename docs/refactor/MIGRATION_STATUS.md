@@ -4,6 +4,26 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-28, CP-46 (§202–§210, INV-303–INV-315, D-488–D-498): only the Registry here opens, `mcp test` reads FastMCP, long screens scroll, credentials are entered on 07b and leave with their installation.**
+Screen 46 keeps each Registry to a few lines, counts its promotions and offers no command. The
+Registry in this directory is marked and opens as 46k, with its checkout's promotions and every
+command acting on it. A subscribed Registry says to run aart-cli in its checkout. A running action
+beats with a turning mark and its seconds, never over a credential prompt. `consume mcp test`
+applies generated schemas' bounds and branches and reads past annotations and `x-` extensions.
+Test MCP in the TUI finds a user installation from a project, and a failed test names the error.
+A secret may declare `min_length`/`max_length`. A stored value of another length is not
+configured in Credentials and variables, `inputs list` and doctor. A value the Keychain prompt cut
+at 128 is entered through a macOS dialog, else Keychain Access instructions. `mcp test` reads every
+schema FastMCP writes (`pattern`, `$ref`, `prefixItems`, `patternProperties`, `propertyNames`,
+exact fractions), checked on every mcp-atlassian 0.23.1 and 0.21.1 tool. Every screen taller than
+the terminal pages with PgUp/PgDn, keeping the trail and keys. Enter on a 07b credential lends the
+terminal to the store's prompt there, the install is prepared again and asks nothing, and what was
+entered is deleted if the review is left or its install fails. An uninstall deletes the removed
+installations' own credentials, and its review says which. An install asks the scope (07a) before
+configuration (07) and credentials (07b). Installed, Updates and Home show by default what an agent
+here reaches (the user's and this project's installations), and `a` shows every project's.
+Evidence: `docs/refactor/slices/CP-46-registry-opens-its-history.md`.
+
 **2026-10-26, CP-45 step 6 (§172.6, INV-302, D-487): 07b marks what the store asks.** 07b no
 longer reads a credential. Enter marks it `asked when installing`, Set later unmarks everything,
 and the transaction lends the terminal to the store's own prompt for each marked credential. Every

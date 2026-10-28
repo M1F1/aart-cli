@@ -86,7 +86,7 @@ class McpSmokeEvaluationTest(unittest.TestCase):
 
         unsupported = evaluate_tool_call(
             self.declaration(),
-            (self.tool(obj(oneOf=JsonArray((obj(type="string"),)))),),
+            (self.tool(obj(type="string", **{"not": obj(const="Ada")})),),
             McpCallResult(structured_content="Ada"),
         )
         self.assertEqual(unsupported.outcome, SmokeOutcome.UNSUPPORTED)
@@ -166,14 +166,16 @@ class McpSmokeSchemaAnnotationTest(unittest.TestCase):
     def test_a_constraint_this_validator_cannot_apply_is_still_refused(self) -> None:
         constrained = obj(
             type="object",
-            properties=obj(limit=obj(type="integer", description="How many", minimum=1)),
+            properties=obj(
+                tag=obj(type="string", description="Which tag", **{"not": obj(const="p")})
+            ),
         )
 
-        protocol = self._refusal(constrained, obj(limit=5))
+        protocol = self._refusal(constrained, obj(tag="project"))
 
         self.assertNotEqual(protocol.outcome, SmokeOutcome.NOT_RUN)
         # Named, because the point of refusing is to say which constraint went unapplied.
-        self.assertIn("'minimum'", protocol.reason)
+        self.assertIn("'not'", protocol.reason)
 
     def test_an_annotation_never_makes_a_value_invalid(self) -> None:
         # `default` says what an absent value would have been. Supplying a different one is the

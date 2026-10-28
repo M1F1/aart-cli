@@ -59,9 +59,9 @@ class WorkflowProgressTest(TestCase):
             (
                 _state(
                     MaintainerScreen.REGISTRY_REBUILD,
-                    MaintainerScreen.REGISTRY,
+                    MaintainerScreen.REGISTRY_DETAILS,
                 ),
-                "✓ Registry",
+                "✓ This Registry",
                 "▸ Rebuild Registry",
                 "· Review Rebuild",
             ),

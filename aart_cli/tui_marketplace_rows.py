@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from textwrap import wrap
 from typing import Sequence
 
-from aart_cli.tui_layout import Frame, render, wrap_lines
+from aart_cli.tui_layout import Frame, Viewport, render, scroll_window, wrap_lines
 
 _HEADINGS = (
     "Artifact",
@@ -205,15 +205,15 @@ def render_marketplace_rows(
 
 
 def marketplace_viewport(
-    view: Frame, *, columns: int, height: int, offset: int
-) -> tuple[Frame, int]:
-    """Page Marketplace's content while keeping its headings and the shared footer.
+    view: Frame, *, columns: int, height: int, offset: int, follow: bool
+) -> Viewport:
+    """Page Marketplace's content while keeping its headings and the shared footer (§206).
 
-    Offset -1 follows the focused logical row. Returning the clamped offset prevents repeated
-    PageDown at the end from accumulating invisible pages before PageUp can move again.
+    Following puts the focused offer at the top of the page, so what More info says of it stands
+    under it rather than past the bottom row.
     """
     if not height:
-        return view, offset
+        return Viewport(view, 0, False)
     content = wrap_lines(
         render(Frame(actions=view.actions, described=view.described)), width=columns + 1
     )
@@ -222,7 +222,6 @@ def marketplace_viewport(
     static = replace(view, actions=(), described=())
     overhead = len(wrap_lines(render(static), width=columns + 1)) + 3
     budget = max(height - overhead - len(sticky), 1)
-    focused = next((i for i, line in enumerate(content) if line.startswith(">")), 0)
-    start = (0 if focused < budget else focused) if offset < 0 else offset
-    start = min(max(start, 0), max(len(content) - budget, 0))
-    return replace(view, actions=(*sticky, *content[start : start + budget]), described=()), start
+    start = scroll_window(content, budget=budget, offset=offset, follow=follow)
+    paged = replace(view, actions=(*sticky, *content[start : start + budget]), described=())
+    return Viewport(paged, start, len(content) > budget)

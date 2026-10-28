@@ -102,6 +102,7 @@ class MaintainerScreenCatalogTest(unittest.TestCase):
                 "46h-rebuild-registry",
                 "46i-review-rebuild",
                 "46j-review-push",
+                "46k-registry-details",
             ],
         )
         for screen in lettered:

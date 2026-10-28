@@ -4627,6 +4627,9 @@ excludes them, stating why. CI can draw the same examples, so it may flake there
 
 ## B-195 — 07a opens on the column 05 left the cursor on
 
+Status: **done** (CP-46, D-497): entering 07a resets `harness_column`; 07a now follows 05 on every
+install, which made the carried column visible every time.
+
 Found: CP-31 step 7 (2026-10-16). `harness_column` is one field of the UI state. After moving to
 the second harness on 05, 07a opens with its cursor on the second scope column (User), so a Space
 there picks User without a Right. This is harmless (the cursor is drawn), but 07a should open on
@@ -5073,3 +5076,50 @@ killed, or are equivalent. The rest predate CP-45 (CP-35, D-468):
   defaults, a credential declared before the default, and nothing answered, would catch both.
 - `resolve_command_line_inputs`: the wording of the "it installs …" list.
 
+
+## B-239 — opencode reports ENOENT spawning a generated MCP launcher
+
+Status: **open**, unconfirmed (CP-46, D-490).
+
+The enterprise report behind D-490 also showed opencode failing with ENOENT on `posix_spawn` of
+`…/.opencode/aart-cli/mcp/…/launch.sh` for other MCPs. It is not known whether:
+
+- the launcher was absent;
+- the path was relative to a different working directory;
+- the interpreter in the launcher's shebang was missing.
+
+Reproduce with a live opencode install (local evidence only), then compare the registered command
+with the file `consume install` placed.
+
+## B-241 — A credential stored as one character after the prompt
+
+Status: **open**, unconfirmed (CP-46, D-492).
+
+The enterprise report behind D-492 also showed `confluence-api-token` stored as 1 character. The
+128-character cut does not explain it: a pty probe showed `getpass` discards the rest of a long
+line rather than carrying it into the next prompt. Candidates:
+
+- a paste that ended in a newline after its first character;
+- a terminal that sent the paste in a bracketed-paste sequence the prompt read partly;
+- the second ("retype") prompt answered differently from the first.
+
+A declared `min_length` (§204) now reports such a value as not configured and offers the dialog, so
+this is a cause to find, not a gap in detection. Reproduce in the enterprise terminal and record
+which of the three it is.
+
+## B-242 — Open the dialog first when a declared length cannot fit the prompt
+
+Status: **open**, noncritical (CP-46, D-492, D-495).
+
+When a secret declares `min_length` above 128, the macOS prompt can never keep a fitting value, so
+07b, `consume install` and `set-credential` ask twice: the prompt, then the dialog. Going straight to
+the dialog would save the first, doomed entry. Offered to the owner on 2026-10-28; not asked for.
+
+## B-243 — Doctor and Credentials and variables still read every project
+
+Status: **open**, noncritical (CP-46, D-498).
+
+Installed, Updates and Home list by default what an agent here reaches (§210). Doctor and
+Credentials and variables still list every project's installations. They may follow the same rule
+and toggle if the owner wants it. Whether another project's installation is measured correctly
+from here, under this project's root, was not checked.

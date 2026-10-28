@@ -207,10 +207,11 @@ def _mcp_blueprint(name: str) -> _Blueprint:
 def _inputs() -> JsonArray:
     """Three inputs, because one cannot carry every field the parser accepts.
 
-    A secret takes no `default` and no `validation` -- §91 keeps the confidential class free of any
-    field a credential could be written into -- so the fields that only a config input has need a
-    config input to sit in. And a validation is `pattern` or `url`, never both: `allowed_hosts`
-    belongs to one and `pattern` to the other, so covering both takes two.
+    A secret takes no `default` -- §91 keeps the confidential class free of any field a credential
+    could be written into -- and its `validation` is only the lengths §204 checks, so the fields
+    that only a config input has need a config input to sit in. And a config validation is
+    `pattern` or `url`, never both: `allowed_hosts` belongs to one and `pattern` to the other, so
+    covering both takes two.
     """
 
     return JsonArray(
@@ -221,6 +222,14 @@ def _inputs() -> JsonArray:
                 ("inject", _object(("type", "environment"), ("variable", "SERVICE_API_TOKEN"))),
                 ("kind", "secret"),
                 ("required", True),
+                (
+                    "validation",
+                    _object(
+                        ("max_length", 200),
+                        ("message", "Provider tokens are 40 to 200 characters long."),
+                        ("min_length", 40),
+                    ),
+                ),
             ),
             _object(
                 ("default", "https://example.invalid"),

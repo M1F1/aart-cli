@@ -161,10 +161,14 @@ class CredentialDiagnosticProjectionTest(unittest.TestCase):
 
         fields = {field.name: field.type for field in dataclasses.fields(CredentialObservation)}
         self.assertEqual(
-            set(fields), {"reference", "provider_state", "state", "detail", "placeholder"}
+            set(fields),
+            {"reference", "provider_state", "state", "detail", "placeholder", "length", "clipped"},
         )
         # §172.3: the placeholder flag is a yes/no, so it cannot carry a value either.
         self.assertEqual(fields["placeholder"], "bool")
+        # §204: a count and a yes/no say how much is stored, never what.
+        self.assertEqual(fields["length"], "int | None")
+        self.assertEqual(fields["clipped"], "bool")
 
     def test_a_credential_reports_its_health_and_who_depends_on_it(self) -> None:
         """Every published field, because a field nothing reads is a contract nobody is keeping."""

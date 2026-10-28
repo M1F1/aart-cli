@@ -17,7 +17,12 @@ from typing import TypeAlias
 
 from aart_cli.redaction import contains_credential_shape, redact_text
 
-from .credentials import CredentialProviderRef, CredentialReference, credential_provider_to_data
+from .credentials import (
+    CredentialLength,
+    CredentialProviderRef,
+    CredentialReference,
+    credential_provider_to_data,
+)
 from .identifiers import InputId
 
 __all__ = [
@@ -358,11 +363,16 @@ class SecretInput:
     binding: ProcessBinding
     required: bool = True
     guidance: InputGuidance | None = None
+    #: The length the manifest says the credential has, checked against what the provider stores
+    #: without the value ever being read here (§204). Absent, nothing about the value is judged.
+    validation: CredentialLength | None = None
 
     def __post_init__(self) -> None:
         _input_id(self.id, "secret input id")
         if not isinstance(self.binding, ProcessBinding) or not isinstance(self.required, bool):
             raise ValueError("secret input is invalid")
+        if self.validation is not None and not isinstance(self.validation, CredentialLength):
+            raise ValueError("secret input validation is invalid")
         if self.guidance is not None:
             if not isinstance(self.guidance, InputGuidance):
                 raise ValueError("secret input guidance is invalid")
@@ -549,6 +559,13 @@ def input_to_data(value: RuntimeInput) -> dict[str, object]:
         "kind": "secret" if isinstance(value, SecretInput) else "config",
         "required": value.required,
     }
+    if isinstance(value, SecretInput) and value.validation is not None:
+        # Only when declared, so every secret declared before §204 keeps the digest it had.
+        data["validation"] = {
+            "max_length": value.validation.max_length,
+            "message": value.validation.message,
+            "min_length": value.validation.min_length,
+        }
     if isinstance(value, ConfigInput):
         data["default"] = value.default
         data["validation"] = (

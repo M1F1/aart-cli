@@ -139,6 +139,7 @@ RECORDED_SCREENS: tuple[ApplicationScreen, ...] = (
     MaintainerScreen.REGISTRY_VALIDATION,
     MaintainerScreen.REGISTRY_COMMIT,
     MaintainerScreen.REGISTRY,
+    MaintainerScreen.REGISTRY_DETAILS,
     MaintainerScreen.REGISTRY_INIT,
     MaintainerScreen.REGISTRY_INIT_REVIEW,
     MaintainerScreen.REPOSITORY_SCAN,
@@ -480,6 +481,17 @@ def _maintainer_cases() -> dict[MaintainerScreen, ScreenCase]:
         "46:approved-registry",
         registry.source,
         _reload(registry.source, registry_state, entering=True),
+    )
+    # §202: the Registry opened from its row, with its Recent promotions.
+    opened_state = ConsumerUiState(
+        ConsumerSession(MaintainerScreen.REGISTRY_DETAILS, history=(MaintainerScreen.REGISTRY,)),
+        settings=settings,
+        focus="company",
+    )
+    cases[MaintainerScreen.REGISTRY_DETAILS] = ScreenCase(
+        "46k:opened-registry",
+        registry.source,
+        _reload(registry.source, opened_state, entering=True),
     )
 
     validation_views = maintainer_validation_views_test._views(

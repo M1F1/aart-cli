@@ -466,7 +466,7 @@ class RegistryMaintainerBlockTest(TestCase):
         self.assertEqual(
             _spoken(blocks[1]),
             (
-                "- current project contains a Registry. Rebuild updates its generated files.",
+                "- current project contains a Registry (● you are here): open it to work on it.",
                 "- no Registry is subscribed in this project yet.",
             ),
         )

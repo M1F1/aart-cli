@@ -46,7 +46,7 @@ FORMS: tuple[tuple[object, object, str], ...] = (
     (ConsumerScreen.REGISTRIES, ConsumerScreen.REGISTRY_ADD, "registry_draft"),
     (MaintainerScreen.SOURCES, MaintainerScreen.SOURCE_ADD, "source_draft"),
     (MaintainerScreen.REGISTRY, MaintainerScreen.REGISTRY_INIT, "registry_init_draft"),
-    (MaintainerScreen.REGISTRY, MaintainerScreen.REPOSITORY_SCAN, "repository_scan_draft"),
+    (MaintainerScreen.REGISTRY_DETAILS, MaintainerScreen.REPOSITORY_SCAN, "repository_scan_draft"),
 )
 
 

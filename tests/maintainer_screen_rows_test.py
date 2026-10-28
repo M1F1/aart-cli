@@ -184,13 +184,16 @@ class RegistryMaintainerTest(_Contract):
         self.assertEqual(
             rows,
             (
-                *render_maintainer_registry(company),
+                *render_maintainer_registry(company, brief=True),
                 "",
-                *render_maintainer_registry(other, selected=True),
+                *render_maintainer_registry(other, selected=True, brief=True),
             ),
         )
         self.assertIn("    Working tree: matches the approved snapshot", without)
-        self.assertEqual(no_workspace, render_maintainer_registry(company, show_working_tree=False))
+        self.assertEqual(
+            no_workspace,
+            render_maintainer_registry(company, show_working_tree=False, brief=True),
+        )
         self.assertNotIn("    Working tree: matches the approved snapshot", no_workspace)
 
     def test_46_detail_spells_out_what_was_observed_and_only_that(self) -> None:

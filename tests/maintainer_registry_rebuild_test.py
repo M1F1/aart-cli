@@ -68,7 +68,7 @@ def _repository(root: str) -> None:
 
 class MaintainerRegistryRebuildInteractionTest(unittest.TestCase):
     def test_the_registry_screen_offers_the_run_it_used_to_make_people_type(self) -> None:
-        event = key_event("b", _state(MaintainerScreen.REGISTRY))
+        event = key_event("b", _state(MaintainerScreen.REGISTRY_DETAILS))
 
         self.assertIsNotNone(event)
         assert event is not None
@@ -78,7 +78,7 @@ class MaintainerRegistryRebuildInteractionTest(unittest.TestCase):
     def test_the_route_exists_in_the_accepted_navigation_map(self) -> None:
         self.assertIn(
             MaintainerScreen.REGISTRY_REBUILD,
-            maintainer_navigation_targets(MaintainerScreen.REGISTRY),
+            maintainer_navigation_targets(MaintainerScreen.REGISTRY_DETAILS),
         )
         self.assertEqual(
             maintainer_navigation_targets(MaintainerScreen.REGISTRY_REBUILD),
@@ -430,7 +430,7 @@ class MaintainerRegistryRebuildShellTest(unittest.TestCase):
                 handler.source(),
                 terminal,
                 state=ConsumerUiState(
-                    ConsumerSession(MaintainerScreen.REGISTRY),
+                    ConsumerSession(MaintainerScreen.REGISTRY_DETAILS),
                     settings=ConsumerSettings().with_maintainer_mode(True),
                 ),
                 action_handler=handler,

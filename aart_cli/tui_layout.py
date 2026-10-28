@@ -693,6 +693,87 @@ def anchor(lines: Sequence[str], *, height: int) -> Tuple[str, ...]:
     return (*body[:start], *("",) * (height - len(body)), *body[start:])
 
 
+@dataclass(frozen=True)
+class Viewport:
+    """What a terminal this tall shows of one frame, and where that page starts (§206)."""
+
+    frame: Frame
+    offset: int
+    paged: bool
+
+
+def scroll_window(
+    lines: Sequence[str], *, budget: int, offset: int, follow: bool, margin: int = 0
+) -> int:
+    """The first line of a ``budget``-line page over ``lines``, clamped to the last full page.
+
+    Following puts the focused ``>`` line back in view, ``margin`` lines from the page's edges,
+    when it is not already there; a page somebody turned with PgUp or PgDn is left where it is.
+    Returning the clamp keeps a repeated PgDn at the end from piling up pages PgUp would first
+    have to undo.
+    """
+
+    last = max(len(lines) - budget, 0)
+    start = min(max(offset, 0), last)
+    if follow:
+        focused = next((i for i, line in enumerate(lines) if line.startswith(">")), None)
+        margin = max(min(margin, (budget - 1) // 2), 0)
+        if focused is not None and not start + margin <= focused < start + budget - margin:
+            start = min(max(focused - margin, 0), last)
+    return start
+
+
+def _more(count: int, where: str) -> str:
+    """The line standing for what a page leaves out above or below it, or nothing."""
+
+    if not count:
+        return ""
+    arrow, key = ("↑", "PgUp") if where == "above" else ("↓", "PgDn")
+    return f"{arrow} {count} more line{'s' * (count != 1)} {where}; {key}"
+
+
+def screen_viewport(
+    view: Frame, *, columns: int, height: int, offset: int, follow: bool
+) -> Viewport:
+    """Page a frame taller than the terminal, keeping its trail and its keys (§206, INV-311).
+
+    Curses clipped such a frame at the bottom, so whatever stood below the last row could be
+    neither read nor reached. Here the blocks between the trail and the footer are one body,
+    wrapped as the terminal will wrap it, and a page of it is drawn between a line saying how much
+    is above and one saying how much is below. A height of 0 is no terminal at all, so nothing
+    is paged.
+    """
+
+    if not height:
+        return Viewport(view, 0, False)
+    width = columns + 1
+    if len(wrap_lines(render(view), width=width)) <= height:
+        return Viewport(view, 0, False)
+    bare = dataclasses.replace(view, actions=(), described=(), status=(), notice=(), help=())
+    body = wrap_lines(
+        render(
+            Frame(
+                actions=view.actions,
+                described=view.described,
+                status=view.status,
+                notice=view.notice,
+                help=view.help,
+            )
+        ),
+        width=width,
+    )
+    overhead = len(wrap_lines(render(dataclasses.replace(bare, actions=("-",))), width=width)) - 1
+    # The two lines saying what is left out wrap like any other, so their room is that of the
+    # longest they could be.
+    room = len(wrap_lines((_more(len(body), "above"), _more(len(body), "below")), width=width))
+    budget = max(height - overhead - room, 1)
+    start = scroll_window(body, budget=budget, offset=offset, follow=follow, margin=1)
+    page = body[start : start + budget]
+    above, below = _more(start, "above"), _more(len(body) - start - len(page), "below")
+    paged = (*(above,) * bool(above), *page, *(below,) * bool(below))
+    return Viewport(dataclasses.replace(bare, actions=paged), start, True)
+
+
 BOX_MARKERS: Mapping[str, str] = {
     "checked": BOX_CHECKED,
     "empty": BOX_EMPTY,
@@ -720,6 +801,7 @@ __all__ = [
     "PROTECTED_HINTS",
     "READABLE_MEASURE",
     "SECTION_RULE",
+    "Viewport",
     "CAPTION",
     "Frame",
     "STAGE_CONFIRMED",
@@ -740,6 +822,8 @@ __all__ = [
     "measure",
     "pane_budget",
     "render",
+    "screen_viewport",
+    "scroll_window",
     "section",
     "separate",
     "stated",

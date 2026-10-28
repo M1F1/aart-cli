@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from hashlib import sha256
 
@@ -115,6 +115,12 @@ class CredentialObservation:
     #: The stored item is still the placeholder a skip left (§172.3). It is present, and nothing
     #: refuses it; it is reported so somebody sets it.
     placeholder: bool = False
+    #: How many bytes the stored value has, measured outside this process, or None when the
+    #: provider cannot say (§204). A length is not the value: it is what a declared check reads.
+    length: int | None = None
+    #: The value is exactly as long as the provider's own prompt keeps, so a longer one may have
+    #: been cut there without anybody being told (§204).
+    clipped: bool = False
 
     def __post_init__(self) -> None:
         if (
@@ -125,6 +131,9 @@ class CredentialObservation:
             or (self.placeholder and self.state is not CredentialState.PRESENT)
             or not isinstance(self.detail, str)
             or any(character in self.detail for character in "\r\n")
+            or not (self.length is None or (type(self.length) is int and self.length >= 0))
+            or not isinstance(self.clipped, bool)
+            or ((self.clipped or self.length is not None) and self.state is CredentialState.ABSENT)
         ):
             raise ValueError("credential observation is invalid")
         if self.provider_state is not ProviderState.AVAILABLE and self.state not in {
@@ -132,6 +141,87 @@ class CredentialObservation:
             CredentialState.ABSENT,
         }:
             raise ValueError("an unavailable provider cannot report credential presence")
+
+
+@dataclass(frozen=True, slots=True)
+class CredentialLength:
+    """How long an artifact says its credential is: an optional check its manifest declares (§204).
+
+    A length is the one thing about a value that can be measured without holding it, and a value cut
+    by a prompt or pasted wrong is the wrong length. Either bound may be left out, not both.
+    """
+
+    min_length: int | None = None
+    max_length: int | None = None
+    message: str = ""
+
+    def __post_init__(self) -> None:
+        bounds = tuple(item for item in (self.min_length, self.max_length) if item is not None)
+        if (
+            not bounds
+            or any(type(item) is not int or item < 1 for item in bounds)
+            or (
+                self.min_length is not None
+                and self.max_length is not None
+                and self.min_length > self.max_length
+            )
+        ):
+            raise ValueError(
+                "a credential length names min_length, max_length or both, as whole numbers of "
+                "at least 1, with min_length not above max_length"
+            )
+        if not isinstance(self.message, str) or any(
+            character in self.message for character in "\r\n"
+        ):
+            raise ValueError("a credential length message must be one line")
+
+    def failure(self, length: int) -> str | None:
+        """Why a value of `length` bytes is not the credential declared, or None when it fits."""
+
+        if self.min_length is not None and length < self.min_length:
+            expected = f"at least {self.min_length}"
+        elif self.max_length is not None and length > self.max_length:
+            expected = f"at most {self.max_length}"
+        else:
+            return None
+        said = f": {self.message}" if self.message else ""
+        return f"the stored value has {length} characters, expected {expected}{said}"
+
+
+@dataclass(frozen=True, slots=True)
+class CredentialCheck:
+    """One installation's credential and the length its artifact declares for it (§204)."""
+
+    reference: CredentialReference
+    length: CredentialLength
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.reference, CredentialReference) or not isinstance(
+            self.length, CredentialLength
+        ):
+            raise ValueError("a credential check names a reference and its declared length")
+
+
+def checked_observation(
+    observation: CredentialObservation, length: CredentialLength | None
+) -> CredentialObservation:
+    """The observation, invalid when a present value fails the length its artifact declared.
+
+    The placeholder is not an answer, so it is not judged as one (§172.3), and a length the
+    provider could not measure is left unjudged rather than guessed at.
+    """
+
+    if (
+        length is None
+        or observation.state is not CredentialState.PRESENT
+        or observation.placeholder
+        or observation.length is None
+    ):
+        return observation
+    failure = length.failure(observation.length)
+    if failure is None:
+        return observation
+    return replace(observation, state=CredentialState.INVALID, detail=failure)
 
 
 class CredentialIntent(str, Enum):

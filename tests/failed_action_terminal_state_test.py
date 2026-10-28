@@ -252,7 +252,8 @@ class FailedActionShellTest(unittest.TestCase):
                 handler.source(),
                 terminal,
                 state=ConsumerUiState(
-                    ConsumerSession(MaintainerScreen.REGISTRY),
+                    # INV-304: rebuild is a command of the Registry aart-cli runs in.
+                    ConsumerSession(MaintainerScreen.REGISTRY_DETAILS),
                     settings=ConsumerSettings().with_maintainer_mode(True),
                 ),
                 action_handler=handler,
@@ -271,7 +272,7 @@ class FailedActionShellTest(unittest.TestCase):
             self.assertNotIn("Enter Confirm", stopped)
             self.assertNotIn("press Enter to start it", stopped)
             # The fourth Enter is the way out the screen advertises, and it has to work.
-            self.assertIn("AART / Registry", terminal.frames[-1][0])
+            self.assertIn("AART / This Registry", terminal.frames[-1][0])
 
 
 if __name__ == "__main__":

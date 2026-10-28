@@ -9,17 +9,16 @@ That last statement is a negative about a second artifact, which is why no exist
 every credential test in this repository has exactly one installation in scope, and a claim about
 what happens to B when A changes cannot be measured with only an A.
 
-Two of the claims here run through the public verb and two run at the seam, and the split is not a
-convenience. `commands/marketplace.py` wires a real `MacOsKeychainProvider` on darwin, so a
-command-line test that actually stored a credential would write into the developer's own Keychain.
-The retention statement needs no credential to exist -- the removal review makes it either way --
-so it is driven through `aart-cli consume uninstall`. The dependant arithmetic does need one, so it
-is measured where a file-backed provider can stand in, the same route every existing credential
-test takes.
+A removal is the other half. Every installation has its own credential items (D-334), so an
+uninstall deletes the removed installations' items and cannot reach anybody else's (§208, which
+amends INV-185). The command-line claims run through `aart-cli consume uninstall` with a store
+standing in for the Keychain, because `commands/marketplace.py` wires the real one on darwin. The
+dependant arithmetic is measured where a file-backed provider can stand in.
 """
 
 from __future__ import annotations
 
+import json
 import pathlib
 import tempfile
 import unittest
@@ -42,12 +41,18 @@ from aart_cli.domain.inputs import (
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.receipts import InstalledRecord
 from aart_cli.domain.result import Ok
+from aart_cli.domain.selection import OwnershipKind, OwnershipReason
 from aart_cli.io.configured_installation_action import InstallationHost
 from aart_cli.io.configured_uninstall_action import prepare_configured_uninstall
+from aart_cli.io.credential_entry import EntryOutcome
 from tests.configured_install_command_e2e_test import COORDINATE, _environment
 from tests.consumer_session_test import OTHER as SECOND_REFERENCE
 from tests.consumer_session_test import TODAY, coordinate, inspection, observed, receipt
 from tests.consumer_session_test import TOKEN as SHARED_REFERENCE
+from tests.credential_length_e2e_test import AUTHORED as CREDENTIALED
+from tests.credential_length_e2e_test import GITHUB as CREDENTIALED_ARTIFACT
+from tests.credential_length_e2e_test import _CuttingStore, _OtherWay, _run
+from tests.credential_length_e2e_test import _install as _install_with_store
 from tests.installation_inputs_test import (
     KEYCHAIN,
     ORG,
@@ -64,20 +69,19 @@ def _deletions(prepared) -> list[DeleteCredential]:
     return [effect for effect in prepared.proposal.effects if isinstance(effect, DeleteCredential)]
 
 
-class RemovalRetainsCredentialsTest(unittest.TestCase):
-    """`aart-cli consume uninstall` over a real machine, through the public verb."""
+class RemovalDeletesCredentialsTest(unittest.TestCase):
+    """An uninstall takes the removed installations' own credential items with it (§208).
+
+    Each installation has its own items (D-334), so nothing another installation uses is at risk;
+    INV-232 holds because no item is shared, not because removals keep them.
+    """
 
     def _installed(self, env) -> None:
         code, payload = env.run("consume", "install", COORDINATE, "--profile", "claude", "--yes")
         self.assertEqual(code, 0, payload)
 
-    def test_the_removal_review_says_credentials_are_retained(self) -> None:
-        """165.19 read from the other end: a removal is not a credential revocation.
-
-        The reviewed payload has to say so rather than merely not mention it. A reader deciding
-        whether to keep a token they also use elsewhere gets no help from silence, and the natural
-        assumption about an uninstall is the wrong one.
-        """
+    def test_the_removal_review_says_which_credentials_go(self) -> None:
+        """The reviewed payload says it rather than leaving it to be assumed either way."""
 
         with _environment() as env:
             self._installed(env)
@@ -86,7 +90,8 @@ class RemovalRetainsCredentialsTest(unittest.TestCase):
 
             self.assertEqual(code, 0, payload)
             self.assertFalse(payload["finalized"])
-            self.assertEqual(payload["review"]["credentials"], "retained")
+            # The fixture Skill declares no inputs, so it has nothing to delete, and says so.
+            self.assertEqual(payload["review"]["credentials"], {"deleted": []})
 
     def test_the_human_rendering_says_it_too(self) -> None:
         """The JSON is not what a person reads, and the two renderings can drift apart."""
@@ -97,36 +102,100 @@ class RemovalRetainsCredentialsTest(unittest.TestCase):
             code, text = env.run_text("consume", "uninstall", COORDINATE, "--profile", "claude")
 
             self.assertEqual(code, 0, text)
-            self.assertIn("Credentials: retained.", text)
+            self.assertIn("Credentials deleted with their installations: none.", text)
 
-    def test_the_call_the_command_makes_plans_no_credential_deletion(self) -> None:
-        """The statement and the plan have to agree, measured where a credential actually exists.
+    def test_consume_uninstall_deletes_the_credential_it_reviewed(self) -> None:
+        """Through the public verb, over a store standing in for the Keychain."""
 
-        This is the seam rather than the command, and deliberately: the fixture registry's Skill
-        declares no inputs, so asserting "no credential was deleted" through the CLI asserts an
-        absence in a scenario where nothing could have been present. The first draft of this test
-        did exactly that and stayed green with credential deletion switched on by default.
+        store = _CuttingStore(cut=1_000)
+        entry = _OtherWay(store, EntryOutcome.UNAVAILABLE)
+        with _environment(authored=CREDENTIALED) as env:
+            _install_with_store(env, store, entry)
+            self.assertEqual(len(store.stored), 1, "the install stored no credential")
+            named = ("consume", "uninstall", CREDENTIALED_ARTIFACT, "--profile", "claude")
 
-        So the record here carries a credential reference, and the two calls differ in one keyword.
-        The first is the call `commands/marketplace.py` makes -- it passes no `delete_credentials`
-        at all -- and the second is what the same function does when asked. The pair is the point:
-        the absence in the first is only evidence because the second shows it was reachable.
-        """
+            code, out, _ = _run(env, store, entry, *named)
+            payload = json.loads(out)
+            self.assertEqual(code, 0, out)
+            self.assertEqual(len(store.stored), 1, "reviewing a removal deleted the credential")
+            deleted = payload["review"]["credentials"]["deleted"]
+            self.assertEqual(len(deleted), 1)
+            self.assertTrue(deleted[0].startswith(CREDENTIALED_ARTIFACT), deleted)
+            self.assertTrue(deleted[0].endswith(": github-token"), deleted)
+            code, text, _ = _run(env, store, entry, *named, as_json=False)
+            self.assertIn("Credentials deleted with their installations:\n  - ", text)
 
+            code, out, _ = _run(
+                env, store, entry, *named, "--yes", "--expect", payload["review_digest"]
+            )
+
+        self.assertEqual(code, 0, out)
+        self.assertEqual(store.stored, {})
+
+    def test_a_credential_already_gone_is_not_said_to_be_deleted(self) -> None:
+        """The review lists what the removal will do, not every reference the receipt names."""
+
+        store = _CuttingStore(cut=1_000)
+        entry = _OtherWay(store, EntryOutcome.UNAVAILABLE)
+        with _environment(authored=CREDENTIALED) as env:
+            _install_with_store(env, store, entry)
+            store.stored.clear()
+
+            code, out, _ = _run(
+                env,
+                store,
+                entry,
+                "consume",
+                "uninstall",
+                CREDENTIALED_ARTIFACT,
+                "--profile",
+                "claude",
+            )
+
+        self.assertEqual(code, 0, out)
+        self.assertEqual(json.loads(out)["review"]["credentials"], {"deleted": []})
+
+    def test_a_removed_installation_plans_deleting_each_of_its_credentials(self) -> None:
         record = InstalledRecord(coordinate("github"), receipt("github"), ())
         with tempfile.TemporaryDirectory() as raw:
             host = self._host(pathlib.Path(raw).resolve())
 
-            kept = prepare_configured_uninstall((record,), host=host, policy=EffectivePolicy())
-            asked = prepare_configured_uninstall(
-                (record,), host=host, policy=EffectivePolicy(), delete_credentials=True
+            prepared = prepare_configured_uninstall((record,), host=host, policy=EffectivePolicy())
+
+            self.assertIsInstance(prepared, Ok, getattr(prepared, "diagnostics", ()))
+            assert isinstance(prepared, Ok)
+            self.assertEqual(
+                [effect.reference for effect in _deletions(prepared.value)],
+                [str(reference) for reference in record.receipt.credentials],
+            )
+            self.assertTrue(record.receipt.credentials, "the receipt holds no credential to delete")
+
+    def test_an_installation_that_stays_keeps_its_credentials(self) -> None:
+        """A Collection giving up its claim on a member something else still owns removes nothing.
+
+        Paired with the record that goes, so the absence is evidence: the same record, owned once
+        more, plans the deletion the moment its last owner lets go.
+        """
+
+        direct = OwnershipReason(OwnershipKind.DIRECT, "company/mcp/github@1.6.0")
+        kit = OwnershipReason(OwnershipKind.COLLECTION, "public/collection/data-scientist@1.0.0")
+        kept = InstalledRecord(coordinate("github"), receipt("github"), (direct, kit))
+        alone = InstalledRecord(coordinate("github"), receipt("github"), (kit,))
+        with tempfile.TemporaryDirectory() as raw:
+            host = self._host(pathlib.Path(raw).resolve())
+
+            narrowed = prepare_configured_uninstall(
+                (kept,), host=host, policy=EffectivePolicy(), release=(kit,)
+            )
+            removed = prepare_configured_uninstall(
+                (alone,), host=host, policy=EffectivePolicy(), release=(kit,)
             )
 
-            self.assertIsInstance(kept, Ok, getattr(kept, "diagnostics", ()))
-            self.assertIsInstance(asked, Ok, getattr(asked, "diagnostics", ()))
-            assert isinstance(kept, Ok) and isinstance(asked, Ok)
-            self.assertTrue(_deletions(asked.value), "the deletion was never reachable")
-            self.assertFalse(_deletions(kept.value))
+            self.assertIsInstance(narrowed, Ok, getattr(narrowed, "diagnostics", ()))
+            self.assertIsInstance(removed, Ok, getattr(removed, "diagnostics", ()))
+            assert isinstance(narrowed, Ok) and isinstance(removed, Ok)
+            self.assertFalse(_deletions(narrowed.value))
+            self.assertTrue(_deletions(removed.value))
 
     @staticmethod
     def _host(root: pathlib.Path) -> InstallationHost:

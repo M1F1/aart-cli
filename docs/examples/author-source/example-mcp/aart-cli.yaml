@@ -50,6 +50,13 @@ inputs:
       obtain_from:
         label: Create one in Example settings → Access tokens
         url: https://example.com/settings/tokens
+    # Optional: how long the token is. aart-cli measures the stored value's length without
+    # reading it, reports a value outside these bounds as not configured, and offers another way
+    # to enter one the Keychain prompt cut at 128 characters. A secret takes no pattern.
+    validation:
+      min_length: 40
+      max_length: 200
+      message: Example API tokens have 40 to 200 characters
 
   # Ordinary configuration: asked at install, kept per harness, editable later in AART.
   - id: base-url

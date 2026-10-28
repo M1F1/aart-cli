@@ -101,6 +101,49 @@ def _materialize(root: pathlib.Path, snapshot: SourceSnapshot) -> None:
         target.chmod(0o700 if entry.executable else 0o600)
 
 
+def _registry_here(env, root: pathlib.Path, snapshot: SourceSnapshot) -> None:
+    """Make `root` the checkout of the subscribed Registry, the one aart-cli acts on (INV-304).
+
+    A Registry made by Initialize carries its marker, and its subscribers synchronize that same
+    tree, so the marker is written into the checkout and published as the subscription's baseline.
+    """
+
+    marker = {
+        "schema_version": 1,
+        "protocol_version": 1,
+        "registry_id": env.source.alias.value,
+        "display_name": "Company",
+        "requires_aart": {"min_inclusive": "1.0.0", "max_exclusive": "2.0.0"},
+        "required_capabilities": ["lockfile-v1", "registry-entry-v1"],
+        "default_channel": "main",
+        "services": {},
+    }
+    content = json.dumps(marker).encode()
+    path = parse_relative_path("aart-cli-registry.json")
+    assert isinstance(path, Ok), path
+    marked = SourceSnapshot(
+        snapshot.origin,
+        (
+            *(entry for entry in snapshot.entries if str(entry.path) != str(path.value)),
+            SnapshotEntry(path.value, SnapshotEntryKind.FILE, content),
+        ),
+    )
+    _materialize(root, marked)
+    (root / "aart-cli-registry.json").chmod(0o644)
+    candidate = make_source_candidate(
+        source_instance_id(env.source), env.source.alias, "a" * 40, marked
+    )
+    assert isinstance(candidate, Ok), candidate
+    published = publish_source_snapshot(
+        SourcePublishCommand(
+            source_store_paths(env.paths.data_root, source_instance_id(env.source)),
+            ValidatedSourceCandidate(candidate.value, SourceId("company-registry")),
+            int(time.time()),
+        )
+    )
+    assert isinstance(published, Ok), published
+
+
 def _two_ready_candidates():
     """One Upstream scan holding two Ready Candidates for the same registry.
 
@@ -892,7 +935,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             assert isinstance(original, Ok) and original.value is not None
 
             registry_root = env.project
-            _materialize(registry_root, original.value.candidate.snapshot)
+            _registry_here(env, registry_root, original.value.candidate.snapshot)
             subprocess.run(
                 ("git", "init", "-b", "main", str(registry_root)),
                 check=True,
@@ -954,13 +997,15 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             assert offered is not None
             self.assertEqual(len(offered.candidates), 2)
 
-            # Dashboard → maintainer dashboard → registry (46) → bulk promotion (47); tick both
-            # rows, then Enter to assemble the transaction, and Enter again to commit it.
+            # Dashboard → maintainer dashboard → registry (46) → the Registry opened (46k, §202)
+            # → bulk promotion (47); tick both rows, then Enter to assemble the transaction, and
+            # Enter again to commit it.
             terminal = FakeTerminal(
                 *(DOWN for _ in range(8)),
                 ENTER,
                 DOWN,
                 DOWN,
+                ENTER,
                 ENTER,
                 ENTER,
                 ord(" "),
@@ -1021,7 +1066,7 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             original = read_current_source(CurrentSourceRequest(original_paths, env.source.alias))
             assert isinstance(original, Ok) and original.value is not None
             registry_root = env.project
-            _materialize(registry_root, original.value.candidate.snapshot)
+            _registry_here(env, registry_root, original.value.candidate.snapshot)
             subprocess.run(
                 ("git", "init", "-b", "main", str(registry_root)),
                 check=True,
@@ -1043,13 +1088,15 @@ class MaintainerProductionCompositionTest(unittest.TestCase):
             self.assertEqual(registry.approved_artifacts, (("skill/code-review", "1.2.0"),))
             self.assertEqual(registry.collections, ())
 
-            # Dashboard → maintainer dashboard → registry (46) → Collections (51) → New (52):
+            # Dashboard → maintainer dashboard → registry (46) → the Registry here (46k) →
+            # Collections (51) → New (52):
             # name, summary, tick the one approved artifact, Continue → 44 → 45 → commit.
             terminal = FakeTerminal(
                 *(DOWN for _ in range(8)),
                 ENTER,
                 DOWN,
                 DOWN,
+                ENTER,
                 ENTER,
                 ord("o"),
                 ENTER,

@@ -7,6 +7,7 @@ three reads meet here, outside every renderer and reducer.
 
 from __future__ import annotations
 
+import dataclasses
 import time
 
 from aart_cli.application.candidate_validation import validate_candidate
@@ -16,6 +17,8 @@ from aart_cli.application.maintainer_promotion import (
 )
 from aart_cli.application.maintainer_sync import ApprovedRegistryState
 from aart_cli.application.maintainer_views import (
+    MaintainerRegistryView,
+    MaintainerRegistryWorkspaceView,
     MaintainerViews,
     UnboundCandidateHistory,
     project_maintainer_bulk_promotion,
@@ -39,6 +42,7 @@ from aart_cli.application.promotion import (
 from aart_cli.application.sources import SourceStatusRequest, source_status
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.identifiers import ArtifactCoordinate, SourceAlias
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.registry import RegistryArtifactVersion, RegistryContentMode
 from aart_cli.domain.result import Err, Ok, Result
@@ -46,6 +50,7 @@ from aart_cli.protocol.native_tree import SourceSnapshot
 from aart_cli.sources.model import (
     CurrentSourceRequest,
     source_instance_id,
+    source_snapshot_digest,
     source_store_paths,
 )
 
@@ -196,6 +201,13 @@ def read_maintainer_views(
             if registry_root is not None and registry_workspace_present
             else None
         )
+        # §202: the Registry this run stands in, read from its checkout rather than from a
+        # subscription, because it is the one Registry here that can be acted on.
+        registry_here = (
+            None
+            if published_registry is None or registry_root is None
+            else _registry_here(registry_root, published_registry)
+        )
         checkout: SourceSnapshot | None = None
         if (
             registry_root is not None
@@ -332,6 +344,7 @@ def read_maintainer_views(
                 version_conflicts,
                 registry_workspace_present,
                 published_registry,
+                registry_here,
             )
         )
     except ValueError as error:
@@ -390,3 +403,59 @@ def read_unbound_candidate_histories(
             )
         )
     return Ok(tuple(unbound))
+
+
+def _registry_here(
+    root: str, workspace: MaintainerRegistryWorkspaceView
+) -> MaintainerRegistryView | None:
+    """The Registry in this directory as screen 46k shows it: what its checkout holds (§202).
+
+    The checkout is its own approved state here, so promotions not pushed yet are part of its
+    history. A name that is no alias, or a directory with no commit, has nothing to show.
+    """
+
+    try:
+        alias = SourceAlias(workspace.name)
+    except ValueError:
+        return None
+    local = FilesystemPromotionOutput(root).current()
+    if isinstance(local, Err):
+        return project_maintainer_registry(
+            alias, None, None, None, unavailable=unavailable_reasons(local)
+        )
+    versions = load_registry_versions(local.value)
+    digest = source_snapshot_digest(local.value)
+    if isinstance(versions, Err):
+        return project_maintainer_registry(
+            alias, None, None, None, unavailable=unavailable_reasons(versions)
+        )
+    if isinstance(digest, Err):
+        return project_maintainer_registry(
+            alias, None, None, None, unavailable=unavailable_reasons(digest)
+        )
+    if workspace.revision is None:
+        return project_maintainer_registry(
+            alias, None, None, None, unavailable=("this Registry has no commit yet",)
+        )
+    try:
+        approved = ApprovedRegistryState(
+            alias,
+            workspace.revision,
+            digest.value,
+            # A version names the Registry that approved it, which this checkout may call
+            # otherwise; the checkout's own name wins, as a subscription's alias does (D-350).
+            tuple(
+                version
+                if version.coordinate.source == alias
+                else dataclasses.replace(
+                    version,
+                    coordinate=ArtifactCoordinate(
+                        alias, version.coordinate.artifact, version.coordinate.version
+                    ),
+                )
+                for version in versions.value
+            ),
+        )
+    except ValueError as error:
+        return project_maintainer_registry(alias, None, None, None, unavailable=(str(error),))
+    return project_maintainer_registry(alias, approved, local.value, None)

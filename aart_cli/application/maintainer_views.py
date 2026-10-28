@@ -234,6 +234,11 @@ class MaintainerScreen(str, Enum):
     REGISTRY_REBUILD = "46h-rebuild-registry"
     REGISTRY_REBUILD_REVIEW = "46i-review-rebuild"
     REGISTRY_PUSH = "46j-review-push"
+    # 46k is the Registry in this directory on its own (§202, D-488, D-489). Its Recent promotions
+    # grew without bound on screen 46 and pushed the next Registry off a large-font terminal, so the
+    # list keeps a Registry to a few lines. Every command acting on a Registry is here and not on
+    # the list, and only the Registry this run stands in can be opened.
+    REGISTRY_DETAILS = "46k-registry-details"
     BULK_PROMOTION = "47-bulk-promotion"
     CANDIDATE_LIFECYCLE = "48-candidate-lifecycle"
     PROVENANCE = "49-provenance"
@@ -2029,6 +2034,9 @@ class MaintainerViews:
     #: Where that workspace's registry has got to, when one was read (`QA-098`). `None` is "this
     #: project publishes no registry", which is not the same as a registry nothing is known about.
     registry_workspace: MaintainerRegistryWorkspaceView | None = None
+    #: §202: what that workspace's Registry holds, read from its checkout. It is the one Registry
+    #: this run can act on, so screen 46k opens it and no subscription.
+    registry_here: MaintainerRegistryView | None = None
 
     def __post_init__(self) -> None:
         aliases = tuple(source.alias for source in self.sources)
@@ -2038,6 +2046,9 @@ class MaintainerViews:
             or not (
                 self.registry_workspace is None
                 or isinstance(self.registry_workspace, MaintainerRegistryWorkspaceView)
+            )
+            or not (
+                self.registry_here is None or isinstance(self.registry_here, MaintainerRegistryView)
             )
             or any(not isinstance(source, MaintainerSourceView) for source in self.sources)
             or len(set(aliases)) != len(aliases)
@@ -2487,17 +2498,19 @@ _NAVIGATION: dict[MaintainerScreen, tuple[MaintainerScreen, ...]] = {
     MaintainerScreen.REGISTRY_VALIDATION: (MaintainerScreen.REGISTRY_COMMIT,),
     MaintainerScreen.REGISTRY_COMMIT: (MaintainerScreen.REGISTRY,),
     MaintainerScreen.REGISTRY: (
-        # Where a finished promotion lands (screen 45 goes on to here), and the operator's next
-        # promotion starts on Candidates -- without this they backed out through the whole
-        # journey they had just completed (`QA-027`).
+        # §202: the list acts on nothing. It opens the Registry in this directory, where that
+        # Registry's commands are, and Initialize is here only for a directory that holds none.
+        MaintainerScreen.REGISTRY_INIT,
+        MaintainerScreen.REGISTRY_DETAILS,
+    ),
+    # The Registry in this directory, opened from its row, is where its commands are (§202).
+    # Initialize is not one of them: the Registry already exists.
+    MaintainerScreen.REGISTRY_DETAILS: (
         MaintainerScreen.CANDIDATES,
         MaintainerScreen.BULK_PROMOTION,
-        MaintainerScreen.REGISTRY_INIT,
         MaintainerScreen.REGISTRY_REBUILD,
         MaintainerScreen.REPOSITORY_SCAN,
         MaintainerScreen.ADOPTED_ARTIFACTS,
-        # Push is reached from this screen and from nowhere else: it is an action on the local
-        # workspace row, not a step any promotion or rebuild flows into (D-312).
         MaintainerScreen.REGISTRY_PUSH,
         MaintainerScreen.COLLECTIONS,
     ),

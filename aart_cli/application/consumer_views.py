@@ -1440,11 +1440,12 @@ def install_flow_screens(view: ConsumerPlanView) -> tuple[ConsumerScreen, ...]:
 
     # Automatic inspection is work AART performs between these screens, not a decision the user
     # must acknowledge. The projection remains available for diagnostics/Verbose presentation.
+    # Where each installation goes is chosen before what it is told and holds (§209).
     screens = [ConsumerScreen.REVIEW_SELECTION]
-    if view.inputs:
-        screens.append(ConsumerScreen.REQUIRED_INPUTS)
     if scope_choice_offered(view.scope_offers):
         screens.append(ConsumerScreen.INSTALL_SCOPE)
+    if view.inputs:
+        screens.append(ConsumerScreen.REQUIRED_INPUTS)
     if secrets_to_ask(view):
         screens.append(ConsumerScreen.INSTALL_CREDENTIALS)
     screens.extend((ConsumerScreen.READY, ConsumerScreen.INSTALLING, ConsumerScreen.SUCCESS))
@@ -2075,6 +2076,17 @@ def under_collections(
                 ordered.append((member.artifact, True))
     ordered.extend((row, False) for row in installations if row not in placed)
     return tuple(ordered)
+
+
+def reached_from(view: InstalledArtifactView, project_root: str) -> bool:
+    """Whether an agent working in `project_root` can use this installation (§210).
+
+    The user's installations are reached from everywhere, a project's only from that project.
+    Where the session knows no project, or the record names no scope, nothing is said to be
+    elsewhere: hiding an installation nobody can place would hide it from everyone.
+    """
+
+    return view.scope != "project" or not project_root or view.root == project_root
 
 
 @dataclass(frozen=True, slots=True)
@@ -2861,12 +2873,16 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
         ConsumerScreen.INSTALL_CREDENTIALS,
         ConsumerScreen.READY,
     ),
+    # 07 after 07a (§209): an installation's scope is known before its configuration is.
     ConsumerScreen.REQUIRED_INPUTS: (
-        ConsumerScreen.INSTALL_SCOPE,
         ConsumerScreen.INSTALL_CREDENTIALS,
         ConsumerScreen.READY,
     ),
-    ConsumerScreen.INSTALL_SCOPE: (ConsumerScreen.INSTALL_CREDENTIALS, ConsumerScreen.READY),
+    ConsumerScreen.INSTALL_SCOPE: (
+        ConsumerScreen.REQUIRED_INPUTS,
+        ConsumerScreen.INSTALL_CREDENTIALS,
+        ConsumerScreen.READY,
+    ),
     ConsumerScreen.INSTALL_CREDENTIALS: (ConsumerScreen.READY,),
     ConsumerScreen.READY: (ConsumerScreen.INSTALLING,),
     ConsumerScreen.INSTALLING: (ConsumerScreen.SUCCESS,),

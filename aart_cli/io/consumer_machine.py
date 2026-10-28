@@ -41,10 +41,12 @@ from aart_cli.application.installed_state import (
 from aart_cli.domain.artifacts import ArtifactKind
 from aart_cli.domain.configuration_files import parse_configuration_file
 from aart_cli.domain.credentials import (
+    CredentialLength,
     CredentialObservation,
     CredentialReference,
     CredentialState,
     ProviderState,
+    checked_observation,
 )
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.harness import (
@@ -106,6 +108,20 @@ def _references(records: Iterable[InstalledRecord]) -> tuple[CredentialReference
     for record in records:
         references.update(record.credential_references)
     return tuple(sorted(references))
+
+
+def _declared_lengths(
+    records: Iterable[InstalledRecord],
+) -> dict[CredentialReference, tuple[CredentialLength, ...]]:
+    """The lengths each credential's artifacts declare, read from the receipts they left (§204)."""
+
+    lengths: dict[CredentialReference, tuple[CredentialLength, ...]] = {}
+    for record in records:
+        receipt = record.receipt
+        if isinstance(receipt, InstallationReceipt):
+            for check in receipt.credential_checks:
+                lengths[check.reference] = (*lengths.get(check.reference, ()), check.length)
+    return lengths
 
 
 def _unknown(reference: CredentialReference) -> CredentialObservation:
@@ -365,6 +381,7 @@ def read_installed_inspections(
         )
 
     observations: list[CredentialObservation] = []
+    declared = _declared_lengths(records)
     for reference in _references(records):
         provider = providers.get(reference.provider.provider)
         if provider is None:
@@ -373,7 +390,12 @@ def read_installed_inspections(
         observed = provider.inspect(reference)
         if isinstance(observed, Err):
             return observed
-        observations.append(observed.value)
+        # A stored value of a length its artifact rules out is not the credential: it is reported
+        # as invalid, with why, wherever this reading is drawn (§204).
+        checked = observed.value
+        for length in declared.get(reference, ()):
+            checked = checked_observation(checked, length)
+        observations.append(checked)
 
     by_reference = {item.reference: item for item in observations}
     # A whole-machine read holds installations of both scopes, and each is measured under its own

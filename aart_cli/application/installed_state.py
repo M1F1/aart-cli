@@ -182,8 +182,8 @@ def removal_state_from_receipt(
 ) -> DesiredState:
     """The absent desired state used by uninstall reconciliation.
 
-    Credentials are deliberately omitted by default. The final dependant disappearing is not
-    authority to delete a credential; callers have to request that separate mutation explicitly.
+    Credentials are included only when `delete_credentials` asks: an uninstall does for every
+    installation it removes, whose items no other installation uses (D-334, §208).
     """
 
     if not isinstance(receipt, InstallationReceipt):

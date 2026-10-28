@@ -26,7 +26,12 @@ from dataclasses import dataclass
 from typing import TypeAlias
 
 from .configuration_files import ConfigurationFileRecord
-from .credentials import CredentialProviderRef, CredentialReference
+from .credentials import (
+    CredentialCheck,
+    CredentialLength,
+    CredentialProviderRef,
+    CredentialReference,
+)
 from .diagnostics import Diagnostic, DiagnosticCode, Severity
 from .effects import DeliveryKind
 from .harness import McpRegistration, registration_from_data, registration_to_data
@@ -117,6 +122,9 @@ class InstallationReceipt:
     #: with two trees and two records, and this is what tells them apart. `None` for the
     #: lower-level callers that never cross that boundary.
     owner: InstallationOwner | None = None
+    #: The length each credential's artifact declares for it, so a later reading can say a stored
+    #: value is the wrong one without the manifest at hand (§204). Never a value, only bounds.
+    credential_checks: tuple[CredentialCheck, ...] = ()
 
     def __post_init__(self) -> None:
         if not (self.owner is None or isinstance(self.owner, InstallationOwner)):
@@ -181,6 +189,26 @@ class InstallationReceipt:
             "configuration_files",
             tuple(sorted(self.configuration_files, key=lambda item: item.harness)),
         )
+        if not isinstance(self.credential_checks, tuple) or any(
+            not isinstance(item, CredentialCheck) or item.reference not in self.credentials
+            for item in self.credential_checks
+        ):
+            raise ValueError("installation receipt checks only the credentials it records")
+        if len({item.reference for item in self.credential_checks}) != len(self.credential_checks):
+            raise ValueError("installation receipt records one check per credential")
+        object.__setattr__(
+            self,
+            "credential_checks",
+            tuple(sorted(self.credential_checks, key=lambda item: item.reference)),
+        )
+
+    def credential_length(self, reference: CredentialReference) -> CredentialLength | None:
+        """The length declared for `reference`, or None when its artifact declared none."""
+
+        return next(
+            (item.length for item in self.credential_checks if item.reference == reference),
+            None,
+        )
 
 
 def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, object]:
@@ -204,11 +232,28 @@ def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, obje
         if receipt.configuration_files
         else {}
     )
+    # Written only when an artifact declared one, so every receipt before §204 reads as it did.
+    checks: dict[str, object] = (
+        {
+            "credential_checks": [
+                {
+                    "input": item.reference.input.value,
+                    "max_length": item.length.max_length,
+                    "message": item.length.message,
+                    "min_length": item.length.min_length,
+                }
+                for item in receipt.credential_checks
+            ]
+        }
+        if receipt.credential_checks
+        else {}
+    )
     return {
         **owned,
         **identity,
         **setup,
         **configuration,
+        **checks,
         "artifact": receipt.artifact,
         "base_interpreter": receipt.base_interpreter,
         "config": [
@@ -787,9 +832,16 @@ def installation_receipt_from_data(data: object) -> Result[InstallationReceipt]:
         for key in ("artifact", "root", "launcher", "launcher_digest", "interpreter"):
             if key not in data:
                 raise ValueError(f"installation receipt is missing {key}")
-        for key in ("registrations", "credentials", "config", "configuration_files"):
+        for key in (
+            "registrations",
+            "credentials",
+            "config",
+            "configuration_files",
+            "credential_checks",
+        ):
             if not isinstance(data.get(key, []), list):
                 raise ValueError(f"installation receipt {key} must be a list")
+        credentials = tuple(_reference(item) for item in data.get("credentials", []))
         return Ok(
             InstallationReceipt(
                 str(data["artifact"]),
@@ -799,7 +851,7 @@ def installation_receipt_from_data(data: object) -> Result[InstallationReceipt]:
                 str(data["interpreter"]),
                 Transport(str(data.get("transport", Transport.STDIO.value))),
                 tuple(registration_from_data(item) for item in data.get("registrations", [])),
-                tuple(_reference(item) for item in data.get("credentials", [])),
+                credentials,
                 tuple(_fingerprint(item) for item in data.get("config", [])),
                 None if data.get("base_interpreter") is None else str(data["base_interpreter"]),
                 # Absent rather than required: see the placed receipt's inverse.
@@ -811,10 +863,28 @@ def installation_receipt_from_data(data: object) -> Result[InstallationReceipt]:
                 None if data.get("setup_state_ref") is None else str(data["setup_state_ref"]),
                 tuple(_configuration_file(item) for item in data.get("configuration_files", [])),
                 _owner(data.get("owner")),
+                tuple(
+                    _credential_check(item, credentials)
+                    for item in data.get("credential_checks", [])
+                ),
             )
         )
     except ValueError as error:
         return _error(str(error))
+
+
+def _credential_check(
+    data: object, credentials: tuple[CredentialReference, ...]
+) -> CredentialCheck:
+    if not isinstance(data, dict) or set(data) != {"input", "max_length", "message", "min_length"}:
+        raise ValueError("an installation receipt credential check is invalid")
+    named = [item for item in credentials if item.input.value == data["input"]]
+    if len(named) != 1:
+        raise ValueError("an installation receipt credential check names no credential it records")
+    return CredentialCheck(
+        named[0],
+        CredentialLength(data["min_length"], data["max_length"], data["message"]),
+    )
 
 
 def _owner(data: object) -> InstallationOwner | None:

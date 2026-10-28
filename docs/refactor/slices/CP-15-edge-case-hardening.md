@@ -338,8 +338,8 @@ test files nearest it, per D-134: 1218 mutants, 335 survivors. The count means n
 (B-054), but one survivor did. Replacing the assignment-detector's result with `None` —
 
 ```python
-        if not detected:
-            detected = None       # was: any(not _placeholder(m.group(2)) for m in ...)
+if not detected:
+    detected = None  # was: any(not _placeholder(m.group(2)) for m in ...)
 ```
 
 — changed nothing anywhere. `_SECRET_PREFIX` recognises the vendors whose tokens have a shape, and

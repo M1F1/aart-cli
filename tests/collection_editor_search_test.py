@@ -61,7 +61,9 @@ def _source() -> CanonicalScreenSource:
         (),
         approved_artifacts=_APPROVED,
     )
-    views = MaintainerViews(project_maintainer_dashboard(()), (), registries=(registry,))
+    views = MaintainerViews(
+        project_maintainer_dashboard(()), (), registries=(registry,), registry_here=registry
+    )
     return CanonicalScreenSource(
         ConsumerScreens(project_dashboard((), registry_count=0), maintainer=views)
     )

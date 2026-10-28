@@ -1,0 +1,439 @@
+{
+ "server": "fastmcp 3.4.11, pydantic 2.14.1",
+ "tools": [
+  {
+   "inputSchema": {
+    "$defs": {
+     "Cat": {
+      "properties": {
+       "kind": {
+        "const": "cat",
+        "default": "cat",
+        "type": "string"
+       },
+       "lives": {
+        "default": 9,
+        "type": "integer"
+       }
+      },
+      "type": "object"
+     },
+     "Child": {
+      "properties": {
+       "name": {
+        "minLength": 1,
+        "pattern": "^[a-z]+$",
+        "type": "string"
+       },
+       "size": {
+        "maximum": 10,
+        "minimum": 0,
+        "type": "integer"
+       }
+      },
+      "required": [
+       "name",
+       "size"
+      ],
+      "type": "object"
+     },
+     "Colour": {
+      "enum": [
+       "red",
+       "blue"
+      ],
+      "type": "string"
+     },
+     "Dog": {
+      "properties": {
+       "good": {
+        "default": true,
+        "type": "boolean"
+       },
+       "kind": {
+        "const": "dog",
+        "default": "dog",
+        "type": "string"
+       }
+      },
+      "type": "object"
+     },
+     "Tree": {
+      "properties": {
+       "children": {
+        "default": [],
+        "items": {
+         "$ref": "#/$defs/Tree"
+        },
+        "type": "array"
+       },
+       "label": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "label"
+      ],
+      "type": "object"
+     }
+    },
+    "additionalProperties": false,
+    "properties": {
+     "child": {
+      "$ref": "#/$defs/Child"
+     },
+     "colour": {
+      "$ref": "#/$defs/Colour",
+      "default": "red"
+     },
+     "counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object"
+     },
+     "ident": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null
+     },
+     "key": {
+      "default": "AB-1",
+      "pattern": "^[A-Z]+-\\d+$",
+      "type": "string"
+     },
+     "mode": {
+      "default": "a",
+      "enum": [
+       "a",
+       "b"
+      ],
+      "type": "string"
+     },
+     "pair": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "type": "array"
+     },
+     "pet": {
+      "discriminator": {
+       "mapping": {
+        "cat": "#/$defs/Cat",
+        "dog": "#/$defs/Dog"
+       },
+       "propertyName": "kind"
+      },
+      "oneOf": [
+       {
+        "$ref": "#/$defs/Cat"
+       },
+       {
+        "$ref": "#/$defs/Dog"
+       }
+      ]
+     },
+     "price": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null
+     },
+     "ratio": {
+      "default": 0.5,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "type": "number"
+     },
+     "tags": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+     },
+     "tree": {
+      "$ref": "#/$defs/Tree"
+     },
+     "when": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null
+     }
+    },
+    "required": [
+     "child",
+     "pet",
+     "tree",
+     "counts",
+     "pair"
+    ],
+    "type": "object"
+   },
+   "name": "shapes",
+   "outputSchema": {
+    "properties": {
+     "child": {
+      "properties": {
+       "name": {
+        "minLength": 1,
+        "pattern": "^[a-z]+$",
+        "type": "string"
+       },
+       "size": {
+        "maximum": 10,
+        "minimum": 0,
+        "type": "integer"
+       }
+      },
+      "required": [
+       "name",
+       "size"
+      ],
+      "type": "object"
+     },
+     "counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object"
+     },
+     "ratio": {
+      "type": "number"
+     },
+     "tags": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "title": {
+      "type": "string"
+     },
+     "when": {
+      "format": "date-time",
+      "type": "string"
+     }
+    },
+    "required": [
+     "title",
+     "ratio",
+     "tags",
+     "counts",
+     "child",
+     "when"
+    ],
+    "type": "object"
+   }
+  },
+  {
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+     "name": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "type": "object"
+   },
+   "name": "plain",
+   "outputSchema": {
+    "additionalProperties": {
+     "type": "integer"
+    },
+    "type": "object"
+   }
+  },
+  {
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+     "n": {
+      "default": 2,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   },
+   "name": "listing",
+   "outputSchema": {
+    "properties": {
+     "result": {
+      "items": {
+       "properties": {
+        "name": {
+         "minLength": 1,
+         "pattern": "^[a-z]+$",
+         "type": "string"
+        },
+        "size": {
+         "maximum": 10,
+         "minimum": 0,
+         "type": "integer"
+        }
+       },
+       "required": [
+        "name",
+        "size"
+       ],
+       "type": "object"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "result"
+    ],
+    "type": "object",
+    "x-fastmcp-wrap-result": true
+   }
+  },
+  {
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+     "address": {
+      "format": "ipv4",
+      "type": "string"
+     },
+     "anything": {
+      "default": null,
+      "title": "Anything"
+     },
+     "few": {
+      "items": {
+       "type": "integer"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "type": "array"
+     },
+     "frozen": {
+      "items": {
+       "type": "integer"
+      },
+      "type": "array",
+      "uniqueItems": true
+     },
+     "keyed": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "propertyNames": {
+       "enum": [
+        "a",
+        "b"
+       ]
+      },
+      "type": "object"
+     },
+     "maybe": {
+      "anyOf": [
+       {
+        "items": {
+         "additionalProperties": {
+          "anyOf": [
+           {
+            "type": "integer"
+           },
+           {
+            "type": "null"
+           }
+          ]
+         },
+         "type": "object"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null
+     },
+     "patterned": {
+      "patternProperties": {
+       "^x": {
+        "type": "integer"
+       }
+      },
+      "type": "object"
+     },
+     "raw": {
+      "format": "binary",
+      "type": "string"
+     },
+     "span": {
+      "format": "duration",
+      "type": "string"
+     },
+     "step": {
+      "default": 1.0,
+      "multipleOf": 0.5,
+      "type": "number"
+     },
+     "where": {
+      "format": "path",
+      "type": "string"
+     },
+     "whole": {
+      "default": 5,
+      "exclusiveMaximum": 100,
+      "exclusiveMinimum": 0,
+      "multipleOf": 5,
+      "type": "integer"
+     }
+    },
+    "required": [
+     "keyed",
+     "patterned",
+     "frozen",
+     "raw",
+     "span",
+     "address",
+     "where",
+     "few"
+    ],
+    "type": "object"
+   },
+   "name": "rare",
+   "outputSchema": {
+    "additionalProperties": true,
+    "type": "object"
+   }
+  }
+ ]
+}

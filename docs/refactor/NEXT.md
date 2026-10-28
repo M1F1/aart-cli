@@ -1,6 +1,69 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-26, CP-45)
+## Where the work is (2026-10-28, CP-46)
+
+0.19.0 (CP-45) is released. **CP-46** makes screen 46 readable with a large font and acts only
+on the Registry here. Each Registry is a few lines, with `Promotions recorded: N` instead of its
+history, and the list offers no command (Initialize only where the directory holds no Registry).
+The Registry in the directory aart-cli runs in is marked `● you are here`; Enter opens it as 46k
+with its promotions read from its checkout, where `c`, `b`, `s`, `u`, `p` and `o` work. Any other
+Registry says to run aart-cli in its checkout (§202, INV-303, INV-304, D-488, D-489).
+
+A running action's heading now carries a turning mark and its seconds, and no beat is drawn over a
+credential prompt. `consume mcp test` applies a generated schema's bounds and branches, and reads
+past annotations and `x-` extensions, so fastmcp servers are no longer refused (§203, INV-305,
+INV-306, D-490).
+
+Test MCP in the TUI reads each chosen installation in the scope and root its key names, so an MCP
+installed for the user is tested from a project, and a test that cannot run names the error (§203
+addendum, INV-307, D-491).
+
+A secret input may declare `validation: {min_length, max_length, message}`. The receipt records it.
+A stored value of another length, measured without reading it, is `Not configured: …` in
+Credentials and variables, `consume inputs list` and doctor. macOS's prompt keeps at most 128
+characters, so a value that fails its length, or sits at 128 with none declared, is entered another
+way: a macOS dialog whose script stores the value itself, else Keychain Access instructions. The
+ways are adapters behind `io/credential_entry` (§204, INV-308, INV-309, D-492).
+
+`consume mcp test` reads every schema FastMCP writes: `pattern` (ECMA-262, ASCII classes, `$` at
+the end), `patternProperties`, `propertyNames`, `additionalProperties` as a schema, `prefixItems`,
+and `$ref` into the tool's own `$defs`. `discriminator` is read past, a server's fractions are
+exact, and a refusal is said without the server's stderr. Every tool of sooperset's mcp-atlassian
+0.23.1 and 0.21.1 is checked from stored fixtures and live (§205, INV-310, D-493).
+
+Every screen taller than the terminal pages with PgUp/PgDn in both TUIs. The trail and keys stay,
+lines above and below say what is left out, the cursor is followed until a page is turned, and the
+legend offers it only when the screen does not fit (§206, INV-311, D-494).
+
+A credential is entered on 07b. Enter on a row lends the terminal to the store's prompt at once,
+once per installation, with the dialog only for a value the prompt cut. The install is prepared
+again, so Ready confirms the review that holds it, and the install asks nothing. What was entered
+is deleted when the review is left, quit or its install fails (§207, INV-312, D-495). `consume
+install` keeps §201's flow.
+
+An uninstall deletes the credentials of exactly the installations it removes, placeholders
+included. A record a Collection removal narrows keeps them. The TUI review lists
+`credential:INPUT`, and `consume uninstall` reviews `"credentials": {"deleted": [...]}` (§208,
+INV-313, D-496, amending INV-185).
+
+An install now asks the scope before configuration and credentials: 05, 07a, 07, 07b, Ready. 07a
+needs no plan, each pair starts on the Settings scope, typed values survive going back to it, and
+07b addresses each item by the scope chosen there (§209, INV-314, D-497).
+
+Installed and Updates list by default what an agent here reaches: the user's installations and
+this project's. The status says how many in other projects are not shown, `a` lists every
+project's, and Home counts what Installed lists by default (§210, INV-315, D-498).
+
+Evidence: `docs/refactor/slices/CP-46-registry-opens-its-history.md`. Steps 1–11 are done (focused
+verification and targeted mutations in the slice). Next is step 12: the owner's run in the lab
+with this build (07a before 07, 07b entry in a real terminal, uninstall deleting the Keychain
+items, scrolling, Installed's `a`), then the PR.
+
+B-239 (opencode ENOENT on a launcher) and B-241 (a credential stored as one character) are open
+from the same enterprise report. B-243 (Doctor and Credentials and variables still read every
+project) is open from step 11.
+
+## Where the work was (2026-10-26, CP-45)
 
 0.18.0 (CP-43, CP-44) is released. **CP-45** lets an agent or a script configure an installed
 artifact without the TUI, with `consume inputs list`, `set` and `set-credential`. All three go

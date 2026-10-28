@@ -63,6 +63,7 @@ from .configured_installation import (
     prepare_configured_installation_draft,
 )
 from .consumer_machine import read_consumer_machine
+from .credential_entry import CredentialEntryFallback
 from .credentials import CredentialProviderPort
 from .environment_inspection import LocalEnvironmentInspector, platform_name
 from .execution import CompositeMutationLock, LocalMutationLock, TerminalHandover
@@ -401,6 +402,7 @@ def complete_configured_installation(
     prompted_credentials: Collection[str] = (),
     skipped_secrets_as_placeholders: bool = False,
     observe: ProgressObserver | None = None,
+    credential_entry: tuple[CredentialEntryFallback, ...] = (),
 ) -> Result[CompletedConfiguredInstallation]:
     """Execute the confirmed review, record it, and re-read the machine it left behind.
 
@@ -436,6 +438,7 @@ def complete_configured_installation(
         credential_handover=credential_handover,
         prompted_credentials=prompted_credentials,
         skipped_secrets_as_placeholders=skipped_secrets_as_placeholders,
+        credential_entry=credential_entry,
     )
     if isinstance(interpreters, Err):
         return interpreters
