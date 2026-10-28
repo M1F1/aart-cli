@@ -144,8 +144,10 @@ class AnUpdateChangesTheInstallationItWasAskedFor(_Lab):
         super().setUpClass()
         publish_version(cls.root)
 
-    def _update(self, row: str) -> dict:
-        return self._walk(*UPDATES, {"row": row}, "space", "i", "enter")
+    def _update(self, row: str, *, everywhere: bool = False) -> dict:
+        # Another project's row is listed only once `a` shows every project (§210).
+        shown = ("a",) if everywhere else ()
+        return self._walk(*UPDATES, *shown, {"row": row}, "space", "i", "enter")
 
     def _skills(self, root: pathlib.Path) -> list[str]:
         return sorted(
@@ -188,7 +190,7 @@ class AnUpdateChangesTheInstallationItWasAskedFor(_Lab):
     def test_another_projects_row_says_where_to_change_it_and_changes_nothing(self) -> None:
         files = sorted(str(path) for path in self.second.rglob("*"))
 
-        seen = self._update(r"project\s+second-")
+        seen = self._update(r"project\s+second-", everywhere=True)
 
         self.assertIn(
             "installed in another project: lab/skill/manual-check@1.0.0 · claude · project "

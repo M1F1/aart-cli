@@ -190,6 +190,11 @@ class ScopeComesBeforeConfigurationE2ETest(BothBackendsMeasured):
             ),
             _environment(authored=AUTHORED_MCP) as env,
         ):
+            # A stand-in store, so 07b has rows wherever this runs: Linux has no Keychain.
+            base = _actions(env)
+            handler = type(base)(
+                replace(base._context, credential_providers=(_Keeping(),))  # noqa: SLF001
+            )
             finished, terminal, _ = _drive(
                 env,
                 _at(ConsumerScreen.MARKETPLACE),
@@ -205,7 +210,7 @@ class ScopeComesBeforeConfigurationE2ETest(BothBackendsMeasured):
                 ENTER,
                 ENTER,
                 ESCAPE,
-                actions=_actions(env),
+                actions=handler,
             )
 
         submitted = _first(terminal, "github-token): not set")

@@ -267,6 +267,12 @@ credential rows, and the end of the summary, could not be seen; every long scree
   line before its list, at the owner's request. `tests/placeholder_warnings_test.py` was red before
   the line was added. 42 files that draw Ready: 537 passed.
 
+- CI on PR #106 failed two tests that the local runs missed. `installation_changed_where_made_lab_e2e_test`
+  updated another project's row, which Installed and Updates now hide until `a` (§210), so that walk
+  presses `a`. `install_credentials_test`'s 07-to-07b drive relied on the macOS Keychain; it now
+  uses a stand-in store, as its neighbours do, because Linux CI has none. Each fix, undone, turns
+  its test red again.
+
 ## Targeted mutations
 
 Run with `PYTHONDONTWRITEBYTECODE=1 python -B`, and each restored file is touched.
