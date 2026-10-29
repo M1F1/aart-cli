@@ -2,7 +2,7 @@
 
 The scenarios are the owner's brief's acceptance tests, against a controlled clock and a fake
 `post`; `http_post` and the detached process run against a real loopback HTTP server that
-follows docs/telemetry-api-v1.md. The server's own tests (aart-telemetry-server) hold the server
+follows docs/telemetry-api-v1.md. The server's own tests (aart-cli-telemetry-server) hold the server
 side: storing once, deduplication and the dashboard.
 """
 

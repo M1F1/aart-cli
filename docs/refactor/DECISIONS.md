@@ -12547,6 +12547,10 @@ and resolves B-251.
 
 Product Specification §213.
 
+- **Its name.** `aart-cli-telemetry-server`, Python package `aart_cli_telemetry_server`, variables
+  `AART_CLI_TELEMETRY_*`: the owner's choice ("w sumie to możesz je nazwać
+  aart-cli-telemetry-server", 2026-10-29), matching `aart-cli` / `aart_cli`.
+
 - **What was asked.** "stworzysz nowe [repo] z serwerem do telemetrii tak jak mówi specka"; the
   brief: a separate repository, FastAPI, SQLite in WAL, a Chart.js dashboard, `/healthz`,
   `/dashboard`, `/api/v1/stats/*`; local end to end first, AKS later. During the work the owner
@@ -12555,7 +12559,7 @@ Product Specification §213.
   and the database abstracted as a functional core with an imperative shell, because it may move
   to PostgreSQL.
 - **Choices.**
-  - `M1F1/aart-telemetry-server`. aart-cli's zero-runtime-dependency invariant does not reach it.
+  - `M1F1/aart-cli-telemetry-server`. aart-cli's zero-runtime-dependency invariant does not reach it.
   - **One contract, two byte-identical copies**: `docs/telemetry-api-v1.md` and
     `contract/telemetry-api-v1.examples.json`. Each repository pins both files' SHA-256 in a test,
     so changing the contract is a change to both in step. Neither repository imports the other.

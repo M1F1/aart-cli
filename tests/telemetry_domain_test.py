@@ -1,7 +1,7 @@
 """CP-50: what is sent to a telemetry server, where, and when (§213, INV-322–INV-327).
 
 The contract is docs/telemetry-api-v1.md with contract/telemetry-api-v1.examples.json, kept
-identical in aart-telemetry-server. The digests below are the same constants that repository's
+identical in aart-cli-telemetry-server. The digests below are the same constants that repository's
 contract test holds: a change made on one side only is red here or there.
 """
 
@@ -43,7 +43,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CONTRACT = ROOT / "docs" / "telemetry-api-v1.md"
 EXAMPLES = ROOT / "contract" / "telemetry-api-v1.examples.json"
 CONTRACT_SHA256 = {
-    "docs/telemetry-api-v1.md": "c06bc119e642b3969fa8444a301ee28bd704058984d681d9896bb0009d401763",
+    "docs/telemetry-api-v1.md": "22c1307cbf9ef97cb6cbe1560804363e74c986ef55f21ad3a1e1c5197eb8ffeb",
     "contract/telemetry-api-v1.examples.json": (
         "af9022f4889ffca325353416c088608925f327feac0176b1f21cedf6374004e9"
     ),

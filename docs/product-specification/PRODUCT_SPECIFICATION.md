@@ -12661,7 +12661,7 @@ many installations, and how that changes, on a dashboard. Supersedes §212's "Lo
 installation where telemetry is turned on.
 
 - **Two repositories, one contract.** The server is a separate repository,
-  `aart-telemetry-server` (a functional core behind FastAPI; SQLite in WAL by default and
+  `aart-cli-telemetry-server` (a functional core behind FastAPI; SQLite in WAL by default and
   PostgreSQL by URL, through one SQLAlchemy repository; a Chart.js dashboard). The only thing the two
   share is `docs/telemetry-api-v1.md` with `contract/telemetry-api-v1.examples.json`, kept
   identical in both and read by each one's contract tests. aart-cli imports nothing of the server

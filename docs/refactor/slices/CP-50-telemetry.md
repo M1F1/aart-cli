@@ -14,7 +14,7 @@ See `docs/refactor/plan.json`, epic CP-50.
 3. The sender: one at a time under a lock, a detached process, split and backoff. Done.
 4. `consume telemetry status|enable|disable|sync`, and the release variable
    `AART_CLI_TELEMETRY_ENDPOINT`. Done.
-5. The server, in its own repository (`aart-telemetry-server`), and an end-to-end run of this
+5. The server, in its own repository (`aart-cli-telemetry-server`), and an end-to-end run of this
    aart-cli against it. Done.
 6. The PR. Open.
 
@@ -57,7 +57,7 @@ with an imperative shell, because it may later move to PostgreSQL.
   `default_telemetry_endpoint`, `configuration.seed.baked_telemetry_endpoint`; `tach.toml`.
 - `docs/telemetry-api-v1.md` and `contract/telemetry-api-v1.examples.json` (new), byte for byte the
   server's; each repository's contract tests pin both digests.
-- The server, `aart-telemetry-server` (D-504): `domain` (events, the strict pydantic contract,
+- The server, `aart-cli-telemetry-server` (D-504): `domain` (events, the strict pydantic contract,
   the dashboard's definitions), `application` (the `EventRepository` port and the use cases as
   `IOResult` flows), `adapters` (an in-memory oracle; SQLAlchemy Core for SQLite in WAL and for
   PostgreSQL), `effects.perform` as the only `returns.unsafe` import, `web` (FastAPI, a strict-CSP
@@ -120,5 +120,5 @@ load; on unchanged code that test passed six runs in a row.
 
 B-253 (telemetry in the TUI's Settings), B-254 (a per-user credential beyond loopback),
 B-255 (a corporate CA bundle), B-256 (whether an organisation's build starts with telemetry on),
-B-257 (the server's next stage: AKS, Alembic, retention). The server is `M1F1/aart-telemetry-server`
+B-257 (the server's next stage: AKS, Alembic, retention). The server is `M1F1/aart-cli-telemetry-server`
 (private), created by the owner on 2026-10-29.

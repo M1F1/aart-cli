@@ -10,7 +10,7 @@ A completed action and a use that resolves to an installed artifact become event
 one under a `fcntl` lock and at most every ten minutes on activity, posts batches of 100 to
 `/api/v1/events/batch` and marks only acknowledged ids sent, with split, backoff and a pause after
 401/403. `consume telemetry status|enable|disable|sync`; `AART_CLI_TELEMETRY_ENDPOINT` bakes an
-offered address. The server is the new repository `aart-telemetry-server`. The hook costs 77 ms
+offered address. The server is the new repository `aart-cli-telemetry-server`. The hook costs 77 ms
 median with telemetry on and nothing due, 55 ms off. Evidence:
 `docs/refactor/slices/CP-50-telemetry.md`.
 

@@ -5235,7 +5235,7 @@ D-502 does for usage recording.
 
 ## B-257 — The telemetry server's next stage
 
-Status: **open**, noncritical (CP-50, D-504), in `M1F1/aart-telemetry-server`.
+Status: **open**, noncritical (CP-50, D-504), in `M1F1/aart-cli-telemetry-server`.
 
 AKS: a container image, one replica on a persistent volume or a managed PostgreSQL, the
 authenticating ingress, scheduled backups with a tested restore. Alembic migrations with the first
