@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.21.0](https://github.com/M1F1/aart-cli/compare/v0.20.0...v0.21.0) (2026-10-29)
+
+
+### Added
+
+* a newer aart-cli that a Registry runs is announced, with the command that installs it ([c7e5ad9](https://github.com/M1F1/aart-cli/commit/c7e5ad9683a827830f57b47a0057e9f0e657fe9a))
+* Activity is kept in SQLite and shows which skills and MCPs each harness uses, ranked, with consume usage ([c7e5ad9](https://github.com/M1F1/aart-cli/commit/c7e5ad9683a827830f57b47a0057e9f0e657fe9a))
+* the release variable AART_CLI_DEFAULT_USAGE_HARNESSES chooses which harnesses record usage without asking, and unset records nowhere ([c7e5ad9](https://github.com/M1F1/aart-cli/commit/c7e5ad9683a827830f57b47a0057e9f0e657fe9a))
+
+
+### Fixed
+
+* consume mcp test accepts ALIAS/KIND/NAME without a version ([c7e5ad9](https://github.com/M1F1/aart-cli/commit/c7e5ad9683a827830f57b47a0057e9f0e657fe9a))
+
 ## [0.20.0](https://github.com/M1F1/aart-cli/compare/v0.19.0...v0.20.0) (2026-10-28)
 
 
