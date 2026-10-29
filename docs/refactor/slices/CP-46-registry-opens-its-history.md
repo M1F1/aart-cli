@@ -1,6 +1,6 @@
 # CP-46 — Only the Registry here opens, and its commands are there
 
-Status: **steps 1–11 done; step 12 (the owner's lab run and the PR) open**, on `feat/cp-46-registry-context`, from `main` at 0.19.0, at the owner's
+Status: **done** (PR #106, released as 0.20.0), on `feat/cp-46-registry-context`, from `main` at 0.19.0, at the owner's
 request (2026-10-27). Authority: Product Specification §202–§210, INV-303–INV-315, D-488–D-498.
 
 ## Steps
@@ -27,7 +27,7 @@ See `docs/refactor/plan.json`, epic CP-46.
     Done.
 11. Installed shows by default what this context reaches: user installations and this project's;
     `a` shows every project's (§210, D-498). Done.
-12. The owner's run in the lab, and the PR.
+12. The owner's run in the lab, and the PR. Done (#106, 0.20.0).
 
 ## Why
 

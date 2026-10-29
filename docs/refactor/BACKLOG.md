@@ -5123,3 +5123,75 @@ Installed, Updates and Home list by default what an agent here reaches (§210). 
 Credentials and variables still list every project's installations. They may follow the same rule
 and toggle if the owner wants it. Whether another project's installation is measured correctly
 from here, under this project's root, was not checked.
+
+## B-244 — `maintain registry init` writes a `.aart-cli-source`
+
+Status: **open**, noncritical (CP-47, D-499).
+
+A new Registry gets `.aart-cli-version` from `registry init`, but no `.aart-cli-source`, so its
+consumers are told a newer aart-cli exists without a command until a maintainer writes one (§211).
+`init` could write a commented template naming the six variables, written only when absent, like
+the README.
+
+## B-245 — The Registry CI could read `.aart-cli-source`
+
+Status: **open**, noncritical (CP-47, D-499).
+
+The CI's "Provide AART" step reads its route from repository variables, and `.aart-cli-source`
+repeats them for consumers. If the step read the file where a variable is unset, a Registry would
+say its route once. Changing the managed workflow changes every Registry's CI and needs the owner's
+consent and a `maintain registry diff` check.
+
+## B-246 — Tabnine's `BeforeTool` hook against the owner's statement
+
+Status: **open**, noncritical (CP-48, D-500).
+
+`aart_cli/profiles/builtin.py` (D-420) models Tabnine hooks as `hooks.BeforeTool` in its
+settings.json, but the owner says Tabnine has no hook mechanism, so §212 refuses it. A live Tabnine
+would settle which is right; until then the profile's hook surface may be unused or wrong.
+
+## B-247 — A skill Claude Code expands from a typed `/name` is not counted
+
+Status: **open**, noncritical (CP-48, D-500).
+
+The hook sees `Skill` tool calls. A skill the person invokes by typing `/name` is expanded by
+`UserPromptExpansion` without a tool call, so it is not recorded. A second hook on that event could
+count it.
+
+## B-248 — The TUI does not say why a usage hook could not be written
+
+Status: **open**, noncritical (CP-48, D-500).
+
+When `~/.claude/settings.json` is not JSON, the Settings row stays off, but the reason is only in
+the diagnostic, which the TUI does not show. `consume usage enable` does print it.
+
+## B-249 — The command line does not put the default harness's hook in place
+
+Status: **open**, noncritical (CP-48, D-500).
+
+Only the TUI's start hooks opencode by default. Someone who uses only `consume` commands records
+nothing until `consume usage enable --harness opencode`.
+
+## B-250 — Doctor could find a usage hook that points at a Python that is gone
+
+Status: **open**, noncritical (CP-48, D-500).
+
+The hook names the interpreter and script by absolute path. After a Python minor upgrade or a
+reinstall into another environment, the old path fails silently (the harness ignores it). The next
+TUI start rewrites the hook of every recording harness, but someone who only runs `consume`
+commands keeps the stale one. Doctor could report it.
+
+## B-251 — A telemetry adapter over the recorded uses
+
+Status: **open**, noncritical (CP-48, D-500).
+
+`application/activity_telemetry.py` is still `DisabledActivityTelemetry`. A server adapter would
+read `artifact_use` rows and needs its own consent, separate from recording locally.
+
+## B-252 — An opencode custom tool with `_` is recorded as an unresolved MCP
+
+Status: **open**, noncritical (CP-48, D-500).
+
+opencode names MCP tools `<server>_<tool>`, and §212 records any tool with `_`. A custom tool such
+as `my_tool` is then ranked as `my_tool (not installed by aart-cli)`. Reading opencode's MCP
+configuration would tell the two apart.

@@ -182,9 +182,12 @@ credential nothing uses any more is done in the TUI.
 `consume mcp test` is a read-only verification command for installations that already exist in one explicit
 scope, root and harness set. It does not install, update, repair, configure, synchronize or publish.
 
-To test one exact installed coordinate in this project and harness:
+To test one installed MCP in this project and harness, name it as `consume inputs` does,
+`ALIAS/KIND/NAME`, with `@VERSION` when you want only that version to count. A version that is not
+the installed one tests nothing and names the installed one:
 
 ```sh
+aart-cli consume mcp test company/mcp/github --harness opencode --scope project --project "$PWD"
 aart-cli consume mcp test company/mcp/github@1.0.0 --harness opencode --scope project --project "$PWD"
 ```
 
@@ -309,6 +312,33 @@ repairs everything.
 
 What it cannot repair, it still reports: an artifact whose payload is missing or divergent is named
 with what is wrong, rather than being omitted because no repair for it exists.
+
+### Which skills and MCPs are used
+
+Activity also ranks the skills and MCPs your agents actually use, per harness. A small hook in the
+harness records the harness, the skill or MCP server's name, the project and the moment, and never
+what a tool was called with, a prompt or an answer. It is kept in `~/.aart-cli/state/activity.sqlite3`,
+readable only by you, and nothing is sent anywhere.
+
+Nothing is recorded until you turn it on, unless your organisation's build of aart-cli records in
+some harnesses from the start (its release variable `AART_CLI_DEFAULT_USAGE_HARNESSES`); the TUI
+then says so on its first start, and Settings turns it off. In opencode the hook is the file
+`~/.config/opencode/plugins/aart-cli-usage.js`. In Claude Code it is one entry in
+`~/.claude/settings.json`, beside your own hooks, which it leaves in place. Tabnine has no hooks and
+cannot record.
+**Settings > Artifact usage** has one row per harness, and when the cursor is on a row the screen
+says what that row changes.
+
+The same from the command line: show what records and the ranking, turn Claude Code on, then turn it
+off and delete what it recorded.
+
+```sh
+aart-cli consume usage show
+aart-cli consume usage enable --harness claude
+aart-cli consume usage disable --harness claude --forget
+```
+
+`consume usage forget --harness opencode` deletes what was recorded and keeps recording.
 
 ## Reset and restore
 

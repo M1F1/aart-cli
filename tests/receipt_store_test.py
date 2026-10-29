@@ -38,6 +38,7 @@ from aart_cli.domain.receipts import (
 )
 from aart_cli.domain.result import Err, Ok
 from aart_cli.domain.selection import OwnershipKind, OwnershipReason
+from aart_cli.io.activity_store import ActivityDatabase
 from aart_cli.io.receipt_store import RECEIPT_UNREADABLE, LocalReceiptStore
 from tests.consumer_activity_test import lifecycle_outcome
 
@@ -343,8 +344,9 @@ class ActivityStoreTest(unittest.TestCase):
 
     def test_a_corrupt_action_is_reported_rather_than_skipped_silently(self):
         self.store.record_action(self.detail())
-        stray = pathlib.Path(self.store.actions_directory) / "2026-08-31T00:00:00+00:00-bad.json"
-        stray.write_text("{not json", encoding="utf-8")
+        ActivityDatabase(self.store.state_root).record_action(
+            "2026-08-31T00:00:00+00:00", b"{not json"
+        )
 
         actions = self.store.actions()
 

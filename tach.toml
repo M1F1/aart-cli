@@ -28,6 +28,10 @@ path = "aart_cli._default_registry"
 depends_on = []
 
 [[modules]]
+path = "aart_cli._default_usage"
+depends_on = []
+
+[[modules]]
 path = "aart_cli.adapters"
 depends_on = []
 
@@ -69,7 +73,7 @@ depends_on = ["aart_cli.domain", "aart_cli.protocol"]
 
 [[modules]]
 path = "aart_cli.configuration"
-depends_on = ["aart_cli.redaction", "aart_cli.domain", "aart_cli._default_registry", "aart_cli.protocol"]
+depends_on = ["aart_cli.redaction", "aart_cli.domain", "aart_cli._default_registry", "aart_cli._default_usage", "aart_cli.protocol"]
 
 [[modules]]
 path = "aart_cli.consumer"

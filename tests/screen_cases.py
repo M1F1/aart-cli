@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from aart_cli.application.aart_cli_update import AartCliUpdate, Installer, UpdateStep
 from aart_cli.application.candidate_validation import validate_candidate
 from aart_cli.application.consumer_ui import (
     ConsumerActionKind,
@@ -119,6 +120,7 @@ RECORDED_SCREENS: tuple[ApplicationScreen, ...] = (
     ConsumerScreen.RECEIPT_DETAILS,
     ConsumerScreen.SETTINGS,
     ConsumerScreen.DOCTOR,
+    ConsumerScreen.AART_CLI_UPDATE,
     MaintainerScreen.DASHBOARD,
     MaintainerScreen.SOURCES,
     MaintainerScreen.SOURCE_ADD,
@@ -654,7 +656,33 @@ def conditional_cases() -> tuple[ScreenCase, ...]:
         ),
         entering=True,
     )
+    # §211: the guidance a newer aart-cli brings, with its commands.
+    update_source = CanonicalScreenSource(
+        replace(
+            consumer_install_flow_shell_test.screens(),
+            aart_cli_update=AartCliUpdate(
+                "0.20.0",
+                "0.21.0",
+                "corp",
+                Installer.PIPX,
+                (
+                    UpdateStep(
+                        "Install it from the package index corp uses:",
+                        (
+                            "pipx install --force --index-url https://pypi.org/simple aart-cli==0.21.0",
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+    update = _reload(
+        update_source,
+        ConsumerUiState(ConsumerSession(ConsumerScreen.AART_CLI_UPDATE)),
+        entering=True,
+    )
     return (
+        ScreenCase("30:newer-aart-cli", update_source, update),
         ScreenCase("12:searching", source, searching),
         ScreenCase("12:filtered", source, filtered),
         ScreenCase("12:help", source, help_visible),

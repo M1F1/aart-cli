@@ -88,6 +88,33 @@ class SmokeSelection:
     failure: str | None = None
 
 
+def _names(record: InstalledRecord, selector: str) -> bool:
+    """`ALIAS/KIND/NAME[@VERSION]`, as `consume inputs` reads it, or the installation key.
+
+    A version, when given, must be the installed one (§170.1); the artifact is named whole.
+    """
+
+    coordinate = str(record.coordinate)
+    return selector in {
+        coordinate,
+        coordinate.partition("@")[0],
+        installation_key(record.coordinate, record.receipt.owner),
+    }
+
+
+def _no_target(selector: str, eligible: list[InstalledRecord]) -> str:
+    artifact = selector.partition("@")[0]
+    alike = sorted(
+        {
+            str(record.coordinate)
+            for record in eligible
+            if str(record.coordinate).partition("@")[0] == artifact
+        }
+    )
+    hint = f"; did you mean {' or '.join(alike)}?" if alike else ""
+    return f"selector {selector!r} names no installed MCP target{hint}"
+
+
 def select_installed_mcps(
     records: Iterable[InstalledRecord],
     *,
@@ -120,17 +147,9 @@ def select_installed_mcps(
     else:
         selected = []
         for selector in selectors:
-            matches = [
-                record
-                for record in eligible
-                if selector
-                in {
-                    str(record.coordinate),
-                    installation_key(record.coordinate, record.receipt.owner),
-                }
-            ]
+            matches = [record for record in eligible if _names(record, selector)]
             if not matches:
-                return SmokeSelection((), f"selector {selector!r} names no installed MCP target")
+                return SmokeSelection((), _no_target(selector, eligible))
             selected.extend(matches)
     unique = {
         installation_key(record.coordinate, record.receipt.owner): record for record in selected

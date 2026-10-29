@@ -17,6 +17,8 @@ from typing import cast
 
 from aart_cli.application.author_views import normalized_workspace
 from aart_cli.configuration.model import SourceKind
+from aart_cli.configuration.seed import baked_usage_harnesses
+from aart_cli.domain.artifact_usage import USAGE_HARNESSES
 from aart_cli.domain.configuration_files import configuration_value_problem
 from aart_cli.domain.credentials import (
     CredentialObservation,
@@ -148,12 +150,15 @@ __all__ = [
     "ConsumerSettings",
     "SETTING_PURPOSE",
     "SETTING_ROWS",
+    "ARTIFACT_USAGE_ROW_PREFIX",
     "DEFAULT_HARNESS_ROW_PREFIX",
     "INSTALL_PATH_CUSTOM",
     "INSTALL_PATH_DEFAULT",
     "INSTALL_PATH_PURPOSE",
     "INSTALL_PATH_ROWS",
+    "artifact_usage_row",
     "default_harness_from_row",
+    "usage_harness_from_row",
     "default_harness_row",
     "setting_purpose",
     "setting_rows",
@@ -294,6 +299,8 @@ class ConsumerScreen(str, Enum):
     RECEIPT_DETAILS = "27-receipt-details"
     SETTINGS = "28-settings"
     DOCTOR = "29-doctor"
+    #: §211: the newer aart-cli a connected Registry runs, and how to install it.
+    AART_CLI_UPDATE = "30-aart-cli-update"
     AUTHOR = "60-author"
     AUTHOR_WORKSPACE = "61-author-workspace"
     AUTHOR_CHECK = "62-author-check"
@@ -2941,6 +2948,7 @@ _NAVIGATION: dict[ConsumerScreen, tuple[ConsumerScreen, ...]] = {
     ConsumerScreen.RECEIPT_DETAILS: (),
     ConsumerScreen.SETTINGS: (),
     ConsumerScreen.DOCTOR: (ConsumerScreen.VERIFY_REPAIR,),
+    ConsumerScreen.AART_CLI_UPDATE: (),
 }
 
 
@@ -3029,6 +3037,8 @@ def navigation_targets(
             *targets,
             *((MaintainerScreen.DASHBOARD,) if maintainer_mode else ()),
             *((ConsumerScreen.AUTHOR,) if author_mode else ()),
+            # Last, so every entry above keeps its place (§211).
+            ConsumerScreen.AART_CLI_UPDATE,
         )
     return targets
 
@@ -3213,12 +3223,22 @@ class ConsumerSettings:
     default_harnesses: tuple[str, ...] = ()
     author_mode: bool = False
     author_workspace: str = ""
+    #: The harnesses whose artifact usage is recorded, as this person chose them (§212), or
+    #: `None` when nobody chose: then it is recorded where this build says (D-502). The hook that
+    #: records is the effect of this setting and is put in place or removed when it is kept.
+    artifact_usage: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.default_harnesses, tuple)
             or any(not _is_harness_name(item) for item in self.default_harnesses)
             or len(set(self.default_harnesses)) != len(self.default_harnesses)
+        ):
+            raise ValueError("consumer settings are invalid")
+        if self.artifact_usage is not None and (
+            not isinstance(self.artifact_usage, tuple)
+            or any(item not in USAGE_HARNESSES for item in self.artifact_usage)
+            or len(set(self.artifact_usage)) != len(self.artifact_usage)
         ):
             raise ValueError("consumer settings are invalid")
         if (
@@ -3231,6 +3251,12 @@ class ConsumerSettings:
             or self.python_installer not in set(_PYTHON_INSTALLERS)
         ):
             raise ValueError("consumer settings are invalid")
+
+    @property
+    def recorded_usage(self) -> tuple[str, ...]:
+        """The harnesses whose artifact usage is recorded: the chosen ones, else the build's."""
+
+        return baked_usage_harnesses() if self.artifact_usage is None else self.artifact_usage
 
     def with_profile(self, profile: PresentationProfile) -> ConsumerSettings:
         return replace(self, profile=profile)
@@ -3269,6 +3295,17 @@ class ConsumerSettings:
                     tuple(item for item in self.default_harnesses if item != harness)
                     if harness in self.default_harnesses
                     else (*self.default_harnesses, harness)
+                ),
+            )
+        harness = usage_harness_from_row(row)
+        if harness is not None:
+            recorded = self.recorded_usage
+            return replace(
+                self,
+                artifact_usage=(
+                    tuple(item for item in recorded if item != harness)
+                    if harness in recorded
+                    else (*recorded, harness)
                 ),
             )
         raise ValueError(f"no consumer setting is named {row}")
@@ -3358,6 +3395,9 @@ SETTING_ROWS: tuple[str, ...] = (
 #: Screen 28's rows for the Default path's harnesses, one per detected harness, each on or off.
 DEFAULT_HARNESS_ROW_PREFIX = "default-harness:"
 
+#: Screen 28's rows for artifact usage, one per detected harness that can record it (§212).
+ARTIFACT_USAGE_ROW_PREFIX = "artifact-usage:"
+
 
 def _is_harness_name(value: object) -> bool:
     return (
@@ -3380,14 +3420,32 @@ def default_harness_from_row(row: str) -> str | None:
     return harness if _is_harness_name(harness) else None
 
 
-def setting_rows(harnesses: tuple[str, ...]) -> tuple[str, ...]:
-    """Screen 28's rows: the fixed controls, then one Default-path harness row per harness.
+def artifact_usage_row(harness: str) -> str:
+    if harness not in USAGE_HARNESSES:
+        raise ValueError(f"artifact usage cannot be recorded in {harness}")
+    return f"{ARTIFACT_USAGE_ROW_PREFIX}{harness}"
 
-    The harness rows come last, under their own heading, so the fixed controls keep their places
+
+def usage_harness_from_row(row: str) -> str | None:
+    if not row.startswith(ARTIFACT_USAGE_ROW_PREFIX):
+        return None
+    harness = row[len(ARTIFACT_USAGE_ROW_PREFIX) :]
+    return harness if harness in USAGE_HARNESSES else None
+
+
+def setting_rows(harnesses: tuple[str, ...]) -> tuple[str, ...]:
+    """Screen 28's rows: the fixed controls, then one Default-path harness row per harness, then
+    one artifact-usage row per detected harness whose hook can record it (§212).
+
+    The harness rows come last, under their own headings, so the fixed controls keep their places
     however many harnesses this machine has.
     """
 
-    return (*SETTING_ROWS, *(default_harness_row(item) for item in harnesses))
+    return (
+        *SETTING_ROWS,
+        *(default_harness_row(item) for item in harnesses),
+        *(artifact_usage_row(item) for item in harnesses if item in USAGE_HARNESSES),
+    )
 
 
 SETTING_PURPOSE: dict[str, str] = {
@@ -3419,6 +3477,13 @@ def setting_purpose(row: str) -> str | None:
         return (
             f"Whether the Default install path installs into {harness} when it is detected and "
             "can host the artifact. With no harness on, Default uses every one that can."
+        )
+    harness = usage_harness_from_row(row)
+    if harness is not None:
+        return (
+            f"Whether aart-cli records which skills and MCPs {harness} uses, for the ranking on "
+            "Activity. On without asking only where this aart-cli was built to record; turning "
+            "it off removes the hook."
         )
     return SETTING_PURPOSE.get(row)
 
@@ -3458,6 +3523,8 @@ def settings_to_data(view: ConsumerSettings) -> dict[str, object]:
         "default_harnesses": list(view.default_harnesses),
         "author_mode": view.author_mode,
         "author_workspace": view.author_workspace,
+        # Absent until somebody chooses, so a later default is not overruled by an old one.
+        **({} if view.artifact_usage is None else {"artifact_usage": list(view.artifact_usage)}),
     }
 
 
@@ -3480,6 +3547,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
         "default_harnesses",
         "author_mode",
         "author_workspace",
+        "artifact_usage",
     }
     unknown = sorted(set(data) - known)
     if unknown:
@@ -3522,6 +3590,20 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
         or len(set(harnesses)) != len(harnesses)
     ):
         return Err((_settings_invalid("stored default harnesses must be distinct harness names"),))
+    usage = data.get("artifact_usage")
+    if usage is not None and (
+        not isinstance(usage, list)
+        or any(item not in USAGE_HARNESSES for item in usage)
+        or len(set(usage)) != len(usage)
+    ):
+        return Err(
+            (
+                _settings_invalid(
+                    "stored artifact usage must name distinct harnesses that can record it: "
+                    + ", ".join(USAGE_HARNESSES)
+                ),
+            )
+        )
     return Ok(
         ConsumerSettings(
             PresentationProfile(detail),
@@ -3532,6 +3614,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
             tuple(harnesses),
             author_mode,
             cast(str, workspace),
+            None if usage is None else tuple(usage),
         )
     )
 
@@ -3611,6 +3694,9 @@ class DashboardView:
     recent_activity: tuple[str, ...]
     #: Connected Registries whose origin is ahead of the snapshot, or whose snapshot is stale.
     registries_to_sync: int = 0
+    #: The newer aart-cli a connected Registry runs, and that Registry; empty when none is (§211).
+    aart_cli_available: str = ""
+    aart_cli_registry: str = ""
 
 
 def project_dashboard(

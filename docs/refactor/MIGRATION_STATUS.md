@@ -4,6 +4,27 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-28, CP-49 (§170.1, D-501): `consume mcp test` accepts `ALIAS/KIND/NAME` without a version.**
+The selector is read as `consume inputs` reads it; a version, when given, must be the installed
+one, and a miss names the installed version. Evidence: `docs/refactor/slices/CP-49-mcp-test-selector.md`.
+
+**2026-10-28, CP-48 (§212, INV-318–INV-321, D-500): Activity is kept in SQLite and records which skills and MCPs are used, per harness.**
+Actions and artifact uses are rows in `state/activity.sqlite3` (0600, schema version 1); the
+`state/activity/` JSON files are gone and not migrated. A user-level hook in Claude Code
+(`PreToolUse`, async) and opencode (a plugin) runs `python -I aart_cli/io/usage_hook.py` and records
+names only. Recording without asking happens only where the release variable
+`AART_CLI_DEFAULT_USAGE_HARNESSES` says (D-502); Settings has a row per harness, Activity
+ranks `most used:`, and `consume usage` shows, enables, disables and forgets. Concurrent writers lose
+nothing (a defect found under four racing writers was fixed). Evidence:
+`docs/refactor/slices/CP-48-activity-and-artifact-usage.md`.
+
+**2026-10-28, CP-47 (§211, INV-316, INV-317, D-499): a newer aart-cli that a Registry runs is announced, with how to install it.**
+The governing pin (the default Registry's, else the highest) is compared with the running version.
+A Registry's `.aart-cli-source` names its route in the CI variables' names, and the commands follow
+how this aart-cli was installed (pipx, uv, pip, or a Git checkout). The TUI's Home, its last entry
+`AART CLI Update`, and the footer say it; `consume` commands say it on stderr; `aart-cli upgrade
+--how` prints the commands. Evidence: `docs/refactor/slices/CP-47-aart-cli-update.md`.
+
 **2026-10-28, CP-46 (§202–§210, INV-303–INV-315, D-488–D-498): only the Registry here opens, `mcp test` reads FastMCP, long screens scroll, credentials are entered on 07b and leave with their installation.**
 Screen 46 keeps each Registry to a few lines, counts its promotions and offers no command. The
 Registry in this directory is marked and opens as 46k, with its checkout's promotions and every

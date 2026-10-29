@@ -1,8 +1,9 @@
 """Where finished installations and finished actions are kept between processes.
 
 A receipt is only evidence if it outlives the process that wrote it, so this adapter is the whole
-of that persistence: canonical JSON, one file per record, staged and renamed into place, readable
-only by its owner.
+of that persistence. An installation is canonical JSON, one file per record, staged and renamed
+into place, readable only by its owner. A finished action is a row of the Activity database
+(`activity_store`), because Activity is read newest first and a directory of files is not.
 
 Nothing here interprets a receipt.  Parsing belongs to the domain and to the consumer projections;
 this module's single judgement is that a document it cannot read is reported rather than dropped.
@@ -52,6 +53,8 @@ from aart_cli.domain.receipts import (
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import OwnershipKind, OwnershipReason
 from aart_cli.domain.serialization import CanonicalValue, canonical_json_bytes
+
+from .activity_store import ActivityDatabase
 
 __all__ = [
     "RECEIPT_ABSENT",
@@ -199,10 +202,6 @@ class LocalReceiptStore:
     @property
     def installations_directory(self) -> str:
         return str(Path(self.state_root) / "installations")
-
-    @property
-    def actions_directory(self) -> str:
-        return str(Path(self.state_root) / "activity")
 
     def path_for(
         self, coordinate: ArtifactCoordinate, *, owner: InstallationOwner | None = None
@@ -354,38 +353,40 @@ class LocalReceiptStore:
         return Ok(str(path))
 
     def record_action(self, receipt: ReceiptDetailView) -> Result[str]:
-        """Record one finished action under the moment it finished.
+        """Record one finished action in the Activity database, under the moment it finished.
 
-        The filename carries that moment normalized to UTC, so the newest actions can be found
-        without opening every file even when they were written in different offsets.
+        The moment is normalized to UTC so that the newest actions sort first as text even when
+        they were recorded in different offsets.
         """
 
         if not isinstance(receipt, ReceiptDetailView):
             return _error(RECEIPT_UNWRITABLE, "an action record needs a receipt")
-        document = receipt_detail_to_data(receipt)
-        content = _canonical(document)
+        content = _canonical(receipt_detail_to_data(receipt))
         moment = receipt.moment.astimezone(timezone.utc).isoformat()
-        name = f"{moment}-{_digest(content)[:12]}.json"
-        return _write(Path(self.actions_directory) / name, content)
+        return ActivityDatabase(self.state_root).record_action(moment, content)
 
     def actions(self, *, limit: int | None = None) -> Result[tuple[ReceiptDetailView, ...]]:
         """Finished actions, newest first.
 
         A limit bounds what is read, not what is reported: records older than the limit are never
-        opened, so nothing about them -- including their readability -- is claimed either way.
+        read, so nothing about them -- including their readability -- is claimed either way.
         """
 
-        if limit is not None and (not isinstance(limit, int) or limit < 0):
-            raise ValueError("an action limit must be a whole number of records")
-        paths = sorted(self._files(Path(self.actions_directory)), reverse=True)
+        database = ActivityDatabase(self.state_root)
+        stored = database.actions(limit=limit)
+        if isinstance(stored, Err):
+            return stored
         receipts = []
-        for path in paths if limit is None else paths[:limit]:
-            read = _read(path)
-            if isinstance(read, Err):
-                return read
-            parsed = receipt_detail_from_data(read.value)
+        for content in stored.value:
+            try:
+                document = json.loads(content.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                return _error(
+                    RECEIPT_UNREADABLE, f"{database.path} holds an unreadable action: {error}"
+                )
+            parsed = receipt_detail_from_data(document)
             if isinstance(parsed, Err):
-                return _unreadable(path, parsed)
+                return _unreadable(Path(database.path), parsed)
             receipts.append(parsed.value)
         return Ok(tuple(sorted(receipts, key=lambda item: item.moment, reverse=True)))
 

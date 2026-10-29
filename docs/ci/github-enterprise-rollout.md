@@ -515,6 +515,27 @@ fails in review, and `git blame` says who moved it. CI compares `aart-cli --vers
 after fetching and fails on a mismatch, on purpose. Take the release into the copy first
 ([Part 1, step 5](#step-5--take-a-later-release)), and publish it to the index if you use one.
 
+**Tell consumers where it comes from: `.aart-cli-source`.** Once the pin moves, every consumer of
+this registry whose `aart-cli` is older is told so: the terminal UI's Home and its footer say
+`aart-cli X.Y.Z available`, and each `consume` command says it in one line on stderr.
+`aart-cli upgrade --how` and the UI's **AART CLI Update** screen then give the commands. They come
+from a file committed beside the pin, in the names of the repository variables above:
+
+```text
+AART_CLI_PIP_INDEX_URL=https://nexus.corp/repository/pypi-group/simple
+AART_CLI_PACKAGE=aart-cli=={version}
+```
+
+`{version}` is the pin. The first route set wins, in the order the **Provide AART** step uses:
+`AART_CLI_PACKAGE` (with `AART_CLI_PIP_INDEX_URL`), `AART_CLI_WHEEL_URL`, `AART_CLI_TOOL_PATH`, then
+`AART_CLI_TOOL_URL` or `AART_CLI_REPOSITORY`. A person who installed with pipx gets
+`pipx install --force …`, with uv `uv tool install --force …`, with pip `python -m pip install
+--upgrade --no-deps …`, and one running from a Git checkout gets `git fetch --tags` and `git
+checkout vX.Y.Z` in that checkout. The file holds no credential: an address with a password or an
+`https` address with a user name refuses the whole file. Signing in to the index stays with each
+person's pip, pipx, uv or Git. Without the file, consumers are still told that a newer version
+exists, and that you can add it. CI does not read this file; keep it in step with the variables.
+
 ## Part 5 — Point consumers at the registry
 
 Each person installs `aart-cli` as in [Part 2, step 5](#step-5--install-aart-cli-on-your-own-machine). A wheel
@@ -580,6 +601,7 @@ Read by `.github/workflows/pr-check.yml`, `.github/workflows/release.yml` and
 | `AART_CLI_LOCAL_VERSION_LABEL` | unset | a PEP 440 local label, such as `corp`, for the version of the wheel built here: `X.Y.Z+corp`. It keeps your wheel's filename apart from the public one on PyPI; `aart-cli==X.Y.Z` still matches it and pip prefers it. `aart-cli --version` keeps `X.Y.Z`. Lower-case letters and digits in dot-joined segments, no leading zero on a number; anything else fails the release |
 | `AART_CLI_REFERENCE_REGISTRY_URL` | unset | registry the release checklist reconciles against. Unset, those checks report `skipped` with a warning. It has no default: one naming a github.com repository reproduces nothing on an instance that cannot reach it |
 | `AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL` | unset | `<alias>=<url>` for the one Registry a wheel built here connects on a first run that has nothing configured: the first `aart-cli` terminal session or `consume` command, except `consume registry add` and `--offline`. Unset bakes nothing, which is what the public build does. The alias is part of the value because it appears in the path of everything installed from that Registry, so it is chosen once and not changed. A malformed value fails the release rather than somebody's first run |
+| `AART_CLI_DEFAULT_USAGE_HARNESSES` | unset | harness names separated by commas, such as `opencode` or `opencode,claude`, in which a wheel built here records which skills and MCPs are used from its first start, without asking; a person still turns it off in Settings. Unset or `none` records nowhere until a person turns it on, which is what the public build does. A harness that cannot record (only `claude` and `opencode` can), an empty or a repeated name fails the release. The release receipt records the value |
 
 ### Variables a registry reads
 

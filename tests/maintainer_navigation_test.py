@@ -165,10 +165,14 @@ class MaintainerModeBoundaryTest(unittest.TestCase):
 
         self.assertNotIn(MaintainerScreen.DASHBOARD.value, disabled.rows)
         self.assertNotIn("Registry Maintainer Dashboard", "\n".join(frame(self.source, disabled)))
-        self.assertEqual(enabled.rows[-1], MaintainerScreen.DASHBOARD.value)
+        # After every consumer root; AART CLI Update alone comes after it (§211).
+        self.assertEqual(
+            enabled.rows[-2:],
+            (MaintainerScreen.DASHBOARD.value, ConsumerScreen.AART_CLI_UPDATE.value),
+        )
         self.assertIn("Registry Maintainer Dashboard", "\n".join(frame(self.source, enabled)))
 
-        focused = replace(enabled, cursor=len(enabled.rows) - 1)
+        focused = replace(enabled, cursor=len(enabled.rows) - 2)
         event = key_event("enter", focused, detail=self.source.detail(focused))
         self.assertIsNotNone(event)
         assert event is not None

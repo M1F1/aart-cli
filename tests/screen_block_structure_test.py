@@ -145,6 +145,7 @@ class DashboardBlockTest(TestCase):
                 "  Activity",
                 "  Doctor",
                 "  Settings",
+                "  AART CLI Update",
             ),
         )
 

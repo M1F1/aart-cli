@@ -1488,6 +1488,14 @@ def run(
         return _render_internal_failure(error, canonical_failures)
     if isinstance(composed, DomainErr):
         return _render_consumer_startup_failure(composed)
+    # §212: artifact usage is recorded without asking only in the harnesses this build baked
+    # (D-502), so such a harness gets its hook here and it is said once; a harness Settings turned
+    # on or off is brought in line too.
+    started = composed.value.record_usage_by_default()
+    for harness in started if isinstance(started, tuple) else ():
+        print(
+            f"Recording which skills and MCPs {harness} uses; Settings > Artifact usage turns it off."
+        )
     if canonical_terminal:
         # Past this point a defect is the running application's, not the composition's, and the
         # record has to say so -- including which terminal was hosting it, because the two answer

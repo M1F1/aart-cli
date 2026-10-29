@@ -1,6 +1,42 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-28, CP-46)
+## Where the work is (2026-10-28, CP-48, in the CP-47 PR)
+
+**CP-48**, at the owner's request in the same PR as CP-47: Activity is one SQLite database,
+`state/activity.sqlite3`, holding install/update/uninstall actions and every recorded use of a skill
+or MCP, per harness (§212, INV-318–INV-321, D-500). A user-level hook (Claude Code `PreToolUse`
+entry, opencode plugin) runs this aart-cli's `usage_hook.py` with `-I` and records names only.
+Recording without asking happens only in the harnesses the release variable
+`AART_CLI_DEFAULT_USAGE_HARNESSES` names (unset or `none`: nowhere; D-502); otherwise a harness is
+turned on in Settings > Artifact usage. Tabnine cannot record. Activity shows `most used:`. `consume usage show|enable|disable|forget`.
+Many hooks writing at once lose nothing.
+
+Evidence: `docs/refactor/slices/CP-48-activity-and-artifact-usage.md`. CP-47, CP-48 and CP-49 are
+done; the owner ran the lab, and they go out in one PR. Next: merge, then the Release Please PR.
+B-244–B-252 are open.
+
+**CP-49** (D-501), in the same PR: `consume mcp test company/mcp/x` without `@VERSION` now selects
+the installation, as `consume inputs` does; a wrong version names the installed one.
+
+## Where the work was (2026-10-28, CP-47)
+
+0.20.0 (CP-46) is released. **CP-47** tells a person when a connected Registry runs a newer
+aart-cli, and how to install it the way their organisation supplies it (§211, INV-316, INV-317,
+D-499). The pin is `.aart-cli-version` (unchanged). A Registry may commit `.aart-cli-source`,
+`NAME=value` lines in the CI variables' names (`AART_CLI_PACKAGE=aart-cli=={version}`,
+`AART_CLI_PIP_INDEX_URL=…`, a wheel, a runner path or Git), refused whole on a bad line or a
+credential. The default Registry's pin governs, else the highest. The commands follow how this
+aart-cli was installed: pipx, uv, pip, or a Git checkout moved to `v<pin>`.
+
+Home says `● aart-cli X available (Registry Y)`, its last entry `AART CLI Update` carries the badge
+and shows the commands, and the footer adds `(X available)`. Every `consume` command says it on
+stderr, and `aart-cli upgrade --how` prints the commands and installs nothing.
+
+Evidence: `docs/refactor/slices/CP-47-aart-cli-update.md`. Steps 1–5 are done. Next is step 6:
+the owner's run (a Registry in the lab with a bumped pin and a `.aart-cli-source`), then the PR.
+B-244 (`registry init` writes the file) and B-245 (the CI reads it) are open.
+
+## Where the work was (2026-10-28, CP-46)
 
 0.19.0 (CP-45) is released. **CP-46** makes screen 46 readable with a large font and acts only
 on the Registry here. Each Registry is a few lines, with `Promotions recorded: N` instead of its

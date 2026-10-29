@@ -15,6 +15,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from typing import Callable, Mapping, Protocol, TypeAlias, runtime_checkable
 
+from aart_cli.application.aart_cli_update import AartCliUpdate, upgrade_headline, upgrade_steps
 from aart_cli.application.author_views import manifest_lines
 from aart_cli.application.consumer_session import (
     ConsumerMachine,
@@ -78,6 +79,7 @@ from aart_cli.application.consumer_views import (
     RegistryView,
     RemediationView,
     RunningInstallationView,
+    artifact_usage_row,
     default_harness_row,
     install_path_label,
     installed_collection_cells,
@@ -111,6 +113,7 @@ from aart_cli.application.consumer_views import (
     target_from_row,
     target_row,
     under_collections,
+    usage_harness_from_row,
 )
 from aart_cli.application.credential_guidance import credential_guidance_lines
 from aart_cli.application.credentials_and_variables import (
@@ -154,7 +157,13 @@ from aart_cli.application.maintainer_views import (
     parse_validation_row,
     project_maintainer_candidate_filters,
 )
+from aart_cli.application.usage_recording import (
+    ArtifactUsageView,
+    usage_disclosure,
+    usage_ranking_lines,
+)
 from aart_cli.authoring.check import AuthorCheckReport
+from aart_cli.domain.artifact_usage import USAGE_HARNESSES
 from aart_cli.domain.inputs import SKIPPED_INPUT, is_skipped_value
 from aart_cli.domain.installation_owner import describe_installation
 from aart_cli.domain.registry import RegistryContentMode
@@ -1504,6 +1513,8 @@ def _badge(target: ApplicationScreen, view: DashboardView, *, show_updates: bool
         return f"  {NEW_MARK} {view.update_count}"
     if target is ConsumerScreen.REGISTRIES and view.registries_to_sync:
         return f"  {NEW_MARK} {view.registries_to_sync} to sync"
+    if target is ConsumerScreen.AART_CLI_UPDATE and view.aart_cli_available:
+        return f"  {NEW_MARK} {view.aart_cli_available}"
     return ""
 
 
@@ -1563,6 +1574,11 @@ def render_dashboard(view: DashboardView, *, show_updates: bool = True) -> tuple
             f"{NEW_MARK} {view.registries_to_sync} "
             f"{'registry has' if view.registries_to_sync == 1 else 'registries have'} newer content"
             " — open Registries and press s"
+        )
+    if view.aart_cli_available:
+        lines.append(
+            f"{NEW_MARK} aart-cli {view.aart_cli_available} available "
+            f"(Registry {view.aart_cli_registry}) — open AART CLI Update"
         )
     lines += [
         "",
@@ -1651,6 +1667,13 @@ def render_settings(
             f"{'on' if item in view.default_harnesses else 'off'}"
             for item in harnesses
         },
+        # §212: whether this harness's artifact usage is recorded, per detected harness that can.
+        **{
+            artifact_usage_row(item): f"Artifact usage {item}: "
+            f"{'on' if item in view.recorded_usage else 'off'}"
+            for item in harnesses
+            if item in USAGE_HARNESSES
+        },
     }
     headings = {
         "detail-level": "Experience",
@@ -1664,7 +1687,12 @@ def render_settings(
     previous = ""
     for row in setting_rows(harnesses):
         drawn = f"{'> ' if row == focus else '  '}{values[row]}"
-        heading = headings.get(row, "Default install harnesses")
+        heading = headings.get(
+            row,
+            "Artifact usage"
+            if usage_harness_from_row(row) is not None
+            else "Default install harnesses",
+        )
         # Rows under the same heading are one group: two controls about installation are two
         # controls, not two sections, and repeating the heading would read as the latter.
         if heading == previous and groups:
@@ -1688,6 +1716,32 @@ def render_install_path(view: ConsumerSettings, harnesses: tuple[str, ...]) -> t
         f"  Scope: {view.default_scope.title()}, where offered",
         f"  Python installer: {view.python_installer}",
     )
+
+
+def artifact_usage_status(
+    usage: ArtifactUsageView, harness: str, settings: ConsumerSettings
+) -> tuple[str, ...]:
+    """What recording this harness's artifact usage means, and whether its hook is in place."""
+
+    said = usage_disclosure(harness, database=usage.database, changed_file=usage.file(harness))
+    if harness in settings.recorded_usage and harness not in usage.hooked:
+        return (
+            *said,
+            f"The hook is not in {usage.file(harness)} yet; it is added on the next start.",
+        )
+    return said
+
+
+def most_used(usage: ArtifactUsageView) -> tuple[str, ...]:
+    """Activity's ranking of the artifacts used most, and where usage is recorded (§212)."""
+
+    recorded = (
+        f"Artifact usage is recorded in {', '.join(usage.hooked)}; Settings turns it off."
+        if usage.hooked
+        else "Artifact usage is not recorded in any harness; Settings turns it on."
+    )
+    lines = usage_ranking_lines(usage.ranking, limit=5)
+    return separate(("Most used:", *lines) if lines else (), (recorded,))
 
 
 def settings_consequence(view: ConsumerSettings) -> tuple[str, ...]:
@@ -2274,6 +2328,9 @@ _DASHBOARD_DESCRIPTIONS: dict[ApplicationScreen, str] = {
     ConsumerScreen.ACTIVITY: "Review recorded changes, results and their receipts.",
     ConsumerScreen.DOCTOR: "Inspect health and find the smallest safe repair for detected drift.",
     ConsumerScreen.SETTINGS: "Choose detail, installation scope and optional Registry Maintainer Mode.",
+    ConsumerScreen.AART_CLI_UPDATE: (
+        "See whether a connected Registry runs a newer aart-cli, and how to install it."
+    ),
     MaintainerScreen.DASHBOARD: "Maintain Upstream repositories, Candidates and Registry.",
     MaintainerScreen.SOURCES: "Author repositories this Registry takes artifacts from",
     MaintainerScreen.CANDIDATES: "Review artifacts discovered in Upstream repositories.",
@@ -2368,6 +2425,7 @@ _FIRST_RUN_LINES: tuple[str, ...] = (
 #: Titles the identifier cannot spell, because `.title()` would write an acronym as a word.
 _TITLES: dict[ApplicationScreen, str] = {
     ConsumerScreen.MCP_TEST: "Test MCP Installations",
+    ConsumerScreen.AART_CLI_UPDATE: "AART CLI Update",
     ConsumerScreen.AUTHOR: "Author",
     ConsumerScreen.AUTHOR_WORKSPACE: "Author Workspace",
     ConsumerScreen.AUTHOR_CHECK: "Author Check",
@@ -2741,9 +2799,14 @@ def compose_frame(source: ConsumerScreenSource, state: ConsumerUiState) -> Frame
     # rule and flush on it, with the terminal's padding above it rather than under it (revising
     # `QA-069`/`D-235`, which had it as a section of its own; `QA-066` had moved it off the title).
     # §200: beside where it works, which aart-cli is drawing, so a report of a screen names both.
-    workspace = (
-        f"working at {state.workspace} · aart-cli {EXECUTABLE_VERSION}" if state.workspace else ""
+    # §211: and the newer one a connected Registry runs, on every screen.
+    available = (
+        source.screens.dashboard.aart_cli_available
+        if isinstance(source, CanonicalScreenSource)
+        else ""
     )
+    running = f"aart-cli {EXECUTABLE_VERSION}" + (f" ({available} available)" if available else "")
+    workspace = f"working at {state.workspace} · {running}" if state.workspace else ""
     return Frame(
         trail=header,
         actions=source.actions(state),
@@ -2850,7 +2913,7 @@ def _described(source: ConsumerScreenSource, state: ConsumerUiState) -> tuple[st
 class ConsumerSettingsWriter(Protocol):
     """Imperative boundary for keeping one consumer's preferences past this session."""
 
-    def __call__(self, settings: ConsumerSettings) -> None: ...
+    def __call__(self, settings: ConsumerSettings) -> ConsumerSettings | None: ...
 
 
 def _progress_redraw(
@@ -3002,7 +3065,11 @@ def run_consumer_shell(
                 # is what keeps that from being silent.
                 if settings_writer is None:
                     raise ValueError("changing a setting needs an injected settings writer")
-                settings_writer(current.settings)
+                # A writer answers with what it kept when that is less than was asked: consent to
+                # record usage stays off when its hook could not be written (§212).
+                kept = settings_writer(current.settings)
+                if isinstance(kept, ConsumerSettings):
+                    current = replace(current, settings=kept)
                 continue
             if command.kind is ConsumerUiCommandKind.DISCARD_SECRETS:
                 # Leaving 07b, Ready or Installing drops whatever was typed there (§172.6).
@@ -3210,6 +3277,10 @@ class ConsumerScreens:
     #: The project this session was opened in. Installed and Updates show the user's installations
     #: and this project's unless every project is asked for (§210); empty leaves nothing out.
     project_root: str = ""
+    #: The newer aart-cli a connected Registry runs and how to install it, if one does (§211).
+    aart_cli_update: AartCliUpdate | None = None
+    #: Where artifact usage is kept, which hooks record it, and the ranking (§212).
+    usage: ArtifactUsageView | None = None
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -3406,6 +3477,8 @@ class ConsumerOffers:
     #: Every enabled configured source, registry or not. Screen 21 lists what is configured, which
     #: is a wider set than what is offered: a source silently missing from it reads as unconfigured.
     registries: tuple[RegistryView, ...] = ()
+    #: The newer aart-cli a connected Registry runs, read from the same snapshots (§211).
+    aart_cli_update: AartCliUpdate | None = None
 
 
 def read_consumer_offers(
@@ -3427,6 +3500,7 @@ def read_consumer_offers(
     names the Collection itself rather than those members (D-422).
     """
 
+    from aart_cli.io.aart_cli_pins import read_aart_cli_update
     from aart_cli.io.configured_offers import read_configured_marketplace
 
     read = read_configured_marketplace(effective, data_root=data_root, observed=observed)
@@ -3453,6 +3527,7 @@ def read_consumer_offers(
             tuple(collections),
             read.value.declined,
             project_registries(read.value.catalog),
+            read_aart_cli_update(effective, data_root=data_root),
         )
     )
 
@@ -3503,6 +3578,8 @@ def screens_from(
     author_report: AuthorCheckReport | None = None,
     install_scope_offers: tuple[str, ...] = (),
     project_root: str = "",
+    aart_cli_update: AartCliUpdate | None = None,
+    usage: ArtifactUsageView | None = None,
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -3539,6 +3616,12 @@ def screens_from(
             dashboard,
             registry_count=sum(1 for item in registries if item.is_registry),
             registries_to_sync=sum(1 for item in registries if registry_needs_sync(item)),
+        )
+    if aart_cli_update is not None:
+        dashboard = replace(
+            dashboard,
+            aart_cli_available=aart_cli_update.available,
+            aart_cli_registry=aart_cli_update.registry,
         )
     return ConsumerScreens(
         dashboard,
@@ -3577,6 +3660,8 @@ def screens_from(
         harnesses,
         author_report,
         project_root,
+        aart_cli_update,
+        usage,
     )
 
 
@@ -4810,6 +4895,10 @@ class CanonicalScreenSource:
             return maintainer_registry_status(
                 (chosen,), registry_workspace_present=self._registry_workspace_present()
             )
+        if screen is ConsumerScreen.AART_CLI_UPDATE and screens.aart_cli_update is not None:
+            return separate(
+                upgrade_headline(screens.aart_cli_update), upgrade_steps(screens.aart_cli_update)
+            )
         if screen is ConsumerScreen.DOCTOR:
             if screens.doctor is None:
                 return ()
@@ -4818,9 +4907,16 @@ class CanonicalScreenSource:
                 return report
             return separate(doctor_rows(screens.doctor, leaving_out=state.rows), report)
         if screen is ConsumerScreen.SETTINGS:
+            # §212: on an artifact-usage row, what turning it on records is what Enter agrees to,
+            # so it stands on the screen in Fast too rather than behind [v].
+            harness = usage_harness_from_row(state.current_row or "")
+            if harness is not None and screens.usage is not None:
+                return artifact_usage_status(screens.usage, harness, state.settings)
             # From the session's own settings, not the machine snapshot: the same reason the rows
             # are drawn from `state.settings`.
             return settings_consequence(state.settings)
+        if screen is ConsumerScreen.ACTIVITY and screens.usage is not None:
+            return most_used(screens.usage)
         if screen is ConsumerScreen.CREDENTIAL_ACTION and self.rows(state):
             record = screens.credential(state.focus)
             assert record is not None
@@ -5720,6 +5816,11 @@ class CanonicalScreenSource:
             # composed source's copy would keep showing the old value until something else
             # happened to re-read the machine.
             return render_settings(state.settings, state.current_row, screens.harnesses)
+        if screen is ConsumerScreen.AART_CLI_UPDATE:
+            if screens.aart_cli_update is None:
+                return (f"No connected Registry runs an aart-cli newer than {EXECUTABLE_VERSION}.",)
+            # The guidance is the screen's status, a list of what to do (§211); it has no rows.
+            return ()
         if screen is ConsumerScreen.DOCTOR:
             if screens.doctor is None:
                 return ("Nothing has been checked yet.",)

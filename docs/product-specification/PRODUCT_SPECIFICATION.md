@@ -10433,7 +10433,7 @@ The managed layout is:
 ├── sources/                        # acquired Registry/Source snapshots and Candidate evidence
 ├── state/
 │   ├── installations/              # one receipt per complete installation identity
-│   ├── activity/                   # action records, including bulk transaction results
+│   ├── activity.sqlite3            # action records and artifact uses (§212), owner-only
 │   ├── setup/                      # target-qualified setup metadata
 │   ├── object-references.json      # canonical object retention metadata
 │   └── consumer-settings.json      # UI preferences
@@ -12524,3 +12524,129 @@ project cannot use it, so listing it beside this project's own read as if it cou
 **INV-315 — Installed lists by default exactly what an agent here reaches.** Without `a`, every
 user installation and every installation of this project is listed, and no other project's
 installation is. With `a`, every installation on the machine is listed.
+
+# 211. A newer aart-cli that a Registry runs is announced, with how to install it
+
+Status: **ACCEPTED 2026-10-28 (D-499)**, on the owner's request during CP-47: tell the person when
+the Registry runs a newer aart-cli than the one they are using, and how to upgrade it, in the way
+their organisation actually supplies aart-cli rather than one way that does not work everywhere.
+
+A Registry pins the aart-cli its CI runs in `.aart-cli-version` (one line, a SemVer). An
+organisation upgrades by bumping that pin in a pull request, so a person whose aart-cli is older
+than the pin of a Registry they consume is behind what that Registry was checked with.
+
+- **Which pin counts.** The pin of the Registry this build was released with as its default
+  (§169, D-309), when it is connected and its current snapshot carries a readable pin. Otherwise
+  the highest readable pin among the connected Registries' current snapshots, and among equal pins
+  the Registry whose alias sorts first. A newer version is announced only when that pin is above
+  the running version; build metadata (`+corp`) is ignored, as SemVer orders it. Nothing is fetched
+  to find out: the pins are read from the snapshots already synced.
+- **Where aart-cli comes from: `.aart-cli-source`.** A Registry may commit a file
+  `.aart-cli-source` beside its pin. Each line is `NAME=value`; blank lines and lines starting with
+  `#` are ignored. The names are the Registry CI's own variables: `AART_CLI_PIP_INDEX_URL`,
+  `AART_CLI_PACKAGE`, `AART_CLI_WHEEL_URL`, `AART_CLI_TOOL_PATH`, `AART_CLI_TOOL_URL` and
+  `AART_CLI_REPOSITORY`. `{version}` in a value stands for the pin. An empty value is unset. The
+  first route set wins, in the order the CI's own step tries them: the package on the index
+  (`AART_CLI_PACKAGE`, from `AART_CLI_PIP_INDEX_URL`, else `https://pypi.org/simple`), the wheel at
+  `AART_CLI_WHEEL_URL`, the directory `AART_CLI_TOOL_PATH`, then Git at `AART_CLI_TOOL_URL` or at
+  `AART_CLI_REPOSITORY` (`owner/name` on the Registry's own host), at the tag `v<pin>`.
+- **The file never holds a credential.** A line that is not `NAME=value`, an unknown or repeated
+  name, a quoted value, a value with a control character, an address carrying a password, or an
+  `http(s)` address carrying a user name refuses the whole file, and the reason, which never repeats
+  the value, is said instead of any command. An SSH user name (`git@host:...`) is not a
+  credential. A sign-in is the
+  person's own, through their package manager or Git, never a Registry's file.
+- **The commands follow how this aart-cli was installed.** pipx (`pipx install --force`), uv
+  (`uv tool install --force`) or pip with the running Python (`python -m pip install --upgrade
+  --no-deps`) receive the Registry's route. An editable install from a Git checkout is moved to the
+  tag with `git -C <checkout> fetch --tags` and `git -C <checkout> checkout v<pin>`, whatever the
+  file says. A wheel address may need a sign-in in a browser: the wheel can then be downloaded and
+  installed with `aart-cli upgrade --wheel FILE`. `AART_CLI_TOOL_PATH` names a directory on the
+  CI's runner, so it gives no command, only that the Registry's maintainers know where it comes
+  from. With no file, the newer version is still announced, with the advice that the Registry's
+  maintainers can add `.aart-cli-source`. Copyable commands carry no comments.
+- **Where it is said.** The TUI's Home says `● aart-cli <pin> available (Registry <alias>) — open
+  AART CLI Update`, its entry `AART CLI Update` carries `● <pin>`, the footer's `aart-cli <version>`
+  adds `(<pin> available)`, and the screen `30-aart-cli-update` shows the running version, the pin
+  and its Registry, how this aart-cli was installed, and the commands. Every `consume` command says
+  it in one line on stderr, so a `--json` document on stdout is unchanged. `aart-cli upgrade --how`
+  prints the same instructions and installs nothing; `--wheel` and `--source-checkout` are as
+  before. `aart-cli --version` is unchanged, since a Registry's CI compares it with the pin.
+- **A defect in finding out never stops anything.** A pin or file that cannot be read is
+  announced as nothing; the command or screen runs as it would have.
+
+**INV-316 — The announced aart-cli is the governing pin, and only when it is newer.** For any set
+of connected Registries' pins and any running version, a newer aart-cli is announced exactly when
+the governing pin (the default Registry's, else the highest, ties by alias) is above the running
+version, and the version announced is that pin.
+
+**INV-317 — `.aart-cli-source` gives commands only from a file it accepts in full, and none that
+carries a credential.** Every accepted file yields commands whose words come from its values with
+`{version}` replaced by the pin; every file with an unknown, repeated, quoted or malformed line, an address with a password, or an
+`http(s)` address with a user name, yields no command and a reason.
+
+# 212. Activity is kept in SQLite, and records which artifacts are used
+
+Status: **ACCEPTED 2026-10-28 (D-500)**, on the owner's request during CP-47: Activity also shows
+which skills and MCPs are actually used, per harness, with a ranking, kept in SQLite rather than in
+JSON files, in preparation for a telemetry server that does not exist yet.
+
+- **One database.** `state/activity.sqlite3` in the application home (§169.2) holds the finished
+  actions (install, update, uninstall, each with its receipt) and the recorded artifact uses, each
+  event its own row. It is created owner-only (0600). A database whose schema version is not the one
+  this aart-cli reads is reported and never rewritten. Activity reads only the newest 500 actions.
+  Action records written as JSON files by earlier versions are not carried over (§169: no
+  migrators).
+- **Many writers at once.** Agents and their subagents call tools in parallel, and every call starts
+  its own hook. Each write is one statement that waits for the others; creating the database waits
+  under one lock; the journal becomes WAL as soon as no other connection holds the file. No use is
+  lost because another hook or aart-cli was writing in the same moment.
+- **What a use is.** The harness, `skill` or `mcp`, the name, the project directory the harness
+  reported, and the moment. Never what a tool was called with, a prompt or an answer. Claude Code:
+  a `Skill` tool call is the skill's name; `mcp__<server>__<tool>` is the server. opencode: the
+  `skill` tool is the skill's name; a tool whose name holds `_` is kept whole as an MCP tool and
+  ranked under the longest installed MCP server name it starts with.
+- **The hook.** A user-level hook in each harness, not a Marketplace artifact: an entry in Claude
+  Code's `~/.claude/settings.json` (`PreToolUse`, matcher `Skill|mcp__.*`, `async`), and a plugin
+  `~/.config/opencode/plugins/aart-cli-usage.js` (`tool.execute.before`, a detached process). Both run
+  this aart-cli's own Python with `-I` and its own `aart_cli/io/usage_hook.py` by absolute path, so
+  nothing in the project can replace what runs. The hook never writes to stdout and always exits 0;
+  what it cannot read or write records nothing. Settings that are not JSON, or whose hooks are not
+  the documented shape, are refused and left byte for byte; removing the hook removes aart-cli's
+  entry only and keeps everyone else's; a plugin file aart-cli did not write is never deleted.
+- **Consent per harness.** Settings has one row per detected harness that can record:
+  `Artifact usage <harness>: on|off`. When the cursor is on the row, the screen says what is
+  recorded, what never is, the file the hook changes and where the uses are kept. Tabnine has no
+  hook mechanism and cannot record. A hook that cannot be written leaves the row off.
+- **Recording without asking is the deployment's decision.** The release variable
+  `AART_CLI_DEFAULT_USAGE_HARNESSES` names the harnesses a build records in until a person chooses:
+  names separated by commas, each a harness that can record (`claude`, `opencode`), or `none`.
+  Unset or `none` bakes none, so the public build records nowhere until a harness is turned on. A
+  name that cannot record, an empty or a repeated one fails the release. The value is baked into
+  the wheel and written in the release receipt. In a harness the build names, the TUI puts the
+  hook in place at start when that harness is on this machine and says so once; the person's own
+  choice in Settings, once made, always wins.
+  Turning a harness off removes its hook; `consume usage disable --harness H --forget` and `consume
+  usage forget --harness H` delete what was recorded for it. `consume usage show [--json]` says
+  which harnesses record and lists the ranking.
+- **Where it is shown.** Activity lists `most used:` — uses, artifact (its installation name when
+  aart-cli installed it, else the name with `(not installed by aart-cli)`), kind, harness and the
+  last use in UTC — and which harnesses record. One artifact in two harnesses is two lines.
+- **Local only.** Nothing is sent anywhere. A telemetry server, when one exists, is a separate
+  adapter with its own consent (`activity_telemetry`, disabled).
+
+**INV-318 — A recorded use carries names only.** For any hook payload, the use recorded holds the
+harness, kind, name, project and moment, and no part of what the tool was called with.
+
+**INV-319 — Usage is recorded only in a harness whose row is on, and without asking only where the
+build says.** Until a person chooses, the rows that are on are exactly the harnesses baked from
+`AART_CLI_DEFAULT_USAGE_HARNESSES`, none when it is unset or `none`. A harness with its row off has
+no aart-cli hook; turning a row off removes that hook and leaves every other hook and plugin in its
+configuration as it was.
+
+**INV-320 — Concurrent writers lose nothing.** Any number of hooks and aart-cli commands writing to
+the Activity database at once, including while it is created, all record their rows.
+
+**INV-321 — The Activity database is its owner's alone and read only at the schema version it
+was written with.** It is created 0600, and a database with another schema version is reported and left
+unchanged.
