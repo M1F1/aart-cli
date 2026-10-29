@@ -87,6 +87,12 @@ def _run_usage(request: Request) -> int:
     return usage.run(request)
 
 
+def _run_telemetry(request: Request) -> int:
+    from .commands import telemetry
+
+    return telemetry.run(request)
+
+
 def _run_inputs(request: Request) -> int:
     """`consume inputs` (§198): the TUI's own application, so it is not a `commands` module.
 
@@ -111,6 +117,7 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "author": _run_author,
     "mcp": _run_mcp,
     "usage": _run_usage,
+    "telemetry": _run_telemetry,
     "candidate": _run_candidate,
 }
 
@@ -158,6 +165,8 @@ def _route(args: argparse.Namespace) -> tuple[str, dict[str, object]]:
             return "inputs", {}
         if action == "usage":
             return "usage", {}
+        if action == "telemetry":
+            return "telemetry", {}
         return "marketplace", {"marketplace_action": action}
     if command == "maintain":
         action = args.maintain_action
@@ -272,6 +281,10 @@ def _to_request(args: argparse.Namespace) -> Request:
         upgrade_how=bool(getattr(args, "upgrade_how", False)),
         usage_action=getattr(args, "usage_action", None),
         usage_forget=bool(getattr(args, "usage_forget", False)),
+        telemetry_action=getattr(args, "telemetry_action", None),
+        telemetry_endpoint=getattr(args, "telemetry_endpoint", None),
+        telemetry_forget=bool(getattr(args, "telemetry_forget", False)),
+        telemetry_force=bool(getattr(args, "telemetry_force", False)),
     )
 
 

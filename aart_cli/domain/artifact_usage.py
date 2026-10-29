@@ -29,6 +29,7 @@ __all__ = [
     "installed_names",
     "parse_usage_harnesses",
     "rank_usage",
+    "resolve_installed",
     "use_from_hook",
 ]
 
@@ -188,6 +189,8 @@ class InstalledName:
     kind: UsageKind
     name: str
     artifact: str
+    #: The version installed, when the record names one.
+    version: str | None = None
 
 
 def installed_names(records: tuple[InstalledRecord, ...]) -> tuple[InstalledName, ...]:
@@ -201,7 +204,11 @@ def installed_names(records: tuple[InstalledRecord, ...]) -> tuple[InstalledName
             for registration in receipt.registrations:
                 names.add(
                     InstalledName(
-                        registration.target.harness, UsageKind.MCP, registration.server, artifact
+                        registration.target.harness,
+                        UsageKind.MCP,
+                        registration.server,
+                        artifact,
+                        record.coordinate.version,
                     )
                 )
         elif record.coordinate.artifact.kind == "skill":
@@ -212,6 +219,7 @@ def installed_names(records: tuple[InstalledRecord, ...]) -> tuple[InstalledName
                         UsageKind.SKILL,
                         delivery.destination.rstrip("/").rpartition("/")[2],
                         artifact,
+                        record.coordinate.version,
                     )
                 )
     return tuple(sorted(names, key=lambda item: (item.harness, item.kind.value, item.name)))
@@ -233,19 +241,25 @@ class UsageRank:
     installed: bool
 
 
-def _resolve(count: UsageCount, names: tuple[InstalledName, ...]) -> InstalledName | None:
-    candidates = [
-        item for item in names if item.harness == count.harness and item.kind is count.kind
-    ]
-    exact = [item for item in candidates if item.name == count.name]
+def resolve_installed(
+    harness: str, kind: UsageKind, name: str, names: tuple[InstalledName, ...]
+) -> InstalledName | None:
+    """The installed artifact a harness's name for a use is, or `None` when none answers to it."""
+
+    candidates = [item for item in names if item.harness == harness and item.kind is kind]
+    exact = [item for item in candidates if item.name == name]
     if exact:
         return exact[0]
-    if count.harness == "opencode" and count.kind is UsageKind.MCP:
+    if harness == "opencode" and kind is UsageKind.MCP:
         # opencode's tool is `<server>_<tool>`: the longest installed server it starts with.
-        prefixed = [item for item in candidates if count.name.startswith(f"{item.name}_")]
+        prefixed = [item for item in candidates if name.startswith(f"{item.name}_")]
         if prefixed:
             return max(prefixed, key=lambda item: len(item.name))
     return None
+
+
+def _resolve(count: UsageCount, names: tuple[InstalledName, ...]) -> InstalledName | None:
+    return resolve_installed(count.harness, count.kind, count.name, names)
 
 
 def rank_usage(

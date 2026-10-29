@@ -102,6 +102,14 @@ runs:
       shell: bash
       run: ${{ inputs.python }} scripts/inject_default_usage.py
 
+    # Unset means this fork's wheel offers no telemetry server, which is the public build's state.
+    # Set, it is the server's base address, `https://` or loopback `http://`, and an address aart-cli
+    # would refuse fails here.  Offering is all it does: telemetry stays off until a person turns it
+    # on.  See D-503.
+    - name: Inject default telemetry server
+      shell: bash
+      run: ${{ inputs.python }} scripts/inject_default_telemetry.py
+
     # Unset means this fork's wheel carries the tag's version, as the public one does.  Set, it is a
     # PEP 440 local label such as `corp`, and the wheel becomes `X.Y.Z+corp`: a filename of its own
     # beside the public wheel on PyPI, which `aart-cli==X.Y.Z` still matches and pip prefers.  Only

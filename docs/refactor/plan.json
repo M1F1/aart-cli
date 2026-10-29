@@ -1828,6 +1828,43 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-50",
+      "title": "Telemetry: installs, updates, removals and uses sent to a telemetry server (§213, D-503, D-504)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "The contract and the pure rules: the address, an event, when a sync is due, what an answer does",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "The outbox in SQLite, recording from actions and the usage hook while telemetry is on",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "One sender under a lock, a detached process, split and backoff",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "consume telemetry status|enable|disable|sync and AART_CLI_TELEMETRY_ENDPOINT",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "The server in its own repository, and aart-cli end to end against it",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "The PR",
+          "status": "in_progress"
+        }
+      ]
     }
   ]
 }

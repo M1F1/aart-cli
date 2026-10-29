@@ -463,6 +463,17 @@ def default_usage_harnesses_value() -> str | None:
     return ",".join(name.strip() for name in raw.split(","))
 
 
+def telemetry_endpoint_value() -> str | None:
+    """The telemetry server this release offers, or ``None`` when it offers none (D-503).
+
+    Recorded for the reason the default Registry is: two wheels of one tag may differ in where
+    they would send telemetry once a person turns it on. Trimmed as
+    `scripts/inject_default_telemetry.py` trims it; a value it refuses fails that step first.
+    """
+
+    return os.environ.get("AART_CLI_TELEMETRY_ENDPOINT", "").strip().rstrip("/") or None
+
+
 def local_version_label_value() -> str | None:
     """The local version label this release puts on its wheel, or ``None`` when it puts none.
 
@@ -739,6 +750,7 @@ def check_release(
         "default_registry": baked_default_registry_value(),
         "local_version_label": local_version_label_value(),
         "default_usage_harnesses": default_usage_harnesses_value(),
+        "default_telemetry_endpoint": telemetry_endpoint_value(),
         "checks": [
             {
                 "name": name,

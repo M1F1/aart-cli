@@ -499,3 +499,8 @@ class Request:
     #: `consume usage`: show, enable, disable or forget (§212).
     usage_action: Optional[str] = None
     usage_forget: bool = False
+    #: `consume telemetry`: status, enable, disable or sync (§213).
+    telemetry_action: Optional[str] = None
+    telemetry_endpoint: Optional[str] = None
+    telemetry_forget: bool = False
+    telemetry_force: bool = False

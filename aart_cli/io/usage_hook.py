@@ -17,6 +17,10 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from aart_cli.domain.artifact_usage import ArtifactUse
 
 #: A hook payload is one tool call. Claude Code includes the call's input, which is bounded by
 #: what a model writes; anything past this is not read and records nothing.
@@ -39,9 +43,34 @@ def record(harness: str, home: str, payload: bytes, *, now: datetime | None = No
     use = use_from_hook(harness, document)
     if use is None:
         return False
-    moment = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
-    written = ActivityDatabase(str(Path(home) / "state")).record_use(use, moment)
+    instant = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    written = ActivityDatabase(str(Path(home) / "state")).record_use(use, instant.isoformat())
+    if isinstance(written, Ok):
+        _telemetry(home, use, instant)
     return isinstance(written, Ok)
+
+
+def _telemetry(home: str, use: ArtifactUse, instant: datetime) -> None:
+    """Keep the use for the telemetry server when telemetry is on, and start a due sync (§213).
+
+    Where telemetry was never turned on this is one `stat`. Nothing here can fail the hook.
+    """
+
+    from aart_cli.io.telemetry_store import TelemetryOutbox
+
+    try:
+        outbox = TelemetryOutbox(str(Path(home) / "state"))
+        if not outbox.exists():
+            return
+        from aart_cli.domain.result import Ok
+        from aart_cli.domain.telemetry import contract_moment
+        from aart_cli.io.telemetry_sync import maybe_sync, new_event_id
+
+        kept = outbox.record_use(use, contract_moment(instant), new_event_id())
+        if isinstance(kept, Ok) and kept.value:
+            maybe_sync(home)
+    except Exception:  # noqa: BLE001 -- telemetry never fails what triggered it
+        pass
 
 
 def main(arguments: list[str]) -> int:

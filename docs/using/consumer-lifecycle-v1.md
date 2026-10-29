@@ -340,6 +340,38 @@ aart-cli consume usage disable --harness claude --forget
 
 `consume usage forget --harness opencode` deletes what was recorded and keeps recording.
 
+### Telemetry
+
+Telemetry sends your organisation's telemetry server what aart-cli installs, updates and removes,
+and each recorded use of an artifact aart-cli installed, so the organisation sees which artifacts
+are used, how often and by how many installations. It is off until you turn it on, and only what
+happens while it is on is ever sent.
+
+```sh
+aart-cli consume telemetry enable --endpoint https://telemetry.example.com
+aart-cli consume telemetry status
+```
+
+Without `--endpoint`, `enable` uses the server your organisation's build of aart-cli offers (its
+release variable `AART_CLI_TELEMETRY_ENDPOINT`); the public build offers none. An event holds the
+event's kind, the artifact's kind, name and version, the moment, a random installation id drawn when
+you turn telemetry on, and aart-cli's version. It never holds a project, path, argument, prompt,
+Registry address, user or host name, or credential, and a use of something aart-cli did not install
+is never sent.
+
+Events wait in `~/.aart-cli/state/telemetry.sqlite3`, readable only by you. When something new is
+recorded and ten minutes have passed since the last successful send, a short-lived process sends
+what waits and exits; there is no background service. A server that cannot be reached is tried
+again later, backing off up to 30 minutes, and nothing you do waits for it or fails because of it.
+
+```sh
+aart-cli consume telemetry sync
+aart-cli consume telemetry disable --forget
+```
+
+`sync` sends now. `disable` stops recording and sending and keeps what waits, unsent; `--forget`
+also deletes it and the installation id.
+
 ## Reset and restore
 
 Run `aart-cli reset` when local AART state is invalid, belongs to another version, or should be

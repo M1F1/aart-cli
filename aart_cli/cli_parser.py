@@ -654,7 +654,8 @@ def build_parser() -> argparse.ArgumentParser:
             "in each harness's user configuration: on from the start only in the harnesses this "
             "aart-cli was built to record in, elsewhere once turned on. Only names, the project "
             "directory and the time are kept, on this machine, in the Activity database; what a "
-            "tool is called with is never recorded and nothing is sent anywhere."
+            "tool is called with is never recorded, and nothing is sent anywhere unless "
+            "telemetry is on (consume telemetry)."
         ),
     )
     usage_sub = p.add_subparsers(dest="usage_action", metavar="ACTION", required=True)
@@ -708,6 +709,79 @@ def build_parser() -> argparse.ArgumentParser:
                 help="also delete what was recorded for the harness",
             )
         _add_json(p_usage)
+
+    # Telemetry (§213) ------------------------------------------------------- #
+    p = consume_sub.add_parser(
+        "telemetry",
+        formatter_class=_HELP_FORMATTER,
+        help="send installs, updates, removals and artifact uses to a telemetry server",
+        description=(
+            "Off until turned on. While on, each install, update and removal aart-cli completes, "
+            "and each recorded use of an artifact aart-cli installed, is kept in "
+            "state/telemetry.sqlite3 and sent to the telemetry server at most every ten minutes, "
+            "when something new is recorded. Sent: the event, the artifact's kind, name and "
+            "version, the moment, a random installation id and aart-cli's version. Never a "
+            "project, path, argument, prompt, user or host name, or credential."
+        ),
+    )
+    telemetry_sub = p.add_subparsers(dest="telemetry_action", metavar="ACTION", required=True)
+    p_telemetry = telemetry_sub.add_parser(
+        "status",
+        formatter_class=_HELP_FORMATTER,
+        help="whether telemetry is on, where it sends, and what waits",
+        description=(
+            "Say whether telemetry is on, the server, the installation id, how many events wait, "
+            "were sent, rejected or skipped, and when the last synchronisation succeeded."
+        ),
+    )
+    _add_json(p_telemetry)
+    p_telemetry = telemetry_sub.add_parser(
+        "enable",
+        formatter_class=_HELP_FORMATTER,
+        help="turn telemetry on",
+        description=(
+            "Turn telemetry on for this application home. Only what happens from now on is sent. "
+            "The server is --endpoint, else the one this aart-cli was built with."
+        ),
+    )
+    p_telemetry.add_argument(
+        "--endpoint",
+        dest="telemetry_endpoint",
+        metavar="URL",
+        help="the server's base address: https://..., or http:// to 127.0.0.1, ::1 or localhost",
+    )
+    _add_json(p_telemetry)
+    p_telemetry = telemetry_sub.add_parser(
+        "disable",
+        formatter_class=_HELP_FORMATTER,
+        help="turn telemetry off",
+        description=(
+            "Stop recording and sending. What waits is kept, unsent, unless --forget is given."
+        ),
+    )
+    p_telemetry.add_argument(
+        "--forget",
+        dest="telemetry_forget",
+        action="store_true",
+        help="also delete what waits and the installation id",
+    )
+    _add_json(p_telemetry)
+    p_telemetry = telemetry_sub.add_parser(
+        "sync",
+        formatter_class=_HELP_FORMATTER,
+        help="send what waits now",
+        description=(
+            "Send what waits now, without waiting for the ten minutes. A backoff after a failure "
+            "or a pause after a refused authorisation still holds unless --force is given."
+        ),
+    )
+    p_telemetry.add_argument(
+        "--force",
+        dest="telemetry_force",
+        action="store_true",
+        help="also ignore a backoff or pause",
+    )
+    _add_json(p_telemetry)
 
     # Credentials and variables without the TUI (§198, D-483) ----------------- #
     p = consume_sub.add_parser(

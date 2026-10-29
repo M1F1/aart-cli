@@ -28,6 +28,7 @@ from aart_cli.application.consumer_views import (
     receipt_detail_from_data,
     receipt_detail_to_data,
 )
+from aart_cli.application.telemetry_events import lifecycle_events
 from aart_cli.configuration.policy import redact_text
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import (
@@ -55,6 +56,8 @@ from aart_cli.domain.selection import OwnershipKind, OwnershipReason
 from aart_cli.domain.serialization import CanonicalValue, canonical_json_bytes
 
 from .activity_store import ActivityDatabase
+from .telemetry_store import TelemetryOutbox
+from .telemetry_sync import maybe_sync, new_event_id
 
 __all__ = [
     "RECEIPT_ABSENT",
@@ -363,7 +366,26 @@ class LocalReceiptStore:
             return _error(RECEIPT_UNWRITABLE, "an action record needs a receipt")
         content = _canonical(receipt_detail_to_data(receipt))
         moment = receipt.moment.astimezone(timezone.utc).isoformat()
-        return ActivityDatabase(self.state_root).record_action(moment, content)
+        recorded = ActivityDatabase(self.state_root).record_action(moment, content)
+        if isinstance(recorded, Ok):
+            self._telemetry(receipt)
+        return recorded
+
+    def _telemetry(self, receipt: ReceiptDetailView) -> None:
+        """Keep what the action changed for the telemetry server when telemetry is on (§213).
+
+        Where telemetry was never turned on this is one `stat`; nothing here fails the action.
+        """
+
+        outbox = TelemetryOutbox(self.state_root)
+        if not outbox.exists():
+            return
+        try:
+            kept = outbox.record_events(lifecycle_events(receipt, new_event_id))
+            if isinstance(kept, Ok) and kept.value:
+                maybe_sync(str(Path(self.state_root).parent))
+        except Exception:  # noqa: BLE001 -- telemetry never fails what triggered it
+            pass
 
     def actions(self, *, limit: int | None = None) -> Result[tuple[ReceiptDetailView, ...]]:
         """Finished actions, newest first.

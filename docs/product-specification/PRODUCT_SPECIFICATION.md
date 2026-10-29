@@ -10434,6 +10434,8 @@ The managed layout is:
 ├── state/
 │   ├── installations/              # one receipt per complete installation identity
 │   ├── activity.sqlite3            # action records and artifact uses (§212), owner-only
+│   ├── telemetry.sqlite3           # telemetry outbox and its state (§213), owner-only
+│   ├── telemetry.lock              # held by the one telemetry sender (§213)
 │   ├── setup/                      # target-qualified setup metadata
 │   ├── object-references.json      # canonical object retention metadata
 │   └── consumer-settings.json      # UI preferences
@@ -12632,8 +12634,8 @@ JSON files, in preparation for a telemetry server that does not exist yet.
 - **Where it is shown.** Activity lists `most used:` — uses, artifact (its installation name when
   aart-cli installed it, else the name with `(not installed by aart-cli)`), kind, harness and the
   last use in UTC — and which harnesses record. One artifact in two harnesses is two lines.
-- **Local only.** Nothing is sent anywhere. A telemetry server, when one exists, is a separate
-  adapter with its own consent (`activity_telemetry`, disabled).
+- **Local unless telemetry is on.** Nothing is sent anywhere until a person turns telemetry on
+  (§213), which is its own consent, separate from recording here.
 
 **INV-318 — A recorded use carries names only.** For any hook payload, the use recorded holds the
 harness, kind, name, project and moment, and no part of what the tool was called with.
@@ -12650,3 +12652,90 @@ the Activity database at once, including while it is created, all record their r
 **INV-321 — The Activity database is its owner's alone and read only at the schema version it
 was written with.** It is created 0600, and a database with another schema version is reported and left
 unchanged.
+
+# 213. Telemetry: installs, updates, removals and uses sent to a telemetry server
+
+Status: **ACCEPTED 2026-10-29 (D-503, D-504)**, on the owner's request after 0.21.0, from their
+telemetry implementation brief: the organisation sees which artifacts are used, how often, by how
+many installations, and how that changes, on a dashboard. Supersedes §212's "Local only" for an
+installation where telemetry is turned on.
+
+- **Two repositories, one contract.** The server is a separate repository,
+  `aart-telemetry-server` (a functional core behind FastAPI; SQLite in WAL by default and
+  PostgreSQL by URL, through one SQLAlchemy repository; a Chart.js dashboard). The only thing the two
+  share is `docs/telemetry-api-v1.md` with `contract/telemetry-api-v1.examples.json`, kept
+  identical in both and read by each one's contract tests. aart-cli imports nothing of the server
+  and gains no runtime dependency: the client is `sqlite3`, `json`, `urllib.request`, `fcntl`,
+  `subprocess` and `uuid`.
+- **Off until a person turns it on.** `consume telemetry enable [--endpoint URL]` turns it on for
+  this application home; `--endpoint` defaults to the address baked from the release variable
+  `AART_CLI_TELEMETRY_ENDPOINT` (unset: none, and `enable` then needs `--endpoint`). A baked
+  address alone sends nothing. `consume telemetry disable` stops sending and recording events for
+  it; `--forget` also deletes what is waiting and the installation id. Only what happens while it
+  is on is ever sent: nothing recorded before is sent afterwards.
+- **The address.** `https://` for any host, `http://` only for `127.0.0.1`, `::1` or `localhost`;
+  never with a user, password, query or fragment. aart-cli appends `/api/v1/events/batch`.
+  Version 1 sends no credential; a server reachable beyond loopback sits behind the organisation's
+  authenticating proxy, and no shared secret is baked into aart-cli.
+- **What is sent.** `artifact.installed`, `artifact.updated` (an update or a downgrade) and
+  `artifact.removed` for each artifact an action changed and completed, from `aart_cli`; and
+  `artifact.used` from `claude_hook` or `opencode_plugin` for a use §212 recorded, only when it is
+  an artifact aart-cli installed: named by its installation (kind, name, version), never by the
+  tool the harness called. A use no installed artifact answers to is never sent. Each event has a
+  random `event_id` and its UTC moment; the request has a random installation id, drawn when
+  telemetry is turned on, and aart-cli's version. Never a project, path, argument, prompt,
+  Registry address, user or host name, or credential.
+- **The outbox.** `state/telemetry.sqlite3` in the application home, created 0600, holds the
+  address, the installation id, every event with whether it is waiting, sent, rejected or skipped,
+  and the synchronisation state: last success, last attempt, the next moment an attempt may start,
+  failures in a row, and a pause after a refused authorisation. A database with another schema
+  version is reported and never rewritten.
+- **When it is sent: on activity, at most every ten minutes.** Recording an event commits it to
+  the outbox, then checks, without waiting, whether a synchronisation is due: something is
+  waiting, nothing was ever sent successfully or at least 600 s passed since the last success,
+  and the backoff or pause has passed. When it is due, a short-lived process is started and the
+  hook or command returns at once. There is no daemon, LaunchAgent, timer or event-count
+  threshold; after a quiet period nothing is sent until the next event, or `consume telemetry
+  sync`.
+- **One sender at a time.** The process takes a non-blocking lock on `state/telemetry.lock`, and
+  only its holder checks again and sends; another exits. It sends up to 100 events a request, at
+  most 20 requests and 60 seconds a run, with a 10-second timeout, and never holds a transaction
+  open while a request is in flight.
+- **What an answer does.** Only the ids a `200` acknowledges are marked sent. Events the server
+  names in a `422` are marked rejected and the rest are sent again; a request refused as a whole
+  (`400`, `413`, `422` naming none) is split, and a single event refused is marked rejected. `401`
+  or `403` pauses automatic attempts for an hour. Anything else, a timeout or no connection keeps
+  every event and backs off 1, 2, 5, 10, then 30 minutes, plus up to a fifth more at random. A
+  success clears the backoff. A process killed mid-request leaves its events waiting.
+- **It never fails what it rides on.** A hook still exits 0 with nothing on stdout, and an
+  install, update or uninstall still reports its own outcome, whatever telemetry does.
+- **`consume telemetry status [--json]`** shows whether it is on, the address, the installation
+  id, how many events wait, were sent, rejected or skipped, the last success and attempt, and when
+  the next attempt may start. **`consume telemetry sync [--force]`** sends now: it does not wait
+  for the ten minutes, keeps the lock, and honours the backoff and pause unless `--force`.
+
+**INV-322 — Nothing is sent unless telemetry is on, and only what was recorded while it was.** For
+any sequence of actions, uses and turning telemetry on and off, the events in the outbox are
+exactly those recorded while it was on.
+
+**INV-323 — An event carries the contract's fields only, and a use only as an installed
+artifact.** Every event sent satisfies `docs/telemetry-api-v1.md`; a use that no installed
+artifact answers to produces no event; no event holds a project, path or argument.
+
+**INV-324 — A synchronisation is due only on time, never on count.** For any state, moment and
+number waiting, a synchronisation is due exactly when something waits, the backoff or pause has
+passed, and nothing was sent successfully before or `SYNC_INTERVAL` has passed since.
+
+**INV-325 — An event is marked sent only when the server acknowledged its id.** Whatever a server
+answers, or if it never answers, every event not acknowledged by id stays waiting or, when the
+server named it invalid, rejected.
+
+**INV-326 — At most one sender at a time.** Any number of concurrent triggers start at most one
+upload at a time for one application home.
+
+**INV-327 — A telemetry address never carries a credential, and is plain HTTP only to loopback.**
+Every accepted address is `https://`, or `http://` to a loopback host, with no user, password,
+query or fragment.
+
+**INV-328 — Telemetry never fails what triggered it.** A hook exits 0 with nothing on stdout and an
+action's outcome is unchanged whatever the outbox, the lock, the network or the server does.
