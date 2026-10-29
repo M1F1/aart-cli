@@ -10,14 +10,14 @@ person runs `consume telemetry enable [--endpoint URL]`; the release variable
 `state/telemetry.lock`, and only acknowledged ids are marked sent. No daemon, no runtime
 dependency, and nothing fails what triggered it. `consume telemetry status|enable|disable|sync`.
 
-The server is its own repository, `aart-telemetry-server` (committed in the owner's
-checkout, not yet on GitHub): a functional core
+The server is its own repository, `aart-telemetry-server`
+(`M1F1/aart-telemetry-server`, private): a functional core
 (`returns`, pydantic) behind FastAPI, SQLite or PostgreSQL through one SQLAlchemy repository port,
 and the same gates as aart-cli. The contract `docs/telemetry-api-v1.md` is copied identically into
 both and pinned by digest.
 
 Evidence: `docs/refactor/slices/CP-50-telemetry.md`. Steps 1–5 are done; the PR is open. Next: the
-owner's review and merge, creating the server's GitHub repository, then the Release Please PR.
+owner's review and merge, then the Release Please PR.
 B-253–B-257 are open; B-256 (should an organisation's build start with telemetry on?) is the
 owner's question.
 

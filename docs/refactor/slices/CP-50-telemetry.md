@@ -120,5 +120,5 @@ load; on unchanged code that test passed six runs in a row.
 
 B-253 (telemetry in the TUI's Settings), B-254 (a per-user credential beyond loopback),
 B-255 (a corporate CA bundle), B-256 (whether an organisation's build starts with telemetry on),
-B-257 (the server's next stage: AKS, Alembic, retention). The server repository is not on GitHub
-yet; creating it is the owner's step.
+B-257 (the server's next stage: AKS, Alembic, retention). The server is `M1F1/aart-telemetry-server`
+(private), created by the owner on 2026-10-29.
