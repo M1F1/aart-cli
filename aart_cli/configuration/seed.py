@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from aart_cli import _default_registry
+from aart_cli import _default_registry, _default_usage
+from aart_cli.domain.artifact_usage import parse_usage_harnesses
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
@@ -61,3 +62,14 @@ def baked_default_registry(
     if git_location_parts(url) is None:
         return _error("baked default registry URL is invalid")
     return Ok(SeededRegistry(parsed, url))
+
+
+def baked_usage_harnesses(raw: str | None = None) -> tuple[str, ...]:
+    """The harnesses this build records artifact usage in until a person chooses (§212, D-502).
+
+    Read when asked rather than when imported, so the stamped module is what counts. A value the
+    release would have refused records nowhere: recording without asking is never the fallback.
+    """
+
+    parsed = parse_usage_harnesses(_default_usage.HARNESSES if raw is None else raw)
+    return parsed.value if isinstance(parsed, Ok) else ()

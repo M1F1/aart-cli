@@ -96,6 +96,7 @@ AART / Dashboard
   Activity
   Doctor
   Settings
+  AART CLI Update
 
 ────────────────────────────────────────────────────────────────
 

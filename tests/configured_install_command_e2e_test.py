@@ -28,6 +28,7 @@ from aart_cli.configuration.schema import user_configuration_bytes
 from aart_cli.domain.identifiers import SourceId
 from aart_cli.domain.registry import RegistryContentMode
 from aart_cli.domain.result import Ok
+from aart_cli.io.receipt_store import LocalReceiptStore
 from aart_cli.io.source_store import publish_source_snapshot
 from aart_cli.sources.model import (
     SourcePublishCommand,
@@ -222,7 +223,7 @@ class ConfiguredInstallCommandTest(unittest.TestCase):
                 "the canonical installation was not recorded",
             )
             self.assertTrue(
-                any((state / "activity").glob("*.json")),
+                LocalReceiptStore(str(state)).actions().value,
                 "the canonical action was not recorded",
             )
 

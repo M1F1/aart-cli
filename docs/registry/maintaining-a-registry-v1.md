@@ -20,6 +20,12 @@ you own afterwards, and AART never compares or overwrites them. `init` runs once
 checkout that is already a registry. The workflow is generated and the same for every registry, so
 configure it with repository variables rather than edits, and a newer copy can replace it whole.
 
+A registry may also commit `.aart-cli-source`, which tells its consumers where to install the
+pinned AART from, in the names of the CI's repository variables (`AART_CLI_PACKAGE=aart-cli=={version}`
+and `AART_CLI_PIP_INDEX_URL=…`, or a wheel or Git address). A consumer whose `aart-cli` is older than
+the pin is told so, and `aart-cli upgrade --how` prints the commands for how they installed it. See
+[Rolling out AART on GitHub Enterprise Server](../ci/github-enterprise-rollout.md).
+
 The generated workflows need no configuration to run on github.com. To run them inside a company,
 set repository variables — no file in the registry changes. See
 [Rolling out AART on GitHub Enterprise Server](../ci/github-enterprise-rollout.md).

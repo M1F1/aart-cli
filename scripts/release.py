@@ -449,6 +449,20 @@ def baked_default_registry_value() -> str | None:
     return os.environ.get("AART_CLI_DEFAULT_REGISTRY_ALIAS_AND_URL", "").strip() or None
 
 
+def default_usage_harnesses_value() -> str | None:
+    """The harnesses this release records artifact usage in without asking, or ``None``.
+
+    Recorded for the reason the default Registry is: two wheels of one tag may now differ in what
+    they do on a person's machine (D-502). Read as `scripts/inject_default_usage.py` reads it, so
+    `none` and unset are both ``None``; a value it refuses fails that step before this runs.
+    """
+
+    raw = os.environ.get("AART_CLI_DEFAULT_USAGE_HARNESSES", "").strip()
+    if not raw or raw.lower() == "none":
+        return None
+    return ",".join(name.strip() for name in raw.split(","))
+
+
 def local_version_label_value() -> str | None:
     """The local version label this release puts on its wheel, or ``None`` when it puts none.
 
@@ -724,6 +738,7 @@ def check_release(
         "registry_reconciliation": "skipped" if registry is None else "performed",
         "default_registry": baked_default_registry_value(),
         "local_version_label": local_version_label_value(),
+        "default_usage_harnesses": default_usage_harnesses_value(),
         "checks": [
             {
                 "name": name,

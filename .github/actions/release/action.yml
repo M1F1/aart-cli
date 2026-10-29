@@ -95,6 +95,13 @@ runs:
       shell: bash
       run: ${{ inputs.python }} scripts/inject_default_registry.py
 
+    # Unset or `none` means this fork's wheel records artifact usage nowhere until a person turns it
+    # on in Settings, which is the public build's state.  Set, it is harness names separated by
+    # commas, such as `opencode`, and a name that cannot record fails here.  See D-502.
+    - name: Inject default usage harnesses
+      shell: bash
+      run: ${{ inputs.python }} scripts/inject_default_usage.py
+
     # Unset means this fork's wheel carries the tag's version, as the public one does.  Set, it is a
     # PEP 440 local label such as `corp`, and the wheel becomes `X.Y.Z+corp`: a filename of its own
     # beside the public wheel on PyPI, which `aart-cli==X.Y.Z` still matches and pip prefers.  Only

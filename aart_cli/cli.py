@@ -81,6 +81,12 @@ def _run_mcp(request: Request) -> int:
     return mcp.run(request)
 
 
+def _run_usage(request: Request) -> int:
+    from .commands import usage
+
+    return usage.run(request)
+
+
 def _run_inputs(request: Request) -> int:
     """`consume inputs` (§198): the TUI's own application, so it is not a `commands` module.
 
@@ -104,6 +110,7 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "reset": _run_reset,
     "author": _run_author,
     "mcp": _run_mcp,
+    "usage": _run_usage,
     "candidate": _run_candidate,
 }
 
@@ -149,6 +156,8 @@ def _route(args: argparse.Namespace) -> tuple[str, dict[str, object]]:
             return "mcp", {}
         if action == "inputs":
             return "inputs", {}
+        if action == "usage":
+            return "usage", {}
         return "marketplace", {"marketplace_action": action}
     if command == "maintain":
         action = args.maintain_action
@@ -260,6 +269,9 @@ def _to_request(args: argparse.Namespace) -> Request:
         approve_setup_effects=bool(getattr(args, "approve_setup_effects", False)),
         upgrade_wheel=getattr(args, "upgrade_wheel", None),
         upgrade_source_checkout=getattr(args, "upgrade_source_checkout", None),
+        upgrade_how=bool(getattr(args, "upgrade_how", False)),
+        usage_action=getattr(args, "usage_action", None),
+        usage_forget=bool(getattr(args, "usage_forget", False)),
     )
 
 
@@ -318,9 +330,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     request = _to_request(args)
     if _seeds_first_run(args, request):
         _seed_first_run(request)
-    if request.command == "inputs":
-        return _run_inputs(request)
-    return DISPATCH[request.command](request)
+    code = (
+        _run_inputs(request) if request.command == "inputs" else DISPATCH[request.command](request)
+    )
+    if args.command == "consume":
+        # §211: after the command, on stderr, so a `--json` document on stdout is unchanged.
+        upgrade.announce_newer_aart_cli(
+            lambda line: print(line, file=sys.stderr), user_home=request.user_home
+        )
+    return code
 
 
 if __name__ == "__main__":

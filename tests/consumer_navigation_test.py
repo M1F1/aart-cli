@@ -91,6 +91,7 @@ class ConsumerNavigationTest(unittest.TestCase):
                 ConsumerScreen.ACTIVITY,
                 ConsumerScreen.DOCTOR,
                 ConsumerScreen.SETTINGS,
+                ConsumerScreen.AART_CLI_UPDATE,
             ),
         )
 

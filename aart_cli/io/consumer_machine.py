@@ -83,6 +83,9 @@ __all__ = [
     "read_installed_inspections",
 ]
 
+#: How many of the newest actions Activity shows. Older ones stay recorded and are not read (§212).
+ACTIVITY_WINDOW = 500
+
 #: An installation manifest exists and could not be read.  Distinct from a missing manifest:
 #: one means nothing was installed in that scope, the other means this process cannot tell.
 INSTALL_STATE_UNREADABLE = DiagnosticCode("install-state-unreadable")
@@ -502,7 +505,7 @@ def read_consumer_machine(
         return read
     inspections = list(read.value.inspections)
     observations = list(read.value.credentials)
-    actions = LocalReceiptStore(state_root).actions()
+    actions = LocalReceiptStore(state_root).actions(limit=ACTIVITY_WINDOW)
     if isinstance(actions, Err):
         return actions
 

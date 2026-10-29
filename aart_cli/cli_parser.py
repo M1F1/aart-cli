@@ -143,6 +143,15 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="reinstall editable from an exact local AART checkout without an index",
     )
+    upgrade_source.add_argument(
+        "--how",
+        dest="upgrade_how",
+        action="store_true",
+        help=(
+            "say how to install the newer aart-cli a connected Registry runs, from its "
+            ".aart-cli-source; install nothing"
+        ),
+    )
     p.add_argument(
         "--dry-run", action="store_true", help="print the pip invocation; install nothing"
     )
@@ -607,7 +616,10 @@ def build_parser() -> argparse.ArgumentParser:
         "names",
         nargs="*",
         metavar="INSTALLED",
-        help="installed MCP coordinate(s) to test; use --all instead to test every one",
+        help=(
+            "ALIAS/KIND/NAME[@VERSION] of the installed MCP(s) to test, or an installation key;"
+            " use --all instead to test every one"
+        ),
     )
     p_mcp_test.add_argument(
         "--all",
@@ -631,6 +643,71 @@ def build_parser() -> argparse.ArgumentParser:
     _add_scope(p_mcp_test)
     _add_project(p_mcp_test)
     _add_json(p_mcp_test)
+
+    # Artifact usage (§212) -------------------------------------------------- #
+    p = consume_sub.add_parser(
+        "usage",
+        formatter_class=_HELP_FORMATTER,
+        help="show which skills and MCPs are used most, and turn recording on or off per harness",
+        description=(
+            "aart-cli records which skills and MCPs Claude Code and opencode use, through a hook "
+            "in each harness's user configuration: on from the start only in the harnesses this "
+            "aart-cli was built to record in, elsewhere once turned on. Only names, the project "
+            "directory and the time are kept, on this machine, in the Activity database; what a "
+            "tool is called with is never recorded and nothing is sent anywhere."
+        ),
+    )
+    usage_sub = p.add_subparsers(dest="usage_action", metavar="ACTION", required=True)
+    p_usage_show = usage_sub.add_parser(
+        "show",
+        formatter_class=_HELP_FORMATTER,
+        help="the most used artifacts per harness, and where recording is on",
+        description=(
+            "Rank the skills and MCPs each harness used, most used first, against what aart-cli "
+            "installed, and say for each harness whether its usage is recorded."
+        ),
+    )
+    _add_json(p_usage_show)
+    for action, said, described in (
+        (
+            "enable",
+            "turn recording on for a harness: adds its hook",
+            "Add the usage hook to the harness's user configuration and remember the choice in "
+            "Settings. The hook hands over the skill's or MCP server's name, the project "
+            "directory and the time; never what a tool is called with.",
+        ),
+        (
+            "disable",
+            "turn recording off for a harness: removes its hook",
+            "Remove the usage hook aart-cli wrote and remember the choice in Settings; every "
+            "other hook stays. What was recorded is kept unless --forget is given.",
+        ),
+        (
+            "forget",
+            "delete what was recorded for a harness; recording stays as it is",
+            "Delete every use recorded for the harness from the Activity database. Whether usage "
+            "is recorded from now on does not change.",
+        ),
+    ):
+        p_usage = usage_sub.add_parser(
+            action, formatter_class=_HELP_FORMATTER, help=said, description=described
+        )
+        p_usage.add_argument(
+            "--harness",
+            dest="profile",
+            action="append",
+            required=True,
+            metavar="NAME",
+            help="claude or opencode",
+        )
+        if action == "disable":
+            p_usage.add_argument(
+                "--forget",
+                dest="usage_forget",
+                action="store_true",
+                help="also delete what was recorded for the harness",
+            )
+        _add_json(p_usage)
 
     # Credentials and variables without the TUI (§198, D-483) ----------------- #
     p = consume_sub.add_parser(

@@ -12347,3 +12347,146 @@ Product Specification §210, INV-315.
   Collection whose members are all elsewhere; a real install with one installation to the user and
   one to the project, then Installed opened from another project lists the user's only, `a` lists
   both, and Home counts one.
+
+## D-499 — A newer aart-cli that a Registry runs is announced, with the route its `.aart-cli-source` names (CP-47)
+
+Product Specification §211, INV-316, INV-317.
+
+- **What was asked.** The owner asked for the person to be told when the Registry runs a newer
+  aart-cli, and how to upgrade it. Asked which route, they chose a file committed in the Registry
+  that says how its organisation supplies aart-cli, in the names of the CI's own variables, so the
+  commands follow the default Registry's way (Nexus gives pip, pipx or uv; a clone gives an
+  editable checkout) and not `gh release download`, which does not work in every Enterprise.
+- **Choices.**
+  - The pin stays `.aart-cli-version`, one line, because the CI reads it with `tr -d`. The route
+    is a second file, `.aart-cli-source`, `NAME=value` lines with the CI variable names. The CI
+    and its variables are unchanged; a Registry whose maintainers keep both in step says the same
+    thing twice, and B-244/B-245 track generating and reading the file.
+  - The governing pin is the baked default Registry's when it is connected and readable, else the
+    highest, ties by alias. The default Registry is the deployment's own statement of which
+    aart-cli it runs, so a side Registry's newer pin does not override it.
+  - The route order is the CI step's: package (index defaults to pypi.org/simple) → wheel → runner
+    path → Git (`AART_CLI_TOOL_URL`, else `AART_CLI_REPOSITORY` on the Registry's own host) at
+    `v<pin>`. An SCP-style origin gives `git+ssh://` for pip, pipx and uv.
+  - The whole file is refused on one bad line, a quoted value, a control character, an address
+    with a password, or an `http(s)` address with a user name. The reason never repeats the value.
+  - The installer is read from the file pipx (`pipx_metadata.json`) or uv (`uv-receipt.toml`)
+    leaves at the root of `sys.prefix`, then from the default paths (`/pipx/venvs/aart-cli`,
+    `/uv/tools/aart-cli`), else pip with `sys.executable`. The lab found the path alone wrong:
+    `PIPX_HOME` put pipx's environment at `…/home/venvs/aart-cli`, which read as pip. A Git checkout two levels above the package (`.git` and
+    `pyproject.toml`) is an editable install and is moved with `git -C … fetch --tags` and
+    `checkout v<pin>`, whatever the file says. uv gets `--default-index`, its current name.
+  - Reading: `io/aart_cli_pins.py` reads only the two files from each enabled Registry's current
+    snapshot through its pointer, without reading and hashing the whole tree, since every `consume`
+    command asks. Any defect is `None`.
+  - Saying: the TUI reads it with the offers (`ConsumerOffers.aart_cli_update`), so a sync re-reads
+    it; Home's line, the entry's badge and the footer come from `DashboardView.aart_cli_available`.
+    The new screen `30-aart-cli-update` is Home's last entry, after Maintainer and Author, so every
+    entry above keeps its place. Its guidance is the screen's status; it has no rows.
+  - The CLI says it after a `consume` command, on stderr. `aart-cli upgrade --how` joins
+    `--wheel`/`--source-checkout` in the required group and runs nothing; `UpgradePlan` stays
+    index-free. `aart-cli --version` is unchanged.
+- **Evidence.** `tests/aart_cli_update_test.py` (Hypothesis for the governing pin against an
+  oracle, for every accepted file and for one bad line refusing it; each route per installer),
+  `tests/aart_cli_pins_e2e_test.py` (a real published snapshot; stderr on `consume list --json`
+  with stdout still JSON; `upgrade --how` runs no subprocess), `tests/aart_cli_update_screen_test.py`
+  (Home line, badge, footer, screen).
+
+## D-500 — Activity in SQLite, and which artifacts are used, per harness (CP-48)
+
+Product Specification §212, INV-318–INV-321.
+
+- **What was asked.** During CP-47 the owner asked, in the same PR, for Activity to record artifact
+  use (skills and MCPs) per harness with a ranking, beside install, update and uninstall, kept in
+  SQLite instead of JSON files, in preparation for a telemetry server. Asked, they chose: consent
+  per harness, hooks at user level; every event its own row; the hook belongs to the Settings
+  toggle, not to the Marketplace; recorded data can be deleted. Then: on by default only in the
+  default harness, opencode; Claude Code opt-in; Tabnine has no hooks. Later: with many agents and
+  subagents it must be robust.
+- **Choices.**
+  - `sqlite3` is in the standard library, so the runtime still has no dependency. One file,
+    `state/activity.sqlite3`, two tables (`action`, `artifact_use`), `PRAGMA user_version` 1. It is
+    pre-created 0600 with `os.open` because SQLite would honour the umask. Old JSON action files are
+    not read or migrated (§169, no-backcompat).
+  - Concurrency. CP-48's first form ran `PRAGMA journal_mode=WAL` before taking the lock, and
+    under four racing writers it failed with "database is locked" at once: SQLite does not apply the
+    busy timeout to a journal-mode change. Now the schema is created under `BEGIN IMMEDIATE`, which
+    waits (5 s), and WAL is switched on afterwards only when the journal is not WAL yet, ignoring a
+    busy answer, since the rollback journal is just as correct and a later writer switches it.
+    Measured: 64 processes × 100 writes and 3 × 100 concurrent real hook processes on a new home lost
+    nothing; the slowest write was 0.25 s.
+  - The hook is `python -I <site-packages>/aart_cli/io/usage_hook.py <harness> <home>`, with the
+    running `sys.executable`, so a project's modules cannot shadow anything and no `PATH` lookup is
+    made. It imports only the domain and the store. It always exits 0 and prints nothing.
+  - Claude Code: a `PreToolUse` entry, matcher `Skill|mcp__.*`, `async: true`, `timeout: 30`,
+    appended after the person's own entries and recognised by its script path, so a moved aart-cli
+    replaces it. opencode: a plugin file marked by its first line, spawning the hook detached with
+    `{tool, skill, directory}` only.
+  - Only the TUI puts the default harness's hook in place at start, and only when
+    `~/.config/opencode` exists; the CLI does not, so scripts never change a harness's configuration
+    unasked (B-249).
+  - Activity reads the newest `ACTIVITY_WINDOW = 500` actions.
+  - Tabnine is refused although `profiles/builtin.py` (D-420) models `hooks.BeforeTool` for it: the
+    owner says it has no hook mechanism, and no live Tabnine is available here to show otherwise
+    (B-246).
+- **Evidence.** `tests/artifact_usage_test.py`, `tests/activity_store_test.py`,
+  `tests/usage_hooks_e2e_test.py`, `tests/artifact_usage_screens_test.py`; live opencode 1.18.29 and
+  Claude Code 2.1.312 runs recorded in `docs/refactor/slices/CP-48-activity-and-artifact-usage.md`.
+
+## D-501 — `consume mcp test` reads `ALIAS/KIND/NAME[@VERSION]` as `consume inputs` does (CP-49)
+
+Product Specification §170.1 ("exact selector syntax follows the repository's existing
+origin/installation selection conventions").
+
+- **What was reported.** `consume mcp test company/mcp/azure-data --harness opencode --scope user`
+  failed with `names no installed MCP target`, while `consume inputs list` took the same selector
+  and `@1.0.0` or the full installation key worked. `select_installed_mcps` compared the selector
+  only with `ALIAS/KIND/NAME@VERSION` and the installation key.
+- **Choices.**
+  - A selector names an installation when it is its coordinate, its coordinate without the
+    version, or its installation key: `select_installations` in `consume inputs` reads the same two
+    coordinate forms. The artifact is named whole, never by prefix, and the alias stays required,
+    because local and remote aliases are separate installations (§169).
+  - A version, when given, must be the installed one (§170.1: an older or changed installation
+    cannot supply the evidence for a named version). That miss names the installed versions of the
+    same artifact in the requested scope and harnesses: `did you mean …@1.0.0?`.
+  - The report asked for a clear error when several versions match. One installation identity
+    holds one version, so within one harness nothing is ambiguous; across requested harnesses the
+    bare form selects the artifact in each, as `--all` and the versioned form already did.
+- **Evidence.** `tests/mcp_smoke_selection_test.py` (Hypothesis: every form selects what the
+  installation key selects; the artifact named whole; another version refused with the hint);
+  mutations in `docs/refactor/slices/CP-49-mcp-test-selector.md`.
+
+## D-502 — Which harnesses record artifact usage without asking is baked from a release variable (CP-48)
+
+Product Specification §212, INV-319. Supersedes the part of D-500 that made opencode the built-in
+default.
+
+- **What was asked.** Before the PR, the owner asked that the harnesses whose usage hook is put in
+  place without asking be set by a GitHub repository variable, a list of harness names matching
+  aart-cli's built-in list, and, asked what unset means, chose: unset records nowhere without
+  asking; `none` the same.
+- **Choices.**
+  - `AART_CLI_DEFAULT_USAGE_HARNESSES`, stamped by `scripts/inject_default_usage.py` into
+    `aart_cli/_default_usage.py` exactly as the default Registry is (D-309, D-373): the source tree
+    holds an empty value, the release action runs the injector, `release.py` discovers it for the
+    digest build, and the receipt records `default_usage_harnesses`.
+  - The names must be harnesses that can record (`USAGE_HARNESSES`: claude, opencode), not every
+    built-in harness: Tabnine is built in but has no hooks, so naming it would promise what no
+    hook can do. An unknown, empty or repeated name fails the release. Spaces around a name are the
+    shell's; `none` is any case. Empty is `none`, because Actions cannot tell unset from empty.
+  - `domain.artifact_usage.parse_usage_harnesses` is the one reader, used by the injector and at
+    run time by `configuration.seed.baked_usage_harnesses`, which reads the module when asked so
+    the stamp counts. A baked value it cannot read records nowhere: recording without asking is
+    never the fallback.
+  - `ConsumerSettings.recorded_usage` is the person's choice once made, else the baked list. The
+    constant `USAGE_DEFAULT_HARNESSES` is gone.
+  - This repository publishes the public build and leaves the variable unset, so the public wheel
+    records nowhere until a harness is turned on; an organisation's fork that wants D-500's
+    behaviour sets `opencode`.
+- **Evidence.** `tests/release_default_usage_injection_test.py` (Hypothesis: every list of
+  recording harnesses reads back, any other name anywhere is refused; unset and `none` render the
+  committed module byte for byte; a refused value writes nothing; the workflow passes the variable
+  to both release jobs; the receipt), `tests/artifact_usage_screens_test.py` (unbaked: every row
+  off and nothing hooked at start; baked `opencode`: hooked at start, Claude not). Mutations N1–N7
+  in the CP-48 slice.

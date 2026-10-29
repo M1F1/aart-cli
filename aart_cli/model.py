@@ -495,3 +495,7 @@ class Request:
     approve_setup_effects: bool = False
     upgrade_wheel: Optional[str] = None
     upgrade_source_checkout: Optional[str] = None
+    upgrade_how: bool = False
+    #: `consume usage`: show, enable, disable or forget (§212).
+    usage_action: Optional[str] = None
+    usage_forget: bool = False

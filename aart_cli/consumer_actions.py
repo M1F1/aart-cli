@@ -122,10 +122,12 @@ from aart_cli.application.maintainer_views import (
     project_source_sync_result,
     project_source_sync_review,
 )
+from aart_cli.application.usage_recording import ArtifactUsageView
 from aart_cli.authoring.check import AuthorCheckReport
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.configuration.schema import configured_source_from_input
+from aart_cli.domain.artifact_usage import USAGE_HARNESSES
 from aart_cli.domain.candidates import CandidateId
 from aart_cli.domain.credentials import (
     CredentialIntent,
@@ -227,6 +229,7 @@ from aart_cli.io.registry_bootstrap import (
 )
 from aart_cli.io.registry_publication import publish_registry_commit
 from aart_cli.io.registry_workspace import read_registry_workspace
+from aart_cli.io.usage_hooks import read_artifact_usage, reconcile_usage_hooks, set_usage_hook
 from aart_cli.protocol.authoring import read_package_description
 from aart_cli.protocol.hashing import parse_sha256
 from aart_cli.registry_commands.publication_state import (
@@ -1073,19 +1076,75 @@ class LocalConsumerActions:
 
         return self._pending_host if self._pending_host is not None else self._host()
 
-    def save_settings(self, settings: ConsumerSettings) -> None:
+    def save_settings(self, settings: ConsumerSettings) -> ConsumerSettings:
         """Keep a changed preference, and keep drawing it, for the rest of this session too.
 
         A composition with no data root can still change a preference; it just cannot outlive the
         session, which is what a caller that supplied no place to write asked for.
+
+        Turning a harness's artifact usage on or off is kept only once its hook is written or
+        removed (§212); a hook that could not be changed leaves the setting as it was, and what
+        was kept is what this returns.
         """
 
+        if self._data_root is not None:
+            settings = self._apply_usage_hooks(self._context.settings, settings)
         self._context = replace(self._context, settings=settings)
         if self._data_root is None:
-            return
+            return settings
         written = write_consumer_settings(settings, data_root=self._data_root)
         if isinstance(written, Err):
             raise ValueError(written.diagnostics[0].message)
+        return settings
+
+    def _apply_usage_hooks(
+        self, previous: ConsumerSettings, settings: ConsumerSettings
+    ) -> ConsumerSettings:
+        assert self._data_root is not None
+        recorded = list(settings.recorded_usage)
+        for harness in USAGE_HARNESSES:
+            enabled = harness in settings.recorded_usage
+            if enabled == (harness in previous.recorded_usage):
+                continue
+            changed = set_usage_hook(
+                harness,
+                enabled,
+                user_home=self._context.host.user_home,
+                data_root=self._data_root,
+            )
+            if isinstance(changed, Err):
+                if enabled:
+                    recorded.remove(harness)
+                else:
+                    recorded.append(harness)
+        return replace(settings, artifact_usage=tuple(recorded))
+
+    def record_usage_by_default(self) -> tuple[str, ...]:
+        """Put the usage hook in place in each detected harness that records usage (§212).
+
+        Recording is on without asking in the harnesses this build baked (D-502), so such a harness
+        gets its hook once it is found here, and a harness turned off loses it. A hook another
+        aart-cli wrote is rewritten to this one.
+        Never raises: the harnesses newly recording are returned, and a failure records nothing.
+        """
+
+        if self._data_root is None:
+            return ()
+        try:
+            return reconcile_usage_hooks(
+                self._context.settings.recorded_usage,
+                user_home=self._context.host.user_home,
+                data_root=self._data_root,
+            )
+        except Exception:  # noqa: BLE001 -- recording usage is never what stops the TUI
+            return ()
+
+    def _usage(self) -> ArtifactUsageView | None:
+        if self._data_root is None:
+            return None
+        return read_artifact_usage(
+            data_root=self._data_root, user_home=self._context.host.user_home
+        )
 
     # -- what the shell draws ------------------------------------------------ #
 
@@ -1155,6 +1214,8 @@ class LocalConsumerActions:
                 author_report=self._author_report,
                 install_scope_offers=install_scope_offers,
                 project_root=self._context.host.project_root,
+                aart_cli_update=self._context.offers.aart_cli_update,
+                usage=self._usage(),
             )
         )
 

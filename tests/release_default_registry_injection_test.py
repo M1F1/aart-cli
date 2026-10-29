@@ -154,7 +154,12 @@ class EveryInjectorReachesBothBuilds(unittest.TestCase):
     def test_there_is_more_than_one_injector_to_keep_together(self) -> None:
         self.assertEqual(
             self._injectors(),
-            {"inject_commit.py", "inject_default_registry.py", "inject_local_version.py"},
+            {
+                "inject_commit.py",
+                "inject_default_registry.py",
+                "inject_default_usage.py",
+                "inject_local_version.py",
+            },
         )
 
     def test_the_release_action_runs_every_injector(self) -> None:

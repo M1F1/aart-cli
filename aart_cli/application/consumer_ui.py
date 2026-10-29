@@ -47,6 +47,7 @@ from .consumer_views import (
     scope_matrix_from_row,
     target_from_row,
     toggle_matrix_cell,
+    usage_harness_from_row,
 )
 from .maintainer_views import (
     REGISTRY_WORKSPACE_READY_ROW,
@@ -2696,7 +2697,9 @@ def _reduce(
         return replace(state, installed_everywhere=event.accepted, quit_pending=False), ()
     if event.kind is ConsumerUiEventKind.TOGGLE_SETTING:
         if state.session.screen is not ConsumerScreen.SETTINGS or (
-            event.key not in SETTING_ROWS and default_harness_from_row(event.key) is None
+            event.key not in SETTING_ROWS
+            and default_harness_from_row(event.key) is None
+            and usage_harness_from_row(event.key) is None
         ):
             return state, ()
         return _apply_setting(state, state.settings.toggled(event.key))

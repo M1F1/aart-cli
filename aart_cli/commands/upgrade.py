@@ -1,4 +1,8 @@
-"""Explicit local AART executable replacement; index publication remains out of scope."""
+"""Explicit local AART executable replacement; index publication remains out of scope.
+
+`--how` only reads: it says how the Registry's newer aart-cli is installed here (§211) and runs
+nothing, so the replacement itself still comes from one explicit local input.
+"""
 
 from __future__ import annotations
 
@@ -147,9 +151,57 @@ def _default_runner(argv: tuple[str, ...]) -> int:
     return subprocess.run(argv, check=False).returncode
 
 
+def _newer_aart_cli(user_home: str | None):
+    """The newer aart-cli a connected Registry runs, read from the synced snapshots, else `None`."""
+
+    from aart_cli.commands._configured_runtime import load_runtime_configuration
+    from aart_cli.io.aart_cli_pins import read_aart_cli_update
+
+    runtime = load_runtime_configuration(
+        Request(command="upgrade", user_home=user_home), content_required=False
+    )
+    if isinstance(runtime, Err):
+        return None
+    return read_aart_cli_update(
+        runtime.value.loaded.effective, data_root=runtime.value.paths.data_root
+    )
+
+
+def announce_newer_aart_cli(write: Callable[[str], None], *, user_home: str | None) -> None:
+    """Say in one line that a Registry runs a newer aart-cli, for a `consume` command's stderr.
+
+    Advice may not stop a command, so a defect in finding out says nothing.
+    """
+
+    try:
+        update = _newer_aart_cli(user_home)
+    except Exception:
+        return
+    if update is not None:
+        write(
+            f"aart-cli {update.available} is available (Registry {update.registry} runs it; "
+            f"this is {update.current}). Run `aart-cli upgrade --how` to see how to install it."
+        )
+
+
+def _how(user_home: str | None) -> int:
+    from aart_cli.application.aart_cli_update import upgrade_guidance
+    from aart_cli.runtime_contract import EXECUTABLE_VERSION
+
+    update = _newer_aart_cli(user_home)
+    if update is None:
+        print(f"No connected Registry runs an aart-cli newer than {EXECUTABLE_VERSION}.")
+        return OK
+    for line in upgrade_guidance(update):
+        print(line)
+    return OK
+
+
 def run(request: Request, *, runner: UpgradeRunner | None = None) -> int:
     """Review or apply an explicit local replacement; never discover or contact an index."""
 
+    if request.upgrade_how:
+        return _how(request.user_home)
     planned = plan_upgrade(
         sys.executable,
         wheel=request.upgrade_wheel,
@@ -168,4 +220,4 @@ def run(request: Request, *, runner: UpgradeRunner | None = None) -> int:
     return OK if execute(planned.value.argv) == 0 else ERROR
 
 
-__all__ = ["UpgradePlan", "plan_upgrade", "run"]
+__all__ = ["UpgradePlan", "announce_newer_aart_cli", "plan_upgrade", "run"]

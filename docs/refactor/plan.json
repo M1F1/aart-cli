@@ -1674,7 +1674,7 @@
     {
       "id": "CP-46",
       "title": "Only the Registry here opens, and its commands are there; a running action beats, mcp test reads generated schemas and says why it failed; a credential may declare its length; mcp test reads every schema FastMCP generates; every long screen scrolls; credentials are entered on 07b and leave with their installation; scope is chosen before configuration; Installed shows what this context reaches",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -1733,8 +1733,99 @@
         },
         {
           "id": "12",
-          "title": "The owner's run in the lab, and the PR",
-          "status": "todo"
+          "title": "The owner's run in the lab, and the PR (#106, released as 0.20.0)",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-47",
+      "title": "A newer aart-cli that a Registry runs is announced, with how to install it the way the organisation supplies it (.aart-cli-source)",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Governing pin and .aart-cli-source routes, pure (§211, INV-316, INV-317, D-499)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Pins and source read from the current snapshots; the running aart-cli and its installer",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "consume commands say it on stderr; aart-cli upgrade --how prints the commands and installs nothing",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "TUI: Home line, entry badge, footer, and screen 30 AART CLI Update",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Registry and Enterprise rollout docs name .aart-cli-source",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "The owner's run, and the PR",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-48",
+      "title": "Activity in SQLite, and which skills and MCPs are used, per harness, with a ranking (in the CP-47 PR)",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "A use from a hook payload, names only, and the ranking, pure (§212, INV-318, D-500)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "One SQLite database for actions and uses (INV-321)",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The hook script; Claude Code settings and the opencode plugin (INV-319)",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Settings rows per harness, Activity's ranking, consume usage, opencode by default",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Robust under many concurrent agents and subagents (INV-320)",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "The owner's run, and the PR (with CP-47)",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-49",
+      "title": "consume mcp test accepts ALIAS/KIND/NAME without a version, as consume inputs does (§170.1, D-501)",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Selector forms and the did-you-mean hint, with the guide and help",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "The PR (with CP-47 and CP-48)",
+          "status": "done"
         }
       ]
     }
