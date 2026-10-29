@@ -5226,12 +5226,11 @@ the TLS failure, would make it diagnosable.
 
 ## B-256 — Should an organisation's build start with telemetry on?
 
-Status: **open**, the owner's decision (CP-50, D-503).
+Status: **resolved 2026-10-29 by D-505** (CP-50), the owner's decision.
 
-A baked `AART_CLI_TELEMETRY_ENDPOINT` only offers an address; a person still runs
-`consume telemetry enable`. An organisation that wants every installation to report would need a
-second release variable (on by default), with the disclosure shown once at the first start, as
-D-502 does for usage recording.
+Yes, with no second variable: a baked `AART_CLI_TELEMETRY_ENDPOINT` turns telemetry on at a home's
+first `aart-cli` or `consume` command where nobody decided, says so once, and sends Activity's
+history too. `consume telemetry disable` is kept for good.
 
 ## B-257 — The telemetry server's next stage
 

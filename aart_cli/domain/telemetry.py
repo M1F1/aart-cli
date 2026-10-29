@@ -8,7 +8,9 @@ put into one.
 
 from __future__ import annotations
 
+import json
 import re
+import uuid
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -37,6 +39,7 @@ __all__ = [
     "batch_document",
     "classify_answer",
     "contract_moment",
+    "history_event_id",
     "lifecycle_event",
     "lifecycle_event_type",
     "parse_telemetry_endpoint",
@@ -70,6 +73,9 @@ _LIFECYCLE_EVENTS = {
     "downgrade": "artifact.updated",
     "uninstall": "artifact.removed",
 }
+
+#: Names every event id drawn from a record; an installation's history key keeps them its own.
+_HISTORY = uuid.UUID("5d1c0c8e-3f4a-4b7e-9a51-6d2f0e7b8c34")
 
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 _MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z")
@@ -172,6 +178,21 @@ def contract_moment(moment: datetime) -> str:
     if moment.tzinfo is None:
         raise ValueError("a telemetry moment needs a time zone")
     return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def history_event_id(key: str, record: str, index: int = 0) -> str:
+    """The id of the `index`-th event Activity's `record` amounts to, under the history `key`.
+
+    The same record always has the same id, so a record queued as it happened and again from the
+    history when telemetry is turned on is kept once, and a server that already stored it stores
+    it once (D-505).
+    """
+
+    if not isinstance(key, str) or not key or not isinstance(record, str) or not record:
+        raise ValueError("an event id from the history needs a key and a record")
+    if not isinstance(index, int) or isinstance(index, bool) or index < 0:
+        raise ValueError("an event's place in its record is a whole number")
+    return str(uuid.uuid5(_HISTORY, json.dumps([key, record, index])))
 
 
 def _artifact(coordinate: str) -> tuple[str, str, str | None] | None:

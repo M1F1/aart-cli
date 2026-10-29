@@ -57,7 +57,7 @@ from aart_cli.domain.serialization import CanonicalValue, canonical_json_bytes
 
 from .activity_store import ActivityDatabase
 from .telemetry_store import TelemetryOutbox
-from .telemetry_sync import maybe_sync, new_event_id
+from .telemetry_sync import maybe_sync
 
 __all__ = [
     "RECEIPT_ABSENT",
@@ -368,10 +368,10 @@ class LocalReceiptStore:
         moment = receipt.moment.astimezone(timezone.utc).isoformat()
         recorded = ActivityDatabase(self.state_root).record_action(moment, content)
         if isinstance(recorded, Ok):
-            self._telemetry(receipt)
+            self._telemetry(receipt, recorded.value.rpartition("#")[2])
         return recorded
 
-    def _telemetry(self, receipt: ReceiptDetailView) -> None:
+    def _telemetry(self, receipt: ReceiptDetailView, record: str) -> None:
         """Keep what the action changed for the telemetry server when telemetry is on (§213).
 
         Where telemetry was never turned on this is one `stat`; nothing here fails the action.
@@ -381,7 +381,7 @@ class LocalReceiptStore:
         if not outbox.exists():
             return
         try:
-            kept = outbox.record_events(lifecycle_events(receipt, new_event_id))
+            kept = outbox.record_action(record, lambda ids: lifecycle_events(receipt, ids))
             if isinstance(kept, Ok) and kept.value:
                 maybe_sync(str(Path(self.state_root).parent))
         except Exception:  # noqa: BLE001 -- telemetry never fails what triggered it

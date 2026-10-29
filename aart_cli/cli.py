@@ -316,6 +316,16 @@ def _seed_first_run(request: Request) -> None:
     announce_first_run_seed(report, lambda line: print(line, file=sys.stderr))
 
 
+def _turns_telemetry_on(args: argparse.Namespace, request: Request) -> bool:
+    """Whether this command may turn on the telemetry the build names (§213, D-505).
+
+    `consume telemetry` is the person deciding, which the build must not pre-empt, and `--offline`
+    forbids the sending turning it on starts.
+    """
+
+    return args.command == "consume" and not request.offline and request.command != "telemetry"
+
+
 def _run_bare(parser: argparse.ArgumentParser, args: Optional[argparse.Namespace] = None) -> int:
     """Bare invocation: launch the TUI on a TTY, else print help."""
     if sys.stdin.isatty() and sys.stdout.isatty():
@@ -343,6 +353,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     request = _to_request(args)
     if _seeds_first_run(args, request):
         _seed_first_run(request)
+    if _turns_telemetry_on(args, request):
+        from .commands.telemetry import turn_on_for_this_build
+
+        turn_on_for_this_build(request)
     code = (
         _run_inputs(request) if request.command == "inputs" else DISPATCH[request.command](request)
     )

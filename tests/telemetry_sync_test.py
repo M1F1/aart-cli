@@ -34,8 +34,8 @@ from aart_cli.domain.result import Ok
 from aart_cli.domain.telemetry import BATCH_PATH, BATCH_SIZE, SyncState
 from aart_cli.io import telemetry_sync
 from aart_cli.io.receipt_store import LocalReceiptStore
-from aart_cli.io.telemetry_store import TelemetryOutbox
-from aart_cli.io.telemetry_sync import http_post, maybe_sync, new_event_id, synchronise
+from aart_cli.io.telemetry_store import OutboxCounts, TelemetryOutbox
+from aart_cli.io.telemetry_sync import http_post, maybe_sync, synchronise
 from aart_cli.io.usage_hook import record
 from tests.consumer_activity_test import lifecycle_outcome
 from tests.receipt_store_test import COORDINATE, receipt
@@ -95,6 +95,7 @@ class Home:
         self.path = temporary.name
         self.state = str(Path(self.path) / "state")
         self.outbox = TelemetryOutbox(self.state)
+        self.records = 0
         installed = receipt(
             registrations=(
                 McpRegistration(mcp_target("claude", Scope.USER), "github", "/opt/github/launch"),
@@ -108,8 +109,9 @@ class Home:
 
     def use(self, count: int = 1, name: str = "github", moment: datetime = START) -> None:
         for _ in range(count):
+            self.records += 1
             stamp = moment.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            self.outbox.record_use(_use(name), stamp, new_event_id())
+            self.outbox.record_use(_use(name), stamp, f"use-{self.records}")
 
     def counts(self):
         counts = self.outbox.counts()
@@ -173,8 +175,14 @@ class TheOutboxTest(unittest.TestCase):
         self.assertEqual(home.outbox.setting().value.client_id, first)
         home.use()
         home.outbox.disable(forget=True)
-        self.assertFalse(home.outbox.exists())
-        self.assertIsNone(home.outbox.setting().value)
+        # Forgotten, the decision stays: off, with nothing kept and no installation id.
+        forgotten = home.outbox.setting().value
+        self.assertEqual((forgotten.enabled, forgotten.client_id), (False, ""))
+        self.assertEqual(home.counts(), OutboxCounts())
+        self.assertEqual(home.state_of(), SyncState())
+        again = "22222222-2222-4222-8222-222222222222"
+        home.outbox.enable("https://telemetry.example.com", again)
+        self.assertEqual(home.outbox.setting().value.client_id, again)
 
     def test_another_schema_version_is_reported_and_left(self) -> None:
         home = Home(self)
@@ -183,7 +191,7 @@ class TheOutboxTest(unittest.TestCase):
             connection.execute("PRAGMA user_version = 9")
         before = Path(home.outbox.path).read_bytes()
         self.assertNotIsInstance(home.outbox.setting(), Ok)
-        self.assertNotIsInstance(home.outbox.record_use(_use(), "x", new_event_id()), Ok)
+        self.assertNotIsInstance(home.outbox.record_use(_use(), "x", "use-1"), Ok)
         self.assertEqual(Path(home.outbox.path).read_bytes(), before)
 
 

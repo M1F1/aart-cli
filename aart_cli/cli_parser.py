@@ -716,7 +716,9 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=_HELP_FORMATTER,
         help="send installs, updates, removals and artifact uses to a telemetry server",
         description=(
-            "Off until turned on. While on, each install, update and removal aart-cli completes, "
+            "On from the first start where this aart-cli was built with a server and nobody "
+            "decided, else off until turned on; turning it on also sends what Activity already "
+            "holds. While on, each install, update and removal aart-cli completes, "
             "and each recorded use of an artifact aart-cli installed, is kept in "
             "state/telemetry.sqlite3 and sent to the telemetry server at most every ten minutes, "
             "when something new is recorded. Sent: the event, the artifact's kind, name and "
@@ -740,7 +742,8 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=_HELP_FORMATTER,
         help="turn telemetry on",
         description=(
-            "Turn telemetry on for this application home. Only what happens from now on is sent. "
+            "Turn telemetry on for this application home. What Activity already holds is sent too, "
+            "each record once. "
             "The server is --endpoint, else the one this aart-cli was built with."
         ),
     )
@@ -763,7 +766,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--forget",
         dest="telemetry_forget",
         action="store_true",
-        help="also delete what waits and the installation id",
+        help="also delete what waits, what was sent and the installation id; it stays off",
     )
     _add_json(p_telemetry)
     p_telemetry = telemetry_sub.add_parser(

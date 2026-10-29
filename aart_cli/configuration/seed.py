@@ -77,11 +77,11 @@ def baked_usage_harnesses(raw: str | None = None) -> tuple[str, ...]:
 
 
 def baked_telemetry_endpoint(raw: str | None = None) -> str | None:
-    """The telemetry server this build offers, or `None` (§213, D-503).
+    """The telemetry server this build names, or `None` (§213, D-503, D-505).
 
     Read when asked rather than when imported, so the stamped module is what counts. A value the
-    release would have refused offers nothing. Offering is all it does: telemetry stays off until
-    a person turns it on.
+    release would have refused names nothing: sending without a valid address is never the
+    fallback. A named server is where telemetry goes from the first start where nobody decided.
     """
 
     value = (_default_telemetry.ENDPOINT if raw is None else raw).strip()

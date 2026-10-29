@@ -81,8 +81,8 @@ jobs:
       # Harness names separated by commas, such as `opencode`, that record which skills and MCPs
       # are used without asking (§212, D-502).  Unset or `none` records nowhere until turned on.
       AART_CLI_DEFAULT_USAGE_HARNESSES: ${{ vars.AART_CLI_DEFAULT_USAGE_HARNESSES }}
-      # The telemetry server this fork's wheel offers when a person turns telemetry on (§213,
-      # D-503).  Unset offers none; a baked address alone sends nothing.
+      # The telemetry server this fork's wheel sends to, on from each home's first start where
+      # nobody decided (§213, D-503, D-505).  Unset names none and sends nothing.
       AART_CLI_TELEMETRY_ENDPOINT: ${{ vars.AART_CLI_TELEMETRY_ENDPOINT }}
       # A PEP 440 local label, such as `corp`, for this fork's wheel version (D-476).  Unset labels
       # nothing.  Read by the build and by the check of the built wheel.
@@ -125,8 +125,8 @@ jobs:
       # Harness names separated by commas, such as `opencode`, that record which skills and MCPs
       # are used without asking (§212, D-502).  Unset or `none` records nowhere until turned on.
       AART_CLI_DEFAULT_USAGE_HARNESSES: ${{ vars.AART_CLI_DEFAULT_USAGE_HARNESSES }}
-      # The telemetry server this fork's wheel offers when a person turns telemetry on (§213,
-      # D-503).  Unset offers none; a baked address alone sends nothing.
+      # The telemetry server this fork's wheel sends to, on from each home's first start where
+      # nobody decided (§213, D-503, D-505).  Unset names none and sends nothing.
       AART_CLI_TELEMETRY_ENDPOINT: ${{ vars.AART_CLI_TELEMETRY_ENDPOINT }}
       # A PEP 440 local label, such as `corp`, for this fork's wheel version (D-476).  Unset labels
       # nothing.  Read by the build and by the check of the built wheel.

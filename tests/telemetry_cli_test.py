@@ -10,7 +10,6 @@ import tempfile
 import threading
 import unittest
 from http.server import ThreadingHTTPServer
-from pathlib import Path
 from unittest import mock
 
 from aart_cli import _default_telemetry, cli
@@ -117,8 +116,11 @@ class TelemetryCommandTest(unittest.TestCase):
         self.assertEqual(self._json("sync")[1]["sent"], 0)
         code, _ = self._run("disable", "--forget")
         self.assertEqual(code, 0)
-        self.assertFalse(self.home.outbox.exists())
-        self.assertFalse(Path(self.home.outbox.lock_path).exists())
+        _, status = self._json("status")
+        self.assertEqual(
+            (status["enabled"], status["client_id"], status["events"]),
+            (False, None, {"waiting": 0, "sent": 0, "rejected": 0, "skipped": 0}),
+        )
 
 
 if __name__ == "__main__":

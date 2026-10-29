@@ -46,11 +46,11 @@ def record(harness: str, home: str, payload: bytes, *, now: datetime | None = No
     instant = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     written = ActivityDatabase(str(Path(home) / "state")).record_use(use, instant.isoformat())
     if isinstance(written, Ok):
-        _telemetry(home, use, instant)
+        _telemetry(home, use, instant, written.value.rpartition("#")[2])
     return isinstance(written, Ok)
 
 
-def _telemetry(home: str, use: ArtifactUse, instant: datetime) -> None:
+def _telemetry(home: str, use: ArtifactUse, instant: datetime, record: str) -> None:
     """Keep the use for the telemetry server when telemetry is on, and start a due sync (§213).
 
     Where telemetry was never turned on this is one `stat`. Nothing here can fail the hook.
@@ -64,9 +64,9 @@ def _telemetry(home: str, use: ArtifactUse, instant: datetime) -> None:
             return
         from aart_cli.domain.result import Ok
         from aart_cli.domain.telemetry import contract_moment
-        from aart_cli.io.telemetry_sync import maybe_sync, new_event_id
+        from aart_cli.io.telemetry_sync import maybe_sync
 
-        kept = outbox.record_use(use, contract_moment(instant), new_event_id())
+        kept = outbox.record_use(use, contract_moment(instant), record)
         if isinstance(kept, Ok) and kept.value:
             maybe_sync(home)
     except Exception:  # noqa: BLE001 -- telemetry never fails what triggered it

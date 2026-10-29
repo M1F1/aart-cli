@@ -1,12 +1,18 @@
 """The telemetry outbox: `state/telemetry.sqlite3` (§213).
 
-It holds whether telemetry is on, the server's address and the installation id; every event
-recorded while it is on, waiting until a server acknowledges it; and when the last
+It holds whether telemetry is on, the server's address, the installation id and the history key;
+every event recorded while it is on, waiting until a server acknowledges it; and when the last
 synchronisation succeeded, was attempted, and may next start.
 
-It exists only once a person turned telemetry on, so a harness hook on a machine where it never
-was costs one `stat`. An event is recorded by one statement that also checks telemetry is on, so
-an event recorded while it is being turned off is either before or after, never half of each.
+It exists once telemetry was turned on or off -- by a person, or on by a build that names a server
+(D-505) -- so a harness hook on a machine where nobody decided costs one `stat`, and a decision,
+once made, is never made again for the person. An event is recorded in one transaction that also
+reads whether telemetry is on, so an event recorded while it is being turned off is either before
+or after, never half of each.
+
+Each event's id is drawn from the Activity record it comes from and the history key, so a record
+queued as it happened and again from the history is kept once, and sent again after a forget it is
+stored once by a server that already had it.
 
 Like the Activity database this imports only the domain: a hook runs it for every recorded use.
 """
@@ -15,6 +21,8 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import uuid
+from collections.abc import Callable, Iterable
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
@@ -23,13 +31,14 @@ from pathlib import Path
 from aart_cli.domain.artifact_usage import ArtifactUse, UsageKind
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.domain.telemetry import SyncState, TelemetryEvent
+from aart_cli.domain.telemetry import SyncState, TelemetryEvent, history_event_id
 
 __all__ = [
     "TELEMETRY_DATABASE",
     "TELEMETRY_LOCK",
     "TELEMETRY_UNREADABLE",
     "TELEMETRY_UNWRITABLE",
+    "EventsOf",
     "OutboxCounts",
     "TelemetryOutbox",
     "TelemetrySetting",
@@ -48,7 +57,8 @@ _SCHEMA = (
     " id INTEGER PRIMARY KEY CHECK (id = 1),"
     " enabled INTEGER NOT NULL,"
     " endpoint TEXT NOT NULL,"
-    " client_id TEXT NOT NULL)",
+    " client_id TEXT NOT NULL,"
+    " history_key TEXT NOT NULL)",
     "CREATE TABLE event ("
     " id INTEGER PRIMARY KEY AUTOINCREMENT,"
     " event_id TEXT NOT NULL UNIQUE,"
@@ -77,7 +87,9 @@ _SCHEMA = (
 
 _SETTLED = ("sent", "rejected", "skipped")
 _BUSY_SECONDS = 5.0
-_ON = "(SELECT enabled FROM setting WHERE id = 1) = 1"
+
+#: An action's events, built with the id factory the outbox hands it.
+EventsOf = Callable[[Callable[[], str]], tuple[TelemetryEvent, ...]]
 
 
 def _error(code: DiagnosticCode, message: str) -> Err:
@@ -92,11 +104,32 @@ def _text(value: datetime | None) -> str | None:
     return None if value is None else value.isoformat()
 
 
+def _ids(key: str, record: str) -> Callable[[], str]:
+    """The ids of one record's events, in the order its events are built."""
+
+    drawn = 0
+
+    def next_id() -> str:
+        nonlocal drawn
+        drawn += 1
+        return history_event_id(key, record, drawn - 1)
+
+    return next_id
+
+
+def _new_key() -> str:
+    return uuid.uuid4().hex
+
+
 @dataclass(frozen=True, slots=True)
 class TelemetrySetting:
+    """The decision. Turned off without ever being on, or forgotten, the endpoint or the
+    installation id is empty."""
+
     enabled: bool
     endpoint: str
     client_id: str
+    history_key: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,51 +216,72 @@ class TelemetryOutbox:
                 return Ok(None)
             with closing(connection):
                 row = connection.execute(
-                    "SELECT enabled, endpoint, client_id FROM setting WHERE id = 1"
+                    "SELECT enabled, endpoint, client_id, history_key FROM setting WHERE id = 1"
                 ).fetchone()
         except (OSError, sqlite3.Error) as error:
             return _error(TELEMETRY_UNREADABLE, f"cannot read telemetry from {self.path}: {error}")
-        return Ok(None if row is None else TelemetrySetting(bool(row[0]), row[1], row[2]))
+        return Ok(None if row is None else TelemetrySetting(bool(row[0]), row[1], row[2], row[3]))
 
-    def enable(self, endpoint: str, new_client_id: str) -> Result[TelemetrySetting]:
-        """Turn telemetry on for `endpoint`, keeping the installation id when there is one."""
+    def enable(
+        self, endpoint: str, new_client_id: str, *, only_if_undecided: bool = False
+    ) -> Result[TelemetrySetting | None]:
+        """Turn telemetry on for `endpoint`, keeping the installation id when there is one.
+
+        `only_if_undecided` turns it on only where nobody turned it on or off before, and answers
+        `None` otherwise: of many first starts at once, one turns it on.
+        """
 
         try:
             connection = self._open(create=True)
             assert connection is not None
             with closing(connection):
                 connection.execute("BEGIN IMMEDIATE")
-                row = connection.execute("SELECT client_id FROM setting WHERE id = 1").fetchone()
-                client_id = new_client_id if row is None else row[0]
+                row = connection.execute(
+                    "SELECT client_id, history_key FROM setting WHERE id = 1"
+                ).fetchone()
+                if row is not None and only_if_undecided:
+                    connection.execute("COMMIT")
+                    return Ok(None)
+                client_id = new_client_id if row is None or not row[0] else row[0]
+                key = _new_key() if row is None else row[1]
                 connection.execute(
-                    "INSERT OR REPLACE INTO setting (id, enabled, endpoint, client_id)"
-                    " VALUES (1, 1, ?, ?)",
-                    (endpoint, client_id),
+                    "INSERT OR REPLACE INTO setting (id, enabled, endpoint, client_id, history_key)"
+                    " VALUES (1, 1, ?, ?, ?)",
+                    (endpoint, client_id, key),
                 )
                 # Turning it on again ends a pause: the person has just said where to send.
                 connection.execute("UPDATE sync SET next_retry_at = NULL, paused = NULL")
                 connection.execute("COMMIT")
         except (OSError, sqlite3.Error) as error:
             return _error(TELEMETRY_UNWRITABLE, f"cannot turn telemetry on in {self.path}: {error}")
-        return Ok(TelemetrySetting(True, endpoint, client_id))
+        return Ok(TelemetrySetting(True, endpoint, client_id, key))
 
     def disable(self, *, forget: bool) -> Result[str]:
-        """Stop recording and sending; `forget` also deletes the outbox and the installation id."""
+        """Stop recording and sending, remembered even where it was never on; `forget` also
+        deletes what waits, what was sent and the installation id."""
 
-        if forget:
-            try:
-                for suffix in ("", "-wal", "-shm", "-journal"):
-                    Path(self.path + suffix).unlink(missing_ok=True)
-                Path(self.lock_path).unlink(missing_ok=True)
-            except OSError as error:
-                return _error(TELEMETRY_UNWRITABLE, f"cannot delete {self.path}: {error}")
-            return Ok(self.path)
         try:
-            connection = self._open(create=False)
-            if connection is None:
-                return Ok(self.path)
+            connection = self._open(create=True)
+            assert connection is not None
             with closing(connection):
+                connection.execute("PRAGMA secure_delete = ON")
+                connection.execute("BEGIN IMMEDIATE")
+                connection.execute(
+                    "INSERT OR IGNORE INTO setting (id, enabled, endpoint, client_id, history_key)"
+                    " VALUES (1, 0, '', '', ?)",
+                    (_new_key(),),
+                )
                 connection.execute("UPDATE setting SET enabled = 0")
+                if forget:
+                    connection.execute("UPDATE setting SET client_id = ''")
+                    connection.execute("DELETE FROM event")
+                    connection.execute(
+                        "UPDATE sync SET last_success_at = NULL, last_attempt_at = NULL,"
+                        " next_retry_at = NULL, failures = 0, paused = NULL"
+                    )
+                connection.execute("COMMIT")
+                if forget:
+                    connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         except (OSError, sqlite3.Error) as error:
             return _error(
                 TELEMETRY_UNWRITABLE, f"cannot turn telemetry off in {self.path}: {error}"
@@ -236,52 +290,76 @@ class TelemetryOutbox:
 
     # -- recording -------------------------------------------------------------------------------
 
-    def record_use(self, use: ArtifactUse, moment: str, event_id: str) -> Result[bool]:
-        """Keep one use for sending, when telemetry is on; whether it was kept."""
+    def record_use(self, use: ArtifactUse, moment: str, record: str) -> Result[bool]:
+        """Keep Activity's use `record` for sending, when telemetry is on; whether it was kept."""
 
         if not self.exists():
             return Ok(False)
-        return self._insert(
-            "INSERT INTO event (event_id, occurred_at, harness, kind, name)"
-            f" SELECT ?, ?, ?, ?, ? WHERE {_ON}",
-            (event_id, moment, use.harness, use.kind.value, use.name),
-        )
+        kept = self.record(uses=((record, moment, use),))
+        return kept if isinstance(kept, Err) else Ok(kept.value > 0)
 
-    def record_events(self, events: tuple[TelemetryEvent, ...]) -> Result[bool]:
-        """Keep an action's events for sending, when telemetry is on; whether they were kept."""
+    def record_action(self, record: str, events: EventsOf) -> Result[bool]:
+        """Keep the events Activity's action `record` amounts to, when telemetry is on."""
 
-        if not events or not self.exists():
+        if not self.exists():
             return Ok(False)
-        return self._insert(
-            "INSERT INTO event (event_id, occurred_at, event_type, artifact_id, artifact_type,"
-            f" artifact_version) SELECT ?, ?, ?, ?, ?, ? WHERE {_ON}",
-            *(
-                (
-                    event.event_id,
-                    event.occurred_at,
-                    event.event_type,
-                    event.artifact_id,
-                    event.artifact_type,
-                    event.artifact_version,
-                )
-                for event in events
-            ),
-        )
+        kept = self.record(actions=((record, events),))
+        return kept if isinstance(kept, Err) else Ok(kept.value > 0)
 
-    def _insert(self, statement: str, *rows: tuple[object, ...]) -> Result[bool]:
+    def record(
+        self,
+        *,
+        uses: Iterable[tuple[str, str, ArtifactUse]] = (),
+        actions: Iterable[tuple[str, EventsOf]] = (),
+    ) -> Result[int]:
+        """Keep uses and actions, each `(record, ...)`, when telemetry is on; how many events were
+        new. A record kept before is kept once."""
+
         try:
             connection = self._open(create=False)
             if connection is None:
-                return Ok(False)
+                return Ok(0)
             with closing(connection):
                 connection.execute("BEGIN IMMEDIATE")
+                row = connection.execute(
+                    "SELECT enabled, history_key FROM setting WHERE id = 1"
+                ).fetchone()
+                if row is None or not row[0]:
+                    connection.execute("COMMIT")
+                    return Ok(0)
+                key = row[1]
                 kept = 0
-                for row in rows:
-                    kept += connection.execute(statement, row).rowcount
+                for record, moment, use in uses:
+                    kept += connection.execute(
+                        "INSERT OR IGNORE INTO event (event_id, occurred_at, harness, kind, name)"
+                        " VALUES (?, ?, ?, ?, ?)",
+                        (
+                            history_event_id(key, record),
+                            moment,
+                            use.harness,
+                            use.kind.value,
+                            use.name,
+                        ),
+                    ).rowcount
+                for record, events_of in actions:
+                    for event in events_of(_ids(key, record)):
+                        kept += connection.execute(
+                            "INSERT OR IGNORE INTO event (event_id, occurred_at, event_type,"
+                            " artifact_id, artifact_type, artifact_version)"
+                            " VALUES (?, ?, ?, ?, ?, ?)",
+                            (
+                                event.event_id,
+                                event.occurred_at,
+                                event.event_type,
+                                event.artifact_id,
+                                event.artifact_type,
+                                event.artifact_version,
+                            ),
+                        ).rowcount
                 connection.execute("COMMIT")
         except (OSError, sqlite3.Error) as error:
             return _error(TELEMETRY_UNWRITABLE, f"cannot record telemetry in {self.path}: {error}")
-        return Ok(kept > 0)
+        return Ok(kept)
 
     # -- sending ---------------------------------------------------------------------------------
 

@@ -102,10 +102,10 @@ runs:
       shell: bash
       run: ${{ inputs.python }} scripts/inject_default_usage.py
 
-    # Unset means this fork's wheel offers no telemetry server, which is the public build's state.
+    # Unset means this fork's wheel names no telemetry server, which is the public build's state.
     # Set, it is the server's base address, `https://` or loopback `http://`, and an address aart-cli
-    # would refuse fails here.  Offering is all it does: telemetry stays off until a person turns it
-    # on.  See D-503.
+    # would refuse fails here.  Set, telemetry is on from each home's first start where nobody
+    # turned it on or off, and sends Activity's history too.  See D-503, D-505.
     - name: Inject default telemetry server
       shell: bash
       run: ${{ inputs.python }} scripts/inject_default_telemetry.py

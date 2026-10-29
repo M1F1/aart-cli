@@ -66,6 +66,7 @@ from .io.consumer_settings import read_consumer_settings
 from .io.credential_entry import default_entry_fallbacks
 from .io.credentials import MacOsKeychainProvider
 from .io.maintainer_views import read_maintainer_views
+from .io.telemetry_consent import announce_turned_on
 from .io.terminal_briefing import BriefingHandover
 from .model import (
     Request,
@@ -1496,6 +1497,10 @@ def run(
         print(
             f"Recording which skills and MCPs {harness} uses; Settings > Artifact usage turns it off."
         )
+    # §213: a build that names a telemetry server turns it on where nobody decided (D-505).
+    turned_on = composed.value.turn_telemetry_on_by_default()
+    if turned_on is not None:
+        announce_turned_on(turned_on, print)
     if canonical_terminal:
         # Past this point a defect is the running application's, not the composition's, and the
         # record has to say so -- including which terminal was hosting it, because the two answer

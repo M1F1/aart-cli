@@ -2,8 +2,8 @@
 
 The value comes from the repository variable `AART_CLI_TELEMETRY_ENDPOINT`: a server's base
 address. Where an organisation's server is, is that deployment's, the way its Registry is (D-309),
-so the source tree carries none. Offering is all a baked address does: telemetry stays off until
-a person turns it on.
+so the source tree carries none. A baked address turns telemetry on where nobody decided (D-505);
+that is held in `telemetry_history_test.py`.
 
 As with the default Registry, unset must produce the committed file byte for byte, and an address
 aart-cli would refuse must fail the build rather than be ignored on somebody's machine.

@@ -12581,3 +12581,32 @@ Product Specification §213.
 - **Evidence.** The server repository's `make quality` (ruff, mypy strict with the pydantic and
   returns plugins, tach, tests under 95% branch coverage) and `tests/test_e2e_aart_cli.py`, run here
   against this branch's aart-cli.
+
+## D-505 — A build that names a telemetry server starts with it on, and turning it on sends Activity's history (CP-50)
+
+Product Specification §213, INV-322. Supersedes D-503's "off until a person turns it on" for a build
+that bakes `AART_CLI_TELEMETRY_ENDPOINT`.
+
+- **What was asked.** Reviewing CP-50 the owner said the address is a repository variable so that an
+  enterprise fork chooses its server, unset sends nothing, and setting it at a release sends what has
+  accumulated locally. Asked, they chose: a build with an address starts with telemetry on (as
+  `AART_CLI_DEFAULT_USAGE_HARNESSES` records without asking, D-502), and turning it on sends the whole
+  Activity history.
+- **When the build turns it on.** At the first `aart-cli` terminal session or `consume` command of a
+  home where nobody decided yet -- the outbox does not exist. Not for `consume telemetry …`, so a
+  person whose first command is `disable` is never sent anything, and not under `--offline`. The
+  outbox is created inside one `BEGIN IMMEDIATE` that also checks nobody decided, so two first
+  commands at once turn it on once. It is said once, on stderr or before the TUI's screen.
+- **The decision is kept.** `disable` on a home where nobody decided creates the outbox turned off,
+  and `--forget` deletes the events, the sync state and the installation id but keeps the row that
+  says off. Deleting the file, as D-503 did, would let the next start turn telemetry on again.
+- **One event id per Activity record.** `uuid5` of a random history key (kept in the outbox, never
+  sent, kept by `--forget`) and the record's row (`action-12` with the artifact's index, `use-7`).
+  The live path and the history compute the same id, the outbox inserts `OR IGNORE`, and the server
+  keeps the first copy of an id, so nothing is counted twice however often the history is queued.
+  The project is not part of the id: a hash of a path is a path to anyone who can guess it.
+- **History is read from Activity, not kept twice.** Turning on reads every action and use row and
+  queues them in one transaction. An action Activity cannot decode is skipped rather than failing
+  the command that turned telemetry on: telemetry never fails what triggered it.
+- **Backfill drains at the ordinary pace.** 2000 events a run, a run when due; a large history takes
+  several runs. Not raised for history: the limits protect the server, and a backlog is not urgent.

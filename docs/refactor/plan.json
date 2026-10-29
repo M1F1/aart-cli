@@ -1831,7 +1831,7 @@
     },
     {
       "id": "CP-50",
-      "title": "Telemetry: installs, updates, removals and uses sent to a telemetry server (§213, D-503, D-504)",
+      "title": "Telemetry: installs, updates, removals and uses sent to a telemetry server (§213, D-503, D-504, D-505)",
       "status": "in_progress",
       "steps": [
         {
@@ -1861,6 +1861,11 @@
         },
         {
           "id": "6",
+          "title": "D-505: a build that names a server starts with telemetry on, and turning it on sends Activity's history, each record once",
+          "status": "done"
+        },
+        {
+          "id": "7",
           "title": "The PR",
           "status": "in_progress"
         }

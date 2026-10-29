@@ -53,7 +53,7 @@ __all__ = [
     "SyncReport",
     "http_post",
     "maybe_sync",
-    "new_event_id",
+    "new_installation_id",
     "spawn_sync",
     "synchronise",
 ]
@@ -71,7 +71,7 @@ _BOOTSTRAP = (
 )
 
 
-def new_event_id() -> str:
+def new_installation_id() -> str:
     return str(uuid.uuid4())
 
 
@@ -288,9 +288,12 @@ def maybe_sync(
     home: str,
     *,
     now: Callable[[], datetime] = _now,
-    spawn: Callable[[str], bool] = spawn_sync,
+    spawn: Callable[[str], bool] | None = None,
 ) -> bool:
-    """Start a synchronisation when one is due, without waiting for it; whether one started."""
+    """Start a synchronisation when one is due, without waiting for it; whether one started.
+
+    `spawn` defaults to `spawn_sync` as it is when called, so replacing it replaces it here too.
+    """
 
     try:
         outbox = TelemetryOutbox(str(Path(home) / "state"))
@@ -305,7 +308,7 @@ def maybe_sync(
             return False
         if not sync_due(state.value, now(), pending=counts.value.waiting):
             return False
-        return spawn(home)
+        return (spawn or spawn_sync)(home)
     except Exception:  # noqa: BLE001 -- telemetry never fails what triggered it
         return False
 

@@ -12655,10 +12655,11 @@ unchanged.
 
 # 213. Telemetry: installs, updates, removals and uses sent to a telemetry server
 
-Status: **ACCEPTED 2026-10-29 (D-503, D-504)**, on the owner's request after 0.21.0, from their
-telemetry implementation brief: the organisation sees which artifacts are used, how often, by how
-many installations, and how that changes, on a dashboard. Supersedes §212's "Local only" for an
-installation where telemetry is turned on.
+Status: **ACCEPTED 2026-10-29 (D-503, D-504, D-505)**, on the owner's request after 0.21.0, from
+their telemetry implementation brief: the organisation sees which artifacts are used, how often, by
+how many installations, and how that changes, on a dashboard. Supersedes §212's "Local only" for an
+installation where telemetry is on. D-505 (the owner, the same day): a build that names a server
+starts with telemetry on, and turning it on sends Activity's history too.
 
 - **Two repositories, one contract.** The server is a separate repository,
   `aart-cli-telemetry-server` (a functional core behind FastAPI; SQLite in WAL by default and
@@ -12667,12 +12668,22 @@ installation where telemetry is turned on.
   identical in both and read by each one's contract tests. aart-cli imports nothing of the server
   and gains no runtime dependency: the client is `sqlite3`, `json`, `urllib.request`, `fcntl`,
   `subprocess` and `uuid`.
-- **Off until a person turns it on.** `consume telemetry enable [--endpoint URL]` turns it on for
-  this application home; `--endpoint` defaults to the address baked from the release variable
-  `AART_CLI_TELEMETRY_ENDPOINT` (unset: none, and `enable` then needs `--endpoint`). A baked
-  address alone sends nothing. `consume telemetry disable` stops sending and recording events for
-  it; `--forget` also deletes what is waiting and the installation id. Only what happens while it
-  is on is ever sent: nothing recorded before is sent afterwards.
+- **On from the start where the build names a server; otherwise off until a person turns it
+  on.** A build whose release variable `AART_CLI_TELEMETRY_ENDPOINT` names a server turns telemetry
+  on for an application home that has never had it on or off, at its first `aart-cli` terminal
+  session or `consume` command (not `consume telemetry …`, not `--offline`), and says so once: on
+  stderr for a command, before the terminal takes the screen for the TUI. A build that names none,
+  as the public one does, sends nothing until `consume telemetry enable --endpoint URL`.
+  `consume telemetry enable` without `--endpoint` uses the baked address. `consume telemetry
+  disable` stops recording and sending, and that choice is kept: no later start turns it on again.
+  `--forget` also deletes what is waiting and the installation id, and keeps the choice.
+- **Turning it on sends Activity's history too.** Each time telemetry is turned on, by the build or
+  by a person, every install, update and removal and every recorded use Activity holds is queued
+  with its own moment, beside what happens from then on. Each Activity record has one event id,
+  drawn from a random key kept in the outbox and the record's row, so a record queued twice -- as it
+  happens and again from the history, or on turning telemetry on again -- is kept once in the
+  outbox and counted once by the server. While it is off nothing new is queued; the history queued
+  when it is next turned on includes what happened meanwhile.
 - **The address.** `https://` for any host, `http://` only for `127.0.0.1`, `::1` or `localhost`;
   never with a user, password, query or fragment. aart-cli appends `/api/v1/events/batch`.
   Version 1 sends no credential; a server reachable beyond loopback sits behind the organisation's
@@ -12681,12 +12692,13 @@ installation where telemetry is turned on.
   `artifact.removed` for each artifact an action changed and completed, from `aart_cli`; and
   `artifact.used` from `claude_hook` or `opencode_plugin` for a use §212 recorded, only when it is
   an artifact aart-cli installed: named by its installation (kind, name, version), never by the
-  tool the harness called. A use no installed artifact answers to is never sent. Each event has a
-  random `event_id` and its UTC moment; the request has a random installation id, drawn when
+  tool the harness called. A use no installed artifact answers to is never sent. Each event has
+  its Activity record's `event_id` (above) and its UTC moment; the request has a random installation id, drawn when
   telemetry is turned on, and aart-cli's version. Never a project, path, argument, prompt,
   Registry address, user or host name, or credential.
-- **The outbox.** `state/telemetry.sqlite3` in the application home, created 0600, holds the
-  address, the installation id, every event with whether it is waiting, sent, rejected or skipped,
+- **The outbox.** `state/telemetry.sqlite3` in the application home, created 0600, holds whether
+  telemetry is on or off once that was decided, the address, the installation id, the history key,
+  every event with whether it is waiting, sent, rejected or skipped,
   and the synchronisation state: last success, last attempt, the next moment an attempt may start,
   failures in a row, and a pause after a refused authorisation. A database with another schema
   version is reported and never rewritten.
@@ -12714,9 +12726,12 @@ installation where telemetry is turned on.
   the next attempt may start. **`consume telemetry sync [--force]`** sends now: it does not wait
   for the ten minutes, keeps the lock, and honours the backoff and pause unless `--force`.
 
-**INV-322 — Nothing is sent unless telemetry is on, and only what was recorded while it was.** For
-any sequence of actions, uses and turning telemetry on and off, the events in the outbox are
-exactly those recorded while it was on.
+**INV-322 — Nothing is sent unless telemetry is on, and what is sent is Activity's, each record
+once.** For any sequence of actions, uses and turning telemetry on and off, the outbox holds exactly
+one event per Activity record (one per artifact an action changed) that was recorded while
+telemetry was on or existed when it was turned on, and nothing else. A build that names no server
+holds none until a person turns telemetry on; one that does turns it on only for a home where
+nobody decided yet.
 
 **INV-323 — An event carries the contract's fields only, and a use only as an installed
 artifact.** Every event sent satisfies `docs/telemetry-api-v1.md`; a use that no installed
