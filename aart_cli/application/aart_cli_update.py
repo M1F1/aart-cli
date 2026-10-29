@@ -14,7 +14,6 @@ import shlex
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
-from urllib.parse import urlsplit
 
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.result import Err, Ok, Result
@@ -56,6 +55,8 @@ _NAME = re.compile(r"[A-Z][A-Z0-9_]*")
 # requirement such as `aart-cli @ https://...`.
 _USERINFO = re.compile(r"([A-Za-z][A-Za-z0-9+.-]*)://([^/\s?#]*)@")
 _SCP = re.compile(r"(?P<user>[^@/\s:]+)@(?P<host>[^/\s:]+):(?P<path>.+)")
+#: A Registry origin as a URL: its scheme and the authority the repository is placed beside.
+_ORIGIN = re.compile(r"(?P<scheme>https?|ssh)://(?P<netloc>[^/?#\s]+)(?:[/?#]\S*)?", re.IGNORECASE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,10 +220,14 @@ def _repository_url(origin: str, repository: str) -> str | None:
     scp = _SCP.fullmatch(origin)
     if scp is not None and "://" not in origin:
         return f"{scp['user']}@{scp['host']}:{repository}.git"
-    parts = urlsplit(origin)
-    if parts.scheme in {"http", "https", "ssh"} and parts.hostname:
-        return f"{parts.scheme}://{parts.netloc}/{repository}.git"
-    return None
+    found = _ORIGIN.fullmatch(origin)
+    if found is None:
+        return None
+    netloc = found["netloc"]
+    host = netloc.rpartition("@")[2].split(":", 1)[0]
+    if not host:
+        return None
+    return f"{found['scheme'].lower()}://{netloc}/{repository}.git"
 
 
 def _install(running: RunningAartCli, *words: str) -> str:

@@ -13,7 +13,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import PurePosixPath
 
 from .diagnostics import Diagnostic, DiagnosticCode, Severity
 from .receipts import InstallationReceipt, InstalledRecord
@@ -211,7 +210,7 @@ def installed_names(records: tuple[InstalledRecord, ...]) -> tuple[InstalledName
                     InstalledName(
                         delivery.harness,
                         UsageKind.SKILL,
-                        PurePosixPath(delivery.destination.rstrip("/")).name,
+                        delivery.destination.rstrip("/").rpartition("/")[2],
                         artifact,
                     )
                 )
