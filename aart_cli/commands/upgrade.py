@@ -186,11 +186,13 @@ def announce_newer_aart_cli(write: Callable[[str], None], *, user_home: str | No
 
 def _how(user_home: str | None) -> int:
     from aart_cli.application.aart_cli_update import upgrade_guidance
-    from aart_cli.runtime_contract import EXECUTABLE_VERSION
+    from aart_cli.io import aart_cli_pins
 
     update = _newer_aart_cli(user_home)
     if update is None:
-        print(f"No connected Registry runs an aart-cli newer than {EXECUTABLE_VERSION}.")
+        # The version the comparison was made against, so the sentence and the check agree.
+        running = aart_cli_pins.running_aart_cli().version
+        print(f"No connected Registry runs an aart-cli newer than {running}.")
         return OK
     for line in upgrade_guidance(update):
         print(line)
