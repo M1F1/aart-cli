@@ -59,6 +59,7 @@ from .maintainer_views import (
 )
 
 __all__ = [
+    "input_form_open",
     "installation_is_mcp",
     "selects_rows",
     "ConsumerActionKind",
@@ -1723,6 +1724,34 @@ def _request_action(
             ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, session.screen),
         )
     if (
+        action is ConsumerActionKind.UPDATE
+        and state.session.screen is ConsumerScreen.UPDATE_INPUTS
+        and state.config_form_active
+    ):
+        if not state.config_draft.ready:
+            return state, ()
+        # §161: 16 asks only what the new version needs and the installation does not hold. The
+        # answers prepare the same update again, and 16 then shows its review.
+        session = replace(
+            state.session, semantic_identity=None, selection_identity=None, review_digest=None
+        )
+        return replace(
+            state,
+            session=session,
+            action=action,
+            config_form_active=False,
+            inputs_submitted=True,
+            quit_pending=False,
+        ), (
+            ConsumerUiCommand(
+                ConsumerUiCommandKind.PREPARE_ACTION,
+                action=action,
+                selection=state.selection,
+                focus=state.focus,
+                config_answers=state.config_draft.answers,
+            ),
+        )
+    if (
         action is ConsumerActionKind.INSTALL
         and state.session.screen is ConsumerScreen.INSTALL_PATH
         and state.current_row == INSTALL_PATH_DEFAULT
@@ -1780,6 +1809,9 @@ def _request_action(
         focus = ""
     if action is ConsumerActionKind.CONFIGURE:
         focus = state.user_inputs_artifact
+    if action is ConsumerActionKind.UPDATE:
+        # A new update asks its own questions; nothing typed for another one carries over.
+        moved = replace(moved, config_draft=InstallationConfigDraft(), inputs_submitted=False)
     prepared = replace(
         moved,
         action=action,
@@ -2072,6 +2104,29 @@ def _action_prepared(
                 ),
             ),
         )
+    if (
+        action is ConsumerActionKind.UPDATE
+        and event.config_draft is not None
+        and event.config_draft.fields
+        and state.session.screen is ConsumerScreen.UPDATE_INPUTS
+    ):
+        # §161: what the new version asks and the installation does not hold is asked on 16 with
+        # the Required Inputs form. Prepared again, the same questions keep what was typed.
+        typed = {item.row: item for item in state.config_draft.fields}
+        session = replace(
+            state.session, semantic_identity=None, selection_identity=None, review_digest=None
+        )
+        return replace(
+            state,
+            session=session,
+            config_draft=InstallationConfigDraft(
+                tuple(typed.get(item.row, item) for item in event.config_draft.fields)
+            ),
+            config_form_active=True,
+            inputs_submitted=False,
+            cursor=0,
+            quit_pending=False,
+        ), (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, ConsumerScreen.UPDATE_INPUTS),)
     if not event.review_digest:
         return _declined_preparation(state)
     # Scanning is the completed read-only action: the result is now on screen and there is no
@@ -2533,20 +2588,17 @@ def _reduce(
         return replace(state, session=session, asked_secrets=(*held, event.key)), ()
     if event.kind is ConsumerUiEventKind.EDIT_INSTALL_CONFIG:
         if (
-            state.session.screen is ConsumerScreen.REQUIRED_INPUTS
-            and state.config_form_active
+            input_form_open(state)
             and event.key == CONFIG_SET_LATER_ROW
             and event.accepted is True
             and state.config_draft.fields
         ):
             return _request_action(
                 replace(state, config_draft=state.config_draft.set_later()),
-                ConsumerActionKind.INSTALL,
+                _INPUT_FORMS[state.session.screen],
             )
-        if (
-            state.session.screen is not ConsumerScreen.REQUIRED_INPUTS
-            or not state.config_form_active
-            or all(item.row != event.key for item in state.config_draft.fields)
+        if not input_form_open(state) or all(
+            item.row != event.key for item in state.config_draft.fields
         ):
             return state, ()
         if event.accepted is True:
@@ -2991,13 +3043,27 @@ def _form_text_rows(state: ConsumerUiState) -> frozenset[str] | None:
         return frozenset({row}) if row.startswith(ADOPTION_NAME_ROW) else None
     if screen is ConsumerScreen.CONFIGURATION_VALUE:
         return frozenset(item.id for item in state.configuration_draft.fields)
-    if screen is ConsumerScreen.REQUIRED_INPUTS:
+    if screen in _INPUT_FORMS:
         return (
             frozenset(item.row for item in state.config_draft.fields)
             if state.config_form_active
             else None
         )
     return _FORM_TEXT_ROWS.get(screen)
+
+
+#: The screens that hold the Required Inputs form, and the action each one's Continue prepares:
+#: 07 for an install, and 16 for what an update newly needs (§161, B-262).
+_INPUT_FORMS: dict[ApplicationScreen, ConsumerActionKind] = {
+    ConsumerScreen.REQUIRED_INPUTS: ConsumerActionKind.INSTALL,
+    ConsumerScreen.UPDATE_INPUTS: ConsumerActionKind.UPDATE,
+}
+
+
+def input_form_open(state: ConsumerUiState) -> bool:
+    """Whether the Required Inputs form is what the screen shows, on 07 or on 16."""
+
+    return state.config_form_active and state.session.screen in _INPUT_FORMS
 
 
 #: Screen 52's submit row. Every row between the text fields and this one is a member.
@@ -3456,7 +3522,7 @@ def key_event(
         # §172.6: a secret row is marked for the store to ask while installing; nothing is typed.
         return ConsumerUiEvent(ConsumerUiEventKind.REQUEST_SECRET, key=cursor or state.current_row)
 
-    if state.session.screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
+    if input_form_open(state):
         row = cursor or state.current_row
         if key == "escape":
             return ConsumerUiEvent(ConsumerUiEventKind.BACK)
@@ -3473,7 +3539,7 @@ def key_event(
                 return (
                     ConsumerUiEvent(
                         ConsumerUiEventKind.REQUEST_ACTION,
-                        action=ConsumerActionKind.INSTALL,
+                        action=_INPUT_FORMS[state.session.screen],
                     )
                     if state.config_draft.ready
                     else None

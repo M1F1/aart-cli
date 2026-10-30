@@ -1,6 +1,17 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-29, CP-50)
+## Where the work is (2026-10-30, CP-52)
+
+**CP-52** fixes an update that ignored the configuration its installation holds (B-261, INV-196,
+D-507). `consume update` and the TUI's update reuse each value from the configuration file aart-cli
+wrote for that same installation, when the new version still declares and accepts it; a flag
+replaces it, `--set-later` never overwrites it, and only an input the new version adds, a value it
+refuses or a placeholder is asked. Screen 16 asks with 07's Required Inputs form (B-262).
+
+Evidence: `docs/refactor/slices/CP-52-update-keeps-inputs.md`. Steps 1–3 are done; the PR is next.
+B-263 (sending uses of artifacts aart-cli did not install) needs a §213 amendment first.
+
+## Where the work was (2026-10-29, CP-50)
 
 0.21.0 (CP-47, CP-48, CP-49) is released. **CP-50** sends installs, updates, removals and uses of
 installed artifacts to a telemetry server (§213, INV-322–INV-328, D-503–D-505). A build whose

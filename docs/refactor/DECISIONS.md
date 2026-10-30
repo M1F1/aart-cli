@@ -12610,3 +12610,26 @@ that bakes `AART_CLI_TELEMETRY_ENDPOINT`.
   the command that turned telemetry on: telemetry never fails what triggered it.
 - **Backfill drains at the ordinary pace.** 2000 events a run, a run when due; a large history takes
   several runs. Not raised for history: the limits protect the server, and a backlog is not urgent.
+
+## D-507 — An update keeps the configuration its installation holds, and screen 16 asks what is new (CP-52)
+
+Product Specification §38, §161, INV-196. Found by the owner: an update of an installed MCP
+refused with "required installation inputs are unanswered" though its configuration file held
+every value; `--set-later` wrote `AART_NOT_SET` over them; the TUI's `i` on 15 returned to 15.
+
+- **Where a held value comes from.** The configuration file the installation's own receipt records
+  for its own harness, read only while its digest is the one recorded. A file edited outside
+  aart-cli is no longer the one aart-cli wrote, so it gives nothing and the update asks. Nothing is
+  read from another installation, harness, scope, root or Registry alias (§169.3, D-334).
+- **What is kept.** A config input the new version still declares, whose value the new version's
+  validation accepts. `AART_NOT_SET` is no value. A credential is never read here: the store keeps
+  it under the same owner and nothing asks for it again.
+- **Precedence.** A flag (or a value typed on 16), then the held value, then the declared default,
+  then, with `--set-later`, the placeholder. Neither a default nor the placeholder replaces a held
+  value.
+- **Screen 16 reuses 07's form.** When something is still needed, 16 opens the Required Inputs form
+  (Set later, one field per value, Continue); Continue prepares the same update with the answers and
+  16 shows its review. Optional fields start from the held value. A held optional value cannot be
+  cleared through this form; `consume inputs set` (or Credentials and variables) changes it.
+- **Repair** asks nothing: its receipt is its whole input (`configured_repair_action`), so it has no
+  values to lose.

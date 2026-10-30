@@ -1870,6 +1870,33 @@
           "status": "in_progress"
         }
       ]
+    },
+    {
+      "id": "CP-52",
+      "title": "An update keeps the configuration its installation holds, and screen 16 asks what is new (§38, §161, INV-196, D-507)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Characterize: update refuses, --set-later overwrites, the TUI returns to 15",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Keep held values for the same installation only, behind the new version's validation",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Screen 16 asks what is new with the Required Inputs form",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "The PR",
+          "status": "in_progress"
+        }
+      ]
     }
   ]
 }

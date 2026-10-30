@@ -135,6 +135,15 @@ nobody answered. You then set each credential yourself with `consume inputs set-
 aart-cli consume install company/mcp/github --profile claude --input company/mcp/github:github-org=platform-team --set-later --yes
 ```
 
+`consume update` keeps what the installation already holds. Each value in the configuration file
+aart-cli wrote for that installation is used again, if the new version still declares the input
+and still accepts the value. A flag replaces it. `--set-later` never writes `AART_NOT_SET` over a
+value. An update asks only for an input the new version adds, a value the new version refuses, or
+one that was set later. In the TUI, screen 16 asks for these with the same form as screen 07. A
+value is kept only for that same installation: another harness, scope or root collects its own.
+If you edited the file by hand, aart-cli no longer recognises it as its own, and the update asks
+again.
+
 If a required ordinary input is missing and there is no `--set-later`, the command refuses. It
 lists the exact flag for each missing input (`inputs[].flag` in `--json`). Credentials need a
 credential store, which today is the macOS Keychain.
