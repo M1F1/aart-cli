@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.23.0](https://github.com/M1F1/aart-cli/compare/v0.22.0...v0.23.0) (2026-10-30)
+
+
+### Added
+
+* a plugin's skills are installed with it, and Activity and telemetry count their uses as the plugin's ([b5d00d7](https://github.com/M1F1/aart-cli/commit/b5d00d7bfe2710d6476dc59fecbf3804803d6cf0))
+* telemetry sends uses of tools aart-cli did not install, unless the build or the person says not ([9c95bfb](https://github.com/M1F1/aart-cli/commit/9c95bfb982cea7e1a228dcde7fe989122b57aa6e))
+
+
+### Fixed
+
+* an update keeps the configuration its installation holds, and screen 16 asks what is new ([9c95bfb](https://github.com/M1F1/aart-cli/commit/9c95bfb982cea7e1a228dcde7fe989122b57aa6e))
+* turning usage on says where uses are sent while telemetry is on ([b5d00d7](https://github.com/M1F1/aart-cli/commit/b5d00d7bfe2710d6476dc59fecbf3804803d6cf0))
+
 ## [0.22.0](https://github.com/M1F1/aart-cli/compare/v0.21.0...v0.22.0) (2026-10-30)
 
 
