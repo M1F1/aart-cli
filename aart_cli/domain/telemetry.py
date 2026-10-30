@@ -303,6 +303,10 @@ def use_event(
     if artifact is None:
         return None
     artifact_kind, artifact_name, _ = artifact
+    if resolved.member is not None:
+        # A skill a plugin carries: a skill, named after its plugin as `<plugin>:<member>`, which
+        # version 1's `artifact_id` allows, so neither the contract nor the server changes (§214).
+        artifact_kind, artifact_name = "skill", f"{artifact_name}:{resolved.member}"
     return _event(
         event_id,
         moment,

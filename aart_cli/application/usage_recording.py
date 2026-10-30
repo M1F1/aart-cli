@@ -189,13 +189,21 @@ class ArtifactUsageView:
     #: The harnesses whose hook is in place now.
     hooked: tuple[str, ...] = ()
     ranking: tuple[UsageRank, ...] = ()
+    #: Where telemetry sends uses, when it is on; empty when nothing is sent (B-259).
+    telemetry_endpoint: str = ""
 
     def file(self, harness: str) -> str:
         return dict(self.files).get(harness, "")
 
 
-def usage_disclosure(harness: str, *, database: str, changed_file: str) -> tuple[str, ...]:
-    """What turning usage on records, where, and what it changes: the consent asked for."""
+def usage_disclosure(
+    harness: str, *, database: str, changed_file: str, telemetry_endpoint: str = ""
+) -> tuple[str, ...]:
+    """What turning usage on records, where, and what it changes: the consent asked for.
+
+    `telemetry_endpoint` is where telemetry sends, empty while it is off: with it on, the uses of
+    artifacts aart-cli installed leave this machine, and saying otherwise would be false (B-259).
+    """
 
     if harness not in USAGE_HARNESSES:
         raise ValueError(f"artifact usage cannot be recorded in {harness}")
@@ -204,7 +212,14 @@ def usage_disclosure(harness: str, *, database: str, changed_file: str) -> tuple
         f"Records each skill {name} loads and each MCP tool it calls: the skill's or MCP "
         "server's name, the project directory and the time.",
         "Never records what a tool is called with, prompts or answers.",
-        f"Kept only on this machine, in {database}. Nothing is sent anywhere.",
+        (
+            f"Kept on this machine, in {database}. Telemetry is on: each use of an artifact "
+            f"aart-cli installed is sent to {telemetry_endpoint} as the artifact's name and "
+            "version, the harness and the time, never the project; "
+            "`aart-cli consume telemetry disable` stops it."
+            if telemetry_endpoint
+            else f"Kept only on this machine, in {database}. Nothing is sent anywhere."
+        ),
         f"Adds a hook to {changed_file}; turning it off removes it.",
     )
 

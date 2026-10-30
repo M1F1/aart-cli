@@ -327,7 +327,10 @@ with what is wrong, rather than being omitted because no repair for it exists.
 Activity also ranks the skills and MCPs your agents actually use, per harness. A small hook in the
 harness records the harness, the skill or MCP server's name, the project and the moment, and never
 what a tool was called with, a prompt or an answer. It is kept in `~/.aart-cli/state/activity.sqlite3`,
-readable only by you, and nothing is sent anywhere.
+readable only by you. Nothing of it is sent anywhere while telemetry is off. While telemetry is on,
+each use of an artifact aart-cli installed is sent to the telemetry server by the artifact's name
+and version, the harness and the time, never the project; turning usage on says so and names the
+server, and `aart-cli consume telemetry disable` stops it.
 
 Nothing is recorded until you turn it on, unless your organisation's build of aart-cli records in
 some harnesses from the start (its release variable `AART_CLI_DEFAULT_USAGE_HARNESSES`); the TUI
@@ -348,6 +351,12 @@ aart-cli consume usage disable --harness claude --forget
 ```
 
 `consume usage forget --harness opencode` deletes what was recorded and keeps recording.
+
+A skill an OpenCode plugin carries, such as superpowers' `brainstorming`, is installed with the
+plugin and goes with it: Installed counts the plugin's skills on its row, and Details and
+`consume status` name them. Activity ranks a use of one as `company/plugin/superpowers:brainstorming`,
+installed by aart-cli, and telemetry sends it as the skill `superpowers:brainstorming` with the
+plugin's version.
 
 ### Telemetry
 

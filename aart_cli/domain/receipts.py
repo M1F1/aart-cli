@@ -44,6 +44,7 @@ from .installation_owner import (
 )
 from .launch import Transport
 from .managed_blocks import is_block_name
+from .plugin_members import PluginMember
 from .result import Err, Ok, Result
 from .selection import OwnershipKind, OwnershipReason
 
@@ -441,10 +442,19 @@ class PlacedArtifactReceipt:
     #: second copy sits beside the harness's own (§179, D-457). `None` is the private tree
     #: `root/payload`, which a plugin still needs because the harness loads it from there.
     payload: str | None = None
+    #: The skills a plugin carries, installed with it and registered by it from its own tree
+    #: (§214). Empty for every other kind.
+    members: tuple[PluginMember, ...] = ()
 
     def __post_init__(self) -> None:
         if not (self.owner is None or isinstance(self.owner, InstallationOwner)):
             raise ValueError("a placed artifact receipt belongs to one installation owner")
+        if not isinstance(self.members, tuple) or any(
+            not isinstance(item, PluginMember) for item in self.members
+        ):
+            raise ValueError("placed artifact receipt members are invalid")
+        if len({item.name for item in self.members}) != len(self.members):
+            raise ValueError("two members of one plugin cannot share a name")
         if self.payload is not None and (
             not isinstance(self.payload, str)
             or not self.payload.startswith("/")
@@ -598,11 +608,17 @@ def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str,
         {} if receipt.setup_state_ref is None else {"setup_state_ref": receipt.setup_state_ref}
     )
     shared: dict[str, object] = {} if receipt.payload is None else {"payload": receipt.payload}
+    members: dict[str, object] = (
+        {"members": [{"name": item.name, "path": item.path} for item in receipt.members]}
+        if receipt.members
+        else {}
+    )
     return {
         **owned,
         **identity,
         **setup,
         **shared,
+        **members,
         "artifact": receipt.artifact,
         "config": [
             {"digest": str(item.digest), "input": item.input.value} for item in receipt.config
@@ -786,7 +802,7 @@ def placed_artifact_receipt_from_data(data: object) -> Result[PlacedArtifactRece
         for key in ("artifact", "root", "payload_digest", "deliveries"):
             if key not in data:
                 raise ValueError(f"placed artifact receipt is missing {key}")
-        for key in ("deliveries", "config", "merges", "settings"):
+        for key in ("deliveries", "config", "merges", "settings", "members"):
             if not isinstance(data.get(key, []), list):
                 raise ValueError(f"placed artifact receipt {key} must be a list")
         return Ok(
@@ -811,10 +827,17 @@ def placed_artifact_receipt_from_data(data: object) -> Result[PlacedArtifactRece
                 None if data.get("setup_state_ref") is None else str(data["setup_state_ref"]),
                 _owner(data.get("owner")),
                 None if data.get("payload") is None else str(data["payload"]),
+                tuple(_member(item) for item in data.get("members", [])),
             )
         )
     except ValueError as error:
         return _error(str(error))
+
+
+def _member(value: object) -> PluginMember:
+    if not isinstance(value, dict):
+        raise ValueError("a plugin member must be a mapping")
+    return PluginMember(str(value.get("name", "")), str(value.get("path", "")))
 
 
 def installation_receipt_from_data(data: object) -> Result[InstallationReceipt]:

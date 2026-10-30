@@ -46,6 +46,7 @@ from aart_cli.domain.install_description import InstallDescription
 from aart_cli.domain.installation_owner import InstallationOwner, installed_name_for
 from aart_cli.domain.installation_tree import installation_tree_root
 from aart_cli.domain.managed_blocks import is_block_name
+from aart_cli.domain.plugin_members import PluginMember
 from aart_cli.domain.python_runtime import ArtifactEnvironment, PythonInstaller
 from aart_cli.domain.receipts import (
     ArtifactDelivery,
@@ -267,8 +268,9 @@ def _plugin_settings(
     profiles_requested: bool,
     root: str,
     harness_root: str,
-) -> Result[tuple[ArtifactSettingsEntry, ...]]:
-    """The one member of the harness's plugin list this installation owns (§171.3).
+) -> Result[tuple[tuple[ArtifactSettingsEntry, ...], tuple[PluginMember, ...]]]:
+    """The one member of the harness's plugin list this installation owns (§171.3), and the
+    skills the plugin carries, which are installed with it (§214).
 
     Nothing is delivered: the module stays in the private tree, which no measured harness scans,
     and the entry is what makes the harness load it. It is spelled relative to the settings file,
@@ -285,7 +287,7 @@ def _plugin_settings(
     except KeyError as error:
         # Named rather than skipped: a vendored tree nothing registers is installed and inert.
         if _skippable(profile, requested=profiles_requested):
-            return Ok(())
+            return Ok(((), ()))
         return _error(str(error).strip("'"))
     settings = os.path.join(harness_root, target.settings)
     module = os.path.join(ArtifactEnvironment(str(identity), root).payload, packaged.value.entry)
@@ -294,7 +296,12 @@ def _plugin_settings(
         entry = PluginEntry(f"./{reference}")
     except ValueError as error:
         return _error(f"{identity} cannot be registered with {profile}: {error}")
-    return Ok((ArtifactSettingsEntry(profile, settings, target.path, entry),))
+    return Ok(
+        (
+            (ArtifactSettingsEntry(profile, settings, target.path, entry),),
+            packaged.value.members,
+        )
+    )
 
 
 def _deliveries(
@@ -510,6 +517,7 @@ def placements_for(
         deliveries: tuple[ArtifactDelivery, ...] = ()
         merges: tuple[ArtifactMerge, ...] = ()
         settings: tuple[ArtifactSettingsEntry, ...] = ()
+        members: tuple[PluginMember, ...] = ()
         if not delivered:
             try:
                 targets.append(mcp_target(profile, scope))
@@ -549,9 +557,9 @@ def placements_for(
             )
             if isinstance(registered, Err):
                 return registered
-            if not registered.value:
+            settings, members = registered.value
+            if not settings:
                 return Ok(None)
-            settings = registered.value
         else:
             made = _deliveries(
                 coordinate,
@@ -602,6 +610,7 @@ def placements_for(
                     # Only a plugin is loaded from its own tree; every other kind a harness reads
                     # is delivered or merged from the canonical object (D-457).
                     shared_payload=delivered and kind is not ArtifactKind.PLUGIN,
+                    members=members,
                 )
             )
         except ValueError as error:

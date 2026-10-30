@@ -1,6 +1,21 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-30, CP-52)
+## Where the work is (2026-10-30, CP-51)
+
+0.22.0 (CP-50) is released. **CP-51** installs the skills an OpenCode plugin carries with the plugin
+(§214, INV-329, INV-331, INV-332, D-506). The members are the payload's skill directories, named by the
+directory, less any shared name. The receipt records them, nothing is copied or renamed, and they
+have no lifecycle of their own. Installed counts them on the plugin's row, and Details and
+`consume status [--json]` name them. A member's use is ranked by Activity as
+`company/plugin/superpowers:brainstorming`, installed. Telemetry sends it as `skill`
+`superpowers:brainstorming` with the plugin's version, within contract version 1, so the server is
+unchanged.
+
+Evidence: `docs/refactor/slices/CP-51-plugin-members.md`, including a lab with the real superpowers
+6.2.0 in opencode. Steps 1–5 are done; PR #112 is merged after #113, and both ship in the next release. B-259 is resolved in the same
+PR: turning usage on says where uses are sent while telemetry is on. B-260 is open.
+
+## Where the work was (2026-10-30, CP-52)
 
 **CP-52** fixes an update that ignored the configuration its installation holds (B-261, INV-196,
 D-507). `consume update` and the TUI's update reuse each value from the configuration file aart-cli
@@ -16,8 +31,8 @@ choice is read when sending. The server's side is `aart-cli-telemetry-server` br
 `feat/unmanaged-uses`; an older server rejects those events alone (422), the rest are stored.
 
 Evidence: `docs/refactor/slices/CP-52-update-keeps-inputs.md`. Steps 1–3 and 5 are done; PR #113 is
-open. Next: merge #113 and the server's PR, deploy the server before a release that sends them.
-Then B-264 (opencode MCP names) or B-253 (telemetry on/off in Settings) if the owner wants them.
+merged, and the server's side is its PR #2. Deploy the server before a release that sends them.
+B-264 (opencode MCP names) and B-253 (telemetry on/off in Settings) are open.
 
 ## Where the work was (2026-10-29, CP-50)
 

@@ -1346,6 +1346,10 @@ def render_installed_artifact(
     else:
         lines.append("Verified against its desired state.")
     lines.extend(f"{name}: {PLACEHOLDER_WARNING}." for name in view.placeholders)
+    if view.members:
+        lines.append(
+            "Skills it carries, installed and removed with it: " + ", ".join(view.members) + "."
+        )
     if not view.actions:
         lines.append("No action is offered until it is observed.")
     shown = (
@@ -1729,7 +1733,12 @@ def artifact_usage_status(
 ) -> tuple[str, ...]:
     """What recording this harness's artifact usage means, and whether its hook is in place."""
 
-    said = usage_disclosure(harness, database=usage.database, changed_file=usage.file(harness))
+    said = usage_disclosure(
+        harness,
+        database=usage.database,
+        changed_file=usage.file(harness),
+        telemetry_endpoint=usage.telemetry_endpoint,
+    )
     if harness in settings.recorded_usage and harness not in usage.hooked:
         return (
             *said,

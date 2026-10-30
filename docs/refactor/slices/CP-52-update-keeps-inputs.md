@@ -1,6 +1,6 @@
 # CP-52 — An update keeps the configuration its installation holds
 
-Status: **done in code and evidence**, on `fix/update-keeps-inputs`; PR #113 is open (2026-10-30).
+Status: **done**; merged as PR #113 (2026-10-30).
 Authority: Product Specification §38, §161, §169.3, §213, INV-196, INV-323, INV-330, D-507, D-508.
 
 ## Steps

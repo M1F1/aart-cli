@@ -29,15 +29,19 @@ from aart_cli.application.consumer_views import (
     settings_from_data,
     settings_to_data,
 )
-from aart_cli.application.usage_recording import ArtifactUsageView
+from aart_cli.application.usage_recording import ArtifactUsageView, usage_disclosure
 from aart_cli.domain.artifact_usage import ArtifactUse, UsageKind, UsageRank
 from aart_cli.domain.result import Err, Ok
 from aart_cli.io.activity_store import ActivityDatabase
-from aart_cli.io.usage_hooks import harness_file, usage_hooked
+from aart_cli.io.telemetry_store import TelemetryOutbox
+from aart_cli.io.telemetry_sync import new_installation_id
+from aart_cli.io.usage_hooks import harness_file, read_artifact_usage, usage_hooked
 from aart_cli.tui_consumer import CanonicalScreenSource, ConsumerScreens, _reload, frame
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions
 from tests.consumer_shell_test import TODAY
+
+_ENDPOINT = "https://telemetry.example.test"
 
 _USAGE = ArtifactUsageView(
     "/home/me/.aart-cli/state/activity.sqlite3",
@@ -121,6 +125,40 @@ class TheSettingTest(unittest.TestCase):
             artifact_usage_row("tabnine")
 
 
+class TheDisclosureTest(unittest.TestCase):
+    """B-259: what turning usage on says about sending follows telemetry's state."""
+
+    def _said(self, endpoint: str) -> str:
+        return "\n".join(
+            usage_disclosure(
+                "opencode",
+                database="/home/me/.aart-cli/state/activity.sqlite3",
+                changed_file="/home/me/.config/opencode/plugins/aart-cli-usage.js",
+                telemetry_endpoint=endpoint,
+            )
+        )
+
+    def test_with_telemetry_off_nothing_is_sent(self) -> None:
+        said = self._said("")
+
+        self.assertIn("Kept only on this machine", said)
+        self.assertIn("Nothing is sent anywhere.", said)
+        self.assertNotIn("Telemetry", said)
+
+    def test_with_telemetry_on_it_names_where_uses_go_and_how_to_stop_it(self) -> None:
+        said = self._said(_ENDPOINT)
+
+        self.assertNotIn("Nothing is sent", said)
+        self.assertNotIn("Kept only", said)
+        self.assertIn("/home/me/.aart-cli/state/activity.sqlite3", said)
+        self.assertIn(
+            f"Telemetry is on: each use of an artifact aart-cli installed is sent to {_ENDPOINT}",
+            said,
+        )
+        self.assertIn("never the project", said)
+        self.assertIn("aart-cli consume telemetry disable", said)
+
+
 class SettingsScreenTest(unittest.TestCase):
     @_baked("opencode")
     def test_one_row_per_detected_harness_that_can_record(self) -> None:
@@ -143,6 +181,17 @@ class SettingsScreenTest(unittest.TestCase):
         self.assertIn("Never records what a tool is called with, prompts or answers.", drawn)
         self.assertIn("/home/me/.claude/settings.json", drawn)
         self.assertIn("/home/me/.aart-cli/state/activity.sqlite3", drawn)
+        self.assertIn("Nothing is sent anywhere.", drawn)
+
+    def test_with_telemetry_on_the_row_says_where_uses_are_sent(self) -> None:
+        drawn = _drawn(
+            ConsumerScreen.SETTINGS,
+            row=artifact_usage_row("claude"),
+            usage=dataclasses.replace(_USAGE, telemetry_endpoint=_ENDPOINT),
+        )
+
+        self.assertIn(_ENDPOINT, drawn)
+        self.assertNotIn("Nothing is sent anywhere.", drawn)
 
     @_baked("opencode")
     def test_it_says_when_a_recording_harness_has_no_hook_yet(self) -> None:
@@ -265,6 +314,41 @@ class TheCommandLineTest(unittest.TestCase):
             self.assertFalse(usage_hooked("claude", user_home=str(env.home)))
             _, out = _cli(env, "consume", "usage", "show", "--json")
             self.assertEqual(json.loads(out)["ranking"], [])
+
+    def test_with_telemetry_on_enable_says_where_uses_are_sent(self) -> None:
+        with _environment() as env:
+            state = str(pathlib.Path(env.paths.data_root) / "state")
+            TelemetryOutbox(state).enable(_ENDPOINT, new_installation_id())
+
+            code, out = _cli(env, "consume", "usage", "enable", "--harness", "claude")
+
+            self.assertEqual(code, 0, out)
+            self.assertIn(_ENDPOINT, out)
+            self.assertNotIn("Nothing is sent anywhere.", out)
+            self.assertEqual(
+                read_artifact_usage(
+                    data_root=env.paths.data_root, user_home=str(env.home)
+                ).telemetry_endpoint,
+                _ENDPOINT,
+            )
+
+    def test_with_telemetry_turned_off_enable_says_nothing_is_sent(self) -> None:
+        with _environment() as env:
+            state = str(pathlib.Path(env.paths.data_root) / "state")
+            TelemetryOutbox(state).enable(_ENDPOINT, new_installation_id())
+            TelemetryOutbox(state).disable(forget=False)
+
+            code, out = _cli(env, "consume", "usage", "enable", "--harness", "claude")
+
+            self.assertEqual(code, 0, out)
+            self.assertIn("Nothing is sent anywhere.", out)
+            self.assertNotIn(_ENDPOINT, out)
+            self.assertEqual(
+                read_artifact_usage(
+                    data_root=env.paths.data_root, user_home=str(env.home)
+                ).telemetry_endpoint,
+                "",
+            )
 
     def test_a_harness_without_hooks_is_refused(self) -> None:
         with _environment() as env:

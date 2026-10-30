@@ -1832,7 +1832,7 @@
     {
       "id": "CP-50",
       "title": "Telemetry: installs, updates, removals and uses sent to a telemetry server (§213, D-503, D-504, D-505)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -1867,14 +1867,51 @@
         {
           "id": "7",
           "title": "The PR",
-          "status": "in_progress"
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-51",
+      "title": "A plugin's skills are installed with it, and their uses are the plugin's (§214, D-506)",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "§214, D-506, INV-329, INV-331, INV-332 and this plan",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "A plugin's members, read from its package",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The installation's receipt records the members",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "Installed, Details and consume status show the members",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Activity and telemetry attribute a member's use to its plugin",
+          "status": "done"
+        },
+        {
+          "id": "6",
+          "title": "The lab with superpowers in opencode, then the PR",
+          "status": "done"
         }
       ]
     },
     {
       "id": "CP-52",
       "title": "An update keeps the configuration its installation holds, screen 16 asks what is new, and telemetry sends uses of tools aart-cli did not install unless turned off (§38, §161, §213, INV-196, INV-330, D-507, D-508)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -1894,7 +1931,7 @@
         {
           "id": "4",
           "title": "The PR",
-          "status": "in_progress"
+          "status": "done"
         },
         {
           "id": "5",

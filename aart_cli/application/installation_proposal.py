@@ -32,6 +32,7 @@ from aart_cli.domain.inspection import EnvironmentFacts
 from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.launch import LaunchContract
 from aart_cli.domain.plans import InstallPlan
+from aart_cli.domain.plugin_members import PluginMember
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.python_runtime import ArtifactEnvironment
 from aart_cli.domain.receipts import (
@@ -327,6 +328,8 @@ class PlannedPlacement:
     #: installation keeps no private copy of it (D-457). It and `payload_source` are exclusive:
     #: one names a tree to copy into `root`, the other says there is none to copy.
     payload: str | None = None
+    #: The skills a plugin carries, which its receipt records (§214).
+    members: tuple[PluginMember, ...] = ()
 
     def __post_init__(self) -> None:
         if self.payload is not None and (
@@ -427,6 +430,7 @@ def intended_placement_receipt(planned: PlannedPlacement) -> PlacedArtifactRecei
         # Which installation this receipt belongs to, so the store can key by it (§169.3).
         owner=planned.owner,
         payload=planned.payload,
+        members=planned.members,
     )
 
 

@@ -1719,6 +1719,7 @@ def _configured_status(request: Request, selectors: tuple[ArtifactSelector, ...]
                 "status": "current",
                 "detail": "" if item.health == "ready" else f"health: {item.health}",
                 "health": item.health,
+                **({"members": list(item.members)} if item.members else {}),
             }
             for item in installed
         ],
