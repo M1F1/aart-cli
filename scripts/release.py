@@ -474,6 +474,17 @@ def telemetry_endpoint_value() -> str | None:
     return os.environ.get("AART_CLI_TELEMETRY_ENDPOINT", "").strip().rstrip("/") or None
 
 
+def telemetry_unmanaged_uses_value() -> bool:
+    """Whether this release sends uses of tools it did not install until a person chooses (D-508).
+
+    Recorded for the reason the telemetry server is. Read as `scripts/inject_default_telemetry.py`
+    reads it, so unset is ``True``; a value it refuses fails that step before this runs.
+    """
+
+    raw = os.environ.get("AART_CLI_TELEMETRY_UNMANAGED_USES", "").strip().lower()
+    return raw not in {"off", "false"}
+
+
 def local_version_label_value() -> str | None:
     """The local version label this release puts on its wheel, or ``None`` when it puts none.
 
@@ -751,6 +762,7 @@ def check_release(
         "local_version_label": local_version_label_value(),
         "default_usage_harnesses": default_usage_harnesses_value(),
         "default_telemetry_endpoint": telemetry_endpoint_value(),
+        "default_telemetry_unmanaged_uses": telemetry_unmanaged_uses_value(),
         "checks": [
             {
                 "name": name,

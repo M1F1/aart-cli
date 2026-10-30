@@ -27,6 +27,7 @@ from aart_cli.domain.inputs import (
     InputValueSource,
     PromptedConfigValue,
     RuntimeInput,
+    validate_config_value,
 )
 from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.policies import EffectivePolicy
@@ -45,6 +46,8 @@ __all__ = [
     "artifact_answer_key",
     "compose_installation_inputs",
     "copy_artifact_answers",
+    "retained_input_sources",
+    "with_retained",
 ]
 
 INPUT_COMPOSITION_INVALID = DiagnosticCode("installation-input-composition-invalid")
@@ -357,3 +360,47 @@ def copy_artifact_answers(
         if value is not None:
             copied.append(OwnedInputSource(owner, PromptedConfigValue(field.input.id, value)))
     return tuple(copied)
+
+
+def retained_input_sources(
+    fields: Iterable[InstallationInputField],
+    stored: Iterable[tuple[InstallationOwner, tuple[tuple[InputId, str], ...]]],
+) -> tuple[OwnedInputSource, ...]:
+    """The configuration an installation already holds, bound again for the fields it still fits.
+
+    `stored` is what each installation's configuration file holds, by its complete identity. A value
+    is kept only for the same owner (§38, INV-196): another harness, scope, root or alias is another
+    installation, and nothing crosses to it. The placeholder is no value, a value the field's
+    validation now refuses is asked again, and an input that is no longer ordinary configuration
+    (or no longer declared) keeps nothing.
+    """
+
+    held = {(owner, identifier): value for owner, values in stored for identifier, value in values}
+    kept: list[OwnedInputSource] = []
+    for field in fields:
+        if not isinstance(field.input, ConfigInput):
+            continue
+        value = held.get((field.owner, field.input.id))
+        if (
+            value is None
+            or value == SKIPPED_INPUT
+            or validate_config_value(field.input.validation, value) is not None
+        ):
+            continue
+        try:
+            kept.append(OwnedInputSource(field.owner, PromptedConfigValue(field.input.id, value)))
+        except ValueError:
+            continue
+    return tuple(kept)
+
+
+def with_retained(
+    given: tuple[OwnedInputSource, ...], retained: tuple[OwnedInputSource, ...]
+) -> tuple[OwnedInputSource, ...]:
+    """What was answered now, and each kept value nothing answered now replaces."""
+
+    answered = {(item.owner, item.source.input) for item in given}
+    return (
+        *given,
+        *(item for item in retained if (item.owner, item.source.input) not in answered),
+    )

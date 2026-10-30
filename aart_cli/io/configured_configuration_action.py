@@ -24,9 +24,11 @@ from aart_cli.application.intents import (
     plan_lifecycle_intent,
 )
 from aart_cli.application.receipt_recording import RecordedOutcome, record_lifecycle_outcome
+from aart_cli.domain.configuration_files import parse_configuration_file
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import InputId, ObjectDigest
 from aart_cli.domain.inputs import InputValidation
+from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.receipts import InstallationReceipt, InstalledRecord
 from aart_cli.domain.reconciliation import (
@@ -54,6 +56,7 @@ __all__ = [
     "CompletedConfiguredConfiguration",
     "PreparedConfiguredConfiguration",
     "complete_configured_configuration",
+    "installed_configuration_values",
     "prepare_configured_configuration",
 ]
 
@@ -107,6 +110,38 @@ class CompletedConfiguredConfiguration:
             or not isinstance(self.machine, ConsumerMachine)
         ):
             raise ValueError("a completed configuration action is invalid")
+
+
+def installed_configuration_values(
+    inspections: tuple[InstalledInspection, ...],
+) -> tuple[tuple[InstallationOwner, tuple[tuple[InputId, str], ...]], ...]:
+    """What each installation's own configuration file holds, by its complete identity (§38).
+
+    Only a file exactly as aart-cli wrote it is read: one changed outside aart-cli, missing or
+    unreadable gives nothing, and what it held is asked again. Never raises.
+    """
+
+    values: list[tuple[InstallationOwner, tuple[tuple[InputId, str], ...]]] = []
+    for inspection in inspections:
+        receipt = inspection.record.receipt
+        if not isinstance(receipt, InstallationReceipt) or receipt.owner is None:
+            continue
+        for record in receipt.configuration_files:
+            if record.harness != receipt.owner.harness:
+                continue
+            try:
+                content = Path(record.path).read_bytes()
+            except OSError:
+                continue
+            if sha256_bytes(content) != record.digest:
+                continue
+            try:
+                parsed = parse_configuration_file(content.decode("utf-8"))
+            except UnicodeDecodeError:
+                continue
+            if isinstance(parsed, Ok):
+                values.append((receipt.owner, parsed.value))
+    return tuple(values)
 
 
 def prepare_configured_configuration(

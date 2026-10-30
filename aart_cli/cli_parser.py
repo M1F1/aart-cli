@@ -719,7 +719,8 @@ def build_parser() -> argparse.ArgumentParser:
             "On from the first start where this aart-cli was built with a server and nobody "
             "decided, else off until turned on; turning it on also sends what Activity already "
             "holds. While on, each install, update and removal aart-cli completes, "
-            "and each recorded use of an artifact aart-cli installed, is kept in "
+            "each recorded use of an artifact aart-cli installed, and, unless `unmanaged off`, "
+            "each use of a skill or MCP it did not install, by name, is kept in "
             "state/telemetry.sqlite3 and sent to the telemetry server at most every ten minutes, "
             "when something new is recorded. Sent: the event, the artifact's kind, name and "
             "version, the moment, a random installation id and aart-cli's version. Never a "
@@ -767,6 +768,24 @@ def build_parser() -> argparse.ArgumentParser:
         dest="telemetry_forget",
         action="store_true",
         help="also delete what waits, what was sent and the installation id; it stays off",
+    )
+    _add_json(p_telemetry)
+    p_telemetry = telemetry_sub.add_parser(
+        "unmanaged",
+        formatter_class=_HELP_FORMATTER,
+        help="send uses of skills and MCPs aart-cli did not install, or not",
+        description=(
+            "Whether telemetry also sends each use of a skill or MCP aart-cli did not install, by "
+            "the name the harness used. Until you choose, this aart-cli's build decides; the "
+            "choice is kept in Settings, which changes it too. Off, such uses still waiting are "
+            "never sent. It applies only while telemetry is on."
+        ),
+    )
+    p_telemetry.add_argument(
+        "telemetry_unmanaged",
+        choices=("on", "off"),
+        metavar="on|off",
+        help="on sends them, off does not",
     )
     _add_json(p_telemetry)
     p_telemetry = telemetry_sub.add_parser(

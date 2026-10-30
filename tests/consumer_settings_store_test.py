@@ -20,6 +20,7 @@ import unittest
 from aart_cli.application.consumer_views import (
     CONSUMER_SETTINGS_INVALID,
     SETTING_ROWS,
+    TELEMETRY_UNMANAGED_ROW,
     ConsumerSettings,
     PresentationProfile,
     settings_from_data,
@@ -35,7 +36,9 @@ from aart_cli.io.consumer_settings import (
 
 class ConsumerSettingsValueTest(unittest.TestCase):
     def test_every_accepted_control_is_binary_and_toggles_only_itself(self) -> None:
-        for row in SETTING_ROWS:
+        # Telemetry of uses aart-cli did not install starts as the build's default, and toggled
+        # twice it is a choice that reads the same: `telemetry_unmanaged_test` holds that.
+        for row in (item for item in SETTING_ROWS if item != TELEMETRY_UNMANAGED_ROW):
             with self.subTest(row=row):
                 once = ConsumerSettings().toggled(row)
                 twice = once.toggled(row)

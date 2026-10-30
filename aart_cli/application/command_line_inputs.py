@@ -33,6 +33,8 @@ from .installation_inputs import (
     InstallationInputField,
     OwnedInputSource,
     artifact_answer_key,
+    copy_artifact_answers,
+    with_retained,
 )
 
 __all__ = [
@@ -40,6 +42,7 @@ __all__ = [
     "CREDENTIAL_REMEDIATION",
     "CommandLineAnswers",
     "CommandLineInput",
+    "command_line_sources",
     "declared_defaults",
     "missing_input_flags",
     "parse_command_line_input",
@@ -182,6 +185,29 @@ def declared_defaults(
                 ),
             )
     return tuple(defaults.values())
+
+
+def command_line_sources(
+    fields: tuple[InstallationInputField, ...],
+    answers: tuple[ArtifactAnswer, ...],
+    *,
+    retained: tuple[OwnedInputSource, ...] = (),
+    set_later: bool = False,
+) -> tuple[OwnedInputSource, ...]:
+    """The ordinary values one command binds, each field once, in this order of precedence:
+
+    a flag's answer; the value the installation already holds (`retained`, an update's, §38); the
+    declared default; and only then, with `set_later`, the placeholder for a required field. A value
+    an installation holds is therefore never replaced by a default or by the placeholder (B-261).
+    """
+
+    kept = with_retained(copy_artifact_answers(fields, answers), retained)
+    bound = {(item.owner, item.source.input) for item in kept}
+    rest = tuple(field for field in fields if (field.owner, field.input.id) not in bound)
+    return (
+        *kept,
+        *copy_artifact_answers(rest, declared_defaults(rest, answers), skip_unanswered=set_later),
+    )
 
 
 def secret_references(

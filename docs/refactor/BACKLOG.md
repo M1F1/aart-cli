@@ -5263,3 +5263,38 @@ Nothing is sent anywhere." whatever telemetry's state. Since D-505 a build that 
 from the first start, and then each use of an installed artifact is sent. The disclosure should
 read the outbox's setting and, when it is on, say that uses of installed artifacts go to the named
 server and how to turn that off.
+
+## B-261 — An update ignored the configuration its installation held
+
+Status: **resolved** by CP-52 (D-507), 2026-10-30; reported by the owner.
+
+`consume update` treated every required config input without a default as unanswered, so it
+refused, `--set-later` overwrote real values with `AART_NOT_SET`, and the TUI's update returned to
+15 without a word.
+
+## B-262 — Screen 16 had no form for what an update newly needs
+
+Status: **resolved** by CP-52 (D-507), 2026-10-30.
+
+§161 says new inputs reuse the Required Inputs UX. Screen 16 now opens 07's form for an input the
+new version adds, a value it refuses, or one set later.
+
+## B-263 — Usage of artifacts aart-cli did not install, sent while telemetry is on
+
+Status: **resolved** by D-508 (CP-52): §213 amended, `unmanaged.used` in contract v1, the release
+variable `AART_CLI_TELEMETRY_UNMANAGED_USES`, and the Settings row "Telemetry". Turning telemetry
+itself on and off in Settings remains B-253.
+
+The owner asked that uses of skills and MCPs aart-cli did not install also be sent, on by default
+through a release variable, with Settings able to turn off telemetry entirely or only these. It
+contradicts D-503 (the names of a person's own tools are never sent), so it needs a §213 amendment,
+a disclosure that names it, and its own slice after CP-52.
+
+## B-264 — An opencode MCP sent as unmanaged is named by its tool, not its server
+
+Status: **open**, noncritical (CP-52, D-508).
+
+opencode names a tool `<server>_<tool>` and does not say where the server's name ends, so an
+`unmanaged.used` from opencode carries the whole tool name, and one server shows on the dashboard
+as one row per tool. Reading opencode's configured MCP server names at send time would let the
+client send the server's name instead, as it does for Claude Code.

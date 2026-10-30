@@ -27,12 +27,17 @@ from unittest import mock
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from aart_cli.application.consumer_views import ActivityRecord, project_receipt_detail
+from aart_cli.application.consumer_views import (
+    ActivityRecord,
+    ConsumerSettings,
+    project_receipt_detail,
+)
 from aart_cli.domain.artifact_usage import ArtifactUse, UsageKind
 from aart_cli.domain.harness import McpRegistration, Scope, mcp_target
 from aart_cli.domain.result import Ok
 from aart_cli.domain.telemetry import BATCH_PATH, BATCH_SIZE, SyncState
 from aart_cli.io import telemetry_sync
+from aart_cli.io.consumer_settings import write_consumer_settings
 from aart_cli.io.receipt_store import LocalReceiptStore
 from aart_cli.io.telemetry_store import OutboxCounts, TelemetryOutbox
 from aart_cli.io.telemetry_sync import http_post, maybe_sync, synchronise
@@ -339,7 +344,11 @@ class TheBriefsScenariosTest(unittest.TestCase):
         report = _sync(self.home, self.server, self.clock)
         self.assertEqual(report.sent, 4)
 
-    def test_a_use_of_nothing_installed_is_skipped_never_sent(self) -> None:
+    def test_a_use_of_nothing_installed_is_skipped_never_sent_when_chosen_so(self) -> None:
+        # D-508: sent by default; `telemetry_unmanaged_test` holds that and the choice itself.
+        write_consumer_settings(
+            ConsumerSettings(telemetry_unmanaged=False), data_root=self.home.path
+        )
         self.home.use(name="my-own-mcp")
         self.home.use(name="github")
         report = _sync(self.home, self.server, self.clock)

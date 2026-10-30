@@ -28,7 +28,7 @@ from aart_cli import command_outcome as _common
 from aart_cli.application.command_line_inputs import (
     COMMAND_LINE_INPUT_INVALID,
     CommandLineInput,
-    declared_defaults,
+    command_line_sources,
     missing_input_flags,
     parse_command_line_input,
     resolve_command_line_inputs,
@@ -50,7 +50,7 @@ from aart_cli.application.credential_guidance import (
 from aart_cli.application.installation_inputs import (
     OwnedInputSource,
     artifact_answer_key,
-    copy_artifact_answers,
+    retained_input_sources,
 )
 from aart_cli.application.installed_setup import declared_setup_to_data
 from aart_cli.configuration.model import SourceKind
@@ -93,8 +93,9 @@ from aart_cli.domain.credentials import ProviderState
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity, diagnostic_to_data
 from aart_cli.domain.effects import DeleteCredential, effect_to_data
 from aart_cli.domain.harness import Scope
-from aart_cli.domain.identifiers import ArtifactCoordinate, SourceAlias
+from aart_cli.domain.identifiers import ArtifactCoordinate, InputId, SourceAlias
 from aart_cli.domain.inputs import InputGuidance, RuntimeInput, SecretInput
+from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.receipts import ArtifactReceipt, InstallationReceipt
 from aart_cli.domain.reconciliation import DesiredState
@@ -107,6 +108,7 @@ from aart_cli.domain.selection import (
     OwnershipKind,
     VersionConstraint,
 )
+from aart_cli.io.configured_configuration_action import installed_configuration_values
 from aart_cli.io.configured_installation_action import (
     InstallationHost,
     PreparedConfiguredInstallation,
@@ -882,8 +884,12 @@ def _command_line_sources(
     request: Request,
     prepared: PreparedConfiguredInstallation,
     credential_providers: tuple[CredentialProviderPort, ...],
+    retained: tuple[OwnedInputSource, ...] = (),
 ) -> Result[tuple[OwnedInputSource, ...]]:
     """Turn `--input` and `--set-later` into this operation's input sources.
+
+    `retained` is what an update's installations already hold: a flag replaces it, and neither a
+    default nor `--set-later`'s placeholder does (§38, B-261).
 
     Every flag is checked against what the operation installs before anything else happens. Each
     credential nobody has stored yet is pointed at its own provider item, which the credential
@@ -905,11 +911,8 @@ def _command_line_sources(
     resolved = resolve_command_line_inputs(fields, parsed)
     if isinstance(resolved, Err):
         return resolved
-    answers = resolved.value.answers
-    sources = copy_artifact_answers(
-        fields,
-        (*answers, *declared_defaults(fields, answers)),
-        skip_unanswered=request.set_later,
+    sources = command_line_sources(
+        fields, resolved.value.answers, retained=retained, set_later=request.set_later
     )
     unanswered = prepared.draft.inputs.unanswered
     credentials = _unanswered_credentials(prepared)
@@ -986,8 +989,13 @@ def _configured_lifecycle(
     selection: ArtifactSelection,
     previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
     previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
+    stored: tuple[tuple[InstallationOwner, tuple[tuple[InputId, str], ...]], ...] = (),
 ) -> int:
     """Review one canonical Selection, and apply exactly the review that was confirmed.
+
+    `stored` is the configuration an update's installations hold now. Each value is bound again for
+    its own installation where the new version still accepts it, so only what is new or no longer
+    fits is asked (§38, INV-196).
 
     Install and update are the same three steps -- prepare without touching anything, project the
     review, execute only the digest somebody confirmed -- differing in one input: whether each
@@ -1024,9 +1032,10 @@ def _configured_lifecycle(
         return _emit_error(request, prepared, operation)
     asked: dict[str, tuple[CredentialGuidance, ...]] = {}
     flagged = request.install_inputs or request.set_later
-    if flagged or not prepared.value.ready:
+    retained = retained_input_sources(prepared.value.draft.inputs.fields, stored)
+    if flagged or retained or not prepared.value.ready:
         asked = _asked_by_the_store(prepared.value, request)
-        answered = _command_line_sources(request, prepared.value, credential_providers)
+        answered = _command_line_sources(request, prepared.value, credential_providers, retained)
         if isinstance(answered, Err):
             return _emit_error(request, answered, operation)
         sources = answered.value
@@ -1416,7 +1425,15 @@ def _configured_update(request: Request, selectors: tuple[ArtifactSelector, ...]
         (replace(item.record.coordinate, version=None), item.desired) for item in installed
     )
     receipts = tuple((item.record.coordinate, item.record.receipt) for item in installed)
-    return _configured_lifecycle(request, operation, runtime.value, selection, previous, receipts)
+    return _configured_lifecycle(
+        request,
+        operation,
+        runtime.value,
+        selection,
+        previous,
+        receipts,
+        stored=installed_configuration_values(installed),
+    )
 
 
 def _pinned_version(selectors: tuple[ArtifactSelector, ...], coordinate: str) -> str | None:

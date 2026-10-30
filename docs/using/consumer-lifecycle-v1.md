@@ -135,6 +135,15 @@ nobody answered. You then set each credential yourself with `consume inputs set-
 aart-cli consume install company/mcp/github --profile claude --input company/mcp/github:github-org=platform-team --set-later --yes
 ```
 
+`consume update` keeps what the installation already holds. Each value in the configuration file
+aart-cli wrote for that installation is used again, if the new version still declares the input
+and still accepts the value. A flag replaces it. `--set-later` never writes `AART_NOT_SET` over a
+value. An update asks only for an input the new version adds, a value the new version refuses, or
+one that was set later. In the TUI, screen 16 asks for these with the same form as screen 07. A
+value is kept only for that same installation: another harness, scope or root collects its own.
+If you edited the file by hand, aart-cli no longer recognises it as its own, and the update asks
+again.
+
 If a required ordinary input is missing and there is no `--set-later`, the command refuses. It
 lists the exact flag for each missing input (`inputs[].flag` in `--json`). Credentials need a
 credential store, which today is the macOS Keychain.
@@ -344,7 +353,9 @@ aart-cli consume usage disable --harness claude --forget
 
 Telemetry sends your organisation's telemetry server what aart-cli installs, updates and removes,
 and each recorded use of an artifact aart-cli installed, so the organisation sees which artifacts
-are used, how often and by how many installations.
+are used, how often and by how many installations. Unless you or your build turn it off, it also
+sends each use of a skill or MCP aart-cli did not install, by the name the harness used, so the
+organisation sees which other tools people use.
 
 If your organisation's build of aart-cli names a server (its release variable
 `AART_CLI_TELEMETRY_ENDPOINT`), telemetry is on from the first `aart-cli` or `consume` command, and
@@ -362,8 +373,22 @@ run `aart-cli consume telemetry disable` as your first command; that choice is k
 start turns telemetry on again. An event holds the
 event's kind, the artifact's kind, name and version, the moment, a random installation id drawn when
 you turn telemetry on, and aart-cli's version. It never holds a project, path, argument, prompt,
-Registry address, user or host name, or credential, and a use of something aart-cli did not install
-is never sent.
+Registry address, user or host name, or credential. A use of something aart-cli did not install is
+sent as its own kind of event, with the name the harness used and no version: a skill's name, an
+MCP server's name in Claude Code, and in opencode the whole tool name, because opencode does not say
+where the server's name ends.
+
+Whether those uses are sent is in Settings, under Telemetry: *Uses of tools aart-cli did not
+install*, which you can change at any time. Until you do, your build decides (its release variable
+`AART_CLI_TELEMETRY_UNMANAGED_USES`; unset sends them). Turned off, such uses still waiting are never
+sent. The same from the command line:
+
+```sh
+aart-cli consume telemetry unmanaged off
+aart-cli consume telemetry unmanaged on
+```
+
+`consume telemetry status` says whether they are sent and whether that is your choice.
 
 Events wait in `~/.aart-cli/state/telemetry.sqlite3`, readable only by you. When something new is
 recorded and ten minutes have passed since the last successful send, a short-lived process sends

@@ -1500,7 +1500,7 @@ def run(
     # §213: a build that names a telemetry server turns it on where nobody decided (D-505).
     turned_on = composed.value.turn_telemetry_on_by_default()
     if turned_on is not None:
-        announce_turned_on(turned_on, print)
+        announce_turned_on(turned_on, print, unmanaged=composed.value.settings.sends_unmanaged_uses)
     if canonical_terminal:
         # Past this point a defect is the running application's, not the composition's, and the
         # record has to say so -- including which terminal was hosting it, because the two answer
