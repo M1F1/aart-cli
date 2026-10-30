@@ -1873,7 +1873,7 @@
     },
     {
       "id": "CP-52",
-      "title": "An update keeps the configuration its installation holds, and screen 16 asks what is new (§38, §161, INV-196, D-507)",
+      "title": "An update keeps the configuration its installation holds, screen 16 asks what is new, and telemetry sends uses of tools aart-cli did not install unless turned off (§38, §161, §213, INV-196, INV-330, D-507, D-508)",
       "status": "in_progress",
       "steps": [
         {
@@ -1895,6 +1895,11 @@
           "id": "4",
           "title": "The PR",
           "status": "in_progress"
+        },
+        {
+          "id": "5",
+          "title": "Send uses of tools aart-cli did not install, by build default and the person's choice (B-263, D-508)",
+          "status": "done"
         }
       ]
     }

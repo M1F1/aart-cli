@@ -30,6 +30,8 @@ __all__ = [
     "SYNC_INTERVAL",
     "TELEMETRY_ENDPOINT_INVALID",
     "TELEMETRY_SOURCES",
+    "TELEMETRY_UNMANAGED_INVALID",
+    "UNMANAGED_USED",
     "Answer",
     "AnswerKind",
     "SyncState",
@@ -43,6 +45,7 @@ __all__ = [
     "lifecycle_event",
     "lifecycle_event_type",
     "parse_telemetry_endpoint",
+    "parse_unmanaged_uses",
     "sync_due",
     "use_event",
 ]
@@ -63,6 +66,11 @@ RUN_SECONDS = 60.0
 
 BATCH_PATH = "/api/v1/events/batch"
 TELEMETRY_ENDPOINT_INVALID = DiagnosticCode("telemetry-endpoint-invalid")
+TELEMETRY_UNMANAGED_INVALID = DiagnosticCode("telemetry-unmanaged-invalid")
+
+#: A use of a skill or MCP no artifact aart-cli installed answers to, by the name the harness used
+#: (D-508).
+UNMANAGED_USED = "unmanaged.used"
 
 #: The contract's `source` for a use recorded by each harness's hook.
 TELEMETRY_SOURCES: dict[str, str] = {"claude": "claude_hook", "opencode": "opencode_plugin"}
@@ -87,7 +95,10 @@ _EVENT_SOURCES = {
     "artifact.updated": frozenset({"aart_cli"}),
     "artifact.removed": frozenset({"aart_cli"}),
     "artifact.used": frozenset(TELEMETRY_SOURCES.values()),
+    UNMANAGED_USED: frozenset(TELEMETRY_SOURCES.values()),
 }
+
+_SENDS_UNMANAGED = {"": True, "on": True, "true": True, "off": False, "false": False}
 
 #: `scheme://host[:port][/path]`, nothing else: no user, password, query or fragment.
 _ENDPOINT = re.compile(
@@ -125,6 +136,28 @@ def parse_telemetry_endpoint(raw: str) -> Result[str]:
     return Ok(value.rstrip("/"))
 
 
+def parse_unmanaged_uses(raw: str) -> Result[bool]:
+    """`AART_CLI_TELEMETRY_UNMANAGED_USES`: whether a build sends uses aart-cli did not install.
+
+    Unset or empty sends them, because a release variable cannot be told unset from empty and
+    the owner chose sending as the default (D-508); `on`/`true` and `off`/`false` say so in any
+    case. Anything else is refused rather than guessed.
+    """
+
+    value = raw.strip().lower()
+    if value not in _SENDS_UNMANAGED:
+        return Err(
+            (
+                Diagnostic(
+                    TELEMETRY_UNMANAGED_INVALID,
+                    Severity.ERROR,
+                    "whether uses aart-cli did not install are sent is on, true, off or false",
+                ),
+            )
+        )
+    return Ok(_SENDS_UNMANAGED[value])
+
+
 @dataclass(frozen=True, slots=True)
 class TelemetryEvent:
     """One event as the contract's version 1 carries it."""
@@ -151,7 +184,8 @@ class TelemetryEvent:
             or (
                 self.artifact_version is not None
                 and (
-                    not isinstance(self.artifact_version, str)
+                    self.event_type == UNMANAGED_USED
+                    or not isinstance(self.artifact_version, str)
                     or _VERSION.fullmatch(self.artifact_version) is None
                 )
             )
@@ -246,18 +280,25 @@ def use_event(
     kind: UsageKind,
     name: str,
     installed: tuple[InstalledName, ...],
+    *,
+    unmanaged: bool = False,
 ) -> TelemetryEvent | None:
-    """A recorded use as an event, only when it is an artifact aart-cli installed.
+    """A recorded use as an event: the artifact aart-cli installed, or, when `unmanaged`, the name.
 
-    A use the harness names that no installed artifact answers to is never sent: it may be the
-    person's own tool, and its name is theirs (D-503). The artifact is named by its installation,
-    never by the tool the harness called.
+    An installed artifact is named by its installation, never by the tool the harness called. A
+    use no installed artifact answers to is sent only when `unmanaged` -- the person's choice, or
+    without one the build's (D-508) -- as `unmanaged.used` with the name the harness used and no
+    version; a name the contract cannot carry is not sent.
     """
 
     source = TELEMETRY_SOURCES.get(harness)
-    resolved = None if source is None else resolve_installed(harness, kind, name, installed)
-    if source is None or resolved is None:
+    if source is None:
         return None
+    resolved = resolve_installed(harness, kind, name, installed)
+    if resolved is None:
+        if not unmanaged:
+            return None
+        return _event(event_id, moment, UNMANAGED_USED, source, kind.value, name, None)
     artifact = _artifact(resolved.artifact)
     if artifact is None:
         return None

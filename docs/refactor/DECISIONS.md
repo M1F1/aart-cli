@@ -12633,3 +12633,38 @@ every value; `--set-later` wrote `AART_NOT_SET` over them; the TUI's `i` on 15 r
   cleared through this form; `consume inputs set` (or Credentials and variables) changes it.
 - **Repair** asks nothing: its receipt is its whole input (`configured_repair_action`), so it has no
   values to lose.
+
+## D-508 — Telemetry sends uses of tools aart-cli did not install, unless the build or the person says not (CP-52)
+
+Product Specification §213, INV-323, INV-330. Supersedes D-503's "a use nothing installed answers
+to is marked `skipped`, never sent" for a build and a person who have not said otherwise. The
+owner's request (B-263), 2026-10-30: such uses are sent by default while telemetry is on; a
+repository variable decides that before a release; a person can change it in Settings at any time.
+
+- **The event.** `unmanaged.used`, from `claude_hook` or `opencode_plugin`, with no
+  `artifact_version`. `artifact_id` is the name the harness used: a skill's name, a Claude Code MCP
+  server's name, or opencode's whole tool name (opencode does not say where its server name ends).
+  `artifact_type` is `skill` or `mcp`. A name the contract's pattern cannot carry is not sent. A use
+  an installed artifact answers to is always `artifact.used`, never this.
+- **Contract v1, amended in place.** A new event type is added to v1 rather than a v2: a server
+  without it answers 422 naming those events; the client marks them `rejected` and the rest of the
+  batch is stored. Both repositories carry the same document and examples (new digests).
+- **The build's default.** `AART_CLI_TELEMETRY_UNMANAGED_USES`, a repository variable read by the
+  release: unset, empty, `on` or `true` sends them; `off` or `false` does not; anything else fails
+  the release before a wheel exists. Stamped into `aart_cli/_default_telemetry.py` beside the
+  address and recorded in the release receipt (`default_telemetry_unmanaged_uses`). A value the
+  installed module carries that aart-cli would refuse sends none: sending what nobody chose is
+  never the fallback.
+- **The person's choice.** `ConsumerSettings.telemetry_unmanaged`, absent until chosen (`None`
+  means the build decides). Settings shows it under "Telemetry" as "Uses of tools aart-cli did not
+  install: sent/not sent"; Enter flips what is in effect. `aart-cli consume telemetry unmanaged
+  on|off` keeps the same choice; `status` says whether they are sent and whose choice that is.
+- **Read when sending.** The sender reads Settings on each run, so turning it off marks every such
+  use still waiting `skipped`; Settings aart-cli cannot read send none. Uses Activity already held
+  when telemetry was turned on are sent too, under the same rule.
+- **Disclosure.** Turning telemetry on says, when they are sent, that each use of a skill or MCP it
+  did not install is sent by name, and how to stop it. Telemetry itself still starts off unless the
+  build carries an address (D-505).
+- **The server** counts them apart: `Summary.unmanaged_uses` is never part of `uses`;
+  `GET /api/v1/stats/top-unmanaged` ranks them; the dashboard shows them in their own table
+  (aart-cli-telemetry-server, branch `feat/unmanaged-uses`).

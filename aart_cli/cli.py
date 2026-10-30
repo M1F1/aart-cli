@@ -285,6 +285,7 @@ def _to_request(args: argparse.Namespace) -> Request:
         telemetry_endpoint=getattr(args, "telemetry_endpoint", None),
         telemetry_forget=bool(getattr(args, "telemetry_forget", False)),
         telemetry_force=bool(getattr(args, "telemetry_force", False)),
+        telemetry_unmanaged=getattr(args, "telemetry_unmanaged", None),
     )
 
 

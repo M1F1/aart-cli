@@ -54,6 +54,7 @@ from aart_cli.application.consumer_views import (
     PLACEHOLDER_WARNING,
     SUCCESS_CHOICES,
     SUCCESS_PURPOSE,
+    TELEMETRY_UNMANAGED_ROW,
     ActivityView,
     ApplicationScreen,
     ConfigInputView,
@@ -1662,6 +1663,9 @@ def render_settings(
         "show-updates": f"Show available updates: {'on' if view.show_updates else 'off'}",
         "maintainer-mode": f"Registry Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
         "author-mode": f"Author Mode: {'on' if view.author_mode else 'off'}",
+        # §213, D-508: telemetry of uses aart-cli did not install, the choice or the build's.
+        TELEMETRY_UNMANAGED_ROW: "Uses of tools aart-cli did not install: "
+        f"{'sent' if view.sends_unmanaged_uses else 'not sent'}",
         # §173.7: the harnesses the Default install path uses, one row per detected harness.
         **{
             default_harness_row(item): f"Default harness {item}: "
@@ -1683,6 +1687,7 @@ def render_settings(
         "show-updates": "Updates",
         "maintainer-mode": "Advanced",
         "author-mode": "Advanced",
+        TELEMETRY_UNMANAGED_ROW: "Telemetry",
     }
     groups: list[tuple[str, ...]] = []
     previous = ""

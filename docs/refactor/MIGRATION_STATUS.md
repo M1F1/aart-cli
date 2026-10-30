@@ -4,6 +4,14 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-30, CP-52 (§213, INV-323, INV-330, D-508, B-263): telemetry sends uses of tools aart-cli did not install, unless the build or the person says not.**
+While telemetry is on, a use no installed artifact answers to was marked skipped; now it is sent as
+`unmanaged.used` (contract v1 amended in place, both repositories) by the name the harness used,
+without a version, when the person's choice in Settings, or without one the build's
+`AART_CLI_TELEMETRY_UNMANAGED_USES` (unset sends), says so at the moment of sending. `consume
+telemetry unmanaged on|off` and the Settings row keep the same choice. The server counts them apart
+from artifact uses. INV-330 is EVIDENCED. Evidence: the CP-52 slice, section D-508.
+
 **2026-10-30, CP-52 (§38, §161, INV-196, D-507): an update keeps the configuration its installation holds, and screen 16 asks what is new.**
 `consume update` refused with unanswered inputs and `--set-later` wrote `AART_NOT_SET` over held
 values; the TUI's update returned to 15. Now each value in the configuration file the

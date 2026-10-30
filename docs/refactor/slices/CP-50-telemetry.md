@@ -51,7 +51,7 @@ with an address starts with telemetry on, and turning it on sends the whole Acti
   `synchronise` under a non-blocking `fcntl` lock on `state/telemetry.lock`, `maybe_sync`,
   `spawn_sync` (a detached `python -I -c` bootstrap with this package's root on its path), `main`.
   A use is sent only as the installed artifact it resolves to; one nothing answers to is marked
-  skipped.
+  skipped (since D-508, CP-52: sent as `unmanaged.used` unless the build or the person says not).
 - D-505: `history_event_id` (domain, `uuid5` of the outbox's random history key, the Activity
   record and the event's place in it); the outbox's `setting` row gains `history_key` and is the
   decision (`enable(only_if_undecided=True)` under `BEGIN IMMEDIATE`; `disable` creates it turned

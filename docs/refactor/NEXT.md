@@ -8,8 +8,16 @@ wrote for that same installation, when the new version still declares and accept
 replaces it, `--set-later` never overwrites it, and only an input the new version adds, a value it
 refuses or a placeholder is asked. Screen 16 asks with 07's Required Inputs form (B-262).
 
-Evidence: `docs/refactor/slices/CP-52-update-keeps-inputs.md`. Steps 1–3 are done; the PR is next.
-B-263 (sending uses of artifacts aart-cli did not install) needs a §213 amendment first.
+At the owner's request the same PR (#113) also resolves B-263 (D-508, §213, INV-330): while
+telemetry is on, a use of a skill or MCP no installed artifact answers to is sent as
+`unmanaged.used` by the name the harness used, unless the build (`AART_CLI_TELEMETRY_UNMANAGED_USES`
+off/false) or the person (Settings > Telemetry, `consume telemetry unmanaged off`) says not; the
+choice is read when sending. The server's side is `aart-cli-telemetry-server` branch
+`feat/unmanaged-uses`; an older server rejects those events alone (422), the rest are stored.
+
+Evidence: `docs/refactor/slices/CP-52-update-keeps-inputs.md`. Steps 1–3 and 5 are done; PR #113 is
+open. Next: merge #113 and the server's PR, deploy the server before a release that sends them.
+Then B-264 (opencode MCP names) or B-253 (telemetry on/off in Settings) if the owner wants them.
 
 ## Where the work was (2026-10-29, CP-50)
 

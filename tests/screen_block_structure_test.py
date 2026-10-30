@@ -365,6 +365,8 @@ class SettingsBlockTest(TestCase):
                 "Advanced",
                 "  Registry Maintainer Mode: on",
                 "  Author Mode: off",
+                "Telemetry",
+                "  Uses of tools aart-cli did not install: sent",
             ),
         )
 

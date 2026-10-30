@@ -5281,9 +5281,20 @@ new version adds, a value it refuses, or one set later.
 
 ## B-263 — Usage of artifacts aart-cli did not install, sent while telemetry is on
 
-Status: **open**, needs a specification amendment (owner's idea, 2026-10-30).
+Status: **resolved** by D-508 (CP-52): §213 amended, `unmanaged.used` in contract v1, the release
+variable `AART_CLI_TELEMETRY_UNMANAGED_USES`, and the Settings row "Telemetry". Turning telemetry
+itself on and off in Settings remains B-253.
 
 The owner asked that uses of skills and MCPs aart-cli did not install also be sent, on by default
 through a release variable, with Settings able to turn off telemetry entirely or only these. It
 contradicts D-503 (the names of a person's own tools are never sent), so it needs a §213 amendment,
 a disclosure that names it, and its own slice after CP-52.
+
+## B-264 — An opencode MCP sent as unmanaged is named by its tool, not its server
+
+Status: **open**, noncritical (CP-52, D-508).
+
+opencode names a tool `<server>_<tool>` and does not say where the server's name ends, so an
+`unmanaged.used` from opencode carries the whole tool name, and one server shows on the dashboard
+as one row per tool. Reading opencode's configured MCP server names at send time would let the
+client send the server's name instead, as it does for Claude Code.

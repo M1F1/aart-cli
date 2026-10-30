@@ -1,7 +1,7 @@
 # CP-52 — An update keeps the configuration its installation holds
 
-Status: **done in code and evidence**, on `fix/update-keeps-inputs`; the PR is next (2026-10-30).
-Authority: Product Specification §38, §161, §169.3, INV-196, D-507.
+Status: **done in code and evidence**, on `fix/update-keeps-inputs`; PR #113 is open (2026-10-30).
+Authority: Product Specification §38, §161, §169.3, §213, INV-196, INV-323, INV-330, D-507, D-508.
 
 ## Steps
 
@@ -12,7 +12,9 @@ See `docs/refactor/plan.json`, epic CP-52.
 2. Keep the held values for the same installation only, behind its own validation; precedence flag,
    held, default, placeholder. Done.
 3. Screen 16 asks what is new with 07's form. Done.
-4. The PR. Next.
+4. The PR. Open as #113.
+5. B-263 at the owner's request, in the same PR: telemetry sends uses of tools aart-cli did not
+   install, unless the build or the person says not (D-508). Done.
 
 ## Why
 
@@ -91,6 +93,57 @@ M11 first survived: with it, an update that asks nothing kept the value in the f
 file from the receipt. The optional-update test now runs `consume inputs set` afterwards, which
 fails on such an orphaned file.
 
+## Uses of tools aart-cli did not install (D-508)
+
+The owner, the same day: "niech info o narzedziach nie z aart-cli bedzie domyslnie wysylane
+telemetrycznie", set by a repository variable before a release, changeable in Settings at any time.
+
+- §213 amended: "What is sent" names `unmanaged.used`; INV-323 reworded, INV-330 added. Contract
+  v1 amended in place, in both repositories (new digests, a valid and two invalid examples).
+- `domain/telemetry.py`: `UNMANAGED_USED`, `parse_unmanaged_uses`, `use_event(..., unmanaged=)`;
+  an `unmanaged.used` never carries a version and never comes from `aart_cli`.
+- The build: `_default_telemetry.UNMANAGED_USES`, stamped by `scripts/inject_default_telemetry.py`
+  from `AART_CLI_TELEMETRY_UNMANAGED_USES`; `configuration/seed.py` `baked_unmanaged_uses`; the
+  release receipt's `default_telemetry_unmanaged_uses`; both release jobs pass the variable.
+- The person: `ConsumerSettings.telemetry_unmanaged` (absent until chosen), the Settings row
+  `telemetry-unmanaged` under "Telemetry", and `consume telemetry unmanaged on|off`; `status`
+  reports `unmanaged_uses: {sent, chosen}`; turning telemetry on says whether they are sent.
+- `io/telemetry_sync.py` reads the choice on each run (`_sends_unmanaged`).
+- The server (`aart-cli-telemetry-server`, `feat/unmanaged-uses`): the event type, a summary count
+  never part of `uses`, `GET /api/v1/stats/top-unmanaged`, a dashboard table, and an end-to-end
+  test where this branch's aart-cli sends one such use and, after `unmanaged off`, skips the next.
+
+Evidence: `tests/telemetry_unmanaged_test.py` (21 tests, a Hypothesis property over harness, kind,
+name, what is installed and the choice), `telemetry_sync_test.py`, `consumer_settings_store_test.py`,
+`screen_block_structure_test.py`; the server's `make quality` (98% branch coverage) and
+`test_e2e_aart_cli.py` with `AART_CLI_PYTHON` and `PYTHONPATH` naming this checkout (it fails against
+`main`).
+
+| # | Mutation | Killed by |
+|---|---|---|
+| N1 | `use_event` ignores `unmanaged` (always sends) | `telemetry_unmanaged_test` |
+| N2 | `use_event` never sends an unmanaged use | `telemetry_unmanaged_test` |
+| N3 | `_sends_unmanaged` always true | `telemetry_unmanaged_test` |
+| N4 | `_sends_unmanaged` always false | `telemetry_unmanaged_test` |
+| N5 | the Settings row does not flip | `telemetry_unmanaged_test` |
+| N6 | an `unmanaged.used` may carry a version | `telemetry_unmanaged_test` |
+| N7 | `off` sends | `telemetry_unmanaged_test` |
+| N8 | empty does not send | `telemetry_unmanaged_test` |
+| N9 | a refused baked value sends | `telemetry_unmanaged_test` |
+| N10 | the choice is never written to Settings | `telemetry_unmanaged_test`, `consumer_settings_store_test` |
+| N11 | the announcement names them when they are not sent | `telemetry_unmanaged_test` |
+| N12 | nobody choosing ignores the build | `telemetry_unmanaged_test` |
+| N13 | the receipt records `false` as sending | `telemetry_unmanaged_test` |
+| N14 | `unmanaged on` keeps off | `telemetry_unmanaged_test` |
+| N15 | the stored choice is never read | `telemetry_unmanaged_test`, `consumer_settings_store_test` |
+| N16 | the receipt does not trim the variable | `telemetry_unmanaged_test` |
+
+N13 first survived: the test checked only `""` and `off`. It now checks every value the injector
+accepts against `parse_unmanaged_uses`. On the server, five targeted mutations (the event's and
+the contract's version check, the summary count, the SQL filter, the dashboard's ranking) were
+killed by `test_stats.py`, `test_contract.py` and `test_repository_contract.py`.
+
 ## Not done here
 
-B-263 (sending uses of artifacts aart-cli did not install) needs a §213 amendment first.
+B-264: an opencode MCP is sent by its tool's name, not its server's. B-253: turning telemetry itself
+on and off in Settings.
