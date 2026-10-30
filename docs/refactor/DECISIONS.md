@@ -12610,3 +12610,46 @@ that bakes `AART_CLI_TELEMETRY_ENDPOINT`.
   the command that turned telemetry on: telemetry never fails what triggered it.
 - **Backfill drains at the ordinary pace.** 2000 events a run, a run when due; a large history takes
   several runs. Not raised for history: the limits protect the server, and a backlog is not urgent.
+
+## D-506 — A plugin's skills are installed with it, and their uses are the plugin's (CP-51)
+
+Product Specification §214, INV-329–INV-331. Amends §171.5 and the attribution of §212 and §213.
+
+- **What was asked.** After 0.22.0 the owner tried superpowers in opencode. Activity recorded its
+  skills as "not installed by aart-cli", and telemetry skipped them. They asked that installing a
+  plugin work like a Collection, so what it carries is installed by aart-cli and visible in
+  telemetry.
+- **Why the members stay in the plugin's tree.** Splitting a plugin into a module and separate skill
+  artifacts was rejected:
+  - superpowers' module adds its own `skills/` directory to opencode's configuration, so a second
+    copy in `.opencode/skills/` loads every skill twice (opencode warns "duplicate skill name");
+  - an installed skill takes §169.7's installed name, which the plugin's own text does not know;
+  - the module reads `using-superpowers/SKILL.md` from its tree, so the skills cannot be left out of
+    it either.
+
+  The members are therefore recorded, not placed. They have no lifecycle of their own and share
+  the plugin's health.
+- **What a member is.** It is a directory below the payload root holding a `SKILL.md`, named by the
+  directory, because skill discovery requires a name matching the parent directory (§169.7, the
+  `skill_projection` note). Frontmatter is not parsed. A `SKILL.md` at the payload root is no member,
+  since it has no directory name. A name two directories share is left out rather than refusing the
+  plugin: refusing would turn an attribution question into a failed install, and the harness picks
+  one of the two anyway.
+- **Read from the package at install.** `package_plugin` reads the members off the package, which
+  is the digest-pinned payload the Registry approved, so no Registry or Marketplace record changes.
+  A plugin installed before this has no members recorded until it is updated or reinstalled. No
+  migration is written, as allowed under CP-26.
+- **Telemetry stays on contract version 1.** The contract accepts no other field, and an optional
+  `plugin` field would be version 2. `artifact_id` allows `:`, so a member is sent as
+  `<plugin>:<member>` with `artifact_type` `skill`, the way Claude Code names a plugin's skills.
+  Neither the contract, its digests nor the server change. Installs, updates and removals stay one
+  event per plugin: the action's receipt names artifacts, not the payload's contents, and replaying
+  Activity's history (D-505) must give the same events as the live path.
+- **Counted on the plugin's row, not given rows.** A Collection's members are rows under it in
+  Installed, and each is an installation with its own actions. A plugin's member has none, so a
+  row for it would carry update, repair and uninstall that could only act on the plugin. The row
+  says `(N skills)`, and Details and `consume status` name them.
+- **Attribution by name, as for every skill.** opencode's hook gives the skill's name, not its
+  directory. A skill of the person's own with a member's name is therefore attributed to the plugin.
+  Telling them apart from `tool.execute.after`'s `metadata.dir` is backlog (B-260).
+

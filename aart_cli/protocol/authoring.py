@@ -56,6 +56,7 @@ from aart_cli.domain.inputs import (
 from aart_cli.domain.install_description import InstallDescription
 from aart_cli.domain.launch import LaunchContract, Transport
 from aart_cli.domain.managed_blocks import MANAGED_MARKER
+from aart_cli.domain.plugin_members import PluginMember, plugin_members
 from aart_cli.domain.python_runtime import (
     PyProjectSpec,
     PythonDependencySpec,
@@ -1285,9 +1286,11 @@ def package_hook(kind: ArtifactKind, entries: tuple[SnapshotEntry, ...]) -> Resu
 
 @dataclass(frozen=True, slots=True)
 class PackagedPlugin:
-    """Which module a plugin package asks its harness to load, relative to the payload root."""
+    """Which module a plugin package asks its harness to load, relative to the payload root, and
+    the skills it carries, which are installed with it (§214)."""
 
     entry: str
+    members: tuple[PluginMember, ...] = ()
 
 
 def package_plugin(entries: tuple[SnapshotEntry, ...]) -> Result[PackagedPlugin]:
@@ -1342,7 +1345,13 @@ def package_plugin(entries: tuple[SnapshotEntry, ...]) -> Result[PackagedPlugin]
             f"{manifest.value.identity} loads {entry.value}, which its package does not carry",
             path=PACKAGE_MANIFEST_FILENAME,
         )
-    return Ok(PackagedPlugin(str(entry.value)))
+    payload = f"{PACKAGE_PAYLOAD_DIRECTORY}/"
+    members = plugin_members(
+        str(item.path).removeprefix(payload)
+        for item in entries
+        if item.kind is SnapshotEntryKind.FILE and str(item.path).startswith(payload)
+    )
+    return Ok(PackagedPlugin(str(entry.value), members))
 
 
 @dataclass(frozen=True, slots=True)

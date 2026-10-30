@@ -33,6 +33,7 @@ from aart_cli.domain.inspection import EnvironmentFacts
 from aart_cli.domain.install_description import InstallDescription
 from aart_cli.domain.installation_owner import InstallationOwner
 from aart_cli.domain.plans import PlannedRemediation
+from aart_cli.domain.plugin_members import PluginMember
 from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.python_runtime import PythonInstaller
 from aart_cli.domain.receipts import (
@@ -115,6 +116,8 @@ class ArtifactPlacement:
     #: Delivered straight from `payload_source`, the canonical object, with no private copy under
     #: `root` (D-457). Every kind a harness only reads; a plugin is loaded from its tree instead.
     shared_payload: bool = False
+    #: The skills a plugin carries, which its receipt records (§214). Empty for every other kind.
+    members: tuple[PluginMember, ...] = ()
 
     def __post_init__(self) -> None:
         if not (self.owner is None or isinstance(self.owner, InstallationOwner)):
@@ -256,6 +259,7 @@ def offer_installation(
                 settings=placement.settings,
                 owner=placement.owner,
                 shared_payload=placement.shared_payload,
+                members=placement.members,
             )
         else:
             planned = plan_artifact_installation(

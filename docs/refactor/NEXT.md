@@ -1,6 +1,21 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-29, CP-50)
+## Where the work is (2026-10-30, CP-51)
+
+0.22.0 (CP-50) is released. **CP-51** installs the skills an OpenCode plugin carries with the plugin
+(§214, INV-329–INV-331, D-506). The members are the payload's skill directories, named by the
+directory, less any shared name. The receipt records them, nothing is copied or renamed, and they
+have no lifecycle of their own. Installed counts them on the plugin's row, and Details and
+`consume status [--json]` name them. A member's use is ranked by Activity as
+`company/plugin/superpowers:brainstorming`, installed. Telemetry sends it as `skill`
+`superpowers:brainstorming` with the plugin's version, within contract version 1, so the server is
+unchanged.
+
+Evidence: `docs/refactor/slices/CP-51-plugin-members.md`, including a lab with the real superpowers
+6.2.0 in opencode. Steps 1–5 are done. Next: the PR, then the owner's review. B-259 and B-260 are
+open.
+
+## Where the work was (2026-10-29, CP-50)
 
 0.21.0 (CP-47, CP-48, CP-49) is released. **CP-50** sends installs, updates, removals and uses of
 installed artifacts to a telemetry server (§213, INV-322–INV-328, D-503–D-505). A build whose

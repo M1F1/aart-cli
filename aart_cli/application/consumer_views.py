@@ -1701,6 +1701,8 @@ class InstalledArtifactView:
     root: str = ""
     #: The newer approved version a connected Registry offers, where health is `update` (§83).
     available: str = ""
+    #: The skills a plugin carries, installed and removed with it (§214), by name.
+    members: tuple[str, ...] = ()
 
     @property
     def row(self) -> str:
@@ -1855,6 +1857,11 @@ def project_installed_artifact(
         _recorded_scope(receipt) if owner is None else owner.scope.value,
         harness,
         root="" if owner is None else owner.root,
+        members=(
+            tuple(item.name for item in receipt.members)
+            if isinstance(receipt, PlacedArtifactReceipt)
+            else ()
+        ),
     )
 
 
@@ -1998,6 +2005,11 @@ def installed_row_cells(view: InstalledArtifactView, health: str) -> tuple[str, 
     """
 
     artifact, kind, registry = offer_cells(view.coordinate)
+    if view.members:
+        # A plugin's skills go with it, so they are counted on its row rather than given rows of
+        # their own that no action could be aimed at (§214).
+        count = len(view.members)
+        artifact = f"{artifact} ({count} skill{'' if count == 1 else 's'})"
     health, scope, project, configuration = installed_cells(view, health)
     return (artifact, kind, view.harness, health, registry, scope, project, configuration)
 

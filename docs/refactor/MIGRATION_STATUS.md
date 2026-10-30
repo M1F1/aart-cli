@@ -4,6 +4,15 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-30, CP-51 (§214, INV-329–INV-331, D-506): a plugin's skills are installed with it, and their uses are the plugin's.**
+`package_plugin` reads a plugin's members off its package: the skill directories below the payload
+root, less any shared name. The installation's receipt records them, and nothing is copied or
+renamed. Installed counts them on the plugin's row, and Details and `consume status [--json]` name
+them. Activity ranks a member's use as `<plugin coordinate>:<member>`, installed, and telemetry sends
+it as `skill` `<plugin>:<member>` with the plugin's version, within contract version 1. A lab with
+the real superpowers 6.2.0 in opencode delivered `artifact.used skill superpowers:brainstorming
+6.2.0` to the server. Evidence: `docs/refactor/slices/CP-51-plugin-members.md`.
+
 **2026-10-29, CP-50 (§213, INV-322–INV-328, D-503–D-505): installs, updates, removals and uses are sent to a telemetry server once telemetry is on: from the first start in a build that names a server, else once a person turns it on.**
 A completed action and a use that resolves to an installed artifact become events in
 `state/telemetry.sqlite3` (0600, schema version 1) while telemetry is on; a detached sender, at most

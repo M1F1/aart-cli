@@ -24,6 +24,7 @@ from aart_cli.domain.identifiers import ObjectDigest
 from aart_cli.domain.inputs import SecretInput
 from aart_cli.domain.install_description import InstallDescription
 from aart_cli.domain.installation_owner import InstallationOwner
+from aart_cli.domain.plugin_members import PluginMember
 from aart_cli.domain.python_runtime import ArtifactEnvironment
 from aart_cli.domain.receipts import (
     ArtifactDelivery,
@@ -88,6 +89,7 @@ def plan_artifact_placement(
     settings: tuple[ArtifactSettingsEntry, ...] = (),
     owner: InstallationOwner | None = None,
     shared_payload: bool = False,
+    members: tuple[PluginMember, ...] = (),
 ) -> Result[PlannedPlacement]:
     """Everything decided about placing `artifact` here, before anything is touched.
 
@@ -136,6 +138,7 @@ def plan_artifact_placement(
                 tuple(settings),
                 owner,
                 payload_source if shared_payload else None,
+                members,
             )
         )
     except ValueError as error:

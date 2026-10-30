@@ -10940,7 +10940,9 @@ the install before any mutation.
 - Repair re-materializes the payload from the installation's own copy and re-registers the entry.
 
 A plugin's internal names, such as the skills it registers or the tools it adds, are its own
-content. AART neither rewrites nor namespaces them, and says so on Details.
+content. AART neither rewrites nor namespaces them, and says so on Details. **Amended 2026-10-30 by D-506
+(§214):** the skills a plugin carries are its members, installed with it, shown under it and
+attributed to it; their names are still neither rewritten nor namespaced.
 
 ## 171.6 Acceptance invariants
 
@@ -12754,3 +12756,52 @@ query or fragment.
 
 **INV-328 — Telemetry never fails what triggered it.** A hook exits 0 with nothing on stdout and an
 action's outcome is unchanged whatever the outbox, the lock, the network or the server does.
+
+# 214. A plugin's skills are installed with it
+
+Status: **ACCEPTED 2026-10-30 (D-506)**, on the owner's request after 0.22.0. A plugin works like a
+Collection of what it carries: each skill inside it is an aart-cli installation, shown in
+Installed, recorded by Activity and sent by telemetry. It amends §171.5 and the attribution of
+§212 and §213. §171's one vendored tree, its one plugin-list entry and its rule that AART neither
+rewrites nor namespaces a plugin's internal names are unchanged.
+
+- **Members are read from the approved payload.** A plugin's members are the skills its payload
+  carries: each directory below the payload root that holds a `SKILL.md`, named by that
+  directory, since a harness discovers a skill under its directory's name. A name two directories
+  carry is no member: which one the harness loads is the harness's choice, so a use of it cannot be
+  attributed with certainty. The members follow from the digest-pinned payload, so the Registry's
+  approval of the plugin is the approval of its members.
+- **Installing a plugin installs its members.** The installation's receipt records each member's
+  name and its directory inside the payload. Nothing is copied, renamed or delivered elsewhere:
+  the plugin registers its members from its own tree, as before, and a second copy in the
+  harness's skill directory would load each skill twice, under a name the plugin does not know.
+- **A member has no lifecycle of its own.** It is installed, updated, repaired, verified and
+  removed with its plugin, because the plugin's module registers every member it carries. Its
+  health is the plugin's.
+- **Installed and Details show the members.** A plugin's row in Installed counts the skills it
+  carries (`superpowers@7.0.0 (14 skills)`). Details, `consume status` and its `--json` (`members`)
+  name them. A member is not a row of its own: a row is what an action is aimed at, and a member
+  has no action of its own.
+- **A member's use is the plugin installation's.** A skill use in a harness the plugin is installed
+  for, under a member's name, is recorded by Activity as that member of that plugin
+  (`company/plugin/superpowers:brainstorming`), installed by aart-cli. With telemetry on (§213) it
+  is sent as `artifact.used` with `artifact_type` `skill`, `artifact_id` `<plugin>:<member>`
+  (`superpowers:brainstorming`) and the plugin's version. These are version 1's fields, so neither
+  the contract nor the server changes. Installs, updates and removals are still sent once per
+  plugin.
+- OpenCode is the one harness with a plugin target (§171.3), so it is the one where members are
+  attributed.
+
+**INV-329 — A plugin's members are exactly its payload's uniquely named skill directories.** For
+any payload, the members are the names of the directories below the payload root that hold a
+`SKILL.md`, less every name two such directories share, each once and in name order.
+
+**INV-330 — A plugin installation records its members and places nothing of them elsewhere.**
+Installing a plugin records in its receipt the members of the package it installed, and writes
+nothing for them outside the installation's tree and its one plugin-list entry.
+
+**INV-331 — A member's use is its plugin installation's, sent in version 1's form.** A skill use
+in a harness a plugin is installed for, under one of its members' names, resolves to that plugin
+installation and member. Its telemetry event is `artifact.used` with `artifact_type` `skill`,
+`artifact_id` `<plugin>:<member>` and the plugin's version. A plugin's install, update and removal
+are each one event, as before.

@@ -1344,6 +1344,10 @@ def render_installed_artifact(
     else:
         lines.append("Verified against its desired state.")
     lines.extend(f"{name}: {PLACEHOLDER_WARNING}." for name in view.placeholders)
+    if view.members:
+        lines.append(
+            "Skills it carries, installed and removed with it: " + ", ".join(view.members) + "."
+        )
     if not view.actions:
         lines.append("No action is offered until it is observed.")
     shown = (

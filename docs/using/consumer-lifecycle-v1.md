@@ -340,6 +340,12 @@ aart-cli consume usage disable --harness claude --forget
 
 `consume usage forget --harness opencode` deletes what was recorded and keeps recording.
 
+A skill an OpenCode plugin carries, such as superpowers' `brainstorming`, is installed with the
+plugin and goes with it: Installed counts the plugin's skills on its row, and Details and
+`consume status` name them. Activity ranks a use of one as `company/plugin/superpowers:brainstorming`,
+installed by aart-cli, and telemetry sends it as the skill `superpowers:brainstorming` with the
+plugin's version.
+
 ### Telemetry
 
 Telemetry sends your organisation's telemetry server what aart-cli installs, updates and removes,

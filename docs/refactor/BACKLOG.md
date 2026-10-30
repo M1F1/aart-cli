@@ -5263,3 +5263,15 @@ Nothing is sent anywhere." whatever telemetry's state. Since D-505 a build that 
 from the first start, and then each use of an installed artifact is sent. The disclosure should
 read the outbox's setting and, when it is on, say that uses of installed artifacts go to the named
 server and how to turn that off.
+
+## B-260 — Attribute an opencode skill use by the directory it was loaded from, not by name alone
+
+Status: **open**, noncritical (CP-51, D-506; found in the opencode lab, 2026-10-30).
+
+opencode's `tool.execute.before` hands the usage plugin only the skill's name, so a skill of the
+person's own whose name matches a plugin member, or an installed skill, is attributed to aart-cli's
+installation. A probe in the lab showed that `tool.execute.after` also receives `metadata.dir`, the
+directory opencode loaded the skill from:
+`/…/upstream-superpowers-v6.2.0/skills/brainstorming` for superpowers' `brainstorming`. Attributing
+a use only when that directory lies inside the installation's tree, or its delivery, would make
+attribution certain. The directory must never be stored or sent; only the comparison is.

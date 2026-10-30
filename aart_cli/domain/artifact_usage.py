@@ -191,10 +191,19 @@ class InstalledName:
     artifact: str
     #: The version installed, when the record names one.
     version: str | None = None
+    #: The plugin's member this name is, when `artifact` is a plugin carrying it (§214).
+    member: str | None = None
+
+    @property
+    def label(self) -> str:
+        """The artifact as Activity names it: a plugin's member after its plugin."""
+
+        return self.artifact if self.member is None else f"{self.artifact}:{self.member}"
 
 
 def installed_names(records: tuple[InstalledRecord, ...]) -> tuple[InstalledName, ...]:
-    """Each installed skill's directory name and each MCP's server name, per harness."""
+    """Each installed skill's directory name, each MCP's server name and each skill a plugin
+    carries, per harness."""
 
     names: set[InstalledName] = set()
     for record in records:
@@ -211,6 +220,21 @@ def installed_names(records: tuple[InstalledRecord, ...]) -> tuple[InstalledName
                         record.coordinate.version,
                     )
                 )
+        elif record.coordinate.artifact.kind == "plugin":
+            # The plugin registers its members from its own tree, under their own names, in each
+            # harness that loads it (§214).
+            for entry in receipt.settings:
+                for member in receipt.members:
+                    names.add(
+                        InstalledName(
+                            entry.harness,
+                            UsageKind.SKILL,
+                            member.name,
+                            artifact,
+                            record.coordinate.version,
+                            member.name,
+                        )
+                    )
         elif record.coordinate.artifact.kind == "skill":
             for delivery in receipt.deliveries:
                 names.add(
@@ -222,7 +246,18 @@ def installed_names(records: tuple[InstalledRecord, ...]) -> tuple[InstalledName
                         record.coordinate.version,
                     )
                 )
-    return tuple(sorted(names, key=lambda item: (item.harness, item.kind.value, item.name)))
+    return tuple(
+        sorted(
+            names,
+            key=lambda item: (
+                item.harness,
+                item.kind.value,
+                item.name,
+                item.artifact,
+                item.member or "",
+            ),
+        )
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,7 +306,7 @@ def rank_usage(
     for count in counts:
         resolved = _resolve(count, names)
         key = (
-            count.name if resolved is None else resolved.artifact,
+            count.name if resolved is None else resolved.label,
             count.kind,
             count.harness,
             resolved is not None,
