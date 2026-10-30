@@ -340,6 +340,46 @@ aart-cli consume usage disable --harness claude --forget
 
 `consume usage forget --harness opencode` deletes what was recorded and keeps recording.
 
+### Telemetry
+
+Telemetry sends your organisation's telemetry server what aart-cli installs, updates and removes,
+and each recorded use of an artifact aart-cli installed, so the organisation sees which artifacts
+are used, how often and by how many installations.
+
+If your organisation's build of aart-cli names a server (its release variable
+`AART_CLI_TELEMETRY_ENDPOINT`), telemetry is on from the first `aart-cli` or `consume` command, and
+that command says so once. The public build names none, so telemetry is off until you turn it on.
+Turning it on, either way, also sends what Activity already holds: each install, update, removal and
+recorded use is sent once, however often telemetry is turned on.
+
+```sh
+aart-cli consume telemetry enable --endpoint https://telemetry.example.com
+aart-cli consume telemetry status
+```
+
+Without `--endpoint`, `enable` uses your organisation's server. To keep anything from being sent,
+run `aart-cli consume telemetry disable` as your first command; that choice is kept, and no later
+start turns telemetry on again. An event holds the
+event's kind, the artifact's kind, name and version, the moment, a random installation id drawn when
+you turn telemetry on, and aart-cli's version. It never holds a project, path, argument, prompt,
+Registry address, user or host name, or credential, and a use of something aart-cli did not install
+is never sent.
+
+Events wait in `~/.aart-cli/state/telemetry.sqlite3`, readable only by you. When something new is
+recorded and ten minutes have passed since the last successful send, a short-lived process sends
+what waits and exits; there is no background service. A server that cannot be reached is tried
+again later, backing off up to 30 minutes, and nothing you do waits for it or fails because of it.
+
+```sh
+aart-cli consume telemetry sync
+aart-cli consume telemetry disable --forget
+```
+
+`--forget` deletes what waits, what was sent and the installation id, and keeps telemetry off.
+
+`sync` sends now. `disable` stops recording and sending and keeps what waits, unsent; `--forget`
+also deletes it and the installation id.
+
 ## Reset and restore
 
 Run `aart-cli reset` when local AART state is invalid, belongs to another version, or should be

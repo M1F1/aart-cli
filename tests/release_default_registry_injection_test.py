@@ -157,6 +157,7 @@ class EveryInjectorReachesBothBuilds(unittest.TestCase):
             {
                 "inject_commit.py",
                 "inject_default_registry.py",
+                "inject_default_telemetry.py",
                 "inject_default_usage.py",
                 "inject_local_version.py",
             },

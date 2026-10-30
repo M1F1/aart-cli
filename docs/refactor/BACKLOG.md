@@ -5183,7 +5183,8 @@ commands keeps the stale one. Doctor could report it.
 
 ## B-251 — A telemetry adapter over the recorded uses
 
-Status: **open**, noncritical (CP-48, D-500).
+Status: **resolved by CP-50** (D-503): telemetry has its own consent (`consume telemetry enable`) and
+its own outbox; uses are sent as the installed artifact they resolve to.
 
 `application/activity_telemetry.py` is still `DisabledActivityTelemetry`. A server adapter would
 read `artifact_use` rows and needs its own consent, separate from recording locally.
@@ -5195,3 +5196,70 @@ Status: **open**, noncritical (CP-48, D-500).
 opencode names MCP tools `<server>_<tool>`, and §212 records any tool with `_`. A custom tool such
 as `my_tool` is then ranked as `my_tool (not installed by aart-cli)`. Reading opencode's MCP
 configuration would tell the two apart.
+
+## B-253 — Telemetry in the TUI's Settings
+
+Status: **open**, noncritical (CP-50, D-503).
+
+Telemetry is turned on and off only with `consume telemetry`. A Settings row beside "Artifact
+usage" would show it on or off, the address, what waits and the last success, and turn it on with
+the baked address, with the same disclosure the command prints.
+
+## B-254 — A per-user credential for a telemetry server beyond loopback
+
+Status: **open**, noncritical (CP-50, D-504).
+
+Version 1 of the API carries no credential; a server beyond loopback must sit behind an
+authenticating proxy. Deployed on AKS for many machines, each person might instead hold a token in
+the system keychain (entered through the TUI as other credentials are, never read into a process's
+arguments or output), sent as `Authorization`. That is version 2 of the contract, in both
+repositories.
+
+## B-255 — A corporate CA bundle for telemetry over HTTPS
+
+Status: **open**, noncritical (CP-50, D-503).
+
+`urllib` verifies against the platform's default certificates. Behind a TLS-inspecting proxy the
+organisation's CA may be missing from Python's view; the sender then backs off silently, and
+`consume telemetry status` shows only failures. An explicit CA bundle setting, or doctor reporting
+the TLS failure, would make it diagnosable.
+
+## B-256 — Should an organisation's build start with telemetry on?
+
+Status: **resolved 2026-10-29 by D-505** (CP-50), the owner's decision.
+
+Yes, with no second variable: a baked `AART_CLI_TELEMETRY_ENDPOINT` turns telemetry on at a home's
+first `aart-cli` or `consume` command where nobody decided, says so once, and sends Activity's
+history too. `consume telemetry disable` is kept for good.
+
+## B-257 — The telemetry server's next stage
+
+Status: **open**, noncritical (CP-50, D-504), in `M1F1/aart-cli-telemetry-server`.
+
+AKS: a container image, one replica on a persistent volume or a managed PostgreSQL, the
+authenticating ingress, scheduled backups with a tested restore. Alembic migrations with the first
+schema change. Retention (events older than N days aggregated or deleted).
+
+## B-258 — An older aart-cli on state a newer one wrote proposes `reset`
+
+Status: **open**, noncritical (found in the CP-50 lab, 2026-10-30).
+
+aart-cli 0.17.0 opened an application home that 0.21.0 had written (`consumer-settings.json` with
+`artifact_usage`) and answered `stored consumer settings name artifact_usage, which AART does not`
+-- a sentence that stops mid-way -- followed by "To start clean and keep this state in a backup:
+aart-cli reset". The state was valid; the binary was old. A person following the advice moves a
+good home aside. Reading state with an unknown field or a newer schema should say that a newer
+aart-cli wrote it and to run that one or upgrade (`aart-cli upgrade --how`), and offer `reset` only
+for state no version could read. Forward compatibility itself is not required (pre-1.0); the
+remediation is the defect.
+
+## B-259 — `consume usage enable` says "Nothing is sent anywhere" while telemetry is on
+
+Status: **open**, noncritical (CP-50, D-505; found in the opencode lab, 2026-10-30).
+
+`usage_disclosure` (`aart_cli/application/usage_recording.py`), shown by the command and by the
+TUI's Settings > Artifact usage row, says "Kept only on this machine, in <activity.sqlite3>.
+Nothing is sent anywhere." whatever telemetry's state. Since D-505 a build that names a server has telemetry on
+from the first start, and then each use of an installed artifact is sent. The disclosure should
+read the outbox's setting and, when it is on, say that uses of installed artifacts go to the named
+server and how to turn that off.

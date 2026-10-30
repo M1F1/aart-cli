@@ -12490,3 +12490,123 @@ default.
   to both release jobs; the receipt), `tests/artifact_usage_screens_test.py` (unbaked: every row
   off and nothing hooked at start; baked `opencode`: hooked at start, Claude not). Mutations N1–N7
   in the CP-48 slice.
+
+## D-503 — Telemetry: an outbox in SQLite, one sender on activity, off until a person turns it on (CP-50)
+
+Product Specification §213, INV-322–INV-328. Supersedes §212's "Local only" where telemetry is on,
+and resolves B-251.
+
+- **What was asked.** After 0.21.0 the owner asked for a new CP and a telemetry server "as the
+  spec says", with an implementation brief: stdlib only in the client, local SQLite as the outbox,
+  one HTTP sender inside aart-cli, no LaunchAgent, daemon or event-count threshold; on each event
+  check whether 600 s have passed since the last success (or there never was one) and whether
+  `next_retry_at` has passed, then start a detached sync; under a `flock`, send batches over HTTPS,
+  mark only acknowledged ids; back off 1/2/5/10/30 minutes with jitter; 401/403 is no retry loop;
+  400/422 isolates the bad events; `maybe-sync`, `sync`, `status`, enable/disable; never prompts,
+  arguments, paths or secrets; acceptance tests 1–10; measure the hook's cost.
+- **Choices.**
+  - **Off by default, and a baked address only offers.** The brief names no consent model. Sending
+    what a person does to a server is a new disclosure beyond §212's local recording, so the
+    conservative choice is an explicit `consume telemetry enable`. `AART_CLI_TELEMETRY_ENDPOINT`
+    (a release variable, stamped by `scripts/inject_default_telemetry.py` as D-309 and D-502 stamp
+    theirs) only supplies the default address. Whether an organisation's build should start on is
+    the owner's question, recorded as B-256.
+  - **The outbox is its own database**, `state/telemetry.sqlite3`, not a table in the Activity
+    database: turning telemetry off with `--forget` deletes one file, and the Activity schema
+    (INV-321) is untouched. Events are inserted with `INSERT … SELECT … WHERE enabled`, so a row
+    recorded while off cannot exist (INV-322). Uses are kept raw (harness, kind, name) and resolved
+    against the installations only when sent, so a use is sent as the artifact aart-cli installed
+    (kind, name, version) and a use nothing installed answers to is marked `skipped`, never sent.
+  - **Lifecycle events come from the receipt** an action records: each member that completed (or
+    completed with attention) in an install, update/downgrade or uninstall. A repair is no event.
+  - **Due is a pure function** (`sync_due`): something waits, not paused, the backoff passed, and
+    never a success or 600 s since it; `consume telemetry sync` drops only the interval, and
+    `--force` also the backoff and pause. No count threshold anywhere.
+  - **The sender** is `python -I -c <bootstrap> <package root> <home>` with the running
+    interpreter, `start_new_session=True`, stdio to `/dev/null`: the current directory (a project)
+    is never on the import path, and the hook does not wait. A non-blocking `flock` on
+    `state/telemetry.lock` admits one; it re-checks under the lock. No transaction is open during a
+    request. Limits: 100 events a request, 20 requests or 60 s a run, 10 s timeout, 1 MiB answer.
+  - **Answers.** `200` marks only the acknowledged ids that were sent (an acknowledgement naming
+    none is treated as no answer); `422` naming events marks those rejected; `400`/`413`/`422`
+    naming none halves the batch down to one event, which is then rejected; `401`/`403` pauses for
+    an hour; anything else backs off 1, 2, 5, 10, 30 minutes plus up to 20% jitter.
+  - **The address** is parsed once (`parse_telemetry_endpoint`): `https://`, or `http://` to
+    loopback only; no user, password, query or fragment, so no credential can ride in it; the
+    error never repeats the address. Loopback is never sent through an environment proxy.
+  - **Measured hook cost** (macOS, 15 runs each, median): 55 ms with telemetry never turned on (one
+    `stat` more than CP-48), 77 ms with it on and not due. The hook stays `async` in Claude Code
+    and detached in opencode, so the harness does not wait for either.
+- **Evidence.** `tests/telemetry_domain_test.py`, `tests/telemetry_sync_test.py` (the brief's
+  scenarios 1–9 on a fixed clock and a fake server, the real hook and the detached process against
+  a loopback HTTP server), `tests/telemetry_cli_test.py`,
+  `tests/release_default_telemetry_injection_test.py`; targeted mutations in
+  `docs/refactor/slices/CP-50-telemetry.md`.
+
+## D-504 — The telemetry server is its own repository, sharing only a copied contract (CP-50)
+
+Product Specification §213.
+
+- **Its name.** `aart-cli-telemetry-server`, Python package `aart_cli_telemetry_server`, variables
+  `AART_CLI_TELEMETRY_*`: the owner's choice ("w sumie to możesz je nazwać
+  aart-cli-telemetry-server", 2026-10-29), matching `aart-cli` / `aart_cli`.
+
+- **What was asked.** "stworzysz nowe [repo] z serwerem do telemetrii tak jak mówi specka"; the
+  brief: a separate repository, FastAPI, SQLite in WAL, a Chart.js dashboard, `/healthz`,
+  `/dashboard`, `/api/v1/stats/*`; local end to end first, AKS later. During the work the owner
+  added: the same quality gates as aart-cli (tach, mypy, ruff, unit tests, Hypothesis), written
+  functionally with `returns`, ORMs and pydantic allowed since the server may have dependencies,
+  and the database abstracted as a functional core with an imperative shell, because it may move
+  to PostgreSQL.
+- **Choices.**
+  - `M1F1/aart-cli-telemetry-server`. aart-cli's zero-runtime-dependency invariant does not reach it.
+  - **One contract, two byte-identical copies**: `docs/telemetry-api-v1.md` and
+    `contract/telemetry-api-v1.examples.json`. Each repository pins both files' SHA-256 in a test,
+    so changing the contract is a change to both in step. Neither repository imports the other.
+  - **Layers**: `domain` (the contract as strict pydantic models, events, and the dashboard's
+    counts as pure functions), `application` (use cases against an `EventRepository` port and a
+    clock, answering with `returns` `Result`/`IOResult`), `adapters` (`SqlEventRepository` on
+    SQLAlchemy Core; `InMemoryEventRepository`), `web` (FastAPI), `effects` (the one module that
+    imports `returns.unsafe`), and `cli`/`asgi` as composition roots. `tach` holds the edges;
+    a test holds which third-party libraries each core layer imports.
+  - **SQLAlchemy Core, not the ORM**: rows are values, the domain owns its dataclasses, and the
+    same statements run on SQLite and PostgreSQL (`ON CONFLICT DO NOTHING` from the dialect, naive
+    UTC moments, a stored UTC day instead of a dialect's date function, `CASE` sums instead of
+    boolean sums). The pure definitions in `domain/stats.py` are the oracle: a property test holds
+    every repository's aggregates equal to them over generated histories; CI runs it on
+    PostgreSQL 16 as well.
+  - **Schema version** is a `schema_info` row (portable), not `PRAGMA user_version`; a database
+    not created by the server, or at another version, is refused and left byte for byte. Alembic
+    can come with the first schema change (B-257).
+- **Evidence.** The server repository's `make quality` (ruff, mypy strict with the pydantic and
+  returns plugins, tach, tests under 95% branch coverage) and `tests/test_e2e_aart_cli.py`, run here
+  against this branch's aart-cli.
+
+## D-505 — A build that names a telemetry server starts with it on, and turning it on sends Activity's history (CP-50)
+
+Product Specification §213, INV-322. Supersedes D-503's "off until a person turns it on" for a build
+that bakes `AART_CLI_TELEMETRY_ENDPOINT`.
+
+- **What was asked.** Reviewing CP-50 the owner said the address is a repository variable so that an
+  enterprise fork chooses its server, unset sends nothing, and setting it at a release sends what has
+  accumulated locally. Asked, they chose: a build with an address starts with telemetry on (as
+  `AART_CLI_DEFAULT_USAGE_HARNESSES` records without asking, D-502), and turning it on sends the whole
+  Activity history.
+- **When the build turns it on.** At the first `aart-cli` terminal session or `consume` command of a
+  home where nobody decided yet -- the outbox does not exist. Not for `consume telemetry …`, so a
+  person whose first command is `disable` is never sent anything, and not under `--offline`. The
+  outbox is created inside one `BEGIN IMMEDIATE` that also checks nobody decided, so two first
+  commands at once turn it on once. It is said once, on stderr or before the TUI's screen.
+- **The decision is kept.** `disable` on a home where nobody decided creates the outbox turned off,
+  and `--forget` deletes the events, the sync state and the installation id but keeps the row that
+  says off. Deleting the file, as D-503 did, would let the next start turn telemetry on again.
+- **One event id per Activity record.** `uuid5` of a random history key (kept in the outbox, never
+  sent, kept by `--forget`) and the record's row (`action-12` with the artifact's index, `use-7`).
+  The live path and the history compute the same id, the outbox inserts `OR IGNORE`, and the server
+  keeps the first copy of an id, so nothing is counted twice however often the history is queued.
+  The project is not part of the id: a hash of a path is a path to anyone who can guess it.
+- **History is read from Activity, not kept twice.** Turning on reads every action and use row and
+  queues them in one transaction. An action Activity cannot decode is skipped rather than failing
+  the command that turned telemetry on: telemetry never fails what triggered it.
+- **Backfill drains at the ordinary pace.** 2000 events a run, a run when due; a large history takes
+  several runs. Not raised for history: the limits protect the server, and a backlog is not urgent.

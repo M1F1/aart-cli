@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from aart_cli import _default_registry, _default_usage
+from aart_cli import _default_registry, _default_telemetry, _default_usage
 from aart_cli.domain.artifact_usage import parse_usage_harnesses
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.domain.telemetry import parse_telemetry_endpoint
 
 from .model import git_location_parts, parse_source_alias
 
@@ -73,3 +74,18 @@ def baked_usage_harnesses(raw: str | None = None) -> tuple[str, ...]:
 
     parsed = parse_usage_harnesses(_default_usage.HARNESSES if raw is None else raw)
     return parsed.value if isinstance(parsed, Ok) else ()
+
+
+def baked_telemetry_endpoint(raw: str | None = None) -> str | None:
+    """The telemetry server this build names, or `None` (§213, D-503, D-505).
+
+    Read when asked rather than when imported, so the stamped module is what counts. A value the
+    release would have refused names nothing: sending without a valid address is never the
+    fallback. A named server is where telemetry goes from the first start where nobody decided.
+    """
+
+    value = (_default_telemetry.ENDPOINT if raw is None else raw).strip()
+    if not value:
+        return None
+    parsed = parse_telemetry_endpoint(value)
+    return parsed.value if isinstance(parsed, Ok) else None

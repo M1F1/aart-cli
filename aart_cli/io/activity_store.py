@@ -157,6 +157,42 @@ class ActivityDatabase:
             return _error(ACTIVITY_UNREADABLE, f"cannot read Activity from {self.path}: {error}")
         return Ok(tuple(bytes(row[0]) for row in rows))
 
+    def action_rows(self) -> Result[tuple[tuple[str, bytes], ...]]:
+        """Every recorded receipt with the record it is, oldest first: `action-<row>`."""
+
+        try:
+            connection = self._open(create=False)
+            if connection is None:
+                return Ok(())
+            with closing(connection):
+                rows = connection.execute("SELECT id, receipt FROM action ORDER BY id").fetchall()
+        except (OSError, sqlite3.Error) as error:
+            return _error(ACTIVITY_UNREADABLE, f"cannot read Activity from {self.path}: {error}")
+        return Ok(tuple((f"action-{row}", bytes(receipt)) for row, receipt in rows))
+
+    def use_rows(self) -> Result[tuple[tuple[str, str, ArtifactUse], ...]]:
+        """Every readable use with the record it is and its moment, oldest first: `use-<row>`."""
+
+        try:
+            connection = self._open(create=False)
+            if connection is None:
+                return Ok(())
+            with closing(connection):
+                rows = connection.execute(
+                    "SELECT id, moment, harness, kind, name, project FROM artifact_use ORDER BY id"
+                ).fetchall()
+        except (OSError, sqlite3.Error) as error:
+            return _error(ACTIVITY_UNREADABLE, f"cannot read usage from {self.path}: {error}")
+        uses: list[tuple[str, str, ArtifactUse]] = []
+        for row, moment, harness, kind, name, project in rows:
+            try:
+                uses.append(
+                    (f"use-{row}", moment, ArtifactUse(harness, UsageKind(kind), name, project))
+                )
+            except ValueError:
+                continue  # a row no use could have written is not one to report
+        return Ok(tuple(uses))
+
     def record_use(self, use: ArtifactUse, moment: str) -> Result[str]:
         """Append one artifact use: names and the moment only."""
 

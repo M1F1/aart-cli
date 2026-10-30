@@ -127,6 +127,7 @@ from aart_cli.authoring.check import AuthorCheckReport
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
 from aart_cli.configuration.policy import EffectiveConfiguration, redact_text
 from aart_cli.configuration.schema import configured_source_from_input
+from aart_cli.configuration.seed import baked_telemetry_endpoint
 from aart_cli.domain.artifact_usage import USAGE_HARNESSES
 from aart_cli.domain.candidates import CandidateId
 from aart_cli.domain.credentials import (
@@ -229,6 +230,8 @@ from aart_cli.io.registry_bootstrap import (
 )
 from aart_cli.io.registry_publication import publish_registry_commit
 from aart_cli.io.registry_workspace import read_registry_workspace
+from aart_cli.io.telemetry_consent import turn_on_by_default
+from aart_cli.io.telemetry_store import TelemetrySetting
 from aart_cli.io.usage_hooks import read_artifact_usage, reconcile_usage_hooks, set_usage_hook
 from aart_cli.protocol.authoring import read_package_description
 from aart_cli.protocol.hashing import parse_sha256
@@ -1138,6 +1141,19 @@ class LocalConsumerActions:
             )
         except Exception:  # noqa: BLE001 -- recording usage is never what stops the TUI
             return ()
+
+    def turn_telemetry_on_by_default(self) -> TelemetrySetting | None:
+        """Turn telemetry on where this build names a server and nobody decided (§213, D-505).
+
+        Never raises: the setting is returned when this call turned it on, else `None`.
+        """
+
+        if self._data_root is None:
+            return None
+        try:
+            return turn_on_by_default(self._data_root, baked_telemetry_endpoint())
+        except Exception:  # noqa: BLE001 -- telemetry is never what stops the TUI
+            return None
 
     def _usage(self) -> ArtifactUsageView | None:
         if self._data_root is None:

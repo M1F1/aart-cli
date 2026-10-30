@@ -4,6 +4,19 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-10-29, CP-50 (§213, INV-322–INV-328, D-503–D-505): installs, updates, removals and uses are sent to a telemetry server once telemetry is on: from the first start in a build that names a server, else once a person turns it on.**
+A completed action and a use that resolves to an installed artifact become events in
+`state/telemetry.sqlite3` (0600, schema version 1) while telemetry is on; a detached sender, at most
+one under a `fcntl` lock and at most every ten minutes on activity, posts batches of 100 to
+`/api/v1/events/batch` and marks only acknowledged ids sent, with split, backoff and a pause after
+401/403. `consume telemetry status|enable|disable|sync`. A build whose `AART_CLI_TELEMETRY_ENDPOINT` names a
+server turns telemetry on at a home's first `aart-cli` or `consume` command where nobody decided
+(D-505), and turning it on, either way, queues Activity's history; each Activity record has one
+event id (`uuid5` of a history key and its row), so nothing is counted twice. `disable` is kept for
+good, `--forget` included. The server is the new repository `aart-cli-telemetry-server`. The hook costs 77 ms
+median with telemetry on and nothing due, 55 ms off. Evidence:
+`docs/refactor/slices/CP-50-telemetry.md`.
+
 **2026-10-28, CP-49 (§170.1, D-501): `consume mcp test` accepts `ALIAS/KIND/NAME` without a version.**
 The selector is read as `consume inputs` reads it; a version, when given, must be the installed
 one, and a miss names the installed version. Evidence: `docs/refactor/slices/CP-49-mcp-test-selector.md`.

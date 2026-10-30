@@ -87,6 +87,12 @@ def _run_usage(request: Request) -> int:
     return usage.run(request)
 
 
+def _run_telemetry(request: Request) -> int:
+    from .commands import telemetry
+
+    return telemetry.run(request)
+
+
 def _run_inputs(request: Request) -> int:
     """`consume inputs` (§198): the TUI's own application, so it is not a `commands` module.
 
@@ -111,6 +117,7 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "author": _run_author,
     "mcp": _run_mcp,
     "usage": _run_usage,
+    "telemetry": _run_telemetry,
     "candidate": _run_candidate,
 }
 
@@ -158,6 +165,8 @@ def _route(args: argparse.Namespace) -> tuple[str, dict[str, object]]:
             return "inputs", {}
         if action == "usage":
             return "usage", {}
+        if action == "telemetry":
+            return "telemetry", {}
         return "marketplace", {"marketplace_action": action}
     if command == "maintain":
         action = args.maintain_action
@@ -272,6 +281,10 @@ def _to_request(args: argparse.Namespace) -> Request:
         upgrade_how=bool(getattr(args, "upgrade_how", False)),
         usage_action=getattr(args, "usage_action", None),
         usage_forget=bool(getattr(args, "usage_forget", False)),
+        telemetry_action=getattr(args, "telemetry_action", None),
+        telemetry_endpoint=getattr(args, "telemetry_endpoint", None),
+        telemetry_forget=bool(getattr(args, "telemetry_forget", False)),
+        telemetry_force=bool(getattr(args, "telemetry_force", False)),
     )
 
 
@@ -303,6 +316,16 @@ def _seed_first_run(request: Request) -> None:
     announce_first_run_seed(report, lambda line: print(line, file=sys.stderr))
 
 
+def _turns_telemetry_on(args: argparse.Namespace, request: Request) -> bool:
+    """Whether this command may turn on the telemetry the build names (§213, D-505).
+
+    `consume telemetry` is the person deciding, which the build must not pre-empt, and `--offline`
+    forbids the sending turning it on starts.
+    """
+
+    return args.command == "consume" and not request.offline and request.command != "telemetry"
+
+
 def _run_bare(parser: argparse.ArgumentParser, args: Optional[argparse.Namespace] = None) -> int:
     """Bare invocation: launch the TUI on a TTY, else print help."""
     if sys.stdin.isatty() and sys.stdout.isatty():
@@ -330,6 +353,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     request = _to_request(args)
     if _seeds_first_run(args, request):
         _seed_first_run(request)
+    if _turns_telemetry_on(args, request):
+        from .commands.telemetry import turn_on_for_this_build
+
+        turn_on_for_this_build(request)
     code = (
         _run_inputs(request) if request.command == "inputs" else DISPATCH[request.command](request)
     )

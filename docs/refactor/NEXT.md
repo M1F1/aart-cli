@@ -1,6 +1,27 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-28, CP-48, in the CP-47 PR)
+## Where the work is (2026-10-29, CP-50)
+
+0.21.0 (CP-47, CP-48, CP-49) is released. **CP-50** sends installs, updates, removals and uses of
+installed artifacts to a telemetry server (§213, INV-322–INV-328, D-503–D-505). A build whose
+release variable `AART_CLI_TELEMETRY_ENDPOINT` names a server starts with it on and says so once;
+otherwise it is off until `consume telemetry enable [--endpoint URL]`. Turning it on sends
+Activity's history too, each record once; `consume telemetry disable` is kept for good. Events wait in `state/telemetry.sqlite3`
+(0600); recording one starts a detached sender at most every ten minutes, one at a time under
+`state/telemetry.lock`, and only acknowledged ids are marked sent. No daemon, no runtime
+dependency, and nothing fails what triggered it. `consume telemetry status|enable|disable|sync`.
+
+The server is its own repository, `aart-cli-telemetry-server`
+(`M1F1/aart-cli-telemetry-server`, private): a functional core
+(`returns`, pydantic) behind FastAPI, SQLite or PostgreSQL through one SQLAlchemy repository port,
+and the same gates as aart-cli. The contract `docs/telemetry-api-v1.md` is copied identically into
+both and pinned by digest.
+
+Evidence: `docs/refactor/slices/CP-50-telemetry.md`. Steps 1–6 are done; the PR is open. Next: the
+owner's review and merge, then the Release Please PR.
+B-253, B-254, B-255 and B-257 are open; B-256 was resolved by D-505.
+
+## Where the work was (2026-10-28, CP-48, in the CP-47 PR)
 
 **CP-48**, at the owner's request in the same PR as CP-47: Activity is one SQLite database,
 `state/activity.sqlite3`, holding install/update/uninstall actions and every recorded use of a skill

@@ -252,7 +252,8 @@ every setting is a repository variable, so a copy on an Enterprise instance neve
 [optional analyzers](docs/security/analyzers-v1.md)
 
 **Protocol contracts** — [native source v1](docs/protocol/native-source-v1.md) ·
-[registry v1](docs/protocol/registry-v1.md)
+[registry v1](docs/protocol/registry-v1.md) ·
+[telemetry API v1](docs/telemetry-api-v1.md)
 
 **Development and testing** — [the package and its interface](docs/development/packaging-and-interface-v1.md) ·
 [the quality gates](docs/development/quality-gates-v1.md) ·
