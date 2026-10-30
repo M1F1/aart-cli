@@ -5239,3 +5239,26 @@ Status: **open**, noncritical (CP-50, D-504), in `M1F1/aart-cli-telemetry-server
 AKS: a container image, one replica on a persistent volume or a managed PostgreSQL, the
 authenticating ingress, scheduled backups with a tested restore. Alembic migrations with the first
 schema change. Retention (events older than N days aggregated or deleted).
+
+## B-258 — An older aart-cli on state a newer one wrote proposes `reset`
+
+Status: **open**, noncritical (found in the CP-50 lab, 2026-10-30).
+
+aart-cli 0.17.0 opened an application home that 0.21.0 had written (`consumer-settings.json` with
+`artifact_usage`) and answered `stored consumer settings name artifact_usage, which AART does not`
+-- a sentence that stops mid-way -- followed by "To start clean and keep this state in a backup:
+aart-cli reset". The state was valid; the binary was old. A person following the advice moves a
+good home aside. Reading state with an unknown field or a newer schema should say that a newer
+aart-cli wrote it and to run that one or upgrade (`aart-cli upgrade --how`), and offer `reset` only
+for state no version could read. Forward compatibility itself is not required (pre-1.0); the
+remediation is the defect.
+
+## B-259 — `consume usage enable` says "Nothing is sent anywhere" while telemetry is on
+
+Status: **open**, noncritical (CP-50, D-505; found in the opencode lab, 2026-10-30).
+
+`usage_recording` prints "Kept only on this machine, in <activity.sqlite3>. Nothing is sent
+anywhere." whatever telemetry's state. Since D-505 a build that names a server has telemetry on
+from the first start, and then each use of an installed artifact is sent. The disclosure should
+read the outbox's setting and, when it is on, say that uses of installed artifacts go to the named
+server and how to turn that off; the TUI's Settings row (B-253) has the same sentence.
