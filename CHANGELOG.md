@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.22.0](https://github.com/M1F1/aart-cli/compare/v0.21.0...v0.22.0) (2026-10-30)
+
+
+### Added
+
+* a build whose AART_CLI_TELEMETRY_ENDPOINT names a server starts with telemetry on, and turning it on sends Activity's history, each record once ([0026091](https://github.com/M1F1/aart-cli/commit/002609182201a675b1388e8f7ae8f05f3781ef57))
+* telemetry sends installs, updates, removals and artifact uses to a telemetry server, with consume telemetry ([0026091](https://github.com/M1F1/aart-cli/commit/002609182201a675b1388e8f7ae8f05f3781ef57))
+
 ## [0.21.0](https://github.com/M1F1/aart-cli/compare/v0.20.0...v0.21.0) (2026-10-29)
 
 
