@@ -122,12 +122,29 @@ def turn_on_by_default(
         return None
 
 
-def announce_turned_on(setting: TelemetrySetting, say: Callable[[str], None]) -> None:
-    """Say, once, that this build turned telemetry on, what it sends and how to turn it off."""
+def announce_turned_on(
+    setting: TelemetrySetting, say: Callable[[str], None], *, unmanaged: bool
+) -> None:
+    """Say, once, that this build turned telemetry on, what it sends and how to turn it off.
 
+    `unmanaged` is whether uses aart-cli did not install are sent too (D-508): then it says so,
+    and where that alone is turned off.
+    """
+
+    others = (
+        ", and each use of a skill or MCP it did not install, by the name the harness used"
+        if unmanaged
+        else ""
+    )
     say(
         f"Telemetry is on: this aart-cli sends to {setting.endpoint} each install, update and "
-        "removal it completes and each use of an artifact it installed, including what Activity "
-        "already holds; never a project, path, argument, prompt, user or host name, or "
+        f"removal it completes and each use of an artifact it installed{others}, including what "
+        "Activity already holds; never a project, path, argument, prompt, user or host name, or "
         "credential. `aart-cli consume telemetry disable` turns it off."
+        + (
+            " Settings > Telemetry, or `aart-cli consume telemetry unmanaged off`, stops "
+            "sending uses of tools aart-cli did not install."
+            if unmanaged
+            else ""
+        )
     )

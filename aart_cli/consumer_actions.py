@@ -98,6 +98,8 @@ from aart_cli.application.installation_inputs import (
     OwnedInputSource,
     artifact_answer_key,
     copy_artifact_answers,
+    retained_input_sources,
+    with_retained,
 )
 from aart_cli.application.installed_setup import DeclaredArtifactSetup
 from aart_cli.application.maintainer_promotion import (
@@ -150,12 +152,14 @@ from aart_cli.domain.identifiers import (
 from aart_cli.domain.inputs import (
     ConfigInput,
     InputGuidance,
+    PromptedConfigValue,
     RuntimeInput,
     SecretInput,
     SecretProviderReference,
     is_skipped_value,
 )
 from aart_cli.domain.installation_owner import (
+    InstallationOwner,
     credential_address,
     describe_installation,
     installation_key,
@@ -176,6 +180,7 @@ from aart_cli.io.author_operations import check_workspace, new_artifact, select_
 from aart_cli.io.configured_configuration_action import (
     PreparedConfiguredConfiguration,
     complete_configured_configuration,
+    installed_configuration_values,
     prepare_configured_configuration,
 )
 from aart_cli.io.configured_installation import InstallationAssignment
@@ -2406,6 +2411,9 @@ class LocalConsumerActions:
             previous_receipts=tuple(
                 (item.record.coordinate, item.record.receipt) for item in installed
             ),
+            # What each installation is configured with now is its own, and its update keeps it
+            # where the new version still accepts it (§38, INV-196).
+            stored=installed_configuration_values(installed),
         )
 
     def _offer_installation(
@@ -2416,6 +2424,7 @@ class LocalConsumerActions:
         previous: tuple[tuple[ArtifactCoordinate, DesiredState], ...] = (),
         previous_receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
         groups: dict[str, tuple[str, ...]] | None = None,
+        stored: tuple[tuple[InstallationOwner, tuple[tuple[InputId, str], ...]], ...] = (),
     ) -> ConsumerActionUpdate:
         context = self._context
         groups = groups or {}
@@ -2572,7 +2581,9 @@ class LocalConsumerActions:
                 answers.append(
                     ArtifactAnswer(held_by.source, held_by.artifact, InputId(identifier), value)
                 )
-        sources = copy_artifact_answers(prepared.value.draft.inputs.fields, answers)
+        fields = prepared.value.draft.inputs.fields
+        retained = retained_input_sources(fields, stored)
+        sources = with_retained(copy_artifact_answers(fields, answers), retained)
         if sources:
             prepared = prepare_configured_installation(
                 context.effective,
@@ -2659,6 +2670,11 @@ class LocalConsumerActions:
                 ):
                     config_fields.setdefault((artifact, runtime_input.id.value), runtime_input)
             if config_fields:
+                held = {
+                    (artifact_answer_key(item.owner), item.source.input.value): item.source.value
+                    for item in retained
+                    if isinstance(item.source, PromptedConfigValue)
+                }
                 order = {
                     artifact: index
                     for index, artifact in enumerate(dict.fromkeys(key for key, _ in config_fields))
@@ -2682,7 +2698,9 @@ class LocalConsumerActions:
                     tuple(
                         InstallationConfigField(
                             runtime_input.id.value,
-                            runtime_input.default or "",
+                            # An update's form starts from what the installation holds (§38).
+                            held.get((artifact, runtime_input.id.value), runtime_input.default)
+                            or "",
                             runtime_input.validation,
                             owner=artifact,
                             required=runtime_input.required,

@@ -12657,11 +12657,14 @@ unchanged.
 
 # 213. Telemetry: installs, updates, removals and uses sent to a telemetry server
 
-Status: **ACCEPTED 2026-10-29 (D-503, D-504, D-505)**, on the owner's request after 0.21.0, from
+Status: **ACCEPTED 2026-10-29 (D-503, D-504, D-505), amended 2026-10-30 (D-508)**, on the owner's request after 0.21.0, from
 their telemetry implementation brief: the organisation sees which artifacts are used, how often, by
 how many installations, and how that changes, on a dashboard. Supersedes §212's "Local only" for an
 installation where telemetry is on. D-505 (the owner, the same day): a build that names a server
-starts with telemetry on, and turning it on sends Activity's history too.
+starts with telemetry on, and turning it on sends Activity's history too. D-508 (the owner,
+2026-10-30): uses of skills and MCPs aart-cli did not install are sent too, by the name the harness
+used, unless the build or the person says otherwise; this supersedes D-503's "a use no installed
+artifact answers to is never sent".
 
 - **Two repositories, one contract.** The server is a separate repository,
   `aart-cli-telemetry-server` (a functional core behind FastAPI; SQLite in WAL by default and
@@ -12691,13 +12694,26 @@ starts with telemetry on, and turning it on sends Activity's history too.
   Version 1 sends no credential; a server reachable beyond loopback sits behind the organisation's
   authenticating proxy, and no shared secret is baked into aart-cli.
 - **What is sent.** `artifact.installed`, `artifact.updated` (an update or a downgrade) and
-  `artifact.removed` for each artifact an action changed and completed, from `aart_cli`; and
-  `artifact.used` from `claude_hook` or `opencode_plugin` for a use §212 recorded, only when it is
-  an artifact aart-cli installed: named by its installation (kind, name, version), never by the
-  tool the harness called. A use no installed artifact answers to is never sent. Each event has
+  `artifact.removed` for each artifact an action changed and completed, from `aart_cli`;
+  `artifact.used` from `claude_hook` or `opencode_plugin` for a use §212 recorded of an artifact
+  aart-cli installed, named by its installation (kind, name, version), never by the tool the
+  harness called; and `unmanaged.used`, from the same sources, for a use no installed artifact
+  answers to, while uses aart-cli did not install are sent (below): named by the name the harness
+  used -- a skill's name, an MCP server's for Claude Code, the whole tool name for opencode, which
+  does not say where the server's name ends -- and its kind, with no version. A name the contract
+  cannot carry is not sent. Each event has
   its Activity record's `event_id` (above) and its UTC moment; the request has a random installation id, drawn when
   telemetry is turned on, and aart-cli's version. Never a project, path, argument, prompt,
   Registry address, user or host name, or credential.
+- **Uses aart-cli did not install: sent unless the build or the person says not (D-508).** The
+  release variable `AART_CLI_TELEMETRY_UNMANAGED_USES` sets what a build does until a person
+  chooses: unset, empty, `on` or `true` sends them; `off` or `false` does not; any other value fails
+  the release. A person changes it at any time: Settings' row *Uses of tools aart-cli did not
+  install*, or `consume telemetry unmanaged on|off`; the choice is kept in the consumer settings
+  and overrules the build. It is read when events are sent, not when a use is recorded, so turning
+  it off means no such use still waiting is sent: each is marked skipped. It changes nothing while
+  telemetry is off, and nothing about what Activity records. Telemetry's announcement, `consume
+  telemetry status`, `enable` and the Settings row say whether such uses are sent.
 - **The outbox.** `state/telemetry.sqlite3` in the application home, created 0600, holds whether
   telemetry is on or off once that was decided, the address, the installation id, the history key,
   every event with whether it is waiting, sent, rejected or skipped,
@@ -12735,9 +12751,10 @@ telemetry was on or existed when it was turned on, and nothing else. A build tha
 holds none until a person turns telemetry on; one that does turns it on only for a home where
 nobody decided yet.
 
-**INV-323 — An event carries the contract's fields only, and a use only as an installed
-artifact.** Every event sent satisfies `docs/telemetry-api-v1.md`; a use that no installed
-artifact answers to produces no event; no event holds a project, path or argument.
+**INV-323 — An event carries the contract's fields only, and a use as the installed artifact it
+is.** Every event sent satisfies `docs/telemetry-api-v1.md`; a use an installed artifact answers to
+is sent as `artifact.used` naming that installation, never as `unmanaged.used`; no event holds a
+project, path or argument.
 
 **INV-324 — A synchronisation is due only on time, never on count.** For any state, moment and
 number waiting, a synchronisation is due exactly when something waits, the backoff or pause has
@@ -12756,6 +12773,11 @@ query or fragment.
 
 **INV-328 — Telemetry never fails what triggered it.** A hook exits 0 with nothing on stdout and an
 action's outcome is unchanged whatever the outbox, the lock, the network or the server does.
+
+**INV-330 — A use aart-cli did not install is sent only while that is chosen.** For any choice of
+the build and the person, a use no installed artifact answers to is sent, as `unmanaged.used`,
+exactly when telemetry is on and the person's choice, or without one the build's, is to send such
+uses at the moment it is sent; otherwise it is marked skipped and never sent.
 
 # 214. A plugin's skills are installed with it
 
@@ -12796,11 +12818,11 @@ rewrites nor namespaces a plugin's internal names are unchanged.
 any payload, the members are the names of the directories below the payload root that hold a
 `SKILL.md`, less every name two such directories share, each once and in name order.
 
-**INV-330 — A plugin installation records its members and places nothing of them elsewhere.**
+**INV-331 — A plugin installation records its members and places nothing of them elsewhere.**
 Installing a plugin records in its receipt the members of the package it installed, and writes
 nothing for them outside the installation's tree and its one plugin-list entry.
 
-**INV-331 — A member's use is its plugin installation's, sent in version 1's form.** A skill use
+**INV-332 — A member's use is its plugin installation's, sent in version 1's form.** A skill use
 in a harness a plugin is installed for, under one of its members' names, resolves to that plugin
 installation and member. Its telemetry event is `artifact.used` with `artifact_type` `skill`,
 `artifact_id` `<plugin>:<member>` and the plugin's version. A plugin's install, update and removal

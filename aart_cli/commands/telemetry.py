@@ -5,14 +5,17 @@ from __future__ import annotations
 import json
 import os
 import sys
+from dataclasses import replace
 from datetime import datetime
 
 from aart_cli import command_outcome as _common
+from aart_cli.application.consumer_views import ConsumerSettings
 from aart_cli.configuration.paths import APPLICATION_HOME_VARIABLE, Platform, resolve_config_paths
 from aart_cli.configuration.policy import redact_text
 from aart_cli.configuration.seed import baked_telemetry_endpoint
-from aart_cli.domain.result import Err
+from aart_cli.domain.result import Err, Ok
 from aart_cli.domain.telemetry import BATCH_PATH, parse_telemetry_endpoint
+from aart_cli.io.consumer_settings import read_consumer_settings, write_consumer_settings
 from aart_cli.io.telemetry_consent import announce_turned_on, turn_on, turn_on_by_default
 from aart_cli.io.telemetry_store import TelemetryOutbox
 from aart_cli.io.telemetry_sync import new_installation_id, synchronise
@@ -64,7 +67,26 @@ def _moment(value: datetime | None) -> str | None:
     return None if value is None else value.isoformat()
 
 
-def _status(request: Request, outbox: TelemetryOutbox) -> int:
+def _unmanaged(settings: ConsumerSettings) -> tuple[dict[str, object], str]:
+    """Whether uses aart-cli did not install are sent, and who decided, as data and as a line."""
+
+    chosen = settings.telemetry_unmanaged is not None
+    sent = settings.sends_unmanaged_uses
+    who = "your choice" if chosen else "this aart-cli's default"
+    return (
+        {"sent": sent, "chosen": chosen},
+        f"uses of tools aart-cli did not install: {'sent' if sent else 'not sent'} ({who})",
+    )
+
+
+def _settings(home: str) -> ConsumerSettings:
+    """The person's settings, or the defaults when they cannot be read: a status still reports."""
+
+    settings = read_consumer_settings(home)
+    return settings.value if isinstance(settings, Ok) else ConsumerSettings()
+
+
+def _status(request: Request, outbox: TelemetryOutbox, home: str) -> int:
     setting = outbox.setting()
     counts = outbox.counts()
     state = outbox.sync_state()
@@ -93,6 +115,8 @@ def _status(request: Request, outbox: TelemetryOutbox) -> int:
         "failures": sync.failures,
         "paused": sync.paused,
     }
+    unmanaged, said = _unmanaged(_settings(home))
+    document["unmanaged_uses"] = unmanaged
     offered = baked_telemetry_endpoint()
     lines = [f"telemetry: {'on' if enabled else 'off'}"]
     if current is not None and current.endpoint:
@@ -101,9 +125,10 @@ def _status(request: Request, outbox: TelemetryOutbox) -> int:
         lines.append(f"installation id: {current.client_id}")
     if (current is None or not current.endpoint) and offered is not None:
         lines.append(f"this aart-cli offers: {offered}")
+    lines.append(said)
     lines.append(
         f"events: {waiting.waiting} waiting, {waiting.sent} sent, {waiting.rejected} rejected, "
-        f"{waiting.skipped} skipped (not an installed artifact)"
+        f"{waiting.skipped} skipped (not sent by choice, or nothing the contract can name)"
     )
     lines.append(f"last success: {document['last_success_at'] or 'never'}")
     if sync.next_retry_at is not None:
@@ -129,12 +154,16 @@ def turn_on_for_this_build(request: Request) -> None:
     except Exception:  # noqa: BLE001 -- telemetry never fails what triggered it
         return
     if turned_on is not None:
-        announce_turned_on(turned_on, lambda line: print(line, file=sys.stderr))
+        announce_turned_on(
+            turned_on,
+            lambda line: print(line, file=sys.stderr),
+            unmanaged=_settings(paths.data_root).sends_unmanaged_uses,
+        )
 
 
 def run(request: Request) -> int:
     action = request.telemetry_action
-    if action not in {"status", "enable", "disable", "sync"}:
+    if action not in {"status", "enable", "disable", "unmanaged", "sync"}:
         return _failure(request, "unsupported telemetry action")
     runtime = load_runtime_configuration(request, content_required=False)
     if isinstance(runtime, Err):
@@ -142,7 +171,9 @@ def run(request: Request) -> int:
     home = runtime.value.paths.data_root
     outbox = TelemetryOutbox(f"{home}/state")
     if action == "status":
-        return _status(request, outbox)
+        return _status(request, outbox, home)
+    if action == "unmanaged":
+        return _choose_unmanaged(request, home)
     if action == "enable":
         raw = request.telemetry_endpoint or baked_telemetry_endpoint()
         if not raw:
@@ -156,15 +187,22 @@ def run(request: Request) -> int:
         if isinstance(enabled, Err):
             return _failure(request, enabled.diagnostics[0].message)
         setting, queued = enabled.value
+        unmanaged = _settings(home).sends_unmanaged_uses
         _print(
             request,
             {"endpoint": setting.endpoint, "client_id": setting.client_id, "queued": queued},
             [
                 f"telemetry: on, sending to {setting.endpoint}{BATCH_PATH}",
                 f"Queued {queued} event(s) Activity already held. From now on each install, "
-                "update and removal aart-cli completes, and each recorded use of an artifact "
-                "aart-cli installed, is sent at most every ten minutes, when something new is "
-                "recorded.",
+                "update and removal aart-cli completes, each recorded use of an artifact "
+                "aart-cli installed"
+                + (
+                    ", and each use of a skill or MCP aart-cli did not install, by the name the "
+                    "harness used (`consume telemetry unmanaged off` stops that),"
+                    if unmanaged
+                    else ","
+                )
+                + " is sent at most every ten minutes, when something new is recorded.",
                 "Sent: the event, the artifact's kind, name and version, the moment, the "
                 f"installation id {setting.client_id} and aart-cli's version. Never a "
                 "project, path, argument, prompt, user or host name, or credential.",
@@ -202,3 +240,28 @@ def run(request: Request) -> int:
         ]
     _print(request, document, lines)
     return _common.OK if not report.reason or report.reason == "not due" else _common.ERROR
+
+
+def _choose_unmanaged(request: Request, home: str) -> int:
+    """Keep the person's choice about uses aart-cli did not install in Settings (D-508)."""
+
+    if request.telemetry_unmanaged not in {"on", "off"}:
+        return _failure(request, "say on or off")
+    settings = read_consumer_settings(home)
+    if isinstance(settings, Err):
+        return _failure(request, settings.diagnostics[0].message)
+    kept = replace(settings.value, telemetry_unmanaged=request.telemetry_unmanaged == "on")
+    written = write_consumer_settings(kept, data_root=home)
+    if isinstance(written, Err):
+        return _failure(request, written.diagnostics[0].message)
+    unmanaged, said = _unmanaged(kept)
+    _print(
+        request,
+        {"unmanaged_uses": unmanaged},
+        [
+            said,
+            "Kept in Settings, which changes it too."
+            + ("" if kept.sends_unmanaged_uses else " Such uses still waiting are never sent."),
+        ],
+    )
+    return _common.OK

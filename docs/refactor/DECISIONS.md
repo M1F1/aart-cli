@@ -12613,7 +12613,7 @@ that bakes `AART_CLI_TELEMETRY_ENDPOINT`.
 
 ## D-506 — A plugin's skills are installed with it, and their uses are the plugin's (CP-51)
 
-Product Specification §214, INV-329–INV-331. Amends §171.5 and the attribution of §212 and §213.
+Product Specification §214, INV-329, INV-331, INV-332. Amends §171.5 and the attribution of §212 and §213.
 
 - **What was asked.** After 0.22.0 the owner tried superpowers in opencode. Activity recorded its
   skills as "not installed by aart-cli", and telemetry skipped them. They asked that installing a
@@ -12653,3 +12653,60 @@ Product Specification §214, INV-329–INV-331. Amends §171.5 and the attributi
   directory. A skill of the person's own with a member's name is therefore attributed to the plugin.
   Telling them apart from `tool.execute.after`'s `metadata.dir` is backlog (B-260).
 
+## D-507 — An update keeps the configuration its installation holds, and screen 16 asks what is new (CP-52)
+
+Product Specification §38, §161, INV-196. Found by the owner: an update of an installed MCP
+refused with "required installation inputs are unanswered" though its configuration file held
+every value; `--set-later` wrote `AART_NOT_SET` over them; the TUI's `i` on 15 returned to 15.
+
+- **Where a held value comes from.** The configuration file the installation's own receipt records
+  for its own harness, read only while its digest is the one recorded. A file edited outside
+  aart-cli is no longer the one aart-cli wrote, so it gives nothing and the update asks. Nothing is
+  read from another installation, harness, scope, root or Registry alias (§169.3, D-334).
+- **What is kept.** A config input the new version still declares, whose value the new version's
+  validation accepts. `AART_NOT_SET` is no value. A credential is never read here: the store keeps
+  it under the same owner and nothing asks for it again.
+- **Precedence.** A flag (or a value typed on 16), then the held value, then the declared default,
+  then, with `--set-later`, the placeholder. Neither a default nor the placeholder replaces a held
+  value.
+- **Screen 16 reuses 07's form.** When something is still needed, 16 opens the Required Inputs form
+  (Set later, one field per value, Continue); Continue prepares the same update with the answers and
+  16 shows its review. Optional fields start from the held value. A held optional value cannot be
+  cleared through this form; `consume inputs set` (or Credentials and variables) changes it.
+- **Repair** asks nothing: its receipt is its whole input (`configured_repair_action`), so it has no
+  values to lose.
+
+## D-508 — Telemetry sends uses of tools aart-cli did not install, unless the build or the person says not (CP-52)
+
+Product Specification §213, INV-323, INV-330. Supersedes D-503's "a use nothing installed answers
+to is marked `skipped`, never sent" for a build and a person who have not said otherwise. The
+owner's request (B-263), 2026-10-30: such uses are sent by default while telemetry is on; a
+repository variable decides that before a release; a person can change it in Settings at any time.
+
+- **The event.** `unmanaged.used`, from `claude_hook` or `opencode_plugin`, with no
+  `artifact_version`. `artifact_id` is the name the harness used: a skill's name, a Claude Code MCP
+  server's name, or opencode's whole tool name (opencode does not say where its server name ends).
+  `artifact_type` is `skill` or `mcp`. A name the contract's pattern cannot carry is not sent. A use
+  an installed artifact answers to is always `artifact.used`, never this.
+- **Contract v1, amended in place.** A new event type is added to v1 rather than a v2: a server
+  without it answers 422 naming those events; the client marks them `rejected` and the rest of the
+  batch is stored. Both repositories carry the same document and examples (new digests).
+- **The build's default.** `AART_CLI_TELEMETRY_UNMANAGED_USES`, a repository variable read by the
+  release: unset, empty, `on` or `true` sends them; `off` or `false` does not; anything else fails
+  the release before a wheel exists. Stamped into `aart_cli/_default_telemetry.py` beside the
+  address and recorded in the release receipt (`default_telemetry_unmanaged_uses`). A value the
+  installed module carries that aart-cli would refuse sends none: sending what nobody chose is
+  never the fallback.
+- **The person's choice.** `ConsumerSettings.telemetry_unmanaged`, absent until chosen (`None`
+  means the build decides). Settings shows it under "Telemetry" as "Uses of tools aart-cli did not
+  install: sent/not sent"; Enter flips what is in effect. `aart-cli consume telemetry unmanaged
+  on|off` keeps the same choice; `status` says whether they are sent and whose choice that is.
+- **Read when sending.** The sender reads Settings on each run, so turning it off marks every such
+  use still waiting `skipped`; Settings aart-cli cannot read send none. Uses Activity already held
+  when telemetry was turned on are sent too, under the same rule.
+- **Disclosure.** Turning telemetry on says, when they are sent, that each use of a skill or MCP it
+  did not install is sent by name, and how to stop it. Telemetry itself still starts off unless the
+  build carries an address (D-505).
+- **The server** counts them apart: `Summary.unmanaged_uses` is never part of `uses`;
+  `GET /api/v1/stats/top-unmanaged` ranks them; the dashboard shows them in their own table
+  (aart-cli-telemetry-server, branch `feat/unmanaged-uses`).

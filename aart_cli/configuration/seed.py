@@ -9,7 +9,7 @@ from aart_cli.domain.artifact_usage import parse_usage_harnesses
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.domain.telemetry import parse_telemetry_endpoint
+from aart_cli.domain.telemetry import parse_telemetry_endpoint, parse_unmanaged_uses
 
 from .model import git_location_parts, parse_source_alias
 
@@ -89,3 +89,15 @@ def baked_telemetry_endpoint(raw: str | None = None) -> str | None:
         return None
     parsed = parse_telemetry_endpoint(value)
     return parsed.value if isinstance(parsed, Ok) else None
+
+
+def baked_unmanaged_uses(raw: str | None = None) -> bool:
+    """Whether this build sends uses of skills and MCPs it did not install (§213, D-508).
+
+    Until a person chooses in Settings. Read when asked rather than when imported, so the stamped
+    module is what counts. Empty sends them, as the owner chose; a value the release would have
+    refused sends none: sending what nobody chose is never the fallback.
+    """
+
+    parsed = parse_unmanaged_uses(_default_telemetry.UNMANAGED_USES if raw is None else raw)
+    return parsed.value if isinstance(parsed, Ok) else False

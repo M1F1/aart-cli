@@ -1,18 +1,18 @@
 # CP-51 — A plugin's skills are installed with it, and their uses are the plugin's
 
-Status: **done in code and evidence**, on `feat/cp-51-plugin-members`; the PR is next (2026-10-30).
-Authority: Product Specification §214, INV-329–INV-331, D-506.
+Status: **done**; merged as PR #112 after #113 (2026-10-30).
+Authority: Product Specification §214, INV-329, INV-331, INV-332, D-506.
 
 ## Steps
 
 See `docs/refactor/plan.json`, epic CP-51.
 
-1. §214, D-506, INV-329–INV-331 and the plan. Done.
+1. §214, D-506, INV-329, INV-331, INV-332 and the plan. Done.
 2. A plugin's members, read from its package. Done.
 3. The installation's receipt records the members. Done.
 4. Installed, Details and `consume status` show the members. Done.
 5. Activity and telemetry attribute a member's use to its plugin. Done.
-6. The lab with superpowers in opencode, then the PR. The lab is done; the PR is next.
+6. The lab with superpowers in opencode, then the PR. Done: PR #112.
 
 ## Why
 
@@ -57,11 +57,11 @@ directory, so separate copies would load twice, and under names it does not know
   - members from a real compiled package;
   - receipt round trip, absence and refusal;
   - the Installed row and Details;
-  - INV-331 as a Hypothesis property over members, harness and the name used;
+  - INV-332 as a Hypothesis property over members, harness and the name used;
   - the ranking and the event document.
 - `tests/plugin_installation_e2e_test.py`, through the public command:
   - the receipt records both members, and nothing but `opencode.json` and the tree is written in
-    the project (INV-330);
+    the project (INV-331);
   - `consume status` names the members;
   - a member's use through the real hook entry point is ranked as the plugin's;
   - a skill of the person's own stays unattributed;

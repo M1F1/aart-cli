@@ -504,3 +504,5 @@ class Request:
     telemetry_endpoint: Optional[str] = None
     telemetry_forget: bool = False
     telemetry_force: bool = False
+    #: `consume telemetry unmanaged on|off` (D-508).
+    telemetry_unmanaged: Optional[str] = None

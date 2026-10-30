@@ -195,14 +195,16 @@ class PluginInstallationTest(unittest.TestCase):
         server = FakeServer()
         _sync_home = SimpleNamespace(path=home)
         _sync(_sync_home, server, Clock())  # type: ignore[arg-type]
+        # A skill no installation answers to is sent by its own name, without a version (D-508).
         self.assertEqual(
-            [("artifact.used", "skill", "superpowers:brainstorming", "7.0.0")] * 2,
+            [("artifact.used", "skill", "superpowers:brainstorming", "7.0.0")] * 2
+            + [("unmanaged.used", "skill", "their-own", None)],
             [
                 (
                     event["event_type"],
                     event["artifact_type"],
                     event["artifact_id"],
-                    event["artifact_version"],
+                    event.get("artifact_version"),
                 )
                 for event in server.stored.values()
             ],

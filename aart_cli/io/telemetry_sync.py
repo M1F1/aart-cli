@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from aart_cli.domain.artifact_usage import InstalledName
-from aart_cli.domain.result import Err
+from aart_cli.domain.result import Err, Ok
 from aart_cli.domain.telemetry import (
     BATCH_PATH,
     BATCH_SIZE,
@@ -128,6 +128,19 @@ def _installed(state_root: str) -> tuple[InstalledName, ...]:
     return () if isinstance(records, Err) else installed_names(records.value)
 
 
+def _sends_unmanaged(home: str) -> bool:
+    """Whether uses aart-cli did not install are sent now: the person's choice, else the build's
+    (D-508). Settings that cannot be read send none of them."""
+
+    from aart_cli.io.consumer_settings import read_consumer_settings
+
+    try:
+        settings = read_consumer_settings(home)
+    except Exception:  # noqa: BLE001 -- telemetry never fails what triggered it
+        return False
+    return isinstance(settings, Ok) and settings.value.sends_unmanaged_uses
+
+
 @dataclass(frozen=True, slots=True)
 class SyncReport:
     started: bool
@@ -207,6 +220,7 @@ def _under_lock(
         return SyncReport(False, reason="not due")
 
     installed = _installed(state_root)
+    unmanaged = _sends_unmanaged(str(Path(state_root).parent))
     started = monotonic()
     size = BATCH_SIZE
     sent = rejected = skipped = requests = 0
@@ -222,7 +236,13 @@ def _under_lock(
                 continue
             assert item.harness is not None and item.kind is not None and item.name is not None
             event = use_event(
-                item.event_id, item.occurred_at, item.harness, item.kind, item.name, installed
+                item.event_id,
+                item.occurred_at,
+                item.harness,
+                item.kind,
+                item.name,
+                installed,
+                unmanaged=unmanaged,
             )
             if event is None:
                 unattributed.append(item.event_id)

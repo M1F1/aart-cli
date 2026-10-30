@@ -1874,11 +1874,11 @@
     {
       "id": "CP-51",
       "title": "A plugin's skills are installed with it, and their uses are the plugin's (§214, D-506)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
-          "title": "§214, D-506, INV-329–INV-331 and this plan",
+          "title": "§214, D-506, INV-329, INV-331, INV-332 and this plan",
           "status": "done"
         },
         {
@@ -1904,7 +1904,39 @@
         {
           "id": "6",
           "title": "The lab with superpowers in opencode, then the PR",
-          "status": "in_progress"
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-52",
+      "title": "An update keeps the configuration its installation holds, screen 16 asks what is new, and telemetry sends uses of tools aart-cli did not install unless turned off (§38, §161, §213, INV-196, INV-330, D-507, D-508)",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Characterize: update refuses, --set-later overwrites, the TUI returns to 15",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Keep held values for the same installation only, behind the new version's validation",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Screen 16 asks what is new with the Required Inputs form",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "The PR",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Send uses of tools aart-cli did not install, by build default and the person's choice (B-263, D-508)",
+          "status": "done"
         }
       ]
     }

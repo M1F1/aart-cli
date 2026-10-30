@@ -38,6 +38,7 @@ from aart_cli.application.consumer_ui import (
     InstallationConfigDraft,
     KeyBinding,
     WorkflowStepStatus,
+    input_form_open,
     key_bindings,
     key_event,
     reduce_consumer_ui,
@@ -53,6 +54,7 @@ from aart_cli.application.consumer_views import (
     PLACEHOLDER_WARNING,
     SUCCESS_CHOICES,
     SUCCESS_PURPOSE,
+    TELEMETRY_UNMANAGED_ROW,
     ActivityView,
     ApplicationScreen,
     ConfigInputView,
@@ -1665,6 +1667,9 @@ def render_settings(
         "show-updates": f"Show available updates: {'on' if view.show_updates else 'off'}",
         "maintainer-mode": f"Registry Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
         "author-mode": f"Author Mode: {'on' if view.author_mode else 'off'}",
+        # §213, D-508: telemetry of uses aart-cli did not install, the choice or the build's.
+        TELEMETRY_UNMANAGED_ROW: "Uses of tools aart-cli did not install: "
+        f"{'sent' if view.sends_unmanaged_uses else 'not sent'}",
         # §173.7: the harnesses the Default install path uses, one row per detected harness.
         **{
             default_harness_row(item): f"Default harness {item}: "
@@ -1686,6 +1691,7 @@ def render_settings(
         "show-updates": "Updates",
         "maintainer-mode": "Advanced",
         "author-mode": "Advanced",
+        TELEMETRY_UNMANAGED_ROW: "Telemetry",
     }
     groups: list[tuple[str, ...]] = []
     previous = ""
@@ -3876,7 +3882,7 @@ class CanonicalScreenSource:
                 if state.configuration_input
                 else ()
             )
-        if screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
+        if input_form_open(state):
             draft_rows = {item.row for item in state.config_draft.fields}
             fields = tuple(
                 item.row
@@ -4548,7 +4554,7 @@ class CanonicalScreenSource:
                 f"Recorded {entry.recorded_at}",
                 f"Review identity: {entry.review_digest}",
             )
-        if state.session.screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
+        if input_form_open(state):
             return installation_config_purpose(self._screens.installation_inputs, state.current_row)
         if state.session.screen is MaintainerScreen.VALIDATION:
             validation = self._screens.validation(state.focus)
@@ -5788,7 +5794,7 @@ class CanonicalScreenSource:
             # A review has nothing the cursor can move over: the one decision it offers is a key,
             # and a key is advertised in the legend (`QA-088`). What it is about is view status.
             return ()
-        if screen is ConsumerScreen.REQUIRED_INPUTS and state.config_form_active:
+        if input_form_open(state):
             return render_installation_config_form(
                 screens.installation_inputs,
                 state.config_draft,

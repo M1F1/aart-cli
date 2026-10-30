@@ -17,7 +17,7 @@ from typing import cast
 
 from aart_cli.application.author_views import normalized_workspace
 from aart_cli.configuration.model import SourceKind
-from aart_cli.configuration.seed import baked_usage_harnesses
+from aart_cli.configuration.seed import baked_unmanaged_uses, baked_usage_harnesses
 from aart_cli.domain.artifact_usage import USAGE_HARNESSES
 from aart_cli.domain.configuration_files import configuration_value_problem
 from aart_cli.domain.credentials import (
@@ -150,6 +150,7 @@ __all__ = [
     "ConsumerSettings",
     "SETTING_PURPOSE",
     "SETTING_ROWS",
+    "TELEMETRY_UNMANAGED_ROW",
     "ARTIFACT_USAGE_ROW_PREFIX",
     "DEFAULT_HARNESS_ROW_PREFIX",
     "INSTALL_PATH_CUSTOM",
@@ -3239,6 +3240,9 @@ class ConsumerSettings:
     #: `None` when nobody chose: then it is recorded where this build says (D-502). The hook that
     #: records is the effect of this setting and is put in place or removed when it is kept.
     artifact_usage: tuple[str, ...] | None = None
+    #: Whether telemetry sends uses of skills and MCPs aart-cli did not install, as this person
+    #: chose, or `None` when nobody chose: then as this build says (§213, D-508).
+    telemetry_unmanaged: bool | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -3252,6 +3256,8 @@ class ConsumerSettings:
             or any(item not in USAGE_HARNESSES for item in self.artifact_usage)
             or len(set(self.artifact_usage)) != len(self.artifact_usage)
         ):
+            raise ValueError("consumer settings are invalid")
+        if self.telemetry_unmanaged is not None and not isinstance(self.telemetry_unmanaged, bool):
             raise ValueError("consumer settings are invalid")
         if (
             not isinstance(self.profile, PresentationProfile)
@@ -3269,6 +3275,14 @@ class ConsumerSettings:
         """The harnesses whose artifact usage is recorded: the chosen ones, else the build's."""
 
         return baked_usage_harnesses() if self.artifact_usage is None else self.artifact_usage
+
+    @property
+    def sends_unmanaged_uses(self) -> bool:
+        """Whether telemetry sends uses aart-cli did not install: the choice, else the build's."""
+
+        if self.telemetry_unmanaged is None:
+            return baked_unmanaged_uses()
+        return self.telemetry_unmanaged
 
     def with_profile(self, profile: PresentationProfile) -> ConsumerSettings:
         return replace(self, profile=profile)
@@ -3299,6 +3313,8 @@ class ConsumerSettings:
             return self.with_maintainer_mode(not self.maintainer_mode)
         if row == "author-mode":
             return replace(self, author_mode=not self.author_mode)
+        if row == TELEMETRY_UNMANAGED_ROW:
+            return replace(self, telemetry_unmanaged=not self.sends_unmanaged_uses)
         harness = default_harness_from_row(row)
         if harness is not None:
             return replace(
@@ -3395,6 +3411,9 @@ class McpTestView:
 
 #: The controls of accepted screen 28, in the order the Product Specification lists them. They are
 #: row identities rather than labels so a rename of what is drawn never rewrites what was stored.
+#: Screen 28's row for whether telemetry sends uses aart-cli did not install (§213, D-508).
+TELEMETRY_UNMANAGED_ROW = "telemetry-unmanaged"
+
 SETTING_ROWS: tuple[str, ...] = (
     "detail-level",
     "default-scope",
@@ -3402,6 +3421,7 @@ SETTING_ROWS: tuple[str, ...] = (
     "show-updates",
     "maintainer-mode",
     "author-mode",
+    TELEMETRY_UNMANAGED_ROW,
 )
 
 #: Screen 28's rows for the Default path's harnesses, one per detected harness, each on or off.
@@ -3472,6 +3492,10 @@ SETTING_PURPOSE: dict[str, str] = {
     "offers a newer version of.",
     "maintainer-mode": "Whether this installation maintains a Registry as well as installing "
     "artifacts, which is what puts Upstream repositories, Candidates and Registry on the Dashboard.",
+    TELEMETRY_UNMANAGED_ROW: "Whether telemetry also sends each use of a skill or MCP aart-cli "
+    "did not install, by the name the harness used, never a project, path or argument. It applies "
+    "only while telemetry is on; off, such uses still waiting are never sent. Until you choose, "
+    "this aart-cli's build decides.",
 }
 """What each setting changes, for the block `[v]` opens (`QA-097`).
 
@@ -3537,6 +3561,11 @@ def settings_to_data(view: ConsumerSettings) -> dict[str, object]:
         "author_workspace": view.author_workspace,
         # Absent until somebody chooses, so a later default is not overruled by an old one.
         **({} if view.artifact_usage is None else {"artifact_usage": list(view.artifact_usage)}),
+        **(
+            {}
+            if view.telemetry_unmanaged is None
+            else {"telemetry_unmanaged_uses": view.telemetry_unmanaged}
+        ),
     }
 
 
@@ -3560,6 +3589,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
         "author_mode",
         "author_workspace",
         "artifact_usage",
+        "telemetry_unmanaged_uses",
     }
     unknown = sorted(set(data) - known)
     if unknown:
@@ -3616,6 +3646,15 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
                 ),
             )
         )
+    unmanaged = data.get("telemetry_unmanaged_uses")
+    if unmanaged is not None and not isinstance(unmanaged, bool):
+        return Err(
+            (
+                _settings_invalid(
+                    "stored telemetry of uses aart-cli did not install is true or false"
+                ),
+            )
+        )
     return Ok(
         ConsumerSettings(
             PresentationProfile(detail),
@@ -3627,6 +3666,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
             author_mode,
             cast(str, workspace),
             None if usage is None else tuple(usage),
+            unmanaged,
         )
     )
 
