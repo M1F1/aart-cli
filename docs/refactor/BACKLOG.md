@@ -5257,8 +5257,9 @@ remediation is the defect.
 
 Status: **open**, noncritical (CP-50, D-505; found in the opencode lab, 2026-10-30).
 
-`usage_recording` prints "Kept only on this machine, in <activity.sqlite3>. Nothing is sent
-anywhere." whatever telemetry's state. Since D-505 a build that names a server has telemetry on
+`usage_disclosure` (`aart_cli/application/usage_recording.py`), shown by the command and by the
+TUI's Settings > Artifact usage row, says "Kept only on this machine, in <activity.sqlite3>.
+Nothing is sent anywhere." whatever telemetry's state. Since D-505 a build that names a server has telemetry on
 from the first start, and then each use of an installed artifact is sent. The disclosure should
 read the outbox's setting and, when it is on, say that uses of installed artifacts go to the named
-server and how to turn that off; the TUI's Settings row (B-253) has the same sentence.
+server and how to turn that off.
