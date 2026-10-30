@@ -29,6 +29,7 @@ from aart_cli.domain.result import Err, Ok, Result
 from . import usage_hook
 from .activity_store import ActivityDatabase
 from .receipt_store import LocalReceiptStore
+from .telemetry_store import TelemetryOutbox
 
 __all__ = [
     "USAGE_HOOK_UNWRITABLE",
@@ -37,6 +38,7 @@ __all__ = [
     "reconcile_usage_hooks",
     "running_usage_hook",
     "set_usage_hook",
+    "telemetry_endpoint",
     "usage_hooked",
 ]
 
@@ -179,7 +181,21 @@ def read_artifact_usage(*, data_root: str, user_home: str) -> ArtifactUsageView:
             ranking = rank_usage(counts.value, installed_names(records))
     except Exception:  # noqa: BLE001 -- a ranking is never what stops a screen
         ranking = ()
-    return ArtifactUsageView(database.path, files, hooked, ranking)
+    return ArtifactUsageView(
+        database.path, files, hooked, ranking, telemetry_endpoint=telemetry_endpoint(data_root)
+    )
+
+
+def telemetry_endpoint(data_root: str) -> str:
+    """Where telemetry sends uses, or empty while it is off or cannot be read; never raises."""
+
+    try:
+        setting = TelemetryOutbox(str(Path(data_root) / "state")).setting()
+    except Exception:  # noqa: BLE001 -- a disclosure is never what stops a screen
+        return ""
+    if isinstance(setting, Ok) and setting.value is not None and setting.value.enabled:
+        return setting.value.endpoint
+    return ""
 
 
 def harness_present(harness: str, *, user_home: str) -> bool:

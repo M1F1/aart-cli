@@ -5255,7 +5255,9 @@ remediation is the defect.
 
 ## B-259 — `consume usage enable` says "Nothing is sent anywhere" while telemetry is on
 
-Status: **open**, noncritical (CP-50, D-505; found in the opencode lab, 2026-10-30).
+Status: **resolved** in CP-51 (2026-10-30): the disclosure takes telemetry's endpoint, and with
+telemetry on says where uses go and how to stop it. Evidence and mutations M23–M29:
+`docs/refactor/slices/CP-51-plugin-members.md`.
 
 `usage_disclosure` (`aart_cli/application/usage_recording.py`), shown by the command and by the
 TUI's Settings > Artifact usage row, says "Kept only on this machine, in <activity.sqlite3>.

@@ -115,11 +115,30 @@ Each was run against the tests named, and each was killed.
 | M21 | `artifact_id` as `<member>:<plugin>` | `plugin_members_test` (event) |
 | M22 | A plugin's name without its member | `plugin_members_test` (attribution) |
 
+### B-259, resolved here
+
+Turning usage on, by `consume usage enable` or on Settings > Artifact usage, said "Kept only on
+this machine … Nothing is sent anywhere." even with telemetry on. `usage_disclosure` now takes
+`telemetry_endpoint`, which io reads from the outbox's setting (`io/usage_hooks.telemetry_endpoint`,
+empty while telemetry is off, turned off or unreadable). With it on, the line says where each use
+of an artifact aart-cli installed is sent, what is sent and that the project is not, and that
+`aart-cli consume telemetry disable` stops it. The user guide says the same.
+Tests: `tests/artifact_usage_screens_test.py` (`TheDisclosureTest`, the Settings row, and the
+command with telemetry on and with it turned off).
+
+| # | Change | Killed by |
+|---|---|---|
+| M23 | The telemetry sentence chosen when telemetry is off | `artifact_usage_screens_test` (disclosure) |
+| M24 | An endpoint kept after telemetry was turned off counts as on | `artifact_usage_screens_test` (turned off) |
+| M25 | `consume usage enable` passes no endpoint | `artifact_usage_screens_test` (command) |
+| M26 | The Settings row passes no endpoint | `artifact_usage_screens_test` (Settings row) |
+| M27 | `read_artifact_usage` reads no endpoint | `artifact_usage_screens_test` (command) |
+| M28 | The line no longer says the project is never sent | `artifact_usage_screens_test` (disclosure) |
+| M29 | It names `consume telemetry status` as the way to stop it | `artifact_usage_screens_test` (disclosure) |
+
 ## Not done here
 
 - **B-260**: attribution from opencode's `metadata.dir`, so a person's own skill with a member's
   name is not the plugin's.
-- **B-259**: `consume usage enable` still says "Nothing is sent anywhere" with telemetry on. The lab
-  showed it again.
 - A plugin installed before CP-51 records its members at its next update or reinstall. No migration
   is written (D-506).

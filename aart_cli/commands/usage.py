@@ -13,7 +13,12 @@ from aart_cli.domain.artifact_usage import USAGE_HARNESSES
 from aart_cli.domain.result import Err, Ok
 from aart_cli.io.activity_store import ActivityDatabase
 from aart_cli.io.consumer_settings import read_consumer_settings, write_consumer_settings
-from aart_cli.io.usage_hooks import harness_file, read_artifact_usage, set_usage_hook
+from aart_cli.io.usage_hooks import (
+    harness_file,
+    read_artifact_usage,
+    set_usage_hook,
+    telemetry_endpoint,
+)
 from aart_cli.model import Request
 
 from ._configured_runtime import load_runtime_configuration
@@ -138,6 +143,7 @@ def run(request: Request) -> int:
                         harness,
                         database=ActivityDatabase(f"{data_root}/state").path,
                         changed_file=harness_file(harness, user_home=user_home),
+                        telemetry_endpoint=telemetry_endpoint(data_root),
                     )
                 )
             else:

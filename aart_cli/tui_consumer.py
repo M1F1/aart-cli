@@ -1727,7 +1727,12 @@ def artifact_usage_status(
 ) -> tuple[str, ...]:
     """What recording this harness's artifact usage means, and whether its hook is in place."""
 
-    said = usage_disclosure(harness, database=usage.database, changed_file=usage.file(harness))
+    said = usage_disclosure(
+        harness,
+        database=usage.database,
+        changed_file=usage.file(harness),
+        telemetry_endpoint=usage.telemetry_endpoint,
+    )
     if harness in settings.recorded_usage and harness not in usage.hooked:
         return (
             *said,

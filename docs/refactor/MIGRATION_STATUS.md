@@ -11,7 +11,9 @@ renamed. Installed counts them on the plugin's row, and Details and `consume sta
 them. Activity ranks a member's use as `<plugin coordinate>:<member>`, installed, and telemetry sends
 it as `skill` `<plugin>:<member>` with the plugin's version, within contract version 1. A lab with
 the real superpowers 6.2.0 in opencode delivered `artifact.used skill superpowers:brainstorming
-6.2.0` to the server. Evidence: `docs/refactor/slices/CP-51-plugin-members.md`.
+6.2.0` to the server. Turning usage on now says, while telemetry is on, where uses are sent and
+how to stop it, instead of "Nothing is sent anywhere" (B-259). Evidence:
+`docs/refactor/slices/CP-51-plugin-members.md`.
 
 **2026-10-29, CP-50 (§213, INV-322–INV-328, D-503–D-505): installs, updates, removals and uses are sent to a telemetry server once telemetry is on: from the first start in a build that names a server, else once a person turns it on.**
 A completed action and a use that resolves to an installed artifact become events in

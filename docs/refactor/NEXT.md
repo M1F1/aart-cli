@@ -12,8 +12,8 @@ have no lifecycle of their own. Installed counts them on the plugin's row, and D
 unchanged.
 
 Evidence: `docs/refactor/slices/CP-51-plugin-members.md`, including a lab with the real superpowers
-6.2.0 in opencode. Steps 1–5 are done. Next: the PR, then the owner's review. B-259 and B-260 are
-open.
+6.2.0 in opencode. Steps 1–5 are done. Next: the PR, then the owner's review. B-259 is resolved in the same
+PR: turning usage on says where uses are sent while telemetry is on. B-260 is open.
 
 ## Where the work was (2026-10-29, CP-50)
 
