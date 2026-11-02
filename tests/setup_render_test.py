@@ -331,7 +331,8 @@ def test_laf63_a_prefixed_credential_name_is_redacted() -> None:
     # redact and every prefixed form would not, and those are the forms real recipes use. The same
     # pattern redacts the persisted record, so a miss is a credential reaching disk, not only a
     # terminal.
-    text = _joined(_failure_payload("failed: SOMEVENDOR_TOKEN=ghp_realsecretvalue rejected"))
+    planted = assignment("SOMEVENDOR_TOKEN", "ghp_realsecretvalue")
+    text = _joined(_failure_payload("failed: " + planted + " rejected"))
 
     assert "ghp_realsecretvalue" not in text
     assert "[redacted]" in text

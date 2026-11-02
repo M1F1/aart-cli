@@ -12779,3 +12779,22 @@ plan").
 - **The server** (`aart-cli-telemetry-server`, branch `feat/error-reports`) stores failures in their
   own table, checks the fingerprint and serves `GET /api/v1/stats/failures`; the dashboard shows
   them grouped by fingerprint.
+
+## D-510 — A key that ends in a credential word, assigned a value, is a credential's shape
+
+- **Evidence.** An organisation's push protection refused a copy of aart-cli-telemetry-server for
+  `API_TOKEN=` followed by a made-up value in a test's environment file. Its secret shape check,
+  ported from this repository's, had passed it: `\bTOKEN` does not match after `_`, which is a word
+  character, so no key that *ends* in a credential word (`API_TOKEN`, `api_token`,
+  `client_secret`) was seen. The same scanner let through a quoted constant,
+  `PASSWORD = "…"`, in that repository's history.
+- **Choice.** `scripts/secret_shape_check.py`'s unquoted rule (a key word assigned a value inside a
+  string) also matches a key word that follows an underscore. A key word that goes on, as in
+  `…_PASSWORD_SECRET_NAME`, still names where a secret is kept and passes; placeholders still pass.
+  The quoted rule is unchanged: widening it would flag product constants such as
+  `ConsumerUiEventKind.REQUEST_SECRET = "request-secret"` for a shape the scanner was seen to
+  accept.
+- **Fixtures.** The five literals the wider rule found (`tests/setup_review_test.py`,
+  `tests/setup_render_test.py`) are assembled through `tests/credential_fixtures.py`.
+- **Tests.** `tests/secret_shape_check_test.py`; the scan of one line is `_scan_text`, so the rule is
+  tested without files. Mutation: back to `\b` only fails four cases.

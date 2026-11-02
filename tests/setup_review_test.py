@@ -22,7 +22,7 @@ from aart_cli.setup import (
     setup_queue_question,
 )
 from aart_cli.tui_layout import CONTENT_MEASURE
-from tests.credential_fixtures import assignment
+from tests.credential_fixtures import assignment, assignment_bytes
 from tests.setup_fixtures import recipe
 
 RETRY = "aart-cli consume setup mcp/atlassian --profile tabnine --scope project"
@@ -100,7 +100,7 @@ class SetupReviewProjectionTests(unittest.TestCase):
                 purpose="Configure "
                 + assignment("token", "do-not-render")
                 + " through reviewed automation.",
-                required_tools=["/usr/bin/security", "api_token=do-not-render"],
+                required_tools=["/usr/bin/security", assignment("api_token", "do-not-render")],
             ),
             "https://github.com/acme/catalog/blob/" + "b" * 40,
         )
@@ -173,7 +173,7 @@ class SetupReviewProjectionTests(unittest.TestCase):
                 profile="tabnine",
                 scope="project",
                 status="cancelled",
-                detail="setup api_token=do-not-render was cancelled",
+                detail="setup " + assignment("api_token", "do-not-render") + " was cancelled",
                 retry_command=RETRY,
                 recovery=("Remove only a file created by this run.",),
                 manual=reference,
@@ -228,7 +228,11 @@ class SetupReviewProjectionTests(unittest.TestCase):
             self.assertNotIn("No setup effect has run.", rendered(status))
 
     def test_custom_review_withholds_script_body_and_keeps_its_recovery_record(self):
-        script = b"#!/bin/sh\n# AART manual setup: see ../SETUP.md\n# api_token=do-not-render\n"
+        script = (
+            b"#!/bin/sh\n# AART manual setup: see ../SETUP.md\n# "
+            + assignment_bytes("api_token", "do-not-render")
+            + b"\n"
+        )
         configured = parse_installer(
             recipe(
                 capabilities=["process", "custom-code"],
@@ -420,7 +424,9 @@ _ROWS = (
         "profile": "claude",
         "scope": "user",
         "status": "apply-failed-rolled-back",
-        "detail": "setup api_token=do-not-render was rejected by the server",
+        "detail": "setup "
+        + assignment("api_token", "do-not-render")
+        + " was rejected by the server",
         "successful": False,
         "retry_command": _RETRY,
     },
