@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.0](https://github.com/M1F1/aart-cli/compare/v0.23.0...v0.24.0) (2026-11-02)
+
+
+### Added
+
+* aart-cli journals the failures it meets, prints them with consume report and sends them as aart_cli.failed ([1a8ede9](https://github.com/M1F1/aart-cli/commit/1a8ede9a2776f895f147b05133fd9a9d0faa86fd))
+
 ## [0.23.0](https://github.com/M1F1/aart-cli/compare/v0.22.0...v0.23.0) (2026-10-30)
 
 
