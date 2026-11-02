@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.1](https://github.com/M1F1/aart-cli/compare/v0.24.0...v0.24.1) (2026-11-02)
+
+
+### Fixed
+
+* consume report says printing it sends nothing, not that nothing left the machine ([f9857b8](https://github.com/M1F1/aart-cli/commit/f9857b8c391328bf6cb0b1f8664a0f6eb8382c13))
+
 ## [0.24.0](https://github.com/M1F1/aart-cli/compare/v0.23.0...v0.24.0) (2026-11-02)
 
 
