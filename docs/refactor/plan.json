@@ -1939,6 +1939,38 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-53",
+      "title": "Failures aart-cli meets are journaled, reportable with consume report, and sent to the telemetry server unless the build or the person says not (§213, §215, INV-333–INV-336, D-509)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "The failure, its fingerprint and aart_cli.failed in contract version 1",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "The journal state/failures.sqlite3 and every place that records into it",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "consume report, the build's and the person's choice, and sending",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "The server stores, checks and shows failures (feat/error-reports)",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "The PRs",
+          "status": "in_progress"
+        }
+      ]
     }
   ]
 }

@@ -57,7 +57,7 @@ class CursesFallbackBoundaryTests(unittest.TestCase):
 
         records: list[tuple[str, str]] = []
 
-        def capture(error, context=None):
+        def capture(error, context=None, **_):
             records.append((context.stage, context.operation))
             return 2
 

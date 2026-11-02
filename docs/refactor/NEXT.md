@@ -1,6 +1,25 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-10-30, CP-51)
+## Where the work is (2026-11-02, CP-53)
+
+0.23.0 (CP-51, CP-52) is released. **CP-53** journals the failures aart-cli meets and sends them to
+the telemetry server (§215, INV-333–INV-336, D-509): a crash, a nonzero exit or Ctrl+C in a
+command, a crash or a stopped action in the terminal application, and a crash in the usage hook or
+the sender, each as its kind, its place in aart-cli's own words, the exception's type, aart-cli's
+own frames, diagnostic codes, the exit code, the versions and a fingerprint, never a message.
+They are kept in `state/failures.sqlite3` (newest 500) whether telemetry is on or not;
+`consume report [--json] [--limit N]` prints them grouped by fingerprint, to paste into an issue.
+While telemetry is on they are sent once as `aart_cli.failed` (contract v1), each batch with the
+version that had them, unless the build (`AART_CLI_TELEMETRY_ERRORS` off/false) or the person
+(Settings > Telemetry, `consume telemetry errors off`) says not. The server's side is
+`aart-cli-telemetry-server` branch `feat/error-reports`: a failure table, the fingerprint checked,
+`/api/v1/stats/failures` and the dashboard's Errors section. Deploy it before the release that sends
+failures; an older server rejects those events alone (422), the rest are stored.
+
+Evidence: `docs/refactor/slices/CP-53-failure-reports.md`. Steps 1–4 are done; step 5 is the two
+PRs. B-265 (signals), B-266 (issues opened by the server) and B-267 (chained causes) are open.
+
+## Where the work was (2026-10-30, CP-51)
 
 0.22.0 (CP-50) is released. **CP-51** installs the skills an OpenCode plugin carries with the plugin
 (§214, INV-329, INV-331, INV-332, D-506). The members are the payload's skill directories, named by the

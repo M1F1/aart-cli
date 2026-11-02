@@ -35,6 +35,7 @@ from aart_cli.domain.diagnostics import (
 )
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.io.failure_journal import note_diagnostics
 from aart_cli.io.source_runtime import (
     discard_configured_source,
     observe_configured_source,
@@ -135,6 +136,7 @@ def _failure(code: str, message: str, *remediation: str) -> Err:
 
 
 def _emit_error(request: Request, operation: str, result: Err) -> int:
+    note_diagnostics(result.diagnostics)
     if request.json:
         print(
             json.dumps(

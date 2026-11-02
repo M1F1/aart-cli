@@ -87,6 +87,10 @@ jobs:
       # Whether that wheel also sends uses of skills and MCPs it did not install, by name, until
       # a person turns it off in Settings (D-508).  Unset sends them; `off` does not.
       AART_CLI_TELEMETRY_UNMANAGED_USES: ${{ vars.AART_CLI_TELEMETRY_UNMANAGED_USES }}
+      # Whether that wheel sends the failures aart-cli meets -- where, the exception's type and
+      # aart-cli's own frames, never a message -- until a person turns it off (D-509).  Unset
+      # sends them; `off` does not.
+      AART_CLI_TELEMETRY_ERRORS: ${{ vars.AART_CLI_TELEMETRY_ERRORS }}
       # A PEP 440 local label, such as `corp`, for this fork's wheel version (D-476).  Unset labels
       # nothing.  Read by the build and by the check of the built wheel.
       AART_CLI_LOCAL_VERSION_LABEL: ${{ vars.AART_CLI_LOCAL_VERSION_LABEL }}
@@ -134,6 +138,10 @@ jobs:
       # Whether that wheel also sends uses of skills and MCPs it did not install, by name, until
       # a person turns it off in Settings (D-508).  Unset sends them; `off` does not.
       AART_CLI_TELEMETRY_UNMANAGED_USES: ${{ vars.AART_CLI_TELEMETRY_UNMANAGED_USES }}
+      # Whether that wheel sends the failures aart-cli meets -- where, the exception's type and
+      # aart-cli's own frames, never a message -- until a person turns it off (D-509).  Unset
+      # sends them; `off` does not.
+      AART_CLI_TELEMETRY_ERRORS: ${{ vars.AART_CLI_TELEMETRY_ERRORS }}
       # A PEP 440 local label, such as `corp`, for this fork's wheel version (D-476).  Unset labels
       # nothing.  Read by the build and by the check of the built wheel.
       AART_CLI_LOCAL_VERSION_LABEL: ${{ vars.AART_CLI_LOCAL_VERSION_LABEL }}

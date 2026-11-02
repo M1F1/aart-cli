@@ -49,6 +49,7 @@ from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.io.curation_runtime import (
     load_local_curation_service,
 )
+from aart_cli.io.failure_journal import note_diagnostics
 from aart_cli.io.git import GitProcessRequest, run_git_process
 from aart_cli.io.registry_adoption import (
     AdoptionUpstreamCheck,
@@ -136,6 +137,7 @@ def _version(raw: str | None, label: str) -> Result[SemVer]:
 
 
 def _emit_error(request: Request, action: str, result: Err) -> int:
+    note_diagnostics(result.diagnostics)
     if request.json:
         print(
             json.dumps(

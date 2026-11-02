@@ -54,6 +54,7 @@ from aart_cli.application.consumer_views import (
     PLACEHOLDER_WARNING,
     SUCCESS_CHOICES,
     SUCCESS_PURPOSE,
+    TELEMETRY_ERRORS_ROW,
     TELEMETRY_UNMANAGED_ROW,
     ActivityView,
     ApplicationScreen,
@@ -1670,6 +1671,9 @@ def render_settings(
         # §213, D-508: telemetry of uses aart-cli did not install, the choice or the build's.
         TELEMETRY_UNMANAGED_ROW: "Uses of tools aart-cli did not install: "
         f"{'sent' if view.sends_unmanaged_uses else 'not sent'}",
+        # §215, D-509: telemetry of the failures aart-cli met, the choice or the build's.
+        TELEMETRY_ERRORS_ROW: "Failures aart-cli met: "
+        f"{'sent' if view.sends_failures else 'not sent'}",
         # §173.7: the harnesses the Default install path uses, one row per detected harness.
         **{
             default_harness_row(item): f"Default harness {item}: "
@@ -1692,6 +1696,7 @@ def render_settings(
         "maintainer-mode": "Advanced",
         "author-mode": "Advanced",
         TELEMETRY_UNMANAGED_ROW: "Telemetry",
+        TELEMETRY_ERRORS_ROW: "Telemetry",
     }
     groups: list[tuple[str, ...]] = []
     previous = ""
@@ -3027,12 +3032,15 @@ def run_consumer_shell(
     state: ConsumerUiState | None = None,
     action_handler: ConsumerActionHandler | None = None,
     settings_writer: ConsumerSettingsWriter | None = None,
+    on_action_failed: Callable[[ConsumerActionKind], None] | None = None,
 ) -> ConsumerUiState:
     """Run the persistent consumer application until somebody leaves it.
 
     The rows are re-read whenever what the screen shows could have changed -- a navigation, a back,
     or an edit to the filter.  The cursor stays on the row it was on if that row is still there,
     which is why filtering never silently moves what somebody was about to act on.
+
+    `on_action_failed` is told each action that stopped, for the failure journal (§215).
     """
 
     current = ConsumerUiState() if state is None else state
@@ -3142,6 +3150,12 @@ def run_consumer_shell(
             )
             if update.event.kind not in expected or update.event.action is not command.action:
                 raise ValueError("a consumer action handler returned the wrong action update")
+            if (
+                update.event.kind is ConsumerUiEventKind.ACTION_FAILED
+                and on_action_failed is not None
+                and command.action is not None
+            ):
+                on_action_failed(command.action)
             active_source = (
                 update.source if update.completion is None else update.completion.complete(terminal)
             )

@@ -43,6 +43,7 @@ __all__ = [
     "TelemetryOutbox",
     "TelemetrySetting",
     "WaitingEvent",
+    "open_versioned",
 ]
 
 TELEMETRY_DATABASE = "telemetry.sqlite3"
@@ -121,6 +122,46 @@ def _new_key() -> str:
     return uuid.uuid4().hex
 
 
+def open_versioned(
+    path: Path, schema: tuple[str, ...], version: int, *, create: bool
+) -> sqlite3.Connection | None:
+    """A connection to the SQLite database at `path`, created 0600 with `schema` when `create`;
+    `None` when it does not exist and is not to be. A database with another schema version is
+    an error and is never rewritten."""
+
+    if not create and not path.exists():
+        return None
+    if create:
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.close(os.open(path, os.O_RDWR | os.O_CREAT, 0o600))
+    connection = sqlite3.connect(path, timeout=_BUSY_SECONDS, isolation_level=None)
+    try:
+        found = connection.execute("PRAGMA user_version").fetchone()[0]
+        if found == 0:
+            if not create:
+                connection.close()
+                return None
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("PRAGMA user_version").fetchone()[0] == 0:
+                for statement in schema:
+                    connection.execute(statement)
+                connection.execute(f"PRAGMA user_version = {version}")
+            connection.execute("COMMIT")
+        elif found != version:
+            raise sqlite3.DatabaseError(
+                f"its schema is version {found}; this aart-cli reads {version}"
+            )
+        if connection.execute("PRAGMA journal_mode").fetchone()[0] != "wal":
+            try:
+                connection.execute("PRAGMA journal_mode=WAL")
+            except sqlite3.OperationalError:
+                pass
+    except BaseException:
+        connection.close()
+        raise
+    return connection
+
+
 @dataclass(frozen=True, slots=True)
 class TelemetrySetting:
     """The decision. Turned off without ever being on, or forgotten, the endpoint or the
@@ -174,38 +215,7 @@ class TelemetryOutbox:
         return Path(self.path).exists()
 
     def _open(self, *, create: bool) -> sqlite3.Connection | None:
-        path = Path(self.path)
-        if not create and not path.exists():
-            return None
-        if create:
-            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            os.close(os.open(path, os.O_RDWR | os.O_CREAT, 0o600))
-        connection = sqlite3.connect(path, timeout=_BUSY_SECONDS, isolation_level=None)
-        try:
-            version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version == 0:
-                if not create:
-                    connection.close()
-                    return None
-                connection.execute("BEGIN IMMEDIATE")
-                if connection.execute("PRAGMA user_version").fetchone()[0] == 0:
-                    for statement in _SCHEMA:
-                        connection.execute(statement)
-                    connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-                connection.execute("COMMIT")
-            elif version != SCHEMA_VERSION:
-                raise sqlite3.DatabaseError(
-                    f"its schema is version {version}; this aart-cli reads {SCHEMA_VERSION}"
-                )
-            if connection.execute("PRAGMA journal_mode").fetchone()[0] != "wal":
-                try:
-                    connection.execute("PRAGMA journal_mode=WAL")
-                except sqlite3.OperationalError:
-                    pass
-        except BaseException:
-            connection.close()
-            raise
-        return connection
+        return open_versioned(Path(self.path), _SCHEMA, SCHEMA_VERSION, create=create)
 
     # -- consent ---------------------------------------------------------------------------------
 

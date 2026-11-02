@@ -4,6 +4,17 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-02, CP-53 (§213, §215, INV-333–INV-336, D-509): the failures aart-cli meets are journaled, reportable and sent.**
+A command's crash, nonzero exit or Ctrl+C, the terminal application's crash or stopped action, and a
+crash in the usage hook or the telemetry sender are journaled in `state/failures.sqlite3` (0600,
+newest 500) without changing how they end: kind, place in aart-cli's words, type, aart-cli's own
+frames, diagnostic codes, exit code, versions, platform and a fingerprint that ignores line
+numbers; never a message, argument, path or value. `consume report` prints them grouped by
+fingerprint. While telemetry is on and failures are sent (the person's choice, else
+`AART_CLI_TELEMETRY_ERRORS`, unset sends), each is sent once as `aart_cli.failed` in contract v1 with
+the version that had it; turned off, what waits is skipped. INV-333–INV-336 are EVIDENCED. Evidence:
+`docs/refactor/slices/CP-53-failure-reports.md`.
+
 **2026-10-30, CP-51 (§214, INV-329, INV-331, INV-332, D-506): a plugin's skills are installed with it, and their uses are the plugin's.**
 `package_plugin` reads a plugin's members off its package: the skill directories below the payload
 root, less any shared name. The installation's receipt records them, and nothing is copied or

@@ -9,7 +9,11 @@ from aart_cli.domain.artifact_usage import parse_usage_harnesses
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import SourceAlias
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.domain.telemetry import parse_telemetry_endpoint, parse_unmanaged_uses
+from aart_cli.domain.telemetry import (
+    parse_failures_sent,
+    parse_telemetry_endpoint,
+    parse_unmanaged_uses,
+)
 
 from .model import git_location_parts, parse_source_alias
 
@@ -100,4 +104,15 @@ def baked_unmanaged_uses(raw: str | None = None) -> bool:
     """
 
     parsed = parse_unmanaged_uses(_default_telemetry.UNMANAGED_USES if raw is None else raw)
+    return parsed.value if isinstance(parsed, Ok) else False
+
+
+def baked_failures_sent(raw: str | None = None) -> bool:
+    """Whether this build sends the failures aart-cli meets (§215, D-509).
+
+    Until a person chooses in Settings, read as `baked_unmanaged_uses` is: empty sends them,
+    and a value the release would have refused sends none.
+    """
+
+    parsed = parse_failures_sent(_default_telemetry.ERRORS if raw is None else raw)
     return parsed.value if isinstance(parsed, Ok) else False

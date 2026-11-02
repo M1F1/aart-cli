@@ -17,6 +17,7 @@ from enum import Enum
 
 from .artifact_usage import InstalledName, UsageKind, resolve_installed
 from .diagnostics import Diagnostic, DiagnosticCode, Severity
+from .failures import Failure
 from .result import Err, Ok, Result
 
 __all__ = [
@@ -24,11 +25,13 @@ __all__ = [
     "BACKOFF",
     "BATCH_PATH",
     "BATCH_SIZE",
+    "FAILED",
     "HTTP_TIMEOUT_SECONDS",
     "MAX_REQUESTS_PER_RUN",
     "RUN_SECONDS",
     "SYNC_INTERVAL",
     "TELEMETRY_ENDPOINT_INVALID",
+    "TELEMETRY_ERRORS_INVALID",
     "TELEMETRY_SOURCES",
     "TELEMETRY_UNMANAGED_INVALID",
     "UNMANAGED_USED",
@@ -41,9 +44,11 @@ __all__ = [
     "batch_document",
     "classify_answer",
     "contract_moment",
+    "failure_event",
     "history_event_id",
     "lifecycle_event",
     "lifecycle_event_type",
+    "parse_failures_sent",
     "parse_telemetry_endpoint",
     "parse_unmanaged_uses",
     "sync_due",
@@ -67,10 +72,13 @@ RUN_SECONDS = 60.0
 BATCH_PATH = "/api/v1/events/batch"
 TELEMETRY_ENDPOINT_INVALID = DiagnosticCode("telemetry-endpoint-invalid")
 TELEMETRY_UNMANAGED_INVALID = DiagnosticCode("telemetry-unmanaged-invalid")
+TELEMETRY_ERRORS_INVALID = DiagnosticCode("telemetry-errors-invalid")
 
 #: A use of a skill or MCP no artifact aart-cli installed answers to, by the name the harness used
 #: (D-508).
 UNMANAGED_USED = "unmanaged.used"
+#: A failure aart-cli met, with the `failure` object only it carries (§215, D-509).
+FAILED = "aart_cli.failed"
 
 #: The contract's `source` for a use recorded by each harness's hook.
 TELEMETRY_SOURCES: dict[str, str] = {"claude": "claude_hook", "opencode": "opencode_plugin"}
@@ -96,9 +104,11 @@ _EVENT_SOURCES = {
     "artifact.removed": frozenset({"aart_cli"}),
     "artifact.used": frozenset(TELEMETRY_SOURCES.values()),
     UNMANAGED_USED: frozenset(TELEMETRY_SOURCES.values()),
+    FAILED: frozenset({"aart_cli"}),
 }
 
-_SENDS_UNMANAGED = {"": True, "on": True, "true": True, "off": False, "false": False}
+#: What a release variable that switches something telemetry sends says; unset sends (D-508).
+_SENDS = {"": True, "on": True, "true": True, "off": False, "false": False}
 
 #: `scheme://host[:port][/path]`, nothing else: no user, password, query or fragment.
 _ENDPOINT = re.compile(
@@ -144,23 +154,35 @@ def parse_unmanaged_uses(raw: str) -> Result[bool]:
     case. Anything else is refused rather than guessed.
     """
 
+    return _switch(
+        raw,
+        TELEMETRY_UNMANAGED_INVALID,
+        "whether uses aart-cli did not install are sent is on, true, off or false",
+    )
+
+
+def parse_failures_sent(raw: str) -> Result[bool]:
+    """`AART_CLI_TELEMETRY_ERRORS`: whether a build sends the failures aart-cli meets (D-509).
+
+    Read as `parse_unmanaged_uses` reads its variable: unset or empty sends them.
+    """
+
+    return _switch(
+        raw, TELEMETRY_ERRORS_INVALID, "whether failures are sent is on, true, off or false"
+    )
+
+
+def _switch(raw: str, code: DiagnosticCode, message: str) -> Result[bool]:
     value = raw.strip().lower()
-    if value not in _SENDS_UNMANAGED:
-        return Err(
-            (
-                Diagnostic(
-                    TELEMETRY_UNMANAGED_INVALID,
-                    Severity.ERROR,
-                    "whether uses aart-cli did not install are sent is on, true, off or false",
-                ),
-            )
-        )
-    return Ok(_SENDS_UNMANAGED[value])
+    if value not in _SENDS:
+        return Err((Diagnostic(code, Severity.ERROR, message),))
+    return Ok(_SENDS[value])
 
 
 @dataclass(frozen=True, slots=True)
 class TelemetryEvent:
-    """One event as the contract's version 1 carries it."""
+    """One event as the contract's version 1 carries it. `failure` is present in a failure's
+    event and in no other, and names its kind and place as `artifact_type` and `artifact_id`."""
 
     event_id: str
     occurred_at: str
@@ -169,6 +191,7 @@ class TelemetryEvent:
     artifact_id: str
     artifact_type: str
     artifact_version: str | None = None
+    failure: Failure | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -184,16 +207,25 @@ class TelemetryEvent:
             or (
                 self.artifact_version is not None
                 and (
-                    self.event_type == UNMANAGED_USED
+                    self.event_type in (UNMANAGED_USED, FAILED)
                     or not isinstance(self.artifact_version, str)
                     or _VERSION.fullmatch(self.artifact_version) is None
+                )
+            )
+            or (self.failure is not None) != (self.event_type == FAILED)
+            or (
+                self.failure is not None
+                and (
+                    not isinstance(self.failure, Failure)
+                    or self.failure.kind.value != self.artifact_type
+                    or self.failure.place != self.artifact_id
                 )
             )
         ):
             raise ValueError("a telemetry event does not follow the contract")
 
-    def document(self) -> dict[str, str]:
-        body = {
+    def document(self) -> dict[str, object]:
+        body: dict[str, object] = {
             "event_id": self.event_id,
             "occurred_at": self.occurred_at,
             "event_type": self.event_type,
@@ -203,6 +235,8 @@ class TelemetryEvent:
         }
         if self.artifact_version is not None:
             body["artifact_version"] = self.artifact_version
+        if self.failure is not None:
+            body["failure"] = self.failure.document()
         return body
 
 
@@ -315,6 +349,14 @@ def use_event(
         artifact_kind,
         artifact_name,
         resolved.version,
+    )
+
+
+def failure_event(event_id: str, moment: str, failure: Failure) -> TelemetryEvent:
+    """A failure as the event that sends it: its kind and place, no version (§215)."""
+
+    return TelemetryEvent(
+        event_id, moment, FAILED, "aart_cli", failure.place, failure.kind.value, None, failure
     )
 
 
