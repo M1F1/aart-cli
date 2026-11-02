@@ -627,9 +627,15 @@ def _debug_traceback_enabled() -> bool:
 def _render_internal_failure(
     error: BaseException,
     context: InternalFailureContext | None = None,
+    *,
+    user_home: Optional[str] = None,
 ) -> int:
     for line in internal_failure_lines(error, context):
         print(line)
+    # §215: journaled after the report is drawn, which it never changes (INV-335).
+    from .commands.report import record_in_application_home
+
+    record_in_application_home(user_home, "crash", "tui", error=error)
     if _debug_traceback_enabled():
         traceback.print_exception(error, file=sys.stderr)
     return 2
@@ -882,6 +888,7 @@ def run_consumer_text(
         state=opening_state(actions.settings, workspace=workspace),
         action_handler=actions,
         settings_writer=actions.save_settings,
+        on_action_failed=actions.record_action_failed,
     )
 
 
@@ -924,6 +931,7 @@ def run_consumer(actions: LocalConsumerActions, *, workspace: str = "") -> Consu
             state=opening_state(actions.settings, workspace=workspace),
             action_handler=actions,
             settings_writer=actions.save_settings,
+            on_action_failed=actions.record_action_failed,
         )
 
     try:
@@ -1473,7 +1481,7 @@ def run(
     try:
         canonical_terminal = _curses_supported()
     except Exception as error:
-        return _render_internal_failure(error, canonical_failures)
+        return _render_internal_failure(error, canonical_failures, user_home=user_home)
     # One composition for whichever terminal answers. Composing again on the degradation path
     # would open the same local state twice, and a failure would then be reported by whichever
     # half opened it first.
@@ -1486,7 +1494,7 @@ def run(
         # Composition reads local state, so an unexpected defect here carries paths and file
         # contents in its message. A typed startup failure is rendered below; this is the untyped
         # one, and it goes through the same redaction as any other internal defect.
-        return _render_internal_failure(error, canonical_failures)
+        return _render_internal_failure(error, canonical_failures, user_home=user_home)
     if isinstance(composed, DomainErr):
         return _render_consumer_startup_failure(composed)
     # §212: artifact usage is recorded without asking only in the harnesses this build baked
@@ -1500,7 +1508,12 @@ def run(
     # §213: a build that names a telemetry server turns it on where nobody decided (D-505).
     turned_on = composed.value.turn_telemetry_on_by_default()
     if turned_on is not None:
-        announce_turned_on(turned_on, print, unmanaged=composed.value.settings.sends_unmanaged_uses)
+        announce_turned_on(
+            turned_on,
+            print,
+            unmanaged=composed.value.settings.sends_unmanaged_uses,
+            failures=composed.value.settings.sends_failures,
+        )
     if canonical_terminal:
         # Past this point a defect is the running application's, not the composition's, and the
         # record has to say so -- including which terminal was hosting it, because the two answer
@@ -1519,12 +1532,12 @@ def run(
             # The outermost crash boundary for the canonical application. ``curses.wrapper`` has
             # already restored the terminal; broad catching is for rendering, never for starting
             # a second application over the same machine.
-            return _render_internal_failure(error, canonical_failures)
+            return _render_internal_failure(error, canonical_failures, user_home=user_home)
         else:
             return 0
     canonical_failures.stage = "text"
     try:
         run_consumer_text(composed.value, workspace=workspace)
     except Exception as error:
-        return _render_internal_failure(error, canonical_failures)
+        return _render_internal_failure(error, canonical_failures, user_home=user_home)
     return 0

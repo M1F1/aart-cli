@@ -485,6 +485,16 @@ def telemetry_unmanaged_uses_value() -> bool:
     return raw not in {"off", "false"}
 
 
+def telemetry_errors_value() -> bool:
+    """Whether this release sends the failures aart-cli meets until a person chooses (D-509).
+
+    Read as `telemetry_unmanaged_uses_value` reads its variable: unset is ``True``.
+    """
+
+    raw = os.environ.get("AART_CLI_TELEMETRY_ERRORS", "").strip().lower()
+    return raw not in {"off", "false"}
+
+
 def local_version_label_value() -> str | None:
     """The local version label this release puts on its wheel, or ``None`` when it puts none.
 
@@ -763,6 +773,7 @@ def check_release(
         "default_usage_harnesses": default_usage_harnesses_value(),
         "default_telemetry_endpoint": telemetry_endpoint_value(),
         "default_telemetry_unmanaged_uses": telemetry_unmanaged_uses_value(),
+        "default_telemetry_errors": telemetry_errors_value(),
         "checks": [
             {
                 "name": name,

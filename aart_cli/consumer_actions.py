@@ -1105,6 +1105,17 @@ class LocalConsumerActions:
             raise ValueError(written.diagnostics[0].message)
         return settings
 
+    def record_action_failed(self, action: ConsumerActionKind) -> None:
+        """Journal an action that stopped as an error at `tui.<action>` (§215); a composition
+        with no data root keeps nothing. Never raises."""
+
+        if self._data_root is None:
+            return
+        from aart_cli.domain.failures import FailureKind
+        from aart_cli.io.failure_journal import record_failure
+
+        record_failure(self._data_root, FailureKind.ERROR, f"tui.{action.value}")
+
     def _apply_usage_hooks(
         self, previous: ConsumerSettings, settings: ConsumerSettings
     ) -> ConsumerSettings:

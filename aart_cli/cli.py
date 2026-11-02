@@ -93,6 +93,12 @@ def _run_telemetry(request: Request) -> int:
     return telemetry.run(request)
 
 
+def _run_report(request: Request) -> int:
+    from .commands import report
+
+    return report.run(request)
+
+
 def _run_inputs(request: Request) -> int:
     """`consume inputs` (§198): the TUI's own application, so it is not a `commands` module.
 
@@ -118,6 +124,7 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "mcp": _run_mcp,
     "usage": _run_usage,
     "telemetry": _run_telemetry,
+    "report": _run_report,
     "candidate": _run_candidate,
 }
 
@@ -167,6 +174,8 @@ def _route(args: argparse.Namespace) -> tuple[str, dict[str, object]]:
             return "usage", {}
         if action == "telemetry":
             return "telemetry", {}
+        if action == "report":
+            return "report", {}
         return "marketplace", {"marketplace_action": action}
     if command == "maintain":
         action = args.maintain_action
@@ -286,6 +295,8 @@ def _to_request(args: argparse.Namespace) -> Request:
         telemetry_forget=bool(getattr(args, "telemetry_forget", False)),
         telemetry_force=bool(getattr(args, "telemetry_force", False)),
         telemetry_unmanaged=getattr(args, "telemetry_unmanaged", None),
+        telemetry_errors=getattr(args, "telemetry_errors", None),
+        report_limit=getattr(args, "report_limit", None),
     )
 
 
@@ -340,6 +351,18 @@ def _run_bare(parser: argparse.ArgumentParser, args: Optional[argparse.Namespace
     return OK
 
 
+def _dispatch(args: argparse.Namespace, request: Request) -> int:
+    if _seeds_first_run(args, request):
+        _seed_first_run(request)
+    if _turns_telemetry_on(args, request):
+        from .commands.telemetry import turn_on_for_this_build
+
+        turn_on_for_this_build(request)
+    return (
+        _run_inputs(request) if request.command == "inputs" else DISPATCH[request.command](request)
+    )
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Parse ``argv``, dispatch to a command, and return its process exit code."""
     parser = build_parser()
@@ -352,15 +375,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             parser, args.docs_path, as_json=args.json, out=sys.stdout, err=sys.stderr
         )
     request = _to_request(args)
-    if _seeds_first_run(args, request):
-        _seed_first_run(request)
-    if _turns_telemetry_on(args, request):
-        from .commands.telemetry import turn_on_for_this_build
+    from .commands.report import command_place, noting_diagnostics, record_command_failure
 
-        turn_on_for_this_build(request)
-    code = (
-        _run_inputs(request) if request.command == "inputs" else DISPATCH[request.command](request)
-    )
+    # §215: a crash, an interruption or a nonzero exit is journaled, and the command ends exactly
+    # as it would have (INV-335).
+    place = command_place(args)
+    with noting_diagnostics() as codes:
+        try:
+            code = _dispatch(args, request)
+        except KeyboardInterrupt as error:
+            record_command_failure(request, "interrupted", place, error=error)
+            raise
+        except Exception as error:
+            record_command_failure(request, "crash", place, error=error)
+            raise
+    if code != OK:
+        record_command_failure(request, "error", place, exit_code=code, diagnostics=tuple(codes))
     if args.command == "consume":
         # §211: after the command, on stderr, so a `--json` document on stdout is unchanged.
         upgrade.announce_newer_aart_cli(

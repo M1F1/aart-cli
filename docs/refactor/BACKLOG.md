@@ -5312,3 +5312,29 @@ opencode names a tool `<server>_<tool>` and does not say where the server's name
 `unmanaged.used` from opencode carries the whole tool name, and one server shows on the dashboard
 as one row per tool. Reading opencode's configured MCP server names at send time would let the
 client send the server's name instead, as it does for Claude Code.
+
+## B-265 — A termination by signal, or an action a closed terminal cut short, is not journaled
+
+Status: **open**, noncritical (CP-53, D-509).
+
+SIGTERM, SIGHUP and a closed terminal end the process without an exception `cli.main` or the TUI
+can catch, so nothing is journaled. Recording a marker when an action starts and finding it at the
+next start (as `io/orphaned_runs.py` does for runs) would journal such an end as `interrupted`
+with the action's place.
+
+## B-266 — The telemetry server opens an issue for a new fingerprint
+
+Status: **open**, noncritical (CP-53, D-509).
+
+The dashboard lists failures by fingerprint. Opening a GitHub issue the first time a fingerprint is
+seen, with the fields `consume report` prints, would remove the step of copying it; it needs a
+token on the server and a rule for which repository.
+
+## B-267 — A chained exception's cause is not journaled
+
+Status: **open**, noncritical (CP-53, D-509).
+
+Only the traceback of the exception that reached the boundary is read. When a handler raised a new
+exception from another (`raise ... from error`, or during `except`), the original's frames, often
+where the defect is, are not kept. Following `__cause__`/`__context__` would need the contract to
+say which frames belong to which exception.

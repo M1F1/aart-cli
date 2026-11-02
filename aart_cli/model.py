@@ -506,3 +506,7 @@ class Request:
     telemetry_force: bool = False
     #: `consume telemetry unmanaged on|off` (D-508).
     telemetry_unmanaged: Optional[str] = None
+    #: `consume telemetry errors on|off` (D-509).
+    telemetry_errors: Optional[str] = None
+    #: `consume report --limit` (§215).
+    report_limit: Optional[int] = None

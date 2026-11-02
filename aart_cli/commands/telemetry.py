@@ -16,6 +16,7 @@ from aart_cli.configuration.seed import baked_telemetry_endpoint
 from aart_cli.domain.result import Err, Ok
 from aart_cli.domain.telemetry import BATCH_PATH, parse_telemetry_endpoint
 from aart_cli.io.consumer_settings import read_consumer_settings, write_consumer_settings
+from aart_cli.io.failure_journal import FailureJournal
 from aart_cli.io.telemetry_consent import announce_turned_on, turn_on, turn_on_by_default
 from aart_cli.io.telemetry_store import TelemetryOutbox
 from aart_cli.io.telemetry_sync import new_installation_id, synchronise
@@ -79,6 +80,19 @@ def _unmanaged(settings: ConsumerSettings) -> tuple[dict[str, object], str]:
     )
 
 
+def _errors(settings: ConsumerSettings) -> tuple[dict[str, object], str]:
+    """Whether the failures aart-cli met are sent, and who decided (D-509)."""
+
+    chosen = settings.telemetry_errors is not None
+    sent = settings.sends_failures
+    who = "your choice" if chosen else "this aart-cli's default"
+    return (
+        {"sent": sent, "chosen": chosen},
+        f"failures aart-cli met: {'sent' if sent else 'not sent'} ({who}); "
+        "`consume report` shows them",
+    )
+
+
 def _settings(home: str) -> ConsumerSettings:
     """The person's settings, or the defaults when they cannot be read: a status still reports."""
 
@@ -115,8 +129,19 @@ def _status(request: Request, outbox: TelemetryOutbox, home: str) -> int:
         "failures": sync.failures,
         "paused": sync.paused,
     }
-    unmanaged, said = _unmanaged(_settings(home))
+    settings = _settings(home)
+    unmanaged, said = _unmanaged(settings)
     document["unmanaged_uses"] = unmanaged
+    errors, said_errors = _errors(settings)
+    document["errors"] = errors
+    journal = FailureJournal(f"{home}/state").counts()
+    if isinstance(journal, Ok):
+        document["journal"] = {
+            "waiting": journal.value.waiting,
+            "sent": journal.value.sent,
+            "rejected": journal.value.rejected,
+            "skipped": journal.value.skipped,
+        }
     offered = baked_telemetry_endpoint()
     lines = [f"telemetry: {'on' if enabled else 'off'}"]
     if current is not None and current.endpoint:
@@ -126,6 +151,7 @@ def _status(request: Request, outbox: TelemetryOutbox, home: str) -> int:
     if (current is None or not current.endpoint) and offered is not None:
         lines.append(f"this aart-cli offers: {offered}")
     lines.append(said)
+    lines.append(said_errors)
     lines.append(
         f"events: {waiting.waiting} waiting, {waiting.sent} sent, {waiting.rejected} rejected, "
         f"{waiting.skipped} skipped (not sent by choice, or nothing the contract can name)"
@@ -158,12 +184,13 @@ def turn_on_for_this_build(request: Request) -> None:
             turned_on,
             lambda line: print(line, file=sys.stderr),
             unmanaged=_settings(paths.data_root).sends_unmanaged_uses,
+            failures=_settings(paths.data_root).sends_failures,
         )
 
 
 def run(request: Request) -> int:
     action = request.telemetry_action
-    if action not in {"status", "enable", "disable", "unmanaged", "sync"}:
+    if action not in {"status", "enable", "disable", "unmanaged", "errors", "sync"}:
         return _failure(request, "unsupported telemetry action")
     runtime = load_runtime_configuration(request, content_required=False)
     if isinstance(runtime, Err):
@@ -174,6 +201,8 @@ def run(request: Request) -> int:
         return _status(request, outbox, home)
     if action == "unmanaged":
         return _choose_unmanaged(request, home)
+    if action == "errors":
+        return _choose_errors(request, home)
     if action == "enable":
         raw = request.telemetry_endpoint or baked_telemetry_endpoint()
         if not raw:
@@ -188,6 +217,7 @@ def run(request: Request) -> int:
             return _failure(request, enabled.diagnostics[0].message)
         setting, queued = enabled.value
         unmanaged = _settings(home).sends_unmanaged_uses
+        failures = _settings(home).sends_failures
         _print(
             request,
             {"endpoint": setting.endpoint, "client_id": setting.client_id, "queued": queued},
@@ -202,6 +232,12 @@ def run(request: Request) -> int:
                     if unmanaged
                     else ","
                 )
+                + (
+                    " each failure aart-cli meets, by where, the exception's type and its own "
+                    "frames (`consume telemetry errors off` stops that),"
+                    if failures
+                    else ""
+                )
                 + " is sent at most every ten minutes, when something new is recorded.",
                 "Sent: the event, the artifact's kind, name and version, the moment, the "
                 f"installation id {setting.client_id} and aart-cli's version. Never a "
@@ -214,8 +250,13 @@ def run(request: Request) -> int:
         disabled = outbox.disable(forget=request.telemetry_forget)
         if isinstance(disabled, Err):
             return _failure(request, disabled.diagnostics[0].message)
+        if request.telemetry_forget:
+            forgotten = FailureJournal(f"{home}/state").forget()
+            if isinstance(forgotten, Err):
+                return _failure(request, forgotten.diagnostics[0].message)
         said = (
-            "telemetry: off; what waited, what was sent and the installation id are deleted."
+            "telemetry: off; what waited, what was sent, the failures journaled and the "
+            "installation id are deleted."
             if request.telemetry_forget
             else "telemetry: off; nothing more is recorded or sent. What waits is kept, unsent."
         )
@@ -262,6 +303,31 @@ def _choose_unmanaged(request: Request, home: str) -> int:
             said,
             "Kept in Settings, which changes it too."
             + ("" if kept.sends_unmanaged_uses else " Such uses still waiting are never sent."),
+        ],
+    )
+    return _common.OK
+
+
+def _choose_errors(request: Request, home: str) -> int:
+    """Keep the person's choice about sending the failures aart-cli met in Settings (D-509)."""
+
+    if request.telemetry_errors not in {"on", "off"}:
+        return _failure(request, "say on or off")
+    settings = read_consumer_settings(home)
+    if isinstance(settings, Err):
+        return _failure(request, settings.diagnostics[0].message)
+    kept = replace(settings.value, telemetry_errors=request.telemetry_errors == "on")
+    written = write_consumer_settings(kept, data_root=home)
+    if isinstance(written, Err):
+        return _failure(request, written.diagnostics[0].message)
+    errors, said = _errors(kept)
+    _print(
+        request,
+        {"errors": errors},
+        [
+            said,
+            "Kept in Settings, which changes it too."
+            + ("" if kept.sends_failures else " Failures still waiting are never sent."),
         ],
     )
     return _common.OK

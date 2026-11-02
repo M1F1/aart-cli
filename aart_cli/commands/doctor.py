@@ -52,6 +52,7 @@ from aart_cli.io.configured_repair_action import (
 )
 from aart_cli.io.consumer_machine import read_installed_inspections
 from aart_cli.io.credentials import CredentialProviderPort
+from aart_cli.io.failure_journal import note_diagnostics
 from aart_cli.io.maintainer_views import read_unbound_candidate_histories
 from aart_cli.io.offline_readiness import read_offline_readiness
 from aart_cli.io.orphaned_runs import read_orphaned_runs
@@ -77,6 +78,7 @@ def _emit_error(
     operation: str = _OPERATION,
     **fields: object,
 ) -> int:
+    note_diagnostics(result.diagnostics)
     if request.json:
         print(
             json.dumps(

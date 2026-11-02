@@ -720,7 +720,8 @@ def build_parser() -> argparse.ArgumentParser:
             "decided, else off until turned on; turning it on also sends what Activity already "
             "holds. While on, each install, update and removal aart-cli completes, "
             "each recorded use of an artifact aart-cli installed, and, unless `unmanaged off`, "
-            "each use of a skill or MCP it did not install, by name, is kept in "
+            "each use of a skill or MCP it did not install, by name, and, unless `errors off`, "
+            "each failure aart-cli meets, by where, its type and aart-cli's own frames, is kept in "
             "state/telemetry.sqlite3 and sent to the telemetry server at most every ten minutes, "
             "when something new is recorded. Sent: the event, the artifact's kind, name and "
             "version, the moment, a random installation id and aart-cli's version. Never a "
@@ -789,6 +790,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_json(p_telemetry)
     p_telemetry = telemetry_sub.add_parser(
+        "errors",
+        formatter_class=_HELP_FORMATTER,
+        help="send the failures aart-cli meets, or not",
+        description=(
+            "Whether telemetry also sends each failure aart-cli meets: where it happened, the "
+            "exception's type and aart-cli's own frames, never a message, argument, path or "
+            "value. Until you choose, this aart-cli's build decides; the choice is kept in "
+            "Settings, which changes it too. Off, failures still waiting are never sent. It "
+            "applies only while telemetry is on; `consume report` shows them either way."
+        ),
+    )
+    p_telemetry.add_argument(
+        "telemetry_errors",
+        choices=("on", "off"),
+        metavar="on|off",
+        help="on sends them, off does not",
+    )
+    _add_json(p_telemetry)
+    p_telemetry = telemetry_sub.add_parser(
         "sync",
         formatter_class=_HELP_FORMATTER,
         help="send what waits now",
@@ -804,6 +824,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="also ignore a backoff or pause",
     )
     _add_json(p_telemetry)
+
+    # Failures aart-cli met (§215) ------------------------------------------- #
+    p = consume_sub.add_parser(
+        "report",
+        formatter_class=_HELP_FORMATTER,
+        help="the failures aart-cli met here, to paste into an issue",
+        description=(
+            "The failures journaled in state/failures.sqlite3, newest first and grouped by "
+            "fingerprint: how many times, first and last seen, in which aart-cli versions, "
+            "where, the exception's type, aart-cli's own frames and the diagnostic codes. Never "
+            "a message, argument, path or value; nothing leaves this machine."
+        ),
+    )
+    p.add_argument(
+        "--limit",
+        dest="report_limit",
+        type=int,
+        metavar="N",
+        help="show at most N failures, the ones seen last",
+    )
+    _add_json(p)
 
     # Credentials and variables without the TUI (§198, D-483) ----------------- #
     p = consume_sub.add_parser(

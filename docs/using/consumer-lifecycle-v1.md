@@ -414,6 +414,39 @@ aart-cli consume telemetry disable --forget
 `sync` sends now. `disable` stops recording and sending and keeps what waits, unsent; `--forget`
 also deletes it and the installation id.
 
+### Failures aart-cli met
+
+When a command crashes, ends with an error, or you stop it with Ctrl+C, and when the terminal
+application crashes or one of its actions stops, aart-cli journals it in
+`~/.aart-cli/state/failures.sqlite3`, readable only by you, whether telemetry is on or not. It keeps
+the newest 500. A failure holds where it happened in aart-cli's own words (`consume.update`, `tui`,
+`tui.install`), the exception's type, the lines of aart-cli's own code it ran through, the
+diagnostic codes the command reported, the exit code, aart-cli's and Python's versions and the
+platform. It never holds the exception's message, an argument, a path, a project, an environment
+variable, a value you entered or a credential. Journaling never changes what the command prints or
+how it exits.
+
+```sh
+aart-cli consume report
+aart-cli consume report --json --limit 5
+```
+
+`report` shows the journal, the failures seen last first and grouped by fingerprint: how many
+times, when first and last, in which versions. Paste it into an issue as it is.
+
+While telemetry is on, each failure is also sent to the telemetry server once, so your organisation
+learns of it before anyone opens an issue; failures journaled before telemetry was on are sent when
+it is. Whether they are sent is in Settings, under Telemetry: *Failures aart-cli met*. Until you
+change it, your build decides (its release variable `AART_CLI_TELEMETRY_ERRORS`; unset sends them).
+Turned off, failures still waiting are never sent; `report` shows them either way.
+
+```sh
+aart-cli consume telemetry errors off
+aart-cli consume telemetry errors on
+```
+
+`telemetry disable --forget` deletes the journal too.
+
 ## Reset and restore
 
 Run `aart-cli reset` when local AART state is invalid, belongs to another version, or should be

@@ -13,6 +13,7 @@ from aart_cli import command_outcome as _common
 from aart_cli.application.maintainer_views import MaintainerCandidateView
 from aart_cli.domain.diagnostics import diagnostic_to_data
 from aart_cli.domain.result import Err
+from aart_cli.io.failure_journal import note_diagnostics
 from aart_cli.io.maintainer_views import read_maintainer_views
 from aart_cli.model import Request
 
@@ -37,6 +38,7 @@ def _candidate_data(view: MaintainerCandidateView) -> dict[str, object]:
 
 
 def _emit_error(request: Request, result: Err) -> int:
+    note_diagnostics(result.diagnostics)
     if request.json:
         print(
             json.dumps(

@@ -123,12 +123,17 @@ def turn_on_by_default(
 
 
 def announce_turned_on(
-    setting: TelemetrySetting, say: Callable[[str], None], *, unmanaged: bool
+    setting: TelemetrySetting,
+    say: Callable[[str], None],
+    *,
+    unmanaged: bool,
+    failures: bool = False,
 ) -> None:
     """Say, once, that this build turned telemetry on, what it sends and how to turn it off.
 
     `unmanaged` is whether uses aart-cli did not install are sent too (D-508): then it says so,
-    and where that alone is turned off.
+    and where that alone is turned off. `failures` is whether the failures aart-cli meets are
+    sent (D-509), said the same way.
     """
 
     others = (
@@ -136,6 +141,11 @@ def announce_turned_on(
         if unmanaged
         else ""
     )
+    if failures:
+        others += (
+            ", and each failure it meets: where, the exception's type and its own frames, "
+            "never a message"
+        )
     say(
         f"Telemetry is on: this aart-cli sends to {setting.endpoint} each install, update and "
         f"removal it completes and each use of an artifact it installed{others}, including what "
@@ -145,6 +155,12 @@ def announce_turned_on(
             " Settings > Telemetry, or `aart-cli consume telemetry unmanaged off`, stops "
             "sending uses of tools aart-cli did not install."
             if unmanaged
+            else ""
+        )
+        + (
+            " `aart-cli consume telemetry errors off` stops sending failures; "
+            "`aart-cli consume report` shows them."
+            if failures
             else ""
         )
     )

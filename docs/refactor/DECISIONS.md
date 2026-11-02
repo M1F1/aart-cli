@@ -12710,3 +12710,72 @@ repository variable decides that before a release; a person can change it in Set
 - **The server** counts them apart: `Summary.unmanaged_uses` is never part of `uses`;
   `GET /api/v1/stats/top-unmanaged` ranks them; the dashboard shows them in their own table
   (aart-cli-telemetry-server, branch `feat/unmanaged-uses`).
+
+## D-509 — Failures aart-cli meets are journaled, reportable, and sent unless the build or the person says not (CP-53)
+
+Product Specification §215, INV-333–INV-336; amends §213's "What is sent". The owner's request,
+2026-11-02, after 0.23.0: error states, errors and terminations are to be known before a GitHub
+issue, precisely enough to write the patch. Approved with the defaults below ("dawaj podoba mi sie
+plan").
+
+- **Kinds and places.** `crash` (an exception no handler took), `error` (a nonzero exit, or a
+  terminal action that stopped), `interrupted` (Ctrl+C). The place is the command's own words: the
+  command and the values of its subparser destinations joined by `.` (`consume.update`,
+  `maintain.candidate.list`), `tui`, `tui.<action>`, `usage-hook`, `telemetry-sync`. Never an
+  argument. argparse's own usage errors (exit 2 before a command runs) are not recorded: they are
+  the person's typing, not aart-cli's defect.
+- **Only fields of a fixed shape, never free text.** The type name (qualified by its module unless
+  it is builtins; a type whose name the pattern cannot carry, such as a local class, is
+  `Exception`), the frames inside the `aart_cli` package as `module:function:line` (innermost last,
+  at most 30; the package is found by path, so any other frame is dropped), at most 10 distinct
+  diagnostic codes, the exit code, Python's version and `darwin`/`linux`/`other`. Each field is
+  matched whole against its contract pattern and dropped, never cut, when it does not match. No
+  message is ever read: a redaction of free text is never complete. Chained exceptions
+  (`__cause__`/`__context__`) are not followed (B-267).
+- **Fingerprint.** The first 16 hex digits of the SHA-256 of the compact JSON
+  `[kind, place, exception or "", frames without :line, diagnostics]`. Line numbers, the exit code
+  and the versions are left out so the same defect groups across releases; the server checks it.
+- **Diagnostic codes.** Commands report codes through their `_emit_error` (marketplace, registry,
+  source, candidate, doctor); each calls `failure_journal.note_diagnostics`, which appends to a
+  `ContextVar` list that `cli.main` opens with `noting()`. Outside `noting()` it does nothing, so
+  the TUI and tests that call commands directly are unaffected. Commands with their own `_failure`
+  (telemetry, usage, report) report no codes: their failure is the message they print.
+- **A journal of its own, not the outbox.** `state/failures.sqlite3`, schema version 1, created
+  0600 like the outbox (`telemetry_store.open_versioned`, extracted for both), keeps every failure
+  whether telemetry is on or not, the newest 500, each with a random uuid4 event id, its contract
+  moment, the aart-cli version that recorded it and waiting/sent/rejected/skipped. Keeping it apart
+  leaves the outbox's schema and its "recorded only while on" rule unchanged, and gives
+  `consume report` something to read on a machine where telemetry never ran.
+- **Recording never changes what failed (INV-335).** `record_failure` never raises and never
+  writes to a stream; `cli.main` records after the command returned or while re-raising its
+  exception unchanged; the TUI records after drawing its internal-failure report; the hook and the
+  sender record inside their existing `except`, each wrapped again so even an import failure stays
+  silent. After recording, the CLI, TUI and hook start a due synchronisation (`maybe_sync`); the
+  sender's own crash is recorded with `sync=False` and waits for the next one. The home is the one
+  every command resolves (`resolve_config_paths(...).data_root`), so `AART_CLI_HOME` applies.
+- **Sending.** The sender, after the outbox, reads waiting journal rows oldest first and sends them
+  as `aart_cli.failed` from `aart_cli`, `artifact_type` the kind, `artifact_id` the place, no
+  version, and the `failure` object. Each batch holds rows of one aart-cli version and has it as
+  `client_version`, so the server attributes a failure to the release that had it even when it is
+  sent by a later one. A row that no longer reads back as a failure is skipped. The outbox's and the
+  journal's waiting rows together decide whether a synchronisation is due. Budget, splitting,
+  backoff and acknowledgement are the outbox's (`_Run`).
+- **Choice.** `AART_CLI_TELEMETRY_ERRORS` (unset/empty/on/true sends; off/false does not; anything
+  else fails the release), stamped as `_default_telemetry.ERRORS` and recorded in the release
+  receipt (`default_telemetry_errors`); `ConsumerSettings.telemetry_errors` (`None` until chosen,
+  stored as `telemetry_failures`), Settings row `telemetry-errors` under Telemetry, "Failures
+  aart-cli met: sent/not sent"; `consume telemetry errors on|off`. Read at send time: off marks
+  what waits skipped. While telemetry is off nothing is skipped; it waits, and is sent when
+  telemetry is turned on, like Activity's history (D-505).
+- **Status.** `consume telemetry status` says whether failures are sent and whose choice; `--json`
+  adds `errors: {sent, chosen}` and `journal: {waiting, sent, rejected, skipped}`. (`failures`
+  was already the count of failed synchronisations and keeps that meaning.)
+- **Forget.** `consume telemetry disable --forget` deletes the journal's rows too: forgetting is
+  "what waits and what was sent", and a failure journaled here is both.
+- **Tests never write the real home.** `tests/conftest.py` replaces
+  `commands.report.record_in_application_home` with a no-op unless the module sets
+  `RECORDS_FAILURES = True`; such a module gives every command a temporary `HOME` and
+  `AART_CLI_HOME`.
+- **The server** (`aart-cli-telemetry-server`, branch `feat/error-reports`) stores failures in their
+  own table, checks the fingerprint and serves `GET /api/v1/stats/failures`; the dashboard shows
+  them grouped by fingerprint.

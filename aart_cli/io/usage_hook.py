@@ -77,8 +77,14 @@ def main(arguments: list[str]) -> int:
     try:
         if len(arguments) == 2:
             record(arguments[0], arguments[1], sys.stdin.buffer.read(_MAX_PAYLOAD + 1))
-    except Exception:  # noqa: BLE001 -- a hook that fails would be the harness failing
-        pass
+    except Exception as error:  # noqa: BLE001 -- a hook that fails would be the harness failing
+        try:
+            from aart_cli.domain.failures import FailureKind
+            from aart_cli.io.failure_journal import record_failure
+
+            record_failure(arguments[1], FailureKind.CRASH, "usage-hook", error=error)
+        except Exception:  # noqa: BLE001 -- nor may its journal
+            pass
     return 0
 
 

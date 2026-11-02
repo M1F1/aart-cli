@@ -133,6 +133,7 @@ from aart_cli.io.credentials import (
     CredentialProviderPort,
     MacOsKeychainProvider,
 )
+from aart_cli.io.failure_journal import note_diagnostics
 from aart_cli.io.terminal_briefing import BriefingHandover, terminal_present
 from aart_cli.marketplace.catalog import marketplace_catalog_bytes, render_marketplace
 from aart_cli.marketplace.search import Document, search, summary_line
@@ -197,6 +198,7 @@ _REQUIRES_COORDINATES = frozenset({"install", "uninstall", "setup"})
 
 
 def _emit_error(request: Request, result: Err, operation: str = _LIST_OPERATION) -> int:
+    note_diagnostics(result.diagnostics)
     if request.json:
         print(
             json.dumps(

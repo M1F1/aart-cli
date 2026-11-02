@@ -37,15 +37,18 @@ from aart_cli.domain.telemetry import (
     MAX_REQUESTS_PER_RUN,
     RUN_SECONDS,
     AnswerKind,
+    SyncState,
     TelemetryEvent,
     after_failure,
     after_success,
     batch_document,
     classify_answer,
+    failure_event,
     sync_due,
     use_event,
 )
 
+from .failure_journal import FailureJournal
 from .telemetry_store import TelemetryOutbox
 
 __all__ = [
@@ -141,6 +144,19 @@ def _sends_unmanaged(home: str) -> bool:
     return isinstance(settings, Ok) and settings.value.sends_unmanaged_uses
 
 
+def _sends_failures(home: str) -> bool:
+    """Whether failures aart-cli met are sent now: the person's choice, else the build's
+    (D-509). Settings that cannot be read send none of them."""
+
+    from aart_cli.io.consumer_settings import read_consumer_settings
+
+    try:
+        settings = read_consumer_settings(home)
+    except Exception:  # noqa: BLE001 -- telemetry never fails what triggered it
+        return False
+    return isinstance(settings, Ok) and settings.value.sends_failures
+
+
 @dataclass(frozen=True, slots=True)
 class SyncReport:
     started: bool
@@ -193,6 +209,81 @@ def synchronise(
         os.close(lock)
 
 
+class _Run:
+    """One synchronisation's budget, counts and state, across the outbox and the journal."""
+
+    def __init__(
+        self,
+        outbox: TelemetryOutbox,
+        state: SyncState,
+        *,
+        endpoint: str,
+        client_id: str,
+        post: Post,
+        now: Callable[[], datetime],
+        jitter: Callable[[], float],
+        monotonic: Callable[[], float],
+    ) -> None:
+        self.outbox, self.current = outbox, state
+        self.endpoint, self.client_id = endpoint, client_id
+        self.post, self.now, self.jitter, self.monotonic = post, now, jitter, monotonic
+        self.started = monotonic()
+        self.size = BATCH_SIZE
+        self.sent = self.rejected = self.skipped = self.requests = 0
+        self.stopped = ""
+
+    def budget(self) -> bool:
+        return (
+            not self.stopped
+            and self.requests < MAX_REQUESTS_PER_RUN
+            and self.monotonic() - self.started < RUN_SECONDS
+        )
+
+    def send(
+        self,
+        events: tuple[TelemetryEvent, ...],
+        client_version: str,
+        settle: Callable[[tuple[str, ...], str, datetime], object],
+    ) -> None:
+        """Post one batch and settle by what the server answered; a failure stops the run."""
+
+        ids = tuple(event.event_id for event in events)
+        try:
+            document = batch_document(self.client_id, client_version, events)
+        except ValueError:
+            settle(ids, "rejected", self.now())
+            self.rejected += len(ids)
+            return
+        self.requests += 1
+        status, answer_body = self.post(
+            self.endpoint + BATCH_PATH, json.dumps(document).encode(), HTTP_TIMEOUT_SECONDS
+        )
+        answer = classify_answer(status, answer_body, ids)
+        if answer.kind is AnswerKind.STORED:
+            settle(answer.event_ids, "sent", self.now())
+            self.sent += len(answer.event_ids)
+            self.current = after_success(self.current, self.now())
+            self.outbox.save_sync_state(self.current)
+        elif answer.kind is AnswerKind.REJECTED:
+            settle(answer.event_ids, "rejected", self.now())
+            self.rejected += len(answer.event_ids)
+        elif answer.kind is AnswerKind.SPLIT:
+            if len(events) == 1:
+                settle(ids, "rejected", self.now())
+                self.rejected += 1
+            else:
+                self.size = max(1, len(events) // 2)
+        else:
+            self.current = after_failure(
+                self.current, self.now(), answer.kind, jitter=self.jitter()
+            )
+            self.outbox.save_sync_state(self.current)
+            self.stopped = answer.kind.value
+
+    def report(self) -> SyncReport:
+        return SyncReport(True, self.sent, self.rejected, self.skipped, self.requests, self.stopped)
+
+
 def _under_lock(
     outbox: TelemetryOutbox,
     state_root: str,
@@ -208,26 +299,43 @@ def _under_lock(
     setting = outbox.setting()
     if isinstance(setting, Err) or setting.value is None or not setting.value.enabled:
         return SyncReport(False, reason="telemetry is off")
-    endpoint, client_id = setting.value.endpoint, setting.value.client_id
+    journal = FailureJournal(state_root)
     state = outbox.sync_state()
     counts = outbox.counts()
+    failures = journal.counts()
     if isinstance(state, Err) or isinstance(counts, Err):
         return SyncReport(False, reason="the outbox cannot be read")
     current = state.value
     if force:
         current = replace(current, next_retry_at=None, paused=None)
-    if not sync_due(current, now(), pending=counts.value.waiting, manual=manual):
+    pending = counts.value.waiting + (0 if isinstance(failures, Err) else failures.value.waiting)
+    if not sync_due(current, now(), pending=pending, manual=manual):
         return SyncReport(False, reason="not due")
 
+    home = str(Path(state_root).parent)
+    run = _Run(
+        outbox,
+        current,
+        endpoint=setting.value.endpoint,
+        client_id=setting.value.client_id,
+        post=post,
+        now=now,
+        jitter=jitter,
+        monotonic=monotonic,
+    )
+    _send_outbox(run, state_root, client_version)
+    if not run.stopped:
+        _send_journal(run, journal, sends=_sends_failures(home))
+    return run.report()
+
+
+def _send_outbox(run: _Run, state_root: str, client_version: str) -> None:
     installed = _installed(state_root)
     unmanaged = _sends_unmanaged(str(Path(state_root).parent))
-    started = monotonic()
-    size = BATCH_SIZE
-    sent = rejected = skipped = requests = 0
-    while requests < MAX_REQUESTS_PER_RUN and monotonic() - started < RUN_SECONDS:
-        waiting = outbox.waiting(limit=size)
+    while run.budget():
+        waiting = run.outbox.waiting(limit=run.size)
         if isinstance(waiting, Err) or not waiting.value:
-            break
+            return
         events: list[TelemetryEvent] = []
         unattributed: list[str] = []
         for item in waiting.value:
@@ -249,35 +357,40 @@ def _under_lock(
             else:
                 events.append(event)
         if unattributed:
-            if isinstance(outbox.settle(tuple(unattributed), "skipped", now()), Err):
-                break
-            skipped += len(unattributed)
-        if not events:
-            continue
-        ids = tuple(event.event_id for event in events)
-        body = json.dumps(batch_document(client_id, client_version, tuple(events))).encode()
-        requests += 1
-        status, answer_body = post(endpoint + BATCH_PATH, body, HTTP_TIMEOUT_SECONDS)
-        answer = classify_answer(status, answer_body, ids)
-        if answer.kind is AnswerKind.STORED:
-            outbox.settle(answer.event_ids, "sent", now())
-            sent += len(answer.event_ids)
-            current = after_success(current, now())
-            outbox.save_sync_state(current)
-        elif answer.kind is AnswerKind.REJECTED:
-            outbox.settle(answer.event_ids, "rejected", now())
-            rejected += len(answer.event_ids)
-        elif answer.kind is AnswerKind.SPLIT:
-            if len(events) == 1:
-                outbox.settle(ids, "rejected", now())
-                rejected += 1
-            else:
-                size = max(1, len(events) // 2)
-        else:
-            current = after_failure(current, now(), answer.kind, jitter=jitter())
-            outbox.save_sync_state(current)
-            return SyncReport(True, sent, rejected, skipped, requests, answer.kind.value)
-    return SyncReport(True, sent, rejected, skipped, requests)
+            if isinstance(run.outbox.settle(tuple(unattributed), "skipped", run.now()), Err):
+                return
+            run.skipped += len(unattributed)
+        if events:
+            run.send(tuple(events), client_version, run.outbox.settle)
+
+
+def _send_journal(run: _Run, journal: FailureJournal, *, sends: bool) -> None:
+    """Send the failures that wait, each batch from one aart-cli version and with it as the
+    batch's `client_version` (§215); not sent, they are skipped (INV-336)."""
+
+    if not sends:
+        skipped = journal.skip_waiting(run.now())
+        if isinstance(skipped, Ok):
+            run.skipped += skipped.value
+        return
+    while run.budget():
+        waiting = journal.waiting(limit=run.size)
+        if isinstance(waiting, Err) or not waiting.value:
+            return
+        version = waiting.value[0].version
+        same = [item for item in waiting.value if item.version == version]
+        unreadable = tuple(item.event_id for item in same if item.failure is None)
+        if unreadable:
+            if isinstance(journal.settle(unreadable, "skipped", run.now()), Err):
+                return
+            run.skipped += len(unreadable)
+        events = tuple(
+            failure_event(item.event_id, item.occurred_at, item.failure)
+            for item in same
+            if item.failure is not None
+        )
+        if events:
+            run.send(events, version, journal.settle)
 
 
 def spawn_sync(home: str) -> bool:
@@ -326,7 +439,11 @@ def maybe_sync(
         counts = outbox.counts()
         if isinstance(state, Err) or isinstance(counts, Err):
             return False
-        if not sync_due(state.value, now(), pending=counts.value.waiting):
+        failures = FailureJournal(str(Path(home) / "state")).counts()
+        pending = counts.value.waiting + (
+            0 if isinstance(failures, Err) else failures.value.waiting
+        )
+        if not sync_due(state.value, now(), pending=pending):
             return False
         return (spawn or spawn_sync)(home)
     except Exception:  # noqa: BLE001 -- telemetry never fails what triggered it
@@ -337,6 +454,15 @@ def main(arguments: list[str]) -> int:
     try:
         if len(arguments) == 1 and arguments[0].startswith("/"):
             synchronise(arguments[0])
-    except Exception:  # noqa: BLE001 -- nobody reads this process's outcome
-        pass
+    except Exception as error:  # noqa: BLE001 -- nobody reads this process's outcome
+        # Journaled for the next synchronisation, never starting one (§215).
+        try:
+            from aart_cli.domain.failures import FailureKind
+            from aart_cli.io.failure_journal import record_failure
+
+            record_failure(
+                arguments[0], FailureKind.CRASH, "telemetry-sync", error=error, sync=False
+            )
+        except Exception:  # noqa: BLE001 -- nor its journal
+            pass
     return 0

@@ -12657,7 +12657,7 @@ unchanged.
 
 # 213. Telemetry: installs, updates, removals and uses sent to a telemetry server
 
-Status: **ACCEPTED 2026-10-29 (D-503, D-504, D-505), amended 2026-10-30 (D-508)**, on the owner's request after 0.21.0, from
+Status: **ACCEPTED 2026-10-29 (D-503, D-504, D-505), amended 2026-10-30 (D-508) and 2026-11-02 (D-509, §215)**, on the owner's request after 0.21.0, from
 their telemetry implementation brief: the organisation sees which artifacts are used, how often, by
 how many installations, and how that changes, on a dashboard. Supersedes §212's "Local only" for an
 installation where telemetry is on. D-505 (the owner, the same day): a build that names a server
@@ -12701,8 +12701,9 @@ artifact answers to is never sent".
   answers to, while uses aart-cli did not install are sent (below): named by the name the harness
   used -- a skill's name, an MCP server's for Claude Code, the whole tool name for opencode, which
   does not say where the server's name ends -- and its kind, with no version. A name the contract
-  cannot carry is not sent. Each event has
-  its Activity record's `event_id` (above) and its UTC moment; the request has a random installation id, drawn when
+  cannot carry is not sent. `aart_cli.failed`, from `aart_cli`, for a failure aart-cli met, while
+  failures are sent (§215). Each event has
+  its Activity record's `event_id` (above), or a failure's own (§215), and its UTC moment; the request has a random installation id, drawn when
   telemetry is turned on, and aart-cli's version. Never a project, path, argument, prompt,
   Registry address, user or host name, or credential.
 - **Uses aart-cli did not install: sent unless the build or the person says not (D-508).** The
@@ -12827,3 +12828,67 @@ in a harness a plugin is installed for, under one of its members' names, resolve
 installation and member. Its telemetry event is `artifact.used` with `artifact_type` `skill`,
 `artifact_id` `<plugin>:<member>` and the plugin's version. A plugin's install, update and removal
 are each one event, as before.
+
+# 215. Failures aart-cli meets are journaled, reportable, and sent to the telemetry server
+
+Status: **ACCEPTED 2026-11-02 (D-509)**, on the owner's request after 0.23.0: what goes wrong for
+the people using aart-cli is to be known before they open an issue, precisely enough to write the
+patch and release it. It amends §213's "What is sent".
+
+- **What a failure is.** A *crash*: an exception no handler took, in a command, the terminal
+  application, a harness's usage hook or the telemetry sender. An *error*: a command that ended
+  with a nonzero exit code, or a terminal action that stopped. An *interruption*: Ctrl+C in a
+  command or the terminal application, which is the person's choice and is counted, not
+  diagnosed.
+- **What is kept of it, and nothing else.** Its kind; where it happened, by the command's own
+  words (`consume.update`, `tui`, `tui.install`, `usage-hook`, `telemetry-sync`), never its
+  arguments; the exception's type name; the frames inside aart-cli's own package as
+  `module:function:line`, innermost last, at most 30; the diagnostic codes the command reported, at
+  most 10; the exit code; aart-cli's version, Python's version and the platform (`darwin`, `linux`
+  or `other`); and a *fingerprint*, the first 16 hex digits of the SHA-256 of the kind, the place,
+  the type, the frames without their line numbers and the codes, so the same defect has the same
+  fingerprint in every version where its functions are the same. Never an exception's message, an
+  argument, a path, a project, an environment variable, an input's value or a credential: those
+  are where such things hide, and a redaction of free text is never complete.
+- **The journal.** `state/failures.sqlite3` in the application home, created 0600, keeps every
+  failure whether telemetry is on or not, the newest 500, with whether it is waiting, sent,
+  rejected or skipped. A database with another schema version is reported and never rewritten.
+  `consume telemetry disable --forget` deletes what it holds, as it deletes what the outbox holds.
+- **Recording never changes what failed.** A command's exit code and output, the terminal's
+  report, a crash's traceback and a hook's silence are what they were. A failure that cannot be
+  recorded is dropped without a word; a failure while recording one is never recorded.
+- **`consume report`.** The journal, newest first and grouped by fingerprint: how many times,
+  first and last seen, in which versions, and the kept fields, as a block to paste into an issue;
+  `--json` gives the same as a document and `--limit N` bounds it. Nothing leaves the machine.
+- **Sent while telemetry is on and failures are sent.** Each failure is sent once as
+  `aart_cli.failed` from `aart_cli`: `artifact_type` its kind, `artifact_id` where it happened, no
+  `artifact_version`, and a `failure` object with the kept fields (docs/telemetry-api-v1.md). Each
+  has its own random event id. Failures the journal held before telemetry was turned on are sent
+  when it is, as Activity's history is (§213). Recording one starts a due synchronisation as
+  recording an event does, except in the telemetry sender itself, whose failures wait for the next
+  one.
+- **Sent unless the build or the person says not.** The release variable
+  `AART_CLI_TELEMETRY_ERRORS` sets what a build does until a person chooses: unset, empty, `on` or
+  `true` sends failures; `off` or `false` does not; any other value fails the release. A person
+  changes it at any time: Settings' row *Failures aart-cli met*, or `consume telemetry errors
+  on|off`; the choice is kept in the consumer settings and overrules the build. It is read when
+  failures are sent, so turning it off means none still waiting is sent: each is marked skipped.
+  `consume telemetry status`, `enable` and the announcement say whether failures are sent.
+
+**INV-333 — A failure record carries none of what failed on.** For any exception, command and
+diagnostics, the record holds only the kind, the place, the exception's type name, frames of
+aart-cli's own modules as `module:function:line`, diagnostic codes of the contract's form, the exit
+code, the versions, the platform and the fingerprint; no message, argument, path or value.
+
+**INV-334 — A fingerprint names the defect, not the version.** Two failures have the same
+fingerprint exactly when their kind, place, type, frames without line numbers and codes are the
+same.
+
+**INV-335 — Recording a failure never changes what failed.** The exit code, standard output and
+standard error of the failed command or hook are those it had without the journal, whatever the
+journal does.
+
+**INV-336 — A failure is sent once, only while that is chosen.** A failure in the journal is sent,
+as `aart_cli.failed`, exactly when telemetry is on and the person's choice, or without one the
+build's, is to send failures at the moment it is sent. One the sender finds while failures are not
+sent is marked skipped and never sent; while telemetry is off, it waits.
