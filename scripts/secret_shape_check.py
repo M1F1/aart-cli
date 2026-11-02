@@ -57,8 +57,11 @@ _TOKEN_RE = re.compile(r"\b(" + "|".join(_TOKEN_PREFIXES) + r")_[A-Za-z0-9_]{20,
 # ordinary keyword argument -- a name bound to a factory call is code, not a credential, and a
 # gate that cannot tell the two apart is a gate people switch off.
 _SPAN_RE = re.compile(r"\"[^\"\n]*\"|'[^'\n]*'|`[^`\n]*`")
+# Here a key word may also end a name, as in `API_TOKEN=…` or `api_token=…`: the form an
+# environment file holds, which push protection refuses (D-510). One that goes on, as in
+# `…_PASSWORD_SECRET_NAME`, names where a secret is kept rather than holding one.
 _UNQUOTED_RE = re.compile(
-    r"(?i)\b(" + _KEY_WORDS + r")\b\s*" + r"=" + r"\s*([^\s\"'`,;)}\]&$\\]{4,})"
+    r"(?i)(?:\b|(?<=_))(" + _KEY_WORDS + r")\b\s*" + r"=" + r"\s*([^\s\"'`,;)}\]&$\\]{4,})"
 )
 # A value opening with one of these is a placeholder or an expansion rather than a credential:
 # a bracketed redaction marker, a format field, an angle-bracketed stand-in, a percent form.
@@ -95,6 +98,10 @@ def _scan(path: str) -> tuple[Finding, ...]:
         text = (ROOT / path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return ()
+    return _scan_text(path, text)
+
+
+def _scan_text(path: str, text: str) -> tuple[Finding, ...]:
     findings: list[Finding] = []
     for number, line in enumerate(text.splitlines(), start=1):
         if _URI_RE.search(line):
