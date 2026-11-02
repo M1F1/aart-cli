@@ -225,6 +225,20 @@ class TheBriefsScenariosTest(unittest.TestCase):
             ("artifact.used", "claude_hook", "github", "1.6.0"),
         )
 
+    def test_a_request_says_automated_exactly_when_the_sender_runs_as_automation(self) -> None:
+        for environment, expected in (
+            ({"CI": "true"}, True),
+            ({"CI": "true", "AART_CLI_AUTOMATED": "off"}, False),
+            ({}, False),
+        ):
+            with self.subTest(environment):
+                self.server.requests.clear()
+                self.home.use()
+                _sync(self.home, self.server, self.clock, force=True, environ=environment)
+                (request,) = self.server.requests
+                self.assertEqual(request.get("automated", False), expected)
+                self.assertNotIn(False, (request.get("automated"),))
+
     def test_2_five_minutes_after_a_success_nothing_is_sent(self) -> None:
         self.home.use()
         _sync(self.home, self.server, self.clock)

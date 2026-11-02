@@ -76,6 +76,16 @@ class TelemetryCommandTest(unittest.TestCase):
         self.assertEqual((status["enabled"], status["endpoint"]), (True, self.url))
         self.assertRegex(status["client_id"], r"^[0-9a-f-]{36}$")
 
+    def test_status_says_whether_this_machine_is_counted_as_automation(self) -> None:
+        for variables, expected, said in (
+            ({"CI": "", "AART_CLI_AUTOMATED": ""}, False, "sent as: a person's installation"),
+            ({"CI": "true", "AART_CLI_AUTOMATED": ""}, True, "sent as: automation"),
+            ({"CI": "true", "AART_CLI_AUTOMATED": "off"}, False, "sent as: a person's"),
+        ):
+            with self.subTest(variables), mock.patch.dict(os.environ, variables):
+                self.assertIs(self._json("status")[1]["automated"], expected)
+                self.assertIn(said, self._run("status")[1])
+
     def test_an_offered_address_is_used_only_when_a_person_enables(self) -> None:
         with mock.patch.object(_default_telemetry, "ENDPOINT", "https://telemetry.example.com"):
             _, out = self._run("status")

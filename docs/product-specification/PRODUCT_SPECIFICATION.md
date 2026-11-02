@@ -12657,14 +12657,15 @@ unchanged.
 
 # 213. Telemetry: installs, updates, removals and uses sent to a telemetry server
 
-Status: **ACCEPTED 2026-10-29 (D-503, D-504, D-505), amended 2026-10-30 (D-508) and 2026-11-02 (D-509, §215)**, on the owner's request after 0.21.0, from
+Status: **ACCEPTED 2026-10-29 (D-503, D-504, D-505), amended 2026-10-30 (D-508) and 2026-11-02 (D-509, §215; D-511)**, on the owner's request after 0.21.0, from
 their telemetry implementation brief: the organisation sees which artifacts are used, how often, by
 how many installations, and how that changes, on a dashboard. Supersedes §212's "Local only" for an
 installation where telemetry is on. D-505 (the owner, the same day): a build that names a server
 starts with telemetry on, and turning it on sends Activity's history too. D-508 (the owner,
 2026-10-30): uses of skills and MCPs aart-cli did not install are sent too, by the name the harness
 used, unless the build or the person says otherwise; this supersedes D-503's "a use no installed
-artifact answers to is never sent".
+artifact answers to is never sent". D-511 (the owner, 2026-11-02): automation, such as a CI job,
+says so, and the dashboard counts it apart from people.
 
 - **Two repositories, one contract.** The server is a separate repository,
   `aart-cli-telemetry-server` (a functional core behind FastAPI; SQLite in WAL by default and
@@ -12704,8 +12705,17 @@ artifact answers to is never sent".
   cannot carry is not sent. `aart_cli.failed`, from `aart_cli`, for a failure aart-cli met, while
   failures are sent (§215). Each event has
   its Activity record's `event_id` (above), or a failure's own (§215), and its UTC moment; the request has a random installation id, drawn when
-  telemetry is turned on, and aart-cli's version. Never a project, path, argument, prompt,
-  Registry address, user or host name, or credential.
+  telemetry is turned on, and aart-cli's version, and `"automated": true` when aart-cli runs as
+  automation (below). Never a project, path, argument, prompt, Registry address, user or host
+  name, credential, or which automation it is.
+- **Automation says so (D-511).** A CI job draws a new installation id each time, so without this
+  every job would read as a new person. A request says `"automated": true` when, at the moment it
+  is sent, `AART_CLI_AUTOMATED` is `on` or `true`, or, without that, `CI` -- which CI services
+  set -- holds anything but nothing, `false` or `0`; `AART_CLI_AUTOMATED` `off` or `false` says
+  not. No other variable is read, and no service is named. A person's request does not carry the
+  field at all, so a server that does not know it reads it unchanged and refuses only automation's.
+  The server counts people's installations and automated ones apart. `consume telemetry status
+  [--json]` says which this machine is.
 - **Uses aart-cli did not install: sent unless the build or the person says not (D-508).** The
   release variable `AART_CLI_TELEMETRY_UNMANAGED_USES` sets what a build does until a person
   chooses: unset, empty, `on` or `true` sends them; `off` or `false` does not; any other value fails
@@ -12779,6 +12789,11 @@ action's outcome is unchanged whatever the outbox, the lock, the network or the 
 the build and the person, a use no installed artifact answers to is sent, as `unmanaged.used`,
 exactly when telemetry is on and the person's choice, or without one the build's, is to send such
 uses at the moment it is sent; otherwise it is marked skipped and never sent.
+
+**INV-337 — A request says it comes from automation exactly when it does, and nothing more.** For
+any environment, a request carries `"automated": true` exactly when `AART_CLI_AUTOMATED` is `on` or
+`true`, or it is neither `on`, `true`, `off` nor `false` and `CI` holds anything but nothing,
+`false` or `0`; otherwise it carries no `automated` field. No other variable changes that.
 
 # 214. A plugin's skills are installed with it
 

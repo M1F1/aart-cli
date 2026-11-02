@@ -21,6 +21,7 @@ from aart_cli.domain.artifact_usage import InstalledName, UsageKind
 from aart_cli.domain.result import Err, Ok
 from aart_cli.domain.telemetry import (
     AUTH_PAUSE,
+    AUTOMATED_VARIABLE,
     BACKOFF,
     BATCH_SIZE,
     SYNC_INTERVAL,
@@ -29,6 +30,7 @@ from aart_cli.domain.telemetry import (
     TelemetryEvent,
     after_failure,
     after_success,
+    automated,
     batch_document,
     classify_answer,
     contract_moment,
@@ -43,9 +45,9 @@ ROOT = Path(__file__).resolve().parent.parent
 CONTRACT = ROOT / "docs" / "telemetry-api-v1.md"
 EXAMPLES = ROOT / "contract" / "telemetry-api-v1.examples.json"
 CONTRACT_SHA256 = {
-    "docs/telemetry-api-v1.md": "7bded26a8b5f79ec4168a2fb71bb0d98e9728c15973197135c94baa1d8032f25",
+    "docs/telemetry-api-v1.md": "23e6c8c249bbce7361d28e8df1cdd2124c0ac0b26d8ae9e15fcdede6ded499c0",
     "contract/telemetry-api-v1.examples.json": (
-        "e699865e780d310761d4e34aa280de57da474c9be8fc6f43de338e6f86421fe9"
+        "352e268b6c19cbade894db3bf07854502091259237a4e3b4625c2c86c3243344"
     ),
 }
 
@@ -78,7 +80,13 @@ class TheContractIsSharedTest(unittest.TestCase):
                 continue
             events = tuple(TelemetryEvent(**event) for event in request["events"])
             self.assertEqual(
-                batch_document(request["client_id"], request["client_version"], events), request
+                batch_document(
+                    request["client_id"],
+                    request["client_version"],
+                    events,
+                    automated=request.get("automated", False),
+                ),
+                request,
             )
 
     def test_no_invalid_example_can_be_built(self) -> None:
@@ -294,6 +302,64 @@ class WhatIsSentTest(unittest.TestCase):
             contract_moment(datetime(2026, 10, 29, 20, 15, tzinfo=timezone(timedelta(hours=2)))),
             "2026-10-29T18:15:00.000000Z",
         )
+
+
+class AutomationTest(unittest.TestCase):
+    """§213: a request says it comes from automation, and only then (D-511)."""
+
+    EVENT = TelemetryEvent(ID, "2026-10-29T18:15:00Z", "artifact.used", "claude_hook", "a", "skill")
+
+    def test_a_request_says_automated_only_when_it_is(self) -> None:
+        self.assertNotIn("automated", batch_document(CLIENT, "0.22.0", (self.EVENT,)))
+        self.assertNotIn(
+            "automated", batch_document(CLIENT, "0.22.0", (self.EVENT,), automated=False)
+        )
+        self.assertIs(
+            batch_document(CLIENT, "0.22.0", (self.EVENT,), automated=True)["automated"], True
+        )
+
+    def test_ci_says_automation_unless_aart_cli_automated_says_otherwise(self) -> None:
+        for environment, expected in (
+            ({}, False),
+            ({"CI": "true"}, True),
+            ({"CI": "1"}, True),
+            ({"CI": "yes"}, True),
+            ({"CI": ""}, False),
+            ({"CI": " "}, False),
+            ({"CI": "false"}, False),
+            ({"CI": "FALSE"}, False),
+            ({"CI": "0"}, False),
+            ({AUTOMATED_VARIABLE: "on"}, True),
+            ({AUTOMATED_VARIABLE: "TRUE"}, True),
+            ({"CI": "true", AUTOMATED_VARIABLE: "off"}, False),
+            ({"CI": "true", AUTOMATED_VARIABLE: " false "}, False),
+            ({"CI": "", AUTOMATED_VARIABLE: "on"}, True),
+            ({"CI": "true", AUTOMATED_VARIABLE: "maybe"}, True),
+            ({"CI": "false", AUTOMATED_VARIABLE: ""}, False),
+        ):
+            with self.subTest(environment):
+                self.assertIs(automated(environment), expected)
+
+    @given(
+        environment=st.dictionaries(
+            st.text(string.ascii_uppercase + "_", min_size=1, max_size=12).filter(
+                lambda name: name not in ("CI", AUTOMATED_VARIABLE)
+            ),
+            st.text(max_size=8),
+            max_size=6,
+        ),
+        ci=st.sampled_from((None, "", "true", "false", "0")),
+        setting=st.sampled_from((None, "", "on", "off", "other")),
+    )
+    def test_no_other_variable_ever_changes_the_answer(
+        self, environment: dict[str, str], ci: str | None, setting: str | None
+    ) -> None:
+        own = {
+            name: value
+            for name, value in (("CI", ci), (AUTOMATED_VARIABLE, setting))
+            if value is not None
+        }
+        self.assertIs(automated({**environment, **own}), automated(own))
 
 
 if __name__ == "__main__":

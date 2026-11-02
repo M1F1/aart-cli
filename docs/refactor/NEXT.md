@@ -1,6 +1,20 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-02, CP-53)
+## Where the work is (2026-11-02, CP-54)
+
+**CP-54** tells automation from people (§213, INV-337, D-511). A request says `"automated": true`
+when the sender runs as automation: `AART_CLI_AUTOMATED` on/true, or without it `CI` holding
+anything but nothing, false or 0; `AART_CLI_AUTOMATED` off/false says not. A person's request has
+no such field, so an older server reads it unchanged. The server (aart-cli-telemetry-server #14,
+merged first) keeps automation's events in an `automation` table and counts people's installations
+(`active_clients`, `using_clients`) apart from automated ones (`automated_clients`).
+`consume telemetry status` says which this machine is. Deploy the server from its main before the
+release that sends `automated`.
+
+Evidence: `docs/refactor/slices/CP-54-automated-installations.md`. B-265, B-266 and B-267 are still
+open.
+
+## Where the work was (2026-11-02, CP-53)
 
 0.23.0 (CP-51, CP-52) is released. **CP-53** journals the failures aart-cli meets and sends them to
 the telemetry server (§215, INV-333–INV-336, D-509): a crash, a nonzero exit or Ctrl+C in a
