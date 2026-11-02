@@ -367,6 +367,7 @@ class SettingsBlockTest(TestCase):
                 "  Author Mode: off",
                 "Telemetry",
                 "  Uses of tools aart-cli did not install: sent",
+                "  Failures aart-cli met: sent",
             ),
         )
 
