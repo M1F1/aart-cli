@@ -16,8 +16,10 @@ version that had them, unless the build (`AART_CLI_TELEMETRY_ERRORS` off/false) 
 `/api/v1/stats/failures` and the dashboard's Errors section. Deploy it before the release that sends
 failures; an older server rejects those events alone (422), the rest are stored.
 
-Evidence: `docs/refactor/slices/CP-53-failure-reports.md`. Steps 1–4 are done; step 5 is the two
-PRs. B-265 (signals), B-266 (issues opened by the server) and B-267 (chained causes) are open.
+Evidence: `docs/refactor/slices/CP-53-failure-reports.md`. CP-53 is done: aart-cli #115 and
+aart-cli-telemetry-server #3 (merged first). Before the release that sends failures, deploy the
+server from its main. B-265 (signals), B-266 (issues opened by the server) and B-267 (chained
+causes) are open.
 
 ## Where the work was (2026-10-30, CP-51)
 

@@ -1943,7 +1943,7 @@
     {
       "id": "CP-53",
       "title": "Failures aart-cli meets are journaled, reportable with consume report, and sent to the telemetry server unless the build or the person says not (§213, §215, INV-333–INV-336, D-509)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -1967,8 +1967,8 @@
         },
         {
           "id": "5",
-          "title": "The PRs",
-          "status": "in_progress"
+          "title": "The PRs: aart-cli #115, aart-cli-telemetry-server #3",
+          "status": "done"
         }
       ]
     }
