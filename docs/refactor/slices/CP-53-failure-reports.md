@@ -135,6 +135,11 @@ exception's message, a local journal with `consume report`, and a dashboard on t
 | M30 | The shell does not tell an action that stopped | `failure_journal_test` |
 | M31 | An action that stopped not journaled | `failure_journal_test` |
 | M32 | Any build value accepted | `failure_journal_test`, `failure_domain_test` |
+| M33 | The report says nothing here left the machine | `failure_journal_test` |
+
+After 0.24.0: its report said "nothing here left this machine", which is false once telemetry has
+sent a failure. §215 says only that the report sends nothing; it now says that, and points to
+`consume telemetry status` (M33).
 
 On the server:
 

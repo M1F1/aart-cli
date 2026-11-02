@@ -456,6 +456,19 @@ class TheReportTest(unittest.TestCase):
         self.assertIn(_failure().fingerprint, out)
         self.assertIn("aart_cli.cli:main:362", out)
 
+    def test_it_says_printing_sends_nothing_and_never_that_nothing_was_sent(self) -> None:
+        """While telemetry is on a journaled failure may already have been sent (§215): the
+        report itself sends nothing, and where to see what is sent is the status."""
+
+        out = self.run("consume", "report")[1]
+
+        self.assertEqual(
+            out.splitlines()[0],
+            "aart-cli failures, seen last first. Printing this sends nothing; "
+            "`consume telemetry status` says whether failures are sent.",
+        )
+        self.assertNotIn("left this machine", out)
+
     def test_json_says_the_same_and_limit_bounds_it(self) -> None:
         code, out, _ = self.run("consume", "report", "--json", "--limit", "1")
 
