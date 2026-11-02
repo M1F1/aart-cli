@@ -56,7 +56,11 @@ def report_lines(groups: tuple[FailureGroup, ...]) -> list[str]:
 
     if not groups:
         return ["No failures are journaled here."]
-    lines = ["aart-cli failures, seen last first; nothing here left this machine.", "```"]
+    lines = [
+        "aart-cli failures, seen last first. Printing this sends nothing; "
+        "`consume telemetry status` says whether failures are sent.",
+        "```",
+    ]
     for number, group in enumerate(groups, start=1):
         failure = group.failure
         times = "once" if group.count == 1 else f"{group.count} times"
