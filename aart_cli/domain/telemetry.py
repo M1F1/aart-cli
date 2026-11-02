@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -22,6 +23,7 @@ from .result import Err, Ok, Result
 
 __all__ = [
     "AUTH_PAUSE",
+    "AUTOMATED_VARIABLE",
     "BACKOFF",
     "BATCH_PATH",
     "BATCH_SIZE",
@@ -41,6 +43,7 @@ __all__ = [
     "TelemetryEvent",
     "after_failure",
     "after_success",
+    "automated",
     "batch_document",
     "classify_answer",
     "contract_moment",
@@ -70,6 +73,8 @@ MAX_REQUESTS_PER_RUN = 20
 RUN_SECONDS = 60.0
 
 BATCH_PATH = "/api/v1/events/batch"
+#: Says whether aart-cli runs as automation, `on` or `off`, overruling `CI` (D-511).
+AUTOMATED_VARIABLE = "AART_CLI_AUTOMATED"
 TELEMETRY_ENDPOINT_INVALID = DiagnosticCode("telemetry-endpoint-invalid")
 TELEMETRY_UNMANAGED_INVALID = DiagnosticCode("telemetry-unmanaged-invalid")
 TELEMETRY_ERRORS_INVALID = DiagnosticCode("telemetry-errors-invalid")
@@ -360,10 +365,30 @@ def failure_event(event_id: str, moment: str, failure: Failure) -> TelemetryEven
     )
 
 
+def automated(environment: Mapping[str, str]) -> bool:
+    """Whether aart-cli runs as automation -- a CI job, for one -- rather than for a person.
+
+    `AART_CLI_AUTOMATED` says so when it is `on`/`true` or `off`/`false`; otherwise `CI`, which CI
+    services set, says so when it holds anything but nothing, `false` or `0` (D-511).
+    """
+
+    setting = environment.get(AUTOMATED_VARIABLE, "").strip().lower()
+    if setting in ("on", "true"):
+        return True
+    if setting in ("off", "false"):
+        return False
+    return environment.get("CI", "").strip().lower() not in ("", "false", "0")
+
+
 def batch_document(
-    client_id: str, client_version: str, events: tuple[TelemetryEvent, ...]
+    client_id: str,
+    client_version: str,
+    events: tuple[TelemetryEvent, ...],
+    *,
+    automated: bool = False,
 ) -> dict[str, object]:
-    """The request body for `events`."""
+    """The request body for `events`; it says `automated` only when it is, so a person's request
+    is the one an older server reads (D-511)."""
 
     if _UUID.fullmatch(client_id) is None:
         raise ValueError("a telemetry client id is a lowercase UUID")
@@ -375,6 +400,7 @@ def batch_document(
         "schema_version": 1,
         "client_id": client_id,
         "client_version": client_version,
+        **({"automated": True} if automated else {}),
         "events": [event.document() for event in events],
     }
 

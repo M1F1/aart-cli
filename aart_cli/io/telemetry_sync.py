@@ -23,7 +23,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,6 +41,7 @@ from aart_cli.domain.telemetry import (
     TelemetryEvent,
     after_failure,
     after_success,
+    automated,
     batch_document,
     classify_answer,
     failure_event,
@@ -176,8 +177,13 @@ def synchronise(
     now: Callable[[], datetime] = _now,
     jitter: Callable[[], float] = random.random,
     monotonic: Callable[[], float] = time.monotonic,
+    environ: Mapping[str, str] | None = None,
 ) -> SyncReport:
-    """Send what waits, under the lock, if it is due; what happened."""
+    """Send what waits, under the lock, if it is due; what happened.
+
+    Each request says whether this sender runs as automation, as `environ` (by default this
+    process's environment, which the detached sender inherits) says now (D-511).
+    """
 
     from aart_cli.runtime_contract import EXECUTABLE_VERSION
 
@@ -204,6 +210,7 @@ def synchronise(
             jitter=jitter,
             monotonic=monotonic,
             client_version=str(EXECUTABLE_VERSION),
+            automated=automated(os.environ if environ is None else environ),
         )
     finally:
         os.close(lock)
@@ -223,8 +230,10 @@ class _Run:
         now: Callable[[], datetime],
         jitter: Callable[[], float],
         monotonic: Callable[[], float],
+        automated: bool,
     ) -> None:
         self.outbox, self.current = outbox, state
+        self.automated = automated
         self.endpoint, self.client_id = endpoint, client_id
         self.post, self.now, self.jitter, self.monotonic = post, now, jitter, monotonic
         self.started = monotonic()
@@ -249,7 +258,9 @@ class _Run:
 
         ids = tuple(event.event_id for event in events)
         try:
-            document = batch_document(self.client_id, client_version, events)
+            document = batch_document(
+                self.client_id, client_version, events, automated=self.automated
+            )
         except ValueError:
             settle(ids, "rejected", self.now())
             self.rejected += len(ids)
@@ -295,6 +306,7 @@ def _under_lock(
     jitter: Callable[[], float],
     monotonic: Callable[[], float],
     client_version: str,
+    automated: bool,
 ) -> SyncReport:
     setting = outbox.setting()
     if isinstance(setting, Err) or setting.value is None or not setting.value.enabled:
@@ -322,6 +334,7 @@ def _under_lock(
         now=now,
         jitter=jitter,
         monotonic=monotonic,
+        automated=automated,
     )
     _send_outbox(run, state_root, client_version)
     if not run.stopped:

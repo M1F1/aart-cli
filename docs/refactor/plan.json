@@ -1971,6 +1971,28 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "CP-54",
+      "title": "Automation says so, and the telemetry server counts it apart from people (§213, INV-337, D-511)",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "The server: automated in contract v1, the automation table, people's and automated installations apart (aart-cli-telemetry-server #14)",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "aart-cli: automated() from CI and AART_CLI_AUTOMATED, sent only when true, said by consume telemetry status",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR",
+          "status": "in_progress"
+        }
+      ]
     }
   ]
 }

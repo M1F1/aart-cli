@@ -4,6 +4,15 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-02, CP-54 (§213, INV-337, D-511): automation says so, and the telemetry server counts it apart from people.**
+`automated(environment)` reads `AART_CLI_AUTOMATED` (on/true, off/false), then `CI`, and no other
+variable. The sender decides once a run from the environment it inherited. Each request carries
+`"automated": true` only then, so a person's request is unchanged for an older server. `consume
+telemetry status [--json]` says which this machine is. Contract v1 gains the optional field in both
+repositories, with new digests. The server (#14) stores it per event and counts people's
+installations apart from automated ones. INV-337 is EVIDENCED. Evidence:
+`docs/refactor/slices/CP-54-automated-installations.md`.
+
 **2026-11-02, CP-53 (§213, §215, INV-333–INV-336, D-509): the failures aart-cli meets are journaled, reportable and sent.**
 A command's crash, nonzero exit or Ctrl+C, the terminal application's crash or stopped action, and a
 crash in the usage hook or the telemetry sender are journaled in `state/failures.sqlite3` (0600,

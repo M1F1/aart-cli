@@ -12798,3 +12798,28 @@ plan").
   `tests/setup_render_test.py`) are assembled through `tests/credential_fixtures.py`.
 - **Tests.** `tests/secret_shape_check_test.py`; the scan of one line is `_scan_text`, so the rule is
   tested without files. Mutation: back to `\b` only fails four cases.
+
+## D-511 — Automation says so, and the server counts it apart from people (CP-54)
+
+- **Evidence.** The owner asked to tell automata from real users. A CI job runs aart-cli in a fresh
+  environment, draws a new installation id each time, and so read as a new person on the dashboard.
+- **Choice.** The request gains an optional envelope field in contract version 1, `automated`,
+  `true` or `false`. aart-cli sends `"automated": true` only when it runs as automation and omits
+  the field otherwise, so a person's request is byte-for-byte what an older server accepts; an older
+  server refuses only automation's requests (`422`, split down to single events, marked rejected).
+  That is why it is version 1 and not version 2. The server is deployed first all the same
+  (aart-cli-telemetry-server #14).
+- **What says automation.** `AART_CLI_AUTOMATED` `on`/`true` or `off`/`false`, case and spaces
+  ignored, overrules; otherwise `CI` holding anything but nothing, `false` or `0`. `CI` is the
+  convention most CI services set; no service's own variable is read, so nothing in this repository
+  names one. It is read by the sender at send time from the environment it inherited, like the
+  unmanaged-uses and failures choices: events a person recorded and a CI job then sent count as
+  automation's, which on one machine is rare and harmless.
+- **The server.** It keeps the events sent as automation in a table of their own, `automation`,
+  created in a version-1 database that lacks it, as `failure` was; an id kept before keeps what its
+  first request said (`INSERT … RETURNING`). `active_clients` and `using_clients` count people's
+  installations; `automated_clients` counts automated ones, in the summary and per day. An
+  installation that sent both is counted in each. Usage, installs and the top lists still count
+  every event.
+- **Status.** `consume telemetry status` says which this machine is, and `--json` adds `automated`.
+

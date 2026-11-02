@@ -399,6 +399,13 @@ aart-cli consume telemetry unmanaged on
 
 `consume telemetry status` says whether they are sent and whether that is your choice.
 
+A CI job draws a new installation id each run, so aart-cli says when it runs as automation and the
+server counts such installations apart from people. It does when the environment variable `CI`,
+which CI services set, holds anything but nothing, `false` or `0`. `AART_CLI_AUTOMATED=on` marks
+automation that sets no `CI`, and `AART_CLI_AUTOMATED=off` says a machine is a person's whatever
+`CI` holds. Only the request's `"automated": true` is sent, never which automation it is.
+`consume telemetry status` says which this machine is.
+
 Events wait in `~/.aart-cli/state/telemetry.sqlite3`, readable only by you. When something new is
 recorded and ten minutes have passed since the last successful send, a short-lived process sends
 what waits and exits; there is no background service. A server that cannot be reached is tried

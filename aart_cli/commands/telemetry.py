@@ -14,7 +14,12 @@ from aart_cli.configuration.paths import APPLICATION_HOME_VARIABLE, Platform, re
 from aart_cli.configuration.policy import redact_text
 from aart_cli.configuration.seed import baked_telemetry_endpoint
 from aart_cli.domain.result import Err, Ok
-from aart_cli.domain.telemetry import BATCH_PATH, parse_telemetry_endpoint
+from aart_cli.domain.telemetry import (
+    AUTOMATED_VARIABLE,
+    BATCH_PATH,
+    automated,
+    parse_telemetry_endpoint,
+)
 from aart_cli.io.consumer_settings import read_consumer_settings, write_consumer_settings
 from aart_cli.io.failure_journal import FailureJournal
 from aart_cli.io.telemetry_consent import announce_turned_on, turn_on, turn_on_by_default
@@ -134,6 +139,7 @@ def _status(request: Request, outbox: TelemetryOutbox, home: str) -> int:
     document["unmanaged_uses"] = unmanaged
     errors, said_errors = _errors(settings)
     document["errors"] = errors
+    document["automated"] = automation = automated(os.environ)
     journal = FailureJournal(f"{home}/state").counts()
     if isinstance(journal, Ok):
         document["journal"] = {
@@ -152,6 +158,12 @@ def _status(request: Request, outbox: TelemetryOutbox, home: str) -> int:
         lines.append(f"this aart-cli offers: {offered}")
     lines.append(said)
     lines.append(said_errors)
+    lines.append(
+        "sent as: automation, counted apart from people "
+        f"(CI or {AUTOMATED_VARIABLE}; {AUTOMATED_VARIABLE}=off says otherwise)"
+        if automation
+        else f"sent as: a person's installation ({AUTOMATED_VARIABLE}=on marks automation)"
+    )
     lines.append(
         f"events: {waiting.waiting} waiting, {waiting.sent} sent, {waiting.rejected} rejected, "
         f"{waiting.skipped} skipped (not sent by choice, or nothing the contract can name)"
