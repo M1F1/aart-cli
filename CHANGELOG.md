@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.29.0](https://github.com/M1F1/aart-cli/compare/v0.28.0...v0.29.0) (2026-11-03)
+
+
+### Added
+
+* each event says its Registry alias, harness, scope and tool, to a server that holds revision 7 ([f1302e5](https://github.com/M1F1/aart-cli/commit/f1302e5bee30172256ad44c59b6d9ab8a33541e4))
+
 ## [0.28.0](https://github.com/M1F1/aart-cli/compare/v0.27.1...v0.28.0) (2026-11-03)
 
 
