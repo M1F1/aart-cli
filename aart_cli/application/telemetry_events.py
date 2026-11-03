@@ -1,8 +1,8 @@
 """The telemetry events one finished action amounts to (§213).
 
-An install, update, downgrade or uninstall reports each artifact it changed and completed; a
-repair, a failure and a member never attempted report nothing, because nothing about what is
-installed changed for the organisation to count.
+An install, update, downgrade or uninstall reports each artifact it changed and completed, and
+each skill a plugin among them carries (§214); a repair, a failure and a member never attempted
+report nothing, because nothing about what is installed changed for the organisation to count.
 """
 
 from __future__ import annotations
@@ -22,16 +22,24 @@ _COMPLETED_ACTION = frozenset({ActivityOutcome.SUCCEEDED, ActivityOutcome.ATTENT
 def lifecycle_events(
     receipt: ReceiptDetailView, new_id: Callable[[], str]
 ) -> tuple[TelemetryEvent, ...]:
-    """Each artifact `receipt` changed and completed, as one event; `new_id` draws event ids."""
+    """Each artifact `receipt` changed and completed, as one event, followed by one for each skill
+    it carries when it is a plugin; `new_id` draws event ids."""
 
     if not isinstance(receipt, ReceiptDetailView):
         raise ValueError("telemetry events come from a finished action's receipt")
     moment = contract_moment(receipt.moment)
+    changed: tuple[tuple[str, tuple[str, ...]], ...]
     if receipt.artifacts:
         changed = tuple(
-            item.coordinate for item in receipt.artifacts if item.status in _COMPLETED_MEMBER
+            (item.coordinate, item.members)
+            for item in receipt.artifacts
+            if item.status in _COMPLETED_MEMBER
         )
     else:
-        changed = (receipt.artifact,) if receipt.outcome in _COMPLETED_ACTION else ()
-    events = (lifecycle_event(new_id(), moment, receipt.intent, item) for item in changed)
+        changed = ((receipt.artifact, ()),) if receipt.outcome in _COMPLETED_ACTION else ()
+    events = (
+        lifecycle_event(new_id(), moment, receipt.intent, coordinate, member=member)
+        for coordinate, members in changed
+        for member in (None, *members)
+    )
     return tuple(event for event in events if event is not None)

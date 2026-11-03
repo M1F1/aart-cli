@@ -2576,6 +2576,8 @@ class ReceiptArtifactView:
     diagnostics: tuple[str, ...] = ()
     detail: str = ""
     source_revision: str | None = None
+    #: The skills a plugin carries, by name, installed and removed with it (§214).
+    members: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -2800,6 +2802,7 @@ def receipt_detail_to_data(view: ReceiptDetailView) -> dict[str, object]:
                             if item.source_revision is None
                             else {"source_revision": item.source_revision}
                         ),
+                        **({"members": list(item.members)} if item.members else {}),
                         "steps": [
                             {
                                 "component": step.component,
@@ -3965,6 +3968,7 @@ def receipt_detail_from_data(data: object) -> Result[ReceiptDetailView]:
                         _strings(row, "diagnostics"),
                         _string(row, "detail"),
                         (None if "source_revision" not in row else _string(row, "source_revision")),
+                        _strings(row, "members") if "members" in row else (),
                     )
                     for row in _rows(data, "artifacts")
                 ),

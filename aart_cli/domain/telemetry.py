@@ -300,15 +300,21 @@ def lifecycle_event_type(intent: str) -> str | None:
 
 
 def lifecycle_event(
-    event_id: str, moment: str, intent: str, coordinate: str
+    event_id: str, moment: str, intent: str, coordinate: str, *, member: str | None = None
 ) -> TelemetryEvent | None:
-    """An install, update or removal aart-cli carried out, or `None` when it is not reportable."""
+    """An install, update or removal aart-cli carried out, or `None` when it is not reportable.
+
+    With `member`, of that skill of the plugin `coordinate` names: a skill named
+    `<plugin>:<member>` at the plugin's version, as its uses are (§214).
+    """
 
     event_type = lifecycle_event_type(intent)
     artifact = _artifact(coordinate)
     if event_type is None or artifact is None:
         return None
     kind, name, version = artifact
+    if member is not None:
+        kind, name = "skill", f"{name}:{member}"
     return _event(event_id, moment, event_type, "aart_cli", kind, name, version)
 
 
