@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.27.0](https://github.com/M1F1/aart-cli/compare/v0.26.0...v0.27.0) (2026-11-03)
+
+
+### Added
+
+* an end by SIGTERM or SIGHUP (a supervisor stopping aart-cli, a closed terminal) is journaled as an interruption at the command or terminal action that was running, and the process still ends by that signal ([6d431d4](https://github.com/M1F1/aart-cli/commit/6d431d46db2819717d71a76f3cb544d86d62baf9))
+* Settings' Telemetry row turns telemetry on and off, and says where it sends, what it sends, what waits, the last success and whether this machine counts as a person or as automation ([6d431d4](https://github.com/M1F1/aart-cli/commit/6d431d46db2819717d71a76f3cb544d86d62baf9))
+
 ## [0.26.0](https://github.com/M1F1/aart-cli/compare/v0.25.0...v0.26.0) (2026-11-03)
 
 
