@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.0](https://github.com/M1F1/aart-cli/compare/v0.29.0...v0.30.0) (2026-11-03)
+
+
+### Added
+
+* events say how an action ran and came, and a use its session pseudonym, scope and Claude Code tool ([222bfad](https://github.com/M1F1/aart-cli/commit/222bfad3041338f738505affca784e9654c89f3f))
+
 ## [0.29.0](https://github.com/M1F1/aart-cli/compare/v0.28.0...v0.29.0) (2026-11-03)
 
 
