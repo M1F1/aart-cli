@@ -79,6 +79,12 @@ def report_lines(groups: tuple[FailureGroup, ...]) -> list[str]:
         if failure.frames:
             lines.append("   frames, innermost last:")
             lines.extend(f"     {frame}" for frame in failure.frames)
+        for cause in failure.causes:
+            if cause.frames:
+                lines.append(f"   raised from {cause.exception}, frames innermost last:")
+                lines.extend(f"     {frame}" for frame in cause.frames)
+            else:
+                lines.append(f"   raised from {cause.exception}")
     lines.append("```")
     return lines
 

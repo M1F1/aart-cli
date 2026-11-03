@@ -92,6 +92,21 @@ def _raise_inside_aart_cli() -> BaseException:
     raise AssertionError("contract_moment accepted a moment without a time zone")
 
 
+def _raised_from_one_inside_aart_cli(*, explicit: bool) -> BaseException:
+    """An exception this module raised from, or while handling, one aart-cli raised."""
+
+    try:
+        try:
+            contract_moment(datetime(2026, 11, 2))
+        except ValueError as inner:
+            if explicit:
+                raise RuntimeError(PRIVATE) from inner
+            raise RuntimeError(PRIVATE)  # noqa: B904 -- the implicit context is the claim
+    except RuntimeError as error:
+        return error
+    raise AssertionError("contract_moment accepted a moment without a time zone")
+
+
 def _home(test: unittest.TestCase) -> str:
     temporary = tempfile.TemporaryDirectory()
     test.addCleanup(temporary.cleanup)
@@ -194,6 +209,65 @@ class RecordingTest(unittest.TestCase):
         raw = Path(_journal(self.home).path).read_bytes()
         self.assertNotIn(str(error).encode(), raw)
         self.assertNotIn(b"failure_journal_test", raw)
+
+    def test_what_a_crash_was_raised_from_is_kept_by_type_and_frames_never_its_message(
+        self,
+    ) -> None:
+        """B-267: an explicit cause, or the exception being handled, in order."""
+
+        for explicit in (True, False):
+            with self.subTest(explicit=explicit):
+                home = _home(self)
+                error = _raised_from_one_inside_aart_cli(explicit=explicit)
+
+                record_failure(home, FailureKind.CRASH, "consume.update", error=error, sync=False)
+
+                (entry,) = _entries(home)
+                self.assertEqual(entry.failure.exception, "RuntimeError")
+                self.assertEqual(entry.failure.frames, ())
+                (cause,) = entry.failure.causes
+                self.assertEqual(cause.exception, "ValueError")
+                self.assertEqual(len(cause.frames), 1)
+                self.assertTrue(cause.frames[0].startswith("aart_cli.domain.telemetry:"))
+                raw = Path(_journal(home).path).read_bytes()
+                self.assertNotIn(PRIVATE.encode(), raw)
+                self.assertNotIn(str(error.__cause__ or error.__context__).encode(), raw)
+
+    def test_a_context_raised_from_none_is_not_a_cause_and_a_cycle_ends(self) -> None:
+        try:
+            try:
+                raise KeyError("x")
+            except KeyError:
+                raise OddFailure(PRIVATE) from None
+        except OddFailure as error:
+            hidden = error
+        first, second = OddFailure("a"), ValueError("b")
+        first.__cause__, second.__cause__ = second, first
+
+        record_failure(self.home, FailureKind.CRASH, "tui", error=hidden, sync=False)
+        record_failure(self.home, FailureKind.CRASH, "tui", error=first, sync=False)
+
+        hidden_entry, cycle_entry = sorted(
+            _entries(self.home), key=lambda entry: len(entry.failure.causes)
+        )
+        self.assertEqual(hidden_entry.failure.causes, ())
+        self.assertEqual([cause.exception for cause in cycle_entry.failure.causes], ["ValueError"])
+
+    def test_a_long_chain_keeps_the_nearest_five(self) -> None:
+        error: BaseException = ValueError("0")
+        for number in range(1, 9):
+            outer = OSError(str(number))
+            outer.__cause__ = error
+            error = outer
+
+        record_failure(self.home, FailureKind.CRASH, "tui", error=error, sync=False)
+
+        (entry,) = _entries(self.home)
+        self.assertEqual(entry.failure.exception, "OSError")
+        self.assertEqual(
+            [cause.exception for cause in entry.failure.causes],
+            ["OSError", "OSError", "OSError", "OSError", "OSError"],
+        )
 
     def test_a_type_outside_builtins_is_named_with_its_module_and_a_local_one_is_not(
         self,
@@ -455,6 +529,39 @@ class TheReportTest(unittest.TestCase):
         self.assertIn("aart-cli 0.24.0, 0.23.0", out)
         self.assertIn(_failure().fingerprint, out)
         self.assertIn("aart_cli.cli:main:362", out)
+
+    def test_it_says_what_each_crash_was_raised_from_after_its_frames(self) -> None:
+        caused = failure_of(
+            FailureKind.CRASH,
+            "consume.install",
+            "RuntimeError",
+            (("aart_cli.cli", "main", 362),),
+            (),
+            None,
+            "3.12.4",
+            "linux",
+            causes=(
+                ("OSError", (("aart_cli.io.receipt_store", "_write", 412),)),
+                ("PermissionError", ()),
+            ),
+        )
+        assert caused is not None
+        _journal(self.run.home).record(
+            caused, "2026-11-03T08:00:00.000000Z", "0.25.0", f"{EVENT[:-1]}8"
+        )
+
+        out = self.run("consume", "report")[1]
+
+        block = out[out.index("crash in consume.install") :]
+        self.assertIn(
+            "   frames, innermost last:\n"
+            "     aart_cli.cli:main:362\n"
+            "   raised from OSError, frames innermost last:\n"
+            "     aart_cli.io.receipt_store:_write:412\n"
+            "   raised from PermissionError\n",
+            block,
+        )
+        self.assertNotIn("raised from", out[: out.index("crash in consume.install")])
 
     def test_it_says_printing_sends_nothing_and_never_that_nothing_was_sent(self) -> None:
         """While telemetry is on a journaled failure may already have been sent (§215): the
