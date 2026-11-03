@@ -12846,9 +12846,11 @@ are each one event, as before.
 
 # 215. Failures aart-cli meets are journaled, reportable, and sent to the telemetry server
 
-Status: **ACCEPTED 2026-11-02 (D-509)**, on the owner's request after 0.23.0: what goes wrong for
-the people using aart-cli is to be known before they open an issue, precisely enough to write the
-patch and release it. It amends §213's "What is sent".
+Status: **ACCEPTED 2026-11-02 (D-509), amended 2026-11-03 (D-512)**, on the owner's request after
+0.23.0: what goes wrong for the people using aart-cli is to be known before they open an issue,
+precisely enough to write the patch and release it. It amends §213's "What is sent". D-512 (the
+owner, 2026-11-03, B-267): a crash keeps what its exception was raised from, since the defect is
+often there.
 
 - **What a failure is.** A *crash*: an exception no handler took, in a command, the terminal
   application, a harness's usage hook or the telemetry sender. An *error*: a command that ended
@@ -12858,11 +12860,16 @@ patch and release it. It amends §213's "What is sent".
 - **What is kept of it, and nothing else.** Its kind; where it happened, by the command's own
   words (`consume.update`, `tui`, `tui.install`, `usage-hook`, `telemetry-sync`), never its
   arguments; the exception's type name; the frames inside aart-cli's own package as
-  `module:function:line`, innermost last, at most 30; the diagnostic codes the command reported, at
-  most 10; the exit code; aart-cli's version, Python's version and the platform (`darwin`, `linux`
-  or `other`); and a *fingerprint*, the first 16 hex digits of the SHA-256 of the kind, the place,
-  the type, the frames without their line numbers and the codes, so the same defect has the same
-  fingerprint in every version where its functions are the same. Never an exception's message, an
+  `module:function:line`, innermost last, at most 30; its *causes*, the exceptions it was raised
+  from or while handling as Python's own traceback follows them (the explicit cause, else the one
+  being handled unless `from None` hid it), the nearest first, at most 5, each its type name and
+  its frames kept the same way; the diagnostic codes the command reported, at most 10; the exit
+  code; aart-cli's version, Python's version and the platform (`darwin`, `linux` or `other`); and a
+  *fingerprint*, the first 16 hex digits of the SHA-256 of the kind, the place, the type, the
+  frames without their line numbers, the codes and, when there are any, the causes' types and
+  frames without their line numbers, so the same defect has the same fingerprint in every version
+  where its functions are the same, and a failure without causes keeps the fingerprint it had
+  before causes were kept. Never an exception's message, an
   argument, a path, a project, an environment variable, an input's value or a credential: those
   are where such things hide, and a redaction of free text is never complete.
 - **The journal.** `state/failures.sqlite3` in the application home, created 0600, keeps every
@@ -12873,7 +12880,8 @@ patch and release it. It amends §213's "What is sent".
   report, a crash's traceback and a hook's silence are what they were. A failure that cannot be
   recorded is dropped without a word; a failure while recording one is never recorded.
 - **`consume report`.** The journal, newest first and grouped by fingerprint: how many times,
-  first and last seen, in which versions, and the kept fields, as a block to paste into an issue;
+  first and last seen, in which versions, and the kept fields, each cause after the frames as
+  "raised from", as a block to paste into an issue;
   `--json` gives the same as a document and `--limit N` bounds it. Nothing leaves the machine.
 - **Sent while telemetry is on and failures are sent.** Each failure is sent once as
   `aart_cli.failed` from `aart_cli`: `artifact_type` its kind, `artifact_id` where it happened, no
@@ -12892,12 +12900,13 @@ patch and release it. It amends §213's "What is sent".
 
 **INV-333 — A failure record carries none of what failed on.** For any exception, command and
 diagnostics, the record holds only the kind, the place, the exception's type name, frames of
-aart-cli's own modules as `module:function:line`, diagnostic codes of the contract's form, the exit
-code, the versions, the platform and the fingerprint; no message, argument, path or value.
+aart-cli's own modules as `module:function:line`, its causes' type names and frames of the same
+form, diagnostic codes of the contract's form, the exit code, the versions, the platform and the
+fingerprint; no message, argument, path or value.
 
 **INV-334 — A fingerprint names the defect, not the version.** Two failures have the same
-fingerprint exactly when their kind, place, type, frames without line numbers and codes are the
-same.
+fingerprint exactly when their kind, place, type, frames without line numbers, codes, and causes'
+types and frames without line numbers, in order, are the same.
 
 **INV-335 — Recording a failure never changes what failed.** The exit code, standard output and
 standard error of the failed command or hook are those it had without the journal, whatever the
@@ -12907,3 +12916,8 @@ journal does.
 as `aart_cli.failed`, exactly when telemetry is on and the person's choice, or without one the
 build's, is to send failures at the moment it is sent. One the sender finds while failures are not
 sent is marked skipped and never sent; while telemetry is off, it waits.
+
+**INV-338 — A crash keeps the chain Python would print.** A failure's causes are, in order and at
+most 5, the exceptions Python's own traceback names before its exception: each one's explicit
+cause, else the exception it was raised while handling unless that was suppressed. The chain ends
+at an exception met again; a failure without an exception type has no causes.

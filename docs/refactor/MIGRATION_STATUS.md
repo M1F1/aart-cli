@@ -4,6 +4,16 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-03, CP-55 (§215, INV-333, INV-334, INV-338, D-512): a crash keeps what its exception was raised from.**
+A failure's `causes` are the exceptions Python's traceback names before its own: the explicit
+cause, else the one being handled unless `from None` hid it, the nearest five. Each cause keeps its
+type and aart-cli's own frames, never a message. They join the fingerprint only when there are any,
+so every earlier fingerprint is unchanged. `consume report` prints them as "raised from". Contract
+v1's `failure` object gains the optional field in both repositories, with new digests. The server
+keeps causes in a `failure_cause` table and shows them in `/api/v1/stats/failures` and on the
+dashboard. B-267 is resolved and INV-338 is EVIDENCED. Evidence:
+`docs/refactor/slices/CP-55-failure-causes.md`.
+
 **2026-11-02, CP-54 (§213, INV-337, D-511): automation says so, and the telemetry server counts it apart from people.**
 `automated(environment)` reads `AART_CLI_AUTOMATED` (on/true, off/false), then `CI`, and no other
 variable. The sender decides once a run from the environment it inherited. Each request carries

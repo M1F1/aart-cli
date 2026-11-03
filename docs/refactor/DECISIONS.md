@@ -12823,3 +12823,24 @@ plan").
   every event.
 - **Status.** `consume telemetry status` says which this machine is, and `--json` adds `automated`.
 
+## D-512 — A crash keeps what its exception was raised from (CP-55)
+
+- **Evidence.** B-267: only the traceback of the exception that reached the boundary was kept, so
+  when a handler wrapped one exception in another the original's frames, often where the defect
+  is, were lost. The owner chose to work it on 2026-11-03.
+- **Choice.** Contract v1's `failure` object gains an optional `causes`: 1–5 objects, each an
+  exception's type name and its frames of aart-cli's own package, the nearest first, only with
+  `exception`. The client sends it only when there are causes. An older server refuses just those
+  failures (`422`, marked rejected), and the rest of a request is stored. So it is version 1, and
+  the server is deployed first.
+- **Which exceptions.** The ones Python's own traceback prints before the exception: its
+  `__cause__`, else its `__context__` unless `__suppress_context__`. An exception met again ends the
+  chain. `failure_of` keeps the nearest five. A failure without an exception type has none.
+- **The fingerprint.** The causes' types and frames without line numbers join the hashed array as
+  a sixth element, only when there are causes. A failure without causes therefore keeps the
+  fingerprint it had in 0.24 and 0.25. A different cause is a different defect, as the person
+  fixing it would count it.
+- **The server.** A table `failure_cause` (event id, causes as JSON), created in a version-1
+  database that lacks it, as `failure` and `automation` were. `top_failures` says the latest
+  occurrence's causes. The failures endpoint adds `causes`, and the dashboard shows them in the
+  place's tooltip and as "from <type>" beside the exception.

@@ -322,6 +322,28 @@ def _frames(error: BaseException | None) -> list[tuple[str, str, int]]:
     return frames
 
 
+def _causes(error: BaseException | None) -> list[BaseException]:
+    """What `error` was raised from, nearest first, as Python's own traceback follows it: the
+    explicit cause, else the exception being handled unless `from None` hid it. An exception met
+    again ends the chain; `failure_of` keeps the nearest `MAX_CAUSES`."""
+
+    chain: list[BaseException] = []
+    seen = {id(error)}
+    current = error
+    while current is not None:
+        if current.__cause__ is not None:
+            current = current.__cause__
+        elif current.__suppress_context__:
+            current = None
+        else:
+            current = current.__context__
+        if current is None or id(current) in seen:
+            break
+        seen.add(id(current))
+        chain.append(current)
+    return chain
+
+
 def _type_name(error: BaseException | None) -> str | None:
     if error is None:
         return None
@@ -364,6 +386,7 @@ def record_failure(
             exit_code,
             platform.python_version(),
             _platform(),
+            causes=[(_type_name(cause), _frames(cause)) for cause in _causes(error)],
         )
         if failure is None:
             return False

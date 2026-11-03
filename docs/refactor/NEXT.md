@@ -1,6 +1,20 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-02, CP-54)
+## Where the work is (2026-11-03, CP-55)
+
+0.25.0 (CP-54) is released. **CP-55** keeps what a crash's exception was raised from (§215,
+INV-333, INV-334, INV-338, D-512; resolves B-267). A failure's `causes` are the exceptions Python's
+traceback names before its own, the nearest five. Each is a type and aart-cli's own frames, sent in
+contract v1's `failure` object only when there are any. They join the fingerprint only then, so
+earlier fingerprints are unchanged. `consume report` prints them. The server
+(aart-cli-telemetry-server, `feat/failure-causes`) keeps them in `failure_cause` and shows them on
+the failures endpoint and the dashboard. Merge and deploy the server first: an older one refuses
+only failures that have causes.
+
+Evidence: `docs/refactor/slices/CP-55-failure-causes.md`. B-253 (telemetry in Settings) and B-265
+(signals and closed terminals) are next, at the owner's request; B-266 is open.
+
+## Where the work was (2026-11-02, CP-54)
 
 **CP-54** tells automation from people (§213, INV-337, D-511). A request says `"automated": true`
 when the sender runs as automation: `AART_CLI_AUTOMATED` on/true, or without it `CI` holding

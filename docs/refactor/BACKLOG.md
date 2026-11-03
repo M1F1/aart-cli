@@ -5332,7 +5332,8 @@ token on the server and a rule for which repository.
 
 ## B-267 — A chained exception's cause is not journaled
 
-Status: **open**, noncritical (CP-53, D-509).
+Status: **resolved** by CP-55 (D-512, INV-338), 2026-11-03: contract v1's `failure` gains `causes`,
+the chain Python would print, at most five, each a type and aart-cli's frames.
 
 Only the traceback of the exception that reached the boundary is read. When a handler raised a new
 exception from another (`raise ... from error`, or during `except`), the original's frames, often

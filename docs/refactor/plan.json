@@ -1990,6 +1990,28 @@
         {
           "id": "3",
           "title": "The PR",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-55",
+      "title": "A crash keeps what its exception was raised from (§215, INV-333, INV-334, INV-338, D-512, B-267)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "The server: causes in contract v1's failure object, the failure_cause table, the failures endpoint and dashboard",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "aart-cli: Cause, the chain walked as Python's traceback does, causes in the fingerprint and consume report",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PRs, the server's first",
           "status": "in_progress"
         }
       ]
