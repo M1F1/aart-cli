@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.25.0](https://github.com/M1F1/aart-cli/compare/v0.24.1...v0.25.0) (2026-11-02)
+
+
+### Added
+
+* automation such as a CI job says so, and the telemetry server counts it apart from people ([ee9c25d](https://github.com/M1F1/aart-cli/commit/ee9c25d1fecc086e673cbf0e2e5061b8df622776))
+
+
+### Fixed
+
+* a key that ends in a credential word is a credential's shape ([7112e4c](https://github.com/M1F1/aart-cli/commit/7112e4c8c2fafac17893ac259eeced3b32471eda))
+
 ## [0.24.1](https://github.com/M1F1/aart-cli/compare/v0.24.0...v0.24.1) (2026-11-02)
 
 
