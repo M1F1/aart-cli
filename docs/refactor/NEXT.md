@@ -1,10 +1,22 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-03, CP-62, in progress)
+## Where the work is (2026-11-03, CP-62, the PR)
 
-**CP-62** sends the rest of contract revision 7 in one PR, with the focus on opencode. The plan,
-what is done and the remaining steps are in `docs/refactor/slices/CP-62-the-rest-of-revision-7.md`.
-The branch is `feat/telemetry-context-rest`. CP-61 is released in 0.29.0.
+**CP-62** sends the rest of contract revision 7 (§213, D-519), with the focus on opencode:
+
+- an install, update or removal says `interface` (`tui`/`cli`), `duration_ms`, `previous_version`,
+  `package_digest`, the counts of configuration values and credentials, and `via` with the
+  Collection the Selection named;
+- a plugin's skill says `via` `plugin`, without the plugin's package, inputs or Collection;
+- a use says a keyed `session` pseudonym, the `scope` of the installation its directory reached,
+  and Claude Code's MCP `tool`; the directory and the session id never leave the machine.
+
+The code, tests and docs are done on `feat/telemetry-context-rest` (worktree
+`/Users/mifi/code/aart-cli-context-rest`). Next: open the PR, whose title is a Conventional Commit
+with a COMMIT_OVERRIDE block; CI runs the full suite. B-270 (resending events sent before revision
+7) and B-271 (Tabnine uses) are open.
+
+Evidence: `docs/refactor/slices/CP-62-the-rest-of-revision-7.md`.
 
 ## Where the work was (2026-11-03, CP-61)
 

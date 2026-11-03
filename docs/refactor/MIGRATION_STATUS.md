@@ -4,6 +4,15 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-03, CP-62 (§213, D-519, INV-340): the rest of contract revision 7.**
+An install, update or removal says the TUI or the command line, its duration, the version an update
+replaced, the package's digest, how many configuration values and credentials it asked for, and
+whether it came directly or with the Collection the Selection named; a plugin's skill says `via`
+`plugin` without the plugin's package or inputs. A use says a keyed pseudonym of its harness
+session, the scope of the installation its directory reached, and Claude Code's MCP tool. Activity
+and the outbox gain their columns in place. B-269 is resolved; B-270 and B-271 are open. Evidence:
+`docs/refactor/slices/CP-62-the-rest-of-revision-7.md`.
+
 **2026-11-03, CP-61 (§213, D-518, INV-340): each event says where and how it happened.**
 `EventContext` carries contract revision 7's fields; lifecycle events name the Registry alias and
 the installation's harness and scope, and an opencode MCP use names its tool. The outbox keeps the

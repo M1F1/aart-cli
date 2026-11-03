@@ -212,12 +212,14 @@ def usage_disclosure(
     name = _HARNESS_NAMES[harness]
     return (
         f"Records each skill {name} loads and each MCP tool it calls: the skill's or MCP "
-        "server's name, the project directory and the time.",
+        "server's name, the tool, the project directory, a pseudonym of the session and the "
+        "time.",
         "Never records what a tool is called with, prompts or answers.",
         (
             f"Kept on this machine, in {database}. Telemetry is on: each use of an artifact "
             f"aart-cli installed is sent to {telemetry_endpoint} as the artifact's name and "
-            "version, the harness and the time, never the project; "
+            "version, the harness, the tool, the scope it reached, the session's pseudonym and "
+            "the time, never the project; "
             "`aart-cli consume telemetry disable` stops it."
             if telemetry_endpoint
             else f"Kept only on this machine, in {database}. Nothing is sent anywhere."

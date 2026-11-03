@@ -67,9 +67,13 @@ def what_is_sent(client_id: str, *, unmanaged: bool, failures: bool) -> tuple[st
     installation = f"the installation id {client_id}" if client_id else "a random installation id"
     never = (
         f"Sent: the event, the artifact's kind, name and version, its Registry's alias, the "
-        f"harness and scope, an MCP's tool, the moment, {installation}, aart-cli's version and "
-        "this machine's OS, architecture and Python. Never a project, path, argument, prompt, "
-        "Registry address, user or host name, or credential."
+        "harness and scope, the TUI or the command line, how long it took, the version an "
+        "update replaced, the package's digest, how many configuration values and credentials "
+        "it asked for, whether it came directly, with a Collection or with a plugin, an MCP's "
+        f"tool, a pseudonym of the harness session, the moment, {installation}, aart-cli's "
+        "version and this machine's OS, architecture and Python. Never a project, path, "
+        "argument, prompt, Registry address, user or host name, input name or value, or "
+        "credential."
     )
     return sent, never
 

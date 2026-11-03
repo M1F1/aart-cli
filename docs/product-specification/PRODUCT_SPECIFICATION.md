@@ -12727,10 +12727,24 @@ it queryable for analysis.
   each run, the sender asks the server which revision it holds (`GET /api/v1/contract`); a server
   that names none, or one below 7, is sent every event without these fields and the request
   without its environment. `401` or `403` to that question pauses, and `429`, a `5xx` or no answer
-  backs off, as for a send (below); any other answer is a server that names no revision. The contract's further
-  fields -- the interface, the duration, the version replaced, the collection, the package digest,
-  input counts, a Claude Code MCP's tool and a session -- are left out until aart-cli says them.
-  Never a project, a project's name or a hash of one.
+  backs off, as for a send (below); any other answer is a server that names no revision.
+- **The rest of revision 7 (D-519).** An install, update or removal also says whether the TUI
+  (`tui`) or the command line (`cli`) asked for it; how long it took, in milliseconds, from the
+  confirmed review until it was recorded; for an update or downgrade, the version it replaced; for
+  an install or update, the package's digest and how many configuration values and credentials it
+  asked for -- counts, never a name or a value; and how it came: `direct` when the Selection named
+  it, `collection` with the Collection's name and version when it came with the Collection the
+  Selection named, nothing when it is only a dependency or no Selection was reviewed. A plugin's
+  skill says the plugin's interface, duration, harness, scope, Registry and version replaced, and
+  `via` `plugin`, never the plugin's package, inputs or Collection. A use also says a pseudonym of
+  the harness session it happened in -- a UUID made of the HMAC-SHA256 of the harness and its
+  session id under a random key kept only in this machine's Activity database, never the session
+  id; the scope of the installation it reached -- `project` when the artifact is installed for a
+  project the use's directory is in, else `user` when it is installed for the user, else none; and
+  Claude Code's MCP tool, which its hook names beside the server. The directory is kept on this
+  machine to find the scope and is never sent. Tabnine's lifecycle events say all of this; its uses
+  cannot be recorded, since it offers no hook that names the tool about to run. Never a project, a
+  project's name or a hash of one.
 - **Automation says so (D-511).** A CI job draws a new installation id each time, so without this
   every job would read as a new person. A request says `"automated": true` when, at the moment it
   is sent, `AART_CLI_AUTOMATED` is `on` or `true`, or, without that, `CI` -- which CI services

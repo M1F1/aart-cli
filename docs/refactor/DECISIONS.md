@@ -12990,3 +12990,57 @@ plan").
   now: the interface, duration, the version replaced, the collection, the package digest, input
   counts, a Claude Code MCP's tool, a session pseudonym and a use's scope each need plumbing of
   their own (B-269). Caching the revision in the outbox: one GET per run is cheap and never stale.
+
+
+## D-519 — The rest of revision 7: how an action ran, how it came, and a use's session and scope (CP-62)
+
+§213 amended ("The rest of revision 7"); INV-340 unchanged. Resolves B-269 except the held-events
+cursor, which stays open as B-270.
+
+- **Evidence.** The owner asked on 2026-11-03 for the rest of revision 7 in one PR, with the focus
+  on opencode, the enterprise harness, and whatever is possible for Tabnine. The server already
+  stores every field (aart-cli-telemetry-server #19).
+- **Lifecycle.** The receipt is the source, so an event queued from the history says the same as
+  one queued as it happened. `ReceiptDetailView` gains `interface` and `duration_ms`;
+  `ReceiptArtifactView` gains `previous_version`, `package_digest`, `configuration_inputs` and
+  `credential_inputs`, each an optional key, absent from older receipts. The TUI passes `tui` and
+  the `consume` commands pass `cli`. The io layer measures with a monotonic clock from the start of
+  `complete_configured_installation`/`_uninstall` and hands the application a callable read just
+  before the action is recorded, because the application has no clock. A command-line install that
+  prompts for a credential during the run counts that prompt in its duration. Input counts are the
+  plan's bound inputs: configuration values and credential references, counts only. A placement
+  asks for none (0/0). The digest is the receipt's `object_digest`.
+- **How it came.** `collection` only when a Collection owning the artifact is one the reviewed
+  Selection named, with that Collection's name and version parsed from
+  `source/collection/name@version`; `direct` when its ownership is direct; nothing for a dependency
+  only or for a removal, which reviews no Selection. An artifact picked by hand that a Collection
+  also owns is `direct`. A plugin's skill is `via` `plugin` and drops the plugin's package, inputs
+  and Collection; it keeps interface, duration, harness, scope, Registry and the version replaced.
+- **The Registry is the coordinate's.** Hypothesis found that a `registry` passed beside the
+  coordinate overrode its alias; the coordinate's alias now always wins.
+- **Session.** The opencode plugin hands over `input.sessionID` as `session`; Claude Code's hook
+  payload has `session_id`. The hook turns it into `session_pseudonym(key, harness, id)`: a v4-shaped
+  UUID from the first 16 bytes of HMAC-SHA256 over `harness\0id`, under a 32-byte random key in the
+  Activity database's new `meta` table, made on first use (`INSERT OR IGNORE`, so concurrent hooks
+  agree). The raw id is never stored or sent; `ArtifactUse.session` accepts only a UUID. Without a
+  key the use is still recorded, without a session.
+- **Scope of a use.** Installed names now carry the installation's scope and, for a project
+  installation, its root. A use is `project` when the artifact it resolved to (same harness, kind,
+  artifact and member) has a project installation whose root is the use's directory or contains
+  it; else `user` when it has a user installation; else no scope. The directory stays on the
+  machine: the outbox keeps it in a new local `project` column, added in place like `context`, and
+  `use_event` never puts it in the event.
+- **Claude Code's tool.** `mcp__server__tool` keeps the tool part as `ArtifactUse.tool`, stored in
+  Activity and sent as `tool`, for installed and unmanaged MCPs alike.
+- **Schemas.** Activity's `artifact_use` gains nullable `tool` and `session`, and the database gains
+  `meta`, all added in place when an older database is opened, without a schema version change, as
+  the outbox's `context` was (D-518). A use waiting in the outbox keeps its tool and session in the
+  `context` column, as contract fields.
+- **Reaching installed hooks.** `reconcile_usage_hooks` rewrites opencode's plugin whenever usage is
+  on, so the new template reaches a machine on aart-cli's next run.
+- **Tabnine.** Its installs, updates and removals say everything above. Its uses cannot be
+  recorded: it has no hook told which tool is about to run, and the contract's sources are only
+  `claude_hook` and `opencode_plugin` (B-271).
+- **Not chosen.** Sending the session id hashed without a key, which anyone holding the id could
+  reverse by hashing it again. Resolving a use's scope in the hook, which would read every receipt
+  on every tool call. Counting input names or sending which inputs were skipped.

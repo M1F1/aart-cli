@@ -1,8 +1,8 @@
 # CP-62 — The rest of contract revision 7, in one PR
 
-Status: **in progress**. Branch `feat/telemetry-context-rest`, worktree
+Status: **done**, awaiting the PR. Branch `feat/telemetry-context-rest`, worktree
 `/Users/mifi/code/aart-cli-context-rest`, from `main` at 0.29.0 (`0e82a58`).
-Authority: Product Specification §213 (to amend), D-519 (to write), INV-340. Resolves B-269.
+Authority: Product Specification §213 (amended: "The rest of revision 7"), D-519, INV-340. Resolves B-269; B-270 and B-271 are open.
 The owner asked on 2026-11-03 for all of it in **one PR**, with a strong focus on **opencode**
 (the enterprise harness), and anything possible for Tabnine.
 
@@ -56,61 +56,91 @@ A member skill's event keeps `interface`, `duration_ms`, harness, scope, Registr
   sources are only `claude_hook` and `opencode_plugin`. That goes to the backlog (a new source on
   both sides if Tabnine CLI ever offers a hook).
 
-## Done so far (uncommitted at the time of writing, then committed as WIP)
+## What was done
 
-- `domain/telemetry.py`:
-  - `lifecycle_event(..., member=None, **said)` takes every field;
-  - `_held(event_type, context)` drops what the type does not hold and keeps the collection rule;
-  - member events say `via=plugin` without the plugin's package or inputs;
-  - `_event` falls back to the bare event if a context would make it invalid (INV-340: context
-    never costs the event).
-- `application/consumer_views.py`:
-  - `ReceiptArtifactView` gains `previous_version`, `package_digest`, `configuration_inputs` and
-    `credential_inputs`;
-  - `ReceiptDetailView` gains `interface` and `duration_ms`;
-  - all are persisted as optional keys (`_said`, `_optional`);
-  - `_replaced(intent)` fills in `previous_version`.
+- **Lifecycle** (`application/telemetry_events.py`, `receipt_recording.py`,
+  `installation_action.py`, `io/configured_installation_action.py`,
+  `io/configured_uninstall_action.py`):
+  - every receipt field reaches `lifecycle_event`;
+  - `_came` decides `via` and the Collection;
+  - `_with_installations` (formerly `_with_members`) adds the digest and the input counts per
+    installation;
+  - `record_installation_transaction` and `complete_installation_action` take `inputs`,
+    `interface` and `elapsed`;
+  - the io layer starts a `stopwatch()`;
+  - the TUI passes `tui` and `commands/marketplace.py` passes `cli`.
+- **Domain** (`domain/telemetry.py`): the coordinate's Registry alias always wins over a `registry`
+  passed beside it (found by Hypothesis).
+- **Uses**:
+  - `domain/artifact_usage.py`:
+    - `ArtifactUse.tool` and `.session`;
+    - `session_from_hook`, `session_pseudonym` and `use_scope`;
+    - `InstalledName.scope`/`.root`.
+  - `use_event` takes `tool`, `session` and `project`.
+  - `io/usage_hook.py` turns the session into the pseudonym.
+  - `io/activity_store.py`:
+    - `tool`/`session` columns and a `meta` table, added in place;
+    - `session_key()`.
+  - `io/telemetry_store.py`: a local `project` column, and a use's tool and session in `context`.
+  - `telemetry_sync` passes them on.
+  - The opencode plugin hands over `input.sessionID`.
+- **Disclosures**: `what_is_sent` and `usage_disclosure` name the new fields.
+- **Docs**:
+  - §213;
+  - D-519;
+  - plan.json (CP-61 done, CP-62);
+  - NEXT, MIGRATION_STATUS;
+  - B-269 resolved, B-270 and B-271 opened.
 
-## Remaining steps
+## Evidence
 
-1. `application/telemetry_events.py`: pass every field to `lifecycle_event`, compute `via` and the
-   collection.
-2. `receipt_recording.record_installation_transaction(..., inputs=, interface=, elapsed=)`:
-   generalise `_with_members` to add the digest and counts, and set `interface`/`duration_ms` on the
-   detail.
-3. `installation_action.complete_installation_action(..., interface=, elapsed=)`, computing the
-   input counts from `prepared.installations`.
-4. io: `configured_installation_action` and `configured_uninstall_action` take `interface` and
-   measure `elapsed`; the TUI passes `tui` and the CLI passes `cli`.
-5. Uses:
-   - the opencode plugin template sends `session: input.sessionID`;
-   - `use_from_hook` reads the session (both harnesses) and the directory;
-   - Activity gets a session key and a `session` column;
-   - `use_event` gets `session`, `scope` and Claude's `tool`;
-   - the template change must reach installed hooks: `reconcile_usage_hooks` rewrites the plugin
-     file when its content differs (check this).
-6. Tests (TDD, then a targeted mutation per claim, Hypothesis for "context never costs the event"):
-   - domain held/collection/member rules;
-   - receipt round trip;
-   - `telemetry_events` via/collection;
-   - the transaction records the digest, counts, interface and duration;
-   - an e2e CLI install in a temporary HOME/AART_CLI_HOME whose outbox event says `interface=cli`;
-   - the hook records a session pseudonym, never the raw id, and is stable within a session;
-   - an opencode project use says `scope=project`.
-7. Docs:
-   - spec §213 "Where and how" bullet: drop the "left out until aart-cli says them" sentence and
-     describe every field;
-   - D-519, CP-62 in plan.json, NEXT, MIGRATION_STATUS;
-   - BACKLOG: B-269 resolved; a new entry for Tabnine uses; the held-events cursor (from B-269)
-     stays open as its own entry;
-   - Settings/announcement disclosure text: add "TUI or CLI, how long, the versions, counts of
-     inputs, a session pseudonym".
-8. Scoped gates: ruff, format, mypy, tach, docs-check, secret-shape-check, the affected tests. CI
-   runs the rest. Then one PR whose title is a Conventional Commit, with a COMMIT_OVERRIDE block.
+- `tests/telemetry_context_rest_test.py` (23 tests). Hypothesis states the property that an event
+  is never lost to what it says, and that every field it says was given, in a field its type holds.
+  Other tests cover:
+  - via/Collection;
+  - the recorded receipt's digest, counts, interface and duration, and their round trip;
+  - session pseudonyms (Hypothesis: a UUID, stable, never the id, keyed by harness and key);
+  - a use's scope;
+  - the hook storing no raw session id anywhere in the state directory;
+  - an older Activity database gaining its columns;
+  - the outbox keeping a use's tool, session and project.
+- `tests/installation_action_test.py`: the counts come from the plan's bound inputs (1/1), with
+  the interface and duration.
+- `tests/plugin_installation_e2e_test.py`:
+  - a `consume install` sends `interface=cli`, `via=direct`, the digest, 0/0 inputs and a
+    duration to a revision 7 server, and each skill sends `via=plugin` without the package;
+  - an opencode use in the project sends `scope=project` and a UUID session, never the raw id or
+    the directory.
+- Updated for the new behaviour:
+  - `artifact_usage_test` (Claude's MCP use keeps its tool);
+  - `usage_hooks_e2e_test` (the plugin hands over the session).
+- Focused run: the receipt, installation, uninstall, plugin, telemetry, usage and Activity modules
+  (493 tests), plus every boundary and purity test (58), pass. ruff, ruff format, mypy and tach
+  pass. CI runs the full suite.
 
-## Rules to keep
+Targeted mutations, each killed by the test named:
 
-- No project name, path or directory, nor a hash of one, ever leaves the machine; the session is a
+| Mutation | Killed by |
+|---|---|
+| `_came` treats any Collection owner as chosen | `test_an_artifact_picked_by_hand_is_direct_even_when_a_collection_owns_it` |
+| `_input_counts` swaps and inflates the counts | `test_the_receipt_counts_the_inputs_the_plan_asked_for_and_says_how_it_ran` |
+| the CLI passes `tui` | `test_a_command_line_install_says_so_and_the_plugin_s_skills_say_how_they_came` |
+| `_with_installations` drops the configuration count | `test_the_receipt_holds_the_package_counts_interface_and_duration` |
+| a member says `via=direct` | `test_a_plugin_s_skill_says_how_and_where_but_not_the_plugin_s_package` |
+| a passed `registry` overrides the coordinate's | `test_the_registry_is_always_the_coordinate_s` |
+| `_within` accepts any prefix (`/work/app` for `/work/application`) | `test_a_use_in_the_project_an_installation_is_for_says_project` |
+| the hook pseudonymizes a constant instead of the session | `test_a_session_is_kept_as_one_pseudonym_and_its_id_is_nowhere` |
+| the sync drops the session | `test_an_opencode_use_says_its_session_and_the_scope_of_what_it_reached` |
+| Claude's MCP use loses its tool | `test_a_claude_code_use_says_the_tool_its_hook_named` |
+| Activity stores no session | `test_a_session_is_kept_as_one_pseudonym_and_its_id_is_nowhere` |
+| the plugin stops handing over the session | `test_the_plugin_hands_over_names_only` |
+
+One mutant survived: `if project and any(...)` → `if any(...)` in `use_scope`. It was equivalent,
+since an empty directory is within no root, so the redundant condition was removed.
+
+## Rules kept
+
+- No project name, path or directory, nor a hash of one, leaves the machine; the session is a
   keyed pseudonym.
-- Tests never touch the real HOME; use a temporary HOME and AART_CLI_HOME.
-- Keep enterprise stack names out of the public repository.
+- Tests use a temporary HOME and AART_CLI_HOME.
+- No enterprise stack names in the public repository.
