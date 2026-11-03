@@ -338,6 +338,15 @@ def _turns_telemetry_on(args: argparse.Namespace, request: Request) -> bool:
     return args.command == "consume" and not request.offline and request.command != "telemetry"
 
 
+def _records_usage(args: argparse.Namespace, request: Request) -> bool:
+    """Whether this command puts the usage hook in place where recording is on (§212, D-516).
+
+    After the command, so an install into a harness has made its configuration first. `consume
+    usage` is the person deciding, which this must not undo.
+    """
+    return args.command == "consume" and request.command != "usage"
+
+
 def _run_bare(parser: argparse.ArgumentParser, args: Optional[argparse.Namespace] = None) -> int:
     """Bare invocation: launch the TUI on a TTY, else print help."""
     if sys.stdin.isatty() and sys.stdout.isatty():
@@ -358,9 +367,14 @@ def _dispatch(args: argparse.Namespace, request: Request) -> int:
         from .commands.telemetry import turn_on_for_this_build
 
         turn_on_for_this_build(request)
-    return (
+    code = (
         _run_inputs(request) if request.command == "inputs" else DISPATCH[request.command](request)
     )
+    if _records_usage(args, request):
+        from .commands.usage import record_usage_for_this_build
+
+        record_usage_for_this_build(request)
+    return code
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:

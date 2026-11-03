@@ -12627,9 +12627,11 @@ JSON files, in preparation for a telemetry server that does not exist yet.
   names separated by commas, each a harness that can record (`claude`, `opencode`), or `none`.
   Unset or `none` bakes none, so the public build records nowhere until a harness is turned on. A
   name that cannot record, an empty or a repeated one fails the release. The value is baked into
-  the wheel and written in the release receipt. In a harness the build names, the TUI puts the
-  hook in place at start when that harness is on this machine and says so once; the person's own
-  choice in Settings, once made, always wins.
+  the wheel and written in the release receipt. In a harness the build names, the TUI's start
+  and every `consume` command but `consume usage` put the hook in place when that harness is on
+  this machine, and say so once (D-516); a wheel runs nothing when it is installed, so the first
+  run of aart-cli is the first moment it can. The person's own choice, in Settings or with
+  `consume usage`, once made, always wins.
   Turning a harness off removes its hook; `consume usage disable --harness H --forget` and `consume
   usage forget --harness H` delete what was recorded for it. `consume usage show [--json]` says
   which harnesses record and lists the ranking.

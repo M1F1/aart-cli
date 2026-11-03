@@ -1,6 +1,15 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-03, CP-58)
+## Where the work is (2026-11-03, CP-59)
+
+CP-58 is released in 0.27.1. **CP-59** has every `consume` command but `consume usage` put the usage
+hook in place where recording is on, as the TUI's start does (§212, D-516; resolves B-249). A build
+baking `opencode` now records the uses of a plugin's skills after `consume install`, without the
+TUI. A wheel runs nothing when installed, so the first run is the first moment.
+
+Evidence: `docs/refactor/slices/CP-59-cli-records-usage.md`. B-266 is open.
+
+## Where the work was (2026-11-03, CP-58)
 
 CP-56 and CP-57 are merged (aart-cli #124). **CP-58** answers a first run whose baked Registry
 could not be connected (D-515; resolves B-268). The warning names the Registry's alias and URL, and

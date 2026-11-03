@@ -2063,7 +2063,7 @@
     {
       "id": "CP-58",
       "title": "A default Registry the first run could not connect is named, with how to give Git a sign-in (D-515, B-268)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -2073,6 +2073,28 @@
         {
           "id": "2",
           "title": "Rollout guide: Git signed in to the host before a first run, and the warning in Troubleshooting",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-59",
+      "title": "A consume command puts the usage hook in place too (§212, D-516, B-249)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "record_usage_for_this_build after every consume command but consume usage",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Spec §212, user guide, D-516; tests hook only with RECORDS_USAGE",
           "status": "done"
         },
         {

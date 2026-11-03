@@ -12422,7 +12422,7 @@ Product Specification §212, INV-318–INV-321.
     appended after the person's own entries and recognised by its script path, so a moved aart-cli
     replaces it. opencode: a plugin file marked by its first line, spawning the hook detached with
     `{tool, skill, directory}` only.
-  - Only the TUI puts the default harness's hook in place at start, and only when
+  - Only the TUI puts the default harness's hook in place at start (superseded by D-516), and only when
     `~/.config/opencode` exists; the CLI does not, so scripts never change a harness's configuration
     unasked (B-249).
   - Activity reads the newest `ACTIVITY_WINDOW = 500` actions.
@@ -12905,3 +12905,31 @@ plan").
   remediation sorted, so each option is one complete entry with its commands indented under it.
 - **Not chosen.** Letting Git prompt on a first run: the run may be unattended, and a prompt is how
   it would hang. Reading or storing a credential in aart-cli: Git's own helper owns it.
+
+## D-516 — A `consume` command puts the usage hook in place too (CP-59)
+
+§212 amended. Supersedes D-500's "only the TUI puts the default harness's hook in place".
+
+- **Evidence.** An organisation's build bakes `AART_CLI_DEFAULT_USAGE_HARNESSES=opencode`, so
+  opencode records without asking (D-502). But only the TUI's start put the hook in place, so a
+  person who installed superpowers with `consume install` recorded none of its skills' uses until
+  they opened the TUI (B-249). D-500 had kept the command line out so that scripts would never
+  change a harness's configuration unasked. The owner had not asked for that. The owner said on
+  2026-11-03 that installing should put the hook in place at once, and asked why it is not done when
+  the package itself is installed.
+- **Choice.** After every `consume` command but `consume usage`, aart-cli does what the TUI does at
+  its start: `reconcile_usage_hooks` with the harnesses the person chose, else the build's, in each
+  harness on this machine. It says each newly hooked harness once on stderr, so a `--json` document
+  is unchanged, and it never fails the command. It runs after the command, so an install into a
+  harness has made that harness's configuration first. `consume usage` is the person deciding,
+  which this must not undo.
+- **Why not when the package is installed.** A wheel runs no code when pip, pipx or uv installs it,
+  and the hook names the interpreter of the environment aart-cli runs from, which only a running
+  aart-cli knows. The first run is the first moment.
+- **Not chosen.** Hooking only after a finished install: a person whose first command is
+  `consume list` or `consume update` records nothing either, and the decision was the build's
+  already. A script's `consume` command does change a harness's configuration now, but only where
+  the organisation's build or the person said usage is recorded, and only in a harness present
+  there.
+- **Tests.** The `pytest` autouse fixture that keeps failures out of the real home gains a second
+  one: a module hooks only with `RECORDS_USAGE = True`.

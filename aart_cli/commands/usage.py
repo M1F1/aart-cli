@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import replace
 
 from aart_cli import command_outcome as _common
 from aart_cli.application.usage_recording import usage_disclosure, usage_ranking_lines
+from aart_cli.configuration.paths import APPLICATION_HOME_VARIABLE, Platform, resolve_config_paths
 from aart_cli.configuration.policy import redact_text
 from aart_cli.domain.artifact_usage import USAGE_HARNESSES
 from aart_cli.domain.result import Err, Ok
@@ -16,6 +18,7 @@ from aart_cli.io.consumer_settings import read_consumer_settings, write_consumer
 from aart_cli.io.usage_hooks import (
     harness_file,
     read_artifact_usage,
+    reconcile_usage_hooks,
     set_usage_hook,
     telemetry_endpoint,
 )
@@ -100,6 +103,40 @@ def _show(request: Request, *, data_root: str, user_home: str) -> int:
     else:
         print("No artifact use is recorded yet.")
     return _common.OK
+
+
+def record_usage_for_this_build(request: Request) -> None:
+    """Put the usage hook in place where recording is on, after a `consume` command (§212, D-516).
+
+    The TUI does this at its start; a `consume` command does it too, so a person who only uses the
+    command line records what the build or they chose to (B-249). A wheel runs nothing when it is
+    installed, so a command's run is the first moment aart-cli can. A harness turned off loses its
+    hook, one not on this machine is left alone. It is said on stderr, so a `--json` document is
+    unchanged, and nothing here fails the command.
+    """
+
+    try:
+        platform = Platform.DARWIN if sys.platform == "darwin" else Platform.LINUX
+        user_home = os.path.abspath(request.user_home or os.path.expanduser("~"))
+        data_root = resolve_config_paths(
+            platform,
+            home=user_home,
+            application_home=os.environ.get(APPLICATION_HOME_VARIABLE) or None,
+        ).data_root
+        settings = read_consumer_settings(data_root)
+        if isinstance(settings, Err):
+            return
+        started = reconcile_usage_hooks(
+            settings.value.recorded_usage, user_home=user_home, data_root=data_root
+        )
+    except Exception:  # noqa: BLE001 -- recording usage is never what fails a command
+        return
+    for harness in started:
+        print(
+            f"Recording which skills and MCPs {harness} uses; "
+            f"`aart-cli consume usage disable --harness {harness}` turns it off.",
+            file=sys.stderr,
+        )
 
 
 def run(request: Request) -> int:

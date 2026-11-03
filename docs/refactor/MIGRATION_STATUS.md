@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-03, CP-59 (§212, D-516): a `consume` command puts the usage hook in place too.**
+`commands/usage.record_usage_for_this_build` runs after every `consume` command but `consume usage`.
+It reconciles the hooks with the person's harnesses, else the build's, in each harness present, and
+says each new one once on stderr. B-249 is resolved; D-500's TUI-only rule is superseded. Evidence:
+`docs/refactor/slices/CP-59-cli-records-usage.md`.
+
 **2026-11-03, CP-58 (D-515): a default Registry the first run could not connect is named, with how to sign Git in.**
 `application/first_run_seed.unconnected_seed` names the alias and URL, and offers the `ls-remote`
 check and the `consume registry add … --default` command. For an HTTPS host whose Git error says

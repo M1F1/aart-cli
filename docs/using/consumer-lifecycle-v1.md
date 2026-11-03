@@ -333,8 +333,10 @@ and version, the harness and the time, never the project; turning usage on says 
 server, and `aart-cli consume telemetry disable` stops it.
 
 Nothing is recorded until you turn it on, unless your organisation's build of aart-cli records in
-some harnesses from the start (its release variable `AART_CLI_DEFAULT_USAGE_HARNESSES`); the TUI
-then says so on its first start, and Settings turns it off. In opencode the hook is the file
+some harnesses from the start (its release variable `AART_CLI_DEFAULT_USAGE_HARNESSES`). Then the
+first start of the TUI, or the first `consume` command (an install, for one), puts the hook in place
+and says so once; Settings or `consume usage disable` turns it off. opencode loads plugins when it
+starts, so an opencode already running may need a restart before it records. In opencode the hook is the file
 `~/.config/opencode/plugins/aart-cli-usage.js`. In Claude Code it is one entry in
 `~/.claude/settings.json`, beside your own hooks, which it leaves in place. Tabnine has no hooks and
 cannot record.

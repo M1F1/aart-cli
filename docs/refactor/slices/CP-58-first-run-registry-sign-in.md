@@ -1,6 +1,6 @@
 # CP-58 — A default Registry the first run could not connect is named, with how to sign Git in
 
-Status: **done** on its branch; merged with its PR.
+Status: **done**; merged in aart-cli #126, released in 0.27.1.
 Authority: D-515. Resolves B-268.
 
 ## Why
