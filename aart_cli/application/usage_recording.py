@@ -146,8 +146,9 @@ def claude_settings_without(document: Mapping[str, object]) -> dict[str, object]
 def opencode_plugin(hook: UsageHook) -> str:
     """The plugin opencode loads from its plugins directory, which runs the usage hook.
 
-    It hands over the tool's name, a skill's name, and the directory; never the call's arguments.
-    Only `skill` and tools with an underscore -- MCP tools are `<server>_<tool>` -- start it.
+    It hands over the tool's name, a skill's name, the directory and opencode's session id, which
+    the hook keeps only as a pseudonym; never the call's arguments. Only `skill` and tools with an
+    underscore -- MCP tools are `<server>_<tool>` -- start it.
     """
 
     if hook.harness != "opencode":
@@ -165,10 +166,11 @@ export const AartCliUsage = async ({{ directory }}) => ({{
       const tool = String(input.tool)
       if (tool !== "skill" && !tool.includes("_")) return
       const skill = tool === "skill" ? output?.args?.name : undefined
+      const session = typeof input.sessionID === "string" ? input.sessionID : undefined
       const child = spawn(COMMAND[0], COMMAND.slice(1), {{ stdio: ["pipe", "ignore", "ignore"] }})
       child.on("error", () => {{}})
       child.stdin.on("error", () => {{}})
-      child.stdin.end(JSON.stringify({{ tool, skill, directory }}))
+      child.stdin.end(JSON.stringify({{ tool, skill, directory, session }}))
       child.unref()
     }} catch {{}}
   }},

@@ -204,7 +204,8 @@ class OpencodePluginTest(unittest.TestCase):
 
         self.assertTrue(plugin.startswith(OPENCODE_PLUGIN_MARK))
         self.assertIn('"tool.execute.before"', plugin)
-        self.assertIn("JSON.stringify({ tool, skill, directory })", plugin)
+        self.assertIn("JSON.stringify({ tool, skill, directory, session })", plugin)
+        self.assertIn("input.sessionID", plugin)
         self.assertNotIn("JSON.stringify(output", plugin)
         self.assertIn(
             json.dumps(["/usr/bin/python3", "-I", f"/site/{HOOK_SCRIPT}", "opencode", "/h"]), plugin

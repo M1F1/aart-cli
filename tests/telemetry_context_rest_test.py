@@ -8,8 +8,13 @@ or Collection. Nothing of this ever costs the event (INV-340).
 
 from __future__ import annotations
 
+import json
+import sqlite3
+import tempfile
 import unittest
 from dataclasses import replace
+from pathlib import Path
+from unittest import mock
 
 from hypothesis import given
 from hypothesis import strategies as st
@@ -23,8 +28,21 @@ from aart_cli.application.consumer_views import (
 from aart_cli.application.installation_proposal import artifact_receipt_for
 from aart_cli.application.receipt_recording import record_installation_transaction
 from aart_cli.application.telemetry_events import lifecycle_events
+from aart_cli.domain.artifact_usage import (
+    ArtifactUse,
+    InstalledName,
+    UsageKind,
+    session_from_hook,
+    session_pseudonym,
+    use_from_hook,
+    use_scope,
+)
 from aart_cli.domain.result import Ok
-from aart_cli.domain.telemetry import CONTEXT_FOR, EventContext, lifecycle_event
+from aart_cli.domain.telemetry import CONTEXT_FOR, EventContext, lifecycle_event, use_event
+from aart_cli.io import telemetry_sync
+from aart_cli.io.activity_store import ActivityDatabase
+from aart_cli.io.telemetry_store import TelemetryOutbox
+from aart_cli.io.usage_hook import record
 from tests.installation_transaction_receipt_test import MOMENT as RECEIPT_MOMENT
 from tests.receipt_recording_test import FakeStore
 from tests.telemetry_context_test import CONTEXT_FIELDS, ID, MOMENT, VALUES, _owned
@@ -243,6 +261,186 @@ class WhatTheTransactionRecordsTest(unittest.TestCase):
             (recorded.value.receipt.interface, recorded.value.receipt.duration_ms), (None, None)
         )
         self.assertNotIn("interface", receipt_detail_to_data(recorded.value.receipt))
+
+
+KEY = bytes(range(32))
+UUID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+JIRA = "corp/mcp/jira-mcp"
+#: Jira installed for the user in both harnesses, and for one project in opencode too.
+INSTALLED = (
+    InstalledName("opencode", UsageKind.MCP, "jira", JIRA, "2.0.1", None, "user"),
+    InstalledName("opencode", UsageKind.MCP, "jira", JIRA, "2.0.1", None, "project", "/work/app"),
+    InstalledName("claude", UsageKind.MCP, "jira", JIRA, "2.0.1", None, "user"),
+    InstalledName(
+        "opencode",
+        UsageKind.SKILL,
+        "notes",
+        "corp/skill/notes",
+        "1.0.0",
+        None,
+        "project",
+        "/work/app",
+    ),
+)
+
+
+class TheSessionTest(unittest.TestCase):
+    def test_each_harness_s_session_is_read_from_its_own_field(self) -> None:
+        self.assertEqual(session_from_hook("claude", {"session_id": "abc-1"}), "abc-1")
+        self.assertEqual(session_from_hook("opencode", {"session": "ses_9"}), "ses_9")
+        self.assertIsNone(session_from_hook("opencode", {"session_id": "abc-1"}))
+        self.assertIsNone(session_from_hook("tabnine", {"session": "x"}))
+        self.assertIsNone(session_from_hook("claude", {"session_id": 7}))
+
+    @given(st.text(min_size=1, max_size=200).filter(lambda value: value.strip() == value))
+    def test_a_pseudonym_is_a_uuid_stable_for_its_session_and_never_the_session(
+        self, session: str
+    ) -> None:
+        if not session.isprintable():
+            return
+        pseudonym = session_pseudonym(KEY, "opencode", session)
+
+        self.assertRegex(pseudonym, UUID)
+        self.assertNotEqual(pseudonym, session)
+        self.assertEqual(pseudonym, session_pseudonym(KEY, "opencode", session))
+        self.assertNotEqual(pseudonym, session_pseudonym(KEY, "claude", session))
+        self.assertNotEqual(pseudonym, session_pseudonym(bytes(32), "opencode", session))
+
+    def test_two_sessions_are_two_pseudonyms_and_a_short_key_is_refused(self) -> None:
+        self.assertNotEqual(
+            session_pseudonym(KEY, "claude", "a"), session_pseudonym(KEY, "claude", "b")
+        )
+        with self.assertRaises(ValueError):
+            session_pseudonym(KEY[:16], "claude", "a")
+
+    def test_a_use_holds_only_a_pseudonym(self) -> None:
+        with self.assertRaises(ValueError):
+            ArtifactUse("claude", UsageKind.MCP, "jira", session="abc-1")
+
+
+class WhatAUseSaysTest(unittest.TestCase):
+    def test_a_use_in_the_project_an_installation_is_for_says_project(self) -> None:
+        resolved = INSTALLED[0]
+
+        self.assertEqual(use_scope(resolved, "/work/app", INSTALLED), "project")
+        self.assertEqual(use_scope(resolved, "/work/app/src", INSTALLED), "project")
+        self.assertEqual(use_scope(resolved, "/work/application", INSTALLED), "user")
+        self.assertEqual(use_scope(resolved, "", INSTALLED), "user")
+
+    def test_a_project_installation_elsewhere_says_no_scope(self) -> None:
+        notes = INSTALLED[3]
+
+        self.assertEqual(use_scope(notes, "/work/app", INSTALLED), "project")
+        self.assertIsNone(use_scope(notes, "/work/other", INSTALLED))
+
+    def test_an_opencode_use_says_its_tool_session_and_scope_but_not_its_project(self) -> None:
+        pseudonym = session_pseudonym(KEY, "opencode", "ses_1")
+        event = use_event(
+            ID,
+            MOMENT,
+            "opencode",
+            UsageKind.MCP,
+            "jira_create_issue",
+            INSTALLED,
+            session=pseudonym,
+            project="/work/app",
+        )
+
+        assert event is not None
+        self.assertEqual(
+            event.context,
+            EventContext(scope="project", registry="corp", tool="create_issue", session=pseudonym),
+        )
+        self.assertNotIn("/work/app", json.dumps(event.document(revision=7)))
+
+    def test_a_claude_code_use_says_the_tool_its_hook_named(self) -> None:
+        use = use_from_hook("claude", {"tool_name": "mcp__jira__create_issue", "cwd": "/work"})
+        assert use is not None
+
+        event = use_event(ID, MOMENT, "claude", use.kind, use.name, INSTALLED, tool=use.tool)
+        unmanaged = use_event(
+            ID, MOMENT, "claude", UsageKind.MCP, "github", INSTALLED, unmanaged=True, tool="search"
+        )
+
+        assert event is not None and unmanaged is not None
+        self.assertEqual(
+            event.context, EventContext(scope="user", registry="corp", tool="create_issue")
+        )
+        self.assertEqual(unmanaged.context, EventContext(tool="search"))
+
+
+class TheHookKeepsAPseudonymTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.home = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, self.home, True)
+        self.state = str(Path(self.home) / "state")
+
+    def _record(self, harness: str, **payload: object) -> None:
+        self.assertTrue(record(harness, self.home, json.dumps(payload).encode()))
+
+    def test_a_session_is_kept_as_one_pseudonym_and_its_id_is_nowhere(self) -> None:
+        raw = "6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab"
+        for _ in range(2):
+            self._record("claude", tool_name="mcp__jira__create_issue", session_id=raw, cwd="/w")
+        self._record("claude", tool_name="mcp__jira__search", session_id="another", cwd="/w")
+
+        rows = ActivityDatabase(self.state).use_rows()
+        assert isinstance(rows, Ok)
+        uses = [use for _, _, use in rows.value]
+        self.assertEqual([use.tool for use in uses], ["create_issue", "create_issue", "search"])
+        self.assertEqual(uses[0].session, uses[1].session)
+        self.assertNotEqual(uses[0].session, uses[2].session)
+        self.assertRegex(uses[0].session, UUID)
+        stored = b"".join(path.read_bytes() for path in Path(self.state).iterdir())
+        self.assertNotIn(raw.encode(), stored)
+        self.assertNotIn(b"another", stored)
+
+    def test_without_a_session_a_use_is_still_recorded(self) -> None:
+        self._record("opencode", tool="skill", skill="notes", directory="/w")
+
+        rows = ActivityDatabase(self.state).use_rows()
+        assert isinstance(rows, Ok)
+        self.assertEqual(rows.value[0][2].session, "")
+
+    def test_an_older_database_gains_the_columns_and_keeps_its_uses(self) -> None:
+        Path(self.state).mkdir()
+        path = Path(self.state) / "activity.sqlite3"
+        with sqlite3.connect(path) as connection:
+            connection.executescript(
+                "CREATE TABLE action (id INTEGER PRIMARY KEY, moment TEXT NOT NULL,"
+                " receipt BLOB NOT NULL);"
+                "CREATE TABLE artifact_use (id INTEGER PRIMARY KEY, moment TEXT NOT NULL,"
+                " harness TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL,"
+                " project TEXT NOT NULL);"
+                "INSERT INTO artifact_use (moment, harness, kind, name, project)"
+                " VALUES ('2026-11-01T00:00:00+00:00', 'claude', 'skill', 'notes', '/w');"
+                "PRAGMA user_version = 1;"
+            )
+        connection.close()
+
+        self._record("opencode", tool="jira_search", directory="/w", session="ses_1")
+
+        rows = ActivityDatabase(self.state).use_rows()
+        assert isinstance(rows, Ok)
+        self.assertEqual(
+            [(use.name, use.session != "") for _, _, use in rows.value],
+            [("notes", False), ("jira_search", True)],
+        )
+
+    def test_the_outbox_keeps_a_use_s_session_tool_and_project_to_send(self) -> None:
+        outbox = TelemetryOutbox(self.state)
+        self.assertIsInstance(outbox.enable("http://127.0.0.1:9", CLIENT_ID), Ok)
+        with mock.patch.object(telemetry_sync, "spawn_sync", return_value=False):
+            self._record("claude", tool_name="mcp__jira__create_issue", session_id="s", cwd="/w/p")
+
+        waiting = outbox.waiting(limit=10)
+        assert isinstance(waiting, Ok)
+        (item,) = waiting.value
+        self.assertEqual((item.name, item.tool, item.project), ("jira", "create_issue", "/w/p"))
+        self.assertRegex(item.session, UUID)
+
+
+CLIENT_ID = "0b6f4d1e-8f8a-4a43-9a52-2f0f5d0f6a11"
 
 
 if __name__ == "__main__":

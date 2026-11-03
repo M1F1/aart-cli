@@ -16,7 +16,7 @@ from dataclasses import dataclass, field, fields, replace
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 
-from .artifact_usage import InstalledName, UsageKind, resolve_installed
+from .artifact_usage import InstalledName, UsageKind, resolve_installed, use_scope
 from .diagnostics import Diagnostic, DiagnosticCode, Severity
 from .failures import Failure
 from .result import Err, Ok, Result
@@ -577,6 +577,9 @@ def use_event(
     installed: tuple[InstalledName, ...],
     *,
     unmanaged: bool = False,
+    tool: str = "",
+    session: str = "",
+    project: str = "",
 ) -> TelemetryEvent | None:
     """A recorded use as an event: the artifact aart-cli installed, or, when `unmanaged`, the name.
 
@@ -584,6 +587,10 @@ def use_event(
     use no installed artifact answers to is sent only when `unmanaged` -- the person's choice, or
     without one the build's (D-508) -- as `unmanaged.used` with the name the harness used and no
     version; a name the contract cannot carry is not sent.
+
+    It says its session's pseudonym, the MCP tool called -- Claude Code's `tool`, or the part of
+    opencode's name after the server -- and, for an installed artifact, the scope of the
+    installation `project` reached. `project` itself is never sent (D-519).
     """
 
     source = TELEMETRY_SOURCES.get(harness)
@@ -593,17 +600,37 @@ def use_event(
     if resolved is None:
         if not unmanaged:
             return None
-        return _event(event_id, moment, UNMANAGED_USED, source, kind.value, name, None)
+        return _event(
+            event_id,
+            moment,
+            UNMANAGED_USED,
+            source,
+            kind.value,
+            name,
+            None,
+            # opencode's whole tool name is already its `artifact_id`; Claude Code's server is,
+            # and the tool is said beside it.
+            EventContext.fitting(
+                session=session or None, tool=(tool or None) if kind is UsageKind.MCP else None
+            ),
+        )
     artifact = _artifact(resolved.artifact)
     if artifact is None:
         return None
     artifact_kind, artifact_name, _ = artifact
-    # opencode names an MCP's tool `<server>_<tool>`; Claude Code's hook keeps the server alone,
-    # which is the name it was resolved by.
-    tool = (
-        name[len(resolved.name) + 1 :] if kind is UsageKind.MCP and name != resolved.name else None
+    # opencode names an MCP's tool `<server>_<tool>`; Claude Code's hook keeps the server, which
+    # is the name it was resolved by, and the tool beside it.
+    called = (
+        name[len(resolved.name) + 1 :]
+        if kind is UsageKind.MCP and name != resolved.name
+        else (tool if kind is UsageKind.MCP else "")
     )
-    context = EventContext.fitting(registry=_registry(resolved.artifact), tool=tool)
+    context = EventContext.fitting(
+        registry=_registry(resolved.artifact),
+        tool=called or None,
+        session=session or None,
+        scope=use_scope(resolved, project, installed),
+    )
     if resolved.member is not None:
         # A skill a plugin carries: a skill, named after its plugin as `<plugin>:<member>`, which
         # version 1's `artifact_id` allows, so neither the contract nor the server changes (§214).

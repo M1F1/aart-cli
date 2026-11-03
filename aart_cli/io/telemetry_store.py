@@ -74,8 +74,11 @@ _SCHEMA = (
     " artifact_id TEXT,"
     " artifact_type TEXT,"
     " artifact_version TEXT,"
-    # Where and how an action's event happened, as the contract writes it (revision 7).
+    # Where and how an event happened, as the contract writes it (revision 7): an action's
+    # whole context, or a use's session and tool, the rest of which is found when it is sent.
     " context TEXT,"
+    # The project a use happened in, kept here only to find the scope it reached; never sent.
+    " project TEXT,"
     " state TEXT NOT NULL DEFAULT 'waiting',"
     " settled_at TEXT)",
     "CREATE INDEX event_state ON event (state, id)",
@@ -121,15 +124,22 @@ def _ids(key: str, record: str) -> Callable[[], str]:
     return next_id
 
 
-def _with_context(connection: sqlite3.Connection) -> None:
-    """An outbox from before an event's context gains its column, and nothing else changes: what
-    waits there stays waiting, with no context (D-518)."""
+#: The columns an outbox of this schema version gained in place (D-518, D-519).
+_ADDED_COLUMNS = ("context", "project")
 
-    columns = {row[1] for row in connection.execute("PRAGMA table_info(event)")}
-    if "context" not in columns:
+
+def _with_context(connection: sqlite3.Connection) -> None:
+    """An outbox from before an event's context gains its columns, and nothing else changes: what
+    waits there stays waiting, with no context (D-518, D-519)."""
+
+    def missing() -> list[str]:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(event)")}
+        return [column for column in _ADDED_COLUMNS if column not in columns]
+
+    if missing():
         connection.execute("BEGIN IMMEDIATE")
-        if "context" not in {row[1] for row in connection.execute("PRAGMA table_info(event)")}:
-            connection.execute("ALTER TABLE event ADD COLUMN context TEXT")
+        for column in missing():
+            connection.execute(f"ALTER TABLE event ADD COLUMN {column} TEXT")
         connection.execute("COMMIT")
 
 
@@ -231,6 +241,10 @@ class WaitingEvent:
     kind: UsageKind | None = None
     name: str | None = None
     event: TelemetryEvent | None = None
+    #: A use's MCP tool and session pseudonym, and the project it happened in (D-519).
+    tool: str = ""
+    session: str = ""
+    project: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -388,14 +402,20 @@ class TelemetryOutbox:
                 kept = 0
                 for record, moment, use in uses:
                     kept += connection.execute(
-                        "INSERT OR IGNORE INTO event (event_id, occurred_at, harness, kind, name)"
-                        " VALUES (?, ?, ?, ?, ?)",
+                        "INSERT OR IGNORE INTO event (event_id, occurred_at, harness, kind, name,"
+                        " context, project) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (
                             history_event_id(key, record),
                             moment,
                             use.harness,
                             use.kind.value,
                             use.name,
+                            _context_text(
+                                EventContext.fitting(
+                                    tool=use.tool or None, session=use.session or None
+                                )
+                            ),
+                            use.project or None,
                         ),
                     ).rowcount
                 for record, events_of in actions:
@@ -431,8 +451,8 @@ class TelemetryOutbox:
             with closing(connection):
                 rows = connection.execute(
                     "SELECT event_id, occurred_at, harness, kind, name, event_type, artifact_id,"
-                    " artifact_type, artifact_version, context FROM event WHERE state = 'waiting'"
-                    " ORDER BY id LIMIT ?",
+                    " artifact_type, artifact_version, context, project FROM event"
+                    " WHERE state = 'waiting' ORDER BY id LIMIT ?",
                     (limit,),
                 ).fetchall()
         except (OSError, sqlite3.Error) as error:
@@ -449,9 +469,22 @@ class TelemetryOutbox:
             kind_of,
             version,
             context,
+            project,
         ) in rows:
             if event_type is None:
-                waiting.append(WaitingEvent(event_id, moment, harness, UsageKind(kind), name))
+                said = _context(context)
+                waiting.append(
+                    WaitingEvent(
+                        event_id,
+                        moment,
+                        harness,
+                        UsageKind(kind),
+                        name,
+                        tool=said.tool or "",
+                        session=said.session or "",
+                        project=project or "",
+                    )
+                )
             else:
                 event = _kept(
                     TelemetryEvent(

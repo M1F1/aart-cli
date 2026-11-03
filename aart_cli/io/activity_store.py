@@ -15,6 +15,7 @@ what it imports is what that call waits for.
 from __future__ import annotations
 
 import os
+import secrets
 import sqlite3
 from contextlib import closing
 from dataclasses import dataclass
@@ -48,9 +49,20 @@ _SCHEMA = (
     " harness TEXT NOT NULL,"
     " kind TEXT NOT NULL,"
     " name TEXT NOT NULL,"
-    " project TEXT NOT NULL)",
+    " project TEXT NOT NULL,"
+    " tool TEXT,"
+    " session TEXT)",
     "CREATE INDEX artifact_use_name ON artifact_use (harness, kind, name)",
+    "CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL)",
 )
+
+#: What a database of this schema version gained in place, without a new version: an older one
+#: gains them as it is opened, and what it holds stays as it was (D-519).
+_ADDED_COLUMNS = (("artifact_use", "tool", "TEXT"), ("artifact_use", "session", "TEXT"))
+_ADDED_TABLES = ("CREATE TABLE IF NOT EXISTS meta (name TEXT PRIMARY KEY, value TEXT NOT NULL)",)
+
+#: The `meta` row holding the key session pseudonyms are made under, as hex.
+_SESSION_KEY = "session_key"
 
 #: How long a writer waits for another one before giving up, in seconds.
 _BUSY_SECONDS = 5.0
@@ -58,6 +70,28 @@ _BUSY_SECONDS = 5.0
 
 def _error(code: DiagnosticCode, message: str) -> Err:
     return Err((Diagnostic(code, Severity.ERROR, message),))
+
+
+def _missing(connection: sqlite3.Connection) -> list[str]:
+    tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master")}
+    wanted = [] if "meta" in tables else list(_ADDED_TABLES)
+    for table, column, kind in _ADDED_COLUMNS:
+        columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            wanted.append(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
+    return wanted
+
+
+def _added(connection: sqlite3.Connection) -> None:
+    """What this schema version gained since the database was made, added once, under the lock."""
+
+    if not _missing(connection):
+        return
+    connection.execute("BEGIN IMMEDIATE")
+    # Another writer may have added it between the read and the lock.
+    for statement in _missing(connection):
+        connection.execute(statement)
+    connection.execute("COMMIT")
 
 
 def _write_ahead(connection: sqlite3.Connection) -> None:
@@ -118,6 +152,7 @@ class ActivityDatabase:
                 raise sqlite3.DatabaseError(
                     f"its schema is version {version}; this aart-cli reads {SCHEMA_VERSION}"
                 )
+            _added(connection)
             if create:
                 _write_ahead(connection)
         except BaseException:
@@ -179,22 +214,44 @@ class ActivityDatabase:
                 return Ok(())
             with closing(connection):
                 rows = connection.execute(
-                    "SELECT id, moment, harness, kind, name, project FROM artifact_use ORDER BY id"
+                    "SELECT id, moment, harness, kind, name, project, tool, session"
+                    " FROM artifact_use ORDER BY id"
                 ).fetchall()
         except (OSError, sqlite3.Error) as error:
             return _error(ACTIVITY_UNREADABLE, f"cannot read usage from {self.path}: {error}")
         uses: list[tuple[str, str, ArtifactUse]] = []
-        for row, moment, harness, kind, name, project in rows:
+        for row, moment, harness, kind, name, project, tool, session in rows:
             try:
-                uses.append(
-                    (f"use-{row}", moment, ArtifactUse(harness, UsageKind(kind), name, project))
+                use = ArtifactUse(
+                    harness, UsageKind(kind), name, project, tool or "", session or ""
                 )
             except ValueError:
                 continue  # a row no use could have written is not one to report
+            uses.append((f"use-{row}", moment, use))
         return Ok(tuple(uses))
 
+    def session_key(self) -> Result[bytes]:
+        """The random key session pseudonyms are made under on this machine, made the first time
+        it is asked for (D-519). It never leaves this database."""
+
+        try:
+            connection = self._open(create=True)
+            assert connection is not None
+            with closing(connection):
+                # Two hooks asking at once keep the first key written.
+                connection.execute(
+                    "INSERT OR IGNORE INTO meta (name, value) VALUES (?, ?)",
+                    (_SESSION_KEY, secrets.token_hex(32)),
+                )
+                row = connection.execute(
+                    "SELECT value FROM meta WHERE name = ?", (_SESSION_KEY,)
+                ).fetchone()
+            return Ok(bytes.fromhex(row[0]))
+        except (OSError, sqlite3.Error, ValueError, TypeError) as error:
+            return _error(ACTIVITY_UNWRITABLE, f"cannot keep a session key in {self.path}: {error}")
+
     def record_use(self, use: ArtifactUse, moment: str) -> Result[str]:
-        """Append one artifact use: names and the moment only."""
+        """Append one artifact use: names, the session's pseudonym and the moment only."""
 
         if not isinstance(use, ArtifactUse):
             raise ValueError("only an artifact use is recorded")
@@ -203,9 +260,17 @@ class ActivityDatabase:
             assert connection is not None
             with closing(connection):
                 row = connection.execute(
-                    "INSERT INTO artifact_use (moment, harness, kind, name, project)"
-                    " VALUES (?, ?, ?, ?, ?)",
-                    (moment, use.harness, use.kind.value, use.name, use.project),
+                    "INSERT INTO artifact_use (moment, harness, kind, name, project, tool, session)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        moment,
+                        use.harness,
+                        use.kind.value,
+                        use.name,
+                        use.project,
+                        use.tool or None,
+                        use.session or None,
+                    ),
                 ).lastrowid
         except (OSError, sqlite3.Error) as error:
             return _error(ACTIVITY_UNWRITABLE, f"cannot record the use in {self.path}: {error}")
