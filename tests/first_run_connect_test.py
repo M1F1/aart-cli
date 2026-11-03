@@ -13,6 +13,9 @@ import unittest
 from tempfile import TemporaryDirectory
 from unittest import mock
 
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
 from aart_cli.application.configuration import FirstRunOptions, LoadedConfiguration
 from aart_cli.commands import first_run
 from aart_cli.commands._configured_runtime import ConfiguredRuntime
@@ -198,6 +201,115 @@ class ARefusalIsAWarning(unittest.TestCase):
 
     def test_it_says_what_to_do_instead(self) -> None:
         self.assertIn("Add Registry", " ".join(self._report().diagnostics[0].remediation))
+
+
+def _git_refuses(message: str):
+    def refuse(_: Request) -> Err:
+        return Err((Diagnostic(DiagnosticCode("source-git-failed"), Severity.ERROR, message),))
+
+    return refuse
+
+
+_FETCH = "Git command failed for git -C mirror.git fetch --force --prune --tags origin: "
+_SIGNED_OUT = (
+    "fatal: unable to get password from user",
+    "fatal: could not read Username for 'https://example.invalid': terminal prompts disabled",
+    "remote: Invalid username or password.\nfatal: Authentication failed for 'x'",
+    "fatal: unable to access 'x': The requested URL returned error: 401",
+    "fatal: unable to access 'x': The requested URL returned error: 403",
+)
+
+
+class TheWarningSaysWhichRegistryAndHowToReachIt(unittest.TestCase):
+    """B-268, D-515: the warning names the Registry, and a missing sign-in says how to sign in.
+
+    The error Git gives names the mirror's remote, `origin`, never the URL, so without this a person
+    could not tell which Registry failed. And `credential.interactive=never` means a host Git holds
+    no credential for fails the same way every time: the one useful thing to say is how to give Git
+    one.
+    """
+
+    def _report(self, add, url: str = URL) -> FirstRunSeedReport:
+        return connect_baked_default_registry(
+            REQUEST,
+            load=lambda _: _runtime(_loaded(first_run=True)),
+            add=add,
+            read_baked=lambda: Ok(SeededRegistry(SourceAlias("company"), url)),
+        )
+
+    def _said(self, add, url: str = URL) -> str:
+        (diagnostic,) = self._report(add, url).diagnostics
+        return "\n".join((diagnostic.message, *diagnostic.remediation))
+
+    def test_it_names_the_alias_and_url_with_a_check_and_the_command_to_add_it(self) -> None:
+        for add in (_refuses, _git_refuses(_FETCH + _SIGNED_OUT[0])):
+            with self.subTest(add=add):
+                (diagnostic,) = self._report(add).diagnostics
+                self.assertIn(f"company ({URL})", diagnostic.message)
+                self.assertIn(
+                    f"Check that Git can read it:\n"
+                    f"    git -c credential.interactive=never ls-remote {URL} HEAD",
+                    diagnostic.remediation,
+                )
+                self.assertIn(
+                    "Or connect it yourself:\n    aart-cli consume registry add --alias company "
+                    f"--kind git --location {URL} --default",
+                    diagnostic.remediation,
+                )
+
+    def test_a_missing_sign_in_says_how_to_give_git_one_for_that_host(self) -> None:
+        for failure in _SIGNED_OUT:
+            with self.subTest(failure):
+                said = self._said(_git_refuses(_FETCH + failure))
+                self.assertIn("Git has no credential for example.invalid", said)
+                self.assertIn("gh auth login --hostname example.invalid", said)
+                self.assertIn("gh auth setup-git --hostname example.invalid", said)
+
+    def test_any_other_refusal_never_suggests_signing_in(self) -> None:
+        for add in (
+            _refuses,
+            _git_refuses(_FETCH + "fatal: unable to access 'x': Could not resolve host"),
+            _git_refuses(_FETCH + "fatal: repository 'x' not found"),
+        ):
+            with self.subTest(add=add):
+                self.assertNotIn("gh auth", self._said(add))
+
+    def test_a_refused_ssh_key_is_not_answered_with_an_https_sign_in(self) -> None:
+        said = self._said(
+            _git_refuses(_FETCH + "git@example.invalid: Permission denied (publickey)."),
+            "ssh://git@example.invalid/team/registry.git",
+        )
+        self.assertNotIn("gh auth", said)
+        self.assertIn("Git has no SSH key example.invalid accepts", said)
+
+    def test_signing_in_is_offered_only_for_https_since_only_https_uses_it(self) -> None:
+        said = self._said(
+            _git_refuses(_FETCH + _SIGNED_OUT[2]), "ssh://git@example.invalid/team/registry.git"
+        )
+        self.assertNotIn("gh auth", said)
+
+    @settings(max_examples=60, deadline=None)
+    @given(
+        alias=st.from_regex(r"[a-z][a-z0-9-]{0,20}", fullmatch=True),
+        host=st.from_regex(r"[a-z][a-z0-9-]{0,15}(\.[a-z]{2,6}){1,2}", fullmatch=True),
+        failure=st.sampled_from(_SIGNED_OUT),
+    )
+    def test_every_registry_is_named_and_signed_in_to_by_its_own_host(
+        self, alias: str, host: str, failure: str
+    ) -> None:
+        url = f"https://{host}/team/registry.git"
+        report = connect_baked_default_registry(
+            REQUEST,
+            load=lambda _: _runtime(_loaded(first_run=True)),
+            add=_git_refuses(_FETCH + failure),
+            read_baked=lambda: Ok(SeededRegistry(SourceAlias(alias), url)),
+        )
+        (diagnostic,) = report.diagnostics
+        self.assertIn(f"{alias} ({url})", diagnostic.message)
+        said = "\n".join(diagnostic.remediation)
+        self.assertIn(f"    gh auth login --hostname {host}\n", said)
+        self.assertIn(f"    gh auth setup-git --hostname {host}\n", said + "\n")
+        self.assertIn(f"--alias {alias} --kind git --location {url} --default\n", said + "\n")
 
 
 class TheTerminalStartupSeedsBeforeItComposes(unittest.TestCase):

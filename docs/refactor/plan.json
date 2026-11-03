@@ -2019,7 +2019,7 @@
     {
       "id": "CP-56",
       "title": "An end by SIGTERM or SIGHUP is journaled, and is still that end (§215, INV-335, INV-339, D-513, B-265)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -2034,14 +2034,14 @@
         {
           "id": "3",
           "title": "The PR",
-          "status": "in_progress"
+          "status": "done"
         }
       ]
     },
     {
       "id": "CP-57",
       "title": "Settings turns telemetry on and off (§213, D-514, B-253)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -2056,6 +2056,28 @@
         {
           "id": "3",
           "title": "The PR, with CP-56",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-58",
+      "title": "A default Registry the first run could not connect is named, with how to give Git a sign-in (D-515, B-268)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "unconnected_seed: alias and URL, the ls-remote check, the add command; a sign-in only for an HTTPS host Git holds no credential for",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Rollout guide: Git signed in to the host before a first run, and the warning in Troubleshooting",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR",
           "status": "in_progress"
         }
       ]

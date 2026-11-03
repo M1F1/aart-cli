@@ -5342,3 +5342,12 @@ Only the traceback of the exception that reached the boundary is read. When a ha
 exception from another (`raise ... from error`, or during `except`), the original's frames, often
 where the defect is, are not kept. Following `__cause__`/`__context__` would need the contract to
 say which frames belong to which exception.
+
+## B-268 — A default Registry the first run could not connect is not named, nor is the missing sign-in
+
+Status: **resolved** by CP-58 (D-515), 2026-11-03: the warning names the alias and URL, gives the
+`ls-remote` check and the `consume registry add` command, and for an HTTPS host Git holds no
+credential for, the `gh auth login` and `gh auth setup-git` that give it one.
+
+A first run whose baked Registry needed a Git sign-in the machine did not have warned with Git's
+`fetch … origin` error, which names neither the Registry nor the cause.

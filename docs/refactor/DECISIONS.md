@@ -12884,3 +12884,24 @@ plan").
   and how it is counted is `sent_as`, which `status` prints, so the two surfaces never disagree.
 - **Not chosen.** Typing an address in the TUI: an address is set once per organisation by its
   build, and `--endpoint` remains for anyone else.
+
+## D-515 — A default Registry the first run could not connect is named, with how to sign Git in (CP-58)
+
+- **Evidence.** B-268: a person's first run, with a build that bakes a Registry on a host Git held
+  no credential for, warned only that the Registry "could not be connected", quoting Git's
+  `fetch … origin: fatal: unable to get password from user`. The mirror's remote is `origin`, so
+  the warning never said which Registry, and nothing said that the fix is a Git sign-in: Git runs
+  with `credential.interactive=never` and so fails the same way on every run until one exists.
+- **Choice.** The warning names the alias and URL. The build already refuses a URL that carries a
+  credential, because a connected Registry is printed too. It always offers two options:
+  `git -c credential.interactive=never ls-remote <URL> HEAD`, which checks what aart-cli needs,
+  and the `consume registry add … --location <URL> --default` command that connects it by hand.
+  When Git's error says it has no credential, or the host refused it (`unable to get password`,
+  `could not read Username/Password`, `Authentication failed`, HTTP 401/403), and the URL is
+  HTTPS, it adds `gh auth login --hostname <host>` and `gh auth setup-git --hostname <host>`,
+  host taken from the URL. A refused SSH key gets its own line. Any other refusal gets no sign-in
+  advice, since signing in would not change it.
+- **Shape.** `application/first_run_seed.unconnected_seed` is pure. `Diagnostic` keeps
+  remediation sorted, so each option is one complete entry with its commands indented under it.
+- **Not chosen.** Letting Git prompt on a first run: the run may be unattended, and a prompt is how
+  it would hang. Reading or storing a credential in aart-cli: Git's own helper owns it.

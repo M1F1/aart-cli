@@ -1,6 +1,6 @@
 # CP-56 — An end by SIGTERM or SIGHUP is journaled
 
-Status: **done** on its branch; merged with its PR.
+Status: **done**; merged in aart-cli #124 with CP-57.
 Authority: Product Specification §215 (amended), INV-335, INV-339, D-513. Resolves B-265.
 
 ## Why
