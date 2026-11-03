@@ -45,13 +45,15 @@ class ClaudeCodeHookTest(unittest.TestCase):
 
         self.assertEqual(use, ArtifactUse("claude", UsageKind.SKILL, "code-review", "/work/shop"))
 
-    def test_an_mcp_call_is_the_server_s_name(self) -> None:
+    def test_an_mcp_call_is_the_server_s_name_and_the_tool_it_called(self) -> None:
         use = use_from_hook(
             "claude",
             {"tool_name": "mcp__github__search_repositories", "tool_input": {"q": "x"}},
         )
 
-        self.assertEqual(use, ArtifactUse("claude", UsageKind.MCP, "github"))
+        self.assertEqual(
+            use, ArtifactUse("claude", UsageKind.MCP, "github", tool="search_repositories")
+        )
 
     def test_any_other_tool_is_no_use(self) -> None:
         for tool in ("Bash", "Read", "mcp__", "Skills", "skill"):

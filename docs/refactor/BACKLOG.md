@@ -5355,7 +5355,8 @@ A first run whose baked Registry needed a Git sign-in the machine did not have w
 
 ## B-269 — The rest of contract revision 7: interface, duration, versions replaced, collections, inputs, sessions
 
-Status: **open**, noncritical (CP-61, D-518).
+Status: **resolved** 2026-11-03 by CP-62 (D-519): every field below is sent. The resending of
+events sent before a server's upgrade moved to B-270; Tabnine uses moved to B-271.
 
 CP-61 sends the Registry alias, the harness and scope of an install, update or removal, an opencode
 MCP's tool, and the request's environment. Revision 7 also holds the following fields, and each one
@@ -5376,3 +5377,22 @@ There is also the matter of events already sent. Once a server is upgraded, an e
 as before revision 7 is never sent again with its context. Sending it again would need a cursor the
 server deduplicates by `event_id` while it adds the context; until then those events stay counted
 without it.
+
+## B-270 — Events sent before a server held revision 7 are never sent again with their context
+
+Status: **open**, noncritical (CP-61, CP-62; moved from B-269).
+
+Once a server is upgraded, an event that went out as before revision 7 is never sent again with
+its context. Sending it again would need a cursor the server deduplicates by `event_id` while it
+adds the context; until then those events stay counted without it.
+
+## B-271 — Tabnine's uses cannot be recorded
+
+Status: **open**, noncritical (CP-62, D-519).
+
+aart-cli installs MCPs into Tabnine for the user and for a project, and those installs, updates and
+removals send every revision 7 field. A use cannot be recorded: Tabnine offers no hook that is told
+which tool is about to run, and the contract's sources are only `claude_hook` and
+`opencode_plugin`. If Tabnine's CLI gains such a hook, it needs a source on both sides (aart-cli's
+`USAGE_HARNESSES`, `TELEMETRY_SOURCES`, and the server's contract) and a hook writer like opencode's
+plugin.

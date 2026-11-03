@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from enum import Enum
 from itertools import groupby
-from typing import cast
+from typing import TypeVar, cast
 
 from aart_cli.application.author_views import normalized_workspace
 from aart_cli.configuration.model import SourceKind
@@ -84,6 +84,7 @@ from .execution import (
 from .installation_proposal import InstallationProposal
 from .intents import (
     InstalledHealth,
+    LifecycleIntent,
     LifecycleIntentKind,
     LifecyclePlan,
     MemberHealth,
@@ -2581,6 +2582,12 @@ class ReceiptArtifactView:
     #: The harness and scope the installation is for, when its plan named one (§213, D-518).
     harness: str | None = None
     scope: str | None = None
+    #: The version an update replaced; the package installed, and how many configuration values
+    #: and credentials it asked for -- counts, never a value or a name (D-519).
+    previous_version: str | None = None
+    package_digest: str | None = None
+    configuration_inputs: int | None = None
+    credential_inputs: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -2600,6 +2607,9 @@ class ReceiptDetailView:
     detail: str
     selection: SelectionView | None = None
     artifacts: tuple[ReceiptArtifactView, ...] = ()
+    #: Whether the TUI or the command line asked for it, and how long it took (D-519).
+    interface: str | None = None
+    duration_ms: int | None = None
     moment: datetime = field(init=False)
 
     def __post_init__(self) -> None:
@@ -2674,6 +2684,17 @@ _TRANSACTION_VERBS: dict[LifecycleIntentKind, str] = {
 }
 
 
+_REPLACING = frozenset({LifecycleIntentKind.UPDATE, LifecycleIntentKind.DOWNGRADE})
+
+
+def _replaced(intent: LifecycleIntent) -> str | None:
+    """The version an update or a downgrade leaves; `None` for anything else."""
+
+    if intent.kind not in _REPLACING or intent.previous is None:
+        return None
+    return intent.previous.artifact.version
+
+
 def _where(owner: InstallationOwner | None) -> tuple[str | None, str | None]:
     """The harness and scope an installation is for; neither when its plan named no owner."""
 
@@ -2719,6 +2740,7 @@ def project_installation_receipt(
             # A plugin's members are added from its receipt as it is recorded.
             (),
             *_where(item.plan.intent.desired.owner),
+            _replaced(item.plan.intent),
         )
         for item in outcome.artifacts
     )
@@ -2788,6 +2810,7 @@ def receipt_detail_to_data(view: ReceiptDetailView) -> dict[str, object]:
         **(
             {} if view.selection is None else {"selection": _selection_view_to_data(view.selection)}
         ),
+        **_said(interface=view.interface, duration_ms=view.duration_ms),
         **(
             {}
             if not view.artifacts
@@ -2817,6 +2840,12 @@ def receipt_detail_to_data(view: ReceiptDetailView) -> dict[str, object]:
                         **({"members": list(item.members)} if item.members else {}),
                         **({} if item.harness is None else {"harness": item.harness}),
                         **({} if item.scope is None else {"scope": item.scope}),
+                        **_said(
+                            previous_version=item.previous_version,
+                            package_digest=item.package_digest,
+                            configuration_inputs=item.configuration_inputs,
+                            credential_inputs=item.credential_inputs,
+                        ),
                         "steps": [
                             {
                                 "component": step.component,
@@ -3891,6 +3920,26 @@ def _string(data: dict[str, object], key: str) -> str:
     return value
 
 
+_Said = TypeVar("_Said", str, int)
+
+
+def _optional(data: dict[str, object], key: str, kind: type[_Said]) -> _Said | None:
+    """What a receipt says at `key`, or `None` when it does not say it."""
+
+    value = data.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, kind) or isinstance(value, bool):
+        raise ValueError(f"a receipt's {key} must be a {kind.__name__} or absent")
+    return value
+
+
+def _said(**values: object) -> dict[str, object]:
+    """The `values` that hold something, to be written into a receipt."""
+
+    return {key: value for key, value in values.items() if value is not None}
+
+
 def _rows(data: dict[str, object], key: str) -> tuple[dict[str, object], ...]:
     rows = data.get(key, [])
     if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
@@ -3985,9 +4034,15 @@ def receipt_detail_from_data(data: object) -> Result[ReceiptDetailView]:
                         _strings(row, "members") if "members" in row else (),
                         None if "harness" not in row else _string(row, "harness"),
                         None if "scope" not in row else _string(row, "scope"),
+                        _optional(row, "previous_version", str),
+                        _optional(row, "package_digest", str),
+                        _optional(row, "configuration_inputs", int),
+                        _optional(row, "credential_inputs", int),
                     )
                     for row in _rows(data, "artifacts")
                 ),
+                _optional(data, "interface", str),
+                _optional(data, "duration_ms", int),
             )
         )
     except ValueError as error:

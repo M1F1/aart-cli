@@ -428,6 +428,9 @@ def _send_outbox(run: _Run, state_root: str, client_version: str) -> None:
                 item.name,
                 installed,
                 unmanaged=unmanaged,
+                tool=item.tool,
+                session=item.session,
+                project=item.project,
             )
             if event is None:
                 unattributed.append(item.event_id)

@@ -37,8 +37,9 @@ from .execution import (
 )
 from .installation_offer import ArtifactPlacement, InstallationOffer, offer_installation
 from .installation_planning import EnvironmentInspectionPort
-from .installation_proposal import PlannedArtifact, artifact_receipt_for
+from .installation_proposal import PlannedArtifact, PlannedInstallation, artifact_receipt_for
 from .receipt_recording import (
+    InputCounts,
     ReceiptStorePort,
     RecordedTransaction,
     record_installation_transaction,
@@ -174,6 +175,23 @@ def prepare_installation_action(
         return _error(ACTION_INVALID, f"this installation action cannot be prepared: {error}")
 
 
+def _input_counts(installations: tuple[PlannedArtifact, ...]) -> InputCounts:
+    """How many configuration values and credentials each installation asked for -- counts only,
+    never a name or a value (D-519). A placement starts no process and asks for none."""
+
+    return tuple(
+        (
+            (item.coordinate, item.owner),
+            (
+                (len(item.bound.config_values), len(item.bound.credential_references))
+                if isinstance(item, PlannedInstallation)
+                else (0, 0)
+            ),
+        )
+        for item in installations
+    )
+
+
 def complete_installation_action(
     prepared: PreparedInstallationAction,
     *,
@@ -185,8 +203,14 @@ def complete_installation_action(
     store: ReceiptStorePort,
     recorded_at: str,
     observe: ProgressObserver | None = None,
+    interface: str | None = None,
+    elapsed: Callable[[], int] | None = None,
 ) -> Result[CompletedInstallationAction]:
-    """Execute and record only the exact prepared review the caller confirmed."""
+    """Execute and record only the exact prepared review the caller confirmed.
+
+    `interface` and `elapsed` are what the receipt says of how it was asked for and how long it
+    took (D-519); see `record_installation_transaction`.
+    """
 
     if not isinstance(prepared, PreparedInstallationAction) or not isinstance(
         expected_review_digest, ObjectDigest
@@ -219,6 +243,9 @@ def complete_installation_action(
             (installation.coordinate, artifact_receipt_for(installation))
             for installation in prepared.installations
         ),
+        inputs=_input_counts(prepared.installations),
+        interface=interface,
+        elapsed=elapsed,
     )
     if isinstance(persisted, Err):
         return persisted

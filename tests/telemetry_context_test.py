@@ -360,12 +360,14 @@ class WhatAnEventSaysTest(unittest.TestCase):
         self.assertEqual(unmanaged.context, EventContext())
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 def _owned_outcome():
     """`_executed`'s transaction, its first member installed for Claude Code in a project."""
+
+    return _owned()[0]
+
+
+def _owned():
+    """`_owned_outcome`'s transaction and the two installations it planned."""
 
     first = _planned()
     owner = InstallationOwner(
@@ -413,7 +415,7 @@ def _owned_outcome():
         lock=_Lock(),
     )
     assert isinstance(executed, Ok), getattr(executed, "diagnostics", ())
-    return executed.value
+    return executed.value, planned
 
 
 class WhatAReceiptSaysTest(unittest.TestCase):
@@ -435,3 +437,7 @@ class WhatAReceiptSaysTest(unittest.TestCase):
                 EventContext(registry=registry),
             ],
         )
+
+
+if __name__ == "__main__":
+    unittest.main()

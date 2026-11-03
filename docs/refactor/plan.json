@@ -2129,7 +2129,7 @@
     {
       "id": "CP-61",
       "title": "Each event says where and how it happened, to a server that holds revision 7 (§213, D-518)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -2144,6 +2144,33 @@
         {
           "id": "3",
           "title": "The PR, stacked on #130, after aart-cli-telemetry-server #19",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-62",
+      "title": "The rest of contract revision 7: how an action ran, how it came, and a use's session and scope (§213, D-519)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Lifecycle: interface, duration, version replaced, package, input counts, via and Collection",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Uses: session pseudonym, scope reached, Claude Code's tool; Activity and outbox columns in place",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Spec §213, D-519, B-269 resolved, B-270, B-271, disclosures, slice",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "The PR",
           "status": "in_progress"
         }
       ]

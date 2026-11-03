@@ -146,8 +146,9 @@ def claude_settings_without(document: Mapping[str, object]) -> dict[str, object]
 def opencode_plugin(hook: UsageHook) -> str:
     """The plugin opencode loads from its plugins directory, which runs the usage hook.
 
-    It hands over the tool's name, a skill's name, and the directory; never the call's arguments.
-    Only `skill` and tools with an underscore -- MCP tools are `<server>_<tool>` -- start it.
+    It hands over the tool's name, a skill's name, the directory and opencode's session id, which
+    the hook keeps only as a pseudonym; never the call's arguments. Only `skill` and tools with an
+    underscore -- MCP tools are `<server>_<tool>` -- start it.
     """
 
     if hook.harness != "opencode":
@@ -165,10 +166,11 @@ export const AartCliUsage = async ({{ directory }}) => ({{
       const tool = String(input.tool)
       if (tool !== "skill" && !tool.includes("_")) return
       const skill = tool === "skill" ? output?.args?.name : undefined
+      const session = typeof input.sessionID === "string" ? input.sessionID : undefined
       const child = spawn(COMMAND[0], COMMAND.slice(1), {{ stdio: ["pipe", "ignore", "ignore"] }})
       child.on("error", () => {{}})
       child.stdin.on("error", () => {{}})
-      child.stdin.end(JSON.stringify({{ tool, skill, directory }}))
+      child.stdin.end(JSON.stringify({{ tool, skill, directory, session }}))
       child.unref()
     }} catch {{}}
   }},
@@ -210,12 +212,14 @@ def usage_disclosure(
     name = _HARNESS_NAMES[harness]
     return (
         f"Records each skill {name} loads and each MCP tool it calls: the skill's or MCP "
-        "server's name, the project directory and the time.",
+        "server's name, the tool, the project directory, a pseudonym of the session and the "
+        "time.",
         "Never records what a tool is called with, prompts or answers.",
         (
             f"Kept on this machine, in {database}. Telemetry is on: each use of an artifact "
             f"aart-cli installed is sent to {telemetry_endpoint} as the artifact's name and "
-            "version, the harness and the time, never the project; "
+            "version, the harness, the tool, the scope it reached, the session's pseudonym and "
+            "the time, never the project; "
             "`aart-cli consume telemetry disable` stops it."
             if telemetry_endpoint
             else f"Kept only on this machine, in {database}. Nothing is sent anywhere."

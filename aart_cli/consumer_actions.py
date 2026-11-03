@@ -3833,6 +3833,7 @@ class LocalConsumerActions:
             skipped_secrets_as_placeholders=True,
             observe=None if self._progress is None else observe,
             credential_entry=self._credential_entry,
+            interface="tui",
         )
         if isinstance(completed, Err):
             # The values were entered for this install, and it did not happen (§207).
@@ -4220,6 +4221,7 @@ class LocalConsumerActions:
             credential_providers=self._context.credential_providers,
             recorded_at=recorded_at,
             today=today,  # type: ignore[arg-type]
+            interface="tui",
         )
         if isinstance(completed, Err):
             return self._failed(command, _refusal(completed.diagnostics))

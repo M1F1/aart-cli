@@ -30,7 +30,9 @@ _MAX_PAYLOAD = 1024 * 1024
 def record(harness: str, home: str, payload: bytes, *, now: datetime | None = None) -> bool:
     """Record the use `payload` describes; whether one was recorded."""
 
-    from aart_cli.domain.artifact_usage import use_from_hook
+    from dataclasses import replace
+
+    from aart_cli.domain.artifact_usage import session_from_hook, session_pseudonym, use_from_hook
     from aart_cli.domain.result import Ok
     from aart_cli.io.activity_store import ActivityDatabase
 
@@ -43,8 +45,16 @@ def record(harness: str, home: str, payload: bytes, *, now: datetime | None = No
     use = use_from_hook(harness, document)
     if use is None:
         return False
+    database = ActivityDatabase(str(Path(home) / "state"))
+    # The harness's session id is turned into this machine's pseudonym of it here and goes no
+    # further; without a key the use is still recorded, without a session (D-519).
+    session = session_from_hook(harness, document)
+    if session is not None:
+        key = database.session_key()
+        if isinstance(key, Ok):
+            use = replace(use, session=session_pseudonym(key.value, harness, session))
     instant = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    written = ActivityDatabase(str(Path(home) / "state")).record_use(use, instant.isoformat())
+    written = database.record_use(use, instant.isoformat())
     if isinstance(written, Ok):
         _telemetry(home, use, instant, written.value.rpartition("#")[2])
     return isinstance(written, Ok)

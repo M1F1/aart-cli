@@ -44,7 +44,7 @@ from aart_cli.domain.reconciliation import CurrentState, DesiredState
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.selection import OwnershipReason
 
-from .configured_installation_action import InstallationHost
+from .configured_installation_action import InstallationHost, stopwatch
 from .consumer_machine import read_consumer_machine
 from .credentials import CredentialProviderPort
 from .execution import (
@@ -259,13 +259,19 @@ def complete_configured_uninstall(
     recorded_at: str,
     today: date,
     credential_providers: tuple[CredentialProviderPort, ...] = (),
+    interface: str | None = None,
 ) -> Result[CompletedConfiguredUninstall]:
-    """Execute the confirmed removal, record it, and re-read the machine it left behind."""
+    """Execute the confirmed removal, record it, and re-read the machine it left behind.
+
+    `interface` is `tui` or `cli`, whichever asked; the receipt says it and how long this took
+    (D-519).
+    """
 
     if not isinstance(prepared, PreparedConfiguredUninstall) or not isinstance(
         host, InstallationHost
     ):
         return _error("completing an uninstall needs a prepared removal and a host")
+    elapsed = stopwatch()
     if not isinstance(expected_review_digest, ObjectDigest):
         return _error("completing an uninstall needs the confirmed review digest")
     if expected_review_digest != prepared.review_digest:
@@ -310,6 +316,8 @@ def complete_configured_uninstall(
         store=LocalReceiptStore(host.state_root),
         # A member something else still owns keeps its record, narrowed to who still owns it.
         receipts=tuple((item.coordinate, item.record.receipt) for item in prepared.removals),
+        interface=interface,
+        elapsed=elapsed,
     )
     if isinstance(recorded, Err):
         return recorded

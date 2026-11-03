@@ -251,6 +251,72 @@ class PluginInstallationTest(unittest.TestCase):
             ),
         )
 
+    def test_a_command_line_install_says_so_and_the_plugin_s_skills_say_how_they_came(
+        self,
+    ) -> None:
+        """D-519: a server holding revision 7 is told the interface, the time taken, the package
+        and how many inputs; each skill says it came with its plugin and none of the package."""
+
+        home = self.env.xdg["AART_CLI_HOME"]
+        enabled = TelemetryOutbox(str(pathlib.Path(home) / "state")).enable(
+            "http://127.0.0.1:9", CLIENT
+        )
+        self.assertIsInstance(enabled, Ok, enabled)
+
+        with mock.patch.object(telemetry_sync, "spawn_sync", return_value=False):
+            code, payload = self._install("--yes")
+        self.assertEqual(code, 0, payload)
+        server = FakeServer()
+        server.revision = 7
+        _sync(SimpleNamespace(path=home), server, Clock())  # type: ignore[arg-type]
+
+        sent = {event["artifact_id"]: event for event in server.stored.values()}
+        plugin = sent["superpowers"]
+        member = sent["superpowers:brainstorming"]
+        self.assertEqual(
+            (plugin["interface"], plugin["harness"], plugin["via"]), ("cli", "opencode", "direct")
+        )
+        self.assertRegex(plugin["package_digest"], r"^sha256:[0-9a-f]{64}$")
+        self.assertEqual((plugin["configuration_inputs"], plugin["credential_inputs"]), (0, 0))
+        self.assertIsInstance(plugin["duration_ms"], int)
+        self.assertEqual((member["interface"], member["via"]), ("cli", "plugin"))
+        self.assertEqual(member["duration_ms"], plugin["duration_ms"])
+        for gone in ("package_digest", "configuration_inputs", "credential_inputs"):
+            self.assertNotIn(gone, member)
+
+    def test_an_opencode_use_says_its_session_and_the_scope_of_what_it_reached(self) -> None:
+        """D-519: the session is a pseudonym, never opencode's id; the scope is the installation's
+        the use's directory reached, and the directory is never sent."""
+
+        self._install("--yes")
+        (installed,) = self._installed()
+        owner = installed.receipt.owner
+        assert owner is not None
+        directory = f"{owner.root}/src" if owner.scope.value == "project" else "/elsewhere"
+        home = self.env.xdg["AART_CLI_HOME"]
+        enabled = TelemetryOutbox(str(pathlib.Path(home) / "state")).enable(
+            "http://127.0.0.1:9", CLIENT
+        )
+        self.assertIsInstance(enabled, Ok, enabled)
+
+        with mock.patch.object(telemetry_sync, "spawn_sync", return_value=False):
+            payload = {
+                "tool": "skill",
+                "skill": "brainstorming",
+                "directory": directory,
+                "session": "ses_4f2a9c",
+            }
+            self.assertTrue(record("opencode", home, json.dumps(payload).encode()))
+        server = FakeServer()
+        server.revision = 7
+        _sync(SimpleNamespace(path=home), server, Clock())  # type: ignore[arg-type]
+
+        (used,) = [e for e in server.stored.values() if e["event_type"] == "artifact.used"]
+        self.assertEqual(used["scope"], owner.scope.value)
+        self.assertRegex(used["session"], r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-")
+        self.assertNotIn("ses_4f2a9c", json.dumps(used))
+        self.assertNotIn(directory, json.dumps(used))
+
     def test_a_harness_nobody_measured_a_plugin_list_for_is_refused_by_name(self) -> None:
         manifest = dict(MANIFEST, compatibility={"harnesses": ["opencode", "claude"]})
         other = self.env.project.parent / "other"

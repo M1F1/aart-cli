@@ -5,11 +5,17 @@ used: a skill being loaded, and a tool of an MCP server. This module turns what 
 its hook into one `ArtifactUse`, and many recorded uses into a ranking a person can read.
 
 Only names are kept. What the tool was called with is never read into a use: arguments carry
-whatever the person or the model typed, and that can be a secret.
+whatever the person or the model typed, and that can be a secret. The harness's session id is
+never kept either: a use keeps a pseudonym of it, keyed by a random key this machine holds, so uses
+of one session can be told together and nothing can be traced back to the harness (D-519).
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import re
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
@@ -30,7 +36,10 @@ __all__ = [
     "parse_usage_harnesses",
     "rank_usage",
     "resolve_installed",
+    "session_from_hook",
+    "session_pseudonym",
     "use_from_hook",
+    "use_scope",
 ]
 
 #: The harnesses whose hooks can say which tool runs. Tabnine and Vibe are absent: neither has a
@@ -42,6 +51,10 @@ USAGE_HARNESSES_INVALID = DiagnosticCode("usage-harnesses-invalid")
 #: A skill or tool name longer than this is not one a harness gave.
 _MAX_NAME = 200
 _MAX_PROJECT = 4096
+#: A session pseudonym's shape: a UUID, lower case.
+_PSEUDONYM = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+#: The least a session key holds, in bytes.
+_MIN_KEY = 32
 
 
 def parse_usage_harnesses(raw: str) -> Result[tuple[str, ...]]:
@@ -116,6 +129,11 @@ class ArtifactUse:
     kind: UsageKind
     name: str
     project: str = ""
+    #: The MCP tool Claude Code called, which its server name alone does not say; empty otherwise.
+    tool: str = ""
+    #: The pseudonym of the harness session it happened in (`session_pseudonym`); empty when the
+    #: harness said none. Never the harness's own id.
+    session: str = ""
 
     def __post_init__(self) -> None:
         if (
@@ -123,8 +141,43 @@ class ArtifactUse:
             or not isinstance(self.kind, UsageKind)
             or _name(self.name) != self.name
             or _project(self.project) != self.project
+            or not (self.tool == "" or _name(self.tool) == self.tool)
+            or not (self.session == "" or _matches_pseudonym(self.session))
         ):
             raise ValueError("an artifact use is invalid")
+
+
+def _matches_pseudonym(value: object) -> bool:
+    return isinstance(value, str) and _PSEUDONYM.fullmatch(value) is not None
+
+
+def session_from_hook(harness: str, payload: object) -> str | None:
+    """The harness's own id of the session a hook's call is in, or `None` when it gives none.
+
+    Claude Code hands its hooks `session_id`; aart-cli's opencode plugin hands over `session`, from
+    opencode's `sessionID`. This is the harness's id and is only ever turned into a pseudonym.
+    """
+
+    if not isinstance(payload, Mapping):
+        return None
+    key = {"claude": "session_id", "opencode": "session"}.get(harness)
+    return None if key is None else _name(payload.get(key))
+
+
+def session_pseudonym(key: bytes, harness: str, session: str) -> str:
+    """The pseudonym a use of `session` in `harness` is kept and sent under (D-519).
+
+    A UUID made of the HMAC-SHA256 of the harness and session under `key`, a random key this
+    machine keeps: the same session is always the same pseudonym here, a different session or
+    machine is another, and without the key nothing leads back to the session.
+    """
+
+    if not isinstance(key, bytes) or len(key) < _MIN_KEY:
+        raise ValueError("a session pseudonym needs a key of at least 32 random bytes")
+    if harness not in USAGE_HARNESSES or _name(session) != session:
+        raise ValueError("a session pseudonym needs a harness and the session it names")
+    digest = hmac.new(key, f"{harness}\0{session}".encode(), hashlib.sha256).digest()
+    return str(uuid.UUID(bytes=digest[:16], version=4))
 
 
 def _claude(payload: Mapping[str, object]) -> ArtifactUse | None:
@@ -137,8 +190,11 @@ def _claude(payload: Mapping[str, object]) -> ArtifactUse | None:
         skill = _name(arguments.get("skill"))
         return None if skill is None else ArtifactUse("claude", UsageKind.SKILL, skill, project)
     if isinstance(tool, str) and tool.startswith("mcp__"):
-        server = _name(tool[len("mcp__") :].split("__", 1)[0])
-        return None if server is None else ArtifactUse("claude", UsageKind.MCP, server, project)
+        server, _, called = tool[len("mcp__") :].partition("__")
+        named = _name(server)
+        if named is None:
+            return None
+        return ArtifactUse("claude", UsageKind.MCP, named, project, _name(called) or "")
     return None
 
 
@@ -193,6 +249,10 @@ class InstalledName:
     version: str | None = None
     #: The plugin's member this name is, when `artifact` is a plugin carrying it (§214).
     member: str | None = None
+    #: The installation's scope, `user` or `project`, and a project installation's root, when
+    #: its record names its owner (§169.3).
+    scope: str | None = None
+    root: str | None = None
 
     @property
     def label(self) -> str:
@@ -209,6 +269,12 @@ def installed_names(records: tuple[InstalledRecord, ...]) -> tuple[InstalledName
     for record in records:
         artifact = f"{record.coordinate.source}/{record.coordinate.artifact}"
         receipt = record.receipt
+        owner = receipt.owner
+        where = (
+            (None, None)
+            if owner is None
+            else (owner.scope.value, owner.root if owner.scope.value == "project" else None)
+        )
         if isinstance(receipt, InstallationReceipt):
             for registration in receipt.registrations:
                 names.add(
@@ -218,6 +284,8 @@ def installed_names(records: tuple[InstalledRecord, ...]) -> tuple[InstalledName
                         registration.server,
                         artifact,
                         record.coordinate.version,
+                        None,
+                        *where,
                     )
                 )
         elif record.coordinate.artifact.kind == "plugin":
@@ -233,6 +301,7 @@ def installed_names(records: tuple[InstalledRecord, ...]) -> tuple[InstalledName
                             artifact,
                             record.coordinate.version,
                             member.name,
+                            *where,
                         )
                     )
         elif record.coordinate.artifact.kind == "skill":
@@ -244,6 +313,8 @@ def installed_names(records: tuple[InstalledRecord, ...]) -> tuple[InstalledName
                         delivery.destination.rstrip("/").rpartition("/")[2],
                         artifact,
                         record.coordinate.version,
+                        None,
+                        *where,
                     )
                 )
     return tuple(
@@ -255,6 +326,8 @@ def installed_names(records: tuple[InstalledRecord, ...]) -> tuple[InstalledName
                 item.name,
                 item.artifact,
                 item.member or "",
+                item.scope or "",
+                item.root or "",
             ),
         )
     )
@@ -290,6 +363,36 @@ def resolve_installed(
         prefixed = [item for item in candidates if name.startswith(f"{item.name}_")]
         if prefixed:
             return max(prefixed, key=lambda item: len(item.name))
+    return None
+
+
+def _within(project: str, root: str) -> bool:
+    return project == root or project.startswith(root.rstrip("/") + "/")
+
+
+def use_scope(
+    resolved: InstalledName, project: str, names: tuple[InstalledName, ...]
+) -> str | None:
+    """The scope of the installation a use in `project` reached: `project` when that artifact is
+    installed for a project `project` is in, else `user` when it is installed for the user, else
+    `None`, when no installation it reached says its scope.
+
+    Only the scope is said; the project and its directory are never part of the answer.
+    """
+
+    same = [
+        item
+        for item in names
+        if (item.harness, item.kind, item.artifact, item.member)
+        == (resolved.harness, resolved.kind, resolved.artifact, resolved.member)
+    ]
+    if any(
+        item.scope == "project" and item.root is not None and _within(project, item.root)
+        for item in same
+    ):
+        return "project"
+    if any(item.scope == "user" for item in same):
+        return "user"
     return None
 
 
