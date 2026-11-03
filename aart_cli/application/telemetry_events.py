@@ -28,18 +28,28 @@ def lifecycle_events(
     if not isinstance(receipt, ReceiptDetailView):
         raise ValueError("telemetry events come from a finished action's receipt")
     moment = contract_moment(receipt.moment)
-    changed: tuple[tuple[str, tuple[str, ...]], ...]
+    changed: tuple[tuple[str, tuple[str, ...], str | None, str | None], ...]
     if receipt.artifacts:
         changed = tuple(
-            (item.coordinate, item.members)
+            (item.coordinate, item.members, item.harness, item.scope)
             for item in receipt.artifacts
             if item.status in _COMPLETED_MEMBER
         )
     else:
-        changed = ((receipt.artifact, ()),) if receipt.outcome in _COMPLETED_ACTION else ()
+        changed = (
+            ((receipt.artifact, (), None, None),) if receipt.outcome in _COMPLETED_ACTION else ()
+        )
     events = (
-        lifecycle_event(new_id(), moment, receipt.intent, coordinate, member=member)
-        for coordinate, members in changed
+        lifecycle_event(
+            new_id(),
+            moment,
+            receipt.intent,
+            coordinate,
+            member=member,
+            harness=harness,
+            scope=scope,
+        )
+        for coordinate, members, harness, scope in changed
         for member in (None, *members)
     )
     return tuple(event for event in events if event is not None)

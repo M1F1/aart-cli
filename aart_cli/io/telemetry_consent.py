@@ -149,8 +149,9 @@ def announce_turned_on(
     say(
         f"Telemetry is on: this aart-cli sends to {setting.endpoint} each install, update and "
         f"removal it completes and each use of an artifact it installed{others}, including what "
-        "Activity already holds; never a project, path, argument, prompt, user or host name, or "
-        "credential. `aart-cli consume telemetry disable` turns it off."
+        "Activity already holds, with the Registry's alias, the harness and scope; never a "
+        "project, path, argument, prompt, Registry address, user or host name, or credential. "
+        "`aart-cli consume telemetry disable` turns it off."
         + (
             " Settings > Telemetry, or `aart-cli consume telemetry unmanaged off`, stops "
             "sending uses of tools aart-cli did not install."

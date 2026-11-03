@@ -1,6 +1,27 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-03, CP-60)
+## Where the work is (2026-11-03, CP-61)
+
+**CP-61** gives each event the context it already knows (§213, D-518, INV-340):
+
+- its Registry alias;
+- the harness and scope of an install, update or removal;
+- an opencode MCP use's tool;
+- the request's operating system, architecture and Python.
+
+The sender asks `GET /api/v1/contract` once a run. Only a server naming revision 7 or later is sent
+these fields; any other server is sent the events as before.
+
+Merge order: aart-cli-telemetry-server #18, then #19 (revision 7, retargeted to main). Deploy the
+server before the clients. Then merge this repository's #130 (CP-60), then CP-61's PR, which is
+stacked on it.
+
+Next: B-269, the rest of revision 7: the interface, duration, version replaced, collection, input
+counts, a Claude Code MCP's tool, a session pseudonym and a use's scope.
+
+Evidence: `docs/refactor/slices/CP-61-where-and-how.md`.
+
+## Where the work was (2026-11-03, CP-60)
 
 CP-59 is merged (#128). **CP-60** sends a plugin's install, update and removal for each skill its
 receipt names too, as `skill` `<plugin>:<member>` at the plugin's version (§214, D-517). The

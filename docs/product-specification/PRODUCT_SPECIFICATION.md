@@ -12659,7 +12659,7 @@ unchanged.
 
 # 213. Telemetry: installs, updates, removals and uses sent to a telemetry server
 
-Status: **ACCEPTED 2026-10-29 (D-503, D-504, D-505), amended 2026-10-30 (D-508), 2026-11-02 (D-509, §215; D-511) and 2026-11-03 (D-514)**, on the owner's request after 0.21.0, from
+Status: **ACCEPTED 2026-10-29 (D-503, D-504, D-505), amended 2026-10-30 (D-508), 2026-11-02 (D-509, §215; D-511) and 2026-11-03 (D-514, D-518)**, on the owner's request after 0.21.0, from
 their telemetry implementation brief: the organisation sees which artifacts are used, how often, by
 how many installations, and how that changes, on a dashboard. Supersedes §212's "Local only" for an
 installation where telemetry is on. D-505 (the owner, the same day): a build that names a server
@@ -12668,7 +12668,9 @@ starts with telemetry on, and turning it on sends Activity's history too. D-508 
 used, unless the build or the person says otherwise; this supersedes D-503's "a use no installed
 artifact answers to is never sent". D-511 (the owner, 2026-11-02): automation, such as a CI job,
 says so, and the dashboard counts it apart from people. D-514 (the owner, 2026-11-03, B-253):
-Settings turns telemetry on and off too.
+Settings turns telemetry on and off too. D-518 (the owner, 2026-11-03): each event says where and
+how it happened, as broadly as the contract allows short of naming a project, and the server keeps
+it queryable for analysis.
 
 - **Two repositories, one contract.** The server is a separate repository,
   `aart-cli-telemetry-server` (a functional core behind FastAPI; SQLite in WAL by default and
@@ -12676,7 +12678,7 @@ Settings turns telemetry on and off too.
   share is `docs/telemetry-api-v1.md` with `contract/telemetry-api-v1.examples.json`, kept
   identical in both and read by each one's contract tests. aart-cli imports nothing of the server
   and gains no runtime dependency: the client is `sqlite3`, `json`, `urllib.request`, `fcntl`,
-  `subprocess` and `uuid`.
+  `subprocess`, `uuid` and `platform`.
 - **On from the start where the build names a server; otherwise off until a person turns it
   on.** A build whose release variable `AART_CLI_TELEMETRY_ENDPOINT` names a server turns telemetry
   on for an application home that has never had it on or off, at its first `aart-cli` terminal
@@ -12716,6 +12718,19 @@ Settings turns telemetry on and off too.
   telemetry is turned on, and aart-cli's version, and `"automated": true` when aart-cli runs as
   automation (below). Never a project, path, argument, prompt, Registry address, user or host
   name, credential, or which automation it is.
+- **Where and how (D-518).** Each event also says, as contract revision 7 lets it: the alias of
+  the Registry its artifact came from (the coordinate's first part, never the Registry's address);
+  for an install, update or removal, the harness and scope its installation is for; and for an
+  opencode use of an MCP, the tool called, which is the harness's tool name past the server's.
+  Each request also says this machine's operating system, architecture and Python version. A value
+  the contract cannot carry is left out, and the event is sent without it. Before its first send
+  each run, the sender asks the server which revision it holds (`GET /api/v1/contract`); a server
+  that names none, or one below 7, is sent every event without these fields and the request
+  without its environment. `401` or `403` to that question pauses, and `429`, a `5xx` or no answer
+  backs off, as for a send (below); any other answer is a server that names no revision. The contract's further
+  fields -- the interface, the duration, the version replaced, the collection, the package digest,
+  input counts, a Claude Code MCP's tool and a session -- are left out until aart-cli says them.
+  Never a project, a project's name or a hash of one.
 - **Automation says so (D-511).** A CI job draws a new installation id each time, so without this
   every job would read as a new person. A request says `"automated": true` when, at the moment it
   is sent, `AART_CLI_AUTOMATED` is `on` or `true`, or, without that, `CI` -- which CI services
@@ -12945,3 +12960,9 @@ terminal application runs with SIGTERM or SIGHUP at its default, the signal jour
 interruption at the place running, with exit code 128 plus the signal's number, and the process
 then ends by that signal, as it would have without the journal; whatever the journal does, the
 signal ends it. A signal ignored or handled before aart-cli started is left as it was.
+
+**INV-340 — A server is sent only the fields its revision holds.** An event's where and how
+(D-518) and the request's environment are sent only to a server that names revision 7 or later at
+the start of that run; to any other server the same event is sent as before revision 7, and it is
+still counted. A value the contract cannot carry is never sent, and never stops its event being
+sent. No event says a project, a project's name or a hash of one.

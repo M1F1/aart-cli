@@ -45,9 +45,9 @@ ROOT = Path(__file__).resolve().parent.parent
 CONTRACT = ROOT / "docs" / "telemetry-api-v1.md"
 EXAMPLES = ROOT / "contract" / "telemetry-api-v1.examples.json"
 CONTRACT_SHA256 = {
-    "docs/telemetry-api-v1.md": "56b7b380750feb7bc6ce82ebf6b7bb7beffc35428389177734430563f5549276",
+    "docs/telemetry-api-v1.md": "8cc63f9a4f759eface7403066d4d813258c7a3b3c92032cefe1cee097128424e",
     "contract/telemetry-api-v1.examples.json": (
-        "9fd38bb5fc586b9ca7c9b9c2bf83177ccc4769fa8c3bbe2772af40240902a037"
+        "c147eb499783599426b9a78c1f2b4a314ae838b1cb3133929720883d2ba947fd"
     ),
 }
 
@@ -66,33 +66,13 @@ def _examples() -> dict:
 
 
 class TheContractIsSharedTest(unittest.TestCase):
+    """Its examples are read by `telemetry_context_test` and `failure_domain_test`."""
+
     def test_the_copies_are_the_ones_the_server_holds(self) -> None:
         for relative, digest in CONTRACT_SHA256.items():
             with self.subTest(relative):
                 held = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
                 self.assertEqual(held, digest)
-
-    def test_every_valid_example_is_an_event_this_client_could_send(self) -> None:
-        for example in _examples()["valid"]:
-            request = example["request"]
-            # A failure's `failure` object is read back by `failure_domain_test`.
-            if any("failure" in event for event in request["events"]):
-                continue
-            events = tuple(TelemetryEvent(**event) for event in request["events"])
-            self.assertEqual(
-                batch_document(
-                    request["client_id"],
-                    request["client_version"],
-                    events,
-                    automated=request.get("automated", False),
-                ),
-                request,
-            )
-
-    def test_no_invalid_example_can_be_built(self) -> None:
-        for example in _examples()["invalid"]:
-            with self.subTest(example["name"]), self.assertRaises((ValueError, TypeError)):
-                TelemetryEvent(**example["event"])
 
 
 class TheAddressTest(unittest.TestCase):

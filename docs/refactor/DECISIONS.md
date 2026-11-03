@@ -12956,3 +12956,37 @@ plan").
   records: a receipt written before this does not say which skills it installed, so it stays one
   event.
 
+
+## D-518 — Each event says where and how it happened, to a server that holds revision 7 (CP-61)
+
+§213 amended; INV-340.
+
+- **Evidence.** The owner asked on 2026-11-03 for events as broad as they can be, stored on the
+  server and queryable for analysis: the harness, the scope, the Registry, the interface, whether
+  automation sent it, the client version and a pseudonymous installation. The owner also ruled out
+  any field about the project: "Nie dodawaj żadnych dodatkowych pultów projektu." The server's
+  contract revision 7 (aart-cli-telemetry-server) defines the optional fields and the request's
+  `environment`, and it keeps them in `event_context` and the view `event_wide`.
+- **Choice.** This slice sends what aart-cli already knows without new plumbing. Every event names
+  the alias of its artifact's Registry. That is the coordinate's first part, so a Registry's address
+  is never sent. An install, update or removal names the harness and scope from its installation's
+  owner, which the receipt now keeps. An opencode use of an MCP names the tool past the server's
+  name. A Claude Code use names no tool, because the hook sees only the server's name. Each request
+  says the operating system, architecture and Python version from `platform`.
+- **Negotiation.** Before its first send each run, the sender asks `GET /api/v1/contract`, once.
+  Revision 7 or later receives the new fields. Any other revision, a `404`, or an answer that is not
+  the contract's document receives the request as before revision 7, so an older server neither
+  refuses nor loses the event. `401`/`403`, `429`, a `5xx` or no answer ends the run as a send's
+  answer would. The question is asked per run, not cached, so a server upgraded between runs is
+  sent the fields at once.
+- **Kept, not resent.** An event keeps its context in the outbox (a `context` column, added in
+  place where an older outbox lacks it, without a schema version change). An event sent as before
+  revision 7 is sent once and not again after the server is upgraded. Resending would count it
+  twice; a cursor for that is backlog.
+- **A value the contract cannot carry is dropped, not refused.** `EventContext.fitting` leaves out
+  a harness, alias or tool the contract's patterns reject, so an unusual alias never costs the
+  event.
+- **Not chosen.** A project name or a hash of one, which the owner excluded. Sending every field
+  now: the interface, duration, the version replaced, the collection, the package digest, input
+  counts, a Claude Code MCP's tool, a session pseudonym and a use's scope each need plumbing of
+  their own (B-269). Caching the revision in the outbox: one GET per run is cheap and never stale.
