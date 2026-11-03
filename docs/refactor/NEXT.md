@@ -12,8 +12,8 @@
   and Claude Code's MCP `tool`; the directory and the session id never leave the machine.
 
 The code, tests and docs are done on `feat/telemetry-context-rest` (worktree
-`/Users/mifi/code/aart-cli-context-rest`). Next: open the PR, whose title is a Conventional Commit
-with a COMMIT_OVERRIDE block; CI runs the full suite. B-270 (resending events sent before revision
+`/Users/mifi/code/aart-cli-context-rest`), in PR #133. Next: CI's full suite on #133, the owner's
+review and merge, then the Release Please PR. B-270 (resending events sent before revision
 7) and B-271 (Tabnine uses) are open.
 
 Evidence: `docs/refactor/slices/CP-62-the-rest-of-revision-7.md`.
