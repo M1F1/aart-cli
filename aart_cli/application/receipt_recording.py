@@ -15,6 +15,7 @@ The store is a port. This module decides; the adapter writes.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Protocol
 
@@ -45,6 +46,7 @@ from .intents import LifecycleIntentKind
 
 __all__ = [
     "RECORDING_INCOMPLETE",
+    "InputCounts",
     "ReceiptStorePort",
     "RecordedOutcome",
     "RecordedTransaction",
@@ -183,23 +185,51 @@ class RecordedTransaction:
             raise ValueError("a transaction records each installation once")
 
 
-def _with_members(
-    detail: ReceiptDetailView, receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...]
-) -> ReceiptDetailView:
-    """`detail` naming the skills each plugin it installed, updated or removed carries (§214),
-    from the receipt that plugin's installation was given or had."""
+#: How many configuration values and credentials one installation asked for, by installation.
+InputCounts = tuple[
+    tuple[tuple[ArtifactCoordinate, InstallationOwner | None], tuple[int, int]], ...
+]
 
-    members = {
-        str(coordinate): tuple(item.name for item in receipt.members)
-        for coordinate, receipt in receipts
-        if isinstance(receipt, PlacedArtifactReceipt) and receipt.members
-    }
-    return replace(
-        detail,
-        artifacts=tuple(
-            replace(item, members=members.get(item.coordinate, ())) for item in detail.artifacts
-        ),
-    )
+
+def _with_installations(
+    detail: ReceiptDetailView,
+    outcome: InstallationExecutionOutcome,
+    receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...],
+    inputs: InputCounts,
+) -> ReceiptDetailView:
+    """`detail` naming, for each member, what only its installation's receipt and plan know: the
+    skills a plugin carries (§214), the package installed and how many inputs it asked for (D-519).
+
+    A member is matched to its receipt by installation, so the same artifact in two harnesses keeps
+    each one's own counts; a receipt recorded under another owner is still found by its artifact.
+    """
+
+    by_installation = {(coordinate, receipt.owner): receipt for coordinate, receipt in receipts}
+    by_artifact = {str(coordinate): receipt for coordinate, receipt in receipts}
+    counts = dict(inputs)
+    artifacts = []
+    for view, member in zip(detail.artifacts, outcome.artifacts, strict=True):
+        key = (member.plan.intent.desired.artifact, member.plan.intent.desired.owner)
+        receipt = by_installation.get(key, by_artifact.get(view.coordinate))
+        configuration, credentials = counts.get(key, (None, None))
+        artifacts.append(
+            replace(
+                view,
+                members=(
+                    tuple(item.name for item in receipt.members)
+                    if isinstance(receipt, PlacedArtifactReceipt)
+                    else ()
+                ),
+                package_digest=(
+                    None
+                    if receipt is None or receipt.object_digest is None
+                    else str(receipt.object_digest)
+                ),
+                configuration_inputs=configuration,
+                credential_inputs=credentials,
+            )
+        )
+    return replace(detail, artifacts=tuple(artifacts))
 
 
 def record_installation_transaction(
@@ -208,8 +238,15 @@ def record_installation_transaction(
     recorded_at: str,
     store: ReceiptStorePort,
     receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...] = (),
+    inputs: InputCounts = (),
+    interface: str | None = None,
+    elapsed: Callable[[], int] | None = None,
 ) -> Result[RecordedTransaction]:
     """Record one transaction as one action, and each member it left installed.
+
+    `interface` says whether the TUI or the command line asked for it, and `elapsed` how many
+    milliseconds the action has taken; it is read just before the action is recorded, since this
+    layer has no clock (D-519).
 
     The Selection is what somebody reviewed, so it is what reaches the timeline: one entry, naming
     every member. What is installed is still per-artifact, because that is the unit a later repair
@@ -253,11 +290,17 @@ def record_installation_transaction(
         keeping.append((coordinate, installed, member.outcome))
 
     try:
-        detail = _with_members(
-            project_installation_receipt(outcome, recorded_at=recorded_at), receipts
+        detail = _with_installations(
+            project_installation_receipt(outcome, recorded_at=recorded_at),
+            outcome,
+            receipts,
+            inputs,
         )
     except ValueError as error:
         return _error(str(error))
+    detail = replace(
+        detail, interface=interface, duration_ms=None if elapsed is None else elapsed()
+    )
     # The action reaches the timeline first, so a store that then refuses an installation still
     # leaves the attempt visible rather than losing the whole transaction.
     action = store.record_action(detail)

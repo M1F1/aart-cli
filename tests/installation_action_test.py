@@ -109,6 +109,39 @@ class InstallationActionCompletionTest(unittest.TestCase):
             completed.value.recorded.receipt.review_digest, str(prepared.review_digest)
         )
 
+    def test_the_receipt_counts_the_inputs_the_plan_asked_for_and_says_how_it_ran(self) -> None:
+        """D-519: counts of configuration values and credentials, never their names or values."""
+
+        prepared = _prepare()
+        planned = prepared.installations[0]
+        calls = 0
+
+        def inspect(_desired):
+            nonlocal calls
+            calls += 1
+            return _nothing_installed(planned) if calls < 3 else _matched(planned)
+
+        completed = complete_installation_action(
+            prepared,
+            expected_review_digest=prepared.review_digest,
+            policy=EffectivePolicy(),
+            interpreters=(_Interpreter(),),
+            inspect=inspect,
+            lock=_Lock(),
+            store=FakeStore(),
+            recorded_at=MOMENT,
+            interface="cli",
+            elapsed=lambda: 250,
+        )
+
+        self.assertIsInstance(completed, Ok, getattr(completed, "diagnostics", ()))
+        receipt = completed.value.recorded.receipt
+        (artifact,) = receipt.artifacts
+        # `_bound` is one credential and one configuration value.
+        self.assertEqual((artifact.configuration_inputs, artifact.credential_inputs), (1, 1))
+        self.assertEqual((receipt.interface, receipt.duration_ms), ("cli", 250))
+        self.assertEqual(completed.value.flow.outcome, receipt)
+
     def test_a_different_review_identity_refuses_before_lock_or_recording(self) -> None:
         prepared = _prepare()
         store = FakeStore()

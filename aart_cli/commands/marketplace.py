@@ -1236,6 +1236,7 @@ def _configured_lifecycle(
         credential_handover=BriefingHandover(stream=sys.stderr) if asked else None,
         skipped_secrets_as_placeholders=request.set_later,
         credential_entry=_credential_entry() if asked else (),
+        interface="cli",
     )
     if isinstance(completed, Err):
         return _emit_error(request, completed, operation)
@@ -1639,6 +1640,7 @@ def _configured_uninstall(request: Request, selectors: tuple[ArtifactSelector, .
         credential_providers=credential_providers,
         recorded_at=now.isoformat(),
         today=now.date(),
+        interface="cli",
     )
     if isinstance(completed, Err):
         return _emit_error(request, completed, operation)

@@ -561,7 +561,8 @@ def lifecycle_event(
         kind, name = "skill", f"{name}:{member}"
         said = {key: value for key, value in said.items() if key not in _THE_PLUGIN_S}
         said["via"] = "plugin"
-    context = EventContext.fitting(**{"registry": _registry(coordinate), **said})
+    # The alias is the coordinate's; nothing said beside it can name another Registry.
+    context = EventContext.fitting(**{**said, "registry": _registry(coordinate)})
     return _event(
         event_id, moment, event_type, "aart_cli", kind, name, version, _held(event_type, context)
     )

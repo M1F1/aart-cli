@@ -24,7 +24,8 @@ from __future__ import annotations
 
 import os
 import sys
-from collections.abc import Collection
+import time
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, replace
 from datetime import date
 
@@ -385,6 +386,13 @@ def _lease(host: InstallationHost, action: PreparedInstallationAction) -> Mutati
     )
 
 
+def stopwatch() -> Callable[[], int]:
+    """The milliseconds since it was started, on a clock no change of the wall clock moves."""
+
+    started = time.monotonic()
+    return lambda: max(0, round((time.monotonic() - started) * 1000))
+
+
 def complete_configured_installation(
     prepared: PreparedConfiguredInstallation,
     *,
@@ -403,8 +411,12 @@ def complete_configured_installation(
     skipped_secrets_as_placeholders: bool = False,
     observe: ProgressObserver | None = None,
     credential_entry: tuple[CredentialEntryFallback, ...] = (),
+    interface: str | None = None,
 ) -> Result[CompletedConfiguredInstallation]:
     """Execute the confirmed review, record it, and re-read the machine it left behind.
+
+    `interface` is `tui` or `cli`, whichever asked; the receipt says it and how long this took,
+    from here until it is recorded (D-519).
 
     `previous_receipts` are what an update is leaving. The executor asks for the previous state
     when it has to put a failed update back, and that state can only be measured against the
@@ -420,6 +432,7 @@ def complete_configured_installation(
         host, InstallationHost
     ):
         return _error("completing a configured installation needs a prepared action and a host")
+    elapsed = stopwatch()
     action = prepared.action
     if action is None:
         names = ", ".join(item.input.id.value for item in prepared.draft.inputs.unanswered)
@@ -489,6 +502,8 @@ def complete_configured_installation(
         store=LocalReceiptStore(host.state_root),
         recorded_at=recorded_at,
         observe=observe,
+        interface=interface,
+        elapsed=elapsed,
     )
     if isinstance(completed, Err):
         return completed
