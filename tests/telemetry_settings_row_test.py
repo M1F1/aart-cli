@@ -220,7 +220,11 @@ class TheTerminalTurnsItOnAndOffTest(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.home = temporary.name
         for patch in (
-            mock.patch.dict(os.environ, {"HOME": self.home, "AART_CLI_HOME": self.home}),
+            # A CI runner sets `CI`; this machine is a person's unless a test says otherwise.
+            mock.patch.dict(
+                os.environ,
+                {"HOME": self.home, "AART_CLI_HOME": self.home, "CI": "", "AART_CLI_AUTOMATED": ""},
+            ),
             mock.patch.object(telemetry_sync, "spawn_sync", return_value=False),
         ):
             patch.start()
