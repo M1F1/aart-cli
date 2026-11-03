@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.0](https://github.com/M1F1/aart-cli/compare/v0.25.0...v0.26.0) (2026-11-03)
+
+
+### Added
+
+* a crash keeps what its exception was raised from, and sends it ([2bcd8bb](https://github.com/M1F1/aart-cli/commit/2bcd8bb1487983760da514a95394c15371ed0a4b))
+
 ## [0.25.0](https://github.com/M1F1/aart-cli/compare/v0.24.1...v0.25.0) (2026-11-02)
 
 
