@@ -14,7 +14,7 @@ non-interactive caller that explicitly accepts the whole offer.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from aart_cli.domain.credentials import CredentialObservation
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -228,7 +228,8 @@ def complete_installation_action(
                 prepared,
                 executed.value,
                 persisted.value,
-                presented.value,
+                # What was recorded also names each plugin's skills, which only the receipts know.
+                replace(presented.value, outcome=persisted.value.receipt),
             )
         )
     except ValueError as error:

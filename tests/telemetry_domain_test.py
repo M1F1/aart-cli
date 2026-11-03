@@ -292,6 +292,20 @@ class WhatIsSentTest(unittest.TestCase):
         self.assertIsNone(lifecycle_event(ID, self.MOMENT, "repair", "corp/skill/x@1"))
         self.assertIsNone(lifecycle_event(ID, self.MOMENT, "install", "not a coordinate"))
 
+    def test_a_plugins_skill_is_a_skill_named_after_it_at_its_version(self) -> None:
+        event = lifecycle_event(
+            ID, self.MOMENT, "uninstall", "corp/plugin/superpowers@6.2.0", member="tdd"
+        )
+        assert event is not None
+        self.assertEqual(
+            (event.event_type, event.artifact_type, event.artifact_id, event.artifact_version),
+            ("artifact.removed", "skill", "superpowers:tdd", "6.2.0"),
+        )
+        # A name the contract cannot carry is not sent, rather than sent mangled.
+        self.assertIsNone(
+            lifecycle_event(ID, self.MOMENT, "install", "corp/plugin/p@1", member="two words")
+        )
+
     def test_a_batch_is_bounded_and_its_moments_are_utc(self) -> None:
         event = TelemetryEvent(ID, self.MOMENT, "artifact.used", "claude_hook", "a", "skill")
         with self.assertRaises(ValueError):

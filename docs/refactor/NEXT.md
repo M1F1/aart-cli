@@ -1,6 +1,19 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-03, CP-59)
+## Where the work is (2026-11-03, CP-60)
+
+CP-59 is merged (#128). **CP-60** sends a plugin's install, update and removal for each skill its
+receipt names too, as `skill` `<plugin>:<member>` at the plugin's version (§214, D-517). The
+telemetry server counts a member's installations in the same row as its uses. The server's read
+API, Swagger at `/docs` and the read-only MCP at `/mcp` ship in aart-cli-telemetry-server #18;
+merge that first.
+
+Next: the contract's revision 7 (the harness, scope, Registry alias and interface of an event), on
+the owner's request of 2026-11-03.
+
+Evidence: `docs/refactor/slices/CP-60-plugin-members-installed.md`. B-266 is open.
+
+## Where the work was (2026-11-03, CP-59)
 
 CP-58 is released in 0.27.1. **CP-59** has every `consume` command but `consume usage` put the usage
 hook in place where recording is on, as the TUI's start does (§212, D-516; resolves B-249). A build

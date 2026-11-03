@@ -15,7 +15,7 @@ The store is a port. This module decides; the adapter writes.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -183,6 +183,25 @@ class RecordedTransaction:
             raise ValueError("a transaction records each installation once")
 
 
+def _with_members(
+    detail: ReceiptDetailView, receipts: tuple[tuple[ArtifactCoordinate, ArtifactReceipt], ...]
+) -> ReceiptDetailView:
+    """`detail` naming the skills each plugin it installed, updated or removed carries (§214),
+    from the receipt that plugin's installation was given or had."""
+
+    members = {
+        str(coordinate): tuple(item.name for item in receipt.members)
+        for coordinate, receipt in receipts
+        if isinstance(receipt, PlacedArtifactReceipt) and receipt.members
+    }
+    return replace(
+        detail,
+        artifacts=tuple(
+            replace(item, members=members.get(item.coordinate, ())) for item in detail.artifacts
+        ),
+    )
+
+
 def record_installation_transaction(
     outcome: InstallationExecutionOutcome,
     *,
@@ -234,7 +253,9 @@ def record_installation_transaction(
         keeping.append((coordinate, installed, member.outcome))
 
     try:
-        detail = project_installation_receipt(outcome, recorded_at=recorded_at)
+        detail = _with_members(
+            project_installation_receipt(outcome, recorded_at=recorded_at), receipts
+        )
     except ValueError as error:
         return _error(str(error))
     # The action reaches the timeline first, so a store that then refuses an installation still
