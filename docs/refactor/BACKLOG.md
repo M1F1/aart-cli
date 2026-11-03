@@ -5167,7 +5167,8 @@ the diagnostic, which the TUI does not show. `consume usage enable` does print i
 
 ## B-249 — The command line does not put the default harness's hook in place
 
-Status: **open**, noncritical (CP-48, D-500).
+Status: **resolved** by CP-59 (D-516), 2026-11-03: every `consume` command but `consume usage`
+puts the hook in place where recording is on, after it runs, and says so once on stderr.
 
 Only the TUI's start hooks opencode by default. Someone who uses only `consume` commands records
 nothing until `consume usage enable --harness opencode`.
