@@ -16,12 +16,12 @@ from dataclasses import dataclass
 from typing import Callable
 
 from aart_cli.application.first_run_seed import (
-    SEED_UNUSABLE,
     FirstRunSeedOutcome,
     plan_first_run_seed,
+    unconnected_seed,
 )
 from aart_cli.configuration.seed import SeededRegistry, baked_default_registry
-from aart_cli.domain.diagnostics import Diagnostic, Severity
+from aart_cli.domain.diagnostics import Diagnostic
 from aart_cli.domain.result import Err, Result
 from aart_cli.model import Request
 
@@ -90,14 +90,8 @@ def connect_baked_default_registry(
             None,
             (),
             (
-                Diagnostic(
-                    SEED_UNUSABLE,
-                    Severity.WARNING,
-                    "this build names a default Registry that could not be connected: "
-                    + "; ".join(diagnostic.message for diagnostic in added.diagnostics),
-                    remediation=(
-                        "open Registries and choose Add Registry to connect one yourself",
-                    ),
+                unconnected_seed(
+                    seed.source, tuple(diagnostic.message for diagnostic in added.diagnostics)
                 ),
             ),
         )

@@ -8,9 +8,10 @@ so it must not be able to overrule a choice, and it must not be able to stop the
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
-from aart_cli.configuration.model import ConfiguredSource, SourceKind
+from aart_cli.configuration.model import ConfiguredSource, SourceKind, git_location_parts
 from aart_cli.configuration.seed import SeededRegistry
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.result import Err, Result
@@ -102,10 +103,60 @@ def _unusable(refused: Err) -> Diagnostic:
     )
 
 
+#: What Git says when it holds no credential for an HTTPS host and may not ask for one
+#: (`credential.interactive=never`), or when the host refused the one it had.
+_NO_CREDENTIAL = re.compile(
+    r"unable to get password|could not read (?:username|password)|authentication failed"
+    r"|returned error: 40[13]\b",
+    re.IGNORECASE,
+)
+_NO_SSH_KEY = re.compile(r"permission denied \(publickey", re.IGNORECASE)
+
+
+def unconnected_seed(source: ConfiguredSource, reasons: tuple[str, ...]) -> Diagnostic:
+    """Why the baked Registry could not be connected, and what a person does next (B-268, D-515).
+
+    Git's own error names the mirror's remote, `origin`, never the URL, so the Registry is named
+    here; the URL carries no credential, since the build refused one (`configuration/seed.py`).
+    Git is never allowed to prompt, so a host it holds no credential for fails the same way on
+    every run, and the one useful answer is how to give Git one. Any other refusal is not answered
+    with a sign-in, because signing in would not change it.
+    """
+
+    url = source.location
+    parts = git_location_parts(url)
+    host = parts[0] if parts is not None else ""
+    said = "; ".join(reasons)
+    # Each entry is one complete option, its commands indented under it: `Diagnostic` keeps
+    # remediation sorted, so an entry may not lean on the one before it.
+    remediation = [
+        f"Check that Git can read it:\n    git -c credential.interactive=never ls-remote {url} HEAD",
+        "Or connect it yourself:\n    aart-cli consume registry add "
+        f"--alias {source.alias.value} --kind git --location {url} --default",
+        "Or open Registries and choose Add Registry.",
+    ]
+    if host and url.startswith("https://") and _NO_CREDENTIAL.search(said):
+        remediation.append(
+            f"Git has no credential for {host}. Sign in and let Git use it, then rerun:\n"
+            f"    gh auth login --hostname {host}\n"
+            f"    gh auth setup-git --hostname {host}"
+        )
+    elif host and _NO_SSH_KEY.search(said):
+        remediation.append(f"Git has no SSH key {host} accepts. Add one, then rerun.")
+    return Diagnostic(
+        SEED_UNUSABLE,
+        Severity.WARNING,
+        f"this build names a default Registry that could not be connected: "
+        f"{source.alias.value} ({url}): {said}",
+        remediation=tuple(remediation),
+    )
+
+
 __all__ = [
     "SEED_REF",
     "SEED_UNUSABLE",
     "FirstRunSeed",
     "FirstRunSeedOutcome",
     "plan_first_run_seed",
+    "unconnected_seed",
 ]

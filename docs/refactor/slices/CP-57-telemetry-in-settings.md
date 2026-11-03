@@ -1,6 +1,6 @@
 # CP-57 — Settings turns telemetry on and off
 
-Status: **done** on its branch; merged with CP-56's PR.
+Status: **done**; merged in aart-cli #124 with CP-56.
 Authority: Product Specification §213 (amended), D-514. Resolves B-253.
 
 ## Why

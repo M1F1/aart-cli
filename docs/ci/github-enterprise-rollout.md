@@ -552,6 +552,19 @@ The location must be a plain `https` URL with no credentials in it. AART reaches
 machine's own Git and credential helper; see
 [`git-environment-v1.md`](../configuration/git-environment-v1.md), which also covers proxies.
 
+AART never lets Git ask for a password, so each person's Git must already hold a credential for the
+instance before the first run, even for a registry everyone in the organisation can read. Sign in
+once and let Git use it, then check that Git reads the registry without asking:
+
+```bash
+gh auth login --hostname ghe.corp
+gh auth setup-git --hostname ghe.corp
+git -c credential.interactive=never ls-remote https://ghe.corp/platform/agent-registry.git HEAD
+```
+
+The last command prints a commit hash. If a first run could not connect the registry, it says which
+one, with these commands; rerun `aart-cli` once they work.
+
 Then run `aart-cli` for the terminal UI, or use the flag form:
 
 ```bash
@@ -575,6 +588,7 @@ aart-cli docs consume install
 | `aart-cli maintain registry push` refuses a branch that is not `main` | the checkout does not know the remote's default branch. Run `git remote set-head origin --auto` |
 | `publish to index` says the index already lists the wheel with another sha256 | that version was uploaded from a different build. Find out which file is right before deleting anything from the index |
 | `publish to index` says the Release must carry exactly one wheel | the Release has no wheel yet (its `release` run failed or is still running) or carries two. Fix the Release first |
+| `this build names a default Registry that could not be connected` | the first run could not read the registry, and nothing was written. With `unable to get password` or `could not read Username`, Git has no credential for the instance: run the `gh auth` commands it prints, then `aart-cli` again. See [Part 5](#part-5--point-consumers-at-the-registry) |
 | `aart-cli consume registry add` says the URL is not a safe Git location | the location is not `https`, or it carries a user or token. Remove it and let the credential helper supply it |
 
 ## Reference

@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-03, CP-58 (D-515): a default Registry the first run could not connect is named, with how to sign Git in.**
+`application/first_run_seed.unconnected_seed` names the alias and URL, and offers the `ls-remote`
+check and the `consume registry add … --default` command. For an HTTPS host whose Git error says
+no credential or a refused one, it adds `gh auth login`/`gh auth setup-git` for that host. A refused
+SSH key gets its own line, and any other refusal no sign-in. B-268 is resolved. Evidence:
+`docs/refactor/slices/CP-58-first-run-registry-sign-in.md`.
+
 **2026-11-03, CP-57 (§213, D-514): Settings turns telemetry on and off.**
 Screen 28's row *Telemetry: on|off* runs `RUN_TELEMETRY`: off, keeping what waits, or on with the
 address kept from before, else the build's, queueing Activity's history; with neither it stays off

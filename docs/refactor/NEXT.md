@@ -1,6 +1,16 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-03, CP-57)
+## Where the work is (2026-11-03, CP-58)
+
+CP-56 and CP-57 are merged (aart-cli #124). **CP-58** answers a first run whose baked Registry
+could not be connected (D-515; resolves B-268). The warning names the Registry's alias and URL, and
+gives the `ls-remote` check and the `consume registry add` command. When Git has no credential for
+an HTTPS host, it also gives the `gh auth login` and `gh auth setup-git` that supply one. The
+rollout guide makes a Git signed in to the host a prerequisite of the first run.
+
+Evidence: `docs/refactor/slices/CP-58-first-run-registry-sign-in.md`. B-266 is open.
+
+## Where the work was (2026-11-03, CP-57)
 
 **CP-57** turns telemetry on and off in Settings (§213, D-514; resolves B-253). Screen 28's first
 Telemetry row, *Telemetry: on|off*, runs an action rather than toggling a preference, since the
