@@ -227,6 +227,18 @@ CONTEXT_FOR: Mapping[str, frozenset[str]] = {
     "session": _USES,
 }
 
+#: What a plugin's install says that its skills do not: its package, its inputs and how it came.
+_THE_PLUGIN_S = frozenset(
+    {
+        "package_digest",
+        "configuration_inputs",
+        "credential_inputs",
+        "via",
+        "collection",
+        "collection_version",
+    }
+)
+
 #: Each field's shape, as the contract writes it.
 _SHAPES: Mapping[str, Callable[[object], bool]] = {
     "harness": lambda value: _matches(_SLUG, value),
@@ -495,7 +507,25 @@ def _event(
             context=context or EventContext(),
         )
     except ValueError:
-        return None
+        # What an event says of where and how never costs it (INV-340).
+        if context is None or not context.document():
+            return None
+        return _event(event_id, moment, event_type, source, kind, name, version)
+
+
+def _held(event_type: str, context: EventContext) -> EventContext:
+    """`context` without what `event_type` does not hold, and without a collection unless it is
+    the one `via` names."""
+
+    kept = {
+        name: value for name, value in context.document().items() if event_type in CONTEXT_FOR[name]
+    }
+    if kept.get("via") != "collection" or "collection" not in kept:
+        kept.pop("collection", None)
+        kept.pop("collection_version", None)
+        if kept.get("via") == "collection":
+            del kept["via"]
+    return EventContext.from_document(kept)
 
 
 def lifecycle_event_type(intent: str) -> str | None:
@@ -511,15 +541,15 @@ def lifecycle_event(
     coordinate: str,
     *,
     member: str | None = None,
-    harness: str | None = None,
-    scope: str | None = None,
+    **said: object,
 ) -> TelemetryEvent | None:
     """An install, update or removal aart-cli carried out, or `None` when it is not reportable.
 
     With `member`, of that skill of the plugin `coordinate` names: a skill named
-    `<plugin>:<member>` at the plugin's version, as its uses are (§214). It says the Registry alias
-    it came from, and the harness and scope it was for when they are known; what cannot be said in
-    the contract's words is left out (D-518).
+    `<plugin>:<member>` at the plugin's version, as its uses are (§214), which came `via` the
+    plugin and says nothing of the plugin's package or inputs. `said` is where and how, by the
+    context's field names, and the Registry alias is the coordinate's; what this event type does
+    not hold, or the contract's words cannot say, is left out (D-518, D-519).
     """
 
     event_type = lifecycle_event_type(intent)
@@ -529,8 +559,12 @@ def lifecycle_event(
     kind, name, version = artifact
     if member is not None:
         kind, name = "skill", f"{name}:{member}"
-    context = EventContext.fitting(harness=harness, scope=scope, registry=_registry(coordinate))
-    return _event(event_id, moment, event_type, "aart_cli", kind, name, version, context)
+        said = {key: value for key, value in said.items() if key not in _THE_PLUGIN_S}
+        said["via"] = "plugin"
+    context = EventContext.fitting(**{"registry": _registry(coordinate), **said})
+    return _event(
+        event_id, moment, event_type, "aart_cli", kind, name, version, _held(event_type, context)
+    )
 
 
 def use_event(
