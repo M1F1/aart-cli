@@ -19,19 +19,20 @@ Like the Activity database this imports only the domain: a hook runs it for ever
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import uuid
 from collections.abc import Callable, Iterable
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
 from aart_cli.domain.artifact_usage import ArtifactUse, UsageKind
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.result import Err, Ok, Result
-from aart_cli.domain.telemetry import SyncState, TelemetryEvent, history_event_id
+from aart_cli.domain.telemetry import EventContext, SyncState, TelemetryEvent, history_event_id
 
 __all__ = [
     "TELEMETRY_DATABASE",
@@ -73,6 +74,8 @@ _SCHEMA = (
     " artifact_id TEXT,"
     " artifact_type TEXT,"
     " artifact_version TEXT,"
+    # Where and how an action's event happened, as the contract writes it (revision 7).
+    " context TEXT,"
     " state TEXT NOT NULL DEFAULT 'waiting',"
     " settled_at TEXT)",
     "CREATE INDEX event_state ON event (state, id)",
@@ -116,6 +119,43 @@ def _ids(key: str, record: str) -> Callable[[], str]:
         return history_event_id(key, record, drawn - 1)
 
     return next_id
+
+
+def _with_context(connection: sqlite3.Connection) -> None:
+    """An outbox from before an event's context gains its column, and nothing else changes: what
+    waits there stays waiting, with no context (D-518)."""
+
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(event)")}
+    if "context" not in columns:
+        connection.execute("BEGIN IMMEDIATE")
+        if "context" not in {row[1] for row in connection.execute("PRAGMA table_info(event)")}:
+            connection.execute("ALTER TABLE event ADD COLUMN context TEXT")
+        connection.execute("COMMIT")
+
+
+def _context_text(context: EventContext) -> str | None:
+    said = context.document()
+    return json.dumps(said, sort_keys=True) if said else None
+
+
+def _context(text: str | None) -> EventContext:
+    """The context kept as `text`; none when it cannot be read, so the event is still sent."""
+
+    if text is None:
+        return EventContext()
+    try:
+        return EventContext.from_document(json.loads(text))
+    except (ValueError, TypeError):
+        return EventContext()
+
+
+def _kept(event: TelemetryEvent, context: EventContext) -> TelemetryEvent:
+    """`event` with the context it was kept with, or without one that no longer fits it."""
+
+    try:
+        return replace(event, context=context)
+    except ValueError:
+        return event
 
 
 def _new_key() -> str:
@@ -215,7 +255,14 @@ class TelemetryOutbox:
         return Path(self.path).exists()
 
     def _open(self, *, create: bool) -> sqlite3.Connection | None:
-        return open_versioned(Path(self.path), _SCHEMA, SCHEMA_VERSION, create=create)
+        connection = open_versioned(Path(self.path), _SCHEMA, SCHEMA_VERSION, create=create)
+        if connection is not None:
+            try:
+                _with_context(connection)
+            except BaseException:
+                connection.close()
+                raise
+        return connection
 
     # -- consent ---------------------------------------------------------------------------------
 
@@ -355,8 +402,8 @@ class TelemetryOutbox:
                     for event in events_of(_ids(key, record)):
                         kept += connection.execute(
                             "INSERT OR IGNORE INTO event (event_id, occurred_at, event_type,"
-                            " artifact_id, artifact_type, artifact_version)"
-                            " VALUES (?, ?, ?, ?, ?, ?)",
+                            " artifact_id, artifact_type, artifact_version, context)"
+                            " VALUES (?, ?, ?, ?, ?, ?, ?)",
                             (
                                 event.event_id,
                                 event.occurred_at,
@@ -364,6 +411,7 @@ class TelemetryOutbox:
                                 event.artifact_id,
                                 event.artifact_type,
                                 event.artifact_version,
+                                _context_text(event.context),
                             ),
                         ).rowcount
                 connection.execute("COMMIT")
@@ -383,19 +431,33 @@ class TelemetryOutbox:
             with closing(connection):
                 rows = connection.execute(
                     "SELECT event_id, occurred_at, harness, kind, name, event_type, artifact_id,"
-                    " artifact_type, artifact_version FROM event WHERE state = 'waiting'"
+                    " artifact_type, artifact_version, context FROM event WHERE state = 'waiting'"
                     " ORDER BY id LIMIT ?",
                     (limit,),
                 ).fetchall()
         except (OSError, sqlite3.Error) as error:
             return _error(TELEMETRY_UNREADABLE, f"cannot read telemetry from {self.path}: {error}")
         waiting: list[WaitingEvent] = []
-        for event_id, moment, harness, kind, name, event_type, artifact, kind_of, version in rows:
+        for (
+            event_id,
+            moment,
+            harness,
+            kind,
+            name,
+            event_type,
+            artifact,
+            kind_of,
+            version,
+            context,
+        ) in rows:
             if event_type is None:
                 waiting.append(WaitingEvent(event_id, moment, harness, UsageKind(kind), name))
             else:
-                event = TelemetryEvent(
-                    event_id, moment, event_type, "aart_cli", artifact, kind_of, version
+                event = _kept(
+                    TelemetryEvent(
+                        event_id, moment, event_type, "aart_cli", artifact, kind_of, version
+                    ),
+                    _context(context),
                 )
                 waiting.append(WaitingEvent(event_id, moment, event=event))
         return Ok(tuple(waiting))

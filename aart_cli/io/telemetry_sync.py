@@ -16,6 +16,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import platform
 import random
 import subprocess
 import sys
@@ -33,10 +34,12 @@ from aart_cli.domain.result import Err, Ok
 from aart_cli.domain.telemetry import (
     BATCH_PATH,
     BATCH_SIZE,
+    CONTRACT_PATH,
     HTTP_TIMEOUT_SECONDS,
     MAX_REQUESTS_PER_RUN,
     RUN_SECONDS,
     AnswerKind,
+    Environment,
     SyncState,
     TelemetryEvent,
     after_failure,
@@ -44,7 +47,9 @@ from aart_cli.domain.telemetry import (
     automated,
     batch_document,
     classify_answer,
+    environment_of,
     failure_event,
+    read_contract,
     sync_due,
     use_event,
 )
@@ -53,8 +58,10 @@ from .failure_journal import FailureJournal
 from .telemetry_store import TelemetryOutbox
 
 __all__ = [
+    "Get",
     "Post",
     "SyncReport",
+    "http_get",
     "http_post",
     "maybe_sync",
     "new_installation_id",
@@ -64,6 +71,8 @@ __all__ = [
 
 #: `(url, body, timeout)` -> `(status, parsed JSON body)`; `(None, None)` when nothing answered.
 Post = Callable[[str, bytes, float], tuple[int | None, object]]
+#: `(url, timeout)` -> `(status, parsed JSON body)`, as `Post` answers.
+Get = Callable[[str, float], tuple[int | None, object]]
 
 _MAX_ANSWER = 1024 * 1024
 
@@ -92,16 +101,23 @@ def _loopback(url: str) -> bool:
 def http_post(url: str, body: bytes, timeout: float) -> tuple[int | None, object]:
     """POST `body` as JSON; the status and the parsed answer, or `(None, None)`."""
 
+    return _http(url, body, timeout)
+
+
+def http_get(url: str, timeout: float) -> tuple[int | None, object]:
+    """GET `url`; the status and the parsed answer, or `(None, None)`."""
+
+    return _http(url, None, timeout)
+
+
+def _http(url: str, body: bytes | None, timeout: float) -> tuple[int | None, object]:
     from aart_cli.runtime_contract import EXECUTABLE_VERSION
 
+    headers = {"User-Agent": f"aart-cli/{EXECUTABLE_VERSION}"}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
     request = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "User-Agent": f"aart-cli/{EXECUTABLE_VERSION}",
-        },
+        url, data=body, method="GET" if body is None else "POST", headers=headers
     )
     # A loopback server is never reached through a proxy the environment names.
     opener = (
@@ -120,6 +136,12 @@ def http_post(url: str, body: bytes, timeout: float) -> tuple[int | None, object
         return status, json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         return status, None
+
+
+def _platform() -> Environment | None:
+    """What this machine is, in the contract's words: no host, user or path."""
+
+    return environment_of(platform.system(), platform.machine(), platform.python_version())
 
 
 def _installed(state_root: str) -> tuple[InstalledName, ...]:
@@ -174,15 +196,19 @@ def synchronise(
     manual: bool = False,
     force: bool = False,
     post: Post = http_post,
+    get: Get = http_get,
     now: Callable[[], datetime] = _now,
     jitter: Callable[[], float] = random.random,
     monotonic: Callable[[], float] = time.monotonic,
     environ: Mapping[str, str] | None = None,
+    platform: Callable[[], Environment | None] = _platform,
 ) -> SyncReport:
     """Send what waits, under the lock, if it is due; what happened.
 
     Each request says whether this sender runs as automation, as `environ` (by default this
-    process's environment, which the detached sender inherits) says now (D-511).
+    process's environment, which the detached sender inherits) says now (D-511). Before the
+    first, the server is asked which revision of the contract it holds, and each request carries
+    what that revision reads (D-518).
     """
 
     from aart_cli.runtime_contract import EXECUTABLE_VERSION
@@ -206,11 +232,13 @@ def synchronise(
             manual=manual or force,
             force=force,
             post=post,
+            get=get,
             now=now,
             jitter=jitter,
             monotonic=monotonic,
             client_version=str(EXECUTABLE_VERSION),
             automated=automated(os.environ if environ is None else environ),
+            platform=platform,
         )
     finally:
         os.close(lock)
@@ -227,13 +255,20 @@ class _Run:
         endpoint: str,
         client_id: str,
         post: Post,
+        get: Get,
         now: Callable[[], datetime],
         jitter: Callable[[], float],
         monotonic: Callable[[], float],
         automated: bool,
+        platform: Callable[[], Environment | None],
     ) -> None:
         self.outbox, self.current = outbox, state
         self.automated = automated
+        self.get, self.platform = get, platform
+        #: The revision the server holds, `None` when it named none; asked before the first send.
+        self.revision: int | None = None
+        self.environment: Environment | None = None
+        self.asked = False
         self.endpoint, self.client_id = endpoint, client_id
         self.post, self.now, self.jitter, self.monotonic = post, now, jitter, monotonic
         self.started = monotonic()
@@ -248,6 +283,28 @@ class _Run:
             and self.monotonic() - self.started < RUN_SECONDS
         )
 
+    def fail(self, kind: AnswerKind) -> None:
+        """Back off, or pause, as an answer of `kind` says, and stop the run."""
+
+        self.current = after_failure(self.current, self.now(), kind, jitter=self.jitter())
+        self.outbox.save_sync_state(self.current)
+        self.stopped = kind.value
+
+    def ask(self) -> bool:
+        """Learn which revision the server holds, once a run; whether the run goes on."""
+
+        if self.asked:
+            return not self.stopped
+        self.asked = True
+        status, body = self.get(self.endpoint + CONTRACT_PATH, HTTP_TIMEOUT_SECONDS)
+        said = read_contract(status, body)
+        if isinstance(said, AnswerKind):
+            self.fail(said)
+            return False
+        self.revision = said
+        self.environment = self.platform()
+        return True
+
     def send(
         self,
         events: tuple[TelemetryEvent, ...],
@@ -256,10 +313,17 @@ class _Run:
     ) -> None:
         """Post one batch and settle by what the server answered; a failure stops the run."""
 
+        if not self.ask():
+            return
         ids = tuple(event.event_id for event in events)
         try:
             document = batch_document(
-                self.client_id, client_version, events, automated=self.automated
+                self.client_id,
+                client_version,
+                events,
+                automated=self.automated,
+                revision=self.revision,
+                environment=self.environment,
             )
         except ValueError:
             settle(ids, "rejected", self.now())
@@ -285,11 +349,7 @@ class _Run:
             else:
                 self.size = max(1, len(events) // 2)
         else:
-            self.current = after_failure(
-                self.current, self.now(), answer.kind, jitter=self.jitter()
-            )
-            self.outbox.save_sync_state(self.current)
-            self.stopped = answer.kind.value
+            self.fail(answer.kind)
 
     def report(self) -> SyncReport:
         return SyncReport(True, self.sent, self.rejected, self.skipped, self.requests, self.stopped)
@@ -302,11 +362,13 @@ def _under_lock(
     manual: bool,
     force: bool,
     post: Post,
+    get: Get,
     now: Callable[[], datetime],
     jitter: Callable[[], float],
     monotonic: Callable[[], float],
     client_version: str,
     automated: bool,
+    platform: Callable[[], Environment | None],
 ) -> SyncReport:
     setting = outbox.setting()
     if isinstance(setting, Err) or setting.value is None or not setting.value.enabled:
@@ -331,10 +393,12 @@ def _under_lock(
         endpoint=setting.value.endpoint,
         client_id=setting.value.client_id,
         post=post,
+        get=get,
         now=now,
         jitter=jitter,
         monotonic=monotonic,
         automated=automated,
+        platform=platform,
     )
     _send_outbox(run, state_root, client_version)
     if not run.stopped:

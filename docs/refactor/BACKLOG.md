@@ -5352,3 +5352,27 @@ credential for, the `gh auth login` and `gh auth setup-git` that give it one.
 
 A first run whose baked Registry needed a Git sign-in the machine did not have warned with Git's
 `fetch … origin` error, which names neither the Registry nor the cause.
+
+## B-269 — The rest of contract revision 7: interface, duration, versions replaced, collections, inputs, sessions
+
+Status: **open**, noncritical (CP-61, D-518).
+
+CP-61 sends the Registry alias, the harness and scope of an install, update or removal, an opencode
+MCP's tool, and the request's environment. Revision 7 also holds the following fields, and each one
+needs its own plumbing:
+
+- `interface`, whether the TUI or the CLI asked; the receipt does not say.
+- `duration_ms`, the time from plan to receipt.
+- `previous_version` for an update; the plan knows it, but the receipt view does not keep it.
+- `via`/`collection`/`collection_version` for what a collection installed.
+- `package_digest`.
+- `configuration_inputs`/`credential_inputs`, as counts only.
+- A Claude Code MCP's `tool`; the hook would have to read the tool name past the server's.
+- `session`, a per-run pseudonym.
+- A use's `scope`, which needs the use matched to a project-scoped installation without naming the
+  project.
+
+There is also the matter of events already sent. Once a server is upgraded, an event that went out
+as before revision 7 is never sent again with its context. Sending it again would need a cursor the
+server deduplicates by `event_id` while it adds the context; until then those events stay counted
+without it.

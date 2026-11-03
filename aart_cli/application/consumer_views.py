@@ -45,7 +45,7 @@ from aart_cli.domain.inputs import (
     binding_kind,
     validate_config_value,
 )
-from aart_cli.domain.installation_owner import compose_installation_key
+from aart_cli.domain.installation_owner import InstallationOwner, compose_installation_key
 from aart_cli.domain.plans import InstallPlan, install_plan_to_data
 from aart_cli.domain.receipts import (
     RECEIPT_INVALID,
@@ -2576,6 +2576,9 @@ class ReceiptArtifactView:
     diagnostics: tuple[str, ...] = ()
     detail: str = ""
     source_revision: str | None = None
+    #: The harness and scope the installation is for, when its plan named one (§213, D-518).
+    harness: str | None = None
+    scope: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -2669,6 +2672,12 @@ _TRANSACTION_VERBS: dict[LifecycleIntentKind, str] = {
 }
 
 
+def _where(owner: InstallationOwner | None) -> tuple[str | None, str | None]:
+    """The harness and scope an installation is for; neither when its plan named no owner."""
+
+    return (None, None) if owner is None else (owner.harness, owner.scope.value)
+
+
 def project_installation_receipt(
     outcome: InstallationExecutionOutcome,
     *,
@@ -2705,6 +2714,7 @@ def project_installation_receipt(
             tuple(diagnostic.message for diagnostic in item.diagnostics),
             item.detail,
             revisions.get(item.plan.intent.desired.artifact),
+            *_where(item.plan.intent.desired.owner),
         )
         for item in outcome.artifacts
     )
@@ -2800,6 +2810,8 @@ def receipt_detail_to_data(view: ReceiptDetailView) -> dict[str, object]:
                             if item.source_revision is None
                             else {"source_revision": item.source_revision}
                         ),
+                        **({} if item.harness is None else {"harness": item.harness}),
+                        **({} if item.scope is None else {"scope": item.scope}),
                         "steps": [
                             {
                                 "component": step.component,
@@ -3965,6 +3977,8 @@ def receipt_detail_from_data(data: object) -> Result[ReceiptDetailView]:
                         _strings(row, "diagnostics"),
                         _string(row, "detail"),
                         (None if "source_revision" not in row else _string(row, "source_revision")),
+                        None if "harness" not in row else _string(row, "harness"),
+                        None if "scope" not in row else _string(row, "scope"),
                     )
                     for row in _rows(data, "artifacts")
                 ),

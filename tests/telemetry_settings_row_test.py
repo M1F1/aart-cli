@@ -149,7 +149,10 @@ class TheStatusTest(unittest.TestCase):
         self.assertIs("did not install" in said, unmanaged)
         self.assertIs("each failure" in said, failures)
         self.assertIs(f"the installation id {client_id}" in said, bool(client_id))
-        self.assertIn("Never a project, path, argument, prompt, user or host name", said)
+        self.assertIn(
+            "Never a project, path, argument, prompt, Registry address, user or host name", said
+        )
+        self.assertIn("its Registry's alias, the harness and scope", said)
 
     def test_the_command_prints_the_same_words(self) -> None:
         with tempfile.TemporaryDirectory() as home:

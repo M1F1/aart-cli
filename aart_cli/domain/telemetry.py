@@ -11,8 +11,8 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field, fields, replace
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 
@@ -27,6 +27,9 @@ __all__ = [
     "BACKOFF",
     "BATCH_PATH",
     "BATCH_SIZE",
+    "CONTEXT_FOR",
+    "CONTEXT_REVISION",
+    "CONTRACT_PATH",
     "FAILED",
     "HTTP_TIMEOUT_SECONDS",
     "MAX_REQUESTS_PER_RUN",
@@ -39,6 +42,8 @@ __all__ = [
     "UNMANAGED_USED",
     "Answer",
     "AnswerKind",
+    "Environment",
+    "EventContext",
     "SyncState",
     "TelemetryEvent",
     "after_failure",
@@ -47,6 +52,7 @@ __all__ = [
     "batch_document",
     "classify_answer",
     "contract_moment",
+    "environment_of",
     "failure_event",
     "history_event_id",
     "lifecycle_event",
@@ -54,6 +60,7 @@ __all__ = [
     "parse_failures_sent",
     "parse_telemetry_endpoint",
     "parse_unmanaged_uses",
+    "read_contract",
     "sync_due",
     "use_event",
 ]
@@ -73,6 +80,12 @@ MAX_REQUESTS_PER_RUN = 20
 RUN_SECONDS = 60.0
 
 BATCH_PATH = "/api/v1/events/batch"
+#: Where a server says which revision of the contract it holds (revision 6).
+CONTRACT_PATH = "/api/v1/contract"
+#: The revision that added where and how an event happened, and `environment` (D-518).
+CONTEXT_REVISION = 7
+#: The first revision that says itself: a server naming an earlier one is not believed.
+_SAYS_ITS_REVISION = 6
 #: Says whether aart-cli runs as automation, `on` or `off`, overruling `CI` (D-511).
 AUTOMATED_VARIABLE = "AART_CLI_AUTOMATED"
 TELEMETRY_ENDPOINT_INVALID = DiagnosticCode("telemetry-endpoint-invalid")
@@ -87,6 +100,8 @@ FAILED = "aart_cli.failed"
 
 #: The contract's `source` for a use recorded by each harness's hook.
 TELEMETRY_SOURCES: dict[str, str] = {"claude": "claude_hook", "opencode": "opencode_plugin"}
+#: The harness each use's source is, so a use that names its harness names that one.
+_HARNESS_OF = {source: harness for harness, source in TELEMETRY_SOURCES.items()}
 
 _LIFECYCLE_EVENTS = {
     "install": "artifact.installed",
@@ -103,6 +118,12 @@ _MOMENT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[
 _NAME = re.compile(r"[0-9A-Za-z._@:+-]{1,200}")
 _KIND = re.compile(r"[a-z0-9-]{1,64}")
 _VERSION = re.compile(r"[0-9A-Za-z.+-]{1,64}")
+_SLUG = re.compile(r"(?=.{1,64}\Z)[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
+_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+_ARCH = re.compile(r"[a-z0-9_]{1,16}")
+_PYTHON = re.compile(r"[0-9A-Za-z.+-]{1,32}")
+MAX_DURATION_MS = 86_400_000
+MAX_INPUTS = 1000
 _EVENT_SOURCES = {
     "artifact.installed": frozenset({"aart_cli"}),
     "artifact.updated": frozenset({"aart_cli"}),
@@ -184,6 +205,163 @@ def _switch(raw: str, code: DiagnosticCode, message: str) -> Result[bool]:
     return Ok(_SENDS[value])
 
 
+_LIFECYCLE = frozenset({"artifact.installed", "artifact.updated", "artifact.removed"})
+_PLACED = frozenset({"artifact.installed", "artifact.updated"})
+_USES = frozenset({"artifact.used", UNMANAGED_USED})
+
+#: Which event types each field of an event's context may be given in (revision 7).
+CONTEXT_FOR: Mapping[str, frozenset[str]] = {
+    "harness": _LIFECYCLE | _USES,
+    "scope": _LIFECYCLE | {"artifact.used"},
+    "registry": _LIFECYCLE | {"artifact.used"},
+    "interface": _LIFECYCLE,
+    "previous_version": frozenset({"artifact.updated"}),
+    "via": _LIFECYCLE,
+    "collection": _LIFECYCLE,
+    "collection_version": _LIFECYCLE,
+    "package_digest": _PLACED,
+    "duration_ms": _LIFECYCLE,
+    "configuration_inputs": _PLACED,
+    "credential_inputs": _PLACED,
+    "tool": _USES,
+    "session": _USES,
+}
+
+#: Each field's shape, as the contract writes it.
+_SHAPES: Mapping[str, Callable[[object], bool]] = {
+    "harness": lambda value: _matches(_SLUG, value),
+    "scope": lambda value: value in ("user", "project"),
+    "registry": lambda value: _matches(_SLUG, value),
+    "interface": lambda value: value in ("tui", "cli"),
+    "previous_version": lambda value: _matches(_VERSION, value),
+    "via": lambda value: value in ("direct", "collection", "plugin"),
+    "collection": lambda value: _matches(_NAME, value),
+    "collection_version": lambda value: _matches(_VERSION, value),
+    "package_digest": lambda value: _matches(_DIGEST, value),
+    "duration_ms": lambda value: _count(value, MAX_DURATION_MS),
+    "configuration_inputs": lambda value: _count(value, MAX_INPUTS),
+    "credential_inputs": lambda value: _count(value, MAX_INPUTS),
+    "tool": lambda value: _matches(_NAME, value),
+    "session": lambda value: _matches(_UUID, value),
+}
+
+
+def _matches(pattern: re.Pattern[str], value: object) -> bool:
+    return isinstance(value, str) and pattern.fullmatch(value) is not None
+
+
+def _count(value: object, most: int) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= most
+
+
+@dataclass(frozen=True, slots=True)
+class EventContext:
+    """Where and how an event happened (revision 7): every field optional, each held by the
+    event types `CONTEXT_FOR` names. Never a project, a path, a Registry address, a user or host
+    name, or a value anyone typed -- only what each field's shape allows."""
+
+    harness: str | None = None
+    scope: str | None = None
+    registry: str | None = None
+    interface: str | None = None
+    previous_version: str | None = None
+    via: str | None = None
+    collection: str | None = None
+    collection_version: str | None = None
+    package_digest: str | None = None
+    duration_ms: int | None = None
+    configuration_inputs: int | None = None
+    credential_inputs: int | None = None
+    tool: str | None = None
+    session: str | None = None
+
+    def __post_init__(self) -> None:
+        for name, value in self.document().items():
+            if not _SHAPES[name](value):
+                raise ValueError(f"an event's {name} does not follow the contract")
+
+    def document(self) -> dict[str, object]:
+        """The fields that hold something, by the contract's names."""
+
+        return {
+            item.name: getattr(self, item.name)
+            for item in fields(self)
+            if getattr(self, item.name) is not None
+        }
+
+    @classmethod
+    def from_document(cls, document: Mapping[str, object]) -> EventContext:
+        """The context `document` says; `TypeError` for a field the contract does not have."""
+
+        return cls(**document)  # type: ignore[arg-type]
+
+    @classmethod
+    def fitting(cls, **said: object) -> EventContext:
+        """The context of every field in `said` that holds something of its shape; the rest is
+        left out, so a value that cannot be said never costs the event."""
+
+        return cls(
+            **{  # type: ignore[arg-type]
+                name: value
+                for name, value in said.items()
+                if value is not None and _SHAPES[name](value)
+            }
+        )
+
+    def problem(self, event_type: str, source: str, artifact_type: str) -> str | None:
+        """Why this context cannot be an event's of that type, source and kind; `None` when it
+        can."""
+
+        given = self.document()
+        if any(event_type not in CONTEXT_FOR[name] for name in given):
+            return "this event_type does not hold that field"
+        if ("collection" in given or "collection_version" in given) and (
+            self.via != "collection" or self.collection is None
+        ):
+            return "a collection is named exactly when via is collection"
+        if self.tool is not None and artifact_type != "mcp":
+            return "a tool is an mcp's"
+        harness = _HARNESS_OF.get(source)
+        if harness is not None and self.harness not in (None, harness):
+            return "a use's harness is its source's"
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class Environment:
+    """What a request was sent from (revision 7): no host, user or path."""
+
+    os: str
+    arch: str
+    python: str
+
+    def __post_init__(self) -> None:
+        if (
+            self.os not in ("darwin", "linux", "windows", "other")
+            or not _matches(_ARCH, self.arch)
+            or not _matches(_PYTHON, self.python)
+        ):
+            raise ValueError("an environment is the contract's os, arch and python")
+
+    def document(self) -> dict[str, str]:
+        return {"os": self.os, "arch": self.arch, "python": self.python}
+
+
+def environment_of(system: str, machine: str, python: str) -> Environment | None:
+    """`platform.system()`, `platform.machine()` and `platform.python_version()` in the
+    contract's words, or `None` when one of them cannot be said in them."""
+
+    os_name = system.strip().lower()
+    try:
+        return Environment(
+            os_name if os_name in ("darwin", "linux", "windows") else "other",
+            machine.strip().lower(),
+            python.strip(),
+        )
+    except ValueError:
+        return None
+
+
 @dataclass(frozen=True, slots=True)
 class TelemetryEvent:
     """One event as the contract's version 1 carries it. `failure` is present in a failure's
@@ -197,6 +375,7 @@ class TelemetryEvent:
     artifact_type: str
     artifact_version: str | None = None
     failure: Failure | None = None
+    context: EventContext = field(default_factory=EventContext)
 
     def __post_init__(self) -> None:
         if (
@@ -228,8 +407,16 @@ class TelemetryEvent:
             )
         ):
             raise ValueError("a telemetry event does not follow the contract")
+        if not isinstance(self.context, EventContext):
+            raise ValueError("a telemetry event's context is an EventContext")
+        problem = self.context.problem(self.event_type, self.source, self.artifact_type)
+        if problem is not None:
+            raise ValueError(f"a telemetry event's context does not follow the contract: {problem}")
 
-    def document(self) -> dict[str, object]:
+    def document(self, *, revision: int | None = None) -> dict[str, object]:
+        """The event as `revision` of the contract carries it: where and how it happened only
+        from `CONTEXT_REVISION` on."""
+
         body: dict[str, object] = {
             "event_id": self.event_id,
             "occurred_at": self.occurred_at,
@@ -242,6 +429,8 @@ class TelemetryEvent:
             body["artifact_version"] = self.artifact_version
         if self.failure is not None:
             body["failure"] = self.failure.document()
+        if revision is not None and revision >= CONTEXT_REVISION:
+            body |= self.context.document()
         return body
 
 
@@ -278,6 +467,12 @@ def _artifact(coordinate: str) -> tuple[str, str, str | None] | None:
     return parts[1], parts[2], version or None
 
 
+def _registry(coordinate: str) -> str:
+    """The Registry alias `source/kind/name[@version]` comes from."""
+
+    return coordinate.partition("/")[0]
+
+
 def _event(
     event_id: str,
     moment: str,
@@ -286,9 +481,19 @@ def _event(
     kind: str,
     name: str,
     version: str | None,
+    context: EventContext | None = None,
 ) -> TelemetryEvent | None:
     try:
-        return TelemetryEvent(event_id, moment, event_type, source, name, kind, version)
+        return TelemetryEvent(
+            event_id,
+            moment,
+            event_type,
+            source,
+            name,
+            kind,
+            version,
+            context=context or EventContext(),
+        )
     except ValueError:
         return None
 
@@ -300,16 +505,27 @@ def lifecycle_event_type(intent: str) -> str | None:
 
 
 def lifecycle_event(
-    event_id: str, moment: str, intent: str, coordinate: str
+    event_id: str,
+    moment: str,
+    intent: str,
+    coordinate: str,
+    *,
+    harness: str | None = None,
+    scope: str | None = None,
 ) -> TelemetryEvent | None:
-    """An install, update or removal aart-cli carried out, or `None` when it is not reportable."""
+    """An install, update or removal aart-cli carried out, or `None` when it is not reportable.
+
+    It says the Registry alias it came from, and the harness and scope it was for when they are
+    known; what cannot be said in the contract's words is left out (D-518).
+    """
 
     event_type = lifecycle_event_type(intent)
     artifact = _artifact(coordinate)
     if event_type is None or artifact is None:
         return None
     kind, name, version = artifact
-    return _event(event_id, moment, event_type, "aart_cli", kind, name, version)
+    context = EventContext.fitting(harness=harness, scope=scope, registry=_registry(coordinate))
+    return _event(event_id, moment, event_type, "aart_cli", kind, name, version, context)
 
 
 def use_event(
@@ -342,6 +558,12 @@ def use_event(
     if artifact is None:
         return None
     artifact_kind, artifact_name, _ = artifact
+    # opencode names an MCP's tool `<server>_<tool>`; Claude Code's hook keeps the server alone,
+    # which is the name it was resolved by.
+    tool = (
+        name[len(resolved.name) + 1 :] if kind is UsageKind.MCP and name != resolved.name else None
+    )
+    context = EventContext.fitting(registry=_registry(resolved.artifact), tool=tool)
     if resolved.member is not None:
         # A skill a plugin carries: a skill, named after its plugin as `<plugin>:<member>`, which
         # version 1's `artifact_id` allows, so neither the contract nor the server changes (§214).
@@ -354,6 +576,7 @@ def use_event(
         artifact_kind,
         artifact_name,
         resolved.version,
+        context,
     )
 
 
@@ -386,9 +609,16 @@ def batch_document(
     events: tuple[TelemetryEvent, ...],
     *,
     automated: bool = False,
+    revision: int | None = None,
+    environment: Environment | None = None,
 ) -> dict[str, object]:
-    """The request body for `events`; it says `automated` only when it is, so a person's request
-    is the one an older server reads (D-511)."""
+    """The request body for `events` as `revision` of the contract carries it; `None` is a server
+    that named none.
+
+    It says `automated` only when it is, so a person's request is the one an older server reads
+    (D-511). Where and how each event happened, and `environment`, only go to a server that holds
+    `CONTEXT_REVISION` (D-518).
+    """
 
     if _UUID.fullmatch(client_id) is None:
         raise ValueError("a telemetry client id is a lowercase UUID")
@@ -401,7 +631,12 @@ def batch_document(
         "client_id": client_id,
         "client_version": client_version,
         **({"automated": True} if automated else {}),
-        "events": [event.document() for event in events],
+        **(
+            {"environment": environment.document()}
+            if environment is not None and revision is not None and revision >= CONTEXT_REVISION
+            else {}
+        ),
+        "events": [event.document(revision=revision) for event in events],
     }
 
 
@@ -446,6 +681,23 @@ def classify_answer(status: int | None, body: object, sent: tuple[str, ...]) -> 
     if status in (401, 403):
         return Answer(AnswerKind.UNAUTHORISED)
     return Answer(AnswerKind.UNAVAILABLE)
+
+
+def read_contract(status: int | None, body: object) -> int | None | AnswerKind:
+    """What a server's answer to `GET CONTRACT_PATH` means: the revision it holds; `None` when it
+    names none, as a server older than revision 6 does; or, as for a batch, a refused
+    authorisation or no answer, which ends the synchronisation."""
+
+    if status in (401, 403):
+        return AnswerKind.UNAUTHORISED
+    if status is None or status == 429 or status >= 500:
+        return AnswerKind.UNAVAILABLE
+    if status != 200 or not isinstance(body, dict) or body.get("schema_version") != 1:
+        return None
+    revision = body.get("revision")
+    if not isinstance(revision, int):
+        return None
+    return revision if revision >= _SAYS_ITS_REVISION else None
 
 
 @dataclass(frozen=True, slots=True)

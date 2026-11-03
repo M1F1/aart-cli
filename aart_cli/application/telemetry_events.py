@@ -29,9 +29,14 @@ def lifecycle_events(
     moment = contract_moment(receipt.moment)
     if receipt.artifacts:
         changed = tuple(
-            item.coordinate for item in receipt.artifacts if item.status in _COMPLETED_MEMBER
+            (item.coordinate, item.harness, item.scope)
+            for item in receipt.artifacts
+            if item.status in _COMPLETED_MEMBER
         )
     else:
-        changed = (receipt.artifact,) if receipt.outcome in _COMPLETED_ACTION else ()
-    events = (lifecycle_event(new_id(), moment, receipt.intent, item) for item in changed)
+        changed = ((receipt.artifact, None, None),) if receipt.outcome in _COMPLETED_ACTION else ()
+    events = (
+        lifecycle_event(new_id(), moment, receipt.intent, coordinate, harness=harness, scope=scope)
+        for coordinate, harness, scope in changed
+    )
     return tuple(event for event in events if event is not None)

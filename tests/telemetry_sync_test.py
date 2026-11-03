@@ -35,7 +35,14 @@ from aart_cli.application.consumer_views import (
 from aart_cli.domain.artifact_usage import ArtifactUse, UsageKind
 from aart_cli.domain.harness import McpRegistration, Scope, mcp_target
 from aart_cli.domain.result import Ok
-from aart_cli.domain.telemetry import BATCH_PATH, BATCH_SIZE, SyncState
+from aart_cli.domain.telemetry import (
+    BATCH_PATH,
+    BATCH_SIZE,
+    CONTRACT_PATH,
+    Environment,
+    SyncState,
+    lifecycle_event,
+)
 from aart_cli.io import telemetry_sync
 from aart_cli.io.consumer_settings import write_consumer_settings
 from aart_cli.io.receipt_store import LocalReceiptStore
@@ -71,6 +78,22 @@ class FakeServer:
         self.down = False
         self.status: int | None = None
         self.lose_answer = False
+        #: The revision `GET /api/v1/contract` says; `None` answers 404, as a server before
+        #: revision 6 does.
+        self.revision: int | None = 6
+        self.contract_status: int | None = None
+        self.asked = 0
+
+    def get(self, url: str, timeout: float) -> tuple[int | None, object]:
+        assert url.endswith(CONTRACT_PATH)
+        self.asked += 1
+        if self.down:
+            return None, None
+        if self.contract_status is not None:
+            return self.contract_status, None
+        if self.revision is None:
+            return 404, {"detail": "Not Found"}
+        return 200, {"schema_version": 1, "revision": self.revision}
 
     def __call__(self, url: str, body: bytes, timeout: float) -> tuple[int | None, object]:
         assert url.endswith(BATCH_PATH)
@@ -130,7 +153,9 @@ class Home:
 
 
 def _sync(home: Home, server: FakeServer, clock: Clock, **kwargs):
-    return synchronise(home.path, post=server, now=clock, jitter=lambda: 0.0, **kwargs)
+    return synchronise(
+        home.path, post=server, get=server.get, now=clock, jitter=lambda: 0.0, **kwargs
+    )
 
 
 class TheOutboxTest(unittest.TestCase):
@@ -305,7 +330,9 @@ class TheBriefsScenariosTest(unittest.TestCase):
         def partly(url: str, body: bytes, timeout: float):
             return 200, {"acknowledged_event_ids": [kept, "not-one-of-ours"]}
 
-        report = synchronise(self.home.path, post=partly, now=self.clock, jitter=lambda: 0.0)
+        report = synchronise(
+            self.home.path, get=self.server.get, post=partly, now=self.clock, jitter=lambda: 0.0
+        )
         # The second request is acknowledged with nothing it carried: that is no answer, so back off.
         self.assertEqual((report.sent, report.requests, report.reason), (1, 2, "unavailable"))
         self.assertEqual((self.home.counts().sent, self.home.counts().waiting), (1, 2))
@@ -332,7 +359,13 @@ class TheBriefsScenariosTest(unittest.TestCase):
         threads = [
             threading.Thread(
                 target=lambda: reports.append(
-                    synchronise(self.home.path, post=slow, now=self.clock, jitter=lambda: 0.0)
+                    synchronise(
+                        self.home.path,
+                        get=self.server.get,
+                        post=slow,
+                        now=self.clock,
+                        jitter=lambda: 0.0,
+                    )
                 )
             )
             for _ in range(8)
@@ -353,7 +386,9 @@ class TheBriefsScenariosTest(unittest.TestCase):
             raise KeyboardInterrupt
 
         with self.assertRaises(KeyboardInterrupt):
-            synchronise(self.home.path, post=dies, now=self.clock, jitter=lambda: 0.0)
+            synchronise(
+                self.home.path, get=self.server.get, post=dies, now=self.clock, jitter=lambda: 0.0
+            )
         self.assertEqual(self.home.counts().waiting, 4)
         report = _sync(self.home, self.server, self.clock)
         self.assertEqual(report.sent, 4)
@@ -381,7 +416,9 @@ class TheBriefsScenariosTest(unittest.TestCase):
                 return 422, {"rejected_events": [{"index": 0, "event_id": bad}]}
             return self.server(url, body, timeout)
 
-        report = synchronise(self.home.path, post=picky, now=self.clock, jitter=lambda: 0.0)
+        report = synchronise(
+            self.home.path, get=self.server.get, post=picky, now=self.clock, jitter=lambda: 0.0
+        )
         self.assertEqual((report.sent, report.rejected), (2, 1))
         self.assertEqual(self.home.counts().rejected, 1)
 
@@ -395,7 +432,9 @@ class TheBriefsScenariosTest(unittest.TestCase):
                 return 413, None
             return self.server(url, body, timeout)
 
-        report = synchronise(self.home.path, post=whole, now=self.clock, jitter=lambda: 0.0)
+        report = synchronise(
+            self.home.path, get=self.server.get, post=whole, now=self.clock, jitter=lambda: 0.0
+        )
         self.assertEqual((report.sent, report.rejected), (7, 1))
 
     def test_a_refused_authorisation_pauses_for_an_hour_unless_forced(self) -> None:
@@ -422,12 +461,138 @@ class TheBriefsScenariosTest(unittest.TestCase):
         self.assertFalse(_sync(self.home, self.server, self.clock, force=True).started)
 
 
+class WhatEachServerIsSentTest(unittest.TestCase):
+    """CP-61: a server is sent what the revision it says it holds can read (D-518)."""
+
+    PLATFORM = Environment("darwin", "arm64", "3.11.9")
+
+    def setUp(self) -> None:
+        self.home = Home(self)
+        self.home.enable()
+        self.server = FakeServer()
+        self.clock = Clock()
+
+    def _install(self, record: str = "action-1") -> None:
+        stamp = START.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+        def events(ids):
+            event = lifecycle_event(
+                ids(), stamp, "install", "company/mcp/jira@2.0.0", harness="claude", scope="user"
+            )
+            assert event is not None
+            return (event,)
+
+        self.assertEqual(self.home.outbox.record_action(record, events), Ok(True))
+
+    def _sync(self, **kwargs):
+        return _sync(self.home, self.server, self.clock, platform=lambda: self.PLATFORM, **kwargs)
+
+    def test_a_server_holding_revision_7_is_told_where_and_how_and_from_what(self) -> None:
+        self.server.revision = 7
+        self._install()
+        self.home.use()
+
+        report = self._sync()
+
+        (request,) = self.server.requests
+        self.assertEqual((report.sent, self.server.asked), (2, 1))
+        self.assertEqual(request["environment"], self.PLATFORM.document())
+        installed, used = request["events"]
+        self.assertEqual(
+            {key: installed[key] for key in ("harness", "scope", "registry")},
+            {"harness": "claude", "scope": "user", "registry": "company"},
+        )
+        self.assertEqual(used["registry"], "public")
+        self.assertNotIn("harness", used)
+
+    def test_an_older_server_or_one_naming_none_is_sent_what_it_read_before(self) -> None:
+        for revision in (6, None):
+            with self.subTest(revision=revision):
+                self.server.revision = revision
+                self.server.requests.clear()
+                self._install(f"action-{revision}")
+
+                report = self._sync(force=True)
+
+                (request,) = self.server.requests
+                self.assertEqual(report.sent, 1)
+                self.assertNotIn("environment", request)
+                self.assertEqual(
+                    set(request["events"][0]),
+                    {
+                        "event_id",
+                        "occurred_at",
+                        "event_type",
+                        "source",
+                        "artifact_id",
+                        "artifact_type",
+                        "artifact_version",
+                    },
+                )
+
+    def test_a_contract_that_cannot_be_read_ends_the_run_as_a_batch_would(self) -> None:
+        self._install()
+        for status, paused in ((503, None), (429, None), (401, "unauthorised")):
+            with self.subTest(status=status):
+                self.server.contract_status = status
+
+                report = self._sync(force=True)
+
+                self.assertEqual((report.requests, self.server.requests), (0, []))
+                self.assertEqual(self.home.counts().waiting, 1)
+                state = self.home.state_of()
+                self.assertIsNotNone(state.next_retry_at)
+                self.assertEqual(state.paused, paused)
+
+    def test_a_server_that_does_not_answer_is_not_asked_to_store_anything(self) -> None:
+        self._install()
+        self.server.down = True
+
+        report = self._sync()
+
+        self.assertEqual((report.requests, report.reason), (0, "unavailable"))
+        self.assertEqual(self.home.counts().waiting, 1)
+
+    def test_the_revision_is_asked_once_a_run_and_only_when_something_waits(self) -> None:
+        self.server.revision = 7
+        self.home.use(BATCH_SIZE * 2 + 1)
+
+        self.assertEqual(self._sync().requests, 3)
+        self.assertEqual(self.server.asked, 1)
+        self._sync(force=True)
+        self.assertEqual(self.server.asked, 1)
+
+    def test_an_outbox_from_before_the_context_gains_it_and_keeps_what_waits(self) -> None:
+        self.home.use()
+        with sqlite3.connect(self.home.outbox.path) as connection:
+            connection.execute("ALTER TABLE event DROP COLUMN context")
+        self.server.revision = 7
+        self._install()
+
+        self.assertEqual(self._sync().sent, 2)
+        (installed,) = (
+            event
+            for event in self.server.requests[0]["events"]
+            if event["event_type"] == "artifact.installed"
+        )
+        self.assertEqual(installed["harness"], "claude")
+
+
 class ContractHandler(BaseHTTPRequestHandler):
     stored: dict[str, dict] = {}
     mode = "ok"
 
     def log_message(self, *args: object) -> None:
         pass
+
+    def do_GET(self) -> None:  # noqa: N802 -- the standard library's name
+        type(self).last_headers = dict(self.headers)
+        answer = json.dumps({"schema_version": 1, "revision": 6}).encode()
+        self.send_response(200 if self.path == CONTRACT_PATH else 404)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(answer)))
+        self.end_headers()
+        self.wfile.write(answer)
 
     def do_POST(self) -> None:  # noqa: N802 -- the standard library's name
         body = self.rfile.read(int(self.headers["Content-Length"]))
