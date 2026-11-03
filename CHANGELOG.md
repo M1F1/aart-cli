@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.0](https://github.com/M1F1/aart-cli/compare/v0.27.1...v0.28.0) (2026-11-03)
+
+
+### Added
+
+* a consume command puts the usage hook in place where recording is on, as the TUI does ([755c920](https://github.com/M1F1/aart-cli/commit/755c92064d9c9670d521618744fa4ac3bb46c67a))
+* installing a plugin is sent as installing each of its skills too ([c671663](https://github.com/M1F1/aart-cli/commit/c6716632188378eacde6da2f8c6a1ece1b57af34))
+
 ## [0.27.1](https://github.com/M1F1/aart-cli/compare/v0.27.0...v0.27.1) (2026-11-03)
 
 
