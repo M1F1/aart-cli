@@ -1,6 +1,12 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-03, CP-61)
+## Where the work is (2026-11-03, CP-62, in progress)
+
+**CP-62** sends the rest of contract revision 7 in one PR, with the focus on opencode. The plan,
+what is done and the remaining steps are in `docs/refactor/slices/CP-62-the-rest-of-revision-7.md`.
+The branch is `feat/telemetry-context-rest`. CP-61 is released in 0.29.0.
+
+## Where the work was (2026-11-03, CP-61)
 
 **CP-61** gives each event the context it already knows (§213, D-518, INV-340):
 
