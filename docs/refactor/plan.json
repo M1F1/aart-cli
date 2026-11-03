@@ -2037,6 +2037,28 @@
           "status": "in_progress"
         }
       ]
+    },
+    {
+      "id": "CP-57",
+      "title": "Settings turns telemetry on and off (§213, D-514, B-253)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "TelemetryView, what_is_sent and sent_as shared with consume telemetry; the row and its status",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "RUN_TELEMETRY: on with the kept or the build's address, or off",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR, with CP-56",
+          "status": "in_progress"
+        }
+      ]
     }
   ]
 }

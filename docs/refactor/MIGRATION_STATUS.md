@@ -4,6 +4,14 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-03, CP-57 (§213, D-514): Settings turns telemetry on and off.**
+Screen 28's row *Telemetry: on|off* runs `RUN_TELEMETRY`: off, keeping what waits, or on with the
+address kept from before, else the build's, queueing Activity's history; with neither it stays off
+and names `--endpoint`. On the row, before Enter, the status says where it sends, what it sends
+(`what_is_sent`, now what `consume telemetry enable` prints too), what waits, the last success and
+`sent_as` (person or automation). B-253 is resolved. Evidence:
+`docs/refactor/slices/CP-57-telemetry-in-settings.md`.
+
 **2026-11-03, CP-56 (§215, INV-335, INV-339, D-513): an end by SIGTERM or SIGHUP is journaled, and is still that end.**
 `io/termination.TerminationGuard` takes SIGTERM and SIGHUP while a command or the terminal
 application runs, only those at their default and only in the main thread. The signal records an

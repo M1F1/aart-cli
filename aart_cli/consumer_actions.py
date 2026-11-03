@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -126,6 +127,7 @@ from aart_cli.application.maintainer_views import (
     project_source_sync_result,
     project_source_sync_review,
 )
+from aart_cli.application.telemetry_settings import TelemetryView
 from aart_cli.application.usage_recording import ArtifactUsageView
 from aart_cli.authoring.check import AuthorCheckReport
 from aart_cli.configuration.model import ConfiguredSource, SourceKind
@@ -178,6 +180,7 @@ from aart_cli.domain.selection import (
     OwnershipReason,
     VersionConstraint,
 )
+from aart_cli.domain.telemetry import BATCH_PATH, automated
 from aart_cli.io.author_operations import check_workspace, new_artifact, select_workspace
 from aart_cli.io.configured_configuration_action import (
     PreparedConfiguredConfiguration,
@@ -208,6 +211,7 @@ from aart_cli.io.consumer_settings import write_consumer_settings
 from aart_cli.io.credential_entry import CredentialEntryFallback
 from aart_cli.io.credentials import CredentialProviderPort
 from aart_cli.io.execution import CredentialEffectInterpreter, TerminalHandover
+from aart_cli.io.failure_journal import FailureJournal
 from aart_cli.io.harness import ScopedHarnessRegistry
 from aart_cli.io.installation_execution import interpreters_for
 from aart_cli.io.installed_smoke import LocalMcpTest, SmokePlanEntry, SmokeTargetResult
@@ -237,8 +241,9 @@ from aart_cli.io.registry_bootstrap import (
 )
 from aart_cli.io.registry_publication import publish_registry_commit
 from aart_cli.io.registry_workspace import read_registry_workspace
-from aart_cli.io.telemetry_consent import turn_on_by_default
-from aart_cli.io.telemetry_store import TelemetrySetting
+from aart_cli.io.telemetry_consent import turn_on, turn_on_by_default
+from aart_cli.io.telemetry_store import TelemetryOutbox, TelemetrySetting
+from aart_cli.io.telemetry_sync import new_installation_id
 from aart_cli.io.usage_hooks import read_artifact_usage, reconcile_usage_hooks, set_usage_hook
 from aart_cli.protocol.authoring import read_package_description
 from aart_cli.protocol.hashing import parse_sha256
@@ -1197,6 +1202,85 @@ class LocalConsumerActions:
         except Exception:  # noqa: BLE001 -- telemetry is never what stops the TUI
             return None
 
+    def _telemetry(self) -> TelemetryView | None:
+        """Telemetry here, as Settings draws it (§213, D-514); `None` with no data root, or
+        when the outbox cannot be read."""
+
+        if self._data_root is None:
+            return None
+        state = f"{self._data_root}/state"
+        outbox = TelemetryOutbox(state)
+        setting, counts, sync = outbox.setting(), outbox.counts(), outbox.sync_state()
+        if not (isinstance(setting, Ok) and isinstance(counts, Ok) and isinstance(sync, Ok)):
+            return None
+        journal = FailureJournal(state).counts()
+        current = setting.value
+        success = sync.value.last_success_at
+        return TelemetryView(
+            enabled=current is not None and current.enabled,
+            endpoint=(current.endpoint if current is not None else "")
+            or baked_telemetry_endpoint()
+            or "",
+            client_id="" if current is None else current.client_id,
+            waiting=counts.value.waiting,
+            failures_waiting=journal.value.waiting if isinstance(journal, Ok) else 0,
+            last_success_at="" if success is None else success.isoformat(),
+            automated=automated(os.environ),
+        )
+
+    def _run_telemetry(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Settings' telemetry row: off when it is on, else on with the address kept from before,
+        else the build's, queueing what Activity holds as `consume telemetry enable` does."""
+
+        def answered(kind: ConsumerUiEventKind, notice: tuple[str, ...], text: str = ""):
+            return ConsumerActionUpdate(
+                self.source(notice=notice),
+                ConsumerUiEvent(kind, action=command.action, text=text),
+            )
+
+        if self._data_root is None:
+            return answered(
+                ConsumerUiEventKind.ACTION_FAILED, ("Telemetry needs this machine's state.",)
+            )
+        home = self._data_root
+        outbox = TelemetryOutbox(f"{home}/state")
+        setting = outbox.setting()
+        if isinstance(setting, Err):
+            return answered(ConsumerUiEventKind.ACTION_FAILED, _refusal(setting.diagnostics))
+        current = setting.value
+        if current is not None and current.enabled:
+            disabled = outbox.disable(forget=False)
+            if isinstance(disabled, Err):
+                return answered(ConsumerUiEventKind.ACTION_FAILED, _refusal(disabled.diagnostics))
+            return answered(
+                ConsumerUiEventKind.ACTION_RECORDED,
+                (
+                    "Telemetry is off; nothing more is recorded or sent. What waits is kept, unsent.",
+                ),
+                "off",
+            )
+        endpoint = (current.endpoint if current is not None else "") or baked_telemetry_endpoint()
+        if not endpoint:
+            return answered(
+                ConsumerUiEventKind.ACTION_FAILED,
+                (
+                    "This aart-cli names no telemetry server, so telemetry stays off. "
+                    "`aart-cli consume telemetry enable --endpoint URL` gives one.",
+                ),
+            )
+        enabled = turn_on(home, endpoint, new_installation_id())
+        if isinstance(enabled, Err):
+            return answered(ConsumerUiEventKind.ACTION_FAILED, _refusal(enabled.diagnostics))
+        turned_on, queued = enabled.value
+        return answered(
+            ConsumerUiEventKind.ACTION_RECORDED,
+            (
+                f"Telemetry is on, sending to {turned_on.endpoint}{BATCH_PATH}.",
+                f"Queued {queued} event(s) Activity already held.",
+            ),
+            "on",
+        )
+
     def _usage(self) -> ArtifactUsageView | None:
         if self._data_root is None:
             return None
@@ -1274,6 +1358,7 @@ class LocalConsumerActions:
                 project_root=self._context.host.project_root,
                 aart_cli_update=self._context.offers.aart_cli_update,
                 usage=self._usage(),
+                telemetry=self._telemetry(),
             )
         )
 
@@ -1284,6 +1369,8 @@ class LocalConsumerActions:
             raise ValueError("a consumer action handler needs a typed action command")
         if command.kind is ConsumerUiCommandKind.RUN_AUTHOR:
             return self._run_author(command)
+        if command.kind is ConsumerUiCommandKind.RUN_TELEMETRY:
+            return self._run_telemetry(command)
         if command.kind is ConsumerUiCommandKind.PREPARE_ACTION:
             return self._prepare(command)
         if command.kind is ConsumerUiCommandKind.EXECUTE_ACTION:

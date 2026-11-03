@@ -5199,7 +5199,8 @@ configuration would tell the two apart.
 
 ## B-253 — Telemetry in the TUI's Settings
 
-Status: **open**, noncritical (CP-50, D-503).
+Status: **resolved** 2026-11-03 by CP-57 (D-514): Settings' row *Telemetry* turns it on and off and
+says where, what, what waits, the last success and whether it sends as a person or as automation.
 
 Telemetry is turned on and off only with `consume telemetry`. A Settings row beside "Artifact
 usage" would show it on or off, the address, what waits and the last success, and turn it on with

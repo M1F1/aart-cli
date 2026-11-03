@@ -12657,7 +12657,7 @@ unchanged.
 
 # 213. Telemetry: installs, updates, removals and uses sent to a telemetry server
 
-Status: **ACCEPTED 2026-10-29 (D-503, D-504, D-505), amended 2026-10-30 (D-508) and 2026-11-02 (D-509, §215; D-511)**, on the owner's request after 0.21.0, from
+Status: **ACCEPTED 2026-10-29 (D-503, D-504, D-505), amended 2026-10-30 (D-508), 2026-11-02 (D-509, §215; D-511) and 2026-11-03 (D-514)**, on the owner's request after 0.21.0, from
 their telemetry implementation brief: the organisation sees which artifacts are used, how often, by
 how many installations, and how that changes, on a dashboard. Supersedes §212's "Local only" for an
 installation where telemetry is on. D-505 (the owner, the same day): a build that names a server
@@ -12665,7 +12665,8 @@ starts with telemetry on, and turning it on sends Activity's history too. D-508 
 2026-10-30): uses of skills and MCPs aart-cli did not install are sent too, by the name the harness
 used, unless the build or the person says otherwise; this supersedes D-503's "a use no installed
 artifact answers to is never sent". D-511 (the owner, 2026-11-02): automation, such as a CI job,
-says so, and the dashboard counts it apart from people.
+says so, and the dashboard counts it apart from people. D-514 (the owner, 2026-11-03, B-253):
+Settings turns telemetry on and off too.
 
 - **Two repositories, one contract.** The server is a separate repository,
   `aart-cli-telemetry-server` (a functional core behind FastAPI; SQLite in WAL by default and
@@ -12683,6 +12684,11 @@ says so, and the dashboard counts it apart from people.
   `consume telemetry enable` without `--endpoint` uses the baked address. `consume telemetry
   disable` stops recording and sending, and that choice is kept: no later start turns it on again.
   `--forget` also deletes what is waiting and the installation id, and keeps the choice.
+  Settings' row *Telemetry* says whether it is on, and Enter does what `disable`, or `enable`
+  without `--endpoint`, does: on with the address telemetry last sent to, else the baked one, and
+  without either it stays off and says how to give one. On that row the status says, before Enter,
+  where it sends or would, what it sends in the words `enable` prints, what waits, the last success
+  and whether this machine sends as a person or as automation.
 - **Turning it on sends Activity's history too.** Each time telemetry is turned on, by the build or
   by a person, every install, update and removal and every recorded use Activity holds is queued
   with its own moment, beside what happens from then on. Each Activity record has one event id,

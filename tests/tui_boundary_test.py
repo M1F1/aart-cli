@@ -217,12 +217,16 @@ class TheFrontendIsHeadlesslyTestableTest(unittest.TestCase):
 
     def test_every_screen_module_imports_with_no_terminal_available(self) -> None:
         saved = sys.modules.pop("curses", None)
+        # The modules imported afresh here are put back as they were afterwards: a later test in
+        # this process would otherwise hold classes from two imports of one module, and an
+        # `isinstance` between them fails.
+        screens = {f"aart_cli.{path.stem}" for path in _screen_modules()}
+        imported = {name: sys.modules[name] for name in screens if name in sys.modules}
         try:
             # `None` in `sys.modules` is the documented way to make an import fail as if the
             # module were not installed, which is the condition CI and a piped run both meet.
             sys.modules["curses"] = None  # type: ignore[assignment]
-            for path in _screen_modules():
-                name = f"aart_cli.{path.stem}"
+            for name in sorted(screens):
                 with self.subTest(module=name):
                     sys.modules.pop(name, None)
                     self.assertTrue(importlib.import_module(name))
@@ -230,6 +234,9 @@ class TheFrontendIsHeadlesslyTestableTest(unittest.TestCase):
             sys.modules.pop("curses", None)
             if saved is not None:
                 sys.modules["curses"] = saved
+            for name in screens:
+                sys.modules.pop(name, None)
+            sys.modules.update(imported)
 
 
 class TheseGuardsAreNotVacuousTest(unittest.TestCase):

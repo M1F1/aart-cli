@@ -12866,3 +12866,21 @@ plan").
   next start, would also catch SIGKILL and a lost machine. It journals late, writes on every action,
   and cannot say where in a command the end came. Nobody asked for those ends, so they stay
   unjournaled.
+
+## D-514 — Settings turns telemetry on and off (CP-57)
+
+- **Evidence.** B-253: telemetry was turned on and off only with `consume telemetry`, and Settings
+  showed only its two sub-choices. The owner chose to work it on 2026-11-03.
+- **Choice.** Screen 28 gains a row *Telemetry: on|off*, first under the Telemetry heading. It is no
+  preference: the outbox keeps the decision, as it does for the command, so Enter runs an action
+  (`TELEMETRY`, command `RUN_TELEMETRY`) rather than toggling a consumer setting, and Settings stays
+  on screen. On, Enter turns it off without forgetting. Off, it turns it on with the address kept
+  from before, else the build's, and queues Activity's history, as `enable` without `--endpoint`
+  does. With neither address it stays off and says `consume telemetry enable --endpoint URL`.
+- **Consent.** As on an artifact-usage row, what Enter agrees to stands under the row before it is
+  pressed, in Fast too: where it sends, what it sends and never sends, what waits (events and
+  failures), the last success, and how this machine is counted. What it sends is
+  `application/telemetry_settings.what_is_sent`, which `consume telemetry enable` now prints too,
+  and how it is counted is `sent_as`, which `status` prints, so the two surfaces never disagree.
+- **Not chosen.** Typing an address in the TUI: an address is set once per organisation by its
+  build, and `--endpoint` remains for anyone else.

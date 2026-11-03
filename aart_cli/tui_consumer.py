@@ -55,6 +55,7 @@ from aart_cli.application.consumer_views import (
     SUCCESS_CHOICES,
     SUCCESS_PURPOSE,
     TELEMETRY_ERRORS_ROW,
+    TELEMETRY_ROW,
     TELEMETRY_UNMANAGED_ROW,
     ActivityView,
     ApplicationScreen,
@@ -160,6 +161,7 @@ from aart_cli.application.maintainer_views import (
     parse_validation_row,
     project_maintainer_candidate_filters,
 )
+from aart_cli.application.telemetry_settings import TelemetryView, telemetry_status
 from aart_cli.application.usage_recording import (
     ArtifactUsageView,
     usage_disclosure,
@@ -1650,13 +1652,17 @@ def registry_purpose(view: RegistryView) -> tuple[str, ...]:
 
 
 def render_settings(
-    view: ConsumerSettings, focus: str = "", harnesses: tuple[str, ...] = ()
+    view: ConsumerSettings,
+    focus: str = "",
+    harnesses: tuple[str, ...] = (),
+    telemetry: TelemetryView | None = None,
 ) -> tuple[str, ...]:
     """Screen 28, with the control Enter would move marked.
 
     Every control is binary, so the row says what it is currently set to rather than listing the
     option that was not chosen. `focus` is a row identity, not a label: what is drawn can be
-    reworded without changing what a keystroke means.
+    reworded without changing what a keystroke means. Whether telemetry is on is the outbox's, so
+    it comes as `telemetry`; without it, it is off.
     """
 
     if not isinstance(view, ConsumerSettings) or not isinstance(focus, str):
@@ -1668,6 +1674,9 @@ def render_settings(
         "show-updates": f"Show available updates: {'on' if view.show_updates else 'off'}",
         "maintainer-mode": f"Registry Maintainer Mode: {'on' if view.maintainer_mode else 'off'}",
         "author-mode": f"Author Mode: {'on' if view.author_mode else 'off'}",
+        # §213, D-514: telemetry itself, as the outbox keeps it.
+        TELEMETRY_ROW: "Telemetry: "
+        f"{'on' if telemetry is not None and telemetry.enabled else 'off'}",
         # §213, D-508: telemetry of uses aart-cli did not install, the choice or the build's.
         TELEMETRY_UNMANAGED_ROW: "Uses of tools aart-cli did not install: "
         f"{'sent' if view.sends_unmanaged_uses else 'not sent'}",
@@ -1695,6 +1704,7 @@ def render_settings(
         "show-updates": "Updates",
         "maintainer-mode": "Advanced",
         "author-mode": "Advanced",
+        TELEMETRY_ROW: "Telemetry",
         TELEMETRY_UNMANAGED_ROW: "Telemetry",
         TELEMETRY_ERRORS_ROW: "Telemetry",
     }
@@ -3108,6 +3118,7 @@ def run_consumer_shell(
                 ConsumerUiCommandKind.EXECUTE_ACTION,
                 ConsumerUiCommandKind.ASK_SECRET,
                 ConsumerUiCommandKind.RUN_AUTHOR,
+                ConsumerUiCommandKind.RUN_TELEMETRY,
             ):
                 continue
             if action_handler is None:
@@ -3317,6 +3328,8 @@ class ConsumerScreens:
     aart_cli_update: AartCliUpdate | None = None
     #: Where artifact usage is kept, which hooks record it, and the ranking (§212).
     usage: ArtifactUsageView | None = None
+    #: Whether telemetry is on, where it sends, what waits and how it is counted (§213, D-514).
+    telemetry: TelemetryView | None = None
 
     def offered(self, key: str) -> MarketplaceEntry | None:
         return next((item for item in self.marketplace if item.key == key), None)
@@ -3616,6 +3629,7 @@ def screens_from(
     project_root: str = "",
     aart_cli_update: AartCliUpdate | None = None,
     usage: ArtifactUsageView | None = None,
+    telemetry: TelemetryView | None = None,
 ) -> ConsumerScreens:
     """The screens for one assembled machine, plus whatever the current flow is holding.
 
@@ -3698,6 +3712,7 @@ def screens_from(
         project_root,
         aart_cli_update,
         usage,
+        telemetry,
     )
 
 
@@ -4948,6 +4963,13 @@ class CanonicalScreenSource:
             harness = usage_harness_from_row(state.current_row or "")
             if harness is not None and screens.usage is not None:
                 return artifact_usage_status(screens.usage, harness, state.settings)
+            # §213, D-514: likewise what turning telemetry on sends, and where.
+            if state.current_row == TELEMETRY_ROW:
+                return telemetry_status(
+                    screens.telemetry or TelemetryView(),
+                    unmanaged=state.settings.sends_unmanaged_uses,
+                    failures=state.settings.sends_failures,
+                )
             # From the session's own settings, not the machine snapshot: the same reason the rows
             # are drawn from `state.settings`.
             return settings_consequence(state.settings)
@@ -5851,7 +5873,9 @@ class CanonicalScreenSource:
             # A preference belongs to the session, not to the machine snapshot: drawing the
             # composed source's copy would keep showing the old value until something else
             # happened to re-read the machine.
-            return render_settings(state.settings, state.current_row, screens.harnesses)
+            return render_settings(
+                state.settings, state.current_row, screens.harnesses, screens.telemetry
+            )
         if screen is ConsumerScreen.AART_CLI_UPDATE:
             if screens.aart_cli_update is None:
                 return (f"No connected Registry runs an aart-cli newer than {EXECUTABLE_VERSION}.",)

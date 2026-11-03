@@ -1,6 +1,17 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-03, CP-56)
+## Where the work is (2026-11-03, CP-57)
+
+**CP-57** turns telemetry on and off in Settings (§213, D-514; resolves B-253). Screen 28's first
+Telemetry row, *Telemetry: on|off*, runs an action rather than toggling a preference, since the
+outbox keeps the decision: off with what waits kept, or on with the address kept from before, else
+the build's. Before Enter, its status says where it sends, what it sends (the words `consume
+telemetry enable` prints, now shared), what waits, the last success and whether this machine sends
+as a person or as automation. It ships in one PR with CP-56.
+
+Evidence: `docs/refactor/slices/CP-57-telemetry-in-settings.md`. B-266 is open.
+
+## Where the work was (2026-11-03, CP-56)
 
 CP-55 is merged on both sides. **CP-56** journals an end by SIGTERM or SIGHUP (§215, INV-335,
 INV-339, D-513; resolves B-265). While a command or the terminal application runs, a signal still
@@ -9,8 +20,7 @@ at its default records an `interrupted` failure at the place running (`consume.l
 sends itself the same signal at its default, so the process ends as before. A signal someone
 ignores or handles is left to them; SIGKILL stays unjournaled.
 
-Evidence: `docs/refactor/slices/CP-56-signal-terminations.md`. B-253 (telemetry in Settings) is
-next, at the owner's request; B-266 is open.
+Evidence: `docs/refactor/slices/CP-56-signal-terminations.md`.
 
 ## Where the work was (2026-11-03, CP-55)
 

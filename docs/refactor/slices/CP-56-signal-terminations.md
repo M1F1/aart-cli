@@ -65,3 +65,8 @@ enters the actions' guard with `with`.
 `make mutants ONLY=aart_cli/io/termination.py TESTS="tests/termination_test.py"` gives no verdict
 here: mutmut's runner times out on the in-process guard test and cannot see the mutants in the
 real processes the other tests start. The targeted mutations above are the evidence.
+
+CI first failed the shell test in one chunk: `tui_boundary_test` imports every screen module afresh
+and left the new copies in `sys.modules`, so a later test's `run_consumer_shell` checked for a
+`ConsumerActionUpdate` class other than the one the actions returned. That test now puts the modules
+it imported back as they were.

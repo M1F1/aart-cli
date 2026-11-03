@@ -238,7 +238,9 @@ class APersonChoosesInSettingsTest(unittest.TestCase):
     def test_settings_draws_it_under_telemetry_and_says_what_it_sends(self) -> None:
         drawn = "\n".join(render_settings(ConsumerSettings(), focus=ROW))
 
-        self.assertIn("Telemetry\n> Uses of tools aart-cli did not install: sent", drawn)
+        self.assertIn(
+            "Telemetry\n  Telemetry: off\n> Uses of tools aart-cli did not install: sent", drawn
+        )
         off = "\n".join(render_settings(ConsumerSettings(telemetry_unmanaged=False)))
         self.assertIn("Uses of tools aart-cli did not install: not sent", off)
         purpose = setting_purpose(ROW)

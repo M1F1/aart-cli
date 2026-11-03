@@ -377,7 +377,11 @@ aart-cli consume telemetry enable --endpoint https://telemetry.example.com
 aart-cli consume telemetry status
 ```
 
-Without `--endpoint`, `enable` uses your organisation's server. To keep anything from being sent,
+Without `--endpoint`, `enable` uses your organisation's server. In the terminal application,
+Settings' row *Telemetry* does the same: Enter turns it off, or on again with the server it sent to
+before, else your organisation's. Before you press Enter, the row says where telemetry sends, what
+it sends, what waits, when it last succeeded, and whether this machine is counted as a person or as
+automation. To keep anything from being sent,
 run `aart-cli consume telemetry disable` as your first command; that choice is kept, and no later
 start turns telemetry on again. An event holds the
 event's kind, the artifact's kind, name and version, the moment, a random installation id drawn when

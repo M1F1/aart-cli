@@ -29,6 +29,7 @@ from .consumer_views import (
     INSTALL_PATH_DEFAULT,
     SETTING_ROWS,
     SUCCESS_CHOICES,
+    TELEMETRY_ROW,
     ApplicationScreen,
     ConsumerScreen,
     ConsumerSession,
@@ -126,6 +127,8 @@ class ConsumerActionKind(str, Enum):
     AUTHOR_WORKSPACE = "author-workspace"
     AUTHOR_CHECK = "author-check"
     AUTHOR_INIT = "author-init"
+    #: Settings' telemetry row: on or off, in the outbox rather than in a preference (D-514).
+    TELEMETRY = "telemetry"
 
 
 class ConsumerUiEventKind(str, Enum):
@@ -460,6 +463,8 @@ class RepositoryScanDraft:
 
 class ConsumerUiCommandKind(str, Enum):
     RUN_AUTHOR = "run-author"
+    #: Turn telemetry on or off from Settings, with nothing to review first (D-514).
+    RUN_TELEMETRY = "run-telemetry"
     LOAD_SCREEN = "load-screen"
     CONFIRM_QUIT = "confirm-quit"
     EXIT = "exit"
@@ -2389,9 +2394,10 @@ def _action_recorded(
             focus="" if action is ConsumerActionKind.AUTHOR_WORKSPACE else event.text,
             quit_pending=False,
         ), (ConsumerUiCommand(ConsumerUiCommandKind.LOAD_SCREEN, author_target),)
-    if action is ConsumerActionKind.MCP_TEST:
+    if action in (ConsumerActionKind.MCP_TEST, ConsumerActionKind.TELEMETRY):
         # The answer is drawn where it was asked for, and Success behind it is unchanged: a test
         # is not a lifecycle result, so it moves nothing and clears nothing the install left.
+        # Turning telemetry on or off stays on Settings, which draws what it now is.
         return replace(state, action=None, quit_pending=False), ()
     origins = {
         ConsumerActionKind.REGISTRY_INIT: RegistryCommitOrigin.INIT_REGISTRY,
@@ -2754,6 +2760,12 @@ def _reduce(
             and usage_harness_from_row(event.key) is None
         ):
             return state, ()
+        if event.key == TELEMETRY_ROW:
+            # The decision lives in the outbox, so this row runs rather than toggles a preference.
+            action = ConsumerActionKind.TELEMETRY
+            return replace(state, action=action, failed_action=None, quit_pending=False), (
+                ConsumerUiCommand(ConsumerUiCommandKind.RUN_TELEMETRY, action=action),
+            )
         return _apply_setting(state, state.settings.toggled(event.key))
     if event.kind is ConsumerUiEventKind.TOGGLE_PROMOTION_MODE:
         if state.session.screen is not MaintainerScreen.PROMOTION_MODE:
