@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.1](https://github.com/M1F1/aart-cli/compare/v0.27.0...v0.27.1) (2026-11-03)
+
+
+### Fixed
+
+* a default Registry the first run could not connect is named, with how to sign Git in ([f5ebde6](https://github.com/M1F1/aart-cli/commit/f5ebde67901aa390b411a70f98887f8e4067ca9a))
+
 ## [0.27.0](https://github.com/M1F1/aart-cli/compare/v0.26.0...v0.27.0) (2026-11-03)
 
 
