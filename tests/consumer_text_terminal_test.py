@@ -97,7 +97,7 @@ class CanonicalTextRouteTest(unittest.TestCase):
     def test_the_text_route_runs_the_same_application_the_terminal_route_runs(self) -> None:
         """One shell, one reducer, one screen source -- in a terminal that cannot host curses."""
 
-        actions = mock.Mock()
+        actions = mock.MagicMock()
         actions.settings = ConsumerSettings()
         written: list[str] = []
 

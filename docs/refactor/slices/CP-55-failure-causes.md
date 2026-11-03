@@ -1,7 +1,7 @@
 # CP-55 — A crash keeps what its exception was raised from
 
-Status: **in progress**; the server's side (aart-cli-telemetry-server, branch `feat/failure-causes`)
-merges first, then this PR.
+Status: **done**; the server's side (aart-cli-telemetry-server #16) merged first, then aart-cli
+#122.
 Authority: Product Specification §215 (amended), INV-333, INV-334, INV-338, D-512. Resolves B-267.
 
 ## Why

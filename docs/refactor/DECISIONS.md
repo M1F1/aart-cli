@@ -12844,3 +12844,25 @@ plan").
   database that lacks it, as `failure` and `automation` were. `top_failures` says the latest
   occurrence's causes. The failures endpoint adds `causes`, and the dashboard shows them in the
   place's tooltip and as "from <type>" beside the exception.
+
+## D-513 — An end by SIGTERM or SIGHUP is journaled, and is still that end (CP-56)
+
+- **Evidence.** B-265: SIGTERM (something stopping aart-cli) and SIGHUP (its terminal closed) end
+  the process at their default without an exception, so unlike Ctrl+C nothing was journaled. The
+  owner chose to work it on 2026-11-03.
+- **Choice.** While a command or the terminal application runs, `io/termination.TerminationGuard`
+  takes each of the two signals that still has its default handling, in the main thread only. On
+  the signal it records an `interrupted` failure at the place running, with no exception type and
+  the shell's exit code, 128 plus the signal's number, then gives the signal back its default and
+  sends it again. The process therefore ends by the same signal, with the same status its parent
+  sees, as it did before (INV-335, INV-339). Whatever recording raises is dropped.
+- **Left as it was.** A signal ignored or handled by whoever started aart-cli: that was their
+  choice, and taking it would change how the process ends. Other threads, where Python allows no
+  handler.
+- **Where.** A command's place is its own (`consume.list`). The terminal's is `tui`, or
+  `tui.<action>` while the shell says that action runs (`on_action_running`, told the action before
+  the handler and None after).
+- **Not chosen.** The marker B-265 first suggested, written when an action starts and found at the
+  next start, would also catch SIGKILL and a lost machine. It journals late, writes on every action,
+  and cannot say where in a command the end came. Nobody asked for those ends, so they stay
+  unjournaled.

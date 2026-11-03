@@ -51,7 +51,7 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
     def test_curses_shortens_the_escape_prefix_delay(self) -> None:
         """The curses default waits about a second for a possible escape sequence (B-078)."""
 
-        actions = mock.Mock()
+        actions = mock.MagicMock()
         actions.settings = ConsumerSettings()
         finished = ConsumerUiState(exited=True)
         with (
@@ -98,7 +98,7 @@ class CanonicalConsumerEntryTest(unittest.TestCase):
         that a terminal that can host curses runs the application and does not also degrade.
         """
 
-        actions = mock.Mock()
+        actions = mock.MagicMock()
         with (
             mock.patch.object(tui, "_curses_supported", return_value=True),
             mock.patch.object(tui, "_canonical_consumer_actions", return_value=Ok(actions)),

@@ -12846,17 +12846,22 @@ are each one event, as before.
 
 # 215. Failures aart-cli meets are journaled, reportable, and sent to the telemetry server
 
-Status: **ACCEPTED 2026-11-02 (D-509), amended 2026-11-03 (D-512)**, on the owner's request after
-0.23.0: what goes wrong for the people using aart-cli is to be known before they open an issue,
-precisely enough to write the patch and release it. It amends §213's "What is sent". D-512 (the
-owner, 2026-11-03, B-267): a crash keeps what its exception was raised from, since the defect is
-often there.
+Status: **ACCEPTED 2026-11-02 (D-509), amended 2026-11-03 (D-512, D-513)**, on the owner's request
+after 0.23.0: what goes wrong for the people using aart-cli is to be known before they open an
+issue, precisely enough to write the patch and release it. It amends §213's "What is sent". D-512
+(the owner, 2026-11-03, B-267): a crash keeps what its exception was raised from, since the defect
+is often there. D-513 (the owner, 2026-11-03, B-265): an end by SIGTERM or SIGHUP is an
+interruption too.
 
 - **What a failure is.** A *crash*: an exception no handler took, in a command, the terminal
   application, a harness's usage hook or the telemetry sender. An *error*: a command that ended
   with a nonzero exit code, or a terminal action that stopped. An *interruption*: Ctrl+C in a
-  command or the terminal application, which is the person's choice and is counted, not
-  diagnosed.
+  command or the terminal application, or its end by SIGTERM (something stopping it) or SIGHUP (its
+  terminal closed) while it runs, which is counted, not diagnosed. One by a signal has no
+  exception type, is kept at the terminal action that was running if one was, and keeps the
+  shell's exit code, 128 plus the signal's number; a signal whoever started aart-cli ignores or
+  handles is left to them, and the process still ends by the signal it was sent. An end nothing
+  can catch, as by SIGKILL or a lost machine, is not journaled.
 - **What is kept of it, and nothing else.** Its kind; where it happened, by the command's own
   words (`consume.update`, `tui`, `tui.install`, `usage-hook`, `telemetry-sync`), never its
   arguments; the exception's type name; the frames inside aart-cli's own package as
@@ -12921,3 +12926,9 @@ sent is marked skipped and never sent; while telemetry is off, it waits.
 most 5, the exceptions Python's own traceback names before its exception: each one's explicit
 cause, else the exception it was raised while handling unless that was suppressed. The chain ends
 at an exception met again; a failure without an exception type has no causes.
+
+**INV-339 — An end by a signal is journaled and is still that end.** While a command or the
+terminal application runs with SIGTERM or SIGHUP at its default, the signal journals an
+interruption at the place running, with exit code 128 plus the signal's number, and the process
+then ends by that signal, as it would have without the journal; whatever the journal does, the
+signal ends it. A signal ignored or handled before aart-cli started is left as it was.

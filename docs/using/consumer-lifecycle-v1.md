@@ -423,8 +423,9 @@ also deletes it and the installation id.
 
 ### Failures aart-cli met
 
-When a command crashes, ends with an error, or you stop it with Ctrl+C, and when the terminal
-application crashes or one of its actions stops, aart-cli journals it in
+When a command crashes, ends with an error, or you stop it with Ctrl+C, when the terminal
+application crashes or one of its actions stops, and when either is ended by SIGTERM or by closing
+its terminal (SIGHUP), aart-cli journals it in
 `~/.aart-cli/state/failures.sqlite3`, readable only by you, whether telemetry is on or not. It keeps
 the newest 500. A failure holds where it happened in aart-cli's own words (`consume.update`, `tui`,
 `tui.install`), the exception's type, the lines of aart-cli's own code it ran through, the type
@@ -432,7 +433,8 @@ and those lines of each exception it was raised from (up to five, the nearest fi
 diagnostic codes the command reported, the exit code, aart-cli's and Python's versions and the
 platform. It never holds the exception's message, an argument, a path, a project, an environment
 variable, a value you entered or a credential. Journaling never changes what the command prints or
-how it exits.
+how it exits: one ended by a signal still ends by that signal, and a signal you ignore or handle
+yourself is left to you.
 
 ```sh
 aart-cli consume report

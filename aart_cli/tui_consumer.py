@@ -3033,6 +3033,7 @@ def run_consumer_shell(
     action_handler: ConsumerActionHandler | None = None,
     settings_writer: ConsumerSettingsWriter | None = None,
     on_action_failed: Callable[[ConsumerActionKind], None] | None = None,
+    on_action_running: Callable[[ConsumerActionKind | None], None] | None = None,
 ) -> ConsumerUiState:
     """Run the persistent consumer application until somebody leaves it.
 
@@ -3041,6 +3042,8 @@ def run_consumer_shell(
     which is why filtering never silently moves what somebody was about to act on.
 
     `on_action_failed` is told each action that stopped, for the failure journal (§215).
+    `on_action_running` is told each action as it starts and None once it is over, so an end by a
+    signal is journaled where it happened (B-265).
     """
 
     current = ConsumerUiState() if state is None else state
@@ -3130,10 +3133,14 @@ def run_consumer_shell(
                 action_handler.observe_progress(  # type: ignore[attr-defined]
                     _progress_redraw(terminal, running_source, running_state, heartbeat)
                 )
+            if on_action_running is not None:
+                on_action_running(command.action)
             try:
                 with heartbeat if heartbeat is not None else nullcontext():
                     update = action_handler.handle(command)
             finally:
+                if on_action_running is not None:
+                    on_action_running(None)
                 if reporting:
                     action_handler.observe_progress(None)  # type: ignore[attr-defined]
             if not isinstance(update, ConsumerActionUpdate):

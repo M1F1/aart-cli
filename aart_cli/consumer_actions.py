@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Callable, Literal, Protocol
@@ -1115,6 +1117,30 @@ class LocalConsumerActions:
         from aart_cli.io.failure_journal import record_failure
 
         record_failure(self._data_root, FailureKind.ERROR, f"tui.{action.value}")
+
+    @contextmanager
+    def journaling_terminations(self) -> Iterator[Callable[[ConsumerActionKind | None], None]]:
+        """While it is open, an end by SIGTERM or SIGHUP is journaled as an interruption (§215,
+        B-265): at `tui.<action>` while the action the callable it gives was last told of runs,
+        at `tui` once it is told None. A composition with no data root keeps nothing."""
+
+        data_root = self._data_root
+        if data_root is None:
+            yield lambda action: None
+            return
+        from aart_cli.domain.failures import FailureKind
+        from aart_cli.io.failure_journal import record_failure
+        from aart_cli.io.termination import TerminationGuard
+
+        def record(place: str, code: int) -> None:
+            record_failure(data_root, FailureKind.INTERRUPTED, place, exit_code=code)
+
+        with TerminationGuard(record, "tui") as guard:
+
+            def running(action: ConsumerActionKind | None) -> None:
+                guard.place = "tui" if action is None else f"tui.{action.value}"
+
+            yield running
 
     def _apply_usage_hooks(
         self, previous: ConsumerSettings, settings: ConsumerSettings
