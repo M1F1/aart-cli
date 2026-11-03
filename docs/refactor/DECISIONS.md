@@ -12934,6 +12934,29 @@ plan").
 - **Tests.** The `pytest` autouse fixture that keeps failures out of the real home gains a second
   one: a module hooks only with `RECORDS_USAGE = True`.
 
+## D-517 — A plugin's skills are sent as installed, updated and removed with it (CP-60)
+
+§214 amended. Supersedes §214's "Installs, updates and removals are still sent once per plugin".
+
+- **Evidence.** The owner installed superpowers for opencode, and the telemetry server showed one
+  plugin installed and fourteen skills used but never installed. Its list of artifacts could not
+  say how many installations hold `superpowers:brainstorming`. On 2026-11-03 the owner asked that
+  installing a Collection or a plugin like superpowers raises the installs of each artifact it
+  brings.
+- **Choice.** `lifecycle_events` sends, after each plugin's event, one for each member the
+  installation's receipt names: kind `skill`, name `<plugin>:<member>`, the plugin's version, the
+  same intent. That is the name its uses already carry (INV-332), so the server counts both in one
+  row with no change to the contract. The receipt view of an action gains `members`, written only
+  when there are some, filled from the `PlacedArtifactReceipt` each plugin's installation was given;
+  the flow's outcome is the recorded one, so what Activity holds and what the action returns agree.
+- **A Collection is already per artifact.** A Collection's install is recorded as one action naming
+  each member's coordinate, and `lifecycle_events` already sends one event per completed member.
+- **Not chosen.** Deriving members on the server from the plugin's name: the server does not know
+  what a plugin carries, and a later version may carry other skills. Back-filling older Activity
+  records: a receipt written before this does not say which skills it installed, so it stays one
+  event.
+
+
 ## D-518 — Each event says where and how it happened, to a server that holds revision 7 (CP-61)
 
 §213 amended; INV-340.

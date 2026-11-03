@@ -210,6 +210,47 @@ class PluginInstallationTest(unittest.TestCase):
             ],
         )
 
+    def test_installing_and_removing_it_is_sent_for_the_plugin_and_each_of_its_skills(
+        self,
+    ) -> None:
+        home = self.env.xdg["AART_CLI_HOME"]
+        enabled = TelemetryOutbox(str(pathlib.Path(home) / "state")).enable(
+            "http://127.0.0.1:9", CLIENT
+        )
+        self.assertIsInstance(enabled, Ok, enabled)
+
+        with mock.patch.object(telemetry_sync, "spawn_sync", return_value=False):
+            code, payload = self._install("--yes")
+            self.assertEqual(code, 0, payload)
+            code, payload = self.env.run(
+                "consume", "uninstall", COORDINATE, "--profile", "opencode", "--yes"
+            )
+            self.assertEqual(code, 0, payload)
+        server = FakeServer()
+        _sync(SimpleNamespace(path=home), server, Clock())  # type: ignore[arg-type]
+
+        # A skill is named after its plugin, as its uses are (§214), at the plugin's version.
+        self.assertEqual(
+            sorted(
+                (event_type, kind, name, "7.0.0")
+                for event_type in ("artifact.installed", "artifact.removed")
+                for kind, name in (
+                    ("plugin", "superpowers"),
+                    ("skill", "superpowers:brainstorming"),
+                    ("skill", "superpowers:writing-plans"),
+                )
+            ),
+            sorted(
+                (
+                    event["event_type"],
+                    event["artifact_type"],
+                    event["artifact_id"],
+                    event.get("artifact_version"),
+                )
+                for event in server.stored.values()
+            ),
+        )
+
     def test_a_harness_nobody_measured_a_plugin_list_for_is_refused_by_name(self) -> None:
         manifest = dict(MANIFEST, compatibility={"harnesses": ["opencode", "claude"]})
         other = self.env.project.parent / "other"

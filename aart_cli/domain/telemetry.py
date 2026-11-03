@@ -510,13 +510,16 @@ def lifecycle_event(
     intent: str,
     coordinate: str,
     *,
+    member: str | None = None,
     harness: str | None = None,
     scope: str | None = None,
 ) -> TelemetryEvent | None:
     """An install, update or removal aart-cli carried out, or `None` when it is not reportable.
 
-    It says the Registry alias it came from, and the harness and scope it was for when they are
-    known; what cannot be said in the contract's words is left out (D-518).
+    With `member`, of that skill of the plugin `coordinate` names: a skill named
+    `<plugin>:<member>` at the plugin's version, as its uses are (§214). It says the Registry alias
+    it came from, and the harness and scope it was for when they are known; what cannot be said in
+    the contract's words is left out (D-518).
     """
 
     event_type = lifecycle_event_type(intent)
@@ -524,6 +527,8 @@ def lifecycle_event(
     if event_type is None or artifact is None:
         return None
     kind, name, version = artifact
+    if member is not None:
+        kind, name = "skill", f"{name}:{member}"
     context = EventContext.fitting(harness=harness, scope=scope, registry=_registry(coordinate))
     return _event(event_id, moment, event_type, "aart_cli", kind, name, version, context)
 

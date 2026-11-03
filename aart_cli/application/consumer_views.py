@@ -2576,6 +2576,8 @@ class ReceiptArtifactView:
     diagnostics: tuple[str, ...] = ()
     detail: str = ""
     source_revision: str | None = None
+    #: The skills a plugin carries, by name, installed and removed with it (§214).
+    members: tuple[str, ...] = ()
     #: The harness and scope the installation is for, when its plan named one (§213, D-518).
     harness: str | None = None
     scope: str | None = None
@@ -2714,6 +2716,8 @@ def project_installation_receipt(
             tuple(diagnostic.message for diagnostic in item.diagnostics),
             item.detail,
             revisions.get(item.plan.intent.desired.artifact),
+            # A plugin's members are added from its receipt as it is recorded.
+            (),
             *_where(item.plan.intent.desired.owner),
         )
         for item in outcome.artifacts
@@ -2810,6 +2814,7 @@ def receipt_detail_to_data(view: ReceiptDetailView) -> dict[str, object]:
                             if item.source_revision is None
                             else {"source_revision": item.source_revision}
                         ),
+                        **({"members": list(item.members)} if item.members else {}),
                         **({} if item.harness is None else {"harness": item.harness}),
                         **({} if item.scope is None else {"scope": item.scope}),
                         "steps": [
@@ -3977,6 +3982,7 @@ def receipt_detail_from_data(data: object) -> Result[ReceiptDetailView]:
                         _strings(row, "diagnostics"),
                         _string(row, "detail"),
                         (None if "source_revision" not in row else _string(row, "source_revision")),
+                        _strings(row, "members") if "members" in row else (),
                         None if "harness" not in row else _string(row, "harness"),
                         None if "scope" not in row else _string(row, "scope"),
                     )

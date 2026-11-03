@@ -1,6 +1,40 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-03, CP-59)
+## Where the work is (2026-11-03, CP-61)
+
+**CP-61** gives each event the context it already knows (§213, D-518, INV-340):
+
+- its Registry alias;
+- the harness and scope of an install, update or removal;
+- an opencode MCP use's tool;
+- the request's operating system, architecture and Python.
+
+The sender asks `GET /api/v1/contract` once a run. Only a server naming revision 7 or later is sent
+these fields; any other server is sent the events as before.
+
+Merge order: aart-cli-telemetry-server #18, then #19 (revision 7, retargeted to main). Deploy the
+server before the clients. Then merge this repository's #130 (CP-60), then CP-61's PR, which is
+stacked on it.
+
+Next: B-269, the rest of revision 7: the interface, duration, version replaced, collection, input
+counts, a Claude Code MCP's tool, a session pseudonym and a use's scope.
+
+Evidence: `docs/refactor/slices/CP-61-where-and-how.md`.
+
+## Where the work was (2026-11-03, CP-60)
+
+CP-59 is merged (#128). **CP-60** sends a plugin's install, update and removal for each skill its
+receipt names too, as `skill` `<plugin>:<member>` at the plugin's version (§214, D-517). The
+telemetry server counts a member's installations in the same row as its uses. The server's read
+API, Swagger at `/docs` and the read-only MCP at `/mcp` ship in aart-cli-telemetry-server #18;
+merge that first.
+
+Next: the contract's revision 7 (the harness, scope, Registry alias and interface of an event), on
+the owner's request of 2026-11-03.
+
+Evidence: `docs/refactor/slices/CP-60-plugin-members-installed.md`. B-266 is open.
+
+## Where the work was (2026-11-03, CP-59)
 
 CP-58 is released in 0.27.1. **CP-59** has every `consume` command but `consume usage` put the usage
 hook in place where recording is on, as the TUI's start does (§212, D-516; resolves B-249). A build

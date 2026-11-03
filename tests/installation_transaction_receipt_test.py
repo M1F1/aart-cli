@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import unittest
+from dataclasses import replace
 
 from aart_cli.application.consumer_views import (
     ActivityOutcome,
@@ -84,6 +85,22 @@ class InstallationTransactionReceiptTest(unittest.TestCase):
         )
         self.assertEqual(len(activity.entries), 1)
         self.assertEqual(activity.entries[0].summary, "Installed 2 artifacts")
+
+    def test_a_plugins_skills_round_trip_and_are_written_only_when_it_has_some(self) -> None:
+        outcome, _ = _executed()
+        receipt = project_installation_receipt(outcome, recorded_at=MOMENT)
+        first, *rest = receipt.artifacts
+        carrying = replace(
+            receipt, artifacts=(replace(first, members=("brainstorming", "tdd")), *rest)
+        )
+
+        data = receipt_detail_to_data(carrying)
+
+        self.assertEqual(receipt_detail_from_data(data), Ok(carrying))
+        rows = data["artifacts"]
+        assert isinstance(rows, list)
+        self.assertEqual(rows[0]["members"], ["brainstorming", "tdd"])
+        self.assertTrue(all("members" not in row for row in rows[1:]))
 
     def test_a_transaction_nobody_finished_cannot_be_undone(self) -> None:
         """Reversing half a Selection is not reversing it."""

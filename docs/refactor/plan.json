@@ -2085,7 +2085,7 @@
     {
       "id": "CP-59",
       "title": "A consume command puts the usage hook in place too (§212, D-516, B-249)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -2100,6 +2100,50 @@
         {
           "id": "3",
           "title": "The PR",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-60",
+      "title": "A plugin's skills are sent as installed, updated and removed with it (§214, D-517)",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "lifecycle_events sends each member the receipt names; receipts carry members",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Spec §214, D-517, slice",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR, after aart-cli-telemetry-server #18",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-61",
+      "title": "Each event says where and how it happened, to a server that holds revision 7 (§213, D-518)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "EventContext, the outbox's context, asking the server's revision once a run",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Spec §213, INV-340, D-518, B-269, slice",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR, stacked on #130, after aart-cli-telemetry-server #19",
           "status": "in_progress"
         }
       ]

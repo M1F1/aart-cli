@@ -4,6 +4,18 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-03, CP-61 (§213, D-518, INV-340): each event says where and how it happened.**
+`EventContext` carries contract revision 7's fields; lifecycle events name the Registry alias and
+the installation's harness and scope, and an opencode MCP use names its tool. The outbox keeps the
+context, and the sender asks the server's revision once a run, sending the context and the
+environment only from revision 7. Evidence: `docs/refactor/slices/CP-61-where-and-how.md`.
+
+**2026-11-03, CP-60 (§214, D-517): a plugin's skills are sent as installed, updated and removed with it.**
+`lifecycle_events` sends one event per member the receipt names after each plugin's, as the skill
+`<plugin>:<member>` at the plugin's version. `ReceiptArtifactView.members` carries the names from
+each plugin's `PlacedArtifactReceipt`. Evidence:
+`docs/refactor/slices/CP-60-plugin-members-installed.md`.
+
 **2026-11-03, CP-59 (§212, D-516): a `consume` command puts the usage hook in place too.**
 `commands/usage.record_usage_for_this_build` runs after every `consume` command but `consume usage`.
 It reconciles the hooks with the person's harnesses, else the build's, in each harness present, and

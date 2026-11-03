@@ -12820,7 +12820,7 @@ any environment, a request carries `"automated": true` exactly when `AART_CLI_AU
 
 # 214. A plugin's skills are installed with it
 
-Status: **ACCEPTED 2026-10-30 (D-506)**, on the owner's request after 0.22.0. A plugin works like a
+Status: **ACCEPTED 2026-10-30 (D-506), amended 2026-11-03 (D-517)**, on the owner's request after 0.22.0. A plugin works like a
 Collection of what it carries: each skill inside it is an aart-cli installation, shown in
 Installed, recorded by Activity and sent by telemetry. It amends §171.5 and the attribution of
 §212 and §213. §171's one vendored tree, its one plugin-list entry and its rule that AART neither
@@ -12848,8 +12848,13 @@ rewrites nor namespaces a plugin's internal names are unchanged.
   (`company/plugin/superpowers:brainstorming`), installed by aart-cli. With telemetry on (§213) it
   is sent as `artifact.used` with `artifact_type` `skill`, `artifact_id` `<plugin>:<member>`
   (`superpowers:brainstorming`) and the plugin's version. These are version 1's fields, so neither
-  the contract nor the server changes. Installs, updates and removals are still sent once per
-  plugin.
+  the contract nor the server changes.
+- **A member's install, update and removal are sent with its plugin's (D-517).** Each install,
+  update or removal of a plugin is sent once for the plugin and once for each member its
+  installation's receipt names, as `artifact_type` `skill`, `artifact_id` `<plugin>:<member>` and
+  the plugin's version, so a server counts a member's installations as it counts its uses. The
+  action's Activity record names the members (`members`, only when there are some), so turning
+  telemetry on later sends them from the history too. A record written before this names none.
 - OpenCode is the one harness with a plugin target (§171.3), so it is the one where members are
   attributed.
 
@@ -12865,7 +12870,7 @@ nothing for them outside the installation's tree and its one plugin-list entry.
 in a harness a plugin is installed for, under one of its members' names, resolves to that plugin
 installation and member. Its telemetry event is `artifact.used` with `artifact_type` `skill`,
 `artifact_id` `<plugin>:<member>` and the plugin's version. A plugin's install, update and removal
-are each one event, as before.
+are each one event for the plugin and one for each member its receipt names, in that form (D-517).
 
 # 215. Failures aart-cli meets are journaled, reportable, and sent to the telemetry server
 
