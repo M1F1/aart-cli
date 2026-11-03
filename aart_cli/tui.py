@@ -882,14 +882,16 @@ def run_consumer_text(
     which is the whole of what ERR05 permits a text fallback to change.
     """
 
-    return run_consumer_shell(
-        actions.source(),
-        _TextTerminal(read, write),
-        state=opening_state(actions.settings, workspace=workspace),
-        action_handler=actions,
-        settings_writer=actions.save_settings,
-        on_action_failed=actions.record_action_failed,
-    )
+    with actions.journaling_terminations() as running:
+        return run_consumer_shell(
+            actions.source(),
+            _TextTerminal(read, write),
+            state=opening_state(actions.settings, workspace=workspace),
+            action_handler=actions,
+            settings_writer=actions.save_settings,
+            on_action_failed=actions.record_action_failed,
+            on_action_running=running,
+        )
 
 
 def run_consumer(actions: LocalConsumerActions, *, workspace: str = "") -> ConsumerUiState:
@@ -925,14 +927,16 @@ def run_consumer(actions: LocalConsumerActions, *, workspace: str = "") -> Consu
         screen = threading.Lock()
         if isinstance(loan, _CursesHandover):
             loan.bind(stdscr, screen)
-        captured["state"] = run_consumer_shell(
-            actions.source(),
-            _CursesTerminal(stdscr, screen),
-            state=opening_state(actions.settings, workspace=workspace),
-            action_handler=actions,
-            settings_writer=actions.save_settings,
-            on_action_failed=actions.record_action_failed,
-        )
+        with actions.journaling_terminations() as running:
+            captured["state"] = run_consumer_shell(
+                actions.source(),
+                _CursesTerminal(stdscr, screen),
+                state=opening_state(actions.settings, workspace=workspace),
+                action_handler=actions,
+                settings_writer=actions.save_settings,
+                on_action_failed=actions.record_action_failed,
+                on_action_running=running,
+            )
 
     try:
         curses.wrapper(_ui)

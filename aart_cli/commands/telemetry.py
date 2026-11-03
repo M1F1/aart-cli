@@ -10,12 +10,12 @@ from datetime import datetime
 
 from aart_cli import command_outcome as _common
 from aart_cli.application.consumer_views import ConsumerSettings
+from aart_cli.application.telemetry_settings import sent_as, what_is_sent
 from aart_cli.configuration.paths import APPLICATION_HOME_VARIABLE, Platform, resolve_config_paths
 from aart_cli.configuration.policy import redact_text
 from aart_cli.configuration.seed import baked_telemetry_endpoint
 from aart_cli.domain.result import Err, Ok
 from aart_cli.domain.telemetry import (
-    AUTOMATED_VARIABLE,
     BATCH_PATH,
     automated,
     parse_telemetry_endpoint,
@@ -158,12 +158,7 @@ def _status(request: Request, outbox: TelemetryOutbox, home: str) -> int:
         lines.append(f"this aart-cli offers: {offered}")
     lines.append(said)
     lines.append(said_errors)
-    lines.append(
-        "sent as: automation, counted apart from people "
-        f"(CI or {AUTOMATED_VARIABLE}; {AUTOMATED_VARIABLE}=off says otherwise)"
-        if automation
-        else f"sent as: a person's installation ({AUTOMATED_VARIABLE}=on marks automation)"
-    )
+    lines.append(f"sent as: {sent_as(automation)}")
     lines.append(
         f"events: {waiting.waiting} waiting, {waiting.sent} sent, {waiting.rejected} rejected, "
         f"{waiting.skipped} skipped (not sent by choice, or nothing the contract can name)"
@@ -228,32 +223,18 @@ def run(request: Request) -> int:
         if isinstance(enabled, Err):
             return _failure(request, enabled.diagnostics[0].message)
         setting, queued = enabled.value
-        unmanaged = _settings(home).sends_unmanaged_uses
-        failures = _settings(home).sends_failures
+        sent, never = what_is_sent(
+            setting.client_id,
+            unmanaged=_settings(home).sends_unmanaged_uses,
+            failures=_settings(home).sends_failures,
+        )
         _print(
             request,
             {"endpoint": setting.endpoint, "client_id": setting.client_id, "queued": queued},
             [
                 f"telemetry: on, sending to {setting.endpoint}{BATCH_PATH}",
-                f"Queued {queued} event(s) Activity already held. From now on each install, "
-                "update and removal aart-cli completes, each recorded use of an artifact "
-                "aart-cli installed"
-                + (
-                    ", and each use of a skill or MCP aart-cli did not install, by the name the "
-                    "harness used (`consume telemetry unmanaged off` stops that),"
-                    if unmanaged
-                    else ","
-                )
-                + (
-                    " each failure aart-cli meets, by where, the exception's type and its own "
-                    "frames (`consume telemetry errors off` stops that),"
-                    if failures
-                    else ""
-                )
-                + " is sent at most every ten minutes, when something new is recorded.",
-                "Sent: the event, the artifact's kind, name and version, the moment, the "
-                f"installation id {setting.client_id} and aart-cli's version. Never a "
-                "project, path, argument, prompt, user or host name, or credential.",
+                f"Queued {queued} event(s) Activity already held. {sent}",
+                never,
                 f"Waiting events are kept in {outbox.path}.",
             ],
         )

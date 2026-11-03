@@ -375,12 +375,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             parser, args.docs_path, as_json=args.json, out=sys.stdout, err=sys.stderr
         )
     request = _to_request(args)
-    from .commands.report import command_place, noting_diagnostics, record_command_failure
+    from .commands.report import (
+        command_place,
+        journaling_terminations,
+        noting_diagnostics,
+        record_command_failure,
+    )
 
-    # §215: a crash, an interruption or a nonzero exit is journaled, and the command ends exactly
-    # as it would have (INV-335).
+    # §215: a crash, an interruption -- by Ctrl-C, SIGTERM or SIGHUP -- or a nonzero exit is
+    # journaled, and the command ends exactly as it would have (INV-335).
     place = command_place(args)
-    with noting_diagnostics() as codes:
+    with noting_diagnostics() as codes, journaling_terminations(request, place):
         try:
             code = _dispatch(args, request)
         except KeyboardInterrupt as error:

@@ -497,7 +497,7 @@ class TheTerminalsActionsTest(unittest.TestCase):
                 on_action_failed=stopped.append,
             )
         self.assertEqual(stopped, [ConsumerActionKind.AUTHOR_WORKSPACE])
-        actions = mock.Mock(settings=ConsumerSettings())
+        actions = mock.MagicMock(settings=ConsumerSettings())
         with mock.patch.object(tui, "run_consumer_shell") as shell:
             tui.run_consumer_text(actions)
         self.assertEqual(shell.call_args.kwargs["on_action_failed"], actions.record_action_failed)

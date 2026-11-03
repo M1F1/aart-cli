@@ -155,6 +155,7 @@ __all__ = [
     "SETTING_PURPOSE",
     "SETTING_ROWS",
     "TELEMETRY_ERRORS_ROW",
+    "TELEMETRY_ROW",
     "TELEMETRY_UNMANAGED_ROW",
     "ARTIFACT_USAGE_ROW_PREFIX",
     "DEFAULT_HARNESS_ROW_PREFIX",
@@ -3431,6 +3432,9 @@ class McpTestView:
 
 #: The controls of accepted screen 28, in the order the Product Specification lists them. They are
 #: row identities rather than labels so a rename of what is drawn never rewrites what was stored.
+#: Screen 28's row turning telemetry itself on and off (§213, D-514). Unlike every other row it is no
+#: preference: the outbox keeps that decision, so Enter on it runs an action rather than a toggle.
+TELEMETRY_ROW = "telemetry"
 #: Screen 28's row for whether telemetry sends uses aart-cli did not install (§213, D-508).
 TELEMETRY_UNMANAGED_ROW = "telemetry-unmanaged"
 #: Screen 28's row for whether telemetry sends the failures aart-cli met (§215, D-509).
@@ -3443,6 +3447,7 @@ SETTING_ROWS: tuple[str, ...] = (
     "show-updates",
     "maintainer-mode",
     "author-mode",
+    TELEMETRY_ROW,
     TELEMETRY_UNMANAGED_ROW,
     TELEMETRY_ERRORS_ROW,
 )
@@ -3515,6 +3520,9 @@ SETTING_PURPOSE: dict[str, str] = {
     "offers a newer version of.",
     "maintainer-mode": "Whether this installation maintains a Registry as well as installing "
     "artifacts, which is what puts Upstream repositories, Candidates and Registry on the Dashboard.",
+    TELEMETRY_ROW: "Whether aart-cli sends its installs, updates, removals, uses and failures to "
+    "the telemetry server, as `consume telemetry enable` and `disable` do. Where and what is "
+    "below; turned off, what waits is kept, unsent.",
     TELEMETRY_UNMANAGED_ROW: "Whether telemetry also sends each use of a skill or MCP aart-cli "
     "did not install, by the name the harness used, never a project, path or argument. It applies "
     "only while telemetry is on; off, such uses still waiting are never sent. Until you choose, "

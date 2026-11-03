@@ -4,6 +4,22 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-03, CP-57 (§213, D-514): Settings turns telemetry on and off.**
+Screen 28's row *Telemetry: on|off* runs `RUN_TELEMETRY`: off, keeping what waits, or on with the
+address kept from before, else the build's, queueing Activity's history; with neither it stays off
+and names `--endpoint`. On the row, before Enter, the status says where it sends, what it sends
+(`what_is_sent`, now what `consume telemetry enable` prints too), what waits, the last success and
+`sent_as` (person or automation). B-253 is resolved. Evidence:
+`docs/refactor/slices/CP-57-telemetry-in-settings.md`.
+
+**2026-11-03, CP-56 (§215, INV-335, INV-339, D-513): an end by SIGTERM or SIGHUP is journaled, and is still that end.**
+`io/termination.TerminationGuard` takes SIGTERM and SIGHUP while a command or the terminal
+application runs, only those at their default and only in the main thread. The signal records an
+`interrupted` failure at the place running, with exit code 128 plus its number, then is sent again
+at its default, so the process ends by it. `cli.main` holds it at the command's place. Both terminals
+hold it at `tui`, and `tui.<action>` while the shell says an action runs. B-265 is resolved and
+INV-339 is EVIDENCED. Evidence: `docs/refactor/slices/CP-56-signal-terminations.md`.
+
 **2026-11-03, CP-55 (§215, INV-333, INV-334, INV-338, D-512): a crash keeps what its exception was raised from.**
 A failure's `causes` are the exceptions Python's traceback names before its own: the explicit
 cause, else the one being handled unless `from None` hid it, the nearest five. Each cause keeps its

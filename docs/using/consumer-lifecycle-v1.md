@@ -377,7 +377,11 @@ aart-cli consume telemetry enable --endpoint https://telemetry.example.com
 aart-cli consume telemetry status
 ```
 
-Without `--endpoint`, `enable` uses your organisation's server. To keep anything from being sent,
+Without `--endpoint`, `enable` uses your organisation's server. In the terminal application,
+Settings' row *Telemetry* does the same: Enter turns it off, or on again with the server it sent to
+before, else your organisation's. Before you press Enter, the row says where telemetry sends, what
+it sends, what waits, when it last succeeded, and whether this machine is counted as a person or as
+automation. To keep anything from being sent,
 run `aart-cli consume telemetry disable` as your first command; that choice is kept, and no later
 start turns telemetry on again. An event holds the
 event's kind, the artifact's kind, name and version, the moment, a random installation id drawn when
@@ -423,8 +427,9 @@ also deletes it and the installation id.
 
 ### Failures aart-cli met
 
-When a command crashes, ends with an error, or you stop it with Ctrl+C, and when the terminal
-application crashes or one of its actions stops, aart-cli journals it in
+When a command crashes, ends with an error, or you stop it with Ctrl+C, when the terminal
+application crashes or one of its actions stops, and when either is ended by SIGTERM or by closing
+its terminal (SIGHUP), aart-cli journals it in
 `~/.aart-cli/state/failures.sqlite3`, readable only by you, whether telemetry is on or not. It keeps
 the newest 500. A failure holds where it happened in aart-cli's own words (`consume.update`, `tui`,
 `tui.install`), the exception's type, the lines of aart-cli's own code it ran through, the type
@@ -432,7 +437,8 @@ and those lines of each exception it was raised from (up to five, the nearest fi
 diagnostic codes the command reported, the exit code, aart-cli's and Python's versions and the
 platform. It never holds the exception's message, an argument, a path, a project, an environment
 variable, a value you entered or a credential. Journaling never changes what the command prints or
-how it exits.
+how it exits: one ended by a signal still ends by that signal, and a signal you ignore or handle
+yourself is left to you.
 
 ```sh
 aart-cli consume report

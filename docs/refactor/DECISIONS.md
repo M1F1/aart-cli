@@ -12844,3 +12844,43 @@ plan").
   database that lacks it, as `failure` and `automation` were. `top_failures` says the latest
   occurrence's causes. The failures endpoint adds `causes`, and the dashboard shows them in the
   place's tooltip and as "from <type>" beside the exception.
+
+## D-513 — An end by SIGTERM or SIGHUP is journaled, and is still that end (CP-56)
+
+- **Evidence.** B-265: SIGTERM (something stopping aart-cli) and SIGHUP (its terminal closed) end
+  the process at their default without an exception, so unlike Ctrl+C nothing was journaled. The
+  owner chose to work it on 2026-11-03.
+- **Choice.** While a command or the terminal application runs, `io/termination.TerminationGuard`
+  takes each of the two signals that still has its default handling, in the main thread only. On
+  the signal it records an `interrupted` failure at the place running, with no exception type and
+  the shell's exit code, 128 plus the signal's number, then gives the signal back its default and
+  sends it again. The process therefore ends by the same signal, with the same status its parent
+  sees, as it did before (INV-335, INV-339). Whatever recording raises is dropped.
+- **Left as it was.** A signal ignored or handled by whoever started aart-cli: that was their
+  choice, and taking it would change how the process ends. Other threads, where Python allows no
+  handler.
+- **Where.** A command's place is its own (`consume.list`). The terminal's is `tui`, or
+  `tui.<action>` while the shell says that action runs (`on_action_running`, told the action before
+  the handler and None after).
+- **Not chosen.** The marker B-265 first suggested, written when an action starts and found at the
+  next start, would also catch SIGKILL and a lost machine. It journals late, writes on every action,
+  and cannot say where in a command the end came. Nobody asked for those ends, so they stay
+  unjournaled.
+
+## D-514 — Settings turns telemetry on and off (CP-57)
+
+- **Evidence.** B-253: telemetry was turned on and off only with `consume telemetry`, and Settings
+  showed only its two sub-choices. The owner chose to work it on 2026-11-03.
+- **Choice.** Screen 28 gains a row *Telemetry: on|off*, first under the Telemetry heading. It is no
+  preference: the outbox keeps the decision, as it does for the command, so Enter runs an action
+  (`TELEMETRY`, command `RUN_TELEMETRY`) rather than toggling a consumer setting, and Settings stays
+  on screen. On, Enter turns it off without forgetting. Off, it turns it on with the address kept
+  from before, else the build's, and queues Activity's history, as `enable` without `--endpoint`
+  does. With neither address it stays off and says `consume telemetry enable --endpoint URL`.
+- **Consent.** As on an artifact-usage row, what Enter agrees to stands under the row before it is
+  pressed, in Fast too: where it sends, what it sends and never sends, what waits (events and
+  failures), the last success, and how this machine is counted. What it sends is
+  `application/telemetry_settings.what_is_sent`, which `consume telemetry enable` now prints too,
+  and how it is counted is `sent_as`, which `status` prints, so the two surfaces never disagree.
+- **Not chosen.** Typing an address in the TUI: an address is set once per organisation by its
+  build, and `--endpoint` remains for anyone else.

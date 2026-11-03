@@ -13,6 +13,7 @@ from aart_cli.configuration.policy import redact_text
 from aart_cli.domain.failures import FailureGroup, FailureKind, grouped
 from aart_cli.domain.result import Err
 from aart_cli.io.failure_journal import FailureJournal, noting, record_failure
+from aart_cli.io.termination import TerminationGuard
 from aart_cli.model import Request
 
 from ._configured_runtime import load_runtime_configuration
@@ -170,6 +171,16 @@ def record_command_failure(
         error=error,
         exit_code=exit_code,
         diagnostics=diagnostics,
+    )
+
+
+def journaling_terminations(request: Request, place: str) -> TerminationGuard:
+    """While it is open, an end by SIGTERM or SIGHUP is journaled as an interruption at `place`,
+    with the shell's exit code, and the command still ends by it (§215, B-265)."""
+
+    return TerminationGuard(
+        lambda at, code: record_command_failure(request, "interrupted", at, exit_code=code),
+        place,
     )
 
 

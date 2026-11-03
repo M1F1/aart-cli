@@ -268,7 +268,7 @@ class RunConsumerBoundaryTests(unittest.TestCase):
     """
 
     def _actions(self) -> mock.Mock:
-        actions = mock.Mock()
+        actions = mock.MagicMock()
         actions.terminal_handover = None
         return actions
 

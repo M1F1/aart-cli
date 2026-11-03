@@ -1997,7 +1997,7 @@
     {
       "id": "CP-55",
       "title": "A crash keeps what its exception was raised from (§215, INV-333, INV-334, INV-338, D-512, B-267)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -2012,6 +2012,50 @@
         {
           "id": "3",
           "title": "The PRs, the server's first",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "CP-56",
+      "title": "An end by SIGTERM or SIGHUP is journaled, and is still that end (§215, INV-335, INV-339, D-513, B-265)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "TerminationGuard: SIGTERM and SIGHUP at their default, recorded at the place held, then the same signal again",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Wired into cli.main and both terminals, at tui.<action> while one runs",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR",
+          "status": "in_progress"
+        }
+      ]
+    },
+    {
+      "id": "CP-57",
+      "title": "Settings turns telemetry on and off (§213, D-514, B-253)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "TelemetryView, what_is_sent and sent_as shared with consume telemetry; the row and its status",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "RUN_TELEMETRY: on with the kept or the build's address, or off",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR, with CP-56",
           "status": "in_progress"
         }
       ]

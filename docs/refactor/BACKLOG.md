@@ -5199,7 +5199,8 @@ configuration would tell the two apart.
 
 ## B-253 — Telemetry in the TUI's Settings
 
-Status: **open**, noncritical (CP-50, D-503).
+Status: **resolved** 2026-11-03 by CP-57 (D-514): Settings' row *Telemetry* turns it on and off and
+says where, what, what waits, the last success and whether it sends as a person or as automation.
 
 Telemetry is turned on and off only with `consume telemetry`. A Settings row beside "Artifact
 usage" would show it on or off, the address, what waits and the last success, and turn it on with
@@ -5315,7 +5316,9 @@ client send the server's name instead, as it does for Claude Code.
 
 ## B-265 — A termination by signal, or an action a closed terminal cut short, is not journaled
 
-Status: **open**, noncritical (CP-53, D-509).
+Status: **resolved** 2026-11-03 by CP-56 (D-513): SIGTERM and SIGHUP are journaled as interruptions
+at the place running, and the process still ends by them. SIGKILL and a lost machine stay
+unjournaled.
 
 SIGTERM, SIGHUP and a closed terminal end the process without an exception `cli.main` or the TUI
 can catch, so nothing is journaled. Recording a marker when an action starts and finding it at the

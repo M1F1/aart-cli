@@ -1,6 +1,28 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-03, CP-55)
+## Where the work is (2026-11-03, CP-57)
+
+**CP-57** turns telemetry on and off in Settings (§213, D-514; resolves B-253). Screen 28's first
+Telemetry row, *Telemetry: on|off*, runs an action rather than toggling a preference, since the
+outbox keeps the decision: off with what waits kept, or on with the address kept from before, else
+the build's. Before Enter, its status says where it sends, what it sends (the words `consume
+telemetry enable` prints, now shared), what waits, the last success and whether this machine sends
+as a person or as automation. It ships in one PR with CP-56.
+
+Evidence: `docs/refactor/slices/CP-57-telemetry-in-settings.md`. B-266 is open.
+
+## Where the work was (2026-11-03, CP-56)
+
+CP-55 is merged on both sides. **CP-56** journals an end by SIGTERM or SIGHUP (§215, INV-335,
+INV-339, D-513; resolves B-265). While a command or the terminal application runs, a signal still
+at its default records an `interrupted` failure at the place running (`consume.list`, `tui`, or
+`tui.<action>` while one runs) with the shell's exit code, 128 plus the signal's number. It then
+sends itself the same signal at its default, so the process ends as before. A signal someone
+ignores or handles is left to them; SIGKILL stays unjournaled.
+
+Evidence: `docs/refactor/slices/CP-56-signal-terminations.md`.
+
+## Where the work was (2026-11-03, CP-55)
 
 0.25.0 (CP-54) is released. **CP-55** keeps what a crash's exception was raised from (§215,
 INV-333, INV-334, INV-338, D-512; resolves B-267). A failure's `causes` are the exceptions Python's
