@@ -60,7 +60,10 @@ from aart_cli.domain.effects import (
 )
 from aart_cli.domain.harness import McpRegistration
 from aart_cli.domain.hooks import (
+    PLUGIN_INDEX,
+    PluginEntry,
     merge_settings_entry,
+    plugin_index,
     remove_settings_entry,
     settings_entry_label,
 )
@@ -584,6 +587,11 @@ class SettingsEntryInterpreter:
                 f"nothing here says {self.artifact} owns {settings_entry_label(effect.entry)} at "
                 f"{effect.path} in {effect.destination}",
             )
+        if isinstance(effect, MergeSettingsEntry):
+            # Before the entry, so the harness is never told to load a tree with nothing in it.
+            indexed = self._write_index(effect)
+            if isinstance(indexed, Err):
+                return indexed
         loaded = self._read(effect.destination)
         if isinstance(loaded, Err):
             return loaded
@@ -610,6 +618,32 @@ class SettingsEntryInterpreter:
         if isinstance(saved, Err):
             return saved
         return Ok(done)
+
+    def _write_index(self, effect: MergeSettingsEntry) -> Result[None]:
+        """The `index.js` a plugin entry naming its tree loads (D-521), written into that tree.
+
+        Only into a directory that is there and is not a symlink: the payload is copied first, so a
+        tree that is missing is not one this install made, and one reached through a link is not
+        the tree the entry was checked against.
+        """
+
+        entry = effect.entry
+        if not isinstance(entry, PluginEntry) or entry.module is None:
+            return Ok(None)
+        tree = os.path.normpath(os.path.join(os.path.dirname(effect.destination), entry.reference))
+        index = os.path.join(tree, PLUGIN_INDEX)
+        if os.path.islink(tree) or not os.path.isdir(tree) or os.path.islink(index):
+            return _error(
+                EXECUTION_REFUSED,
+                f"{tree} is not a plugin tree this installation holds, so nothing is written there",
+            )
+        content = plugin_index(entry).encode("utf-8")
+        try:
+            write_atomic(index, content)
+            os.chmod(index, 0o600)
+        except OSError as error:
+            return _error(EXECUTION_FAILED, f"cannot write {index}: {error.strerror}")
+        return Ok(None)
 
     def _read(self, destination: str) -> Result[dict[str, object] | None]:
         """The settings document, or `None` when there is no file there yet."""

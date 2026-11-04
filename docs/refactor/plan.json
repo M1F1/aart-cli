@@ -2177,7 +2177,7 @@
     },
     {
       "id": "OPENCODE-2-USAGE",
-      "title": "One opencode usage plugin both opencode runtimes load, measured on 1.19.4 and 2.1.3 (§212, D-520)",
+      "title": "The usage plugin and installed plugins load on both opencode runtimes, measured on 1.19.4 and 2.1.3 (§212, §171.3, D-520, D-521)",
       "status": "in_progress",
       "steps": [
         {
@@ -2197,6 +2197,16 @@
         },
         {
           "id": "4",
+          "title": "An installed plugin's entry is its tree with an index.js both runtimes load (B-272, D-521)",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "Live e2e on 1.19.4 and 2.1.3, project and user scope: plugin, MCP, skill, Activity",
+          "status": "done"
+        },
+        {
+          "id": "6",
           "title": "The PR",
           "status": "in_progress"
         }

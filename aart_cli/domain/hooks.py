@@ -35,6 +35,7 @@ __all__ = [
     "SETTINGS_UNMERGEABLE",
     "HookEntry",
     "HookEntryShape",
+    "PLUGIN_INDEX",
     "PluginEntry",
     "SettingsListEntry",
     "settings_entry_label",
@@ -42,6 +43,7 @@ __all__ = [
     "settings_entry_fingerprint",
     "settings_entry_to_json",
     "merge_settings_entry",
+    "plugin_index",
     "remove_settings_entry",
 ]
 
@@ -85,28 +87,79 @@ class HookEntry:
             raise ValueError("a hook command must be one absolute path")
 
 
-#: A plugin path as AART writes it: `./`, then segments of ordinary file-name characters, ending in a
-#: module the harness loads. Narrower than any path opencode accepts on purpose -- no scheme, no
-#: `@`, no absolute root and no parent segment -- because each of those is a spelling that loads
-#: something other than the installation's own reviewed copy (INV-255).
-_PLUGIN_REFERENCE_RE = re.compile(r"^\./(?:[A-Za-z0-9_.+-]+/)*[A-Za-z0-9_.+-]+\.(?:js|mjs|ts)$")
+#: A plugin path as AART writes it: `./`, then segments of ordinary file-name characters. Narrower
+#: than any path opencode accepts on purpose -- no scheme, no `@`, no absolute root and no parent
+#: segment -- because each of those is a spelling that loads something other than the
+#: installation's own reviewed copy (INV-255).
+_SEGMENTS = r"(?:[A-Za-z0-9_.+-]+/)*[A-Za-z0-9_.+-]+"
+_MODULE = rf"{_SEGMENTS}\.(?:js|mjs|ts)"
+_PLUGIN_REFERENCE_RE = re.compile(rf"^\./{_MODULE}$")
+_PLUGIN_DIRECTORY_RE = re.compile(rf"^\./{_SEGMENTS}$")
+_PLUGIN_MODULE_RE = re.compile(rf"^payload/{_MODULE}$")
+
+#: The file aart-cli writes at the root of a plugin's tree, which both of opencode's plugin
+#: runtimes load when the entry names that directory (D-521).
+PLUGIN_INDEX = "index.js"
+
+
+def _dotted(path: str) -> bool:
+    return any(part in (".", "..") for part in path.split("/"))
 
 
 @dataclass(frozen=True, slots=True)
 class PluginEntry:
-    """What the harness is told: load the module at this path, relative to the settings file."""
+    """What the harness is told: load the plugin at this path, relative to the settings file.
+
+    `module` set is the form every install writes (D-521): `reference` names the installation's
+    tree, and `module` is the entry module inside it, `payload/...`, which the tree's `index.js`
+    loads. OpenCode 1.x resolves a directory to its `index.js`; OpenCode 2 loads only directories,
+    and finds the same file. `module` unset is the form installs wrote before, the module's own
+    path, which OpenCode 1.x loads and OpenCode 2 skips; a receipt holding it still reads, and an
+    update writes the directory form.
+    """
 
     reference: str
+    module: str | None = None
 
     def __post_init__(self) -> None:
+        pattern = _PLUGIN_REFERENCE_RE if self.module is None else _PLUGIN_DIRECTORY_RE
         if (
             not isinstance(self.reference, str)
-            or _PLUGIN_REFERENCE_RE.fullmatch(self.reference) is None
-            or any(part in (".", "..") for part in self.reference.split("/")[1:])
+            or pattern.fullmatch(self.reference) is None
+            or _dotted(self.reference[2:])
         ):
             raise ValueError(
                 "a plugin entry is a ./ path inside the installation to a .js, .mjs or .ts module"
+                if self.module is None
+                else "a plugin entry is a ./ path to the installation's own tree"
             )
+        if self.module is not None and (
+            not isinstance(self.module, str)
+            or _PLUGIN_MODULE_RE.fullmatch(self.module) is None
+            or _dotted(self.module)
+        ):
+            raise ValueError("a plugin's module is a .js, .mjs or .ts file inside its payload")
+
+
+def plugin_index(entry: PluginEntry) -> str:
+    """The `index.js` at the root of a plugin's tree, which loads its entry module (D-521).
+
+    Every export is passed through, so OpenCode 1.x finds what it always found. The default is the
+    module's own, which is what OpenCode 2 takes; a module with none passes its first function
+    instead, which OpenCode 1.x already loads once under its own name and does not load again.
+    OpenCode 2 refuses a module like that by name: its plugins are a definition, not a function.
+    """
+
+    if entry.module is None:
+        raise ValueError("a plugin registered by its module path has no index")
+    target = json.dumps(f"./{entry.module}")
+    return (
+        "// Written by aart-cli: loads this plugin for OpenCode 1.x and OpenCode 2 alike.\n"
+        f"export * from {target}\n"
+        f"import * as plugin from {target}\n"
+        "export default plugin.default ??\n"
+        '  Object.values(plugin).find((value) => typeof value === "function")\n'
+    )
 
 
 #: One member of a list in a settings file that an installation owns.

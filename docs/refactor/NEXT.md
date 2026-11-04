@@ -7,9 +7,14 @@ D-520): one default export, `server` for OpenCode 1.x and `setup` for OpenCode 2
 own `opencode_<tool>` tools are no use. Measured live on opencode 1.19.4 (most people) and
 opencode2 2.1.3 (preview), old plugin against new.
 
+B-272 is done in the same PR (§171.3, §171.5, D-521): an installed plugin's entry is its tree,
+with an `index.js` aart-cli writes, which 1.19.4 and 2.1.3 both load; a missing or edited one is
+drift a repair rewrites. `opencode` stays one harness for both runtimes. Live end to end on both
+builds at project and user scope: plugin, MCP (through Code Mode on 2.1.3), skill and Activity.
+
 The code, tests and docs are on `fix/opencode-2-usage-plugin` (worktree
-`/Users/mifi/code/aart-cli-context-rest`). Next: the PR, CI, the owner's review and merge, then the
-Release Please PR. After that, B-272: a plugin installed for opencode does not load on OpenCode 2.
+`/Users/mifi/code/aart-cli-context-rest`), PR #135. Next: CI, the owner's review and merge, then
+the Release Please PR.
 
 Evidence: `docs/refactor/slices/OPENCODE-2-USAGE-one-plugin-both-runtimes.md`.
 

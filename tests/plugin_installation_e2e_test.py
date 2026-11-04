@@ -2,7 +2,8 @@
 
 A plugin is the one kind whose files reach no directory the harness reads. Its tree stays in the
 installation's private directory, exactly as reviewed, and what turns it on is one member of the
-`plugin` list in `opencode.json`, spelled relative to that file (§171.3). So what is proven here is
+`plugin` list in `opencode.json`, spelled relative to that file (§171.3): the tree's directory,
+whose `index.js` loads the module for either of opencode's runtimes (D-521). So what is proven here is
 that the two land together and come apart together, that the list keeps every plugin somebody
 else put there (INV-257), and that the review says the registration runs code (INV-256).
 """
@@ -16,6 +17,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from aart_cli.domain.hooks import PluginEntry, plugin_index
 from aart_cli.domain.plugin_members import PluginMember
 from aart_cli.domain.result import Ok
 from aart_cli.io import telemetry_sync
@@ -50,7 +52,9 @@ AUTHORED: tuple[tuple[str, str] | tuple[str, str, bool], ...] = (
 
 COORDINATE = "company/plugin/superpowers"
 TREE = ".opencode/aart-cli/plugin/company/superpowers"
-REFERENCE = f"./{TREE}/payload/.opencode/plugins/superpowers.js"
+#: The tree, whose `index.js` loads the module, for OpenCode 1.x and OpenCode 2 alike (D-521).
+REFERENCE = f"./{TREE}"
+ENTRY_MODULE = f"{TREE}/payload/.opencode/plugins/superpowers.js"
 
 #: What the user configured for themselves: an npm plugin and a local one.
 EXISTING = {
@@ -80,7 +84,7 @@ class PluginInstallationTest(unittest.TestCase):
         code, payload = self._install("--yes")
 
         self.assertEqual(code, 0, payload)
-        module = self.env.project / REFERENCE
+        module = self.env.project / ENTRY_MODULE
         self.assertEqual(MODULE, module.read_text(encoding="utf-8"))
         self.assertTrue(
             (self.env.project / TREE / "payload/skills/brainstorming/SKILL.md").is_file()
@@ -90,6 +94,54 @@ class PluginInstallationTest(unittest.TestCase):
             (self.env.project / ".opencode/plugins").exists(),
             "a plugin's files reached a directory OpenCode scans on its own",
         )
+
+    def test_the_tree_holds_the_index_both_opencode_runtimes_load(self) -> None:
+        code, payload = self._install("--yes")
+
+        self.assertEqual(code, 0, payload)
+        index = self.env.project / TREE / "index.js"
+        written = PluginEntry(REFERENCE, "payload/.opencode/plugins/superpowers.js")
+        self.assertEqual(plugin_index(written), index.read_text(encoding="utf-8"))
+        self.assertIn('from "./payload/.opencode/plugins/superpowers.js"', index.read_text())
+        (installed,) = self._installed()
+        self.assertEqual((written,), tuple(item.entry for item in installed.receipt.settings))
+
+    def test_a_removed_index_is_drift_that_a_repair_puts_back(self) -> None:
+        self._install("--yes")
+        index = self.env.project / TREE / "index.js"
+        index.unlink()
+
+        code, payload = self.env.run("consume", "status", "--profile", "opencode")
+        self.assertEqual(code, 0, payload)
+        self.assertNotEqual("ready", payload["items"][0]["health"])
+
+        code, review = self.env.run("doctor", "--repair", COORDINATE + "@7.0.0")
+        self.assertEqual(code, 0, review)
+        self.assertEqual(
+            {"settings:opencode"}, {step["component"] for step in review["review"]["steps"]}
+        )
+        code, applied = self.env.run(
+            "doctor",
+            "--repair",
+            COORDINATE + "@7.0.0",
+            "--yes",
+            "--expect",
+            review["review_digest"],
+        )
+
+        self.assertEqual(code, 0, applied)
+        self.assertTrue(index.is_file())
+        code, payload = self.env.run("consume", "status", "--profile", "opencode")
+        self.assertEqual("ready", payload["items"][0]["health"])
+
+    def test_an_edited_index_is_drift(self) -> None:
+        self._install("--yes")
+        (self.env.project / TREE / "index.js").write_text('export default "other"\n')
+
+        code, payload = self.env.run("consume", "status", "--profile", "opencode")
+
+        self.assertEqual(code, 0, payload)
+        self.assertNotEqual("ready", payload["items"][0]["health"])
 
     def test_the_receipt_records_the_skills_it_carries_and_places_none_of_them(self) -> None:
         before = _files(self.env.root)

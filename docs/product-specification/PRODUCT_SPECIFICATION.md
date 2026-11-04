@@ -10910,18 +10910,31 @@ declarations are not runtime dependencies.
 
 ## 171.3 Registration
 
+**Amended 2026-11-04 by D-521:** the entry names the installation's tree, which both of opencode's
+plugin runtimes load.
+
 Installing a plugin owns one entry of the harness's plugin list and nothing else in the file:
-- OpenCode 1.x reads that list from the `plugin` key of `opencode.json` at the chosen scope's root:
-  the project root for Project, the opencode config directory for User.
-- The entry is the entry module's path relative to the directory holding that file, so a project's
-  committed configuration names no machine-specific path.
+- opencode reads that list from the `plugin` key of `opencode.json` at the chosen scope's root:
+  the project root for Project, the opencode config directory for User. OpenCode 2 reads the same
+  files and takes the `plugin` key into its own `plugins`.
+- The entry is the path of the installation's tree relative to the directory holding that file, so
+  a project's committed configuration names no machine-specific path.
+- The tree holds, beside its payload, one file aart-cli writes: `index.js`, which loads the entry
+  module. OpenCode 1.x resolves the directory to that file; OpenCode 2 loads only a directory, and
+  finds the same file (measured on 1.19.4 and 2.1.3). It passes through every export of the module
+  and, as the default, the module's own default, or its first function when it has none. OpenCode
+  1.x therefore loads what it loaded from the module itself, once; OpenCode 2 loads a module whose
+  default is its definition, `{ id, setup }` or `{ id, effect }`, and refuses one written only for
+  1.x with its own error, which is the plugin's to fix.
 - The installation's tree and therefore its entry follow the versionless installed-name rules of
   §169.7. An update keeps the same entry, and two Registries or two scopes never share one.
 
-OpenCode 2.x reads a `plugins` key, and migrates the `plugin` key into it, but loads only the
-directory form: measured on 2.1.3 and 2.2.5, the module path this entry is is skipped with a
-warning. It is not supported in this release (B-272). Supporting it is a new measured target, not a
-fallback written beside this one.
+One harness, `opencode`, covers both runtimes, because both read the same configuration, skills,
+MCP servers and instruction files from the same places; a second harness would put two
+installations into one file (D-521).
+
+A receipt written before D-521 names the module itself, which OpenCode 1.x still loads; it reads as
+it was, and an update writes the tree.
 
 A harness that measures no plugin target refuses a plugin it was asked for by name and is left
 out when it was not, exactly as for every other kind.
@@ -10938,8 +10951,10 @@ the install before any mutation.
 - Uninstall removes exactly this installation's entry from the list, leaves the list and every other
   entry as found, and removes the installation's tree.
 - Status and verification compare the payload against its recorded digest and the entry against
-  the receipt. A missing or edited entry is drift and is never assumed away.
-- Repair re-materializes the payload from the installation's own copy and re-registers the entry.
+  the receipt. A missing or edited entry is drift and is never assumed away, and so is a missing or
+  edited `index.js`.
+- Repair re-materializes the payload from the installation's own copy and re-registers the entry,
+  writing `index.js` again.
 
 A plugin's internal names, such as the skills it registers or the tools it adds, are its own
 content. AART neither rewrites nor namespaces them, and says so on Details. **Amended 2026-10-30 by D-506

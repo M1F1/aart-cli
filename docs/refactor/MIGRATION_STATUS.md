@@ -8,7 +8,10 @@ contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 OpenCode 2 refused the usage plugin, which had only a named 1.x export. It now default-exports
 `{ id, server, setup }`: 1.x loads `server` and `tool.execute.before`, OpenCode 2 `setup` and
 `ctx.tool.hook("execute.before")`. OpenCode 2's own `opencode_<tool>` tools are no use. Measured
-live on opencode 1.19.4 and opencode2 2.1.3. CP-62 was released in 0.30.0. B-272 is open.
+live on opencode 1.19.4 and opencode2 2.1.3. An installed plugin's entry is now its tree, holding an
+`index.js` aart-cli writes that both runtimes load (§171.3, §171.5, D-521); a missing or edited one
+is drift. Live end to end on both builds at project and user scope with a fake model and a fake MCP:
+plugin, MCP, skill and Activity. CP-62 was released in 0.30.0. B-272 is done.
 Evidence: `docs/refactor/slices/OPENCODE-2-USAGE-one-plugin-both-runtimes.md`.
 
 **2026-11-03, CP-62 (§213, D-519, INV-340): the rest of contract revision 7.**

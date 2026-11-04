@@ -25,6 +25,7 @@ from aart_cli.domain.hooks import (
     HookEntryShape,
     PluginEntry,
     merge_settings_entry,
+    plugin_index,
     remove_settings_entry,
     settings_entry_at,
     settings_entry_to_json,
@@ -44,6 +45,10 @@ REFERENCE = (
     "./.opencode/aart-cli/plugin/company/superpowers/payload/.opencode/plugins/superpowers.js"
 )
 ENTRY = PluginEntry(REFERENCE)
+TREE = "./.opencode/aart-cli/plugin/company/superpowers"
+MODULE = "payload/.opencode/plugins/superpowers.js"
+#: The form every install writes (D-521): the tree, whose `index.js` loads the module.
+TREE_ENTRY = PluginEntry(TREE, MODULE)
 THEIRS = ["opencode-wakatime", "./mine/plugin.ts"]
 
 
@@ -148,6 +153,61 @@ class RegisteringAPluginIsHighRiskTest(unittest.TestCase):
         self.assertTrue(policy.permits_effect(UnmergeSettingsEntry(*plugin, ENTRY)))
 
 
+class APluginEntryNamingItsTreeTest(unittest.TestCase):
+    def test_the_harness_is_told_the_tree(self) -> None:
+        self.assertEqual(TREE, settings_entry_to_json(TREE_ENTRY))
+        self.assertEqual({"plugin": [TREE]}, _merged({}, TREE_ENTRY))
+
+    def test_only_a_tree_inside_the_scope_and_a_module_inside_its_payload_are_accepted(
+        self,
+    ) -> None:
+        for reference, module in (
+            ("/abs/tree", MODULE),
+            ("tree", MODULE),
+            ("./a/../../escape", MODULE),
+            ("./a/./b", MODULE),
+            ("./tree\n", MODULE),
+            (TREE, "payload/../../escape.js"),
+            (TREE, ".opencode/plugins/superpowers.js"),
+            (TREE, "payload/plugin.json"),
+            (TREE, "/payload/p.js"),
+            (TREE, ""),
+        ):
+            with self.subTest(reference=reference, module=module), self.assertRaises(ValueError):
+                PluginEntry(reference, module)
+        self.assertEqual(MODULE, PluginEntry("./t", MODULE).module)
+
+    def test_the_index_loads_the_module_and_nothing_else(self) -> None:
+        index = plugin_index(TREE_ENTRY)
+
+        self.assertEqual(
+            ['"./payload/.opencode/plugins/superpowers.js"'] * 2,
+            [line.rsplit(" from ", 1)[1] for line in index.splitlines() if " from " in line],
+        )
+        self.assertIn("export default plugin.default ??", index)
+        with self.assertRaises(ValueError):
+            plugin_index(ENTRY)
+
+    @given(
+        st.lists(
+            st.from_regex(r"[A-Za-z0-9_+-][A-Za-z0-9_.+-]{0,8}", fullmatch=True),
+            min_size=1,
+            max_size=4,
+        ),
+        st.sampled_from(("js", "mjs", "ts")),
+    )
+    def test_every_module_the_payload_can_hold_is_imported_as_itself(
+        self, parts: list[str], extension: str
+    ) -> None:
+        module = "payload/" + "/".join(parts) + "." + extension
+        try:
+            entry = PluginEntry("./t", module)
+        except ValueError:
+            self.assertTrue(any(part in (".", "..") for part in module.split("/")))
+            return
+        self.assertIn(f'export * from "./{module}"\n', plugin_index(entry))
+
+
 class APluginReceiptReadsBackAsWrittenTest(unittest.TestCase):
     def test_the_entry_survives_a_round_trip(self) -> None:
         receipt = PlacedArtifactReceipt(
@@ -160,6 +220,34 @@ class APluginReceiptReadsBackAsWrittenTest(unittest.TestCase):
         self.assertEqual(
             Ok(receipt), placed_artifact_receipt_from_data(placed_artifact_receipt_to_data(receipt))
         )
+
+    def test_the_tree_and_its_module_survive_a_round_trip(self) -> None:
+        receipt = PlacedArtifactReceipt(
+            "company/plugin/superpowers",
+            "/p/.opencode/aart-cli/plugin/company/superpowers",
+            sha256_bytes(b"payload"),
+            settings=(ArtifactSettingsEntry("opencode", "/p/opencode.json", PATH, TREE_ENTRY),),
+        )
+
+        data = placed_artifact_receipt_to_data(receipt)
+
+        self.assertEqual(Ok(receipt), placed_artifact_receipt_from_data(data))
+        self.assertEqual(
+            {"plugin": TREE, "module": MODULE},
+            {key: data["settings"][0][key] for key in ("plugin", "module")},
+        )
+
+    def test_a_receipt_from_before_the_tree_entry_reads_as_its_module_path(self) -> None:
+        receipt = PlacedArtifactReceipt(
+            "company/plugin/superpowers",
+            "/p/.opencode/aart-cli/plugin/company/superpowers",
+            sha256_bytes(b"payload"),
+            settings=(ArtifactSettingsEntry("opencode", "/p/opencode.json", PATH, ENTRY),),
+        )
+        data = placed_artifact_receipt_to_data(receipt)
+
+        self.assertNotIn("module", data["settings"][0])
+        self.assertEqual(Ok(receipt), placed_artifact_receipt_from_data(data))
 
 
 class OpenCodeIsTheMeasuredPluginHostTest(unittest.TestCase):

@@ -564,6 +564,8 @@ def effect_to_data(effect: Effect) -> dict[str, object]:
         )
         if isinstance(effect.entry, PluginEntry):
             data.update(plugin=effect.entry.reference)
+            if effect.entry.module is not None:
+                data.update(module=effect.entry.module)
         else:
             data.update(
                 shape=effect.entry.shape.value,

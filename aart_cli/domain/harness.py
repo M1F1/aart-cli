@@ -710,7 +710,9 @@ class PluginTarget:
 #: Measured plugin registrations. OpenCode 1.18.29, 2026-10-15 (D-406): the `plugin` list of the
 #: `opencode.json` at the project root, and of the one in the config directory `opencode debug
 #: paths` reports for the user, each loading a `./` path relative to the file that names it. No
-#: other measured harness loads code this way; OpenCode 2.x's `plugins` key is unmeasured.
+#: other measured harness loads code this way. OpenCode 2 (2.1.3, 2026-11-04, D-521) reads the same
+#: files and takes this key into its `plugins`, loading only a directory entry -- which is why the
+#: entry names the installation's tree.
 PLUGIN_TARGETS: dict[tuple[str, Scope], PluginTarget] = {
     ("opencode", Scope.PROJECT): PluginTarget("opencode", Scope.PROJECT, "opencode.json", "plugin"),
     ("opencode", Scope.USER): PluginTarget(
