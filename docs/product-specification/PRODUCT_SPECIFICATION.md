@@ -10918,8 +10918,10 @@ Installing a plugin owns one entry of the harness's plugin list and nothing else
 - The installation's tree and therefore its entry follow the versionless installed-name rules of
   §169.7. An update keeps the same entry, and two Registries or two scopes never share one.
 
-OpenCode 2.x reads a `plugins` key that accepts only the directory form. It is not measured in
-this release. Supporting it is a new measured target, not a fallback written beside this one.
+OpenCode 2.x reads a `plugins` key, and migrates the `plugin` key into it, but loads only the
+directory form: measured on 2.1.3 and 2.2.5, the module path this entry is is skipped with a
+warning. It is not supported in this release (B-272). Supporting it is a new measured target, not a
+fallback written beside this one.
 
 A harness that measures no plugin target refuses a plugin it was asked for by name and is left
 out when it was not, exactly as for every other kind.
@@ -12609,10 +12611,14 @@ JSON files, in preparation for a telemetry server that does not exist yet.
   reported, and the moment. Never what a tool was called with, a prompt or an answer. Claude Code:
   a `Skill` tool call is the skill's name; `mcp__<server>__<tool>` is the server. opencode: the
   `skill` tool is the skill's name; a tool whose name holds `_` is kept whole as an MCP tool and
-  ranked under the longest installed MCP server name it starts with.
+  ranked under the longest installed MCP server name it starts with, except OpenCode 2's own
+  `opencode_<tool>` tools, which are no use (D-520).
 - **The hook.** A user-level hook in each harness, not a Marketplace artifact: an entry in Claude
   Code's `~/.claude/settings.json` (`PreToolUse`, matcher `Skill|mcp__.*`, `async`), and a plugin
-  `~/.config/opencode/plugins/aart-cli-usage.js` (`tool.execute.before`, a detached process). Both run
+  `~/.config/opencode/plugins/aart-cli-usage.js` (a detached process). Its one export is a default
+  definition both opencode runtimes load: OpenCode 1.x (from 1.18.29) through `server` and
+  `tool.execute.before`, OpenCode 2 through `setup` and `ctx.tool.hook("execute.before")` (D-520).
+  Every start of aart-cli rewrites it, so an upgrade replaces an older one. Both run
   this aart-cli's own Python with `-I` and its own `aart_cli/io/usage_hook.py` by absolute path, so
   nothing in the project can replace what runs. The hook never writes to stdout and always exits 0;
   what it cannot read or write records nothing. Settings that are not JSON, or whose hooks are not

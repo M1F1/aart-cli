@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-04, OPENCODE-2-USAGE (§212, D-520): one usage plugin both opencode runtimes load.**
+OpenCode 2 refused the usage plugin, which had only a named 1.x export. It now default-exports
+`{ id, server, setup }`: 1.x loads `server` and `tool.execute.before`, OpenCode 2 `setup` and
+`ctx.tool.hook("execute.before")`. OpenCode 2's own `opencode_<tool>` tools are no use. Measured
+live on opencode 1.19.4 and opencode2 2.1.3. CP-62 was released in 0.30.0. B-272 is open.
+Evidence: `docs/refactor/slices/OPENCODE-2-USAGE-one-plugin-both-runtimes.md`.
+
 **2026-11-03, CP-62 (§213, D-519, INV-340): the rest of contract revision 7.**
 An install, update or removal says the TUI or the command line, its duration, the version an update
 replaced, the package's digest, how many configuration values and credentials it asked for, and

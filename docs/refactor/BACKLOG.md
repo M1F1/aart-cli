@@ -5396,3 +5396,24 @@ which tool is about to run, and the contract's sources are only `claude_hook` an
 `opencode_plugin`. If Tabnine's CLI gains such a hook, it needs a source on both sides (aart-cli's
 `USAGE_HARNESSES`, `TELEMETRY_SOURCES`, and the server's contract) and a hook writer like opencode's
 plugin.
+
+## B-272 — A plugin installed for opencode is not loaded by OpenCode 2
+
+Measured on opencode2 2.1.3 and 2.2.5 (D-520's test beds): OpenCode 2 reads the same
+`opencode.json` and migrates its `plugin` key into `plugins`, but a configured plugin path that is a
+file is skipped with the warning "configured plugin path must be a directory". §171.3's entry is the
+entry module's path, so a plugin aart-cli installs never loads there. Skills, MCP servers and the
+usage plugin are unaffected.
+
+What was found so far, not yet a design:
+- OpenCode 2 loads a directory entry whose `package.json` has `name` and `exports` pointing at a
+  module inside that directory, and calls its `setup`; the installation tree is such a directory
+  once it holds that `package.json`.
+- OpenCode 1.18.29 skips a directory entry without an error, so listing both the module path and the
+  tree's directory may serve both runtimes; that is unmeasured on 1.19.4 and on the loaded-twice
+  question.
+- The plugin itself must be written for OpenCode 2 (a default `{ id, setup }`) to do anything there.
+- Separately, opencode 1.x and 2 keep the same `~/.local/share/opencode/opencode.db`; one written
+  by 2 is refused by 1.x ("Database is not empty and has no session table"). Not aart-cli's, but it
+  is why a check of both builds needs a home each.
+

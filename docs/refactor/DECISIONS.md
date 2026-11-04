@@ -13044,3 +13044,34 @@ cursor, which stays open as B-270.
 - **Not chosen.** Sending the session id hashed without a key, which anyone holding the id could
   reverse by hashing it again. Resolving a use's scope in the hook, which would read every receipt
   on every tool call. Counting input names or sending which inputs were skipped.
+
+## D-520 — One opencode usage plugin both opencode runtimes load (OPENCODE-2-USAGE)
+
+§212 amended ("The hook", "What a use is"). A build of opencode on the OpenCode 2 runtime refused
+aart-cli's usage plugin: "Plugin must export a default definition with an id and an effect or setup
+function". The plugin had only a named, 1.x-style export.
+
+- **One file, one export.** `~/.config/opencode/plugins/aart-cli-usage.js` default-exports
+  `{ id: "aart-cli-usage", server, setup }`. OpenCode 1.x (from 1.18.29) loads an object entrypoint
+  through `server`, whose hooks are `tool.execute.before` as before. OpenCode 2 validates the
+  default export as `{ id, setup }` and calls `setup(ctx)`, which registers
+  `ctx.tool.hook("execute.before", event)`; the event carries `tool`, `input` and `sessionID`, and
+  the directory is `ctx.location.directory`. There is no named export: a 1.x loader that reads
+  every export would load a second one twice.
+- **OpenCode 2's own rules.** A hook that throws fails the tool call there, so the hook body never
+  throws; whatever `setup` returns is taken as its cleanup, so it returns nothing; a `setup` called
+  without `ctx.tool.hook` registers nothing.
+- **The skill's name.** OpenCode 2's `skill` tool takes `id`, 1.x's `name`; the plugin hands over
+  whichever is there. Both are the skill's directory name, which is the name aart-cli installs.
+- **OpenCode 2's own tools.** It names them `opencode_<tool>` (`opencode_list_mcp_resources`,
+  `opencode_schedule_create`, ...), a shape an MCP tool's `<server>_<tool>` fits; `use_from_hook`
+  records none of them. MCP tools keep `<server>_<tool>` in OpenCode 2, CodeMode's inner calls
+  included.
+- **No migration.** Every aart-cli start rewrites the plugin from the current template, so an
+  upgraded aart-cli replaces the old file the next time it runs.
+- **Measured.** Live, in a temporary home, with the real usage hook: on opencode 1.19.4 the old and
+  the new plugin both record a skill and an MCP tool call once; on opencode2 2.1.3 the old plugin
+  fails to load and records nothing, the new one records both, with the session pseudonym. The
+  types and source of `@opencode/plugin` and `@opencode/core` 2.2.5 give the event's shape.
+- **Not chosen.** Keeping the named export beside the default one (1.x loads both). Detecting the
+  runtime's version when writing the file (one machine runs both builds).

@@ -2151,7 +2151,7 @@
     {
       "id": "CP-62",
       "title": "The rest of contract revision 7: how an action ran, how it came, and a use's session and scope (§213, D-519)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -2166,6 +2166,33 @@
         {
           "id": "3",
           "title": "Spec §213, D-519, B-269 resolved, B-270, B-271, disclosures, slice",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "The PR",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "OPENCODE-2-USAGE",
+      "title": "One opencode usage plugin both opencode runtimes load, measured on 1.19.4 and 2.1.3 (§212, D-520)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "The plugin's one default export: server for 1.x, setup for 2",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "OpenCode 2's opencode_<tool> tools are no use",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "Live on opencode 1.19.4 and opencode2 2.1.3, old and new plugin",
           "status": "done"
         },
         {

@@ -1,6 +1,19 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-03, CP-62, the PR)
+## Where the work is (2026-11-04, OPENCODE-2-USAGE, the PR)
+
+**OPENCODE-2-USAGE** makes aart-cli's opencode usage plugin load on both opencode runtimes (§212,
+D-520): one default export, `server` for OpenCode 1.x and `setup` for OpenCode 2, and OpenCode 2's
+own `opencode_<tool>` tools are no use. Measured live on opencode 1.19.4 (most people) and
+opencode2 2.1.3 (preview), old plugin against new.
+
+The code, tests and docs are on `fix/opencode-2-usage-plugin` (worktree
+`/Users/mifi/code/aart-cli-context-rest`). Next: the PR, CI, the owner's review and merge, then the
+Release Please PR. After that, B-272: a plugin installed for opencode does not load on OpenCode 2.
+
+Evidence: `docs/refactor/slices/OPENCODE-2-USAGE-one-plugin-both-runtimes.md`.
+
+## Where the work was (2026-11-03, CP-62, released in 0.30.0)
 
 **CP-62** sends the rest of contract revision 7 (§213, D-519), with the focus on opencode:
 
@@ -11,9 +24,7 @@
 - a use says a keyed `session` pseudonym, the `scope` of the installation its directory reached,
   and Claude Code's MCP `tool`; the directory and the session id never leave the machine.
 
-The code, tests and docs are done on `feat/telemetry-context-rest` (worktree
-`/Users/mifi/code/aart-cli-context-rest`), in PR #133. Next: CI's full suite on #133, the owner's
-review and merge, then the Release Please PR. B-270 (resending events sent before revision
+PR #133 was merged and released in 0.30.0. B-270 (resending events sent before revision
 7) and B-271 (Tabnine uses) are open.
 
 Evidence: `docs/refactor/slices/CP-62-the-rest-of-revision-7.md`.
