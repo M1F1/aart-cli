@@ -724,7 +724,9 @@ def _settings_entry_to_data(item: ArtifactSettingsEntry) -> dict[str, object]:
         "path": item.path,
     }
     if isinstance(item.entry, PluginEntry):
-        return {**common, "plugin": item.entry.reference}
+        if item.entry.module is None:
+            return {**common, "plugin": item.entry.reference}
+        return {**common, "plugin": item.entry.reference, "module": item.entry.module}
     return {
         **common,
         "command": item.entry.command,
@@ -744,7 +746,9 @@ def _settings_entry(value: object) -> ArtifactSettingsEntry:
             str(value["harness"]),
             str(value["destination"]),
             str(value["path"]),
-            PluginEntry(str(value["plugin"])),
+            PluginEntry(
+                str(value["plugin"]), None if value.get("module") is None else str(value["module"])
+            ),
         )
     for key in ("harness", "destination", "path", "shape", "matcher", "command"):
         if key not in value:

@@ -88,6 +88,24 @@ class OpencodePluginTest(unittest.TestCase):
             with self.subTest(tool=tool):
                 self.assertIsNone(use_from_hook("opencode", {"tool": tool}))
 
+    def test_opencode_2_s_own_namespaced_tools_are_no_use(self) -> None:
+        """OpenCode 2 names its own tools `opencode_<tool>`, which an MCP tool's shape fits (D-520);
+        measured on 2.1.3, whose `opencode_list_mcp_resources` reached the hook beside an MCP
+        call."""
+
+        for tool in (
+            "opencode_list_mcp_resources",
+            "opencode_read_mcp_resource",
+            "opencode_schedule_create",
+            "opencode_worktree_list",
+        ):
+            with self.subTest(tool=tool):
+                self.assertIsNone(use_from_hook("opencode", {"tool": tool}))
+        self.assertEqual(
+            use_from_hook("opencode", {"tool": "opencodex_search"}),
+            ArtifactUse("opencode", UsageKind.MCP, "opencodex_search"),
+        )
+
 
 class NothingButNamesTest(unittest.TestCase):
     @settings(max_examples=300)

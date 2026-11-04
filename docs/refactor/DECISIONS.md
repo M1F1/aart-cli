@@ -13044,3 +13044,66 @@ cursor, which stays open as B-270.
 - **Not chosen.** Sending the session id hashed without a key, which anyone holding the id could
   reverse by hashing it again. Resolving a use's scope in the hook, which would read every receipt
   on every tool call. Counting input names or sending which inputs were skipped.
+
+## D-520 — One opencode usage plugin both opencode runtimes load (OPENCODE-2-USAGE)
+
+§212 amended ("The hook", "What a use is"). A build of opencode on the OpenCode 2 runtime refused
+aart-cli's usage plugin: "Plugin must export a default definition with an id and an effect or setup
+function". The plugin had only a named, 1.x-style export.
+
+- **One file, one export.** `~/.config/opencode/plugins/aart-cli-usage.js` default-exports
+  `{ id: "aart-cli-usage", server, setup }`. OpenCode 1.x (from 1.18.29) loads an object entrypoint
+  through `server`, whose hooks are `tool.execute.before` as before. OpenCode 2 validates the
+  default export as `{ id, setup }` and calls `setup(ctx)`, which registers
+  `ctx.tool.hook("execute.before", event)`; the event carries `tool`, `input` and `sessionID`, and
+  the directory is `ctx.location.directory`. There is no named export: a 1.x loader that reads
+  every export would load a second one twice.
+- **OpenCode 2's own rules.** A hook that throws fails the tool call there, so the hook body never
+  throws; whatever `setup` returns is taken as its cleanup, so it returns nothing; a `setup` called
+  without `ctx.tool.hook` registers nothing.
+- **The skill's name.** OpenCode 2's `skill` tool takes `id`, 1.x's `name`; the plugin hands over
+  whichever is there. Both are the skill's directory name, which is the name aart-cli installs.
+- **OpenCode 2's own tools.** It names them `opencode_<tool>` (`opencode_list_mcp_resources`,
+  `opencode_schedule_create`, ...), a shape an MCP tool's `<server>_<tool>` fits; `use_from_hook`
+  records none of them. MCP tools keep `<server>_<tool>` in OpenCode 2, CodeMode's inner calls
+  included.
+- **No migration.** Every aart-cli start rewrites the plugin from the current template, so an
+  upgraded aart-cli replaces the old file the next time it runs.
+- **Measured.** Live, in a temporary home, with the real usage hook: on opencode 1.19.4 the old and
+  the new plugin both record a skill and an MCP tool call once; on opencode2 2.1.3 the old plugin
+  fails to load and records nothing, the new one records both, with the session pseudonym. The
+  types and source of `@opencode/plugin` and `@opencode/core` 2.2.5 give the event's shape.
+- **Not chosen.** Keeping the named export beside the default one (1.x loads both). Detecting the
+  runtime's version when writing the file (one machine runs both builds).
+
+## D-521 — A plugin is registered by its tree, which both opencode runtimes load (OPENCODE-2-USAGE)
+
+§171.3 and §171.5 amended; B-272 done. OpenCode 2 skipped every plugin aart-cli installed, because
+the entry was the module's path and OpenCode 2 loads only a directory entry.
+
+- **One entry, the tree.** The entry in `opencode.json`'s `plugin` list is the installation's tree,
+  `./.opencode/aart-cli/plugin/<registry>/<name>` (relative to the file, as before), and the tree
+  holds an `index.js` aart-cli writes beside `payload/`. Measured on 1.19.4 and 2.1.3: OpenCode 1.x
+  resolves the directory to `index.js`; OpenCode 2.1.3 tries the directory's `server` and then its
+  `index` file, reading no `package.json`. Later OpenCode 2 builds were not measured.
+  INV-257's one entry and one tree hold.
+- **What `index.js` is.** `export *` from the entry module, and as the default the module's own
+  default, or its first function when it has none. A plugin written for both runtimes
+  (`export default { id, server, setup }`) loads once on each. A plugin written only for 1.x
+  (named function exports) loads once on 1.19.4, which does not load one function twice under two
+  names, and OpenCode 2 refuses it with its own error: there is no 1.x API to adapt it to.
+- **Owned like the entry.** It is written by the settings-entry interpreter before the entry, only
+  into the existing, unlinked tree. A missing or edited `index.js` is drift of the settings
+  component, and a repair writes it again. Uninstall removes it with the tree.
+- **Older receipts.** `PluginEntry` keeps its module-path form, with no `module`; a receipt from
+  before this reads as it was, so one installed plugin does not make every receipt unreadable. An
+  update writes the tree form.
+- **One harness.** `opencode` stays one harness for both runtimes. They read the same
+  `opencode.json`, `.opencode/skills`, `mcp` key and `AGENTS.md`, so an `opencode2` harness would
+  put two installations into one key or one directory; and writing OpenCode 2's own spellings
+  (`mcp.servers`, `plugins`) would break 1.x on the same machine. To be revisited if OpenCode 2
+  stops reading the 1.x keys.
+- **Not chosen.** Two entries, the module for 1.x and the directory for 2: 2.1.3 logs a warning for
+  the module entry on every start. A directory with `server.js`: 1.19.4 does not load it. A
+  `package.json` with `exports`: 2.1.3 does not read it. Detecting the runtime's version: one
+  machine runs both builds, under names that differ between distributions.

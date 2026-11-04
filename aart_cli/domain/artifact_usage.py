@@ -55,6 +55,8 @@ _MAX_PROJECT = 4096
 _PSEUDONYM = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 #: The least a session key holds, in bytes.
 _MIN_KEY = 32
+#: The namespace OpenCode 2 gives its own tools, which an MCP tool's `<server>_<tool>` would fit.
+_OPENCODE_OWN = "opencode_"
 
 
 def parse_usage_harnesses(raw: str) -> Result[tuple[str, ...]]:
@@ -204,8 +206,9 @@ def _opencode(payload: Mapping[str, object]) -> ArtifactUse | None:
     if tool == "skill":
         skill = _name(payload.get("skill"))
         return None if skill is None else ArtifactUse("opencode", UsageKind.SKILL, skill, project)
-    # Every MCP tool is `<server>_<tool>`; opencode's own tools have no underscore.
-    if tool is not None and "_" in tool.strip("_"):
+    # Every MCP tool is `<server>_<tool>`; opencode's own tools have no underscore, except that
+    # OpenCode 2 names its own `opencode_<tool>` (D-520).
+    if tool is not None and "_" in tool.strip("_") and not tool.startswith(_OPENCODE_OWN):
         return ArtifactUse("opencode", UsageKind.MCP, tool, project)
     return None
 

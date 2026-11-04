@@ -149,6 +149,11 @@ def opencode_plugin(hook: UsageHook) -> str:
     It hands over the tool's name, a skill's name, the directory and opencode's session id, which
     the hook keeps only as a pseudonym; never the call's arguments. Only `skill` and tools with an
     underscore -- MCP tools are `<server>_<tool>` -- start it.
+
+    One file serves both of opencode's plugin runtimes (D-520): its only export is the default
+    definition, which OpenCode 1.x (from 1.18.29) loads through `server` and OpenCode 2 through
+    `setup`. A second, named export would have 1.x load it twice. OpenCode 2 names the skill it
+    loads `id`, 1.x `name`; either is the skill's directory, which is the name aart-cli installs.
     """
 
     if hook.harness != "opencode":
@@ -160,21 +165,39 @@ import {{ spawn }} from "node:child_process"
 
 const COMMAND = {command}
 
-export const AartCliUsage = async ({{ directory }}) => ({{
-  "tool.execute.before": async (input, output) => {{
-    try {{
-      const tool = String(input.tool)
-      if (tool !== "skill" && !tool.includes("_")) return
-      const skill = tool === "skill" ? output?.args?.name : undefined
-      const session = typeof input.sessionID === "string" ? input.sessionID : undefined
-      const child = spawn(COMMAND[0], COMMAND.slice(1), {{ stdio: ["pipe", "ignore", "ignore"] }})
-      child.on("error", () => {{}})
-      child.stdin.on("error", () => {{}})
-      child.stdin.end(JSON.stringify({{ tool, skill, directory, session }}))
-      child.unref()
-    }} catch {{}}
-  }},
+// Names only: a skill's name, and nothing else the call was given.
+const record = (directory, called, args, sessionID) => {{
+  try {{
+    const tool = String(called)
+    if (tool !== "skill" && !tool.includes("_")) return
+    const named = tool === "skill" ? (args?.id ?? args?.name) : undefined
+    const skill = typeof named === "string" ? named : undefined
+    const session = typeof sessionID === "string" ? sessionID : undefined
+    const child = spawn(COMMAND[0], COMMAND.slice(1), {{ stdio: ["pipe", "ignore", "ignore"] }})
+    child.on("error", () => {{}})
+    child.stdin.on("error", () => {{}})
+    child.stdin.end(JSON.stringify({{ tool, skill, directory, session }}))
+    child.unref()
+  }} catch {{}}
+}}
+
+// OpenCode 1.x.
+const server = async ({{ directory }}) => ({{
+  "tool.execute.before": async (input, output) =>
+    record(directory, input?.tool, output?.args, input?.sessionID),
 }})
+
+// OpenCode 2. A hook that throws fails the tool call, so this one never does; and setup returns
+// nothing, because what it returns is taken as its cleanup.
+async function setup(ctx) {{
+  if (typeof ctx?.tool?.hook !== "function") return
+  const directory = ctx.location?.directory ?? process.cwd()
+  await ctx.tool.hook("execute.before", (event) =>
+    record(directory, event?.tool, event?.input, event?.sessionID),
+  )
+}}
+
+export default {{ id: "aart-cli-usage", server, setup }}
 """
 
 

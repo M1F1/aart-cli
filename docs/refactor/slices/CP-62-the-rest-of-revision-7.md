@@ -1,6 +1,6 @@
 # CP-62 — The rest of contract revision 7, in one PR
 
-Status: **done**, awaiting the PR. Branch `feat/telemetry-context-rest`, worktree
+Status: **done**; PR #133, released in 0.30.0. Branch `feat/telemetry-context-rest`, worktree
 `/Users/mifi/code/aart-cli-context-rest`, from `main` at 0.29.0 (`0e82a58`).
 Authority: Product Specification §213 (amended: "The rest of revision 7"), D-519, INV-340. Resolves B-269; B-270 and B-271 are open.
 The owner asked on 2026-11-03 for all of it in **one PR**, with a strong focus on **opencode**

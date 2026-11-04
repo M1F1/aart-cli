@@ -26,7 +26,7 @@ from aart_cli.application.runtime_projection import RuntimeProjection
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.effects import DeliveryKind
 from aart_cli.domain.harness import McpRegistration
-from aart_cli.domain.hooks import settings_entry_at
+from aart_cli.domain.hooks import PLUGIN_INDEX, PluginEntry, plugin_index, settings_entry_at
 from aart_cli.domain.identifiers import ObjectDigest
 from aart_cli.domain.managed_blocks import managed_block_body
 from aart_cli.domain.python_runtime import ArtifactEnvironment
@@ -233,7 +233,27 @@ def _entry_digest(entry: ArtifactSettingsEntry) -> ObjectDigest | None:
     found = settings_entry_at(document, entry.path, entry.entry)
     if isinstance(found, Err) or found.value is None:
         return None
+    if not _indexed(entry):
+        # The entry is there and loads nothing it should: drift, which a repair rewrites (D-521).
+        return settings_entry_digest({"entry": found.value, "index": "missing or changed"})
     return settings_entry_digest(found.value)
+
+
+def _indexed(entry: ArtifactSettingsEntry) -> bool:
+    """Whether a plugin entry naming its tree finds the `index.js` aart-cli wrote there."""
+
+    plugin = entry.entry
+    if not isinstance(plugin, PluginEntry) or plugin.module is None:
+        return True
+    tree = os.path.normpath(os.path.join(os.path.dirname(entry.destination), plugin.reference))
+    index = os.path.join(tree, PLUGIN_INDEX)
+    try:
+        if os.path.islink(index) or not os.path.isfile(index):
+            return False
+        with open(index, "rb") as handle:
+            return handle.read() == plugin_index(plugin).encode("utf-8")
+    except OSError:
+        return False
 
 
 def _merged_digest(merge: ArtifactMerge) -> ObjectDigest | None:

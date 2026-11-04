@@ -273,7 +273,8 @@ def _plugin_settings(
     skills the plugin carries, which are installed with it (§214).
 
     Nothing is delivered: the module stays in the private tree, which no measured harness scans,
-    and the entry is what makes the harness load it. It is spelled relative to the settings file,
+    and the entry -- the tree's own directory, whose `index.js` loads the module (D-521) -- is what
+    makes the harness load it. It is spelled relative to the settings file,
     because that is how OpenCode resolves it, so the tree and the entry move together with the
     root. An entry that would have to climb out of the settings file's directory is refused by
     `PluginEntry` rather than written, since it is no longer a path inside this installation.
@@ -290,10 +291,14 @@ def _plugin_settings(
             return Ok(((), ()))
         return _error(str(error).strip("'"))
     settings = os.path.join(harness_root, target.settings)
-    module = os.path.join(ArtifactEnvironment(str(identity), root).payload, packaged.value.entry)
-    reference = os.path.relpath(module, os.path.dirname(settings)).replace(os.sep, "/")
+    environment = ArtifactEnvironment(str(identity), root)
+    module = os.path.join(environment.payload, packaged.value.entry)
+    # The tree, not the module (D-521): OpenCode 2 loads only a directory, and both runtimes load
+    # the `index.js` the tree holds, which loads the module.
+    reference = os.path.relpath(environment.root, os.path.dirname(settings)).replace(os.sep, "/")
+    inside = os.path.relpath(module, environment.root).replace(os.sep, "/")
     try:
-        entry = PluginEntry(f"./{reference}")
+        entry = PluginEntry(f"./{reference}", inside)
     except ValueError as error:
         return _error(f"{identity} cannot be registered with {profile}: {error}")
     return Ok(
