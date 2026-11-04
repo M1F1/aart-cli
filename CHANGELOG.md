@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.30.1](https://github.com/M1F1/aart-cli/compare/v0.30.0...v0.30.1) (2026-11-04)
+
+
+### Fixed
+
+* a plugin installed for opencode loads on OpenCode 2 as well as 1.x, through an index.js in its tree ([b3eda2f](https://github.com/M1F1/aart-cli/commit/b3eda2f88d9b57e4307c0bd9acfb46dfce4b0fd8))
+* the opencode usage plugin loads on OpenCode 2 as well as 1.x, and OpenCode 2's own opencode_&lt;tool&gt; tools are not recorded as MCP uses ([b3eda2f](https://github.com/M1F1/aart-cli/commit/b3eda2f88d9b57e4307c0bd9acfb46dfce4b0fd8))
+
 ## [0.30.0](https://github.com/M1F1/aart-cli/compare/v0.29.0...v0.30.0) (2026-11-03)
 
 
