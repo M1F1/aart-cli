@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.30.3](https://github.com/M1F1/aart-cli/compare/v0.30.2...v0.30.3) (2026-11-05)
+
+
+### Fixed
+
+* after Required Inputs the screen stays until the next one is ready, so Review Selection is not drawn again ([137783c](https://github.com/M1F1/aart-cli/commit/137783c20df9e3923dc4b5dd388a1061569b33ad))
+* installing a Collection names each member, how many are done, and the running member's steps ([137783c](https://github.com/M1F1/aart-cli/commit/137783c20df9e3923dc4b5dd388a1061569b33ad))
+* Ready's Less info shows only the summary; the changes, stored credentials and AART_NOT_SET inputs are in More info, and storing a credential is no longer listed ([137783c](https://github.com/M1F1/aart-cli/commit/137783c20df9e3923dc4b5dd388a1061569b33ad))
+* Review Selection no longer asks pip or uv; the Settings Python installer is used and Ready names the one that runs ([137783c](https://github.com/M1F1/aart-cli/commit/137783c20df9e3923dc4b5dd388a1061569b33ad))
+* the credentials screen opens on the credential after Required Inputs ([137783c](https://github.com/M1F1/aart-cli/commit/137783c20df9e3923dc4b5dd388a1061569b33ad))
+
 ## [0.30.2](https://github.com/M1F1/aart-cli/compare/v0.30.1...v0.30.2) (2026-11-05)
 
 
