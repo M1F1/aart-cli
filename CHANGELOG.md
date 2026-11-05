@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.30.2](https://github.com/M1F1/aart-cli/compare/v0.30.1...v0.30.2) (2026-11-05)
+
+
+### Fixed
+
+* 07b asks again for a credential whose item still holds a Set later's AART_NOT_SET ([9bca86a](https://github.com/M1F1/aart-cli/commit/9bca86acf1a29e07671598f58d699f9a2d6b47ef))
+* a harness that cannot host a Collection is no longer listed as not offered ([9bca86a](https://github.com/M1F1/aart-cli/commit/9bca86acf1a29e07671598f58d699f9a2d6b47ef))
+* screen 05 draws its own rows while an install is prepared instead of "[ ] None", and says it is preparing ([9bca86a](https://github.com/M1F1/aart-cli/commit/9bca86acf1a29e07671598f58d699f9a2d6b47ef))
+
 ## [0.30.1](https://github.com/M1F1/aart-cli/compare/v0.30.0...v0.30.1) (2026-11-04)
 
 
