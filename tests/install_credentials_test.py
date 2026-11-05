@@ -47,11 +47,17 @@ class _Keeping(_MemoryCredentialProvider):
     A store with no carrier is the provider's own prompt: the person types into it, and the fake
     records only that it asked. `cancelled` makes that prompt come back with nothing stored, and
     `clipped` makes every stored item measure as the 128 bytes the macOS prompt keeps. An item
-    whose address names `held_before` was stored by somebody before this review began.
+    whose address names `held_before` was stored by somebody before this review began; with
+    `placeholder`, what was stored then is the `AART_NOT_SET` a Set later left.
     """
 
     def __init__(
-        self, *, cancelled: bool = False, clipped: bool = False, held_before: str = ""
+        self,
+        *,
+        cancelled: bool = False,
+        clipped: bool = False,
+        held_before: str = "",
+        placeholder: bool = False,
     ) -> None:
         super().__init__()
         self.handed: list[str] = []
@@ -61,7 +67,9 @@ class _Keeping(_MemoryCredentialProvider):
         self.cancelled = cancelled
         self.clipped = clipped
         self.held_before = held_before
+        self.placeholder = placeholder
         self._seen: set[str] = set()
+        self._placeholders: set[str] = set()
 
     def store(self, reference, secret=None, *, replace: bool = False):
         if secret is None:
@@ -71,6 +79,7 @@ class _Keeping(_MemoryCredentialProvider):
                 return Err((Diagnostic(_CANCELLED, Severity.ERROR, "the prompt was cancelled"),))
         else:
             self.handed.append(secret.consume())
+        self._placeholders.discard(self._address(reference))
         self.stored.add(self._address(reference))
         return self.inspect(reference)
 
@@ -78,8 +87,12 @@ class _Keeping(_MemoryCredentialProvider):
         address = self._address(reference)
         if self.held_before and self.held_before in address and address not in self._seen:
             self.stored.add(address)
+            if self.placeholder:
+                self._placeholders.add(address)
         self._seen.add(address)
         observed = super().inspect(reference)
+        if address in self._placeholders and address in self.stored:
+            return Ok(replace(observed.value, placeholder=True))
         if not self.clipped or not self.holds(reference):
             return observed
         return Ok(replace(observed.value, length=128, clipped=True))
@@ -311,6 +324,46 @@ class EnteredOn07bE2ETest(BothBackendsMeasured):
         self.assertNotIn("opencode", provider.prompted[0])
         self.assertEqual(len(journal.briefings), 1)
         self.assertEqual((provider.handed, provider.deleted), ([], []))
+
+    def test_a_placeholder_stored_before_this_review_is_asked_for_again(self) -> None:
+        # An earlier install's Set later left AART_NOT_SET in opencode's item: that is no value, so
+        # 07b asks for it like tabnine's, rather than calling it configured securely.
+        provider = _Keeping(held_before="opencode", placeholder=True)
+        finished, terminal, _, journal, _ = _install(ENTER, DOWN, ENTER, ENTER, provider=provider)
+
+        self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
+        self.assertNotIn("Configured securely", terminal.screen_containing("/ Credentials"))
+        self.assertEqual(len(provider.prompted), 2)
+        self.assertTrue(any("opencode" in item for item in provider.prompted))
+        self.assertEqual(len(journal.briefings), 2)
+        self.assertEqual(provider.handed, [])
+        # The item exists, so the store is asked to replace it; tabnine's is added.
+        replacing = dict(zip(provider.prompted, provider.replacing, strict=True))
+        self.assertEqual(sorted(replacing.values()), [False, True], replacing)
+        self.assertTrue(next(v for k, v in replacing.items() if "opencode" in k))
+
+    def test_a_row_every_installation_holds_as_a_placeholder_is_still_asked(self) -> None:
+        provider = _Keeping(held_before="github", placeholder=True)
+        finished, terminal, _, _, _ = _install(ENTER, DOWN, ENTER, ENTER, provider=provider)
+
+        self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
+        self.assertNotIn("Configured securely", terminal.screen_containing("/ Credentials"))
+        self.assertEqual(len(provider.prompted), 2)
+        self.assertEqual(provider.replacing, [True, True])
+
+    def test_leaving_07b_puts_back_a_placeholder_it_replaced(self) -> None:
+        provider = _Keeping(held_before="opencode", placeholder=True)
+        finished, terminal, _, _, handler = _install(ENTER, ESCAPE, ord("q"), provider=provider)
+
+        self.assertIsNot(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
+        self.assertEqual(len(provider.prompted), 2)
+        opencode = next(item for item in provider.prompted if "opencode" in item)
+        # tabnine's item was this review's and is deleted; opencode's held AART_NOT_SET before
+        # and holds it again, rather than being deleted from under its installation.
+        self.assertEqual(provider.deleted, [item for item in provider.prompted if item != opencode])
+        self.assertEqual(provider.handed, [SKIPPED_INPUT])
+        self.assertEqual(provider.stored, {opencode})
+        self.assertEqual(handler._entered, {})  # noqa: SLF001
 
     def test_set_later_after_entering_keeps_what_was_entered(self) -> None:
         finished, terminal, provider, _, _ = _install(ENTER, UP, ENTER, ENTER)

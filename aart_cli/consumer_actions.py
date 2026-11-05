@@ -154,6 +154,7 @@ from aart_cli.domain.identifiers import (
     SourceAlias,
 )
 from aart_cli.domain.inputs import (
+    SKIPPED_INPUT,
     ConfigInput,
     InputGuidance,
     PromptedConfigValue,
@@ -209,7 +210,7 @@ from aart_cli.io.configured_uninstall_action import (
 from aart_cli.io.consumer_machine import read_consumer_machine, read_installed_inspections
 from aart_cli.io.consumer_settings import write_consumer_settings
 from aart_cli.io.credential_entry import CredentialEntryFallback
-from aart_cli.io.credentials import CredentialProviderPort
+from aart_cli.io.credentials import CredentialProviderPort, TransientSecret
 from aart_cli.io.execution import CredentialEffectInterpreter, TerminalHandover
 from aart_cli.io.failure_journal import FailureJournal
 from aart_cli.io.harness import ScopedHarnessRegistry
@@ -584,20 +585,19 @@ def _grouped_targets(
     targets: tuple[HarnessTargetView, ...],
     groups: dict[str, tuple[str, ...]],
     profiles: tuple[str, ...],
-) -> tuple[tuple[HarnessTargetView, ...], tuple[str, ...]]:
-    """05's harnesses with each Collection standing as one artifact (§173.5, D-422).
+) -> tuple[HarnessTargetView, ...]:
+    """05's harnesses with each Collection standing as one artifact (§173.5, D-422, D-522).
 
     A harness is offered a Collection only when it hosts every member, and then the Collection
-    replaces its members on that row; the members are never offered one by one. Each harness that
-    cannot host a Collection is said to, naming the first member it cannot host.
+    replaces its members on that row; the members are never offered one by one. A harness that
+    cannot host it is simply not offered: nothing says so, because nobody could have chosen it.
     """
 
     if not groups:
-        return targets, ()
+        return targets
     member_of = {member: key for key, members in groups.items() for member in members}
     hosted = {item.harness: item.artifacts for item in targets}
     grouped: list[HarnessTargetView] = []
-    unhosted: list[str] = []
     for profile in profiles:
         artifacts = hosted.get(profile, ())
         row: list[str] = []
@@ -607,13 +607,9 @@ def _grouped_targets(
                 row.append(artifact)
             elif key not in row and all(member in artifacts for member in groups[key]):
                 row.append(key)
-        for key, members in groups.items():
-            missing = next((member for member in members if member not in artifacts), None)
-            if missing is not None:
-                unhosted.append(f"{profile} is not offered for {key}: it cannot host {missing}.")
         if row:
             grouped.append(HarnessTargetView(profile, tuple(row)))
-    return tuple(grouped), tuple(unhosted)
+    return tuple(grouped)
 
 
 def _member_pairs(pairs: tuple[str, ...], groups: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
@@ -910,8 +906,6 @@ class LocalConsumerActions:
         self._machine = context.machine
         self._now = now if now is not None else (lambda: datetime.now(timezone.utc))
         self._pending: _Pending | None = None
-        #: Why 05 offers a harness no Collection of the prepared install (§173.5).
-        self._unhosted: tuple[str, ...] = ()
         self._pending_action: ConsumerActionKind | None = None
         #: The machine the held action was prepared against, so a preference changed between the
         #: review and its confirmation cannot execute a project plan as a user install.
@@ -940,6 +934,9 @@ class LocalConsumerActions:
         #: References only: no value of a credential is ever held in this process. They are
         #: deleted when that review is abandoned or its install fails.
         self._entered: dict[str, CredentialReference] = {}
+        #: Those of them that held a Set later's `AART_NOT_SET` before 07b replaced it: abandoning
+        #: the review puts the placeholder back rather than deleting the installation's item.
+        self._replaced_placeholders: set[str] = set()
         #: The command the held install review was prepared from, to prepare it again after 07b
         #: stored something, because the machine it measured has changed (§207).
         self._install_command: ConsumerUiCommand | None = None
@@ -1350,7 +1347,6 @@ class LocalConsumerActions:
                 ),
                 installation_inputs=installation_inputs,
                 install_targets=install_targets,
-                install_unhosted=self._unhosted,
                 mcp_test=mcp_test,
                 harnesses=self._context.host.profiles,
                 author_report=self._author_report,
@@ -1468,10 +1464,16 @@ class LocalConsumerActions:
                 ),
                 None,
             )
-            if keeper is not None:
-                # A deletion that fails leaves an item Credentials and variables still lists, so
-                # it can be deleted there; nothing here could say more about it.
-                keeper.delete(reference)
+            if keeper is None:
+                continue
+            if raw in self._replaced_placeholders:
+                # It was a placeholder before 07b, and is one again.
+                self._replaced_placeholders.discard(raw)
+                keeper.store(reference, TransientSecret(SKIPPED_INPUT), replace=True)
+                continue
+            # A deletion that fails leaves an item Credentials and variables still lists, so
+            # it can be deleted there; nothing here could say more about it.
+            keeper.delete(reference)
 
     def _ask_secret(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
         """Let the credential store take one 07b row's value now, then prepare the install again.
@@ -1530,11 +1532,15 @@ class LocalConsumerActions:
             if keeper is None:
                 why = _lines(f"nothing here can store {reference.input}")
                 break
+            replacing = raw in self._entered
             if raw not in self._entered:
                 before = keeper.provider.inspect(reference)
                 if isinstance(before, Ok) and before.value.state is CredentialState.PRESENT:
-                    continue
-            replacing = raw in self._entered
+                    if not before.value.placeholder:
+                        continue
+                    # A Set later's AART_NOT_SET is no value: it is asked for, over the item.
+                    replacing = True
+                    self._replaced_placeholders.add(raw)
             # Whatever the prompt leaves behind is this review's, to delete if it is abandoned.
             self._entered[raw] = reference
             applied = keeper.apply(
@@ -1620,6 +1626,8 @@ class LocalConsumerActions:
                 if (
                     not isinstance(observed, Ok)
                     or observed.value.state is not CredentialState.PRESENT
+                    # A Set later's AART_NOT_SET is held, and is no value (§172.3).
+                    or observed.value.placeholder
                     # What 07b stored for this review is still its question, answered (§207).
                     or str(reference) in self._entered
                 ):
@@ -2621,7 +2629,7 @@ class LocalConsumerActions:
             if command.action is ConsumerActionKind.INSTALL
             else ()
         )
-        targets, self._unhosted = _grouped_targets(targets, groups, host.profiles)
+        targets = _grouped_targets(targets, groups, host.profiles)
         # §172.2: until 05 is answered, an artifact only one harness can host has it ticked.
         # §173.7: the Default path takes its harnesses from Settings rather than from 05.
         pairs = command.pairs or (
@@ -3841,6 +3849,7 @@ class LocalConsumerActions:
             return self._failed(command, _refusal(completed.diagnostics))
         # They belong to the installations now, and leave with them (§208).
         self._entered = {}
+        self._replaced_placeholders = set()
         self._machine = completed.value.machine
         receipt = completed.value.action.flow.outcome
         assert receipt is not None

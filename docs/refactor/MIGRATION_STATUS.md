@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-05, REVIEW-05-PREPARING (§173.5, D-522): 05 draws its own rows, and names no harness nobody could choose.**
+While an install was prepared, 05 drew the previous screen's rows: after Set later, 07's form rows
+as `[ ] None`. It now draws its own, and says it is preparing before it has any. A harness that
+cannot host a Collection is no longer listed as not offered. 07b asks again for a credential whose
+item holds a Set later's placeholder (D-523). OPENCODE-2-USAGE was released in
+0.30.1. Evidence: `docs/refactor/slices/REVIEW-05-PREPARING-own-rows-and-no-unoffered-harnesses.md`.
+
 **2026-11-04, OPENCODE-2-USAGE (§212, D-520): one usage plugin both opencode runtimes load.**
 OpenCode 2 refused the usage plugin, which had only a named 1.x export. It now default-exports
 `{ id, server, setup }`: 1.x loads `server` and `tool.execute.before`, OpenCode 2 `setup` and

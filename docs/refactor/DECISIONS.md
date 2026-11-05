@@ -13107,3 +13107,35 @@ the entry was the module's path and OpenCode 2 loads only a directory entry.
   the module entry on every start. A directory with `server.js`: 1.19.4 does not load it. A
   `package.json` with `exports`: 2.1.3 does not read it. Detecting the runtime's version: one
   machine runs both builds, under names that differ between distributions.
+
+## D-522 — 05 says nothing of a harness a Collection cannot use, and draws only its own rows (REVIEW-05-PREPARING)
+
+§173.5 amended (owner decision, 2026-11-05).
+
+- **No "not offered" lines.** 05 named every detected harness that could not host a Collection
+  ("codex is not offered for …: it cannot host …"). Where a Registry's artifacts run on only some
+  harnesses, every install listed the rest, though none of them was ever a choice. A harness that
+  cannot host the Collection is now simply not a column, as a harness that hosts no artifact never
+  was. `_grouped_targets` returns the grouped harnesses alone, and `install_unhosted` is gone.
+- **05 draws its own rows.** While an install is prepared -- after Custom on 05p, a tick, or 07's
+  Continue or Set later -- the shell beats over a frame drawn before it reloads the rows, so
+  `state.rows` still held the previous screen's: 07's form rows were drawn on 05 as `[ ] None`
+  for as long as a Collection took to prepare. 05's matrix and its other rows now come from the
+  screen's own `rows(state)`, and a row 05 cannot name is not drawn.
+- **Preparing says so.** On 05 with no plan and no rows yet while an install is prepared, the body
+  is "Preparing the installation." instead of "Nothing has been planned yet.".
+- **Not chosen.** Drawing `render_running` while preparing: there is no running view before the
+  plan exists, and the steps it lists are the plan's.
+
+## D-523 — A stored `AART_NOT_SET` is asked for again on 07b (REVIEW-05-PREPARING)
+
+§172.6 amended (owner decision, 2026-11-05). 07b called a credential `Configured securely` and asked
+nothing when every installation's item was present, and the item a Set later leaves holds
+`AART_NOT_SET`: an artifact installed once with Set later was never asked for its credential again
+by a later install into the same harness and scope. The provider already says an item is the
+placeholder (`CredentialObservation.placeholder`, compared outside this process); 07b now reads it:
+- a row is configured only when every item is present and none is the placeholder;
+- Enter on such a row lets the store's prompt replace the placeholder item, and leaves alone only an
+  item holding a value somebody stored;
+- abandoning the review, or a failed install, stores the placeholder back into an item that held it,
+  instead of deleting an item an installation still names.

@@ -301,6 +301,8 @@ class HandoverReachesTheInterpreterTest(unittest.TestCase):
             )
             for name in ("ref-x-claude", "ref-x-opencode")
         }
+        # None of them held a Set later's placeholder before 07b (D-523).
+        actions._replaced_placeholders = set()
         actions._context = types.SimpleNamespace(
             policy=None, credential_providers=(_Keeper(),), offline=False
         )

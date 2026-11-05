@@ -2968,6 +2968,10 @@ def _progress_redraw(
     return redraw
 
 
+#: What 05 says while an install is prepared and it has no plan or rows of its own yet.
+PREPARING_INSTALL = "Preparing the installation."
+
+
 #: A running action's mark, one per beat: it turns, so a long run reads as working (§203).
 HEARTBEAT_MARKS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
@@ -3309,9 +3313,6 @@ class ConsumerScreens:
     #: has no plan until they are answered, and they are answered per harness, so the harness is
     #: chosen from this first (#50).
     install_targets: tuple[HarnessTargetView, ...] = ()
-    #: Why 05 does not offer a harness for a Collection: each line names the first member that
-    #: harness cannot host (§173.5).
-    install_unhosted: tuple[str, ...] = ()
     #: The 07a rows while no plan exists yet: the scope is chosen before 07 is answered (§209),
     #: and an install with unanswered inputs has no plan until they are.
     install_scope_offers: tuple[str, ...] = ()
@@ -3621,7 +3622,6 @@ def screens_from(
     adoption_upstream: MaintainerAdoptionUpstreamView | None = None,
     installation_inputs: tuple[InputView, ...] = (),
     install_targets: tuple[HarnessTargetView, ...] = (),
-    install_unhosted: tuple[str, ...] = (),
     mcp_test: McpTestView | None = None,
     harnesses: tuple[str, ...] = (),
     author_report: AuthorCheckReport | None = None,
@@ -3704,7 +3704,6 @@ def screens_from(
         machine.configurations,
         running,
         install_targets,
-        install_unhosted,
         install_scope_offers,
         mcp_test,
         harnesses,
@@ -4991,11 +4990,10 @@ class CanonicalScreenSource:
             and screens.plan is None
             and screens.install_targets
         ):
-            problems = (*screens.install_unhosted, *self._harness_choice_problems(state))
+            problems = self._harness_choice_problems(state)
             if problems or state.session.profile is not PresentationProfile.MORE_INFO:
                 # The ticked cells are the choice; restating them, and what comes after, is for
-                # More info (D-401). A choice that cannot continue still says why, and so does a
-                # harness a Collection is not offered (§173.5).
+                # More info (D-401). A choice that cannot continue still says why.
                 return problems
             return (
                 *_pairs_summary(state.pairs),
@@ -5008,12 +5006,9 @@ class CanonicalScreenSource:
         ):
             problems = pair_choice_problems(screens.plan.targets, state.pairs)
             target_status = (
-                *screens.install_unhosted,
-                *(
-                    problems
-                    if problems or state.session.profile is not PresentationProfile.MORE_INFO
-                    else _pairs_summary(state.pairs)
-                ),
+                problems
+                if problems or state.session.profile is not PresentationProfile.MORE_INFO
+                else _pairs_summary(state.pairs)
             )
             return separate(
                 render_review_selection(screens.plan, state.session.profile),
@@ -5161,7 +5156,9 @@ class CanonicalScreenSource:
         which harness the next Space ticks is visible without a second cursor convention.
         """
 
-        rows = tuple(row for row in state.rows if matrix_from_row(row) is not None)
+        # The rows this screen has now, not `state.rows`: those are the previous screen's until the
+        # shell reloads, and a prepare after 07's Set later is drawn before it does.
+        rows = tuple(row for row in self.rows(state) if matrix_from_row(row) is not None)
         columns = matrix_columns(rows)
         if not columns:
             return ()
@@ -5235,12 +5232,15 @@ class CanonicalScreenSource:
         screen, profile = state.session.screen, state.session.profile
         screens = self._screens
         if screen is ConsumerScreen.REVIEW_SELECTION and self.rows(state):
+            # This screen's own rows: while the answers to 07 are prepared, `state.rows` still
+            # holds 07's form rows, which named nothing here and were drawn as `[ ] None`.
             return (
                 *self._matrix_lines(state),
                 *(
                     self._review_row(row, state)
-                    for row in state.rows
+                    for row in self.rows(state)
                     if matrix_from_row(row) is None
+                    and (installer_from_row(row) is not None or target_from_row(row) is not None)
                 ),
             )
         if screen is ConsumerScreen.INSTALL_SCOPE and self.rows(state):
@@ -5893,6 +5893,14 @@ class CanonicalScreenSource:
 
     def _plan(self, screen: ConsumerScreen, state: ConsumerUiState) -> tuple[str, ...]:
         plan, profile = self._screens.plan, state.session.profile
+        if (
+            plan is None
+            and screen is ConsumerScreen.REVIEW_SELECTION
+            and state.action is ConsumerActionKind.INSTALL
+        ):
+            # What was chosen, and on the way back from 07 what was entered, is being prepared
+            # into the plan; for a Collection that takes a while, and nothing is missing.
+            return (PREPARING_INSTALL,)
         if plan is None:
             return ("Nothing has been planned yet.",)
         if screen is ConsumerScreen.REVIEW_SELECTION:

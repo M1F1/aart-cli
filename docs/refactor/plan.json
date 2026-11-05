@@ -2178,7 +2178,7 @@
     {
       "id": "OPENCODE-2-USAGE",
       "title": "The usage plugin and installed plugins load on both opencode runtimes, measured on 1.19.4 and 2.1.3 (§212, §171.3, D-520, D-521)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -2207,6 +2207,33 @@
         },
         {
           "id": "6",
+          "title": "The PR",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "REVIEW-05-PREPARING",
+      "title": "05 draws its own rows while preparing, names no harness a Collection cannot use, and 07b asks for a stored placeholder (§173.5, §172.6, D-522, D-523)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "05's matrix and rows from rows(state); Preparing the installation before it has any",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "No 'not offered' lines for a harness that cannot host a Collection",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "07b asks for a credential whose item holds AART_NOT_SET, and puts it back if abandoned",
+          "status": "done"
+        },
+        {
+          "id": "4",
           "title": "The PR",
           "status": "in_progress"
         }
