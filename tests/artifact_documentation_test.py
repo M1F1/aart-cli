@@ -432,6 +432,19 @@ def _listed(env, *flags: str) -> tuple[int, str]:
     return code, output.getvalue()
 
 
+def _searched(env, *words: str) -> tuple[int, str]:
+    """`consume search`, which like `consume list` reads every connected Registry."""
+
+    output = io.StringIO()
+    with (
+        mock.patch.dict(os.environ, env.xdg, clear=False),
+        contextlib.redirect_stdout(output),
+        mock.patch("os.getcwd", return_value=str(env.project)),
+    ):
+        code = cli.main(["consume", "search", *words])
+    return code, output.getvalue()
+
+
 class FromTheManifestToEverySurfaceE2ETest(unittest.TestCase):
     """Real compile, scan, assess, promote and publish; each surface reads what was approved."""
 
@@ -511,18 +524,44 @@ class FromTheManifestToEverySurfaceE2ETest(unittest.TestCase):
             done["documentation"], [{"artifact": "company/mcp/github@1.5.0", "url": DOCS}]
         )
 
+    def test_search_names_the_link_under_the_artifact_it_finds(self) -> None:
+        """§197: a search answers with the page that says how to install and configure it."""
+
+        from tests.configured_install_command_e2e_test import _environment
+
+        with _environment(authored=_mcp()) as env, _no_keychain():
+            text_code, text = _searched(env, "github")
+            json_code, data = _searched(env, "github", "--json")
+
+        self.assertEqual(text_code, 0, text)
+        self.assertRegex(
+            text,
+            rf"(?m)^  company/mcp/github@1\.5\.0 .*\n    Documentation: {re.escape(DOCS)}$",
+        )
+        self.assertEqual(json_code, 0, data)
+        self.assertEqual(
+            [(item["coordinate"], item["documentation"]) for item in json.loads(data)["matches"]],
+            [("company/mcp/github@1.5.0", DOCS)],
+        )
+
     def test_an_undocumented_artifact_shows_no_link_anywhere(self) -> None:
         from tests.configured_install_command_e2e_test import _environment
 
         coordinate = "company/mcp/github"
         with _environment(authored=_mcp(documentation=None)) as env, _no_keychain():
             _, listed = _listed(env)
+            _, searched = _searched(env, "github")
+            _, searched_json = _searched(env, "github", "--json")
             _, refused = env.run_text("consume", "install", coordinate, "--profile", "claude")
             _, done = env.run(
                 "consume", "install", coordinate, "--profile", "claude", "--set-later", "--yes"
             )
 
         self.assertNotIn("documentation", listed.lower())
+        self.assertNotIn("documentation", searched.lower())
+        self.assertEqual(
+            [item["documentation"] for item in json.loads(searched_json)["matches"]], [None]
+        )
         self.assertNotIn("Documentation", refused)
         self.assertNotIn("documentation", done)
 

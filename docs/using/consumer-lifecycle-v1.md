@@ -43,7 +43,9 @@ case-insensitive substring over the name, the coordinate, the summary, and colle
 `review` finds `code-review`. The best matches come first -- a name that *is* the word, then a
 name that starts with it, then a name that holds it, then a coordinate, then a summary -- and rows
 that tie keep catalog order, so two runs over one catalog print one order. The coordinate printed
-is the one `install` takes.
+is the one `install` takes. An artifact whose approved manifest declares `documentation` has the
+link printed whole on its own line under its row (`    Documentation: <url>`), and `--json` gives
+it as each match's `documentation`, `null` where none is declared.
 
 The TUI searches the same way. In the list of artifacts press `/` and keep typing: the list
 narrows as you type, Enter keeps the filter and hands the arrows back, Escape drops it. In the

@@ -4,6 +4,10 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-05, SEARCH-DOCUMENTATION (§197, D-527): search names the documentation.**
+`consume search` prints an artifact's approved documentation link whole under its row and as
+`documentation` in JSON. Evidence: `docs/refactor/slices/SEARCH-DOCUMENTATION-link-in-search.md`.
+
 **2026-11-05, INSTALL-ONE-PASS (§172, D-526): no install screen is drawn twice.**
 After 07 the heartbeat drew 05 while the plan was prepared again, and 05 then came back to ask pip
 or uv. 07 now stays until 07b or Ready, 05 asks no Python installer (Settings' is used), the listed

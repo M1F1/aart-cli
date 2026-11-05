@@ -12070,7 +12070,8 @@ or a configuration walkthrough. An author can now point to a page that has room.
     explained: screen 07, the briefing on the terminal lent to a credential prompt, and the CLI's
     refusal for unanswered inputs;
   - in Credentials and variables, for each installed artifact whose approved offer carries one;
-  - in the CLI: the Marketplace listing (text and JSON), the install review's "What you will
+  - in the CLI: the Marketplace listing (text and JSON), `consume search` (text, on its own line
+    under the artifact's row, and JSON; amended by D-527), the install review's "What you will
     need", and the result of an install, which names the documentation of each artifact it
     installed.
 - **Where to get a credential.** When a credential's `help` does not say where to get it, the

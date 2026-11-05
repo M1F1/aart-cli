@@ -2314,6 +2314,23 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "SEARCH-DOCUMENTATION",
+      "title": "consume search prints each artifact's documentation link, text and JSON (§197, D-527)",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Text line under the row and JSON documentation",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "The PR",
+          "status": "done"
+        }
+      ]
     }
   ]
 }

@@ -1,6 +1,12 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-05, COLLECTION-PROGRESS, READY-LESS-INFO and INSTALL-ONE-PASS, the PR)
+## Where the work is (2026-11-05, SEARCH-DOCUMENTATION)
+
+**SEARCH-DOCUMENTATION** (§197, D-527): `consume search` prints each artifact's approved
+documentation link under its row, and `--json` gives it as `documentation` (`null` where none).
+Evidence: `docs/refactor/slices/SEARCH-DOCUMENTATION-link-in-search.md`.
+
+## Where the work was (2026-11-05, COLLECTION-PROGRESS, READY-LESS-INFO and INSTALL-ONE-PASS, released in 0.30.3)
 
 **INSTALL-ONE-PASS** (§172, D-526) fixes the screen an MCP install showed twice. After 07, 05
 flashed while the plan was prepared again, and came back to ask pip or uv. Now 07 stays until 07b
@@ -19,7 +25,7 @@ Evidence: `docs/refactor/slices/READY-LESS-INFO-summary-only.md`.
 `Installing (6 of 7 done)`, because every member's step reports overwrote the one before. It now
 names every member, says how many artifacts are done, and shows the running member's steps. The
 work is on `fix/collection-install-progress-names` (worktree `/Users/mifi/code/aart-cli-context-rest`).
-Next: the PR, CI, and the owner's merge and release.
+Released in 0.30.3 (#139).
 
 Evidence: `docs/refactor/slices/COLLECTION-PROGRESS-name-every-member.md`.
 
