@@ -372,7 +372,7 @@ def _possible_remediations(
 
 
 def _one_installer_per_contract(
-    options: list[PlannedRemediation],
+    options: list[PlannedRemediation], preferred: PythonInstaller | None = None
 ) -> list[PlannedRemediation]:
     """Reduce every dependency contract to the single offer that names the backend that will run.
 
@@ -387,7 +387,8 @@ def _one_installer_per_contract(
             contract = usable.setdefault(option.remediation.requirement, set())
             contract.add(PythonInstaller(option.remediation.installer))
     selected = {
-        requirement: chosen_installer(installers) for requirement, installers in usable.items()
+        requirement: chosen_installer(installers, preferred)
+        for requirement, installers in usable.items()
     }
     return [
         option
@@ -405,7 +406,12 @@ def allowed_remediations(
     assessments: tuple[OwnedAssessment, ...],
     facts: EnvironmentFacts,
     policy: EffectivePolicy,
+    *,
+    preferred_installer: PythonInstaller | None = None,
 ) -> tuple[PlannedRemediation, ...]:
+    """What may be agreed to. `preferred_installer` is the backend the install runs, so the
+    dependency change names it rather than the name-ordered default (D-526)."""
+
     if not policy.interactive_remediation:
         return ()
     options = []
@@ -437,7 +443,12 @@ def allowed_remediations(
             ):
                 continue
             options.append(PlannedRemediation(remediation, assessment.requirement.owners, risk))
-    return tuple(sorted(_one_installer_per_contract(options), key=lambda item: item.sort_key))
+    return tuple(
+        sorted(
+            _one_installer_per_contract(options, preferred_installer),
+            key=lambda item: item.sort_key,
+        )
+    )
 
 
 def _policy_failure(message: str) -> Err:
@@ -484,6 +495,7 @@ def prepare_install_plan(
     policy: EffectivePolicy,
     *,
     selected_remediations: tuple[Remediation, ...] = (),
+    preferred_installer: PythonInstaller | None = None,
 ) -> Result[InstallPlan]:
     """Produce one exact review plan; this function has no inspection or mutation port."""
 
@@ -518,7 +530,9 @@ def prepare_install_plan(
     if isinstance(aggregated, Err):
         return aggregated
     assessments = assess_requirements(aggregated.value, facts)
-    options = allowed_remediations(assessments, facts, policy)
+    options = allowed_remediations(
+        assessments, facts, policy, preferred_installer=preferred_installer
+    )
     option_by_value = {item.remediation: item for item in options}
     selected = tuple(sorted(set(selected_remediations), key=_remediation_key))
     if any(item not in option_by_value for item in selected):

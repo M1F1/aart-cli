@@ -537,21 +537,14 @@ def _per_artifact(views: tuple[InputView, ...], artifacts: dict[str, str]) -> tu
     return tuple(projected)
 
 
-def _after_inputs(plan: ConsumerPlanView, *, default_path: bool = False) -> ConsumerScreen:
+def _after_inputs(plan: ConsumerPlanView) -> ConsumerScreen:
     """Where a reviewed install goes once its form was submitted (D-380, §161.5, §209).
 
-    05 again only while the plan still offers a real choice of backend; otherwise 07b or Ready.
-    07a was passed before the form (§209). The Default path has its backend from Settings
-    (§173.7), so only the secrets are left.
+    07b or Ready, never 05 again: 07a was passed before the form (§209), and the Python
+    installer is Settings' on every path (D-526), so only the secrets are left.
     """
 
-    if default_path:
-        return ConsumerScreen.INSTALL_CREDENTIALS if secrets_to_ask(plan) else ConsumerScreen.READY
-    if plan.installer_choice is not None and plan.installer_choice.is_a_choice:
-        return ConsumerScreen.REVIEW_SELECTION
-    if secrets_to_ask(plan):
-        return ConsumerScreen.INSTALL_CREDENTIALS
-    return ConsumerScreen.READY
+    return ConsumerScreen.INSTALL_CREDENTIALS if secrets_to_ask(plan) else ConsumerScreen.READY
 
 
 def _installation_targets(
@@ -2970,7 +2963,7 @@ class LocalConsumerActions:
                 review_digest=plan.review_digest,
                 # A Default plan that left some artifact without a harness goes to 05 for it.
                 screen=(
-                    _after_inputs(plan, default_path=command.default_path)
+                    _after_inputs(plan)
                     if chosen or not command.default_path
                     else ConsumerScreen.REVIEW_SELECTION
                 ),
@@ -3817,6 +3810,10 @@ class LocalConsumerActions:
             )
         recorded_at, today = self._moment()
         reports: list[StepProgress] = []
+        # Every artifact the reviewed transaction runs, so a Collection lists the ones still to
+        # come by name rather than only a count of steps.
+        action = pending.prepared.action
+        members = () if action is None else tuple(str(item) for item in action.flow.artifacts)
 
         def observe(progress: StepProgress) -> None:
             # Accumulated here rather than in the projection so the screen is a fold of everything
@@ -3824,7 +3821,7 @@ class LocalConsumerActions:
             reports.append(progress)
             report = self._progress
             if report is not None:
-                report(project_running_installation(tuple(reports)))
+                report(project_running_installation(tuple(reports), members))
 
         completed = complete_configured_installation(
             pending.prepared,

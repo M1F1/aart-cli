@@ -13139,3 +13139,68 @@ placeholder (`CredentialObservation.placeholder`, compared outside this process)
   item holding a value somebody stored;
 - abandoning the review, or a failed install, stores the placeholder back into an item that held it,
   instead of deleting an item an installation still names.
+
+## D-524 — Installing a Collection names every member while it runs (COLLECTION-PROGRESS)
+
+§203 amended (owner report, 2026-11-05). Installing a Collection of MCP servers drew only
+"Installing (6 of 7 done)", with no member's name. `project_running_installation` folded the step
+reports by step number, and every member of a transaction numbers its own plan from one, so each
+member's reports overwrote the last one's. With more than one artifact the heading lost its name too.
+- Steps are told apart by artifact and number. `RunningInstallationView.members` holds one
+  `RunningMemberView` per member, in the order the reviewed transaction runs them. The members come
+  from `flow.artifacts`, so a member not reached yet is listed as waiting.
+- With more than one member, screen 10 reads `Installing N artifacts (k of N done)`. It lists each
+  member by coordinate. The running member carries its step count and its steps. A member that
+  applied is one line (its steps under More info). One that failed or was not attempted keeps its
+  steps.
+- One artifact is drawn as before.
+- **Not chosen.** Seeding every member's steps from the review: the steps a member runs are
+  planned again under the lease, so the count is known only once it starts.
+
+## D-525 — Ready's Less info is the summary; the changes and placeholders are More info's (READY-LESS-INFO)
+
+§161.5 (08, 09) and §172.3 amended (owner decision, 2026-11-05). For a Collection, Ready in Less
+info listed, under its counts:
+- every material change once per artifact: "Install its Python dependencies with uv" seven times;
+- "Store the credential it needs securely in macOS Keychain" once per credential;
+- every input left as `AART_NOT_SET`.
+
+The owner asked for the credential line to go entirely and for the rest to go to verbose.
+
+- **Less info** keeps:
+  - the counts and the harnesses;
+  - the INV-151 sentence for a material risk no count names, so `This install changes network
+    access.` now appears where a listed change used to say it;
+  - one line saying `[v]` shows the changes it makes, what is set later, and the plan.
+- **More info** opens with the readable list of changes. Each change is said once, followed by
+  `(×n)` when the plan needs it more than once. Then come what 07b stored, what is left as
+  `AART_NOT_SET`, and the Verbose plan.
+- **`configure-credential` is never listed in words.** The count `credential(s) stored securely`
+  says it. The Verbose plan's own Remediations and Effects still name it (INV-152).
+- **Not chosen.** A count of placeholders in Less info: the owner asked for everything else to be
+  in verbose.
+
+## D-526 — 07 goes on to 07b or Ready, and the Python installer is Settings' (INSTALL-ONE-PASS)
+
+§172 bullet "After 07, 07a is not asked again" amended (owner decision, 2026-11-05). The owner
+reported that during an MCP install "one window repeats and then switches automatically". Two
+causes, both in the step after 07:
+- **The preparing frame was 05.** Submitting 07 rewinds the session to 05 (REVIEW_SELECTION) while
+  the plan is prepared again (D-380), and the heartbeat drew the current state, so 05 flashed
+  between 07 and 07b/Ready. The heartbeat now draws the state before the key when that key left 07
+  (`_preparing_frame`), so 07 stays until the next screen is ready.
+- **05 came back for the pip/uv choice.** On a machine with both backends the plan left a choice
+  open, and `_after_inputs` sent the person back to 05 to answer it: the same screen twice. Asked
+  how pip or uv should be chosen, the owner chose "Use Settings, no question".
+  - 05 draws no installer rows, and `_after_inputs` never returns 05. The reducer's installer
+    toggle and the row helpers are gone; `state.python_installer` stays, always empty, so the
+    Settings preference reaches the plan unchanged (D-296).
+  - **The listed change names the backend that runs.** The remediation offer narrowed each
+    dependency contract with `chosen_installer` and no preference, so Ready said "with pip" while
+    the effect ran uv. `allowed_remediations`, `prepare_install_plan` and
+    `installation_remediations` take `preferred_installer`, read off the planned installations'
+    dependency effect (`planned_installer`), so the offer and the acceptance agree.
+  - **07b opens on the credential again.** 07 and 07b both end on Continue; with no 05 between
+    them the cursor stayed on Continue. Moving past the form clears 07's rows.
+- **Not chosen.** Keeping the 05 choice but asking it before 07: it is still a question the
+  Settings default answers, and the owner chose no question.

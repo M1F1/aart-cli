@@ -41,15 +41,12 @@ from aart_cli.application.consumer_views import (
     HarnessTargetView,
     PythonInstallerChoiceView,
     default_pair_scopes,
-    installer_from_row,
-    installer_row,
     matrix_rows,
     offer_python_installers,
     pair_key,
     pair_scope_key,
     project_install_plan,
     scope_matrix_rows,
-    target_row,
 )
 from aart_cli.application.python_environment import (
     select_python_installer,
@@ -72,7 +69,7 @@ from tests.artifact_installation_test import _facts as _plan_facts
 from tests.artifact_installation_test import _plan
 from tests.configured_install_command_e2e_test import _environment
 from tests.consumer_application_e2e_test import _actions, _drive
-from tests.consumer_shell_test import DOWN, INSTALL_CUSTOM, SPACE, _at
+from tests.consumer_shell_test import ENTER, INSTALL_CUSTOM, SPACE, _at
 from tests.consumer_views_test import _plan as _view_plan
 
 BACKENDS = ("pip", "uv")
@@ -335,23 +332,6 @@ class ThePreferenceReachesThePlanTest(unittest.TestCase):
 
 
 class TheChoiceTravelsFromTheScreenTest(unittest.TestCase):
-    def test_choosing_a_backend_re_prepares_the_plan_at_that_backend(self) -> None:
-        state = ConsumerUiState(
-            ConsumerSession(ConsumerScreen.REVIEW_SELECTION),
-            action=ConsumerActionKind.INSTALL,
-            selection=("company/skill/code-review@1.2.0",),
-        )
-
-        chosen, commands = reduce_consumer_ui(
-            state,
-            ConsumerUiEvent(ConsumerUiEventKind.TOGGLE_SELECTION, key=installer_row("uv")),
-        )
-
-        self.assertEqual(chosen.python_installer, "uv")
-        self.assertEqual(len(commands), 1)
-        self.assertIs(commands[0].kind, ConsumerUiCommandKind.PREPARE_ACTION)
-        self.assertEqual(commands[0].python_installer, "uv")
-
     def test_the_backend_and_the_scope_are_answered_separately(self) -> None:
         """Choosing where files land on 07a says nothing about what resolves their dependencies."""
 
@@ -377,11 +357,6 @@ class TheChoiceTravelsFromTheScreenTest(unittest.TestCase):
         self.assertEqual(chosen.python_installer, "uv")
         self.assertEqual(commands[0].python_installer, "uv")
 
-    def test_a_row_naming_no_backend_is_not_a_backend_choice(self) -> None:
-        for row in ("installer:conda", "installer:", "uv", target_row("claude")):
-            with self.subTest(row=row):
-                self.assertIsNone(installer_from_row(row))
-
 
 class TheQuestionThatDoesNotAriseTest(unittest.TestCase):
     def test_a_selection_with_no_python_dependencies_draws_no_backend_rows(self) -> None:
@@ -393,7 +368,6 @@ class TheQuestionThatDoesNotAriseTest(unittest.TestCase):
             )
 
             self.assertIs(finished.session.screen, ConsumerScreen.REVIEW_SELECTION)
-            self.assertFalse([row for row in finished.rows if installer_from_row(row)])
             self.assertNotIn("Dependencies with", terminal.last)
 
 
@@ -401,8 +375,8 @@ class TheQuestionThatDoesNotAriseTest(unittest.TestCase):
 _MATRIX = matrix_rows((HarnessTargetView("claude", ("company/mcp/github@1.0.0",)),))
 
 
-class TheReviewScreenOffersTheBackendTest(unittest.TestCase):
-    """Screen 05 draws the backend the same way it draws the scope: a radio, after the harnesses."""
+class TheReviewScreenAsksNoBackendTest(unittest.TestCase):
+    """D-526: 05 asks only the harnesses; the backend is Settings', however many could run."""
 
     def _source(self, choice: PythonInstallerChoiceView | None) -> CanonicalScreenSource:
         view = project_install_plan(_view_plan())
@@ -422,30 +396,20 @@ class TheReviewScreenOffersTheBackendTest(unittest.TestCase):
             action=ConsumerActionKind.INSTALL,
         )
 
-    def test_both_usable_backends_are_rows_below_the_harnesses(self) -> None:
-        source = self._source(PythonInstallerChoiceView(BACKENDS, "pip"))
+    def test_no_offer_is_a_row_or_drawn(self) -> None:
+        for choice in (
+            PythonInstallerChoiceView(BACKENDS, "pip"),
+            PythonInstallerChoiceView(BACKENDS, "uv"),
+            PythonInstallerChoiceView(("uv",), "uv"),
+            None,
+        ):
+            with self.subTest(choice=choice):
+                source = self._source(choice)
+                state = self._state()
 
-        rows = source.rows(self._state())
-
-        self.assertEqual(rows, (*_MATRIX, installer_row("pip"), installer_row("uv")))
-
-    def test_the_offer_opens_on_the_backend_the_plan_was_prepared_with(self) -> None:
-        source = self._source(PythonInstallerChoiceView(BACKENDS, "uv"))
-        state = self._state()
-        drawn = "\n".join(frame(source, replace(state, rows=source.rows(state))))
-
-        self.assertIn("( ) Dependencies with: pip", drawn)
-        self.assertIn("(*) Dependencies with: uv", drawn)
-
-    def test_one_usable_backend_is_disclosed_rather_than_offered(self) -> None:
-        source = self._source(PythonInstallerChoiceView(("uv",), "uv"))
-
-        self.assertEqual(source.rows(self._state()), _MATRIX)
-
-    def test_a_plan_with_no_python_dependencies_offers_nothing(self) -> None:
-        source = self._source(None)
-
-        self.assertEqual(source.rows(self._state()), _MATRIX)
+                self.assertEqual(source.rows(state), _MATRIX)
+                drawn = "\n".join(frame(source, replace(state, rows=source.rows(state))))
+                self.assertNotIn("Dependencies with", drawn)
 
 
 _DEPENDENT_MANIFEST = {
@@ -506,34 +470,26 @@ class ThePreferenceReachesTheRealCompositionTest(unittest.TestCase):
             env, _at(ConsumerScreen.MARKETPLACE), SPACE, *INSTALL_CUSTOM, *codes, actions=actions
         )
 
-    def test_the_review_offers_both_backends_when_the_machine_has_both(self) -> None:
+    def test_the_review_asks_no_backend_when_the_machine_has_both(self) -> None:
         with _machine_with_both_backends(), _environment(authored=AUTHORED_DEPENDENT) as env:
             finished, terminal, _ = self._reviewed(env)
 
             self.assertIs(finished.session.screen, ConsumerScreen.REVIEW_SELECTION)
-            self.assertEqual(
-                tuple(row for row in finished.rows if installer_from_row(row)),
-                (installer_row("pip"), installer_row("uv")),
-            )
-            self.assertIn("Dependencies with: uv", terminal.last)
+            self.assertNotIn("Dependencies with", terminal.last)
 
     def test_the_stored_preference_is_the_backend_the_reviewed_plan_names(self) -> None:
-        with _machine_with_both_backends(), _environment(authored=AUTHORED_DEPENDENT) as env:
-            _, terminal, _ = self._reviewed(env, preference="uv")
+        """D-526: Settings' backend is the one Ready's More info names, and the one that runs."""
 
-            self.assertIn("(*) Dependencies with: uv", terminal.last)
-            self.assertIn("( ) Dependencies with: pip", terminal.last)
+        for preference in BACKENDS:
+            with (
+                self.subTest(preference=preference),
+                _machine_with_both_backends(),
+                _environment(authored=AUTHORED_DEPENDENT) as env,
+            ):
+                finished, terminal, _ = self._reviewed(
+                    env, ENTER, ENTER, "v", preference=preference
+                )
 
-    def test_choosing_the_other_backend_re_prepares_the_plan_at_it(self) -> None:
-        with _machine_with_both_backends(), _environment(authored=AUTHORED_DEPENDENT) as env:
-            # Past the harness row to `installer:pip`, then choose it; the scope is 07a's (§172.5).
-            _, terminal, _ = self._reviewed(env, DOWN, SPACE, preference="uv")
-
-            self.assertIn("(*) Dependencies with: pip", terminal.last)
-            self.assertIn("( ) Dependencies with: uv", terminal.last)
-
-    def test_choosing_a_backend_does_not_rewrite_the_stored_preference(self) -> None:
-        with _machine_with_both_backends(), _environment(authored=AUTHORED_DEPENDENT) as env:
-            self._reviewed(env, DOWN, SPACE, preference="uv")
-
-            self.assertEqual(_actions(env).settings.python_installer, "uv")
+                self.assertIs(finished.session.screen, ConsumerScreen.READY, terminal.last)
+                self.assertIn(f"install its Python dependencies with {preference}", terminal.last)
+                self.assertIn(f"installer={preference};", terminal.last)

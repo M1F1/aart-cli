@@ -1,6 +1,6 @@
 """CP-30 step 9: what a skip left as `AART_NOT_SET` is said, before and after it is stored (§172.3).
 
-Ready lists every input that will be stored as the placeholder. Once installed, Doctor, Installed
+Ready's More info lists every input that will be stored as the placeholder (D-525). Once installed, Doctor, Installed
 and Credentials and variables warn about each one. An ordinary value is compared as text; a secret
 is compared by the provider in its own processes and only the answer comes back (D-421), so no
 secret value is read to give the warning.
@@ -26,10 +26,10 @@ from tests.install_credentials_test import _Keeping
 
 #: 05 answered, then 07a as it is: the scope comes before the form (§209).
 _TO_FORM = (SPACE, *INSTALL_CUSTOM, RIGHT, SPACE, RIGHT, SPACE, ENTER, ENTER)
-#: 07: the declared default cleared, then Set later; the installer as it is; 07b: Set later.
-_SKIP_ALL = (*_TO_FORM, *((BACKSPACE,) * len("acme")), UP, ENTER, ENTER, UP, ENTER)
-#: 07 answered; the installer as it is; 07b: the credential entered through the store, then Continue.
-_ANSWER_ALL = (*_TO_FORM, "platform-team", ENTER, ENTER, ENTER, ENTER, DOWN, ENTER)
+#: 07: the declared default cleared, then Set later; 07b: Set later. The installer is Settings'.
+_SKIP_ALL = (*_TO_FORM, *((BACKSPACE,) * len("acme")), UP, ENTER, UP, ENTER)
+#: 07 answered; 07b: the credential entered through the store, then Continue.
+_ANSWER_ALL = (*_TO_FORM, "platform-team", ENTER, ENTER, ENTER, DOWN, ENTER)
 
 
 class _Comparing(_Keeping):
@@ -79,9 +79,13 @@ def _text(frames) -> str:
 
 class ReadyListsWhatWillBePlaceholderE2ETest(BothBackendsMeasured):
     def test_a_skipped_value_and_an_unentered_secret_are_listed_before_confirming(self) -> None:
-        install, _ = _installed(_SKIP_ALL)
+        # D-525: in More info, which `[v]` opens on Ready; Less info says only where they are.
+        install, _ = _installed((*_SKIP_ALL, "v"))
 
-        ready = install.screen_containing("ready to install")
+        fast = install.screen_containing("ready to install")
+        self.assertNotIn(SKIPPED_INPUT, fast)
+        self.assertIn("what is set later", fast)
+        ready = install.screen_containing("install plan (Verbose)")
         self.assertIn(f"as {SKIPPED_INPUT}, to set later in Credentials and variables:", ready)
         self.assertIn("company/mcp/github: github-org", ready)
         self.assertIn("company/mcp/github: github-token", ready)

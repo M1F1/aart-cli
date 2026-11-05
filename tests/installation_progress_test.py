@@ -16,6 +16,7 @@ from hypothesis import strategies as st
 
 from aart_cli.application.consumer_views import (
     RUNNING,
+    WAITING,
     RunningInstallationView,
     project_running_installation,
 )
@@ -283,6 +284,49 @@ class RunningInstallationProjectionTest(unittest.TestCase):
 
         both = project_running_installation(self._reports(artifact=V1) + self._reports(artifact=V2))
         self.assertEqual(both.artifact, "")
+
+    def test_every_member_keeps_its_own_steps_though_each_numbers_them_from_one(self) -> None:
+        # A Collection of servers is one transaction, and every member's plan counts from step 1:
+        # folded by number alone, the second member's steps overwrote the first's.
+        view = project_running_installation(self._reports(artifact=V1) + self._reports(artifact=V2))
+
+        self.assertEqual(
+            [(item.artifact, item.component) for item in view.steps],
+            [
+                (str(V1), "launcher"),
+                (str(V1), "harness:tabnine"),
+                (str(V2), "launcher"),
+                (str(V2), "harness:tabnine"),
+            ],
+        )
+        self.assertEqual((view.done, view.total), (2, 4))
+        self.assertEqual([item.artifact for item in view.members], [str(V1), str(V2)])
+        self.assertEqual([(item.done, item.total) for item in view.members], [(1, 2), (1, 2)])
+
+    def test_a_member_not_reached_yet_is_listed_by_name_as_waiting(self) -> None:
+        view = project_running_installation(self._reports(artifact=V1), (str(V1), str(V2)))
+
+        self.assertEqual([item.artifact for item in view.members], [str(V1), str(V2)])
+        self.assertEqual([item.status for item in view.members], [RUNNING, WAITING])
+        self.assertEqual(view.members[1].steps, ())
+        self.assertFalse(view.finished)
+
+    def test_a_member_is_over_when_every_step_is_and_reads_as_its_worst_step(self) -> None:
+        launcher = ComponentId(Component.LAUNCHER)
+        write = WriteFile("/opt/agents/mcp/github/launch", "sha256:" + "a" * 64, True)
+        applied = StepProgress(launcher, write, 1, 1, StepStatus.APPLIED, artifact=V1)
+        failed = StepProgress(launcher, write, 1, 1, StepStatus.FAILED, artifact=V2)
+
+        view = project_running_installation((applied, failed))
+
+        self.assertEqual([item.status for item in view.members], ["applied", "failed"])
+        self.assertTrue(view.finished)
+
+    def test_one_artifact_has_no_member_list(self) -> None:
+        self.assertEqual(project_running_installation(self._reports(artifact=V1)).members, ())
+        self.assertEqual(
+            project_running_installation(self._reports(artifact=V1), (str(V1),)).members, ()
+        )
 
     def test_only_progress_reports_can_be_projected(self) -> None:
         with self.assertRaises(ValueError):

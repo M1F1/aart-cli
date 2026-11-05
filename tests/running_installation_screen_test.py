@@ -26,6 +26,7 @@ from aart_cli.application.consumer_views import (
 )
 from aart_cli.application.execution import StepProgress, StepStatus
 from aart_cli.domain.effects import ConfigureHarness, WriteFile
+from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity, SourceAlias
 from aart_cli.domain.reconciliation import Component, ComponentId
 from aart_cli.tui_consumer import (
     CanonicalScreenSource,
@@ -174,6 +175,46 @@ class RunningInstallationScreenTest(unittest.TestCase):
         self.assertGreater(len(loud), CONTENT_MEASURE)
         self.assertTrue(all(len(line) <= CONTENT_MEASURE for line in lines), lines)
         self.assertNotIn(loud, "\n".join(lines))
+
+
+class CollectionRunningScreenTest(unittest.TestCase):
+    """Several artifacts in one install: each is named, and the one running shows its steps."""
+
+    def _view(self):
+        github, jira, slack = (
+            ArtifactCoordinate(SourceAlias("company"), ArtifactIdentity("mcp", name), "1.0.0")
+            for name in ("github", "jira", "slack")
+        )
+        reports = (
+            StepProgress(LAUNCHER, WRITE, 1, 2, StepStatus.APPLIED, artifact=github),
+            StepProgress(HARNESS, CONFIGURE, 2, 2, StepStatus.APPLIED, artifact=github),
+            StepProgress(LAUNCHER, WRITE, 1, 2, StepStatus.APPLIED, artifact=jira),
+            StepProgress(HARNESS, CONFIGURE, 2, 2, artifact=jira),
+        )
+        return project_running_installation(reports, tuple(map(str, (github, jira, slack))))
+
+    def test_every_member_is_named_and_counted_as_an_artifact(self) -> None:
+        lines = render_running(self._view(), PresentationProfile.LESS_INFO)
+
+        self.assertEqual(lines[0], "Installing 3 artifacts (1 of 3 done)")
+        self.assertEqual(
+            lines[2:],
+            (
+                "  ✓ company/mcp/github@1.0.0",
+                "  ▸ company/mcp/jira@1.0.0 (1 of 2 done)",
+                "      ✓ launcher",
+                "      ▸ harness:tabnine",
+                "  · company/mcp/slack@1.0.0",
+            ),
+        )
+
+    def test_more_info_keeps_the_steps_of_a_member_that_is_over(self) -> None:
+        lines = render_running(self._view(), PresentationProfile.MORE_INFO)
+
+        self.assertEqual(
+            lines[3:5],
+            ("      ✓ launcher: write-file", "      ✓ harness:tabnine: configure-harness"),
+        )
 
 
 if __name__ == "__main__":

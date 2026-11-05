@@ -4,6 +4,24 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-05, INSTALL-ONE-PASS (§172, D-526): no install screen is drawn twice.**
+After 07 the heartbeat drew 05 while the plan was prepared again, and 05 then came back to ask pip
+or uv. 07 now stays until 07b or Ready, 05 asks no Python installer (Settings' is used), the listed
+dependency change names the backend the effect runs, and 07b opens on the credential. Evidence:
+`docs/refactor/slices/INSTALL-ONE-PASS-no-screen-twice.md`.
+
+**2026-11-05, READY-LESS-INFO (§161.5, §172.3, D-525): Ready's Less info is the summary.**
+For a Collection, Ready listed under its counts every change once per artifact, a line per stored
+credential, and every `AART_NOT_SET`. It now keeps only the counts, the harnesses, an INV-151 risk
+and a `[v]` line. The changes (each once, `(×n)`), what 07b stored and the placeholders are in More
+info. Storing a credential is never listed. Evidence: `docs/refactor/slices/READY-LESS-INFO-summary-only.md`.
+
+**2026-11-05, COLLECTION-PROGRESS (§203, D-524): installing a Collection names every member.**
+Screen 10 drew only `Installing (6 of 7 done)` for a Collection. Every member numbers its steps
+from one, so their reports overwrote each other. Screen 10 now lists each member by coordinate and
+counts artifacts done. The running member shows its steps. REVIEW-05-PREPARING was released in
+0.30.2. Evidence: `docs/refactor/slices/COLLECTION-PROGRESS-name-every-member.md`.
+
 **2026-11-05, REVIEW-05-PREPARING (§173.5, D-522): 05 draws its own rows, and names no harness nobody could choose.**
 While an install was prepared, 05 drew the previous screen's rows: after Set later, 07's form rows
 as `[ ] None`. It now draws its own, and says it is preparing before it has any. A harness that

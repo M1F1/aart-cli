@@ -310,7 +310,7 @@ class HandoverReachesTheInterpreterTest(unittest.TestCase):
         actions._reviewed_host = lambda: None  # type: ignore[method-assign]
         actions._failed = lambda command, lines: "refused"  # type: ignore[method-assign]
         pending = types.SimpleNamespace(
-            prepared=types.SimpleNamespace(review_digest=None),
+            prepared=types.SimpleNamespace(review_digest=None, action=None),
             previous_receipts=(),
             # D-260: a plan with no harness choice to make, so the targets check has nothing to hold.
             targets=(),

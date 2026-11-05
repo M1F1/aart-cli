@@ -2215,7 +2215,7 @@
     {
       "id": "REVIEW-05-PREPARING",
       "title": "05 draws its own rows while preparing, names no harness a Collection cannot use, and 07b asks for a stored placeholder (§173.5, §172.6, D-522, D-523)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -2235,7 +2235,83 @@
         {
           "id": "4",
           "title": "The PR",
-          "status": "in_progress"
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "COLLECTION-PROGRESS",
+      "title": "Installing a Collection names each member and the steps of the one running (§203, D-524)",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "The running projection keeps each member's steps apart and lists members not reached",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Screen 10 names every member, counted as artifacts, with the running member's steps",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "READY-LESS-INFO",
+      "title": "Ready's Less info is the summary; changes, 07b and AART_NOT_SET lists are More info's (§161.5, §172.3, D-525)",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Less info: counts, harnesses, INV-151 risk and a [v] line",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "More info: each change once with (×n); storing a credential never listed",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR (with COLLECTION-PROGRESS)",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "INSTALL-ONE-PASS",
+      "title": "07 goes on to 07b or Ready; 07 stays while preparing; the Python installer is Settings' (§172, D-526)",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "The preparing heartbeat after 07 draws 07, not 05",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "No pip/uv rows on 05; _after_inputs never returns 05",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The listed dependency change names the backend that runs",
+          "status": "done"
+        },
+        {
+          "id": "4",
+          "title": "07b opens on the credential after 07",
+          "status": "done"
+        },
+        {
+          "id": "5",
+          "title": "The PR (with COLLECTION-PROGRESS and READY-LESS-INFO)",
+          "status": "done"
         }
       ]
     }

@@ -1,6 +1,29 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-05, REVIEW-05-PREPARING, the PR)
+## Where the work is (2026-11-05, COLLECTION-PROGRESS, READY-LESS-INFO and INSTALL-ONE-PASS, the PR)
+
+**INSTALL-ONE-PASS** (§172, D-526) fixes the screen an MCP install showed twice. After 07, 05
+flashed while the plan was prepared again, and came back to ask pip or uv. Now 07 stays until 07b
+or Ready is ready, 05 asks no Python installer (Settings' is used, on Custom as on Default),
+Ready's More info names the installer that actually runs, and 07b opens on the credential. Same
+branch and PR. Evidence: `docs/refactor/slices/INSTALL-ONE-PASS-no-screen-twice.md`.
+
+**READY-LESS-INFO** (§161.5, §172.3, D-525) changes Ready's Less info. It now holds only the
+counts, the harnesses, a risk no count names (INV-151) and a `[v]` line. The changes, each once
+with `(×n)`, what 07b stored and what is left as `AART_NOT_SET` are More info's. "Store the
+credential it needs securely" is gone. It shares the branch and PR with COLLECTION-PROGRESS.
+Evidence: `docs/refactor/slices/READY-LESS-INFO-summary-only.md`.
+
+
+**COLLECTION-PROGRESS** (§203, D-524) fixes screen 10 while a Collection installs. It showed only
+`Installing (6 of 7 done)`, because every member's step reports overwrote the one before. It now
+names every member, says how many artifacts are done, and shows the running member's steps. The
+work is on `fix/collection-install-progress-names` (worktree `/Users/mifi/code/aart-cli-context-rest`).
+Next: the PR, CI, and the owner's merge and release.
+
+Evidence: `docs/refactor/slices/COLLECTION-PROGRESS-name-every-member.md`.
+
+## Where the work was (2026-11-05, REVIEW-05-PREPARING, released in 0.30.2)
 
 **REVIEW-05-PREPARING** (§173.5, D-522): screen 05 draws its own rows while an install is prepared,
 so 07's form rows are no longer drawn as `[ ] None` after Set later, and says "Preparing the

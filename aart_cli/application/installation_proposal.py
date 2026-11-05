@@ -34,7 +34,7 @@ from aart_cli.domain.launch import LaunchContract
 from aart_cli.domain.plans import InstallPlan
 from aart_cli.domain.plugin_members import PluginMember
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.python_runtime import ArtifactEnvironment
+from aart_cli.domain.python_runtime import ArtifactEnvironment, PythonInstaller
 from aart_cli.domain.receipts import (
     ArtifactDelivery,
     ArtifactMerge,
@@ -69,6 +69,7 @@ __all__ = [
     "PROPOSAL_INVALID",
     "InstallationProposal",
     "PlannedArtifact",
+    "planned_installer",
     "PlannedInstallation",
     "PlannedPlacement",
     "artifact_desired_state",
@@ -476,6 +477,21 @@ def _supersession_key(
     return _unversioned(coordinate) if owner is None else owner
 
 
+def planned_installer(installations: tuple[PlannedArtifact, ...]) -> PythonInstaller | None:
+    """The one backend these plans install dependencies with, or None for none or several.
+
+    The review's dependency change and the effect that runs have to name the same backend; the
+    effect already carries the preference, so the change is read off it (D-526).
+    """
+
+    named = {
+        item.dependencies[2]
+        for item in installations
+        if isinstance(item, PlannedInstallation) and item.dependencies is not None
+    }
+    return PythonInstaller(named.pop()) if len(named) == 1 else None
+
+
 def artifact_receipt_for(planned: PlannedArtifact) -> ArtifactReceipt:
     """What either shape of plan would leave behind, without the caller deciding which it is.
 
@@ -677,6 +693,7 @@ def propose_installation(
         facts,
         policy,
         selected_remediations=selected_remediations,
+        preferred_installer=planned_installer(installations),
     )
     if isinstance(prepared, Err):
         return prepared

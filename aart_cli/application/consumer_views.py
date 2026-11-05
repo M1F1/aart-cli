@@ -375,22 +375,6 @@ class HarnessTargetView:
             raise ValueError("a harness target view is invalid")
 
 
-#: How screen 05 addresses one Python-backend row, in the same shape as a harness row so the list
-#: has one kind of control rather than a control and a special case.
-INSTALLER_ROW_PREFIX = "installer:"
-
-
-def installer_row(installer: str) -> str:
-    return f"{INSTALLER_ROW_PREFIX}{installer}"
-
-
-def installer_from_row(row: str) -> str | None:
-    if not isinstance(row, str) or not row.startswith(INSTALLER_ROW_PREFIX):
-        return None
-    installer = row[len(INSTALLER_ROW_PREFIX) :]
-    return installer if installer in ("pip", "uv") else None
-
-
 def target_row(harness: str) -> str:
     return f"{TARGET_ROW_PREFIX}{harness}"
 
@@ -2183,6 +2167,32 @@ class RunningStepView:
     effect: str
     status: str
     detail: str = ""
+    #: The member of a transaction this step belongs to; empty for a single repair.
+    artifact: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class RunningMemberView:
+    """One artifact of a transaction that is running: its steps so far, or none yet."""
+
+    artifact: str
+    steps: tuple[RunningStepView, ...]
+    done: int
+    total: int
+
+    @property
+    def status(self) -> str:
+        """Waiting before its first report, running until every step is over, then how it ended."""
+
+        if not self.steps:
+            return WAITING
+        if self.done < self.total:
+            return RUNNING
+        ended = {item.status for item in self.steps}
+        for worst in ("failed", "interrupted", "not-attempted"):
+            if worst in ended:
+                return worst
+        return "applied"
 
 
 @dataclass(frozen=True, slots=True)
@@ -2197,46 +2207,79 @@ class RunningInstallationView:
     steps: tuple[RunningStepView, ...]
     done: int
     total: int
+    #: Every member of a transaction with more than one, in the order they run, each with its own
+    #: steps, so a Collection names the artifact each step installs. Empty for one artifact.
+    members: tuple[RunningMemberView, ...] = ()
 
     @property
     def finished(self) -> bool:
-        return self.done == self.total
+        return self.done == self.total and all(
+            item.status != WAITING and item.done == item.total for item in self.members
+        )
 
 
 #: What a step that has been reached but has not finished reads as. It is not a `StepStatus`,
 #: because the execution has no outcome to report for it yet.
 RUNNING = "running"
 
+#: What a member of a transaction reads as before its first step is reached.
+WAITING = "waiting"
 
-def project_running_installation(reports: tuple[StepProgress, ...]) -> RunningInstallationView:
+
+def project_running_installation(
+    reports: tuple[StepProgress, ...], members: tuple[str, ...] = ()
+) -> RunningInstallationView:
     """Fold the reports a running plan has made so far into one screen's worth of state.
 
     Each step is held once, at the latest thing said about it, so a step announced as reached and
-    then as applied is one line that changed rather than two lines. Pure: it is given what the
-    execution said and reads nothing.
+    then as applied is one line that changed rather than two lines. A step is told apart by its
+    artifact as well as its number, because every member of a transaction numbers its own plan
+    from one. `members` are the artifacts the reviewed transaction runs, in order, so one not
+    reached yet is still listed. Pure: it is given what the execution said and reads nothing.
     """
 
     if any(not isinstance(item, StepProgress) for item in reports):
         raise ValueError("a running installation is projected from step progress reports")
-    latest: dict[int, StepProgress] = {}
+    if any(not isinstance(item, str) or not item for item in members):
+        raise ValueError("a running installation's members are named by their coordinates")
+    latest: dict[tuple[str, int], StepProgress] = {}
+    totals: dict[str, int] = {}
+    order: list[str] = list(dict.fromkeys(members))
     for report in reports:
-        latest[report.index] = report
-    total = max((item.total for item in reports), default=0)
-    artifacts = {str(item.artifact) for item in reports if item.artifact is not None}
+        artifact = "" if report.artifact is None else str(report.artifact)
+        latest[(artifact, report.index)] = report
+        totals[artifact] = max(totals.get(artifact, 0), report.total)
+        if artifact not in order:
+            order.append(artifact)
+    position = {artifact: number for number, artifact in enumerate(order)}
     steps = tuple(
         RunningStepView(
             str(item.component),
             str(effect_to_data(item.effect)["kind"]),
             RUNNING if item.status is None else item.status.value,
             item.detail,
+            artifact,
         )
-        for _, item in sorted(latest.items())
+        for (artifact, _), item in sorted(
+            latest.items(), key=lambda entry: (position[entry[0][0]], entry[0][1])
+        )
+    )
+    named = tuple(artifact for artifact in order if artifact)
+    grouped = tuple(
+        RunningMemberView(
+            artifact,
+            tuple(item for item in steps if item.artifact == artifact),
+            sum(1 for item in steps if item.artifact == artifact and item.status != RUNNING),
+            totals.get(artifact, 0),
+        )
+        for artifact in named
     )
     return RunningInstallationView(
-        artifacts.pop() if len(artifacts) == 1 else "",
+        named[0] if len(named) == 1 else "",
         steps,
         sum(1 for item in latest.values() if item.status is not None),
-        total,
+        sum(totals.values()),
+        grouped if len(named) > 1 else (),
     )
 
 

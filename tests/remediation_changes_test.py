@@ -9,7 +9,8 @@ The changes AART will make are stated as outcomes that name their subject. Mater
 plain words in Fast; the effect vocabulary and owners are Verbose. Since D-403 they are no longer
 a screen of their own with a Continue row: the operator asked *"czy daloby sie scalic Remediation
 i Ready widoki w jeden"*, and confirming Ready is what agrees to them. Routine derived harness
-configuration stays More info's (D-258, D-398).
+configuration stays More info's (D-258, D-398). Since D-525 the whole list is More info's, each
+change once with how many need it, and storing a credential is not listed: its count says it.
 """
 
 from __future__ import annotations
@@ -107,10 +108,22 @@ def _drawn(*remediations: RemediationView, profile=PresentationProfile.LESS_INFO
     return "\n".join(frame(source, state))
 
 
+_MORE = PresentationProfile.MORE_INFO
+
+
 class ReadyStatesTheChangesAartWillMakeTest(unittest.TestCase):
-    def test_the_review_announces_changes_aart_makes_rather_than_chores(self) -> None:
-        many = _drawn(CREDENTIAL, RUNTIME)
-        one = _drawn(CREDENTIAL)
+    def test_less_info_lists_no_change_and_says_where_they_are(self) -> None:
+        # D-525: *"wszystko inne niech bedzie w verbose"* -- the list under the counts ran to a
+        # screen of repeated lines for a Collection.
+        fast = _drawn(*_DECISIONS)
+
+        self.assertNotIn("AART will make", fast)
+        self.assertNotRegex(fast, r"(?m)^\s*- (install|store|configure|keep)")
+        self.assertIn("[v] for more info: the changes it makes", fast)
+
+    def test_more_info_announces_changes_aart_makes_rather_than_chores(self) -> None:
+        many = _drawn(RUNTIME, PACKAGES, profile=_MORE)
+        one = _drawn(RUNTIME, profile=_MORE)
 
         self.assertIn("AART will make these changes when you confirm:", many)
         self.assertIn("AART will make this change when you confirm:", one)
@@ -120,7 +133,6 @@ class ReadyStatesTheChangesAartWillMakeTest(unittest.TestCase):
 
     def test_each_change_is_an_outcome_that_names_its_subject(self) -> None:
         for remediation, words in (
-            (CREDENTIAL, ("store", "credential", "securely", "macos keychain")),
             (RUNTIME, ("install", "python", ">=3.11")),
             (EXECUTABLE, ("install", "node")),
             (PACKAGES, ("install", "Python dependencies", "uv")),
@@ -128,7 +140,7 @@ class ReadyStatesTheChangesAartWillMakeTest(unittest.TestCase):
             (PROVIDER, ("onepassword",)),
         ):
             with self.subTest(kind=remediation.kind):
-                drawn = _drawn(remediation)
+                drawn = _drawn(remediation, profile=_MORE)
                 for word in words:
                     self.assertIn(word, drawn)
                 # The bare kind label as an item, not a sentence that happens to open with it.
@@ -136,36 +148,53 @@ class ReadyStatesTheChangesAartWillMakeTest(unittest.TestCase):
                     drawn, rf"(?m)^\s*(- )?{remediation.kind.replace('-', ' ')}\s*$"
                 )
 
+    def test_storing_a_credential_is_never_listed_as_a_change(self) -> None:
+        # D-525: *"store the credential it needs securely wywal calkowicie"*. The count
+        # `credential(s) stored securely` says it, once.
+        for profile in PresentationProfile:
+            with self.subTest(profile=profile):
+                drawn = _drawn(CREDENTIAL, RUNTIME, profile=profile)
+
+                self.assertNotIn("store the credential", drawn.lower())
+        self.assertIn("credential(s) stored securely", _drawn(CREDENTIAL, RUNTIME))
+
+    def test_a_change_many_artifacts_need_is_said_once_with_how_many(self) -> None:
+        jira = dataclasses.replace(PACKAGES, owners=("public/mcp/jira@1.0.0",))
+        lines = render_ready(_plan(PACKAGES, jira, RUNTIME), _MORE)
+
+        said = [line for line in lines if "Python dependencies" in line]
+        self.assertEqual(len(said), 1, lines)
+        self.assertTrue(said[0].endswith("(×2)"), said)
+        self.assertFalse(any("python >=3.11" in line and "×" in line for line in lines))
+
     def test_the_changes_are_parted_from_their_sentence_and_from_each_other(self) -> None:
-        lines = render_ready(_plan(CREDENTIAL, RUNTIME), PresentationProfile.LESS_INFO)
+        lines = render_ready(_plan(RUNTIME, PACKAGES), _MORE)
         opening = lines.index("AART will make these changes when you confirm:")
 
-        self.assertEqual(lines[opening - 1], "")
         self.assertEqual(lines[opening + 1], "")
-        self.assertTrue(lines[opening + 2].startswith("  - store the credential"))
+        self.assertTrue(lines[opening + 2].startswith("  - install the python"))
         self.assertEqual(lines[opening + 3], "")
-        self.assertTrue(lines[opening + 4].startswith("  - install the python"))
+        self.assertTrue(lines[opening + 4].startswith("  - install its Python dependencies"))
 
     def test_fast_keeps_material_impact_in_plain_words_and_verbose_adds_the_effect_terms(
         self,
     ) -> None:
-        remediations = (CREDENTIAL, RUNTIME, NETWORK)
-        fast = _drawn(*remediations)
-        verbose = _drawn(*remediations, profile=PresentationProfile.MORE_INFO)
+        view = dataclasses.replace(
+            _plan(CREDENTIAL, RUNTIME, NETWORK), risks=("credential-mutation", "network-mutation")
+        )
+        fast = "\n".join(render_ready(view, PresentationProfile.LESS_INFO))
+        verbose = "\n".join(render_ready(view, _MORE))
 
-        for impact in ("credential", "install the python", "network access to api.github.com"):
-            self.assertIn(impact, fast.lower())
+        self.assertIn("credential(s) stored securely", fast)
+        self.assertIn("This install changes network access.", fast)
         for term in ("credential mutation", "executable install", "network mutation", _OWNER):
             with self.subTest(term=term):
                 self.assertNotIn(term, fast)
                 self.assertIn(term, verbose)
 
-    def test_each_change_is_said_once_with_no_summary_repeating_it(self) -> None:
-        # D-397: *"informacje w Remediation ... sa zduplikowane"* -- a line per kind of impact under
-        # the list said again what the list had just said. On Ready that is the risk sentence too.
-        view = dataclasses.replace(
-            _plan(*_DECISIONS), risks=("credential-mutation", "network-mutation")
-        )
+    def test_a_risk_a_count_already_names_is_not_said_again(self) -> None:
+        # D-397: a sentence under the counts said again what they had just said.
+        view = dataclasses.replace(_plan(*_DECISIONS), risks=("credential-mutation",))
         drawn = "\n".join(render_ready(view, PresentationProfile.LESS_INFO))
 
         for repeated in (
@@ -173,12 +202,11 @@ class ReadyStatesTheChangesAartWillMakeTest(unittest.TestCase):
             "never shows its value",
             "will be configured",
             "stores a credential",
-            "changes network access",
         ):
             self.assertNotIn(repeated, drawn)
 
-    def test_a_material_risk_no_change_names_is_still_said(self) -> None:
-        # INV-151: Fast cannot hide it, so only a listed change may stand in for the sentence.
+    def test_a_material_risk_no_count_names_is_still_said(self) -> None:
+        # INV-151: Less info cannot hide it.
         view = dataclasses.replace(_plan(RUNTIME), risks=("network-mutation",))
 
         self.assertIn(
@@ -201,7 +229,7 @@ class ThereIsNoSeparateStopTest(unittest.TestCase):
         # verbose"*. The harness counts and Harnesses line already say it; `[v]` keeps the rest.
         plan = _plan(_harness("claude"), _harness("codex"))
         fast = "\n".join(render_ready(plan, PresentationProfile.LESS_INFO))
-        verbose = "\n".join(render_ready(plan, PresentationProfile.MORE_INFO))
+        verbose = "\n".join(render_ready(plan, _MORE))
 
         self.assertNotIn("AART will make", fast)
         self.assertNotIn("integration", fast)
@@ -210,12 +238,13 @@ class ThereIsNoSeparateStopTest(unittest.TestCase):
             self.assertIn(harness, verbose)
 
     @given(chosen=st.lists(st.sampled_from(_EVERY), max_size=5, unique=True))
-    def test_every_plan_goes_to_ready_which_lists_exactly_its_material_changes(
+    def test_every_plan_goes_to_ready_whose_more_info_lists_exactly_its_material_changes(
         self, chosen: list[RemediationView]
     ) -> None:
         plan = _plan(*chosen, inputs=False)
         source, state = _on(ConsumerScreen.REVIEW_SELECTION, *chosen, inputs=False)
         fast = render_ready(plan, PresentationProfile.LESS_INFO)
+        verbose = render_ready(plan, _MORE)
 
         self.assertEqual(
             install_flow_screens(plan)[-3:],
@@ -223,15 +252,14 @@ class ThereIsNoSeparateStopTest(unittest.TestCase):
         )
         self.assertEqual(install_flow_screens(plan)[:-3], (ConsumerScreen.REVIEW_SELECTION,))
         self.assertIs(source.detail(state), ConsumerScreen.READY)
-        listed = tuple(line for line in fast if line.startswith("  - "))
-        self.assertEqual(
-            listed,
-            tuple(
-                list_item(remediation_change(item))
-                for item in chosen
-                if item.kind != "configure-harness"
-            ),
+        self.assertEqual(tuple(line for line in fast if line.startswith("  - ")), ())
+        expected = tuple(
+            list_item(remediation_change(item))
+            for item in chosen
+            if item.kind not in ("configure-harness", "configure-credential")
         )
+        changes = verbose[: verbose.index("Review install plan (Verbose)")]
+        self.assertEqual(tuple(line for line in changes if line.startswith("  - ")), expected)
 
 
 if __name__ == "__main__":
