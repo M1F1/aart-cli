@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.31.0](https://github.com/M1F1/aart-cli/compare/v0.30.3...v0.31.0) (2026-11-05)
+
+
+### Added
+
+* consume search prints each artifact's documentation link under its row, and --json gives it as documentation ([fb1241b](https://github.com/M1F1/aart-cli/commit/fb1241bab8e08d7f3a1ccaa907c12a91030ea2fa))
+
+
+### Documentation
+
+* the README and the consumer guide say search shows the documentation link ([fb1241b](https://github.com/M1F1/aart-cli/commit/fb1241bab8e08d7f3a1ccaa907c12a91030ea2fa))
+
 ## [0.30.3](https://github.com/M1F1/aart-cli/compare/v0.30.2...v0.30.3) (2026-11-05)
 
 
