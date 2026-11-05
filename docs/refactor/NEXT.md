@@ -1,6 +1,17 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-04, OPENCODE-2-USAGE, the PR)
+## Where the work is (2026-11-05, REVIEW-05-PREPARING, the PR)
+
+**REVIEW-05-PREPARING** (§173.5, D-522): screen 05 draws its own rows while an install is prepared,
+so 07's form rows are no longer drawn as `[ ] None` after Set later, and says "Preparing the
+installation." before it has any; and a harness that cannot host a Collection is no longer named
+as "not offered". 07b asks again for a credential whose item still holds a Set later's
+`AART_NOT_SET` (§172.6, D-523). On `fix/review-selection-while-installing` (worktree
+`/Users/mifi/code/aart-cli-context-rest`). Next: the PR, CI, the owner's merge and release.
+
+Evidence: `docs/refactor/slices/REVIEW-05-PREPARING-own-rows-and-no-unoffered-harnesses.md`.
+
+## Where the work was (2026-11-04, OPENCODE-2-USAGE, released in 0.30.1)
 
 **OPENCODE-2-USAGE** makes aart-cli's opencode usage plugin load on both opencode runtimes (§212,
 D-520): one default export, `server` for OpenCode 1.x and `setup` for OpenCode 2, and OpenCode 2's

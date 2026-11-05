@@ -1,8 +1,8 @@
 """§173.5: the TUI installs a Collection as one artifact, through the real composed shell.
 
 The Registry here approved two artifacts and a Collection naming both. Screen 05 offers the
-Collection as one row, a harness only when it hosts every member, and says why the others are not
-offered; one tick per harness installs every member there. 07a puts a Collection and harness on one
+Collection as one row, and a harness only when it hosts every member, saying nothing of the others
+(D-522); one tick per harness installs every member there. 07a puts a Collection and harness on one
 scope, and every member there goes to it (D-422).
 """
 
@@ -55,17 +55,16 @@ class CollectionInstallShellTest(unittest.TestCase):
             )
             return finished, terminal, installed
 
-    def test_05_offers_the_collection_as_one_row_and_names_what_a_harness_cannot_host(self):
+    def test_05_offers_the_collection_as_one_row_and_says_nothing_of_a_harness_it_cannot(self):
         finished, terminal, installed = self._drive()
 
         self.assertIs(finished.session.screen, ConsumerScreen.REVIEW_SELECTION)
         self.assertEqual(
             finished.rows, (f"pairs:{STARTER}\tclaude,opencode,tabnine",), terminal.last
         )
-        self.assertIn(
-            f"codex is not offered for {STARTER}: it cannot host company/mcp/dummy@1.0.0.",
-            terminal.last,
-        )
+        # D-522: codex cannot host the dummy server, so it is not a column, and nothing says so.
+        self.assertNotIn("codex", terminal.last)
+        self.assertNotIn("not offered", terminal.last)
         self.assertEqual(installed, [])
 
     def test_one_tick_per_harness_installs_every_member_there(self):

@@ -11081,7 +11081,9 @@ credentials the credential store's own prompt asks for while installing, as `con
 A person who cannot find a credential leaves it, and the install still completes.
 
 - The screen lists each secret input once per artifact. A secret already stored for the same
-  existing owner shows `Configured securely` and asks nothing.
+  existing owner shows `Configured securely` and asks nothing. A stored `AART_NOT_SET` placeholder
+  is not a stored secret: its row is asked like any other, the store replaces the item, and
+  abandoning the review puts the placeholder back (amended 2026-11-05 by D-523).
 - Nothing is typed on 07b. Enter on a secret marks it `asked when installing`, and Enter again
   unmarks it. Set later unmarks every row. The UI state holds only which rows are marked. No
   value of a credential is held in the process, a frame, the plan, a receipt, a log or argv.
@@ -11186,8 +11188,9 @@ and offered as an artifact of its own; installing it alone is an ordinary artifa
 
 The §172 flow applies, with the Collection taking the place of one artifact (D-422).
 - **05 Harnesses.** A harness is offered for the Collection only when it can host every member.
-  A harness that cannot is shown as not offered, and the reason names the first member it cannot
-  host. There is one choice per Collection and harness, and it applies to every member.
+  A harness that cannot is not shown, and nothing says it is not offered: nobody could have chosen
+  it (amended 2026-11-05 by D-522). There is one choice per Collection and harness, and it applies
+  to every member.
 - **07a Scope.** A scope is offered for a Collection and harness only when every member has a
   target in it there. The chosen scope applies to every member.
 - **07 Configuration / 07b Credentials.** Each member's inputs are asked once per member

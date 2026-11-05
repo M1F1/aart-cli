@@ -18,6 +18,7 @@ from unittest import mock
 from aart_cli.application.consumer_views import ConsumerScreen
 from aart_cli.domain.inputs import SKIPPED_INPUT
 from aart_cli.domain.inspection import RemediationCapability, RemediationCapabilityKind
+from aart_cli.tui_consumer import PREPARING_INSTALL
 from tests.artifact_installation_e2e_test import MANIFEST
 from tests.configured_install_command_e2e_test import _environment
 from tests.configured_installation_draft_e2e_test import (
@@ -63,9 +64,53 @@ def _with_starter(_authored, **keywords):
     return _published_registries(AUTHORED_MCP, _AUTHORED_JIRA, _STARTER, **keywords)
 
 
+class _Beats:
+    """Stands in for the shell's heartbeat and keeps every frame it would beat over (§203)."""
+
+    frames: list[tuple[str, ...]] = []
+
+    def __init__(self, _terminal, lines, **_keywords) -> None:
+        type(self).frames.append(lines)
+
+    def show(self, lines) -> None:
+        type(self).frames.append(lines)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        return None
+
+
+#: Marketplace to Success for the Collection on claude and opencode, with Set later on 07 and 07b.
+_SET_LATER_INSTALL = (
+    # Marketplace rows are the two servers, then the Collection; preview, install.
+    DOWN,
+    DOWN,
+    ENTER,
+    *INSTALL_CUSTOM,
+    # 05: the Collection on claude and opencode.
+    SPACE,
+    RIGHT,
+    SPACE,
+    ENTER,
+    # 07a as it is (§209).
+    ENTER,
+    # 07: GitHub's default cleared, Jira's kept; Set later, above the first value; the
+    # dependency manager as it is.
+    *((BACKSPACE,) * len("acme")),
+    UP,
+    ENTER,
+    ENTER,
+    # 07b: Set later, above the first credential; then Ready.
+    UP,
+    ENTER,
+    ENTER,
+)
+
+
 class CollectionInputsShellTest(unittest.TestCase):
-    def test_07_and_07b_ask_each_member_once_and_set_later_blocks_nothing(self) -> None:
-        provider = _Keeping()
+    def _install(self, provider):
         with (
             mock.patch(
                 "tests.configured_install_command_e2e_test._published_registry", _with_starter
@@ -82,36 +127,40 @@ class CollectionInputsShellTest(unittest.TestCase):
                 terminal_handover=_Journal().handover,
             )
             finished, terminal, _ = _drive(
-                env,
-                _at(ConsumerScreen.MARKETPLACE),
-                # Marketplace rows are the two servers, then the Collection; preview, install.
-                DOWN,
-                DOWN,
-                ENTER,
-                *INSTALL_CUSTOM,
-                # 05: the Collection on claude and opencode.
-                SPACE,
-                RIGHT,
-                SPACE,
-                ENTER,
-                # 07a as it is (§209).
-                ENTER,
-                # 07: GitHub's default cleared, Jira's kept; Set later, above the first value; the
-                # dependency manager as it is.
-                *((BACKSPACE,) * len("acme")),
-                UP,
-                ENTER,
-                ENTER,
-                # 07b: Set later, above the first credential; then Ready.
-                UP,
-                ENTER,
-                ENTER,
-                actions=handler,
+                env, _at(ConsumerScreen.MARKETPLACE), *_SET_LATER_INSTALL, actions=handler
             )
             configs = {
                 (path.parent.parent.name, path.stem): path.read_text(encoding="utf-8")
                 for path in env.project.rglob("config/*.conf")
             }
+        return finished, terminal, configs
+
+    def test_while_set_later_prepares_the_install_the_screen_names_no_form_row(self) -> None:
+        # The frame beaten over while the answers are prepared was drawn from 07's form rows on
+        # 05, each one `[ ] None`, for as long as a Collection took to prepare.
+        _Beats.frames = []
+        with mock.patch("aart_cli.tui_consumer.Heartbeat", _Beats):
+            finished, terminal, _ = self._install(_Keeping())
+
+        self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
+        self.assertTrue(_Beats.frames)
+        drawn = ["\n".join(frame) for frame in _Beats.frames]
+        for frame in drawn:
+            self.assertNotIn("None", frame)
+            self.assertNotIn("not offered", frame)
+        # 05 shows what was chosen while it is prepared, or, before it has rows, that it is.
+        for frame in (frame for frame in drawn if frame.split("\n", 1)[0].endswith("Selection")):
+            self.assertTrue(
+                "company/collection/starter" in frame or PREPARING_INSTALL.lower() in frame.lower(),
+                frame,
+            )
+        # Preparing before 05 has rows of its own says so, rather than that nothing is planned.
+        self.assertTrue(any(PREPARING_INSTALL.lower() in frame.lower() for frame in drawn))
+        self.assertFalse(any("nothing has been planned" in frame.lower() for frame in drawn))
+
+    def test_07_and_07b_ask_each_member_once_and_set_later_blocks_nothing(self) -> None:
+        provider = _Keeping()
+        finished, terminal, configs = self._install(provider)
 
         self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
         configuration = terminal.screen_containing("Jira site (jira-site)")
