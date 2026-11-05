@@ -145,7 +145,8 @@ aart-cli consume registry add --alias <alias> --kind git --location <registry-ur
 
 Find the artifact. `list` prints the whole catalog; `search` is how you find one thing in it. Every
 word must match, so a second word narrows rather than widens, and the coordinate it prints is the
-one `install` takes:
+one `install` takes. An artifact that declares a documentation link has it printed whole under its
+row, so the page with its setup steps is one copy away:
 
 ```sh
 aart-cli consume search <word>

@@ -276,6 +276,8 @@ def _search_rows(catalog) -> tuple[tuple[Document, ...], tuple[dict, ...]]:
                 "summary": summary,
                 "trust": item.trust.kind.value,
                 "source": item.source.alias.value,
+                # §197: the approved link, whole, or None where the artifact declares none.
+                "documentation": artifact.documentation,
             }
         )
     for collection in catalog.collections:
@@ -356,6 +358,9 @@ def _search(request: Request) -> int:
         marker = "[collection]" if row["kind"] == "collection" else f"[{row['trust']}]"
         where = f" ({', '.join(hit.matched)})" if hit.matched else ""
         print(f"  {row['coordinate']} {marker} {row['summary']}{where}")
+        if row.get("documentation"):
+            # On its own line and never cut, so it can be copied whole (§197).
+            print(f"    Documentation: {row['documentation']}")
     if not hits:
         print("Try one word, or part of one: matching is by substring, not by whole word.")
     return _common.OK

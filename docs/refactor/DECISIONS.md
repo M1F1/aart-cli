@@ -13204,3 +13204,18 @@ causes, both in the step after 07:
     them the cursor stayed on Continue. Moving past the form clears 07's rows.
 - **Not chosen.** Keeping the 05 choice but asking it before 07: it is still a question the
   Settings default answers, and the owner chose no question.
+
+## D-527 — `consume search` prints each artifact's documentation link (SEARCH-DOCUMENTATION)
+
+§197 amended (owner request, 2026-11-05). `consume list` and the install review already printed an
+artifact's approved `documentation`, but `consume search`, the command a person runs to find one
+artifact, did not. The owner asked for it, so that the page with the install commands is one copy
+away from the answer.
+
+- **Text:** under an artifact's row, `    Documentation: <url>` on its own line, whole and uncut,
+  as §197 requires. An artifact that declares none gets no line.
+- **JSON:** every artifact match carries `documentation`, the approved link or `null`, the same
+  key and value `consume list --json` uses. A Collection declares no documentation, so its match
+  has no key.
+- **Not chosen.** Printing a ready-made install command under each row: the owner asked for the
+  link, and the documentation is where an author says how their artifact is installed and set up.

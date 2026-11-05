@@ -404,7 +404,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Match every word given against each artifact's name, coordinate, summary, authors, "
             "licence, and collection members, and print what matches all of them, best first. "
             "Matching is plain case-insensitive substring: looking for `code-review` finds it "
-            "from `review`. A second word narrows the answer rather than widening it."
+            "from `review`. A second word narrows the answer rather than widening it. An "
+            "artifact that declares a documentation link has it printed whole under its row."
         ),
     )
     p_marketplace_search.add_argument(
