@@ -237,6 +237,17 @@ class TheFrontendIsHeadlesslyTestableTest(unittest.TestCase):
             for name in screens:
                 sys.modules.pop(name, None)
             sys.modules.update(imported)
+            # The fresh import also rebound the package attribute (`aart_cli.tui_consumer`), and
+            # Python 3.10's `mock.patch` resolves a target through that attribute rather than
+            # `sys.modules`: a later patch then landed on the discarded module while the shell ran
+            # the restored one, so a test's stand-in was never called.
+            package = sys.modules["aart_cli"]
+            for name in screens:
+                attribute = name.rpartition(".")[2]
+                if name in imported:
+                    setattr(package, attribute, imported[name])
+                elif hasattr(package, attribute):
+                    delattr(package, attribute)
 
 
 class TheseGuardsAreNotVacuousTest(unittest.TestCase):

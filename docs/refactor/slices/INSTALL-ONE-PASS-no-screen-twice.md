@@ -58,3 +58,15 @@ Targeted mutations, all killed:
 
 Focused: 1800 TUI, consumer, install, credential, remediation, placeholder and Collection tests
 pass; ruff, ruff format, mypy, tach and docs-check pass.
+
+## What CI found
+
+On Python 3.10 the three `_Beats` tests in `tests/collection_inputs_tui_e2e_test.py` saw no frame
+when `tests/tui_boundary_test.py` ran first in the same chunk; the new tests had regrouped the
+chunks. That test imports every screen module afresh and put `sys.modules` back, but left the
+package attribute `aart_cli.tui_consumer` on the discarded copy. Python 3.10's `mock.patch`
+resolves its target through that attribute, so the stand-in Heartbeat was patched onto a module
+the shell did not run. The test now restores the package attributes too. Reproduced and verified
+with `scripts/parallel_tests.py --worker tui_boundary_test collection_inputs_tui_e2e_test` on 3.10:
+3 failures before, OK after.
+
