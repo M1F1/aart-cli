@@ -53,7 +53,7 @@ from .installation_planning import (
     allowed_remediations,
     assess_requirements,
 )
-from .installation_proposal import PlannedArtifact, PlannedInstallation
+from .installation_proposal import PlannedArtifact, PlannedInstallation, planned_installer
 from .python_environment import dependency_installation, select_python_installer
 from .runtime_projection import (
     ConfigurationProjection,
@@ -283,4 +283,11 @@ def installation_remediations(
     )
     if isinstance(aggregated, Err):
         return aggregated
-    return Ok(allowed_remediations(assess_requirements(aggregated.value, facts), facts, policy))
+    return Ok(
+        allowed_remediations(
+            assess_requirements(aggregated.value, facts),
+            facts,
+            policy,
+            preferred_installer=planned_installer(installations),
+        )
+    )

@@ -52,11 +52,13 @@ from aart_cli.application.consumer_views import (
     INSTALL_PATH_PURPOSE,
     INSTALL_PATH_ROWS,
     PLACEHOLDER_WARNING,
+    RUNNING,
     SUCCESS_CHOICES,
     SUCCESS_PURPOSE,
     TELEMETRY_ERRORS_ROW,
     TELEMETRY_ROW,
     TELEMETRY_UNMANAGED_ROW,
+    WAITING,
     ActivityView,
     ApplicationScreen,
     ConfigInputView,
@@ -83,13 +85,12 @@ from aart_cli.application.consumer_views import (
     RegistryView,
     RemediationView,
     RunningInstallationView,
+    RunningStepView,
     artifact_usage_row,
     default_harness_row,
     install_path_label,
     installed_collection_cells,
     installed_row_cells,
-    installer_from_row,
-    installer_row,
     marketplace_cells,
     material_remediations,
     matrix_columns,
@@ -927,16 +928,22 @@ _MATERIAL_RISKS: tuple[tuple[str, str], ...] = (
 def render_ready(
     view: ConsumerPlanView, profile: PresentationProfile, *, asked: tuple[str, ...] = ()
 ) -> tuple[str, ...]:
-    """Screen 09. Outcomes in Fast; the same InstallPlan, undiminished, in Verbose.
+    """Screen 09. Outcomes in Less info; the changes, the placeholders and the plan in More info.
 
-    Both end with what will be stored as `AART_NOT_SET`, so a skip is never a surprise (§172.3).
+    Less info is the summary and nothing a count above it already says (D-525): the changes it
+    makes, what 07b stored and what is left as `AART_NOT_SET` are each one `[v]` away. A material
+    risk no count names is still said in plain words in either mode (INV-151).
     """
 
     if not isinstance(view, ConsumerPlanView) or not isinstance(profile, PresentationProfile):
         raise ValueError("ready rendering needs a consumer plan and presentation profile")
-    left = (*_asked_block(view, asked), *_placeholders_block(view, asked))
     if profile is PresentationProfile.MORE_INFO:
-        return (*_verbose_plan(view), *left)
+        return (
+            *_changes_block(view),
+            *_asked_block(view, asked),
+            *_placeholders_block(view, asked),
+            *_verbose_plan(view),
+        )
     outcomes = Counter(_OUTCOMES.get(item.outcome, "other change") for item in view.effects)
     lines = ["Ready to install", f"{len(view.selection.resolved)} artifact(s) will be installed."]
     lines.extend(f"  {count} {name}" for name, count in sorted(outcomes.items()))
@@ -946,26 +953,9 @@ def render_ready(
     if harnesses:
         suffix = " (chosen for this installation)." if view.chosen_targets else "."
         lines.append(f"Harnesses: {', '.join(harnesses)}{suffix}")
-    # The outcomes and the harnesses are the summary (§161.5 09). Ready is also the one place the
-    # material changes are agreed to, since screen 08 folded into it (D-403): they are listed under
-    # the summary, a blank line after their sentence and between each (D-402). The risk vocabulary
-    # and the review identity are the full plan, which `[v]` opens (D-398).
-    changes = material_remediations(view)
-    if changes:
-        lines.extend(
-            (
-                "",
-                "AART will make this change when you confirm:"
-                if len(changes) == 1
-                else "AART will make these changes when you confirm:",
-            )
-        )
-        for item in changes:
-            lines.extend(("", list_item(remediation_change(item))))
-        lines.append("")
     # What INV-151 keeps in every mode is a material risk, said once in plain words, and not where
-    # a count or a listed change above has already said it.
-    said = " ".join((*outcomes, *(item.kind for item in changes)))
+    # a count above has already said it.
+    said = " ".join(outcomes)
     attention = tuple(
         words
         for risk, words in _MATERIAL_RISKS
@@ -975,8 +965,37 @@ def render_ready(
     )
     if attention:
         lines.append("This install " + ", ".join(attention) + ".")
-    lines.extend(left)
-    lines.append("Press [v] for more info: the full plan.")
+    lines.extend(
+        ("", "Press [v] for more info: the changes it makes, what is set later, the plan.")
+    )
+    return tuple(lines)
+
+
+#: Changes Ready does not list in words: storing a credential is the count `credential(s) stored
+#: securely` already, and was one line per credential (D-525).
+_UNLISTED_CHANGES = frozenset({"configure-credential"})
+
+
+def _changes_block(view: ConsumerPlanView) -> tuple[str, ...]:
+    """The material changes, once each in words, with how many artifacts need the same (D-525)."""
+
+    said = Counter(
+        remediation_change(item)
+        for item in material_remediations(view)
+        if item.kind not in _UNLISTED_CHANGES
+    )
+    if not said:
+        return ()
+    heading = (
+        "AART will make this change when you confirm:"
+        if len(said) == 1
+        else "AART will make these changes when you confirm:"
+    )
+    lines = [heading]
+    # A blank line after the sentence and between each change (D-402).
+    for change, count in said.items():
+        lines.extend(("", list_item(f"{change} (×{count})" if count > 1 else change)))
+    lines.append("")
     return tuple(lines)
 
 
@@ -1021,17 +1040,51 @@ def render_running(view: RunningInstallationView, profile: PresentationProfile) 
         profile, PresentationProfile
     ):
         raise ValueError("running rendering needs a running view and presentation profile")
+    if view.members:
+        return _running_members(view, profile)
     heading = f"Installing {view.artifact}" if view.artifact else "Installing"
     lines = [f"{heading} ({view.done} of {view.total} done)", ""]
-    for item in view.steps:
+    lines.extend(_running_steps(view.steps, profile, "  "))
+    if not view.steps:
+        lines.append("  Nothing to do.")
+    return tuple(lines)
+
+
+def _running_steps(
+    steps: tuple[RunningStepView, ...], profile: PresentationProfile, indent: str
+) -> list[str]:
+    lines = []
+    for item in steps:
         mark = _STEP_MARKS.get(item.status, "·")
         if profile is PresentationProfile.MORE_INFO:
             detail = f" ({item.detail})" if item.detail else ""
-            lines.append(f"  {mark} {item.component}: {item.effect}{detail}")
+            lines.append(f"{indent}{mark} {item.component}: {item.effect}{detail}")
         else:
-            lines.append(f"  {mark} {item.component}")
-    if not view.steps:
-        lines.append("  Nothing to do.")
+            lines.append(f"{indent}{mark} {item.component}")
+    return lines
+
+
+def _running_members(
+    view: RunningInstallationView, profile: PresentationProfile
+) -> tuple[str, ...]:
+    """A transaction of several artifacts: each named, with the steps of the one that runs now.
+
+    A member that is over is one line, and one not reached yet is one line too, so a Collection
+    reads as the list of what it installs rather than a count of steps nobody can place.
+    """
+
+    over = sum(1 for item in view.members if item.status not in (WAITING, RUNNING))
+    lines = [f"Installing {len(view.members)} artifacts ({over} of {len(view.members)} done)", ""]
+    for member in view.members:
+        mark = _STEP_MARKS.get(member.status, "·")
+        running = member.status == RUNNING
+        count = f" ({member.done} of {member.total} done)" if running else ""
+        lines.append(f"  {mark} {member.artifact}{count}")
+        # The steps of the member running now, of one that did not apply, or of any when asked.
+        if member.status != WAITING and (
+            member.status != "applied" or profile is PresentationProfile.MORE_INFO
+        ):
+            lines.extend(_running_steps(member.steps, profile, "      "))
     return tuple(lines)
 
 
@@ -3096,6 +3149,7 @@ def run_consumer_shell(
         event = key_event(name, current, detail=active_source.detail(current))
         if event is None:
             continue
+        before = current
         current, commands = reduce_consumer_ui(current, event)
         entering = any(command.kind is ConsumerUiCommandKind.LOAD_SCREEN for command in commands)
         for command in commands:
@@ -3138,7 +3192,7 @@ def run_consumer_shell(
             # Preparing reads Registries and executing changes the machine; either can take long
             # enough to look hung, so both beat (§203).
             heartbeat = (
-                Heartbeat(terminal, frame(active_source, current))
+                Heartbeat(terminal, _preparing_frame(active_source, before, current))
                 if command.kind
                 in (ConsumerUiCommandKind.PREPARE_ACTION, ConsumerUiCommandKind.EXECUTE_ACTION)
                 else None
@@ -3188,6 +3242,25 @@ def run_consumer_shell(
         if entering or event.kind in reloads:
             current = _reload(active_source, current, entering=entering)
     return current
+
+
+def _preparing_frame(
+    source: ConsumerScreenSource, before: ConsumerUiState, current: ConsumerUiState
+) -> tuple[str, ...]:
+    """The frame an action beats over: the screen it is going to, or for 07's answers, 07.
+
+    Submitting 07 rewinds the session to 05 so that Back from what comes next skips the form, and
+    then prepares the install again. Beaten over 05, that read as 05 shown a second time and left
+    on its own a moment later (D-526): the person stays on the screen they answered until the next
+    one is ready.
+    """
+
+    if (
+        before.session.screen is ConsumerScreen.REQUIRED_INPUTS
+        and current.session.screen is not ConsumerScreen.REQUIRED_INPUTS
+    ):
+        return frame(source, before)
+    return frame(source, current)
 
 
 def _reload(
@@ -3934,17 +4007,9 @@ class CanonicalScreenSource:
                 # #50: no plan yet because inputs are unanswered, so the harness is the only
                 # thing to decide here; scope and backend are amendments to a plan.
                 return matrix
-            # The scope is 07a's, one per pair (§172.5). The backend rows sit after the harnesses:
-            # they amend a plan that already exists, and the cursor opens on the screen's subject.
-            installers = (
-                tuple(installer_row(item) for item in plan.installer_choice.offered)
-                if plan.installer_choice is not None and plan.installer_choice.is_a_choice
-                else ()
-            )
-            if state.inputs_submitted:
-                # D-380: the answers were given for these harnesses; what is left is the choice.
-                return installers
-            return (*matrix, *installers)
+            # The scope is 07a's, one per pair (§172.5), and the Python installer is Settings'
+            # (D-526): the harnesses are all 05 asks.
+            return matrix
         if screen is ConsumerScreen.INSTALL_SCOPE:
             plan = self._screens.plan
             return self._screens.install_scope_offers if plan is None else plan.scope_offers
@@ -5214,17 +5279,6 @@ class CanonicalScreenSource:
         """
 
         cursor = ">" if row == state.current_row else " "
-        plan = self._screens.plan
-        installer = installer_from_row(row)
-        if installer is not None:
-            chosen = (
-                plan.installer_choice.selected
-                if plan is not None and plan.installer_choice is not None
-                else state.python_installer
-            )
-            return (
-                f"{cursor} {'(*)' if installer == chosen else '( )'} Dependencies with: {installer}"
-            )
         harness = target_from_row(row)
         return f"{cursor} {'[x]' if harness in state.targets else '[ ]'} {harness}"
 
@@ -5239,8 +5293,7 @@ class CanonicalScreenSource:
                 *(
                     self._review_row(row, state)
                     for row in self.rows(state)
-                    if matrix_from_row(row) is None
-                    and (installer_from_row(row) is not None or target_from_row(row) is not None)
+                    if matrix_from_row(row) is None and target_from_row(row) is not None
                 ),
             )
         if screen is ConsumerScreen.INSTALL_SCOPE and self.rows(state):

@@ -25,7 +25,6 @@ from aart_cli.application.consumer_views import (
     ConsumerSession,
     HarnessTargetView,
     PythonInstallerChoiceView,
-    installer_row,
     matrix_rows,
     project_install_plan,
 )
@@ -90,9 +89,8 @@ class TheFormGoesForwardE2ETest(BothBackendsMeasured):
                 ENTER,
                 value,
                 ENTER,
-                # Submit the form. The plan offers a choice of Python backend, which 05 asks, then
-                # 07a the scope; Continue on each, then confirm Ready. Nothing else.
-                ENTER,
+                # Submit the form, Continue on 07a's scope, then confirm Ready. No 05 again: the
+                # Python backend is Settings' (D-526).
                 ENTER,
                 ENTER,
                 # 07b: Set later, above the credential the cursor opens on (§172.6).
@@ -107,8 +105,8 @@ class TheFormGoesForwardE2ETest(BothBackendsMeasured):
             first_form = next(i for i, text in enumerate(frames) if "/ Required Inputs" in text)
             after = frames[first_form:]
             self.assertTrue(after)
-            # D-380: 05 after the form is the backend alone; the harness matrix is not drawn again,
-            # and the scope is asked on 07a only (§172.5).
+            # D-526: no 05 after the form, so the harness matrix is not drawn again, and the scope
+            # is asked on 07a only (§172.5).
             self.assertTrue(any("/ Scope" in text for text in after))
             for text in after:
                 self.assertNotRegex(text, r"claude +opencode +tabnine")
@@ -162,7 +160,7 @@ class TheReducerFollowsTheAdapterForwardTest(unittest.TestCase):
 
 
 class TheAmendmentsScreenTest(unittest.TestCase):
-    """When the plan still offers a real choice, 05 is drawn with that choice and no harness."""
+    """D-526: 05 asks the harnesses alone, even when two Python installers could run."""
 
     def _source(self) -> CanonicalScreenSource:
         view = project_install_plan(_view_plan())
@@ -184,20 +182,12 @@ class TheAmendmentsScreenTest(unittest.TestCase):
             inputs_submitted=submitted,
         )
 
-    def test_after_the_form_only_the_choice_is_a_row(self) -> None:
+    def test_no_backend_is_a_row_before_or_after_the_form(self) -> None:
         source = self._source()
+        matrix = matrix_rows((HarnessTargetView("claude", ("company/mcp/github@1.0.0",)),))
 
-        self.assertEqual(
-            source.rows(self._state(submitted=True)), (installer_row("pip"), installer_row("uv"))
-        )
-        self.assertEqual(
-            source.rows(self._state(submitted=False)),
-            (
-                *matrix_rows((HarnessTargetView("claude", ("company/mcp/github@1.0.0",)),)),
-                installer_row("pip"),
-                installer_row("uv"),
-            ),
-        )
+        self.assertEqual(source.rows(self._state(submitted=False)), matrix)
+        self.assertEqual(source.rows(self._state(submitted=True)), matrix)
 
 
 if __name__ == "__main__":

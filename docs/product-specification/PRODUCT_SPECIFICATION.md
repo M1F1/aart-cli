@@ -8858,24 +8858,31 @@ its new installations.
 
 There is no separate Remediation screen. The material changes aart-cli will make to satisfy the
 plan's requirements are listed on Ready to Install, the one final review, because confirming it is
-what agrees to them. Routine derived changes, such as configuring the chosen harness, are not
-listed there in Fast. Example of the list on 09:
+what agrees to them. **Amended 2026-11-05 by D-525:**
+- The list is in Ready's More info (`[v]`), not in Less info.
+- Each change is said once, with how many times the plan needs it.
+- Storing a credential is not listed, because the count `credential(s) stored securely` already
+  says it.
+- Routine derived changes, such as configuring the chosen harness, are not listed.
+
+Example of the list in 09's More info:
 
 ```text
 AART will make these changes when you confirm:
 
   - install the python >=3.11 runtime it runs on
 
-  - store the credential it needs securely in macos keychain
+  - install its Python dependencies with uv (×7)
 ```
 
 ### 09 Ready to Install
 
 Concise final review summarizes outcomes such as configured MCP servers, isolated environments,
-installed skills/rules and securely stored credentials. In every mode it lists each material change
-aart-cli will make once confirmed, as an outcome naming its subject (08). A material risk that no
-listed change already names is still said in plain words (INV-151). `[v]` (More info) exposes the
-same InstallPlan in Verbose mode.
+installed skills/rules and securely stored credentials. **Amended 2026-11-05 by D-525:**
+- Less info is that summary, the harnesses, and one line saying `[v]` shows the rest.
+- A material risk that no count names is still said there in plain words (INV-151).
+- `[v]` (More info) shows the material changes (08) and what 07b stored. It also shows what is
+  left as `AART_NOT_SET`, and the same InstallPlan in Verbose mode.
 
 ### 10 Installing
 
@@ -11095,8 +11102,8 @@ A person who cannot find a credential leaves it, and the install still completes
 - If the person cancels the store's prompt, the install finishes as partial, and the credential
   is set in Credentials and variables.
 - Leaving before confirming on Ready forgets the marks.
-- Ready lists, in every mode, which credentials the store will ask for, and which inputs are being
-  left as the `AART_NOT_SET` placeholder.
+- Ready's More info lists which credentials the store took on 07b, and which inputs are being left
+  as the `AART_NOT_SET` placeholder; Less info says `[v]` shows them (amended by D-525).
 
 ## 172.7 Acceptance invariants
 
@@ -12287,6 +12294,11 @@ it, because its schemas used keywords the validator did not implement.
   turning mark and the whole seconds taken, for example `⠹ working 12s`. The heartbeat redraws the
   step the action last reported, so the frame keeps showing how far it got. It stops when the action
   returns.
+- **A Collection's install names each member (amended by D-524).** While a transaction of more
+  than one artifact runs, screen 10 lists every member by coordinate, in the order they run, and
+  counts artifacts done. The member running now shows its own steps and their count; a member not
+  reached yet is listed as waiting. Each member's steps are its own, though every member numbers
+  them from one.
 - **A heartbeat never draws over a prompt.** While the terminal is lent to the credential store's
   prompt (§201), no beat is drawn. A beat that falls during the loan is skipped, not drawn after it.
 - **`mcp test` applies a generated schema's bounds.** It applies:
@@ -12514,8 +12526,13 @@ installation whose place is already decided.
   07 is still unanswered, that preparation returns the form, and what was already typed into it
   is kept.
 - **07a opens on its first column.** Its columns are scopes, not 05's harnesses.
-- **After 07, 07a is not asked again.** 07 goes on to 05 only while a choice of Python installer is
-  still open (D-380), then to 07b or Ready. Going back to 05 asks the scope, then the form, again.
+- **After 07, 07a is not asked again.** 07 goes on to 07b or Ready, never to 05 again (amended by
+  D-526). Going back to 05 asks the scope, then the form, again.
+- **The Python installer is Settings', on Custom as on Default (amended by D-526).** 05 offers no
+  pip/uv rows. The installer the install runs is the Settings one when this machine and policy can
+  use it, and the first usable one otherwise; Ready's More info names it in the change it lists,
+  and Settings is where it is changed. While the plan is prepared after 07, 07 stays on screen
+  until 07b or Ready is ready, so no screen is drawn twice.
 
 **INV-314 — A credential is entered for an installation whose place is chosen.** On every TUI
 install path, 07a, when shown, comes before 07 and 07b, and each item 07b asks for is addressed by

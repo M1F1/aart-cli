@@ -164,11 +164,15 @@ class InstallFlowScreenTest(unittest.TestCase):
         self.assertIn("Configured securely", fast)
         self.assertNotIn("value", fast.lower())
 
-    def test_ready_lists_the_changes_it_agrees_to_since_remediation_folded_into_it(self):
+    def test_ready_leaves_the_changes_to_more_info_and_never_lists_storing_a_credential(self):
+        # D-525: the count says a credential is stored; the list of changes is `[v]`'s.
         fast = drawn(ConsumerScreen.READY)
+        verbose = drawn(ConsumerScreen.READY, PresentationProfile.MORE_INFO)
 
-        self.assertIn("AART will make this change when you confirm:", fast)
-        self.assertIn("store the credential", fast)
+        self.assertIn("credential(s) stored securely", fast)
+        self.assertNotIn("AART will make", fast)
+        for each in (fast, verbose):
+            self.assertNotIn("store the credential", each)
 
     def test_ready_summarises_outcomes_and_verbose_shows_the_same_plan(self):
         fast = drawn(ConsumerScreen.READY)

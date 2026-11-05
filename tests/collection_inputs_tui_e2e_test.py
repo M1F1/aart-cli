@@ -51,8 +51,8 @@ _AUTHORED_JIRA = tuple(
     )
     for path, content in AUTHORED_MCP
 )
-# The review offers a dependency manager only when the host has more than one; pin both so the
-# keys below land on the same rows whether or not this machine has uv.
+# Both dependency managers, pinned so the keys below are the same whether or not this machine has
+# uv: neither is asked for, because the install takes Settings' (D-526).
 _INSTALLERS = tuple(
     RemediationCapability(RemediationCapabilityKind.PYTHON_INSTALLER, name)
     for name in ("pip", "uv")
@@ -96,11 +96,10 @@ _SET_LATER_INSTALL = (
     ENTER,
     # 07a as it is (§209).
     ENTER,
-    # 07: GitHub's default cleared, Jira's kept; Set later, above the first value; the
-    # dependency manager as it is.
+    # 07: GitHub's default cleared, Jira's kept; Set later, above the first value. The
+    # dependency manager is Settings' (D-526), so 07b comes next.
     *((BACKSPACE,) * len("acme")),
     UP,
-    ENTER,
     ENTER,
     # 07b: Set later, above the first credential; then Ready.
     UP,
@@ -110,7 +109,7 @@ _SET_LATER_INSTALL = (
 
 
 class CollectionInputsShellTest(unittest.TestCase):
-    def _install(self, provider):
+    def _install(self, provider, keys=_SET_LATER_INSTALL):
         with (
             mock.patch(
                 "tests.configured_install_command_e2e_test._published_registry", _with_starter
@@ -127,7 +126,7 @@ class CollectionInputsShellTest(unittest.TestCase):
                 terminal_handover=_Journal().handover,
             )
             finished, terminal, _ = _drive(
-                env, _at(ConsumerScreen.MARKETPLACE), *_SET_LATER_INSTALL, actions=handler
+                env, _at(ConsumerScreen.MARKETPLACE), *keys, actions=handler
             )
             configs = {
                 (path.parent.parent.name, path.stem): path.read_text(encoding="utf-8")
@@ -158,9 +157,55 @@ class CollectionInputsShellTest(unittest.TestCase):
         self.assertTrue(any(PREPARING_INSTALL.lower() in frame.lower() for frame in drawn))
         self.assertFalse(any("nothing has been planned" in frame.lower() for frame in drawn))
 
+    def test_after_07_the_screen_stays_on_07_until_the_next_one_is_ready(self) -> None:
+        # D-526: submitting 07 rewinds to 05 and prepares again. The beat was drawn over 05, so 05
+        # appeared a second time and then left by itself for 07b.
+        # With pip and uv both usable, 05 also came back to ask which (D-526): it no longer does.
+        _Beats.frames = []
+        with mock.patch("aart_cli.tui_consumer.Heartbeat", _Beats):
+            finished, terminal, _ = self._install(_Keeping())
+
+        self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
+
+        def after_the_form(frames) -> list[str]:
+            screens = [frame[0].rsplit(" / ", 1)[-1] for frame in frames]
+            return (
+                screens[screens.index("Required Inputs") :] if "Required Inputs" in screens else []
+            )
+
+        # Neither a drawn frame nor one beaten over while preparing goes back to 05 after 07, and
+        # the preparation after 07 is beaten over 07 itself.
+        drawn, beaten = after_the_form(terminal.frames), after_the_form(_Beats.frames)
+        self.assertTrue(beaten, [frame[0] for frame in _Beats.frames])
+        self.assertNotIn("Review Selection", drawn, drawn)
+        self.assertNotIn("Review Selection", beaten, beaten)
+
+    def test_while_the_collection_installs_each_member_is_named(self) -> None:
+        # Installing a Collection drew only "Installing (6 of 7 done)": every member numbers its
+        # steps from one, so their reports overwrote each other and no frame named a member.
+        _Beats.frames = []
+        with mock.patch("aart_cli.tui_consumer.Heartbeat", _Beats):
+            finished, terminal, _ = self._install(_Keeping())
+
+        self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
+        running = [
+            "\n".join(frame)
+            for frame in _Beats.frames
+            if any(line.strip().lower().startswith("installing 2 artifacts") for line in frame)
+        ]
+        self.assertTrue(running, [frame[:4] for frame in _Beats.frames])
+        first, last = running[0], running[-1]
+        self.assertIn("▸ company/mcp/github", first)
+        self.assertIn("· company/mcp/jira", first)
+        self.assertIn("✓ company/mcp/github", last)
+        self.assertIn("company/mcp/jira", last)
+        self.assertTrue(any("▸ company/mcp/jira" in frame for frame in running))
+
     def test_07_and_07b_ask_each_member_once_and_set_later_blocks_nothing(self) -> None:
         provider = _Keeping()
-        finished, terminal, configs = self._install(provider)
+        # `[v]` on Ready before confirming: what is left as the placeholder is More info's (D-525).
+        keys = (*_SET_LATER_INSTALL[:-1], "v", _SET_LATER_INSTALL[-1])
+        finished, terminal, configs = self._install(provider, keys)
 
         self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
         configuration = terminal.screen_containing("Jira site (jira-site)")
@@ -173,7 +218,8 @@ class CollectionInputsShellTest(unittest.TestCase):
         credentials = terminal.screen_containing("Jira token (jira-token)")
         self.assertEqual(credentials.count("GitHub token (github-token)"), 1)
         self.assertEqual(credentials.count("Jira token (jira-token)"), 1)
-        ready = terminal.screen_containing("ready to install")
+        self.assertNotIn(SKIPPED_INPUT, terminal.screen_containing("ready to install"))
+        ready = terminal.screen_containing("install plan (Verbose)")
         for item in (
             "company/mcp/github: github-org",
             "company/mcp/github: github-token",

@@ -37,7 +37,6 @@ from .consumer_views import (
     DefaultPathMismatch,
     choose_pair_scope,
     default_harness_from_row,
-    installer_from_row,
     is_screen_identifier,
     keeps_focus,
     matrix_columns,
@@ -1411,28 +1410,6 @@ def _toggle_selection(
             ),
         )
     if state.session.screen is ConsumerScreen.REVIEW_SELECTION:
-        installer = installer_from_row(key)
-        if installer is not None:
-            # The plan records which backend will resolve the dependencies, so choosing another one
-            # is a different plan to review, not the same plan relabelled (issue #11b). Settings
-            # keep saying what they said.
-            chosen_installer = replace(state, python_installer=installer, quit_pending=False)
-            if state.action is not ConsumerActionKind.INSTALL:
-                return chosen_installer, ()
-            return chosen_installer, (
-                ConsumerUiCommand(
-                    ConsumerUiCommandKind.PREPARE_ACTION,
-                    action=ConsumerActionKind.INSTALL,
-                    selection=state.selection,
-                    targets=state.targets,
-                    pairs=state.pairs,
-                    pair_scopes=state.pair_scopes,
-                    focus=state.focus,
-                    config_answers=state.config_draft.answers,
-                    install_scope=state.install_scope,
-                    python_installer=installer,
-                ),
-            )
         if matrix_from_row(key) is not None:
             columns = matrix_columns(state.rows)
             if not columns:
@@ -2172,8 +2149,17 @@ def _action_prepared(
         and event.screen is not ConsumerScreen.REVIEW_SELECTION
     ):
         # D-380: the answers are in, so the plan goes on to whatever needs deciding next rather
-        # than back through the harness choice and a second Required Inputs.
-        reviewed = replace(state, session=session, config_form_active=False, quit_pending=False)
+        # than back through the harness choice and a second Required Inputs. 07's rows go with
+        # it: 07 and 07b both end on Continue, and the cursor left there opened 07b on Continue
+        # instead of the credential once no 05 stood between them (D-526).
+        reviewed = replace(
+            state,
+            session=session,
+            rows=(),
+            cursor=0,
+            config_form_active=False,
+            quit_pending=False,
+        )
         return _navigate(reviewed, event.screen)
     return replace(
         state,

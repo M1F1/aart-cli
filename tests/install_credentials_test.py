@@ -140,7 +140,7 @@ def _install(*keys, provider: _Keeping | None = None, completed=None, after=None
                 *scope,
                 ENTER,
                 "platform-team",
-                ENTER,
+                # Keep the value, then submit the form: 07b comes next, never 05 again (D-526).
                 ENTER,
                 ENTER,
                 *keys,
@@ -273,7 +273,8 @@ class ScopeComesBeforeConfigurationE2ETest(BothBackendsMeasured):
 
 class EnteredOn07bE2ETest(BothBackendsMeasured):
     def test_enter_on_07b_lets_the_store_ask_there_and_the_install_asks_nothing(self) -> None:
-        finished, terminal, provider, journal, handler = _install(ENTER, DOWN, ENTER, ENTER)
+        # `[v]` on Ready: what 07b stored is listed in More info (D-525).
+        finished, terminal, provider, journal, handler = _install(ENTER, DOWN, ENTER, "v", ENTER)
 
         self.assertIs(finished.session.screen, ConsumerScreen.SUCCESS, terminal.last)
         # Entered once for the artifact, asked by the store in each installation's own item.
@@ -289,7 +290,8 @@ class EnteredOn07bE2ETest(BothBackendsMeasured):
             self.assertIn("test-keychain asks for it next", "\n".join(briefing))
         # The store asked on 07b, before Ready was even drawn.
         self.assertLess(_first(terminal, "github-token): stored"), _first(terminal, "/ Ready"))
-        ready = terminal.screen_containing("ready to install")
+        self.assertNotIn("credential store", terminal.screen_containing("ready to install"))
+        ready = terminal.screen_containing("install plan (Verbose)")
         self.assertIn("stored by the credential store on the previous screen", ready)
         self.assertIn("company/mcp/github: github-token", ready)
         self.assertNotIn(SKIPPED_INPUT, ready)
