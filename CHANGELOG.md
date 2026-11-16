@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.32.0](https://github.com/M1F1/aart-cli/compare/v0.31.0...v0.32.0) (2026-11-16)
+
+
+### Added
+
+* a failed pip or uv step in an install points at aart-cli doctor --check-index ([b477800](https://github.com/M1F1/aart-cli/commit/b4778003a8f4812c16d2a2593f393268235077fa))
+* aart-cli doctor --check-index asks pip's and uv's package index from a throwaway environment built the way an install builds one, and names the cause when it fails ([b477800](https://github.com/M1F1/aart-cli/commit/b4778003a8f4812c16d2a2593f393268235077fa))
+* aart-cli doctor shows pip and uv as an install runs them: the interpreter, the pip new environments get, pip's configuration and the shell variables pip and uv are not given ([b477800](https://github.com/M1F1/aart-cli/commit/b4778003a8f4812c16d2a2593f393268235077fa))
+
+
+### Fixed
+
+* a failed pip or uv run reports the line naming the cause (certificate, proxy, network, access) instead of pip's last line ([b477800](https://github.com/M1F1/aart-cli/commit/b4778003a8f4812c16d2a2593f393268235077fa))
+* pip and uv receive XDG_CONFIG_HOME, so a relocated pip.conf or uv.toml is read ([b477800](https://github.com/M1F1/aart-cli/commit/b4778003a8f4812c16d2a2593f393268235077fa))
+
+
+### Documentation
+
+* "When pip or uv fails" in the consumer lifecycle guide ([b477800](https://github.com/M1F1/aart-cli/commit/b4778003a8f4812c16d2a2593f393268235077fa))
+
 ## [0.31.0](https://github.com/M1F1/aart-cli/compare/v0.30.3...v0.31.0) (2026-11-05)
 
 
