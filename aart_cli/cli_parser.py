@@ -87,11 +87,15 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser(
         "doctor",
         formatter_class=_HELP_FORMATTER,
-        help="report installed health, offline readiness, activity, credentials and configuration",
+        help=(
+            "report installed health, offline readiness, pip and uv, activity, credentials and "
+            "configuration"
+        ),
         description=(
             "Inspect the installed environment and report it in one place: measured drift with the "
             "smallest policy-permitted reconciliation plans; offline readiness for each enabled "
-            "source, as metadata, canonical payload and runtime dependencies separately; any "
+            "source, as metadata, canonical payload and runtime dependencies separately; pip and "
+            "uv as an install runs them, including the shell variables they are not given; any "
             "working copy an interrupted run left behind; the recorded activity trail and what "
             "each action can undo; credential health and which installations depend on it; and the "
             "configuration this machine is ignoring, meaning disabled sources and fields your "
@@ -117,6 +121,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--expect",
         metavar="DIGEST",
         help="review digest returned by the prior --repair review",
+    )
+    p.add_argument(
+        "--check-index",
+        dest="check_index",
+        action="store_true",
+        help=(
+            "also ask pip's and uv's package index for one package, from a throwaway environment "
+            "built the way an install builds one; installs nothing"
+        ),
     )
     _add_project(p)
     _add_json(p)

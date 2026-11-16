@@ -2331,6 +2331,23 @@
           "status": "done"
         }
       ]
+    },
+    {
+      "id": "PYTHON-INSTALLERS-DOCTOR",
+      "title": "doctor shows pip and uv as an install runs them, --check-index asks the index, and a failed pip step points at doctor (§216, D-528)",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Doctor section, --check-index, cause line, XDG_CONFIG_HOME, failure hint",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "The PR",
+          "status": "in_progress"
+        }
+      ]
     }
   ]
 }

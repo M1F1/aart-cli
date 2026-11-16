@@ -13022,3 +13022,40 @@ signal ends it. A signal ignored or handled before aart-cli started is left as i
 the start of that run; to any other server the same event is sent as before revision 7, and it is
 still counted. A value the contract cannot carry is never sent, and never stops its event being
 sent. No event says a project, a project's name or a hash of one.
+
+# 216. Doctor shows pip and uv as an install runs them
+
+An install runs pip and uv with a reduced environment (§189): `HOME`, `PATH`, `SYSTEMROOT`,
+`TMPDIR` and `XDG_CONFIG_HOME`, and none of the person's other variables. A `pip install` that
+works in the person's shell therefore says nothing about aart-cli's, and when an MCP's
+`runtime-dependencies` step fails, the person needs to see what aart-cli's pip and uv saw. Asked
+for by the owner after a reported install that stopped at pip with no visible cause (2026-11-16).
+
+- **Doctor's section.** `aart-cli doctor` reports, under *Python installers (as aart-cli runs
+  them)*: the interpreter new artifact environments are built from; the pip version those
+  environments start with, which is the one bundled with that interpreter, or that they get none;
+  pip's configuration as that pip reads it, with credentials redacted; uv's version, or that uv is
+  absent; and the names of the variables the person has set that would change pip or uv
+  (`PIP_*`, `UV_*`, proxies, CA bundles) and that an install does not pass. A value is never read
+  or shown, only a name. The section reads only and never fetches.
+- **`doctor --check-index`.** Builds a throwaway environment from the same interpreter, asks pip
+  (`pip index versions pip`) and, when present, uv (`uv pip install --dry-run --no-cache
+  packaging`) for one package from their configured index, with the same reduced environment,
+  installs nothing and removes the environment. A failure names the line of the installer's output
+  that gives the cause and what to try; it makes doctor's `ok` false, as do new environments that
+  get no pip.
+- **The cause, not the consequence.** Wherever aart-cli reports a pip or uv failure, it gives the
+  first line naming a certificate, proxy, network or access failure, else the line saying nothing
+  matched, else the last error line, else the last line; always a line the installer printed.
+- **The failed step points at doctor.** When an install's `runtime-environment` or
+  `runtime-dependencies` step fails, the ordinary view under the failed artifact says:
+  `pip or uv failed. To see why, as an install runs them: aart-cli doctor --check-index`.
+- **Not changed.** What an install passes to pip and uv beyond `XDG_CONFIG_HOME`, and that a
+  transaction stops at the first artifact that does not complete (D-064). The remedy doctor gives
+  for a shell-only setting is the installer's own configuration file (`pip.conf`, `uv.toml`).
+
+**INV-341 — Doctor's pip and uv are an install's.** Every probe doctor runs for §216 runs with the
+interpreter an install builds environments from and with the environment an install gives pip and
+uv; an ignored setting doctor reports is one the person set, that changes pip or uv, and that an
+install does not pass; and a reported failure line is a line the installer printed, with
+credentials redacted.

@@ -218,6 +218,7 @@ def _to_request(args: argparse.Namespace) -> Request:
         yes=bool(getattr(args, "yes", False)),
         expect=getattr(args, "expect", None),
         for_default_branch=bool(getattr(args, "for_default_branch", False)),
+        check_index=bool(getattr(args, "check_index", False)),
         install_inputs=tuple(getattr(args, "install_inputs", None) or ()),
         set_later=bool(getattr(args, "set_later", False)),
         inputs_action=getattr(args, "inputs_action", None),

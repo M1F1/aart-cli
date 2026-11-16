@@ -17,6 +17,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from aart_cli.application.python_installers import installer_failure
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.effects import CreatePythonEnvironment, InstallPythonDependencies
 from aart_cli.domain.inspection import RemediationCapability, RemediationCapabilityKind
@@ -28,7 +29,9 @@ PYTHON_RUNTIME_FAILED = DiagnosticCode("python-runtime-failed")
 PYTHON_RUNTIME_REFUSED = DiagnosticCode("python-runtime-refused")
 PYTHON_RUNTIME_UNSUPPORTED = DiagnosticCode("python-runtime-unsupported")
 
-_ALLOWED_ENVIRONMENT = ("HOME", "PATH", "SYSTEMROOT", "TMPDIR")
+# XDG_CONFIG_HOME is where uv, and pip on Linux, look for uv.toml and pip.conf once it is set;
+# without it a relocated config directory is silently not read (§216).
+_ALLOWED_ENVIRONMENT = ("HOME", "PATH", "SYSTEMROOT", "TMPDIR", "XDG_CONFIG_HOME")
 _MAX_OUTPUT_BYTES = 8192
 
 
@@ -49,7 +52,9 @@ class ProcessRunner(Protocol):
     ) -> ProcessOutcome: ...
 
 
-def _environment(environ: Mapping[str, str]) -> dict[str, str]:
+def installer_environment(environ: Mapping[str, str]) -> dict[str, str]:
+    """The whole environment pip and uv run with, given the caller's: a fixed few names, no more."""
+
     result = {name: environ[name] for name in _ALLOWED_ENVIRONMENT if name in environ}
     result.update(
         {
@@ -73,7 +78,7 @@ def run_python_process(
     completed = subprocess.run(
         argv,
         shell=False,
-        env={**_environment(os.environ), **(environment or {})},
+        env={**installer_environment(os.environ), **(environment or {})},
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -132,7 +137,7 @@ def observe_python_installers(
     probe = subprocess.run(
         (python, "-c", "import pip"),
         shell=False,
-        env=_environment(os.environ),
+        env=installer_environment(os.environ),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -194,11 +199,12 @@ class LocalPythonRuntime:
                 f"{label} timed out after {self.timeout_seconds:g}s",
             )
         if outcome.returncode != 0:
-            detail = (outcome.stderr or outcome.stdout).strip().splitlines()
-            tail = detail[-1] if detail else "(no output)"
+            # The cause, not the last line: pip names a certificate or proxy in its retries and ends
+            # on "No matching distribution", which sends people looking at the package (§216).
+            reason = installer_failure(f"{outcome.stdout}\n{outcome.stderr}").line
             return _failure(
                 PYTHON_RUNTIME_FAILED,
-                f"{label} failed with status {outcome.returncode}: {tail}",
+                f"{label} failed with status {outcome.returncode}: {reason}",
             )
         return Ok(outcome)
 

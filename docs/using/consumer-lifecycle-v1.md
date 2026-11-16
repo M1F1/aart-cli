@@ -324,6 +324,35 @@ repairs everything.
 What it cannot repair, it still reports: an artifact whose payload is missing or divergent is named
 with what is wrong, rather than being omitted because no repair for it exists.
 
+### When pip or uv fails
+
+An MCP's runtime dependencies are installed by pip or uv, and aart-cli runs them without your
+shell's variables: only `HOME`, `PATH`, `SYSTEMROOT`, `TMPDIR` and `XDG_CONFIG_HOME` reach them. A
+`pip install` that works in your terminal can therefore fail inside aart-cli, typically when your
+package index, proxy or CA bundle is set in a variable such as `PIP_INDEX_URL`, `HTTPS_PROXY` or
+`SSL_CERT_FILE`. When it does, the failed artifact says so and points here.
+
+Doctor shows pip and uv the way an install runs them: the interpreter, the pip version new
+environments start with, pip's configuration, uv, and the variables you have set that pip and uv
+are not given. To also ask the package index for one package, from a throwaway environment built
+the way an install builds one:
+
+```sh
+aart-cli doctor --check-index
+```
+
+A failure names the line of pip's or uv's output that gives the cause and what to try. Settings
+that live in your shell belong in the installer's own file, which an install does read, for
+example `~/.config/pip/pip.conf`:
+
+```ini
+[global]
+index-url = https://<your-mirror>/simple
+cert = /path/to/company-ca.pem
+```
+
+Then run the same install again.
+
 ### Which skills and MCPs are used
 
 Activity also ranks the skills and MCPs your agents actually use, per harness. A small hook in the

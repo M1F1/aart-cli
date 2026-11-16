@@ -482,6 +482,8 @@ class Request:
     expect: Optional[str] = None
     # `registry audit --for-default-branch` (INV-286).
     for_default_branch: bool = False
+    # `doctor --check-index` (§216): ask pip's and uv's package index the way an install does.
+    check_index: bool = False
     # `consume install`/`update` inputs (§169.4, D-468): raw `ALIAS/KIND/NAME:INPUT=...` flags.
     install_inputs: tuple[str, ...] = ()
     set_later: bool = False
