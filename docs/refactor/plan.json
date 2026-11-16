@@ -2345,6 +2345,28 @@
         {
           "id": "2",
           "title": "The PR",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "RUNTIME-DEPENDENCIES-VERIFIED",
+      "title": "An MCP's Python packages are checked against its recorded descriptor by install, doctor and repair (§217, D-529, B-029)",
+      "status": "done",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Reproduce through the public commands with a real venv and pip",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Receipt records the descriptor; observation reads site-packages; judged ABSENT when missing",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR",
           "status": "in_progress"
         }
       ]

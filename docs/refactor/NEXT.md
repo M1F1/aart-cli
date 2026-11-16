@@ -1,6 +1,13 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-16, PYTHON-INSTALLERS-DOCTOR)
+## Where the work is (2026-11-16, RUNTIME-DEPENDENCIES-VERIFIED)
+
+**RUNTIME-DEPENDENCIES-VERIFIED** (§217, D-529, closes B-029): an MCP's Python packages are checked
+against its recorded descriptor wherever the installation is judged. Branch
+`fix/runtime-dependencies-verified` (worktree `/Users/mifi/code/aart-cli-deps-check`); the PR is what
+remains. Evidence: `docs/refactor/slices/RUNTIME-DEPENDENCIES-VERIFIED-packages-checked.md`.
+
+## Where the work was (2026-11-16, PYTHON-INSTALLERS-DOCTOR, released in 0.32.0)
 
 **PYTHON-INSTALLERS-DOCTOR** (§216, D-528): `aart-cli doctor` shows pip and uv as an install runs
 them, `--check-index` asks their index from a throwaway venv, a pip or uv failure names its cause

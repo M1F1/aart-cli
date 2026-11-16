@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-16, RUNTIME-DEPENDENCIES-VERIFIED (§217, D-529): an MCP's packages are checked.**
+The receipt records the dependency descriptor; installs, Installed, doctor and repair compare the
+environment's `site-packages` with it, so an install after a failed pip runs pip again, doctor sees
+a missing package and a repair puts it back. Closes B-029. Evidence:
+`docs/refactor/slices/RUNTIME-DEPENDENCIES-VERIFIED-packages-checked.md`.
+
 **2026-11-16, PYTHON-INSTALLERS-DOCTOR (§216, D-528): doctor shows pip and uv as an install runs them.**
 Doctor reports the interpreter, the pip new environments get, pip's configuration, uv, and the shell
 variables pip and uv are not given; `--check-index` asks the index from a throwaway venv built the

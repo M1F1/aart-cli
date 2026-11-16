@@ -351,7 +351,15 @@ index-url = https://<your-mirror>/simple
 cert = /path/to/company-ca.pem
 ```
 
-Then run the same install again.
+Then run the same install again. It checks which of the artifact's packages its environment holds
+and runs pip or uv for any that are missing, including after an install that stopped at pip.
+
+`aart-cli doctor` checks the same thing for everything installed: an MCP whose environment lacks
+a package its `requirements.txt` or `pyproject.toml` declares needs attention, and
+`aart-cli doctor --repair <artifact>@<version>` installs what is missing. A descriptor that includes
+another file (`-r`), installs something editable or names a package only by URL or path cannot be
+checked in full; for those doctor says the packages were not checked rather than that they are
+installed.
 
 ### Which skills and MCPs are used
 

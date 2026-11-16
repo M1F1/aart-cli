@@ -182,8 +182,17 @@ class InstallationObservation:
     #: (harness, present, digest) for each configuration file the receipt records. A file that is
     #: there and could not be read is present with no digest, which is not the same as absent.
     configuration_files: tuple[tuple[str, bool, ObjectDigest | None], ...] = ()
+    #: The declared distributions the environment does not hold (§217). `()` is "every one is
+    #: there"; `None` is "not checked" -- no descriptor recorded, or one that cannot be read in
+    #: full -- which is not the same answer and must never read as it.
+    missing_distributions: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
+        if self.missing_distributions is not None and (
+            not isinstance(self.missing_distributions, tuple)
+            or any(not isinstance(item, str) or not item for item in self.missing_distributions)
+        ):
+            raise ValueError("observed missing distributions are invalid")
         if self.payload_present is not None and not isinstance(self.payload_present, bool):
             raise ValueError("observed installed payload presence is invalid")
         for value, label in (

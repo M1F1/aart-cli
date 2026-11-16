@@ -13059,3 +13059,32 @@ interpreter an install builds environments from and with the environment an inst
 uv; an ignored setting doctor reports is one the person set, that changes pip or uv, and that an
 install does not pass; and a reported failure line is a line the installer printed, with
 credentials redacted.
+
+# 217. An MCP's Python packages are checked, not assumed
+
+An installation's `runtime-dependencies` are the distributions its dependency descriptor declares,
+held in the environment the installation owns. Through 0.32.0 they counted as installed whenever that
+environment existed. Two reports (2026-11-16) showed what that cost: an install that followed a
+failed pip planned no pip run and left the MCP unable to start, and doctor reported it ready while
+its repair would have rebuilt the environment without packages.
+
+- **Recorded.** The installation receipt records the dependency descriptor (a path inside the
+  installation's root), its kind and the installer that ran it. Every reading of the installation
+  -- an install's plan, Installed, doctor and its repair -- judges `runtime-dependencies` from it.
+  A receipt written before this records none, and reads as before.
+- **Checked.** The declared distributions are read from the descriptor: every requirement of a
+  `requirements.txt`, and a `pyproject.toml`'s project and `[project].dependencies`. Options that
+  say where packages come from are read past; a requirement under an environment marker is not
+  required. Installed distributions are read from the environment's `site-packages` metadata;
+  nothing in the environment is run. Names compare as installers compare them (PEP 503).
+- **Judged.** Every declared distribution present: `runtime-dependencies` matches. Any missing:
+  it is absent, naming them, so an install runs pip or uv again, doctor reports attention and its
+  repair installs them; a repair that rebuilds the environment installs them too. A descriptor that
+  cannot be read in full (`-r`, `-e`, a bare URL or path, dynamic or unreadable TOML, Python 3.10
+  for TOML) is not checked: the component matches while the environment exists, and its detail says
+  the packages were not checked.
+
+**INV-342 — Missing declared packages are never installed state.** For an installation whose
+receipt records a dependency descriptor that can be read in full, `runtime-dependencies` is matched
+exactly when its environment exists and holds every distribution the descriptor requires; where it
+cannot be read in full, the component's detail says the packages were not checked.

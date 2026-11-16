@@ -10,6 +10,7 @@ interpreter (INV-045, INV-046).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -103,6 +104,87 @@ def spec_descriptor_path(spec: PythonDependencySpec) -> str:
     """The descriptor an installer reads, relative to the payload."""
 
     return spec.path if isinstance(spec, RequirementsFile) else spec.pyproject
+
+
+# A PEP 508 name at the start of a requirement, before any extras, version, URL or marker.
+_REQUIREMENT_NAME = re.compile(
+    r"([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)\s*(?=$|[\[(<>=!~@;\s])"
+)
+# Options that only say where packages come from or how; the requirements they sit beside are
+# still every requirement there is.
+_SOURCE_OPTIONS = (
+    "-i",
+    "--index-url",
+    "--extra-index-url",
+    "--no-index",
+    "-f",
+    "--find-links",
+    "--trusted-host",
+    "--pre",
+    "--prefer-binary",
+    "--only-binary",
+    "--no-binary",
+    "--require-hashes",
+    "--use-feature",
+    "-c",
+    "--constraint",
+)
+
+
+def normalize_distribution(name: str) -> str:
+    """A distribution name as installers compare them (PEP 503): case and separators folded."""
+
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def requirement_distribution(requirement: str) -> str | None:
+    """The distribution one requirement names, normalized.
+
+    `""` when it applies only under a marker, which this cannot evaluate, so it is not required
+    here. `None` when it names no distribution this can read (a bare URL or path).
+    """
+
+    text = requirement.strip()
+    if ";" in text:
+        return ""
+    found = _REQUIREMENT_NAME.match(text)
+    if found is None or "/" in found.group(1):
+        return None
+    return normalize_distribution(found.group(1))
+
+
+def requirements_distributions(text: str) -> tuple[str, ...] | None:
+    """Every distribution a requirements file requires, or None when it cannot say them all.
+
+    It cannot when the file includes another one, installs something editable, or names a
+    requirement by URL or path alone: a check that skipped those would report an environment
+    complete that is not.
+    """
+
+    names: set[str] = set()
+    for raw in re.sub(r"\\\n", " ", text).splitlines():
+        line = raw.split(" #", 1)[0].strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("-"):
+            option = re.split(r"[\s=]", line, maxsplit=1)[0]
+            if option in _SOURCE_OPTIONS:
+                continue
+            return None
+        line = line.split(" --", 1)[0]
+        name = requirement_distribution(line)
+        if name is None:
+            return None
+        if name:
+            names.add(name)
+    return tuple(sorted(names))
+
+
+def missing_distributions(declared: Iterable[str], installed: Iterable[str]) -> tuple[str, ...]:
+    """The declared distributions an environment does not hold, by normalized name."""
+
+    held = {normalize_distribution(name) for name in installed}
+    return tuple(sorted({normalize_distribution(name) for name in declared} - held))
 
 
 def installers_for_lock(lock_format: str | None) -> frozenset[PythonInstaller]:
