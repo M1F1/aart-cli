@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-16, PYTHON-INSTALLERS-DOCTOR (§216, D-528): doctor shows pip and uv as an install runs them.**
+Doctor reports the interpreter, the pip new environments get, pip's configuration, uv, and the shell
+variables pip and uv are not given; `--check-index` asks the index from a throwaway venv built the
+way an install builds one. Failures name the cause line, `XDG_CONFIG_HOME` is passed, and a failed
+pip step points at doctor. Evidence:
+`docs/refactor/slices/PYTHON-INSTALLERS-DOCTOR-pip-and-uv-as-installs-run-them.md`.
+
 **2026-11-05, SEARCH-DOCUMENTATION (§197, D-527): search names the documentation.**
 `consume search` prints an artifact's approved documentation link whole under its row and as
 `documentation` in JSON. Evidence: `docs/refactor/slices/SEARCH-DOCUMENTATION-link-in-search.md`.

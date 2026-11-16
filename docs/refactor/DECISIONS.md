@@ -13219,3 +13219,41 @@ away from the answer.
   has no key.
 - **Not chosen.** Printing a ready-made install command under each row: the owner asked for the
   link, and the documentation is where an author says how their artifact is installed and set up.
+
+## D-528 — Doctor shows pip and uv as an install runs them (PYTHON-INSTALLERS-DOCTOR)
+
+§216 added (owner request, 2026-11-16). A person's install stopped at pip in the
+`runtime-dependencies` step of one MCP, the rest of the Collection was `not-attempted`, and the
+ordinary view showed no cause. The likeliest cause was configuration held in shell variables
+(`PIP_INDEX_URL`, a proxy, a CA bundle), which an install never passes to pip. Asked whether to
+pass more variables or to give the person a check, the owner chose the check: help when pip or uv
+fails, without changing what an install does.
+
+- **Doctor, not a new command.** §161.11 already makes doctor the environment-wide inspection; a
+  section and one flag (`--check-index`) add no command to learn.
+- **The probes are an install's.** `read_python_installers` (`io/python_installers.py`) runs
+  through `run_python_process`, so it gets `installer_environment` and nothing else, and
+  `--check-index` builds its throwaway venv from `sys.executable`, the base interpreter an install
+  uses. A probe run with the whole shell would pass exactly where the install fails.
+- **The pip new environments get.** `ensurepip.version()`, not the base interpreter's pip:
+  `python -m venv` installs the bundled wheel. On this machine that is pip 22.3, older than pip's
+  use of the system trust store, which is why a corporate CA can work in the person's pip and not
+  in an artifact's.
+- **Names only.** Ignored settings are compared by name (`is_installer_setting`); pip's
+  configuration lines and failure lines go through `redact_text`. No value of a shell variable is
+  read.
+- **The cause line.** `installer_failure` replaces "last line of stderr" in
+  `LocalPythonRuntime._execute` too, because pip ends on "No matching distribution" after a
+  certificate failure. Status codes match as whole tokens (`1.403.0` is not a 403).
+- **`XDG_CONFIG_HOME` is passed.** uv, and pip on Linux, read their configuration there; without
+  it the file doctor tells people to write could be the one an install does not read. Measured:
+  pip on macOS reads `~/.config/pip` whatever `XDG_CONFIG_HOME` says.
+- **Not chosen.** Passing `PIP_*`/`UV_*`/proxy/CA variables to installs (B-273): it changes every
+  install and needs a list that keeps out `PIP_TARGET`, `PIP_PREFIX`, `PIP_USER` and `PIP_SRC`.
+  Continuing a transaction past a failed member (B-274): D-064 and INV-213 make the stop
+  deliberate.
+- **Evidence.** `tests/python_installers_test.py` (properties for ignored settings, the reduced
+  environment and the cause line; recorded probes; the install's failure reason; the hint) and
+  `tests/doctor_python_installers_e2e_test.py` (the public command). Targeted mutations, each
+  turning its test red: not preferring the cause line (6 tests), dropping `XDG_CONFIG_HOME` (the
+  environment property), keying the hint on `applied` (the hint test).

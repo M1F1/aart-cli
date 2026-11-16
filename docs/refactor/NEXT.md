@@ -1,6 +1,15 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-05, SEARCH-DOCUMENTATION)
+## Where the work is (2026-11-16, PYTHON-INSTALLERS-DOCTOR)
+
+**PYTHON-INSTALLERS-DOCTOR** (§216, D-528): `aart-cli doctor` shows pip and uv as an install runs
+them, `--check-index` asks their index from a throwaway venv, a pip or uv failure names its cause
+line, and a failed pip step points at doctor. Branch `feat/doctor-python-installers` (worktree
+`/Users/mifi/code/aart-cli-python-doctor`); the PR is what remains. Deliberately left: B-273
+(passing shell settings to installs) and B-274 (continuing a Collection past a failed member).
+Evidence: `docs/refactor/slices/PYTHON-INSTALLERS-DOCTOR-pip-and-uv-as-installs-run-them.md`.
+
+## Where the work was (2026-11-05, SEARCH-DOCUMENTATION)
 
 **SEARCH-DOCUMENTATION** (§197, D-527): `consume search` prints each artifact's approved
 documentation link under its row, and `--json` gives it as `documentation` (`null` where none).

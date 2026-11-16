@@ -36,6 +36,10 @@ from aart_cli.application.orphaned_runs import (
     orphaned_run_lines,
     orphaned_runs_to_data,
 )
+from aart_cli.application.python_installers import (
+    python_installer_lines,
+    python_installers_to_data,
+)
 from aart_cli.application.reconciliation import repair_plan_to_data
 from aart_cli.configuration.policy import EffectiveConfiguration
 from aart_cli.consumer.application import CONSUMER_REVIEW_MISMATCH
@@ -56,6 +60,7 @@ from aart_cli.io.failure_journal import note_diagnostics
 from aart_cli.io.maintainer_views import read_unbound_candidate_histories
 from aart_cli.io.offline_readiness import read_offline_readiness
 from aart_cli.io.orphaned_runs import read_orphaned_runs
+from aart_cli.io.python_installers import read_python_installers
 from aart_cli.io.receipt_store import LocalReceiptStore
 from aart_cli.model import Request
 from aart_cli.receipt_service import resolved_paths
@@ -460,6 +465,8 @@ def run(request: Request) -> int:
     )
     if isinstance(offline, Err):
         return _emit_error(request, offline)
+    # pip and uv as an install runs them: the interpreter, the environment and the index (§216).
+    installers = read_python_installers(check_index=request.check_index)
     # The run root is the data root, not the project root: deriving it a second time invites disagreement.
     orphaned = read_orphaned_runs(run_root=runtime.value.paths.data_root)
     # What the Maintainer screens say per Source, said here too: this is where somebody looks when
@@ -507,7 +514,7 @@ def run(request: Request) -> int:
 
     payload = {
         "schema_version": 1,
-        "ok": not view.attention_count and not unbound.value,
+        "ok": not view.attention_count and not unbound.value and not installers.needs_attention,
         "operation": _OPERATION,
         "observed_at": datetime.now(timezone.utc).isoformat(),
         "summary": {
@@ -517,6 +524,7 @@ def run(request: Request) -> int:
         "items": [_item_data(item) for item in artifacts],
         "repairs": repairs,
         "offline_readiness": offline_readiness_to_data(offline.value),
+        "python_installers": python_installers_to_data(installers),
         "orphaned_runs": orphaned_runs_to_data(orphaned),
         "candidate_history": {
             "unbound": [
@@ -543,6 +551,8 @@ def run(request: Request) -> int:
                     *render_doctor(view, PresentationProfile.LESS_INFO),
                     "",
                     *_offline_lines(offline.value),
+                    "",
+                    *python_installer_lines(installers),
                     "",
                     *orphaned_run_lines(orphaned),
                     "",

@@ -5411,3 +5411,26 @@ the directory to that file too, and each runtime loads the plugin once.
 Left as found: opencode 1.x and 2 keep the same `~/.local/share/opencode/opencode.db`, and one
 written by 2 is refused by 1.x ("Database is not empty and has no session table"). Not aart-cli's,
 but it is why a check of both builds needs a home each.
+
+## B-273 — Installs do not pass pip's and uv's shell settings
+
+Status: **open**, noncritical (D-528).
+
+An install gives pip and uv `HOME`, `PATH`, `SYSTEMROOT`, `TMPDIR` and `XDG_CONFIG_HOME` only, so
+`PIP_INDEX_URL`, `HTTPS_PROXY`, `SSL_CERT_FILE` and the like set in a shell do not reach them.
+Doctor now names those variables and points at `pip.conf`/`uv.toml` (§216). That covers pip fully
+(`index-url`, `proxy`, `cert`) but not uv behind a proxy: uv reads a proxy only from variables.
+Promotion condition: a uv install behind a proxy that cannot work, or a person who cannot use
+`pip.conf`. The change is a named list of passed variables, never a prefix, so `PIP_TARGET`,
+`PIP_PREFIX`, `PIP_USER` and `PIP_SRC` stay out.
+
+## B-274 — A failed Collection member leaves the rest not attempted
+
+Status: **open**, noncritical (D-064, D-528).
+
+A transaction stops at the first member that does not complete and reports the rest as
+`not-attempted`, so one MCP's pip failure leaves nine others uninstalled. This is deliberate (one
+review, one transaction, INV-213). Two things are worth measuring before changing it: whether
+running the same install again completes the Collection, and whether the failure screen should say
+so. Continuing past a failed member is a product decision, because it changes what one
+confirmation applies.

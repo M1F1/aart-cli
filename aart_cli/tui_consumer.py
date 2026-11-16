@@ -1106,6 +1106,14 @@ def render_progress(view: LifecycleOutcomeView, profile: PresentationProfile) ->
     return tuple(lines)
 
 
+#: The steps pip or uv run. When one fails the cause is usually this machine's pip or uv set-up, not
+#: the artifact, and doctor is where that set-up is shown as an install sees it (§216).
+_PYTHON_COMPONENTS = ("runtime-environment", "runtime-dependencies")
+PYTHON_INSTALLER_HINT = (
+    "pip or uv failed. To see why, as an install runs them: aart-cli doctor --check-index"
+)
+
+
 def _transaction_member(view: ReceiptArtifactView, profile: PresentationProfile) -> tuple[str, ...]:
     lines = [f"{_STEP_MARKS.get(view.status, '·')} {view.coordinate}  {_human(view.status)}"]
     if view.detail:
@@ -1119,6 +1127,11 @@ def _transaction_member(view: ReceiptArtifactView, profile: PresentationProfile)
             lines.append(f"    {mark} {step.component}: {step.effect}{detail}")
         else:
             lines.append(f"    {mark} {step.component}")
+    if any(
+        step.status == "failed" and step.component.startswith(_PYTHON_COMPONENTS)
+        for step in view.steps
+    ):
+        lines.append(f"    {PYTHON_INSTALLER_HINT}")
     return tuple(lines)
 
 
