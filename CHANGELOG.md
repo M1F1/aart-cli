@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.32.1](https://github.com/M1F1/aart-cli/compare/v0.32.0...v0.32.1) (2026-11-16)
+
+
+### Fixed
+
+* doctor reports an MCP whose environment lacks a declared package, and its repair installs it, also when it rebuilds the environment ([a1e630d](https://github.com/M1F1/aart-cli/commit/a1e630d9e5af0f64f465280af164231fd05275dc))
+* running an install again after pip failed installs the missing packages instead of reporting success ([a1e630d](https://github.com/M1F1/aart-cli/commit/a1e630d9e5af0f64f465280af164231fd05275dc))
+
 ## [0.32.0](https://github.com/M1F1/aart-cli/compare/v0.31.0...v0.32.0) (2026-11-16)
 
 
