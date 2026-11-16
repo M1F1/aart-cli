@@ -33,7 +33,7 @@ from .credentials import (
     CredentialReference,
 )
 from .diagnostics import Diagnostic, DiagnosticCode, Severity
-from .effects import DeliveryKind
+from .effects import DESCRIPTOR_KINDS, DeliveryKind
 from .harness import McpRegistration, registration_from_data, registration_to_data
 from .hooks import HookEntry, HookEntryShape, PluginEntry, SettingsListEntry
 from .identifiers import ArtifactCoordinate, InputId, ObjectDigest
@@ -126,6 +126,11 @@ class InstallationReceipt:
     #: The length each credential's artifact declares for it, so a later reading can say a stored
     #: value is the wrong one without the manifest at hand (§204). Never a value, only bounds.
     credential_checks: tuple[CredentialCheck, ...] = ()
+    #: The dependency descriptor, its kind and the installer that installed it from inside the
+    #: payload (§217). Without it a reading of this installation cannot know which packages its
+    #: environment should hold, so a repair rebuilt that environment empty and an install that
+    #: followed a failed pip planned no pip run. `None` for an artifact with no dependencies.
+    dependencies: tuple[str, str, str] | None = None
 
     def __post_init__(self) -> None:
         if not (self.owner is None or isinstance(self.owner, InstallationOwner)):
@@ -197,6 +202,19 @@ class InstallationReceipt:
             raise ValueError("installation receipt checks only the credentials it records")
         if len({item.reference for item in self.credential_checks}) != len(self.credential_checks):
             raise ValueError("installation receipt records one check per credential")
+        if self.dependencies is not None and (
+            not isinstance(self.dependencies, tuple)
+            or len(self.dependencies) != 3
+            or any(not isinstance(item, str) or not item for item in self.dependencies)
+            or not self.dependencies[0].startswith(f"{self.root}/")
+            or ".." in self.dependencies[0].split("/")
+            or any(character in self.dependencies[0] for character in "\r\n\x00")
+            or self.dependencies[1] not in DESCRIPTOR_KINDS
+        ):
+            raise ValueError(
+                "installation receipt dependencies are a descriptor inside its root, a kind and "
+                "an installer"
+            )
         object.__setattr__(
             self,
             "credential_checks",
@@ -249,12 +267,25 @@ def installation_receipt_to_data(receipt: InstallationReceipt) -> dict[str, obje
         if receipt.credential_checks
         else {}
     )
+    # Written only when the artifact declares dependencies, so a receipt without them reads as before.
+    dependencies: dict[str, object] = (
+        {}
+        if receipt.dependencies is None
+        else {
+            "dependencies": {
+                "descriptor": receipt.dependencies[0],
+                "installer": receipt.dependencies[2],
+                "kind": receipt.dependencies[1],
+            }
+        }
+    )
     return {
         **owned,
         **identity,
         **setup,
         **configuration,
         **checks,
+        **dependencies,
         "artifact": receipt.artifact,
         "base_interpreter": receipt.base_interpreter,
         "config": [
@@ -894,10 +925,21 @@ def installation_receipt_from_data(data: object) -> Result[InstallationReceipt]:
                     _credential_check(item, credentials)
                     for item in data.get("credential_checks", [])
                 ),
+                _dependencies(data.get("dependencies")),
             )
         )
     except ValueError as error:
         return _error(str(error))
+
+
+def _dependencies(data: object) -> tuple[str, str, str] | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict) or set(data) != {"descriptor", "installer", "kind"}:
+        raise ValueError("installation receipt dependencies are invalid")
+    if any(not isinstance(data[key], str) for key in ("descriptor", "kind", "installer")):
+        raise ValueError("installation receipt dependencies are invalid")
+    return (data["descriptor"], data["kind"], data["installer"])
 
 
 def _credential_check(

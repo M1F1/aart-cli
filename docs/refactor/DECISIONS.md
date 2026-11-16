@@ -13257,3 +13257,36 @@ fails, without changing what an install does.
   `tests/doctor_python_installers_e2e_test.py` (the public command). Targeted mutations, each
   turning its test red: not preferring the cause line (6 tests), dropping `XDG_CONFIG_HOME` (the
   environment property), keying the hint on `applied` (the hint test).
+
+## D-529 — An MCP's Python packages are checked, not assumed (RUNTIME-DEPENDENCIES-VERIFIED)
+
+§217 added, B-029 closed (owner request, 2026-11-16). A second report followed D-528's: after an
+install stopped at pip, the servers still lacked `mcp`, doctor said nothing, and the reporter
+warned a repair could leave them broken again. Three tests through the public command reproduced
+all of it before any change: an install after a failed pip ran no pip; doctor reported a removed
+package as ready; a repair of a deleted environment rebuilt it empty.
+
+- **Why it happened.** `current_state_from_observation` judged `runtime-dependencies` matched
+  whenever the interpreter existed (B-029), and `compare_states` plans nothing for a matched
+  component. Doctor and repair built their desired state from the receipt, which recorded no
+  descriptor, so they did not want the dependencies at all.
+- **Recorded on the receipt.** `InstallationReceipt.dependencies` is the plan's own
+  `(descriptor, kind, installer)`, written by `intended_receipt` and serialized only when present.
+  The descriptor must lie inside the root. Older receipts have none and read as before; no
+  migration (no backward compatibility in this product, and nothing is lost by not checking).
+- **Read from files, not run.** `observe_installation` reads `site-packages` with
+  `importlib.metadata.distributions(path=...)`: no subprocess, nothing imported from the
+  environment, quick enough for Installed and doctor. A missing `site-packages` reports every
+  declared package missing.
+- **Parse conservatively.** `requirements_distributions` (domain, pure) reads past index/link/
+  constraint options and per-requirement `--hash`, skips marker-guarded requirements (no marker
+  evaluator in a zero-dependency runtime), and returns `None` -- not checked -- for `-r`, `-e`, a
+  bare URL or path. `pyproject.toml` uses `tomllib` and is not checked on Python 3.10.
+- **Absent, not divergent.** A missing package is `ABSENT` with the names in the detail, whether
+  one or all are missing: the remedy is the same pip or uv run.
+- **Not chosen.** Running `pip check` or the environment's interpreter: slower, and a broken
+  environment would fail the check instead of being reported. A marker file written after a
+  successful install: it misses a package removed later, which is the case doctor exists for.
+- **Evidence.** `tests/runtime_dependencies_verified_e2e_test.py` (real venv, real pip, offline
+  hand-built wheel, public commands) and `tests/runtime_dependencies_test.py` (parser properties,
+  receipt round-trip, judging).

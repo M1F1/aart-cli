@@ -426,6 +426,8 @@ def read_installed_inspections(
             record.coordinate,
             receipt,
             base_interpreter=receipt.base_interpreter,
+            # Recorded, not guessed: without it a repair rebuilt the environment empty (§217).
+            dependencies=receipt.dependencies,
         )
         credential_states = tuple(
             (reference.input.value, COMPONENT_STATE[by_reference[reference].state])

@@ -9,9 +9,12 @@ meant to write.
 
 from __future__ import annotations
 
+import glob
+import importlib
 import json
 import os
 from dataclasses import dataclass
+from importlib import metadata
 from typing import Protocol
 
 from aart_cli.application.installation_verification import (
@@ -29,7 +32,13 @@ from aart_cli.domain.harness import McpRegistration
 from aart_cli.domain.hooks import PLUGIN_INDEX, PluginEntry, plugin_index, settings_entry_at
 from aart_cli.domain.identifiers import ObjectDigest
 from aart_cli.domain.managed_blocks import managed_block_body
-from aart_cli.domain.python_runtime import ArtifactEnvironment
+from aart_cli.domain.python_runtime import (
+    ArtifactEnvironment,
+    missing_distributions,
+    normalize_distribution,
+    requirement_distribution,
+    requirements_distributions,
+)
 from aart_cli.domain.receipts import (
     ArtifactDelivery,
     ArtifactMerge,
@@ -118,6 +127,70 @@ class LocalProjectionWriter:
         return Ok(ProjectionReceipt(projection.path, digest, changed=True))
 
 
+def _declared_in_pyproject(text: str) -> tuple[str, ...] | None:
+    """The project and every unconditional dependency `pyproject.toml` declares, or None."""
+
+    try:
+        tomllib = importlib.import_module("tomllib")
+    except ImportError:  # Python 3.10 has no TOML reader, and nothing is guessed in its place.
+        return None
+    try:
+        project = tomllib.loads(text).get("project")
+    except ValueError:  # TOMLDecodeError is a ValueError.
+        return None
+    if not isinstance(project, dict) or "dependencies" in project.get("dynamic", ()):
+        return None
+    name = project.get("name")
+    entries = project.get("dependencies", [])
+    if not isinstance(name, str) or not isinstance(entries, list):
+        return None
+    names = {normalize_distribution(name)}
+    for entry in entries:
+        found = requirement_distribution(entry) if isinstance(entry, str) else None
+        if found is None:
+            return None
+        if found:
+            names.add(found)
+    return tuple(sorted(names))
+
+
+def _missing_distributions(
+    receipt: InstallationReceipt,
+) -> tuple[str, ...] | None:
+    """Which declared distributions the environment lacks, read from its own site-packages (§217).
+
+    Read from the files, not by running the environment's interpreter: listing distributions
+    imports nothing, so a broken package cannot make the check fail, and doctor stays quick.
+    """
+
+    if receipt.dependencies is None:
+        return None
+    descriptor, kind, _installer = receipt.dependencies
+    try:
+        with open(descriptor, encoding="utf-8") as handle:
+            text = handle.read()
+    except (OSError, UnicodeDecodeError):
+        return None
+    declared = (
+        requirements_distributions(text) if kind == "requirements" else _declared_in_pyproject(text)
+    )
+    if declared is None:
+        return None
+    environment = ArtifactEnvironment(receipt.artifact, receipt.root).environment
+    paths = [
+        *glob.glob(os.path.join(glob.escape(environment), "lib", "python*", "site-packages")),
+        *glob.glob(os.path.join(glob.escape(environment), "Lib", "site-packages")),
+    ]
+    if not paths:
+        return declared
+    installed = (
+        item.metadata["Name"]
+        for item in metadata.distributions(path=paths)
+        if item.metadata and item.metadata["Name"]
+    )
+    return missing_distributions(declared, installed)
+
+
 def observe_installation(
     receipt: InstallationReceipt,
     *,
@@ -160,14 +233,16 @@ def observe_installation(
                 measured = None
         configuration.append((record.harness, held, measured))
 
+    interpreter = os.access(receipt.interpreter, os.X_OK)
     return InstallationObservation(
         configuration_files=tuple(configuration),
         payload_present=os.path.isdir(ArtifactEnvironment(receipt.artifact, receipt.root).payload),
         launcher_present=present,
         launcher_executable=present and os.access(receipt.launcher, os.X_OK),
         launcher_digest=digest,
-        interpreter_present=os.access(receipt.interpreter, os.X_OK),
+        interpreter_present=interpreter,
         registered_commands=tuple(commands),
+        missing_distributions=_missing_distributions(receipt) if interpreter else None,
     )
 
 

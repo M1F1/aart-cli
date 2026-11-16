@@ -278,6 +278,8 @@ def intended_receipt(planned: PlannedInstallation) -> InstallationReceipt:
         owner=planned.owner,
         # The lengths its artifact declares, so a later reading judges what is stored (§204).
         credential_checks=planned.credential_checks,
+        # Which packages the environment holds, so a later reading can check them (§217).
+        dependencies=planned.dependencies,
     )
 
 

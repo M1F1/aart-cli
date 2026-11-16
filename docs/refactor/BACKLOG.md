@@ -378,7 +378,9 @@ Promotion condition: evidence that an artifact reached a consumer carrying a bin
 could never deliver.
 
 ### B-029 — Verify installed distributions against the declared descriptor
-Status: OPEN
+Status: **done** (§217, D-529, 2026-11-16). Reclassified from noncritical by two reports: an install
+after a failed pip planned no pip run, and doctor and its repair could not see or restore missing
+packages.
 Discovered in: CP-13 / `application/installed_state.py` / `current_state_from_observation`
 Why useful: the `runtime-dependencies` component is currently reported through the environment that
 holds it (D-057), so a package somebody removed or upgraded by hand inside a healthy environment is
@@ -5430,7 +5432,8 @@ Status: **open**, noncritical (D-064, D-528).
 
 A transaction stops at the first member that does not complete and reports the rest as
 `not-attempted`, so one MCP's pip failure leaves nine others uninstalled. This is deliberate (one
-review, one transaction, INV-213). Two things are worth measuring before changing it: whether
-running the same install again completes the Collection, and whether the failure screen should say
-so. Continuing past a failed member is a product decision, because it changes what one
+review, one transaction, INV-213). Running the same install again now completes it: before §217
+(D-529) a member whose pip had failed kept its environment, its dependencies counted as installed,
+and the second install skipped pip. Whether the failure screen should say "run it again" is still
+open. Continuing past a failed member is a product decision, because it changes what one
 confirmation applies.
