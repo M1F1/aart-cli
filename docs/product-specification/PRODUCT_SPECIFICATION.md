@@ -12661,10 +12661,14 @@ JSON files, in preparation for a telemetry server that does not exist yet.
   gives it only `PATH`, `HOME`, `LANG`, `LC_*`, `TMPDIR`, `SYSTEMROOT`, the proxy and CA variables
   and `CI`/`AART_CLI_AUTOMATED` of opencode's environment: never opencode's server password, a
   provider's key or a launcher's token (D-531). It hands over which runtime delivered the call, by
-  the hook it came through. Its one export is a default
+  the hook it came through. Each hook returns once the recorder is started, a second at most,
+  since opencode awaits it and may exit as soon as the call returns; calls made while the runtime
+  is asked for its servers share one answer (D-535). Its one export is a default
   definition both opencode runtimes load: OpenCode 1.x (from 1.18.29) through `server` and
   `tool.execute.before`, OpenCode 2 through `setup` and `ctx.tool.hook("execute.before")` (D-520).
-  Every start of aart-cli rewrites it, so an upgrade replaces an older one. Both run
+  Every start of aart-cli writes it when its bytes differ, so an upgrade replaces an older one and
+  an unchanged one is left alone: OpenCode 2 watches the file and reloads the plugin in open
+  sessions when it is written (D-535). Both run
   this aart-cli's own Python with `-I` and its own `aart_cli/io/usage_hook.py` by absolute path, so
   nothing in the project can replace what runs. The hook never writes to stdout and always exits 0;
   what it cannot read or write records nothing. Settings that are not JSON, or whose hooks are not

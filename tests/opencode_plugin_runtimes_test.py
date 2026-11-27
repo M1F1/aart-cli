@@ -65,23 +65,32 @@ _DRIVER = textwrap.dedent(
 
     // OpenCode 2.
     const registered = []
+    said.asked = 0
     const ctx = {
       location: { directory: "/two" },
-      mcp: { list: async () => ({ data: [{ name: "github" }, { name: "github.enterprise" }] }) },
+      mcp: {
+        list: async () => {
+          said.asked += 1
+          return { data: [{ name: "github" }, { name: "github.enterprise" }] }
+        },
+      },
       tool: { hook: async (name, callback) => { registered.push([name, callback]); return {} } },
     }
     said.returned = typeof (await plugin.setup(ctx))
     said.registered = registered.map(([name]) => name)
     const [, hook] = registered[0]
-    said.results = [
-      hook({ tool: "skill", sessionID: "s-two", input: { id: "review" } }),
-      hook({ tool: "github_search_code", sessionID: "s-two", input: { q: process.argv[3] } }),
-      hook({ tool: "github_enterprise_search", sessionID: "s-two", input: {} }),
-      hook({ tool: "opencode_list_mcp_resources", sessionID: "s-two", input: {} }),
-      hook({ tool: "bash", sessionID: "s-two", input: { command: "ls" } }),
-      hook(undefined),
-      hook({ tool: { toString() { throw new Error("no") } } }),
-    ].map((value) => typeof value)
+    // OpenCode 2 awaits what a hook returns, and a rejection fails the tool call.
+    said.results = await Promise.all(
+      [
+        hook({ tool: "skill", sessionID: "s-two", input: { id: "review" } }),
+        hook({ tool: "github_search_code", sessionID: "s-two", input: { q: process.argv[3] } }),
+        hook({ tool: "github_enterprise_search", sessionID: "s-two", input: {} }),
+        hook({ tool: "opencode_list_mcp_resources", sessionID: "s-two", input: {} }),
+        hook({ tool: "bash", sessionID: "s-two", input: { command: "ls" } }),
+        hook(undefined),
+        hook({ tool: { toString() { throw new Error("no") } } }),
+      ].map((value) => Promise.resolve(value).then((done) => typeof done, () => "rejected")),
+    )
 
     // A context without the OpenCode 2 tool domain registers nothing and does not throw.
     await plugin.setup({ directory: "/one", tool: {} })
@@ -173,6 +182,10 @@ class ThePluginInBothRuntimesTest(unittest.TestCase):
 
     def test_a_hook_never_throws_into_opencode_2_s_tool_call(self) -> None:
         self.assertEqual(self.said["results"], ["undefined"] * 7)
+
+    def test_calls_made_together_ask_the_runtime_for_its_servers_once(self) -> None:
+        # Each hook now waits for the answer, so three at once must not ask three times.
+        self.assertEqual(self.said["asked"], 1)
 
     def test_each_runtime_hands_over_its_skill_and_mcp_calls_by_name_only(self) -> None:
         # B-277: a tool is an MCP's only when opencode has a server it fits, the longest such.
@@ -292,6 +305,89 @@ class OpenCodeExitingTest(unittest.TestCase):
             self.assertEqual(
                 sorted(json.loads(line)["tool"] for line in lines), ["github_search", "skill"]
             )
+
+
+# opencode exiting as soon as the tool call its hook was awaited for returns, before the runtime
+# has said which servers it has: the first MCP call of a run (B-277). `late` answers after
+# 150 ms, `never` never does; the last argument is the runtime whose hook is called.
+_QUICK = textwrap.dedent(
+    """
+    import { pathToFileURL } from "node:url"
+
+    const plugin = (await import(pathToFileURL(process.argv[2]).href)).default
+    // opencode's own server keeps it running; the plugin's timer must not.
+    setInterval(() => {}, 1000)
+    const answer = (value) =>
+      process.argv[3] === "late"
+        ? new Promise((resolve) => setTimeout(() => resolve(value), 150))
+        : new Promise(() => {})
+    const client = { mcp: { status: async () => answer({ data: { jira: {} } }) } }
+    const hooks = await plugin.server({ client, directory: "/one" })
+    const registered = []
+    await plugin.setup({
+      location: { directory: "/two" },
+      mcp: { list: async () => answer({ data: [{ name: "github" }] }) },
+      tool: { hook: async (name, callback) => { registered.push(callback) } },
+    })
+    const started = Date.now()
+    if (process.argv[4] === "1") {
+      await hooks["tool.execute.before"]({ tool: "jira_search", sessionID: "s" }, { args: {} })
+    } else {
+      await registered[0]({ tool: "github_search", sessionID: "s", input: {} })
+    }
+    console.log(JSON.stringify({ waited: Date.now() - started }))
+    process.kill(-process.pid, "SIGKILL")
+    """
+)
+
+
+@unittest.skipIf(_NODE is None or sys.platform == "win32", "node runs the plugin; POSIX groups")
+class OpenCodeExitingRightAfterTheFirstCallTest(unittest.TestCase):
+    def _run(self, answer: str, runtime: str) -> tuple[list[str], int]:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            kept = root / "kept.jsonl"
+            keeper = root / HOOK_SCRIPT
+            keeper.parent.mkdir(parents=True)
+            keeper.write_text(_KEEPER)
+            plugin = root / "aart-cli-usage.js"
+            plugin.write_text(
+                opencode_plugin(UsageHook("opencode", sys.executable, str(keeper), str(kept)))
+            )
+            driver = root / "quick.mjs"
+            driver.write_text(_QUICK)
+            assert _NODE is not None
+            ran = subprocess.run(
+                [_NODE, str(driver), str(plugin), answer, runtime],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+                start_new_session=True,
+            )
+            waited = int(json.loads(ran.stdout.strip().splitlines()[-1])["waited"])
+            deadline = time.monotonic() + (10 if answer == "late" else 2)
+            lines: list[str] = []
+            while time.monotonic() < deadline:
+                lines = kept.read_text().splitlines() if kept.exists() else []
+                if lines:
+                    break
+                time.sleep(0.05)
+            return [json.loads(line)["tool"] for line in lines], waited
+
+    def test_the_first_mcp_call_is_recorded_when_opencode_exits_right_after_it(self) -> None:
+        for runtime, tool in (("1", "jira_search"), ("2", "github_search")):
+            with self.subTest(runtime=runtime):
+                self.assertEqual(self._run("late", runtime)[0], [tool])
+
+    def test_a_runtime_that_never_names_its_servers_holds_a_tool_call_a_second_at_most(
+        self,
+    ) -> None:
+        for runtime in ("1", "2"):
+            with self.subTest(runtime=runtime):
+                tools, waited = self._run("never", runtime)
+                self.assertEqual(tools, [])
+                self.assertLess(waited, 1500)
 
 
 if __name__ == "__main__":

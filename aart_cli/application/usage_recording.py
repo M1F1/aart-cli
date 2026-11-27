@@ -176,7 +176,9 @@ def opencode_plugin(hook: UsageHook) -> str:
 
     The recorder is started detached and let go, so opencode exiting or stopping its process group
     does not take the last uses with it, and with only `RECORDER_ENVIRONMENT` of opencode's
-    environment.
+    environment. Each hook returns only once it is started, or after a second at most: opencode
+    awaits the hook, and asking the runtime for its servers first would otherwise leave the
+    start to after opencode may have exited.
 
     One file serves both of opencode's plugin runtimes (D-520): its only export is the default
     definition, which OpenCode 1.x (from 1.18.29) loads through `server` and OpenCode 2 through
@@ -221,19 +223,37 @@ const serverOf = (tool, servers) => {{
 }}
 
 // The servers' names, asked for again when a tool fits none of those already known, since a
-// server can be added while opencode runs.
+// server can be added while opencode runs; calls made while it is being asked share one answer.
 const mcpServers = (list) => {{
   let known = []
+  let asking
   return async (tool) => {{
-    let server = serverOf(tool, known)
+    const server = serverOf(tool, known)
     if (server !== undefined) return server
-    try {{
-      known = (await list()) ?? []
-    }} catch {{
-      return undefined
+    if (asking === undefined) {{
+      asking = Promise.resolve()
+        .then(list)
+        .then((names) => {{ known = names ?? [] }}, () => {{}})
+        .finally(() => {{ asking = undefined }})
     }}
+    await asking
     return serverOf(tool, known)
   }}
+}}
+
+// opencode can exit as soon as the tool call returns, so the hook holds it until the recorder is
+// started; at most WAIT_MS, which only a call that has the runtime asked for its servers takes.
+const WAIT_MS = 1000
+const awaited = (recording) => {{
+  let timer
+  const limit = new Promise((resolve) => {{
+    timer = setTimeout(resolve, WAIT_MS)
+    timer.unref?.()
+  }})
+  return Promise.race([recording, limit])
+    .catch(() => {{}})
+    .finally(() => clearTimeout(timer))
+    .then(() => undefined)
 }}
 
 const hand = (payload) => {{
@@ -272,22 +292,22 @@ const server = async ({{ client, directory }}) => {{
   const serverFor = mcpServers(async () => Object.keys((await client.mcp.status())?.data ?? {{}}))
   return {{
     "tool.execute.before": async (input, output) => {{
-      void record(1, directory, input?.tool, output?.args, input?.sessionID, serverFor)
+      await awaited(record(1, directory, input?.tool, output?.args, input?.sessionID, serverFor))
     }},
   }}
 }}
 
-// OpenCode 2. A hook that throws fails the tool call, so this one never does; and setup returns
-// nothing, because what it returns is taken as its cleanup.
+// OpenCode 2. A hook that throws or rejects fails the tool call, so this one never does; and
+// setup returns nothing, because what it returns is taken as its cleanup.
 async function setup(ctx) {{
   if (typeof ctx?.tool?.hook !== "function") return
   const directory = ctx.location?.directory ?? process.cwd()
   const serverFor = mcpServers(async () =>
     ((await ctx.mcp.list())?.data ?? []).map((item) => item?.name),
   )
-  await ctx.tool.hook("execute.before", (event) => {{
-    void record(2, directory, event?.tool, event?.input, event?.sessionID, serverFor)
-  }})
+  await ctx.tool.hook("execute.before", (event) =>
+    awaited(record(2, directory, event?.tool, event?.input, event?.sessionID, serverFor)),
+  )
 }}
 
 export default {{ id: "aart-cli-usage", server, setup }}

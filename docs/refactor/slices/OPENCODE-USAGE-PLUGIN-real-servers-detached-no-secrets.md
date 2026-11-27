@@ -1,6 +1,6 @@
 # OPENCODE-USAGE-PLUGIN — Real MCP servers, a recorder that outlives opencode, no secrets (B-277)
 
-Status: implemented on `fix/opencode-usage-plugin`, stacked on PR #147 (2026-11-27). D-531, §212.
+Status: implemented on `fix/opencode-usage-plugin`, PR #148 on `main` (2026-11-27). D-531, D-535, §212.
 
 ## Why
 
@@ -24,6 +24,9 @@ The owner asked for opencode telemetry to work properly. A report measured on Op
   (`PATH`, `HOME`, `LANG`, `LC_*`, `TMPDIR`, `SYSTEMROOT`, proxies, `SSL_CERT_*`, `CI`,
   `AART_CLI_AUTOMATED`).
 - The plugin hands over `runtime: 1|2` by the hook that delivered the call; consumed by B-279.
+- D-535: each hook returns once the recorder is started (a second at most), so a run ending right
+  after its first MCP call keeps it; concurrent calls share one request for the servers; the
+  plugin file is written only when its bytes differ, as OpenCode 2 reloads a written plugin.
 
 ## Evidence
 
@@ -35,6 +38,11 @@ The owner asked for opencode telemetry to work properly. A report measured on Op
 - `tests/artifact_usage_test.py`: server and tool, a sanitised server name, tools no server fits,
   a property over generated server and tool names.
 - Updated: `usage_hooks_e2e_test`, `telemetry_context_rest_test`.
+- D-535: `OpenCodeExitingRightAfterTheFirstCallTest` per runtime (servers named after 150 ms, the
+  group killed as soon as the awaited hook returns: recorded; never named: the call held under
+  1.5 s, nothing handed over); `test_calls_made_together_ask_the_runtime_for_its_servers_once`;
+  `test_opencode_s_plugin_is_written_only_when_its_bytes_change`. Mutations: either hook not
+  awaited, no limit, no shared request, an unconditional write -- each red.
 
 ### Targeted mutations
 
@@ -55,4 +63,5 @@ mutmut runs them from another executor.
 ## Not done here
 
 The `opencode2` label (B-279, with P0-2 and a telemetry-server change). Live runs on OpenCode 2
-(B-278): `ctx.mcp.list()` is taken from the published plugin types, not yet from a live 2.3.2.
+(B-278). `ctx.mcp.list()` and 1.x's `client.mcp.status()` are now confirmed by the owner's live
+measurement on 2.3.2 and 1.19.5. A plugin's skill name and rewritten server names on 2: B-282.

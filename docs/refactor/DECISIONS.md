@@ -13442,3 +13442,37 @@ and too much to put in an instruction for many people whose installations differ
 - **TUI start.** The Dashboard says `● opencode does not load N installations — open Doctor and
   press m`, and Doctor's entry carries `● N to move`, as Registries carries `● N to sync`.
 
+## D-535 — The opencode usage plugin waits for its recorder and is written only when it changes (B-277 follow-up)
+
+§212 amended (owner request, 2026-11-27, on a report measured live on OpenCode 1.19.5 and 2.3.2,
+also under a launcher). The report confirmed D-531's runtime calls live (`ctx.mcp.list()` is empty
+in `setup` and full at the first tool call; 1.x's `client.mcp.status()` answers in a hook, not
+during `server()`), and found two faults left:
+
+- **The first MCP call of a run could be lost.** The hooks recorded with `void record(...)` and
+  returned at once, while `record` first asked the runtime for its servers and only then started
+  the recorder. A run that ends right after its first MCP call -- automation, a one-shot `opencode
+  run` -- could exit between the two. Both runtimes await a hook (OpenCode 2's adapter wraps it in
+  `Promise.resolve(callback(event))`), so each hook now returns once the recorder is started, or
+  after `WAIT_MS` (1 s) when the runtime does not answer, through a timer that does not keep
+  opencode running. Only a call that has the runtime asked waits at all; once a server is known its
+  calls start the recorder at once. Calls made while the runtime is asked share that one request,
+  since each now waits for it. Rejected: caching the list from `setup` (empty on OpenCode 2), and
+  waiting without a limit (a runtime that never answers would hold every tool call).
+- **The plugin was rewritten on every `consume` command and TUI start.** OpenCode 2 watches
+  `plugins/` (`watcher subscribe ... aart-cli-usage.js` in its log), so each write could reload the
+  plugin in open sessions. It is now written only when its bytes differ, as Claude Code's settings
+  already were; an upgrade still replaces an older plugin at the next start.
+- **Kept as they are.** `REQUESTS_CA_BUNDLE` is not passed: the sender uses `urllib`, which reads
+  `SSL_CERT_FILE`/`SSL_CERT_DIR`, already passed. The `opencode2` label stays with B-279: the
+  telemetry contract says a use's harness is its source's (`opencode` for `opencode_plugin`), so
+  the server changes first. Skills from a plugin on OpenCode 2 and server names opencode rewrites
+  are unmeasured live (B-282).
+- **Evidence.** `OpenCodeExitingRightAfterTheFirstCallTest` (node, per runtime): a runtime that
+  names its servers after 150 ms and a driver that kills its process group as soon as the awaited
+  hook returns -- the use is recorded; a runtime that never answers holds the call under 1.5 s and
+  hands nothing over. `test_calls_made_together_ask_the_runtime_for_its_servers_once`;
+  `test_a_hook_never_throws_into_opencode_2_s_tool_call` now awaits each hook and sees no
+  rejection. `test_opencode_s_plugin_is_written_only_when_its_bytes_change` (same inode and mtime;
+  a changed file is replaced). Targeted mutations -- either runtime's hook not awaited, no limit, no
+  shared request, writing unconditionally -- each turn their named test red.

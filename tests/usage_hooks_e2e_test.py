@@ -268,6 +268,23 @@ class PuttingItInPlaceTest(unittest.TestCase):
         self.assertIsInstance(refused, Err)
         self.assertEqual(plugin.read_text(), "// somebody's own plugin\n")
 
+    def test_opencode_s_plugin_is_written_only_when_its_bytes_change(self) -> None:
+        # OpenCode 2 watches the file and reloads the plugin in open sessions on a write, and
+        # every `consume` command and TUI start turns usage on again.
+        plugin = Path(harness_file("opencode", user_home=self.user_home))
+        set_usage_hook("opencode", True, user_home=self.user_home, data_root=self.data_root)
+        first = plugin.stat()
+
+        again = set_usage_hook("opencode", True, user_home=self.user_home, data_root=self.data_root)
+
+        self.assertIsInstance(again, Ok)
+        now = plugin.stat()
+        self.assertEqual((first.st_ino, first.st_mtime_ns), (now.st_ino, now.st_mtime_ns))
+        written = plugin.read_bytes()
+        plugin.write_bytes(written.replace(b"aart-cli-usage", b"aart-cli-usage-older", 1))
+        set_usage_hook("opencode", True, user_home=self.user_home, data_root=self.data_root)
+        self.assertEqual(plugin.read_bytes(), written)
+
     def test_by_default_only_a_present_default_harness_is_hooked(self) -> None:
         (Path(self.user_home) / ".claude").mkdir()
         self.assertEqual(

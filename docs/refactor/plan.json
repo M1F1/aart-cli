@@ -2388,8 +2388,8 @@
         },
         {
           "id": "3",
-          "title": "The PR",
-          "status": "in_progress"
+          "title": "The PR (#147, released in 0.32.2)",
+          "status": "done"
         },
         {
           "id": "4",
@@ -2410,11 +2410,16 @@
         },
         {
           "id": "2",
-          "title": "The PR, stacked on #147",
-          "status": "in_progress"
+          "title": "D-535: each hook waits for its recorder (a second at most); the plugin is written only when it changes",
+          "status": "done"
         },
         {
           "id": "3",
+          "title": "The PR (#148, on main since #147 was released in 0.32.2)",
+          "status": "in_progress"
+        },
+        {
+          "id": "4",
           "title": "B-279: the opencode2 label, with P0-2 and the telemetry server's HARNESS_OF",
           "status": "todo"
         }

@@ -7,7 +7,9 @@ contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 **2026-11-27, OPENCODE-USAGE-PLUGIN (B-277, D-531): opencode usage counts real MCP servers only.**
 The usage plugin asks opencode for its MCP servers and counts a tool only when one of them has it,
 starts the recorder detached so the last uses survive opencode exiting, and passes it no secret
-from opencode's environment. Evidence:
+from opencode's environment. D-535: each hook waits for its recorder to start (a second at most),
+so the first MCP call of a run that ends at once is kept, and the plugin is written only when it
+changes. Evidence:
 `docs/refactor/slices/OPENCODE-USAGE-PLUGIN-real-servers-detached-no-secrets.md`.
 
 **2026-11-27, OPENCODE-USER-SETTINGS-FILE (§218, D-530): user OpenCode settings go where OpenCode reads them.**

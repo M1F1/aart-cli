@@ -5469,7 +5469,8 @@ project `opencode.json`.
 
 Status: **done** except the label (D-531, 2026-11-27): the plugin names the MCP server from the
 runtime's own list, starts the recorder detached with `RECORDER_ENVIRONMENT` only, and hands over
-which runtime delivered the call. The label moved to B-279.
+which runtime delivered the call. The label moved to B-279. D-535 (2026-11-27): each hook waits
+for its recorder to start, a second at most, and the plugin is written only when its bytes change.
 
 ## B-278 — Live tests on a pinned OpenCode 2, plain and launcher-managed
 
@@ -5508,3 +5509,13 @@ Deleting `~/.config/opencode/aart-cli/plugin/<alias>/<name>/index.js`, the modul
 points at, leaves the installation `ready` until the payload beside it is also gone, so doctor
 offers no repair for a plugin OpenCode cannot load. Measure that module as part of the delivery.
 
+## B-282 — Measure live what opencode names a plugin's skill and a rewritten MCP server
+
+Status: **open**, noncritical (D-535, 2026-11-27).
+
+Two names the usage plugin relies on were not measured on a running OpenCode 2: the `input.id` its
+hook sees for a skill a plugin carries (`brainstorming`, or `superpowers-opencode:brainstorming`?),
+which decides whether the use is the plugin installation's (§214) or `unmanaged`; and the tool name
+of an MCP server whose name holds characters outside `[A-Za-z0-9_-]`, which the plugin assumes are
+made `_`. Promotion condition: a plugin skill seen as `unmanaged`, or a server with such a name
+whose uses are missing. Measure with B-278's recipe (fake model, isolated home).
