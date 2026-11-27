@@ -13392,3 +13392,49 @@ OpenCode 2.3.2 and 1.19.5.
   parser. Targeted mutations -- no `detached`, the whole environment, the first server instead of
   the longest, handing over without a server, no server needed in Python, the raw server name as
   the prefix -- each turn their named test red.
+
+## D-532 — OpenCode 2's project plugin is a directory of its own, for the OpenCode chosen (P0-2, B-276)
+
+Owner decisions (2026-11-27, OpenCode 2 report P0-2): the OpenCode a project plugin is installed for
+is chosen, not detected; the default comes from the build (`AART_CLI_DEFAULT_OPENCODE`: the
+enterprise build sets `2`, the public one stays `1` until OpenCode 2 is public); nothing migrates
+-- a plugin installed earlier stays where it is and the person uninstalls or reinstalls it. Only the
+usage plugin, which aart-cli installs by itself, follows without asking, as it already did.
+
+- **Measured** on OpenCode 2 beta 19271 with `run --standalone` and a stub model (`debug config`
+  loads plugins in the background and may print first, B-278): `.opencode/plugins/<dir>/index.js`
+  loads with no entry, from any subdirectory; with the project's configuration off and its plugins
+  handed over as a launcher does, the directory still loads (absolute path) and the tree's relative
+  entry is lost from a subdirectory; listed and in the directory, a plugin loads twice. OpenCode 1
+  does not read the directory. A module exporting only a 1.x function is imported and refused ("must
+  export a default definition with an id and an effect or setup function") from either place.
+- **Why chosen, not detected.** Nothing aart-cli can read tells which binary a launcher starts, and
+  the project's files are shared by everybody who opens it. A choice is a fact a person can see and
+  change; a guess would move plugins under them.
+- **Where.** Settings row `OpenCode: 1 | 2` (`opencode_runtime`, absent until somebody chooses, so
+  the build's default keeps applying) and `aart-cli consume opencode [1|2]`, which says who decided.
+  The release stamps `aart_cli/_default_opencode.py` (`scripts/inject_default_opencode.py`, empty in
+  source and byte-identical when unset) and refuses anything but empty, `1` or `2`; the release
+  receipt records `default_opencode`.
+- **What.** For OpenCode 2 at Project scope a plugin is an `ArtifactDelivery` (tree) to
+  `.opencode/plugins/<installed name>/` whose new `loads` names the entry module; the executor
+  writes only `index.js` there, re-exporting the module by a path relative to that directory (no
+  machine path in the project), after checking the module is in the tree. No settings entry is
+  written. The delivery is `DeliverArtifact(loads_code=True)`, which raises its risk to
+  `high-risk-execution` (INV-256) where a plain delivery stays a configuration mutation. Status,
+  drift, repair and uninstall are a delivery's; the status view recognises the directory by
+  `PLUGIN_DIRECTORIES`. User scope keeps the entry in the user file, which OpenCode 2 reads.
+- **Not chosen.** A second `opencode2` harness (one project, two installations in one file, the same
+  objection as D-521); writing both forms (loaded twice); an absolute entry in `opencode.json` (a
+  machine path in a committed file); a migrator or a startup relocation of existing installations
+  (compatibility code, which the CP-26 contract excludes).
+- **Evidence.** `tests/opencode_runtime_test.py` (choice, stored values, the loader's exact text),
+  `tests/opencode2_project_plugin_e2e_test.py` (install, review risk, drift and repair, uninstall,
+  an OpenCode 1 installation left as it was, user scope),
+  `tests/opencode_default_injection_test.py` (stamp, refusal, receipt) and the local-only
+  `tests/opencode2_project_plugin_live_test.py` (a real `opencode2` starts the plugin once from a
+  subdirectory, plainly and as a launcher starts it; skipped where `opencode2` is absent, CI
+  included). Targeted mutations: no `loads_code` → the review test; no OpenCode 2 branch → the
+  install, repair and reinstall tests and the launcher-style live test; the status view not
+  recognising the directory → the install and repair tests; an import not made relative → the
+  loader test; `isinstance` for the stored value → the stored-value test.

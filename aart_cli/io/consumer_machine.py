@@ -55,11 +55,12 @@ from aart_cli.domain.harness import (
     delivery_destination,
     delivery_target,
     memory_target,
+    plugin_directory,
     plugin_target,
     settings_files,
 )
 from aart_cli.domain.identifiers import ArtifactCoordinate
-from aart_cli.domain.installation_owner import installation_key
+from aart_cli.domain.installation_owner import installation_key, installed_name_for
 from aart_cli.domain.receipts import (
     InstallationReceipt,
     InstalledRecord,
@@ -196,6 +197,18 @@ def _targets_scope_and_profile(
     kind = ArtifactKind(record.coordinate.artifact.kind)
     for delivery in receipt.deliveries:
         if profiles and delivery.harness not in profiles:
+            continue
+        if delivery.loads is not None:
+            # A plugin OpenCode 2 finds by itself (D-532): this scope's directory for it, under the
+            # installation's own name.
+            named = installed_name_for(record.coordinate, scope)
+            try:
+                if not isinstance(named, Err) and delivery.destination == os.path.join(
+                    harness_root, plugin_directory(delivery.harness, scope, named.value)
+                ):
+                    return True
+            except (KeyError, ValueError):
+                pass
             continue
         try:
             target = delivery_target(delivery.harness, scope, kind)

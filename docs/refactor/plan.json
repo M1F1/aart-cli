@@ -2393,8 +2393,8 @@
         },
         {
           "id": "4",
-          "title": "P0-2: opencode2 harness variant detected by version (stacked branch)",
-          "status": "todo"
+          "title": "P0-2: moved to OPENCODE-2-PROJECT-PLUGINS (chosen, not detected; D-532)",
+          "status": "done"
         }
       ]
     },
@@ -2417,6 +2417,28 @@
           "id": "3",
           "title": "B-279: the opencode2 label, with P0-2 and the telemetry server's HARNESS_OF",
           "status": "todo"
+        }
+      ]
+    },
+    {
+      "id": "OPENCODE-2-PROJECT-PLUGINS",
+      "title": "Project plugins for the OpenCode chosen: OpenCode 2's own .opencode/plugins/<name>/ directory, the build's default, no migration (B-276, D-532)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Setting, consume opencode, AART_CLI_DEFAULT_OPENCODE stamped by the release",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Loader delivery: install, review risk, status, drift, repair, uninstall; live on opencode2",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR, stacked on #148",
+          "status": "in_progress"
         }
       ]
     }

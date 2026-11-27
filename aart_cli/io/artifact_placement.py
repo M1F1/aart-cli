@@ -22,12 +22,15 @@ from __future__ import annotations
 
 import os
 
+from aart_cli.application.consumer_views import ConsumerSettings
 from aart_cli.application.installation_offer import ArtifactPlacement
 from aart_cli.application.skill_projection import SKILL_DOCUMENT, project_skill_document
 from aart_cli.compiler.graph import supported_label
 from aart_cli.domain.artifacts import ArtifactKind
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.effects import DeliveryKind
 from aart_cli.domain.harness import (
+    PLUGIN_DIRECTORIES,
     Scope,
     delivery_destination,
     delivery_target,
@@ -37,9 +40,10 @@ from aart_cli.domain.harness import (
     mcp_target,
     measured_harnesses,
     memory_target,
+    plugin_directory,
     plugin_target,
 )
-from aart_cli.domain.hooks import HookEntry, PluginEntry
+from aart_cli.domain.hooks import PLUGIN_INDEX, HookEntry, PluginEntry, plugin_loader_at
 from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity
 from aart_cli.domain.inputs import InputValueSource
 from aart_cli.domain.install_description import InstallDescription
@@ -63,10 +67,13 @@ from aart_cli.protocol.authoring import (
     package_plugin,
     read_package_description,
 )
+from aart_cli.protocol.hashing import file_entry, tree_digest
 from aart_cli.protocol.native_models import ArtifactManifest
 from aart_cli.protocol.native_tree import compile_native_package
+from aart_cli.protocol.paths import parse_relative_path
 from aart_cli.store.model import ObjectReadRequest, ObjectStorePaths
 
+from .consumer_settings import read_consumer_settings
 from .environment_inspection import platform_name
 from .object_store import read_object
 
@@ -259,8 +266,53 @@ def _settings(
     return Ok(tuple(settings))
 
 
+#: What a plugin registers with: entries in a settings list, directories a harness finds by itself,
+#: and the skills it carries.
+_Registered = tuple[
+    tuple[ArtifactSettingsEntry, ...], tuple[ArtifactDelivery, ...], tuple[PluginMember, ...]
+]
+
+
+def _plugin_loader(
+    coordinate: ArtifactCoordinate,
+    *,
+    profile: str,
+    scope: Scope,
+    harness_root: str,
+    tree: str,
+    module: str,
+) -> Result[ArtifactDelivery | None]:
+    """The directory OpenCode 2 finds this project plugin in, or `None` where it has none (D-532).
+
+    It holds only the `index.js` aart-cli writes, importing the module from the private tree by a
+    relative path, so the tree stays where every other installation's does and the project's
+    `opencode.json` names nothing. The digest is that one file's tree, measured as a delivered tree
+    is, so a loader somebody edited reads as drift.
+    """
+
+    if (profile, scope) not in PLUGIN_DIRECTORIES:
+        return Ok(None)
+    named = installed_name_for(coordinate, scope)
+    if isinstance(named, Err):
+        return named
+    relative = plugin_directory(profile, scope, named.value)
+    destination = os.path.join(harness_root, relative)
+    try:
+        content = plugin_loader_at(destination, module).encode("utf-8")
+    except ValueError as error:
+        return _error(f"{coordinate.artifact} cannot be loaded by {profile}: {error}")
+    index = parse_relative_path(PLUGIN_INDEX)
+    assert isinstance(index, Ok)
+    digest = tree_digest((file_entry(index.value, content),))
+    if isinstance(digest, Err):
+        return digest
+    return Ok(
+        ArtifactDelivery(profile, tree, destination, DeliveryKind.TREE, digest.value, loads=module)
+    )
+
+
 def _plugin_settings(
-    identity: ArtifactIdentity,
+    coordinate: ArtifactCoordinate,
     entries: object,
     *,
     profile: str,
@@ -268,7 +320,8 @@ def _plugin_settings(
     profiles_requested: bool,
     root: str,
     harness_root: str,
-) -> Result[tuple[tuple[ArtifactSettingsEntry, ...], tuple[PluginMember, ...]]]:
+    opencode_runtime: int,
+) -> Result[_Registered]:
     """The one member of the harness's plugin list this installation owns (§171.3), and the
     skills the plugin carries, which are installed with it (§214).
 
@@ -278,11 +331,29 @@ def _plugin_settings(
     because that is how OpenCode resolves it, so the tree and the entry move together with the
     root. An entry that would have to climb out of the settings file's directory is refused by
     `PluginEntry` rather than written, since it is no longer a path inside this installation.
+
+    For OpenCode 2 a project plugin is a directory under `.opencode/plugins/` instead, and never
+    an entry as well, which OpenCode 2 would load twice (`_plugin_loader`, D-532).
     """
 
+    identity = coordinate.artifact
     packaged = package_plugin(entries)  # type: ignore[arg-type]
     if isinstance(packaged, Err):
         return packaged
+    if profile == "opencode" and opencode_runtime == 2:
+        environment = ArtifactEnvironment(str(identity), root)
+        loader = _plugin_loader(
+            coordinate,
+            profile=profile,
+            scope=scope,
+            harness_root=harness_root,
+            tree=environment.payload,
+            module=os.path.join(environment.payload, packaged.value.entry),
+        )
+        if isinstance(loader, Err):
+            return loader
+        if loader.value is not None:
+            return Ok(((), (loader.value,), packaged.value.members))
     try:
         target = plugin_target(
             profile, scope, exists=lambda path: os.path.isfile(os.path.join(harness_root, path))
@@ -290,7 +361,7 @@ def _plugin_settings(
     except KeyError as error:
         # Named rather than skipped: a vendored tree nothing registers is installed and inert.
         if _skippable(profile, requested=profiles_requested):
-            return Ok(((), ()))
+            return Ok(((), (), ()))
         return _error(str(error).strip("'"))
     settings = os.path.join(harness_root, target.settings)
     environment = ArtifactEnvironment(str(identity), root)
@@ -306,6 +377,7 @@ def _plugin_settings(
     return Ok(
         (
             (ArtifactSettingsEntry(profile, settings, target.path, entry),),
+            (),
             packaged.value.members,
         )
     )
@@ -412,6 +484,7 @@ def placements_for(
     harness_root: str | None = None,
     sources: tuple[InputValueSource, ...] = (),
     preferred_installer: PythonInstaller | None = None,
+    opencode_runtime: int | None = None,
 ) -> Result[tuple[ArtifactPlacement, ...]]:
     """One placement per harness this artifact would be installed into.
 
@@ -444,6 +517,13 @@ def placements_for(
             "against",
             "supply the project root for a project install, or the user home for a user one",
         )
+
+    if opencode_runtime is None:
+        # The person's choice, else the build's (D-532). Read here, where every install, update
+        # and reinstall places, so no caller can place a plugin for the other OpenCode. Settings
+        # nobody can read are the build's: placing for it is what the person would have had.
+        chosen = read_consumer_settings(data_root)
+        opencode_runtime = (chosen.value if isinstance(chosen, Ok) else ConsumerSettings()).opencode
 
     coordinate = artifact.version.coordinate
     stored = read_object(ObjectReadRequest(store, artifact.version.object_digest))
@@ -562,18 +642,19 @@ def placements_for(
             merges = blocks.value
         elif kind is ArtifactKind.PLUGIN:
             registered = _plugin_settings(
-                coordinate.artifact,
+                coordinate,
                 entries,
                 profile=profile,
                 scope=scope,
                 profiles_requested=profiles_requested,
                 root=root,
                 harness_root=harness_root,
+                opencode_runtime=opencode_runtime,
             )
             if isinstance(registered, Err):
                 return registered
-            settings, members = registered.value
-            if not settings:
+            settings, deliveries, members = registered.value
+            if not settings and not deliveries:
                 return Ok(None)
         else:
             made = _deliveries(

@@ -277,6 +277,7 @@ def desired_state_from_placement(
                     delivery.source,
                     delivery.destination,
                     delivery.kind,
+                    loads_code=delivery.loads is not None,
                 ),
             ),
         )

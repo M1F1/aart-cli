@@ -725,6 +725,30 @@ def build_parser() -> argparse.ArgumentParser:
             )
         _add_json(p_usage)
 
+    # OpenCode (§171.3, D-532) ---------------------------------------------- #
+    p = consume_sub.add_parser(
+        "opencode",
+        formatter_class=_HELP_FORMATTER,
+        help="say which OpenCode project plugins are installed for, 1 or 2",
+        description=(
+            "Which OpenCode a project plugin is installed for. OpenCode 1 loads it from the "
+            "`plugin` list in the project's opencode.json; OpenCode 2 from its own directory under "
+            ".opencode/plugins/, which also works when it is started from a subdirectory. Without "
+            "a value, says which one is in effect and who decided. Until you choose, this "
+            "aart-cli's build decides; the choice is kept in Settings, which changes it too. "
+            "Plugins already installed stay as they were: uninstall and install them again to "
+            "move them."
+        ),
+    )
+    p.add_argument(
+        "opencode_runtime",
+        nargs="?",
+        choices=("1", "2"),
+        metavar="1|2",
+        help="the OpenCode to install project plugins for",
+    )
+    _add_json(p)
+
     # Telemetry (§213) ------------------------------------------------------- #
     p = consume_sub.add_parser(
         "telemetry",

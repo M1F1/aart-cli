@@ -93,6 +93,12 @@ def _run_telemetry(request: Request) -> int:
     return telemetry.run(request)
 
 
+def _run_opencode(request: Request) -> int:
+    from .commands import opencode
+
+    return opencode.run(request)
+
+
 def _run_report(request: Request) -> int:
     from .commands import report
 
@@ -124,6 +130,7 @@ DISPATCH: dict[str, Callable[[Request], int]] = {
     "mcp": _run_mcp,
     "usage": _run_usage,
     "telemetry": _run_telemetry,
+    "opencode": _run_opencode,
     "report": _run_report,
     "candidate": _run_candidate,
 }
@@ -174,6 +181,8 @@ def _route(args: argparse.Namespace) -> tuple[str, dict[str, object]]:
             return "usage", {}
         if action == "telemetry":
             return "telemetry", {}
+        if action == "opencode":
+            return "opencode", {}
         if action == "report":
             return "report", {}
         return "marketplace", {"marketplace_action": action}
@@ -297,6 +306,7 @@ def _to_request(args: argparse.Namespace) -> Request:
         telemetry_force=bool(getattr(args, "telemetry_force", False)),
         telemetry_unmanaged=getattr(args, "telemetry_unmanaged", None),
         telemetry_errors=getattr(args, "telemetry_errors", None),
+        opencode_runtime=getattr(args, "opencode_runtime", None),
         report_limit=getattr(args, "report_limit", None),
     )
 

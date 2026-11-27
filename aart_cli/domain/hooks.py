@@ -24,6 +24,7 @@ Pure data in, pure data out. Nothing here reads or writes a file.
 from __future__ import annotations
 
 import json
+import posixpath
 import re
 from dataclasses import dataclass
 from enum import Enum
@@ -44,6 +45,8 @@ __all__ = [
     "settings_entry_to_json",
     "merge_settings_entry",
     "plugin_index",
+    "plugin_loader",
+    "plugin_loader_at",
     "remove_settings_entry",
 ]
 
@@ -96,6 +99,7 @@ _MODULE = rf"{_SEGMENTS}\.(?:js|mjs|ts)"
 _PLUGIN_REFERENCE_RE = re.compile(rf"^\./{_MODULE}$")
 _PLUGIN_DIRECTORY_RE = re.compile(rf"^\./{_SEGMENTS}$")
 _PLUGIN_MODULE_RE = re.compile(rf"^payload/{_MODULE}$")
+_MODULE_SUFFIX_RE = re.compile(r"\.(?:js|mjs|ts)$")
 
 #: The file aart-cli writes at the root of a plugin's tree, which both of opencode's plugin
 #: runtimes load when the entry names that directory (D-521).
@@ -141,6 +145,19 @@ class PluginEntry:
             raise ValueError("a plugin's module is a .js, .mjs or .ts file inside its payload")
 
 
+def _loading(target: str, runtimes: str) -> str:
+    """A module that loads the plugin module at `target`, a `./` or `../` path from itself."""
+
+    quoted = json.dumps(target)
+    return (
+        f"// Written by aart-cli: loads this plugin for {runtimes}.\n"
+        f"export * from {quoted}\n"
+        f"import * as plugin from {quoted}\n"
+        "export default plugin.default ??\n"
+        '  Object.values(plugin).find((value) => typeof value === "function")\n'
+    )
+
+
 def plugin_index(entry: PluginEntry) -> str:
     """The `index.js` at the root of a plugin's tree, which loads its entry module (D-521).
 
@@ -152,14 +169,37 @@ def plugin_index(entry: PluginEntry) -> str:
 
     if entry.module is None:
         raise ValueError("a plugin registered by its module path has no index")
-    target = json.dumps(f"./{entry.module}")
-    return (
-        "// Written by aart-cli: loads this plugin for OpenCode 1.x and OpenCode 2 alike.\n"
-        f"export * from {target}\n"
-        f"import * as plugin from {target}\n"
-        "export default plugin.default ??\n"
-        '  Object.values(plugin).find((value) => typeof value === "function")\n'
-    )
+    return _loading(f"./{entry.module}", "OpenCode 1.x and OpenCode 2 alike")
+
+
+def plugin_loader(module: str) -> str:
+    """The `index.js` of the directory OpenCode 2 finds a project plugin in (D-532).
+
+    `module` is the entry module as seen from that directory: `../../aart-cli/plugin/...`, since
+    the plugin's tree stays in the installation's private directory and only this file sits where
+    OpenCode 2 looks. A relative path, so the project can move and be checked out elsewhere; the
+    import resolves from this file, not from where OpenCode was started. Exports pass through as
+    `plugin_index`'s do.
+    """
+
+    if (
+        not isinstance(module, str)
+        or not module.startswith("../")
+        or _MODULE_SUFFIX_RE.search(module) is None
+        or any(part in ("", ".") for part in module.split("/"))
+        or any(character in module for character in "\r\n\\")
+    ):
+        raise ValueError("a plugin loader imports a .js, .mjs or .ts module by a ../ path")
+    return _loading(module, "OpenCode 2")
+
+
+def plugin_loader_at(directory: str, module: str) -> str:
+    """`plugin_loader` for a loader written into `directory`, both absolute POSIX paths."""
+
+    for value in (directory, module):
+        if not isinstance(value, str) or not value.startswith("/"):
+            raise ValueError("a plugin loader is placed and loads by absolute paths")
+    return plugin_loader(posixpath.relpath(module, directory))
 
 
 #: One member of a list in a settings file that an installation owns.

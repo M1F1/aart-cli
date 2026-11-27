@@ -266,6 +266,10 @@ class DeliverArtifact:
 
     The source is inside the artifact's own tree, so a withdrawal can be undone while the payload
     stands -- which is why this is reversible in the same way an entry in a settings file is.
+
+    A delivery that loads code raises it, as a plugin's settings entry does (§171.4, INV-256): the
+    directory OpenCode 2 loads a project plugin from (D-532) is that entry's place, and writing it
+    is the high-risk execution itself.
     """
 
     harness: str
@@ -273,7 +277,7 @@ class DeliverArtifact:
     source: str
     destination: str
     delivery: DeliveryKind
-    risk: ClassVar[RiskClass] = RiskClass.CONFIGURATION_MUTATION
+    loads_code: bool = False
     capabilities: ClassVar[EffectCapabilities] = _HARNESS
 
     def __post_init__(self) -> None:
@@ -282,6 +286,14 @@ class DeliverArtifact:
         _line(self.source, "delivery source")
         _line(self.destination, "delivery destination")
         object.__setattr__(self, "delivery", _delivery_kind(self.delivery))
+        if not isinstance(self.loads_code, bool):
+            raise ValueError("whether a delivery loads code is true or false")
+
+    @property
+    def risk(self) -> RiskClass:
+        if self.loads_code:
+            return RiskClass.HIGH_RISK_EXECUTION
+        return RiskClass.CONFIGURATION_MUTATION
 
 
 @dataclass(frozen=True, slots=True)

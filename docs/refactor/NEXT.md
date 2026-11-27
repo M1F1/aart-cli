@@ -1,6 +1,17 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-27, OPENCODE-USAGE-PLUGIN)
+## Where the work is (2026-11-27, OPENCODE-2-PROJECT-PLUGINS)
+
+**OPENCODE-2-PROJECT-PLUGINS** (P0-2, B-276, D-532): a project plugin is installed for the OpenCode
+chosen in Settings or with `consume opencode 1|2`, defaulting to the build's
+`AART_CLI_DEFAULT_OPENCODE` (enterprise `2`, public `1`). For OpenCode 2 it is
+`.opencode/plugins/<installed name>/index.js`, a loader into the private tree, and nothing in
+`opencode.json`; nothing installed earlier migrates. Branch `feat/opencode-2-project-plugins`,
+stacked on #148. Next: B-279 (say which OpenCode was last used), then B-278 (the rest live on
+OpenCode 2). Evidence:
+`docs/refactor/slices/OPENCODE-2-PROJECT-PLUGINS-the-directory-opencode-2-loads.md`.
+
+## Where the work was (2026-11-27, OPENCODE-USAGE-PLUGIN)
 
 **OPENCODE-USAGE-PLUGIN** (B-277, D-531): the opencode usage plugin counts an MCP use only for a
 server the runtime reports, starts the recorder detached with `RECORDER_ENVIRONMENT` only, and

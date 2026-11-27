@@ -68,6 +68,7 @@ from aart_cli.domain.hooks import (
     PluginEntry,
     merge_settings_entry,
     plugin_index,
+    plugin_loader_at,
     remove_settings_entry,
     settings_entry_label,
     settings_entry_to_json,
@@ -940,6 +941,8 @@ class DeliveryEffectInterpreter:
     def _deliver(self, effect: DeliverArtifact) -> Result[str]:
         delivery = self._matching(effect)
         assert delivery is not None  # `apply` refuses a delivery this interpreter was not given.
+        if delivery.loads is not None:
+            return self._write_loader(delivery)
         tree = effect.delivery is DeliveryKind.TREE
         present = os.path.isdir(effect.source) if tree else os.path.isfile(effect.source)
         if not present:
@@ -970,6 +973,38 @@ class DeliveryEffectInterpreter:
                 f"cannot deliver to {effect.destination}: {error.strerror or error}",
             )
         return Ok(f"delivered {self.artifact} to {effect.harness} at {effect.destination}")
+
+    def _write_loader(self, delivery: ArtifactDelivery) -> Result[str]:
+        """The directory OpenCode 2 finds a project plugin in: one `index.js` (D-532).
+
+        Written only once the module it imports is in the private tree, as a plain file, so
+        OpenCode 2 is never told about a plugin with nothing behind it. The directory is replaced
+        whole, like any delivery, so nothing else lingers where OpenCode 2 scans.
+        """
+
+        assert delivery.loads is not None
+        if os.path.islink(delivery.source) or not os.path.isfile(delivery.loads):
+            return _error(
+                EXECUTION_FAILED,
+                f"{delivery.loads} is not in this installation's tree, so "
+                f"{delivery.destination} is left as it was",
+            )
+        content = plugin_loader_at(delivery.destination, delivery.loads).encode("utf-8")
+        removed = self._remove(delivery.destination)
+        if isinstance(removed, Err):
+            return removed
+        index = os.path.join(delivery.destination, PLUGIN_INDEX)
+        try:
+            os.makedirs(delivery.destination, mode=0o700)
+            write_atomic(index, content)
+            os.chmod(index, 0o600)
+            _restrict(delivery.destination)
+        except OSError as error:
+            return _error(
+                EXECUTION_FAILED,
+                f"cannot deliver to {delivery.destination}: {error.strerror or error}",
+            )
+        return Ok(f"delivered {self.artifact} to {delivery.harness} at {delivery.destination}")
 
     def _project(self, delivery: ArtifactDelivery) -> Result[None]:
         """Rewrite the delivered document so it names the directory it was delivered into.

@@ -102,6 +102,13 @@ runs:
       shell: bash
       run: ${{ inputs.python }} scripts/inject_default_usage.py
 
+    # Unset means this fork's wheel installs project plugins for OpenCode 1 until a person chooses
+    # OpenCode 2 in Settings, which is the public build's state.  Set, it is `1` or `2`, and any
+    # other value fails here.  See D-532.
+    - name: Inject default OpenCode
+      shell: bash
+      run: ${{ inputs.python }} scripts/inject_default_opencode.py
+
     # Unset means this fork's wheel names no telemetry server, which is the public build's state.
     # Set, it is the server's base address, `https://` or loopback `http://`, and an address aart-cli
     # would refuse fails here.  Set, telemetry is on from each home's first start where nobody

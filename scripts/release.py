@@ -463,6 +463,18 @@ def default_usage_harnesses_value() -> str | None:
     return ",".join(name.strip() for name in raw.split(","))
 
 
+def default_opencode_value() -> int:
+    """Which OpenCode this release installs project plugins for until a person chooses (D-532).
+
+    Recorded for the reason the default Registry is: two wheels of one tag may differ in where they
+    put a project plugin. Read as `scripts/inject_default_opencode.py` reads it, so unset is 1; a
+    value it refuses fails that step before this runs.
+    """
+
+    raw = os.environ.get("AART_CLI_DEFAULT_OPENCODE", "").strip()
+    return 2 if raw == "2" else 1
+
+
 def telemetry_endpoint_value() -> str | None:
     """The telemetry server this release offers, or ``None`` when it offers none (D-503).
 
@@ -771,6 +783,7 @@ def check_release(
         "default_registry": baked_default_registry_value(),
         "local_version_label": local_version_label_value(),
         "default_usage_harnesses": default_usage_harnesses_value(),
+        "default_opencode": default_opencode_value(),
         "default_telemetry_endpoint": telemetry_endpoint_value(),
         "default_telemetry_unmanaged_uses": telemetry_unmanaged_uses_value(),
         "default_telemetry_errors": telemetry_errors_value(),
