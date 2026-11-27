@@ -2367,7 +2367,34 @@
         {
           "id": "3",
           "title": "The PR",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "OPENCODE-USER-SETTINGS-FILE",
+      "title": "OpenCode user MCP servers and plugins go in the file OpenCode reads, edited as JSON with comments (§218, D-530)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Choose opencode.jsonc before opencode.json; JSONC editor keeping comments; marker comments",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Sibling clean-up, relocation on read, doctor's Settings files section and reviewed repair",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR",
           "status": "in_progress"
+        },
+        {
+          "id": "4",
+          "title": "P0-2: opencode2 harness variant detected by version (stacked branch)",
+          "status": "todo"
         }
       ]
     }

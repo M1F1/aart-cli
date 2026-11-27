@@ -113,10 +113,9 @@ class TabnineMcpE2ETest(unittest.TestCase):
                     "--yes",
                 )
                 self.assertEqual(removed_project, 0, removed_project_payload)
-                # The settings file AART created stays behind, emptied, for now (B-204).
-                self.assertEqual(
-                    json.loads(project_file.read_text(encoding="utf-8"))["mcpServers"], {}
-                )
+                # The settings file AART created stays behind (B-204), without the map the
+                # removal emptied (§218).
+                self.assertNotIn("mcpServers", json.loads(project_file.read_text(encoding="utf-8")))
                 self.assertEqual(
                     list(json.loads(user_file.read_text(encoding="utf-8"))["mcpServers"]),
                     ["atlassian-reference-user"],
@@ -133,9 +132,7 @@ class TabnineMcpE2ETest(unittest.TestCase):
                     "--yes",
                 )
                 self.assertEqual(removed_user, 0, removed_user_payload)
-                self.assertEqual(
-                    json.loads(user_file.read_text(encoding="utf-8"))["mcpServers"], {}
-                )
+                self.assertNotIn("mcpServers", json.loads(user_file.read_text(encoding="utf-8")))
 
 
 if __name__ == "__main__":  # pragma: no cover

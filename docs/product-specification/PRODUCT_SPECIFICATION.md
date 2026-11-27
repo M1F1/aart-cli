@@ -10918,12 +10918,14 @@ declarations are not runtime dependencies.
 ## 171.3 Registration
 
 **Amended 2026-11-04 by D-521:** the entry names the installation's tree, which both of opencode's
-plugin runtimes load.
+plugin runtimes load. **Amended 2026-11-27 by D-530:** at User scope the file is the one §218
+chooses, `opencode.jsonc` before `opencode.json`.
 
 Installing a plugin owns one entry of the harness's plugin list and nothing else in the file:
-- opencode reads that list from the `plugin` key of `opencode.json` at the chosen scope's root:
-  the project root for Project, the opencode config directory for User. OpenCode 2 reads the same
-  files and takes the `plugin` key into its own `plugins`.
+- opencode reads that list from the `plugin` key of its settings file at the chosen scope's root:
+  `opencode.json` at the project root for Project; for User, the file §218 chooses in the opencode
+  config directory. OpenCode 2 reads the same files and takes the `plugin` key into its own
+  `plugins`.
 - The entry is the path of the installation's tree relative to the directory holding that file, so
   a project's committed configuration names no machine-specific path.
 - The tree holds, beside its payload, one file aart-cli writes: `index.js`, which loads the entry
@@ -12939,7 +12941,11 @@ interruption too.
 
 - **What a failure is.** A *crash*: an exception no handler took, in a command, the terminal
   application, a harness's usage hook or the telemetry sender. An *error*: a command that ended
-  with a nonzero exit code, or a terminal action that stopped. An *interruption*: Ctrl+C in a
+  with a nonzero exit code, or a terminal action that stopped. A check that read everything and
+  found something to fix is not one: `doctor` still exits 1 when an installation needs
+  attention, and that is its answer, not a failure aart-cli met, so it is not journaled; a doctor
+  that could not read what it checks, or a repair that failed, still is. (Amended 2026-11-27 by
+  D-534: during a migration everybody runs doctor, and each finding was counted as a failure.) An *interruption*: Ctrl+C in a
   command or the terminal application, or its end by SIGTERM (something stopping it) or SIGHUP (its
   terminal closed) while it runs, which is counted, not diagnosed. One by a signal has no
   exception type, is kept at the terminal action that was running if one was, and keeps the
@@ -13088,3 +13094,76 @@ its repair would have rebuilt the environment without packages.
 receipt records a dependency descriptor that can be read in full, `runtime-dependencies` is matched
 exactly when its environment exists and holds every distribution the descriptor requires; where it
 cannot be read in full, the component's detail says the packages were not checked.
+
+# 218. OpenCode's user settings go where every OpenCode reads them
+
+An OpenCode 2 that a launcher starts with `OPENCODE_CONFIG` reads one user settings file:
+`~/.config/opencode/opencode.jsonc` when it exists, else `opencode.json` (measured on 2.3.2,
+2026-11-27). OpenCode 1.x creates an empty `opencode.jsonc` the first time it runs, so most people
+have one. Through 0.32.1 aart-cli wrote every user MCP server and plugin into `opencode.json`, which
+such an OpenCode never reads: they were installed and invisible. Reported 2026-11-27 (D-530).
+
+- **Which file.** At User scope an install writes the first of `opencode.jsonc`, `opencode.json`
+  that exists in the opencode config directory, and creates `opencode.jsonc` when neither does.
+  The file is chosen when the installation is planned and recorded on its receipt; a receipt may
+  name either. Project scope is unchanged: `opencode.json` at the project root, with no machine
+  path in it.
+- **JSON with comments.** opencode reads both files as JSON with comments and trailing commas, and
+  aart-cli reads them the same way. It edits them in place: what it does not change -- comments,
+  layout, order, other entries -- stays byte for byte. An edit that could only be made by
+  rewriting a value that holds a comment is refused, the file is left as it was, and the error
+  names the file. Other harnesses' files stay strict JSON.
+- **Marked.** In a `.jsonc` file each entry aart-cli writes has the comment
+  `// managed by aart-cli: <artifact>` on the line above it, and removing the entry removes that
+  comment. The comment is for people reading the file; ownership is still the receipt's, so a
+  deleted or edited comment changes nothing aart-cli does. A `.json` file gets no comment.
+- **Moved, not doubled.** Writing an entry takes this installation's identical entry -- the same
+  server starting the same launcher, or the same plugin reference -- out of the other user file;
+  an entry anybody else wrote is never touched, even under the same name. Uninstall takes it out
+  of both. The other file is left as it is when it cannot be read, or is a symlink (a dotfiles
+  checkout) that does not hold the entry; a symlink that does is refused, naming the remedy.
+- **Doctor.** An installation is judged against the file opencode reads now. An entry recorded in
+  the other file, or present in both, is drift: status and doctor report it as needing attention,
+  and doctor names the file it is in, the file opencode reads and one repair command naming every
+  such installation of a scope. The repair is a reviewed plan like any other
+  (`--yes --expect <digest>`): it writes the entry into the file opencode reads, takes it out of the
+  other and records the new file on the receipt.
+- **Several repairs, one review.** `doctor --repair` accepts several named installations. Their
+  plans are reviewed together under one digest, the SHA-256 of their own digests in the order
+  named, so confirming it applies exactly the reviewed set and a change to any one asks for a new
+  review. Each is still named; there is no repair of everything. One named installation keeps the
+  single review shape. (Amended 2026-11-27, review of D-530.)
+- **One command for everybody.** `aart-cli doctor --repair-settings` names no artifact: it reviews
+  the move of every User-scope installation that has an entry in a settings file its harness does
+  not read, as one plan under the digest above, and `aart-cli doctor --repair-settings --yes`
+  applies it. That confirmation needs no `--expect`, because it reviews again what it applies and
+  moves only what is misplaced; `--expect`, when given, must still match. It is the same two
+  commands on every machine, so a team can hand them out. Doctor's *Settings files* section names
+  it for User scope; every `consume` command says on stderr how many are not loaded and names it,
+  and says nothing when none are; the TUI's Doctor counts them and `m` reviews the same move, which
+  Enter confirms. A `doctor --repair` review ends with the exact command that applies it,
+  digest included. (Amended 2026-11-27 by D-533, owner request.)
+- **Said plainly.** A review whose plans change nothing but where settings entries are written
+  is shown as that: the harness, the file each entry leaves, the file it goes to, the
+  installations, and that nothing is installed or removed, without a risk level or digest; the
+  artifact's own risk was reviewed when it was installed. After the move it says what moved and
+  that the harness loads it when it next starts. A plan that also repairs something else is shown
+  in full and confirmed with `--yes --expect <digest>`, as any repair. The TUI's Dashboard says
+  which harness does not load how many installations and to open Doctor and press `m`, and
+  Doctor's entry is marked with the count. (Amended 2026-11-27 by D-534, review of D-533.)
+- **Nothing left behind.** Removing an entry (uninstall, or the other file's copy on a move) also
+  removes the list or object it was the last member of, and every object that then holds nothing,
+  in every harness's settings file: an install into a file without a `plugin` key, then an
+  uninstall, leaves the file as it was. A list or object holding a comment somebody wrote is kept
+  empty, with the comment, rather than removed. A list that was already empty before the install
+  cannot be told from one the install created and goes too; to every harness the two mean the
+  same. Removing an entry whose own text holds a comment somebody wrote is refused, as any edit
+  that would lose a comment is.
+- **Not changed.** Where a project's settings live; the `XDG_CONFIG_HOME` config directory, which
+  opencode honours and aart-cli does not yet (B-275).
+
+**INV-343 — A user OpenCode entry is where OpenCode reads it, and nothing else moves.** After an
+install, update or repair at User scope, each of the installation's MCP servers and plugin entries
+is in the first of `opencode.jsonc`, `opencode.json` that exists, and in no other user file; every
+comment and every entry aart-cli does not own is unchanged; an edit that would lose a comment
+changes nothing. An uninstall leaves no list or object it emptied, except one holding a comment.

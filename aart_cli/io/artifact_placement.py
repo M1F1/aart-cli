@@ -284,7 +284,9 @@ def _plugin_settings(
     if isinstance(packaged, Err):
         return packaged
     try:
-        target = plugin_target(profile, scope)
+        target = plugin_target(
+            profile, scope, exists=lambda path: os.path.isfile(os.path.join(harness_root, path))
+        )
     except KeyError as error:
         # Named rather than skipped: a vendored tree nothing registers is installed and inert.
         if _skippable(profile, requested=profiles_requested):
@@ -525,7 +527,15 @@ def placements_for(
         members: tuple[PluginMember, ...] = ()
         if not delivered:
             try:
-                targets.append(mcp_target(profile, scope))
+                # The file this harness reads on this machine (§218): for OpenCode's user scope,
+                # `opencode.jsonc` when it is there, which is all a launcher passes it.
+                targets.append(
+                    mcp_target(
+                        profile,
+                        scope,
+                        exists=lambda path: os.path.isfile(os.path.join(harness_root, path)),
+                    )
+                )
             except KeyError as error:
                 # Named rather than skipped. A profile quietly dropped is an install that reports
                 # success and leaves the harness somebody asked for with no way to start the

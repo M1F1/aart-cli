@@ -117,13 +117,22 @@ class APluginOwnsOneMemberOfTheListTest(unittest.TestCase):
 
         self.assertEqual(Ok({"plugin": THEIRS}), removed)
 
-    @given(st.lists(st.sampled_from(("a", "b", "./c.js", "./d/e.ts")), max_size=5))
+    @given(st.lists(st.sampled_from(("a", "b", "./c.js", "./d/e.ts")), min_size=1, max_size=5))
     def test_install_then_uninstall_leaves_any_list_as_it_was(self, theirs: list[str]) -> None:
         document = {"plugin": list(theirs)}
 
         removed = remove_settings_entry(_merged(document), PATH, ENTRY)
 
         self.assertEqual(Ok({"plugin": [item for item in theirs if item != REFERENCE]}), removed)
+
+    @given(st.dictionaries(st.sampled_from(("$schema", "model", "mcp")), st.integers(), max_size=3))
+    def test_install_then_uninstall_of_a_list_it_created_leaves_the_file_as_it_was(
+        self, theirs: dict[str, int]
+    ) -> None:
+        # §218: without a `plugin` key before, there is none after.
+        removed = remove_settings_entry(_merged(dict(theirs)), PATH, ENTRY)
+
+        self.assertEqual(Ok(theirs), removed)
 
 
 class RegisteringAPluginIsHighRiskTest(unittest.TestCase):
@@ -252,8 +261,10 @@ class APluginReceiptReadsBackAsWrittenTest(unittest.TestCase):
 
 class OpenCodeIsTheMeasuredPluginHostTest(unittest.TestCase):
     def test_project_and_user_scope_name_the_list_in_opencode_json(self) -> None:
+        # The user row is the file created when neither user file exists (§218); which one an
+        # install writes is chosen on the machine.
         self.assertEqual(("opencode.json", "plugin"), _where(Scope.PROJECT))
-        self.assertEqual((".config/opencode/opencode.json", "plugin"), _where(Scope.USER))
+        self.assertEqual((".config/opencode/opencode.jsonc", "plugin"), _where(Scope.USER))
 
     def test_an_unmeasured_harness_has_no_plugin_target(self) -> None:
         for harness in ("claude", "codex", "tabnine"):

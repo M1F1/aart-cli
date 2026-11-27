@@ -3879,6 +3879,8 @@ class DashboardView:
     #: The newer aart-cli a connected Registry runs, and that Registry; empty when none is (§211).
     aart_cli_available: str = ""
     aart_cli_registry: str = ""
+    #: Settings entries a harness does not load, which Doctor's `m` moves (§218, D-534).
+    settings_to_move: tuple["SettingsMoveView", ...] = ()
 
 
 def project_dashboard(
@@ -3914,6 +3916,24 @@ def project_dashboard(
 
 
 @dataclass(frozen=True, slots=True)
+class SettingsMoveView:
+    """One installation's entry in a settings file its harness does not read, and the file it
+    does: paths under the installation's own root are shown from `~/` (§218)."""
+
+    installation: str
+    coordinate: str
+    harness: str
+    recorded: str
+    read: str
+
+
+def settings_move_installations(moves: tuple[SettingsMoveView, ...]) -> tuple[str, ...]:
+    """The installations these moves are of, each once, in order."""
+
+    return tuple(dict.fromkeys(item.installation for item in moves))
+
+
+@dataclass(frozen=True, slots=True)
 class DoctorView:
     ready_count: int
     attention_count: int
@@ -3922,11 +3942,15 @@ class DoctorView:
     actions: tuple[str, ...]
     artifacts: tuple[InstalledArtifactView, ...] = ()
     collections: tuple[InstalledCollectionView, ...] = ()
+    #: The User-scope installations with an entry in a settings file their harness does not read,
+    #: which `m` moves together (§218).
+    misplaced_settings: tuple[SettingsMoveView, ...] = ()
 
 
 def project_doctor(
     artifacts: tuple[InstalledArtifactView, ...],
     collections: tuple[InstalledCollectionView, ...] = (),
+    misplaced_settings: tuple[SettingsMoveView, ...] = (),
 ) -> DoctorView:
     if any(not isinstance(item, InstalledArtifactView) for item in artifacts):
         raise ValueError("Doctor projection needs installed artifact views")
@@ -3949,6 +3973,7 @@ def project_doctor(
         actions,
         artifacts,
         collections,
+        misplaced_settings,
     )
 
 

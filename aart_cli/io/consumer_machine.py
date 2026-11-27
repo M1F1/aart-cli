@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 
@@ -38,6 +38,7 @@ from aart_cli.application.installed_state import (
     desired_state_from_placement,
     desired_state_from_receipt,
 )
+from aart_cli.application.settings_relocation import relocated_receipt, settings_moves
 from aart_cli.domain.artifacts import ArtifactKind
 from aart_cli.domain.configuration_files import parse_configuration_file
 from aart_cli.domain.credentials import (
@@ -55,6 +56,7 @@ from aart_cli.domain.harness import (
     delivery_target,
     memory_target,
     plugin_target,
+    settings_files,
 )
 from aart_cli.domain.identifiers import ArtifactCoordinate
 from aart_cli.domain.installation_owner import installation_key
@@ -231,7 +233,8 @@ def _targets_scope_and_profile(
                 plugin = plugin_target(entry.harness, scope)
             except KeyError:
                 continue
-            if entry.destination == os.path.join(harness_root, plugin.settings):
+            readable = settings_files(entry.harness, scope, plugin.settings)
+            if entry.destination in {os.path.join(harness_root, item) for item in readable}:
                 return True
     return False
 
@@ -408,7 +411,12 @@ def read_installed_inspections(
     )
     inspections = []
     for record in records:
-        receipt = record.receipt
+        # Judged against the settings file its harness reads now (§218): an entry still in the
+        # one it no longer reads is missing where it is read, and a repair moves it.
+        receipt = relocated_receipt(record.receipt, root=harness_root, exists=os.path.isfile)
+        moves = settings_moves(record.receipt, receipt)
+        if receipt is not record.receipt:
+            record = replace(record, receipt=receipt)
         if isinstance(receipt, PlacedArtifactReceipt):
             # An artifact a harness reads. There is no launcher to look for and no interpreter to
             # find, so none is looked for: reporting a missing process for something that starts
@@ -419,6 +427,7 @@ def read_installed_inspections(
                     record,
                     placed,
                     current_state_from_placement(placed, receipt, observe_placement(receipt)),
+                    moves,
                 )
             )
             continue
@@ -446,7 +455,7 @@ def read_installed_inspections(
             observe_installation(receipt, registry=measured_by),
             credentials=credential_states,
         )
-        inspections.append(InstalledInspection(record, desired, current))
+        inspections.append(InstalledInspection(record, desired, current, moves))
 
     configurations = read_configuration_files(records)
     if isinstance(configurations, Err):

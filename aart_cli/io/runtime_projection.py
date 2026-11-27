@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import glob
 import importlib
-import json
 import os
 from dataclasses import dataclass
 from importlib import metadata
@@ -28,7 +27,7 @@ from aart_cli.application.installation_verification import (
 from aart_cli.application.runtime_projection import RuntimeProjection
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.effects import DeliveryKind
-from aart_cli.domain.harness import McpRegistration
+from aart_cli.domain.harness import McpRegistration, settings_syntax, sibling_settings_paths
 from aart_cli.domain.hooks import PLUGIN_INDEX, PluginEntry, plugin_index, settings_entry_at
 from aart_cli.domain.identifiers import ObjectDigest
 from aart_cli.domain.managed_blocks import managed_block_body
@@ -47,6 +46,7 @@ from aart_cli.domain.receipts import (
     PlacedArtifactReceipt,
 )
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.domain.settings_text import parse_settings_text
 from aart_cli.io.fs import write_atomic
 from aart_cli.protocol.hashing import (
     directory_entry,
@@ -298,20 +298,41 @@ def _entry_digest(entry: ArtifactSettingsEntry) -> ObjectDigest | None:
     name rather than acting on this measurement.
     """
 
-    try:
-        if not os.path.isfile(entry.destination) or os.path.islink(entry.destination):
-            return None
-        with open(entry.destination, "r", encoding="utf-8") as handle:
-            document = json.load(handle)
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return None
-    found = settings_entry_at(document, entry.path, entry.entry)
-    if isinstance(found, Err) or found.value is None:
+    found = _settings_entry_in(entry.destination, entry)
+    if found is None:
+        # Only in another file the harness reads (§218): there, and not where it should be, which
+        # a repair moves and an uninstall still takes out.
+        for sibling in sibling_settings_paths(entry.harness, entry.destination):
+            elsewhere = _settings_entry_in(sibling, entry)
+            if elsewhere is not None:
+                return settings_entry_digest({"entry": elsewhere, "only": sibling})
         return None
     if not _indexed(entry):
         # The entry is there and loads nothing it should: drift, which a repair rewrites (D-521).
-        return settings_entry_digest({"entry": found.value, "index": "missing or changed"})
-    return settings_entry_digest(found.value)
+        return settings_entry_digest({"entry": found, "index": "missing or changed"})
+    for sibling in sibling_settings_paths(entry.harness, entry.destination):
+        if _settings_entry_in(sibling, entry) is not None:
+            # Also still in another file the harness reads (§218): drift, and the repair that
+            # writes the entry again takes it out of there.
+            return settings_entry_digest({"entry": found, "also": sibling})
+    return settings_entry_digest(found)
+
+
+def _settings_entry_in(path: str, entry: ArtifactSettingsEntry) -> object | None:
+    """How the settings file at `path` spells this entry, or `None` when it holds none."""
+
+    try:
+        if not os.path.isfile(path) or os.path.islink(path):
+            return None
+        with open(path, "r", encoding="utf-8") as handle:
+            raw = handle.read()
+        document = parse_settings_text(raw, settings_syntax(entry.harness)) if raw.strip() else {}
+    except (OSError, ValueError, UnicodeDecodeError):
+        return None
+    found = settings_entry_at(document, entry.path, entry.entry)
+    if isinstance(found, Err):
+        return None
+    return found.value
 
 
 def _indexed(entry: ArtifactSettingsEntry) -> bool:

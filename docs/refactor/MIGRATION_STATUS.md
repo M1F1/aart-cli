@@ -4,6 +4,16 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-27, OPENCODE-USER-SETTINGS-FILE (§218, D-530): user OpenCode settings go where OpenCode reads them.**
+A launcher-started OpenCode 2 reads `opencode.jsonc` before `opencode.json`, so every user MCP server
+and plugin aart-cli wrote was invisible. Installs now write the file OpenCode reads, edit it as JSON
+with comments without losing any, mark their entries, and take their own entry out of the other file;
+doctor names misplaced entries and one reviewed repair moves them all; `doctor --repair-settings`
+then `--yes`, or `m` on the TUI's Doctor, moves every one without naming any (D-533); doctor's findings are no failure, and the
+move is said plainly, also on the TUI Dashboard (D-534). Removing an entry leaves no
+list or object it emptied, in any harness's settings. Evidence:
+`docs/refactor/slices/OPENCODE-USER-SETTINGS-FILE-the-file-opencode-reads.md`.
+
 **2026-11-16, RUNTIME-DEPENDENCIES-VERIFIED (§217, D-529): an MCP's packages are checked.**
 The receipt records the dependency descriptor; installs, Installed, doctor and repair compare the
 environment's `site-packages` with it, so an install after a failed pip runs pip again, doctor sees

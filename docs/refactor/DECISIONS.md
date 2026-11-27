@@ -13290,3 +13290,115 @@ package as ready; a repair of a deleted environment rebuilt it empty.
 - **Evidence.** `tests/runtime_dependencies_verified_e2e_test.py` (real venv, real pip, offline
   hand-built wheel, public commands) and `tests/runtime_dependencies_test.py` (parser properties,
   receipt round-trip, judging).
+
+## D-530 — OpenCode's user settings go in the file it reads, edited as JSON with comments (OPENCODE-USER-SETTINGS-FILE)
+
+§218 added, §171.3 amended (owner request, 2026-11-27, deadline 2026-11-30). A report measured
+OpenCode 2.3.2 under a launcher that sets `OPENCODE_CONFIG`: it reads `opencode.jsonc` when it
+exists and `opencode.json` only when it does not, and OpenCode 1.x leaves an empty
+`opencode.jsonc` behind. Every user MCP server and plugin aart-cli wrote was therefore invisible.
+
+- **Choice of file.** `SETTINGS_FILES` lists a harness's user files in the order it reads them;
+  `chosen_settings_file` takes the first that exists, else the first. With neither file present it
+  creates `opencode.jsonc` (owner-approved): the file every OpenCode reads first, so a later
+  OpenCode 1.x run cannot shadow it.
+- **A JSONC editor, not a refusal.** The owner chose the full fix over refusing commented files
+  ("najważniejszy jest user experience"). `aart_cli/domain/jsonc.py` is pure and dependency-free:
+  it parses comments, trailing commas and duplicates, diffs the old document against the new and
+  edits only changed members and items, laying new ones out as `json.dumps(indent=...)` would with
+  the file's own indent. It refuses rather than drops: a replaced span holding a comment raises
+  `JsoncError`, and every result is reparsed and must equal the intended document. Properties:
+  rewrite equals the document or refuses only where comments are; added members keep every
+  comment; unchanged documents are byte-identical; add then remove is identity.
+- **Marker comments.** `// managed by aart-cli: <artifact>` above each entry in `.jsonc` files,
+  removed with the entry. For people only; the receipt is still the ownership record, so nothing
+  parses the comment to decide what is ours. `.json` files get none, as some tools reading
+  `opencode.json` may be strict.
+- **Sibling clean-up in the writers.** `LocalHarnessRegistry.register` and
+  `SettingsEntryInterpreter.apply` remove the same entry from the sibling file after writing the
+  chosen one; MCP removal requires the registered command to match, plugin entries are identified
+  by their `./aart-cli/...` reference. This makes install, update, repair and uninstall move
+  entries without a new component kind. A sibling that cannot be parsed is skipped, as the
+  observation skips it: opencode does not read it while the chosen file exists, and failing an
+  install over it would be worse. A symlinked sibling is read through the link and refused only
+  when it holds the entry, so a dotfiles-managed `opencode.json` does not block installs.
+- **Relocation on read.** `relocated_receipt` (application, pure) rebases a receipt's settings
+  files onto the file read now, so an old receipt naming `opencode.json` is judged against
+  `opencode.jsonc`. Observation reports an entry also or only in the sibling as divergent. Doctor
+  lists the moves under *Settings files* (and `settings_files` in JSON) with the repair command;
+  the repair records the relocated receipt. No migration of stored receipts (no backward
+  compatibility owed).
+- **Not chosen.** Writing both files: two copies drift, and an OpenCode that reads one would still
+  disagree with doctor. Converting `opencode.json` into `opencode.jsonc`: it moves the person's own
+  settings without being asked. A third-party JSONC library: zero runtime dependencies.
+- **Evidence.** `tests/jsonc_test.py` (examples and Hypothesis properties),
+  `tests/opencode_user_settings_file_test.py` (choice, registry, relocation),
+  `tests/opencode_user_settings_file_e2e_test.py` (public commands on an isolated home: create,
+  OpenCode's own file, comments through install and uninstall, json-only, reviewed repair moving
+  an entry, both-files drift, doctor's section, uninstall of a recorded json entry). Targeted
+  mutations: choosing the last candidate, dropping the command match on removal and skipping
+  relocation each turn their named tests red.
+- **Review follow-up (2026-11-27).** (1) Removing an entry also prunes the list or object it
+  emptied and every parent left empty (`hooks._pruned`, and the MCP map in
+  `LocalHarnessRegistry._remove`), for every harness, since "byte for byte" was the promise and a
+  stray `"plugin": []` broke it. Not recorded per key: an empty list the person typed is lost
+  with ours, which every harness reads the same way, and a receipt field for it would be state
+  with no reader. Where the emptied container holds a person's comment, `render_settings_text`
+  keeps it empty instead (the rewriter refuses the removal, the fallback restores the dropped
+  containers and retries). The rewriter now also refuses to remove an entry whose own text holds
+  a comment that is not an aart-cli marker; it dropped it silently before. (2) `doctor --repair`
+  takes several coordinates under one review digest, `sha256` over the per-installation digests
+  in the given order; doctor prints one command per scope. Kept explicit naming rather than a
+  `--all`: the boundary that nothing is repaired unnamed stands. (3) The live opencode tests read
+  stdout from a file, not a pipe, because a Bun process may exit before a pipe past 64 KB is
+  drained (`opencode debug config` on 1.18.30), and drop every `OPENCODE_*` variable.
+
+## D-533 — One doctor command moves every misplaced OpenCode entry (REPAIR-SETTINGS)
+
+§218 amended (owner request, 2026-11-27). The owner hands users a short instruction to make
+aart-cli work with OpenCode 2 again, and asked for commands that are concrete and few. The move of
+D-530 needed every coordinate typed out, then the digest copied into `--yes --expect`: correct,
+and too much to put in an instruction for many people whose installations differ.
+
+- `doctor --repair-settings` reviews the move of every User-scope installation with an entry in a
+  settings file its harness does not read (`misplaced_user_installations`, pure over receipts and
+  which files exist), as the one multi-repair plan of D-530's review. `--repair-settings --yes`
+  applies it without `--expect`. That is the one exception to "confirm with the reviewed digest",
+  and it is safe for the reason the digest exists: the plan is recomputed and reviewed at the
+  moment it is applied, it can only move entries aart-cli wrote and recorded, and a review already
+  printed nothing it then does differently. `--expect`, when passed, still has to match.
+  `--repair-settings` with `--repair` is refused.
+- Every `consume` command, after the newer-version notice, says on stderr how many are not loaded
+  and names the command; silent when none are, and a defect in finding out says nothing (advice
+  never fails a command). `--json` stdout is unchanged.
+- The TUI's Doctor counts them and binds `m` (Move settings) to the same review on screen 30
+  (Verify repair); Enter confirms, as with any reviewed lifecycle action. It needs no focused row.
+- A `doctor --repair` review now ends with the exact command that applies it, shell-quoted, digest
+  included, instead of "re-run with --yes and --expect".
+- Rejected: moving automatically on install or upgrade (the brief: files change only after a
+  confirmation); a `--repair-all` across every kind of drift (out of this request, and a broader
+  claim than settings moves).
+
+## D-534 — Doctor's findings are no failure; the settings move is said plainly (REPAIR-SETTINGS review)
+
+§215 and §218 amended (review of D-533, 2026-11-27).
+
+- **Findings.** `doctor` exiting 1 because an installation needs attention was journaled as an
+  `error` and sent as `aart_cli.failed`: during a migration every person who runs it would show
+  on the failure dashboard as a failure. Its exit code stays 1 -- scripts read it -- but its type
+  is `command_outcome.Findings`, an `int` whose value is the exit code, and `cli.main` does not
+  journal one. Only doctor's report returns it; a doctor that cannot read its state and every
+  failed repair still return a plain code and are journaled. Rejected: a new exit code (breaks
+  every `doctor || ...`), and inferring from "no diagnostics noted" (silent when a later change
+  notes one).
+- **Plain review.** A `--repair-settings` review of plans whose every step is a `settings` or
+  `harness` component renders through one `render_settings_move` shared by the CLI and the TUI:
+  from, to, which installations, "nothing is installed or removed"; no "Risks: high risk
+  execution" (a plugin's own risk, reviewed at install, not this change's) and no digests.
+  `[v]` in the TUI still shows the full plan beneath.
+- **Only the move goes without a digest.** A misplaced installation whose plan is wider (its
+  payload is also gone, say) is shown in full, and its confirmation needs `--expect`: D-533's
+  "no digest" rests on the plan being only the move, so it is now checked rather than assumed.
+- **TUI start.** The Dashboard says `● opencode does not load N installations — open Doctor and
+  press m`, and Doctor's entry carries `● N to move`, as Registries carries `● N to sync`.
+

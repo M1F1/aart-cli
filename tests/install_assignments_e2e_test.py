@@ -7,12 +7,12 @@ project scope and opencode at user scope, in one prepared action and one complet
 
 from __future__ import annotations
 
-import json
 import pathlib
 import unittest
 
 from aart_cli.application.execution import InstallationExecutionStatus
 from aart_cli.application.installation_inputs import OwnedInputSource
+from aart_cli.domain import jsonc
 from aart_cli.domain.harness import Scope, mcp_target
 from aart_cli.domain.identifiers import ArtifactCoordinate, ArtifactIdentity
 from aart_cli.domain.inputs import PromptedConfigValue, SecretProviderReference
@@ -95,7 +95,7 @@ class EachPairIsOneInstallationTest(unittest.TestCase):
             target = mcp_target(harness, scope)
             settings = pathlib.Path(root) / target.settings_file
             self.assertTrue(settings.is_file(), f"{harness} was not registered under its root")
-            servers = json.loads(settings.read_text(encoding="utf-8"))[target.server_map]
+            servers = jsonc.loads(settings.read_text(encoding="utf-8"))[target.server_map]
             self.assertEqual(set(servers), {f"github-company-{scope.value}"})
         # Nothing of the user-scope installation lands in the project, or the other way round.
         self.assertFalse((pathlib.Path(self.project_root) / "opencode.json").exists())

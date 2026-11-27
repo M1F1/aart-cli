@@ -711,6 +711,18 @@ class _AfterInstall:
 
 
 @dataclass(frozen=True, slots=True)
+class _PendingSettingsMove:
+    """Doctor's reviewed move of every misplaced User-scope settings entry (§218).
+
+    One repair per installation, confirmed as one plan: its digest covers every one of theirs in
+    order, as `doctor --repair-settings` does, so moving ten servers is one decision.
+    """
+
+    repairs: tuple[PreparedConfiguredRepair, ...]
+    review_digest: str
+
+
+@dataclass(frozen=True, slots=True)
 class _PendingMcpTest:
     records: tuple[InstalledRecord, ...]
     review_digest: str
@@ -841,6 +853,7 @@ _Pending = (
     | _PendingCredentialAction
     | PreparedConfiguredConfiguration
     | _PendingMcpTest
+    | _PendingSettingsMove
 )
 
 #: The host is passed rather than closed over: setup describes the installation that just happened,
@@ -1697,6 +1710,8 @@ class LocalConsumerActions:
             return self._prepare_configuration(command)
         if action is ConsumerActionKind.VERIFY_REPAIR:
             return self._prepare_repair(command)
+        if action is ConsumerActionKind.REPAIR_SETTINGS:
+            return self._prepare_settings_move(command)
         if action is ConsumerActionKind.REGISTRY_SYNC:
             return self._prepare_registry_refresh(command)
         if action is ConsumerActionKind.REGISTRY_REMOVE:
@@ -2994,6 +3009,53 @@ class LocalConsumerActions:
             ),
         )
 
+    def _prepare_settings_move(self, command: ConsumerUiCommand) -> ConsumerActionUpdate:
+        """Review moving every User-scope entry aart-cli wrote into a settings file its harness
+        does not read, into the one it does (§218): the screen's `doctor --repair-settings`."""
+
+        host = self._host(Scope.USER.value)
+        inspected = read_installed_inspections(
+            state_root=host.state_root,
+            harness_root=host.harness_root,
+            credential_providers=self._context.credential_providers,
+            scope=Scope.USER,
+        )
+        if isinstance(inspected, Err):
+            return self._declined(command, _refusal(inspected.diagnostics))
+        misplaced = tuple(item for item in inspected.value.inspections if item.moves)
+        if not misplaced:
+            return self._declined(
+                command,
+                _lines(
+                    "nothing to move: every entry aart-cli wrote is in the settings file "
+                    "its harness reads"
+                ),
+            )
+        repairs = []
+        for item in misplaced:
+            prepared = prepare_configured_repair(item, policy=self._context.policy)
+            if isinstance(prepared, Err):
+                return self._declined(command, _refusal(prepared.diagnostics))
+            repairs.append(prepared.value)
+        digests = [str(item.review_digest) for item in repairs]
+        digest = (
+            digests[0]
+            if len(digests) == 1
+            else "sha256:" + hashlib.sha256("\n".join(digests).encode("utf-8")).hexdigest()
+        )
+        self._pending_host = host
+        self._pending = _PendingSettingsMove(tuple(repairs), digest)
+        self._pending_action = command.action
+        first, *rest = (project_lifecycle_plan(item.plan) for item in repairs)
+        return ConsumerActionUpdate(
+            self.source(lifecycle=replace(first, also=tuple(rest))),
+            ConsumerUiEvent(
+                ConsumerUiEventKind.ACTION_PREPARED,
+                action=command.action,
+                review_digest=digest,
+            ),
+        )
+
     def _installed_inputs(self, record: InstalledRecord) -> Result[tuple[RuntimeInput, ...]]:
         """Read an installed artifact's approved input declarations from its immutable object."""
 
@@ -3317,6 +3379,8 @@ class LocalConsumerActions:
             return self._execute_repository_adoption(command, pending)
         if isinstance(pending, PreparedConfiguredRepair):
             return self._execute_repair(command, pending)
+        if isinstance(pending, _PendingSettingsMove):
+            return self._execute_settings_move(command, pending)
         if isinstance(pending, PreparedConfiguredConfiguration):
             return self._execute_configuration(command, pending)
         if isinstance(pending, PreparedSourceSync):
@@ -4195,6 +4259,31 @@ class LocalConsumerActions:
             return self._failed(command, _refusal(completed.diagnostics))
         self._machine = completed.value.machine
         return self._recorded(command, completed.value.recorded.receipt.recorded_at)
+
+    def _execute_settings_move(
+        self, command: ConsumerUiCommand, pending: _PendingSettingsMove
+    ) -> ConsumerActionUpdate:
+        """Each reviewed repair in order; the first that fails stops the rest, and what moved
+        before it stays moved and recorded."""
+
+        recorded = ""
+        for repair in pending.repairs:
+            recorded_at, today = self._moment()
+            completed = complete_configured_repair(
+                repair,
+                expected_review_digest=repair.review_digest,
+                host=self._reviewed_host(),
+                policy=self._context.policy,
+                credential_providers=self._context.credential_providers,
+                recorded_at=recorded_at,
+                today=today,  # type: ignore[arg-type]
+                offline=self._context.offline,
+            )
+            if isinstance(completed, Err):
+                return self._failed(command, _refusal(completed.diagnostics))
+            self._machine = completed.value.machine
+            recorded = completed.value.recorded.receipt.recorded_at
+        return self._recorded(command, recorded)
 
     def _execute_configuration(
         self, command: ConsumerUiCommand, pending: PreparedConfiguredConfiguration

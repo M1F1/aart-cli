@@ -1,11 +1,26 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-16, RUNTIME-DEPENDENCIES-VERIFIED)
+## Where the work is (2026-11-27, OPENCODE-USER-SETTINGS-FILE)
+
+**OPENCODE-USER-SETTINGS-FILE** (§218, D-530): user MCP servers and plugins go into
+`~/.config/opencode/opencode.jsonc` when it exists (created when neither file does), edited as
+JSON with comments with a `// managed by aart-cli` marker; an entry left in `opencode.json` is drift
+that doctor names and its reviewed repair moves. Branch `fix/opencode-user-config-file` (worktree
+`/Users/mifi/code/aart-cli-opencode-config`), PR #147, with the review addressed: uninstall and
+moves leave no emptied `plugin`/`mcp` key, `doctor --repair` takes several artifacts under one
+digest, the live opencode tests no longer read a cut-off pipe. D-533 adds the two commands a
+team hands out, `aart-cli doctor --repair-settings` and `... --yes` (and `m` on the TUI's
+Doctor), with a stderr notice after every `consume` command; D-534 stops journaling doctor's
+findings as failures, says the move plainly and puts it on the TUI Dashboard. Next, before 2026-11-30, the owner
+asked for B-277 (OpenCode usage telemetry) first; then **P0-2**, an `opencode2` harness variant
+detected by version, on a branch stacked on this one; then B-276 and B-278. Evidence:
+`docs/refactor/slices/OPENCODE-USER-SETTINGS-FILE-the-file-opencode-reads.md`.
+
+## Where the work was (2026-11-16, RUNTIME-DEPENDENCIES-VERIFIED, released in 0.32.1)
 
 **RUNTIME-DEPENDENCIES-VERIFIED** (§217, D-529, closes B-029): an MCP's Python packages are checked
 against its recorded descriptor wherever the installation is judged. Branch
-`fix/runtime-dependencies-verified` (worktree `/Users/mifi/code/aart-cli-deps-check`); the PR is what
-remains. Evidence: `docs/refactor/slices/RUNTIME-DEPENDENCIES-VERIFIED-packages-checked.md`.
+`fix/runtime-dependencies-verified`, merged (#145). Evidence: `docs/refactor/slices/RUNTIME-DEPENDENCIES-VERIFIED-packages-checked.md`.
 
 ## Where the work was (2026-11-16, PYTHON-INSTALLERS-DOCTOR, released in 0.32.0)
 

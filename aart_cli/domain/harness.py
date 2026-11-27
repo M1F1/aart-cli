@@ -13,7 +13,8 @@ resolved into the launcher, so the harness never learns a value and never has to
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from enum import Enum
 
 from .artifacts import ArtifactKind
@@ -38,7 +39,14 @@ __all__ = [
     "McpTarget",
     "MemoryTarget",
     "PluginTarget",
+    "SETTINGS_NOTE",
     "Scope",
+    "SettingsSyntax",
+    "is_settings_note",
+    "settings_files",
+    "settings_note",
+    "settings_syntax",
+    "sibling_settings_paths",
     "delivery_destination",
     "delivery_target",
     "hook_event_path",
@@ -52,6 +60,10 @@ __all__ = [
     "registered_command",
     "registration_from_data",
     "registration_to_data",
+    "annotates",
+    "chosen_settings_file",
+    "preferred_settings_path",
+    "SETTINGS_FILES",
 ]
 
 _SERVER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -229,25 +241,152 @@ MCP_TARGETS: dict[tuple[str, Scope], McpTarget] = {
         "mcp",
         entry_shape=McpEntryShape.TYPED_COMMAND_VECTOR,
     ),
+    # The user row names `opencode.jsonc`, the file created when neither user file exists; which
+    # one an install writes is chosen on the machine (`SETTINGS_FILES`, §218).
     ("opencode", Scope.USER): McpTarget(
         "opencode",
         Scope.USER,
-        ".config/opencode/opencode.json",
+        ".config/opencode/opencode.jsonc",
         "mcp",
         entry_shape=McpEntryShape.TYPED_COMMAND_VECTOR,
     ),
 }
 
 
-def mcp_target(harness: str, scope: Scope) -> McpTarget:
-    """The measured target for `harness` at `scope`, or `KeyError` if nobody has measured it."""
+#: The settings files a harness reads at one scope where it reads more than one, the one aart-cli
+#: writes first (§218, D-530). OpenCode 1.x and 2 started on their own read both user files and
+#: merge them. An OpenCode 2 a launcher starts with `OPENCODE_CONFIG` reads exactly one: the
+#: launcher passes `opencode.jsonc` whenever it exists, else `opencode.json` (2.3.2, 2026-11-27),
+#: and OpenCode 1.x writes an empty `opencode.jsonc` the first time it runs. So the file every
+#: variant reads is `opencode.jsonc` when it is there, `opencode.json` when only it is, and a new
+#: `opencode.jsonc` when neither is. The project rows are not here: a launcher gathers the
+#: project's configuration itself and passes it whole.
+SETTINGS_FILES: dict[tuple[str, Scope], tuple[str, ...]] = {
+    ("opencode", Scope.USER): (
+        ".config/opencode/opencode.jsonc",
+        ".config/opencode/opencode.json",
+    ),
+}
+
+
+def settings_files(harness: str, scope: Scope, default: str) -> tuple[str, ...]:
+    """Every file `harness` reads this scope's settings from, preferred first; `default` alone
+    where it reads one."""
+
+    return SETTINGS_FILES.get((harness, scope), (default,))
+
+
+def chosen_settings_file(
+    harness: str, scope: Scope, default: str, exists: Callable[[str], bool]
+) -> str:
+    """The one of `harness`'s settings files an install writes, given which are on this machine.
+
+    `exists` is asked about paths relative to the scope's root. The first present candidate wins,
+    and with none present the first is created -- the one every variant of the harness reads.
+    """
+
+    candidates = settings_files(harness, scope, default)
+    for candidate in candidates:
+        if exists(candidate):
+            return candidate
+    return candidates[0]
+
+
+def sibling_settings_paths(harness: str, path: str) -> tuple[str, ...]:
+    """The other files `harness` reads beside the settings file at absolute `path`, if any.
+
+    An entry aart-cli moved to the file a harness reads must not stay behind in the one it no
+    longer reads: OpenCode started on its own reads both, and would load a plugin twice.
+    """
+
+    for (named, _scope), candidates in SETTINGS_FILES.items():
+        if named != harness:
+            continue
+        for candidate in candidates:
+            if path.endswith("/" + candidate):
+                root = path[: -len(candidate)]
+                return tuple(root + other for other in candidates if other != candidate)
+    return ()
+
+
+def preferred_settings_path(harness: str, path: str, exists: Callable[[str], bool]) -> str:
+    """The settings file `harness` reads on this machine in place of the one at absolute `path`.
+
+    `path` itself where the harness reads only one file there, or where it is already the one
+    `chosen_settings_file` would choose. `exists` is asked about absolute paths.
+    """
+
+    siblings = sibling_settings_paths(harness, path)
+    if not siblings:
+        return path
+    for (named, _scope), candidates in SETTINGS_FILES.items():
+        if named != harness:
+            continue
+        for candidate in candidates:
+            if path.endswith("/" + candidate):
+                root = path[: -len(candidate)]
+                ordered = [root + item for item in candidates]
+                return next((item for item in ordered if exists(item)), ordered[0])
+    return path
+
+
+class SettingsSyntax(str, Enum):
+    """How a harness spells its settings files.
+
+    OpenCode reads its configuration as JSON with comments -- `//`, `/* */` and trailing commas --
+    in `opencode.json` and `opencode.jsonc` alike. Every other harness here reads strict JSON, and
+    a comment aart-cli let through there would be one that harness refuses to start with.
+    """
+
+    JSON = "json"
+    JSONC = "jsonc"
+
+
+def settings_syntax(harness: str) -> SettingsSyntax:
+    return SettingsSyntax.JSONC if harness == "opencode" else SettingsSyntax.JSON
+
+
+#: The comment aart-cli writes above an entry it adds to a `.jsonc` settings file (§218). It tells
+#: the person reading the file what manages the entry; it is never what aart-cli decides ownership
+#: by, which is the receipt's (INV-257), so a comment moved, edited or deleted changes nothing.
+SETTINGS_NOTE = "managed by aart-cli"
+
+
+def settings_note(artifact: str) -> str:
+    return f"{SETTINGS_NOTE}: {artifact}"
+
+
+def is_settings_note(comment: str) -> bool:
+    return comment == SETTINGS_NOTE or comment.startswith(SETTINGS_NOTE + ":")
+
+
+def annotates(path: str) -> bool:
+    """Whether a file at `path` is one aart-cli writes its note into: only `.jsonc`, which is
+    comment-bearing by name. `opencode.json` is read with comments too, but a person -- or their
+    editor -- expects JSON there."""
+
+    return path.endswith(".jsonc")
+
+
+def mcp_target(
+    harness: str, scope: Scope, *, exists: Callable[[str], bool] | None = None
+) -> McpTarget:
+    """The measured target for `harness` at `scope`, or `KeyError` if nobody has measured it.
+
+    With `exists`, the target's settings file is the one an install on this machine writes
+    (`chosen_settings_file`); without, it is the table's.
+    """
 
     try:
-        return MCP_TARGETS[(harness, scope)]
+        target = MCP_TARGETS[(harness, scope)]
     except KeyError:
         raise KeyError(
             f"no measured MCP target for harness {harness!r} at {scope.value} scope"
         ) from None
+    if exists is None:
+        return target
+    chosen = chosen_settings_file(harness, scope, target.settings_file, exists)
+    return target if chosen == target.settings_file else replace(target, settings_file=chosen)
 
 
 @dataclass(frozen=True, slots=True)
@@ -716,20 +855,29 @@ class PluginTarget:
 PLUGIN_TARGETS: dict[tuple[str, Scope], PluginTarget] = {
     ("opencode", Scope.PROJECT): PluginTarget("opencode", Scope.PROJECT, "opencode.json", "plugin"),
     ("opencode", Scope.USER): PluginTarget(
-        "opencode", Scope.USER, ".config/opencode/opencode.json", "plugin"
+        "opencode", Scope.USER, ".config/opencode/opencode.jsonc", "plugin"
     ),
 }
 
 
-def plugin_target(harness: str, scope: Scope) -> PluginTarget:
-    """The measured plugin list for `harness`, or `KeyError` if nobody measured one."""
+def plugin_target(
+    harness: str, scope: Scope, *, exists: Callable[[str], bool] | None = None
+) -> PluginTarget:
+    """The measured plugin list for `harness`, or `KeyError` if nobody measured one.
+
+    `exists` chooses the settings file as it does for `mcp_target`.
+    """
 
     try:
-        return PLUGIN_TARGETS[(harness, scope)]
+        target = PLUGIN_TARGETS[(harness, scope)]
     except KeyError:
         raise KeyError(
             f"no measured plugin target for harness {harness!r} at {scope.value} scope"
         ) from None
+    if exists is None:
+        return target
+    chosen = chosen_settings_file(harness, scope, target.settings, exists)
+    return target if chosen == target.settings else replace(target, settings=chosen)
 
 
 def memory_target(harness: str, scope: Scope) -> MemoryTarget:
@@ -873,8 +1021,11 @@ def registration_from_data(data: object) -> McpRegistration:
         target = mcp_target(harness, Scope(scope))
     except (KeyError, ValueError):
         raise ValueError(f"no measured MCP target for {harness} at {scope} scope") from None
-    if target.settings_file != settings_file:
-        raise ValueError(f"{harness} settings live at {target.settings_file}, not {settings_file}")
+    readable = settings_files(target.harness, target.scope, target.settings_file)
+    if settings_file not in readable:
+        raise ValueError(f"{harness} settings live at {' or '.join(readable)}, not {settings_file}")
+    if settings_file != target.settings_file:
+        target = replace(target, settings_file=settings_file)
     return McpRegistration(target, server, command, tuple(arguments), Transport(transport))
 
 

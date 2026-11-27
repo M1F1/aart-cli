@@ -20,7 +20,6 @@ import os
 import pathlib
 import secrets
 import shutil
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -93,6 +92,7 @@ from aart_cli.store.model import (
 from tests.fixture_versions import with_fixture_versions
 from tests.marketplace_lifecycle_e2e_test import _environment
 from tests.mcp_stdio_e2e_test import SERVER_SOURCE, _FileProvider, speak
+from tests.opencode_live import OpenCodeUnavailable, run_opencode
 from tests.reference_registry import (
     ESSENTIALS,
     memory,
@@ -447,25 +447,10 @@ class InstalledOpenCodeReadsWhatWasInstalledTest(unittest.TestCase):
         self.home.mkdir()
 
     def _run(self, *arguments: str) -> str:
-        environment = {
-            key: value
-            for key, value in os.environ.items()
-            if not key.startswith("XDG_") and key != "OPENCODE_CONFIG"
-        }
-        environment["HOME"] = str(self.home)
-        completed = subprocess.run(
-            ("opencode", *arguments),
-            capture_output=True,
-            text=True,
-            timeout=120,
-            cwd=str(self.project),
-            env=environment,
-        )
-        if completed.returncode != 0:
-            self.skipTest(
-                f"`opencode {' '.join(arguments)}` is unavailable: {completed.stderr[:200]}"
-            )
-        return completed.stdout
+        try:
+            return run_opencode(*arguments, home=self.home, cwd=self.project, timeout=120)
+        except OpenCodeUnavailable as unavailable:
+            self.skipTest(str(unavailable))
 
     def test_a_skill_delivered_where_the_table_says_is_found_by_opencode(self) -> None:
         target = delivery_target("opencode", Scope.PROJECT, ArtifactKind.SKILL)

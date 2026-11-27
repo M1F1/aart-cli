@@ -21,7 +21,7 @@ from typing import Callable, Optional, Sequence, Tuple
 
 from . import cli_docs
 from .cli_parser import build_parser
-from .command_outcome import OK
+from .command_outcome import OK, Findings
 from .commands import upgrade
 from .model import Request
 from .outcomes import CommandOutcome
@@ -219,6 +219,7 @@ def _to_request(args: argparse.Namespace) -> Request:
         expect=getattr(args, "expect", None),
         for_default_branch=bool(getattr(args, "for_default_branch", False)),
         check_index=bool(getattr(args, "check_index", False)),
+        repair_settings=bool(getattr(args, "repair_settings", False)),
         install_inputs=tuple(getattr(args, "install_inputs", None) or ()),
         set_later=bool(getattr(args, "set_later", False)),
         inputs_action=getattr(args, "inputs_action", None),
@@ -409,11 +410,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         except Exception as error:
             record_command_failure(request, "crash", place, error=error)
             raise
-    if code != OK:
+    # A check that worked and found something to fix exits nonzero, and is no failure (D-534).
+    if code != OK and not isinstance(code, Findings):
         record_command_failure(request, "error", place, exit_code=code, diagnostics=tuple(codes))
     if args.command == "consume":
         # §211: after the command, on stderr, so a `--json` document on stdout is unchanged.
         upgrade.announce_newer_aart_cli(
+            lambda line: print(line, file=sys.stderr), user_home=request.user_home
+        )
+        from .commands import doctor
+
+        doctor.announce_misplaced_settings(
             lambda line: print(line, file=sys.stderr), user_home=request.user_home
         )
     return code

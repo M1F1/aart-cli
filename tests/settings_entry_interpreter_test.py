@@ -249,7 +249,7 @@ class UnmergeSettingsEntryTest(SettingsEntryInterpreterTest):
 
         self.interpreter.apply(self._effect())
 
-        self.assertEqual([], self._entries())
+        self.assertEqual({}, self._document())
 
     def test_applying_it_twice_leaves_one_entry(self) -> None:
         self._write({"hooks": {"PreToolUse": [self._written()]}})
@@ -269,12 +269,17 @@ class UnmergeSettingsEntryTest(SettingsEntryInterpreterTest):
         self.assertIsInstance(applied, Ok)
         self.assertEqual("\n", self.destination.read_text(encoding="utf-8"))
 
-    def test_the_list_itself_is_left_for_the_harness_that_owns_it(self) -> None:
-        self._write({"hooks": {"PreToolUse": [self._written()]}})
+    def test_a_list_it_empties_goes_and_one_still_holding_anything_stays(self) -> None:
+        # §218: a list this entry was the last of goes, and so does what held only it; anybody
+        # else's list, and every other key, stays.
+        theirs = {"matcher": "Read", "hooks": [{"type": "command", "command": "/bin/true"}]}
+        self._write(
+            {"model": "x", "hooks": {"PreToolUse": [self._written()], "PostToolUse": [theirs]}}
+        )
 
         self.interpreter.apply(self._effect())
 
-        self.assertEqual([], self._document()["hooks"]["PreToolUse"])
+        self.assertEqual({"model": "x", "hooks": {"PostToolUse": [theirs]}}, self._document())
 
     def _written(self) -> dict:
         return {"matcher": "Bash", "hooks": [{"type": "command", "command": COMMAND}]}

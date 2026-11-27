@@ -326,8 +326,9 @@ def remove_settings_entry(
 ) -> Result[dict[str, object]]:
     """`document` without this hook's entry, and with everyone else's left standing.
 
-    The list itself stays, empty if it has to. It is the harness's key, not this artifact's, and an
-    uninstall that tidied it away would be removing something it never created.
+    A list this removal empties goes with it, and so does every object above it that held nothing
+    else (§218): it was there for this entry, so a file goes back to what it said before the install.
+    A list that was already empty, or still holds anybody's entry, stays.
     """
 
     if not isinstance(entry, (HookEntry, PluginEntry)):
@@ -345,4 +346,21 @@ def remove_settings_entry(
         # rather than writing a key the harness never had.
         assert isinstance(document, dict)
         return Ok(document)
+    if not remaining and found.value:
+        return Ok(_pruned(chain, parts))
     return Ok(_rebuilt(chain, parts, remaining))
+
+
+def _pruned(chain: list[dict[str, object]], parts: list[object]) -> dict[str, object]:
+    """The document without the key at the path, nor any object above it left empty by that."""
+
+    rebuilt: dict[str, object] | None = None
+    for depth in range(len(parts) - 1, -1, -1):
+        holder = dict(chain[depth])
+        if rebuilt is None:
+            holder.pop(str(parts[depth]), None)
+        else:
+            holder[str(parts[depth])] = rebuilt
+        rebuilt = None if (not holder and depth > 0) else holder
+    assert rebuilt is not None
+    return rebuilt

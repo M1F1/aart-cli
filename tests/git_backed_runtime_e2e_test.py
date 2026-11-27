@@ -332,7 +332,7 @@ class GitBackedUninstallE2ETest(unittest.TestCase):
 
             recorded = json.loads((env.project / ".mcp.json").read_text(encoding="utf-8"))
 
-            self.assertNotIn("notes", recorded["mcpServers"])
+            self.assertNotIn("notes", recorded.get("mcpServers", {}))
             self.assertFalse((runtime / "launch.sh").exists())
 
     def test_doctor_reports_a_clean_machine_rather_than_drift_it_cannot_repair(self) -> None:

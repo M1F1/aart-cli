@@ -307,22 +307,62 @@ each entry can still undo; credential health and which installations depend on i
 configuration this machine is ignoring, meaning disabled Registry subscriptions and fields your organization's
 policy has locked.
 
-Repair follows the same review-then-confirm boundary as everything else, one artifact at a time:
+Repair follows the same review-then-confirm boundary as everything else. Reviewing an artifact's
+minimal plan applies nothing:
 
 ```sh
-# Review one artifact's minimal plan — applies nothing
 aart-cli doctor --repair company/mcp/github
+```
 
-# Apply exactly the plan that review returned
+Confirming applies exactly the plan that review returned:
+
+```sh
 aart-cli doctor --repair company/mcp/github --yes --expect <digest>
 ```
 
 `--yes` without `--expect` is refused, and a machine that changed between the review and the
-confirmation returns the recomputed plan instead of applying the stale one. There is no flag that
-repairs everything.
+confirmation returns the recomputed plan instead of applying the stale one. Name several artifacts
+to review them together: one review lists every plan, and its single digest confirms all of them,
+so a change to any one of them asks for a new review. There is no flag that repairs everything;
+each artifact is named.
 
 What it cannot repair, it still reports: an artifact whose payload is missing or divergent is named
 with what is wrong, rather than being omitted because no repair for it exists.
+
+### OpenCode's user settings file
+
+For your user, opencode keeps its settings in `~/.config/opencode/opencode.jsonc` or
+`opencode.json`, and an OpenCode started by a launcher reads only the first that exists. aart-cli
+writes MCP servers and plugins into that same file, and creates `opencode.jsonc` when neither is
+there. It keeps your comments and layout, adds `// managed by aart-cli: <artifact>` above each entry
+it writes, and leaves every other entry alone. The comment is only for reading the file: deleting
+it changes nothing.
+
+If an entry sits in the file opencode does not read -- usually because `opencode.jsonc` appeared
+after the install -- every `aart-cli consume` command says so, and doctor lists them under
+*Settings files*. Two commands, the same for everybody, move all of them. The first shows what
+would change and changes nothing:
+
+```bash
+aart-cli doctor --repair-settings
+```
+
+The second moves them:
+
+```bash
+aart-cli doctor --repair-settings --yes
+```
+
+The review lists which entries move from which file to which. If an installation also needs
+something else repaired, its whole plan is shown instead and the last line is the command with
+`--expect <digest>` that confirms it. In the TUI the Dashboard says when the harness does not load
+something; open Doctor and press `m`, then Enter.
+
+`aart-cli doctor` exits 1 while something needs attention. That is its answer, not a failure of
+aart-cli, so it is not recorded as one. Uninstalling removes
+what aart-cli added: its entry, its marker comment, and a `plugin` list or `mcp` object it
+created and left empty. A list or object you wrote a comment into stays, empty, with your
+comment. A project's settings stay in `opencode.json` at the project root.
 
 ### When pip or uv fails
 

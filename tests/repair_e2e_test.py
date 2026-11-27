@@ -335,7 +335,7 @@ class RepairedInstallationTest(InstalledFixture):
         settings = json.loads(
             (self.scope / ".tabnine/agent/settings.json").read_text(encoding="utf-8")
         )
-        self.assertNotIn("github", settings["mcpServers"])
+        self.assertNotIn("github", settings.get("mcpServers", {}))
 
 
 if __name__ == "__main__":
