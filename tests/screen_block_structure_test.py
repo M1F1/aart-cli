@@ -360,6 +360,7 @@ class SettingsBlockTest(TestCase):
                 "Installation",
                 "  Default scope: Project",
                 "  Python installer: pip",
+                "  OpenCode: 1",
                 "Updates",
                 "  Show available updates: on",
                 "Advanced",
