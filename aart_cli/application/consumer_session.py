@@ -27,6 +27,7 @@ from datetime import date
 from aart_cli.application.settings_relocation import SettingsMove
 from aart_cli.domain.credentials import CredentialObservation, CredentialState
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import ArtifactCoordinate, InputId
 from aart_cli.domain.inputs import BoundInput, BoundInputs, RuntimeInput
 from aart_cli.domain.inspection import EnvironmentFacts
@@ -311,7 +312,17 @@ def assemble_consumer_machine(
         timeline,
         actions,
         registries,
-        project_doctor(views, collections),
+        project_doctor(
+            views,
+            collections,
+            tuple(
+                item.installation
+                for item in inspections
+                if item.moves
+                and (owner := item.record.receipt.owner) is not None
+                and owner.scope is Scope.USER
+            ),
+        ),
         tuple(sorted(configurations, key=lambda item: (item.coordinate, item.harness))),
     )
 
@@ -377,7 +388,9 @@ def with_offered_versions(machine: ConsumerMachine, offered: Mapping[str, str]) 
         ),
         installed=views,
         collections=collections,
-        doctor=None if machine.doctor is None else project_doctor(views, collections),
+        doctor=None
+        if machine.doctor is None
+        else project_doctor(views, collections, machine.doctor.misplaced_settings),
     )
 
 

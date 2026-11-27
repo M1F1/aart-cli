@@ -12,17 +12,25 @@ choice, the same JSONC editor and the same sibling clean-up as an MCP server.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
+import os
 import pathlib
+import shlex
 import tempfile
 import unittest
 from unittest import mock
 
+from aart_cli import cli
+from aart_cli.application.consumer_ui import ConsumerScreen
 from aart_cli.domain import jsonc
 from aart_cli.domain.result import Ok
 from aart_cli.io.receipt_store import LocalReceiptStore
 from tests.configured_install_command_e2e_test import _Environment
 from tests.configured_installation_draft_e2e_test import _published_registries
+from tests.consumer_application_e2e_test import _actions, _at, _drive
+from tests.consumer_shell_test import ENTER
 from tests.plugin_installation_e2e_test import AUTHORED, COORDINATE, MANIFEST, MODULE
 
 HELPERS = "company/plugin/helpers"
@@ -101,6 +109,154 @@ class OpenCodeUserSettingsFileTest(unittest.TestCase):
         (item,) = payload["items"]
         return item["health"]
 
+    def _with_stderr(self, *argv: str) -> tuple[int, str, str]:
+        """A command as a person types it, without `--project`: its stdout and its stderr."""
+
+        out, err = io.StringIO(), io.StringIO()
+        with (
+            mock.patch.dict(os.environ, self.env.xdg, clear=False),
+            contextlib.redirect_stdout(out),
+            contextlib.redirect_stderr(err),
+            mock.patch("os.getcwd", return_value=str(self.env.project)),
+        ):
+            code = cli.main(list(argv))
+        return code, out.getvalue(), err.getvalue()
+
+    def _two_misplaced(self) -> None:
+        with mock.patch(
+            "tests.configured_install_command_e2e_test._published_registry",
+            lambda _authored, **keywords: _published_registries(AUTHORED, HELPERS_TREE, **keywords),
+        ):
+            self.env.publish(AUTHORED)
+        self._write(self.json, json.dumps({"$schema": SCHEMA, "plugin": ["mine"]}, indent=2))
+        for coordinate in (COORDINATE, HELPERS):
+            self._run(
+                "consume",
+                "install",
+                coordinate,
+                "--profile",
+                "opencode",
+                "--scope",
+                "user",
+                "--yes",
+            )
+        # OpenCode 1.x ran once: from now on a launcher passes only this file.
+        self._write(self.jsonc, OPENCODES_OWN)
+
+    def test_the_same_two_commands_move_every_misplaced_entry_for_everybody(self) -> None:
+        self._two_misplaced()
+
+        # Any consume command says so, on stderr, with the command; its --json stays a document.
+        code, out, err = self._with_stderr("consume", "list", "--json")
+        self.assertEqual(0, code, err)
+        json.loads(out)
+        self.assertIn("OpenCode does not load 2 MCP servers or plugins aart-cli installed", err)
+        self.assertIn("Review moving them: aart-cli doctor --repair-settings", err)
+
+        code, review, err = self._with_stderr("doctor", "--repair-settings")
+        self.assertEqual(0, code, err)
+        self.assertTrue(
+            review.rstrip("\n").endswith(
+                "Reviewed only; nothing changed. To apply exactly this:\n"
+                "  aart-cli doctor --repair-settings --yes"
+            ),
+            review,
+        )
+        self.assertEqual(2, len(self._ours(self.json)), "a review wrote")
+
+        code, applied, err = self._with_stderr("doctor", "--repair-settings", "--yes")
+
+        self.assertEqual(0, code, applied + err)
+        self.assertEqual(2, len(self._ours(self.jsonc)))
+        self.assertEqual(["mine"], self._plugins(self.json))
+        self.assertEqual([str(self.jsonc)] * 2, self._destinations())
+        code, out, err = self._with_stderr("consume", "list")
+        self.assertEqual("", err, "the notice outlived the repair")
+        code, again, _err = self._with_stderr("doctor", "--repair-settings", "--yes")
+        self.assertEqual(0, code)
+        self.assertIn("Nothing to move", again)
+
+    def test_nothing_misplaced_means_no_notice(self) -> None:
+        self._install()
+
+        code, _out, err = self._with_stderr("consume", "list")
+
+        self.assertEqual(0, code)
+        self.assertNotIn("does not load", err)
+
+    def test_repair_settings_names_no_artifact(self) -> None:
+        self._two_misplaced()
+
+        code, out, _err = self._with_stderr(
+            "doctor", "--repair-settings", "--repair", COORDINATE + "@7.0.0", "--yes"
+        )
+
+        self.assertNotEqual(0, code)
+        self.assertIn("names no artifact", out)
+        self.assertEqual(2, len(self._ours(self.json)), "a refused repair wrote")
+
+    def test_a_named_repair_review_ends_with_the_exact_command_that_applies_it(self) -> None:
+        self._write(self.json, json.dumps({"$schema": SCHEMA}, indent=2))
+        self._install()
+        self._write(self.jsonc, OPENCODES_OWN)
+        named = COORDINATE + "@7.0.0"
+        code, _out, _err = self._with_stderr(
+            "doctor", "--repair", named, "--scope", "user", "--yes"
+        )
+        self.assertNotEqual(0, code, "a named repair applied without the reviewed digest")
+
+        code, review, err = self._with_stderr("doctor", "--repair", named, "--scope", "user")
+        self.assertEqual(0, code, err)
+        command = review.rstrip("\n").rsplit("\n", 1)[1].strip()
+        argv = shlex.split(command)
+        self.assertEqual(
+            ["aart-cli", "doctor", "--repair", named, "--scope", "user", "--yes", "--expect"],
+            argv[:-1],
+        )
+        code, applied, err = self._with_stderr(*argv[1:])
+
+        self.assertEqual(0, code, applied + err)
+        self.assertEqual(1, len(self._ours(self.jsonc)))
+
+    def test_the_tui_doctor_moves_every_misplaced_entry_with_one_key_and_enter(self) -> None:
+        self._two_misplaced()
+        handler = _actions(self.env)
+
+        reviewed, terminal, handler = _drive(
+            self.env, _at(ConsumerScreen.DOCTOR), ord("m"), actions=handler
+        )
+        self.assertEqual(ConsumerScreen.VERIFY_REPAIR, reviewed.session.screen)
+        self.assertEqual(2, len(self._ours(self.json)), "a review wrote")
+
+        finished, terminal, handler = _drive(
+            self.env, _at(ConsumerScreen.DOCTOR), ord("m"), ENTER, actions=_actions(self.env)
+        )
+
+        self.assertEqual(ConsumerScreen.ACTIVITY_DETAILS, finished.session.screen, terminal.last)
+        self.assertEqual(2, len(self._ours(self.jsonc)))
+        self.assertEqual(["mine"], self._plugins(self.json))
+        self.assertEqual([str(self.jsonc)] * 2, self._destinations())
+
+    def test_the_tui_doctor_says_what_is_misplaced_and_which_key_moves_it(self) -> None:
+        self._two_misplaced()
+
+        _finished, terminal, _handler = _drive(self.env, _at(ConsumerScreen.DOCTOR))
+
+        self.assertTrue(
+            terminal.screen_containing("2 written in a settings file the harness does not read"),
+            terminal.last,
+        )
+        self.assertTrue(terminal.screen_containing("Press m to move them all"), terminal.last)
+
+    def test_the_tui_doctor_has_nothing_to_move_when_nothing_is_misplaced(self) -> None:
+        self._install()
+
+        finished, terminal, _handler = _drive(self.env, _at(ConsumerScreen.DOCTOR), ord("m"))
+
+        self.assertEqual(ConsumerScreen.DOCTOR, finished.session.screen)
+        self.assertFalse(terminal.screen_containing("Press m to move"), terminal.last)
+        self.assertTrue(terminal.screen_containing("nothing to move"), terminal.last)
+
     def test_with_neither_file_it_creates_opencode_jsonc_and_says_what_manages_the_entry(
         self,
     ) -> None:
@@ -172,7 +328,7 @@ class OpenCodeUserSettingsFileTest(unittest.TestCase):
 
         _code, text = self.env.run_text("doctor")
         named = (f"{HELPERS}@1.0.0", f"{COORDINATE}@7.0.0")
-        self.assertIn(f"Move them: aart-cli doctor --repair {' '.join(named)} --scope user", text)
+        self.assertIn("Move them all: aart-cli doctor --repair-settings", text)
         review = self._run("doctor", "--repair", *named, "--scope", "user")
         self.assertEqual(list(named), review["coordinates"])
         self.assertEqual(2, len(self._ours(self.json)), "a review wrote")
@@ -264,7 +420,7 @@ class OpenCodeUserSettingsFileTest(unittest.TestCase):
         _code, text = self.env.run_text("doctor")
         self.assertIn("written in ~/.config/opencode/opencode.json\n", text)
         self.assertIn("opencode reads ~/.config/opencode/opencode.jsonc instead", text)
-        self.assertIn(f"Move them: aart-cli doctor --repair {COORDINATE}@7.0.0 --scope user", text)
+        self.assertIn("Move them all: aart-cli doctor --repair-settings\n", text)
 
     def test_doctor_is_silent_about_settings_files_when_nothing_is_misplaced(self) -> None:
         self._install()

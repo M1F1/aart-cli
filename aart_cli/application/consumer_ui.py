@@ -97,6 +97,9 @@ class ConsumerActionKind(str, Enum):
     INSTALL = "install"
     UPDATE = "update"
     VERIFY_REPAIR = "verify-repair"
+    #: Doctor's move of every User-scope entry aart-cli wrote into a settings file its harness
+    #: does not read: one review, one confirmation, the TUI's `doctor --repair-settings` (§218).
+    REPAIR_SETTINGS = "repair-settings"
     UNINSTALL = "uninstall"
     SOURCE_SYNC = "source-sync"
     CANDIDATE_PROMOTION = "candidate-promotion"
@@ -1519,6 +1522,7 @@ _ACTION_REVIEW: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
         ConsumerScreen.INSTALLED_ARTIFACT_DETAILS,
     ): ConsumerScreen.VERIFY_REPAIR,
     (ConsumerActionKind.VERIFY_REPAIR, ConsumerScreen.DOCTOR): ConsumerScreen.VERIFY_REPAIR,
+    (ConsumerActionKind.REPAIR_SETTINGS, ConsumerScreen.DOCTOR): ConsumerScreen.VERIFY_REPAIR,
     (ConsumerActionKind.UNINSTALL, ConsumerScreen.INSTALLED): ConsumerScreen.UNINSTALL_REVIEW,
     (
         ConsumerActionKind.UNINSTALL,
@@ -1779,6 +1783,8 @@ def _request_action(
             ConsumerActionKind.SOURCE_ADD,
             ConsumerActionKind.REGISTRY_INIT,
             ConsumerActionKind.REPOSITORY_SCAN,
+            # Doctor's move is about every misplaced entry, never the row under the cursor.
+            ConsumerActionKind.REPAIR_SETTINGS,
         )
         and not focus
     ):
@@ -1809,6 +1815,7 @@ def _request_action(
     if action in (
         ConsumerActionKind.UNINSTALL,
         ConsumerActionKind.VERIFY_REPAIR,
+        ConsumerActionKind.REPAIR_SETTINGS,
         ConsumerActionKind.MCP_TEST,
     ):
         # A lifecycle action is about installations: what is ticked on Installed, and there only.
@@ -2190,6 +2197,7 @@ _ACTION_RUNNING: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationS
         ConsumerActionKind.VERIFY_REPAIR,
         ConsumerScreen.VERIFY_REPAIR,
     ): None,
+    (ConsumerActionKind.REPAIR_SETTINGS, ConsumerScreen.VERIFY_REPAIR): None,
     (ConsumerActionKind.UNINSTALL, ConsumerScreen.UNINSTALL_REVIEW): ConsumerScreen.UNINSTALLING,
     (ConsumerActionKind.SOURCE_SYNC, MaintainerScreen.SOURCE_SYNC): None,
     (
@@ -2274,6 +2282,10 @@ _ACTION_RESULT: dict[tuple[ConsumerActionKind, ApplicationScreen], ApplicationSc
     (ConsumerActionKind.UPDATE, ConsumerScreen.UPDATING): ConsumerScreen.ACTIVITY_DETAILS,
     (
         ConsumerActionKind.VERIFY_REPAIR,
+        ConsumerScreen.VERIFY_REPAIR,
+    ): ConsumerScreen.ACTIVITY_DETAILS,
+    (
+        ConsumerActionKind.REPAIR_SETTINGS,
         ConsumerScreen.VERIFY_REPAIR,
     ): ConsumerScreen.ACTIVITY_DETAILS,
     (ConsumerActionKind.UNINSTALL, ConsumerScreen.UNINSTALLING): ConsumerScreen.ACTIVITY_DETAILS,
@@ -2925,6 +2937,7 @@ _SCREEN_BINDINGS: dict[ApplicationScreen, tuple[_ScreenBinding, ...]] = {
     ),
     ConsumerScreen.DOCTOR: (
         _action_binding("r", "Repair issues", ConsumerActionKind.VERIFY_REPAIR),
+        _action_binding("m", "Move settings", ConsumerActionKind.REPAIR_SETTINGS),
     ),
     ConsumerScreen.REGISTRIES: (
         _navigate_binding("a", "Add Registry", ConsumerScreen.REGISTRY_ADD),

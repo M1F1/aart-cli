@@ -16,18 +16,19 @@ Pure: which files exist is asked through `exists`, with absolute paths.
 from __future__ import annotations
 
 import posixpath
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 
-from aart_cli.domain.harness import McpRegistration, preferred_settings_path
+from aart_cli.domain.harness import McpRegistration, Scope, preferred_settings_path
 from aart_cli.domain.receipts import (
     ArtifactReceipt,
     ArtifactSettingsEntry,
     InstallationReceipt,
+    InstalledRecord,
     PlacedArtifactReceipt,
 )
 
-__all__ = ["SettingsMove", "relocated_receipt", "settings_moves"]
+__all__ = ["SettingsMove", "misplaced_user_installations", "relocated_receipt", "settings_moves"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,3 +106,25 @@ def relocated_receipt(
             return receipt
         return replace(receipt, settings=settings)
     return receipt
+
+
+def misplaced_user_installations(
+    records: Iterable[InstalledRecord], *, exists: Callable[[str], bool]
+) -> tuple[str, ...]:
+    """The User-scope installations with an entry in a settings file their harness does not read.
+
+    Their exact coordinates, each once, in the order given: what `doctor --repair-settings`
+    reviews and moves. Only a User-scope owner is asked about, because only a User-scope settings
+    file has a sibling its harness may read instead (`SETTINGS_FILES`); a receipt with no owner
+    names no root to judge it under.
+    """
+
+    found: dict[str, None] = {}
+    for record in records:
+        owner = getattr(record.receipt, "owner", None)
+        if owner is None or owner.scope is not Scope.USER:
+            continue
+        relocated = relocated_receipt(record.receipt, root=owner.root, exists=exists)
+        if settings_moves(record.receipt, relocated):
+            found.setdefault(str(record.coordinate), None)
+    return tuple(found)

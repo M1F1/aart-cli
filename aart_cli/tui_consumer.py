@@ -1940,6 +1940,13 @@ def doctor_status(view: DoctorView, profile: PresentationProfile) -> tuple[str, 
         # behind "ready" either.
         (f"{unset} still hold {SKIPPED_INPUT}",) if unset else (),
         ("Actions: repair issues using minimal reconciliation plans.",) if view.actions else (),
+        # §218: what OpenCode never loads is said outright, with the one key that moves it all.
+        (
+            f"{len(view.misplaced_settings)} written in a settings file the harness does not read",
+            "Press m to move them all to the file it reads.",
+        )
+        if view.misplaced_settings
+        else (),
         repairable,
     )
 

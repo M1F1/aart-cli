@@ -93,6 +93,25 @@ Targeted mutations, each turning only its named test red: keeping an emptied lis
 (`holds_foreign_comment`), no fallback (`render_settings_text`), and the combined digest replaced
 by the first installation's.
 
+## Two commands for everybody (2026-11-27, D-533)
+
+The owner hands users a short instruction, so the move needs no coordinates and no digest:
+`aart-cli doctor --repair-settings` reviews moving every misplaced User-scope entry,
+`--repair-settings --yes` moves them, and the TUI's Doctor does the same with `m` and Enter.
+
+- `test_the_same_two_commands_move_every_misplaced_entry_for_everybody`: `consume list --json`
+  says so on stderr and its stdout still parses; the review ends with the exact apply command and
+  writes nothing; `--yes` moves both; the notice is gone afterwards; a second `--yes` has nothing
+  to move.
+- `test_nothing_misplaced_means_no_notice`, `test_repair_settings_names_no_artifact`.
+- `test_a_named_repair_review_ends_with_the_exact_command_that_applies_it`: `--repair` without
+  `--expect` still refuses, and the review's last line, run as printed, applies.
+- TUI: `test_the_tui_doctor_moves_every_misplaced_entry_with_one_key_and_enter`,
+  `..._says_what_is_misplaced_and_which_key_moves_it`, `..._has_nothing_to_move_when_nothing_is_misplaced`.
+
+Targeted mutations: `if not item.moves` in `_prepare_settings_move` turns the two TUI move tests
+red; `if not settings_moves(...)` in `misplaced_user_installations` turns the two CLI tests red.
+
 ## Not done here
 
 `XDG_CONFIG_HOME` (B-275); project plugin directories for `opencode2` (B-276); usage plugin

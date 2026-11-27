@@ -13352,3 +13352,30 @@ exists and `opencode.json` only when it does not, and OpenCode 1.x leaves an emp
   `--all`: the boundary that nothing is repaired unnamed stands. (3) The live opencode tests read
   stdout from a file, not a pipe, because a Bun process may exit before a pipe past 64 KB is
   drained (`opencode debug config` on 1.18.30), and drop every `OPENCODE_*` variable.
+
+## D-533 — One doctor command moves every misplaced OpenCode entry (REPAIR-SETTINGS)
+
+§218 amended (owner request, 2026-11-27). The owner hands users a short instruction to make
+aart-cli work with OpenCode 2 again, and asked for commands that are concrete and few. The move of
+D-530 needed every coordinate typed out, then the digest copied into `--yes --expect`: correct,
+and too much to put in an instruction for many people whose installations differ.
+
+- `doctor --repair-settings` reviews the move of every User-scope installation with an entry in a
+  settings file its harness does not read (`misplaced_user_installations`, pure over receipts and
+  which files exist), as the one multi-repair plan of D-530's review. `--repair-settings --yes`
+  applies it without `--expect`. That is the one exception to "confirm with the reviewed digest",
+  and it is safe for the reason the digest exists: the plan is recomputed and reviewed at the
+  moment it is applied, it can only move entries aart-cli wrote and recorded, and a review already
+  printed nothing it then does differently. `--expect`, when passed, still has to match.
+  `--repair-settings` with `--repair` is refused.
+- Every `consume` command, after the newer-version notice, says on stderr how many are not loaded
+  and names the command; silent when none are, and a defect in finding out says nothing (advice
+  never fails a command). `--json` stdout is unchanged.
+- The TUI's Doctor counts them and binds `m` (Move settings) to the same review on screen 30
+  (Verify repair); Enter confirms, as with any reviewed lifecycle action. It needs no focused row.
+- A `doctor --repair` review now ends with the exact command that applies it, shell-quoted, digest
+  included, instead of "re-run with --yes and --expect".
+- Rejected: moving automatically on install or upgrade (the brief: files change only after a
+  confirmation); a `--repair-all` across every kind of drift (out of this request, and a broader
+  claim than settings moves).
+

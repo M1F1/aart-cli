@@ -60,7 +60,9 @@ class DoctorRepairCommandE2ETest(unittest.TestCase):
             self.assertIn(f"Review repair for {INSTALLED_COORDINATE}", output)
             self.assertIn("Components changing: delivery:claude", output)
             self.assertIn("Review identity: sha256:", output)
-            self.assertIn("--yes and --expect", output)
+            # The confirmation boundary is the exact command, carrying the reviewed digest.
+            identity = output.split("Review identity: ", 1)[1].split()[0]
+            self.assertIn(f"--yes --expect {identity}", output)
             self.assertNotIn("reinstall", output.lower())
             self.assertFalse(_delivered(env).exists())
 

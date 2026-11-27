@@ -13129,6 +13129,16 @@ such an OpenCode never reads: they were installed and invisible. Reported 2026-1
   named, so confirming it applies exactly the reviewed set and a change to any one asks for a new
   review. Each is still named; there is no repair of everything. One named installation keeps the
   single review shape. (Amended 2026-11-27, review of D-530.)
+- **One command for everybody.** `aart-cli doctor --repair-settings` names no artifact: it reviews
+  the move of every User-scope installation that has an entry in a settings file its harness does
+  not read, as one plan under the digest above, and `aart-cli doctor --repair-settings --yes`
+  applies it. That confirmation needs no `--expect`, because it reviews again what it applies and
+  moves only what is misplaced; `--expect`, when given, must still match. It is the same two
+  commands on every machine, so a team can hand them out. Doctor's *Settings files* section names
+  it for User scope; every `consume` command says on stderr how many are not loaded and names it,
+  and says nothing when none are; the TUI's Doctor counts them and `m` reviews the same move, which
+  Enter confirms. A `doctor --repair` review ends with the exact command that applies it,
+  digest included. (Amended 2026-11-27 by D-533, owner request.)
 - **Nothing left behind.** Removing an entry (uninstall, or the other file's copy on a move) also
   removes the list or object it was the last member of, and every object that then holds nothing,
   in every harness's settings file: an install into a file without a `plugin` key, then an

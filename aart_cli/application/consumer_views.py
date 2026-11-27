@@ -3922,11 +3922,15 @@ class DoctorView:
     actions: tuple[str, ...]
     artifacts: tuple[InstalledArtifactView, ...] = ()
     collections: tuple[InstalledCollectionView, ...] = ()
+    #: The User-scope installations with an entry in a settings file their harness does not read,
+    #: which `m` moves together (§218).
+    misplaced_settings: tuple[str, ...] = ()
 
 
 def project_doctor(
     artifacts: tuple[InstalledArtifactView, ...],
     collections: tuple[InstalledCollectionView, ...] = (),
+    misplaced_settings: tuple[str, ...] = (),
 ) -> DoctorView:
     if any(not isinstance(item, InstalledArtifactView) for item in artifacts):
         raise ValueError("Doctor projection needs installed artifact views")
@@ -3949,6 +3953,7 @@ def project_doctor(
         actions,
         artifacts,
         collections,
+        misplaced_settings,
     )
 
 

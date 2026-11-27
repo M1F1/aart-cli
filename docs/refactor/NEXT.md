@@ -8,7 +8,9 @@ JSON with comments with a `// managed by aart-cli` marker; an entry left in `ope
 that doctor names and its reviewed repair moves. Branch `fix/opencode-user-config-file` (worktree
 `/Users/mifi/code/aart-cli-opencode-config`), PR #147, with the review addressed: uninstall and
 moves leave no emptied `plugin`/`mcp` key, `doctor --repair` takes several artifacts under one
-digest, the live opencode tests no longer read a cut-off pipe. Next, before 2026-11-30, the owner
+digest, the live opencode tests no longer read a cut-off pipe. D-533 adds the two commands a
+team hands out, `aart-cli doctor --repair-settings` and `... --yes` (and `m` on the TUI's
+Doctor), with a stderr notice after every `consume` command. Next, before 2026-11-30, the owner
 asked for B-277 (OpenCode usage telemetry) first; then **P0-2**, an `opencode2` harness variant
 detected by version, on a branch stacked on this one; then B-276 and B-278. Evidence:
 `docs/refactor/slices/OPENCODE-USER-SETTINGS-FILE-the-file-opencode-reads.md`.

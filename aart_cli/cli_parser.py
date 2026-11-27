@@ -101,7 +101,9 @@ def build_parser() -> argparse.ArgumentParser:
             "configuration this machine is ignoring, meaning disabled sources and fields your "
             "organization's policy has locked. On its own the report changes nothing. With "
             "--repair, review the plans of the exact installed artifacts it names, as one; applying "
-            "it requires both --yes and the prior review's --expect digest. This command never reinstalls everything."
+            "it requires both --yes and the prior review's --expect digest. With --repair-settings, review "
+            "moving every entry aart-cli wrote into a settings file the harness does not read; "
+            "--yes moves them. This command never reinstalls everything."
         ),
     )
     p.add_argument(
@@ -112,11 +114,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="review the minimal repair plan of one or more named installed artifacts, "
         "confirmed together",
     )
+    p.add_argument(
+        "--repair-settings",
+        dest="repair_settings",
+        action="store_true",
+        help="review moving every MCP server and plugin aart-cli wrote into a settings file "
+        "your harness does not read (OpenCode's opencode.json beside opencode.jsonc); "
+        "--yes moves them",
+    )
     _add_scope(p)
     p.add_argument(
         "--yes",
         action="store_true",
-        help="apply the selected repair; requires --expect from a prior review",
+        help="apply the selected repair; --repair requires --expect from a prior review",
     )
     p.add_argument(
         "--expect",
