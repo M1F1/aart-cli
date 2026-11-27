@@ -20,6 +20,7 @@ from aart_cli.application.consumer_session import (
     InstalledInspection,
     credential_dependants,
     installed_collections,
+    settings_move_views,
 )
 from aart_cli.application.consumer_views import (
     ActivityView,
@@ -57,9 +58,11 @@ from aart_cli.domain.diagnostics import Diagnostic, Severity, diagnostic_to_data
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.installation_owner import describe_installation
 from aart_cli.domain.policies import EffectivePolicy
+from aart_cli.domain.reconciliation import Component
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.io.configured_installation_action import InstallationHost
 from aart_cli.io.configured_repair_action import (
+    PreparedConfiguredRepair,
     complete_configured_repair,
     prepare_configured_repair,
 )
@@ -78,6 +81,7 @@ from aart_cli.tui_consumer import (
     render_doctor,
     render_lifecycle_plan,
     render_receipt_detail,
+    render_settings_move,
 )
 
 from ._configured_runtime import load_runtime_configuration
@@ -361,6 +365,35 @@ def _candidate_history_lines(unbound: tuple[UnboundCandidateHistory, ...]) -> tu
     return tuple(lines)
 
 
+def _only_moves(prepared: PreparedConfiguredRepair) -> bool:
+    """Whether a repair changes nothing but where settings entries are written."""
+
+    repair = prepared.plan.repair
+    return (
+        bool(repair.steps)
+        and not repair.escalated
+        and all(
+            step.component.component in (Component.SETTINGS, Component.HARNESS)
+            for step in repair.steps
+        )
+    )
+
+
+def _move_lines(
+    prepared_items: list[
+        tuple[str, EffectivePolicy, PreparedConfiguredRepair, InstalledInspection]
+    ],
+    *,
+    done: bool,
+) -> tuple[str, ...]:
+    """A settings move as the TUI draws it, from the inspections it was planned from (D-534)."""
+
+    return render_settings_move(
+        settings_move_views(tuple(inspection for *_rest, inspection in prepared_items)),
+        done=done,
+    )
+
+
 def _repair_command(names: tuple[str, ...], scope: Scope, project_root: str, digest: str) -> str:
     """The command that applies a reviewed `--repair`, ready to copy."""
 
@@ -379,6 +412,7 @@ def _run_repair(
     user_home: str,
     credential_providers: tuple[CredentialProviderPort, ...],
     apply_command: str | None = None,
+    settings_review: bool = False,
 ) -> int:
     """Review or execute exact repairs through the configured lifecycle adapter: one, or several
     named together and confirmed as one plan.
@@ -386,6 +420,8 @@ def _run_repair(
     A review ends with the command that applies it, ready to copy. `apply_command` is that
     command where it needs no digest -- `--repair-settings`, which reviews again what it applies
     -- and then `--yes` alone confirms; otherwise it is this one with `--yes --expect <digest>`.
+    With `settings_review`, a set of plans that only move settings entries is reviewed and
+    reported as that move: where from, where to, and nothing else (D-534).
     """
 
     scope = Scope(request.scope)
@@ -433,11 +469,13 @@ def _run_repair(
         prepared = prepare_configured_repair(matches[0], policy=policy)
         if isinstance(prepared, Err):
             return _emit_error(request, prepared, _REPAIR_OPERATION, finalized=False)
-        prepared_items.append((coordinate, policy, prepared.value))
+        prepared_items.append((coordinate, policy, prepared.value, matches[0]))
 
     # One artifact keeps its own digest; several are reviewed and confirmed as one plan, whose
     # digest covers every one of theirs in order (§218: moving ten servers is one decision).
-    digests = [str(item.review_digest) for _coordinate, _policy, item in prepared_items]
+    digests = [
+        str(item.review_digest) for _coordinate, _policy, item, _inspection in prepared_items
+    ]
     digest = (
         digests[0]
         if len(digests) == 1
@@ -449,13 +487,19 @@ def _run_repair(
             "review_digest": str(item.review_digest),
             "review": repair_plan_to_data(item.plan.repair),
         }
-        for coordinate, _policy, item in prepared_items
+        for coordinate, _policy, item, _inspection in prepared_items
     ]
     review_lines: list[str] = []
-    for _coordinate, _policy, item in prepared_items:
+    for _coordinate, _policy, item, _inspection in prepared_items:
         review_lines.extend(
             render_lifecycle_plan(project_lifecycle_plan(item.plan), PresentationProfile.LESS_INFO)
         )
+    moving = settings_review and all(
+        _only_moves(item) and inspection.moves
+        for _coordinate, _policy, item, inspection in prepared_items
+    )
+    if moving:
+        review_lines = list(_move_lines(prepared_items, done=False))
     if len(prepared_items) == 1:
         base: dict[str, object] = {
             "schema_version": 1,
@@ -466,8 +510,9 @@ def _run_repair(
             "review": reviews[0]["review"],
         }
     else:
-        review_lines.append(f"Repairs reviewed together: {len(prepared_items)}")
-        review_lines.append(f"Review identity: {digest}")
+        if not moving:
+            review_lines.append(f"Repairs reviewed together: {len(prepared_items)}")
+            review_lines.append(f"Review identity: {digest}")
         base = {
             "schema_version": 1,
             "operation": _REPAIR_OPERATION,
@@ -476,9 +521,14 @@ def _run_repair(
             "review_digest": digest,
             "reviews": reviews,
         }
+    # Only a plan that is nothing but the move is confirmed without its digest: anything wider
+    # it found on the way is reviewed and confirmed as any repair is (D-534).
+    without_digest = apply_command is not None and moving
     if not request.yes:
         confirm = (
             f"{apply_command} --yes"
+            if without_digest
+            else f"{apply_command} --yes --expect {digest}"
             if apply_command is not None
             else _repair_command(request.names, scope, project_root, digest)
         )
@@ -493,7 +543,7 @@ def _run_repair(
         )
         return _common.OK
 
-    expected_missing = request.expect is None and apply_command is None
+    expected_missing = request.expect is None and not without_digest
     if expected_missing or (request.expect is not None and request.expect != digest):
         expected = request.expect
         message = (
@@ -527,7 +577,7 @@ def _run_repair(
     results: list[dict[str, object]] = []
     lines: list[str] = []
     successful = True
-    for coordinate, policy, item in prepared_items:
+    for coordinate, policy, item, _inspection in prepared_items:
         now = datetime.now(timezone.utc)
         completed = complete_configured_repair(
             item,
@@ -573,6 +623,8 @@ def _run_repair(
             }
         )
         lines.extend(render_receipt_detail(receipt, PresentationProfile.LESS_INFO))
+    if moving and successful:
+        lines = list(_move_lines(prepared_items, done=True))
     if len(prepared_items) == 1:
         (only,) = results
         _emit(
@@ -641,6 +693,7 @@ def _run_repair_settings(
         user_home=user_home,
         credential_providers=credential_providers,
         apply_command=REPAIR_SETTINGS_COMMAND,
+        settings_review=True,
     )
 
 
@@ -833,4 +886,6 @@ def run(request: Request) -> int:
                 )
             )
         )
-    return _common.OK if payload["ok"] else _common.ERROR
+    # Exit 1 still says something needs attention, as a finding: the check itself worked, so
+    # it is not journaled as a failure aart-cli met (§215, D-534).
+    return _common.OK if payload["ok"] else _common.FOUND

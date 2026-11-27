@@ -112,6 +112,21 @@ The owner hands users a short instruction, so the move needs no coordinates and 
 Targeted mutations: `if not item.moves` in `_prepare_settings_move` turns the two TUI move tests
 red; `if not settings_moves(...)` in `misplaced_user_installations` turns the two CLI tests red.
 
+## Review of D-533 (2026-11-27, D-534)
+
+- `test_a_doctor_that_finds_misplaced_entries_exits_1_and_is_no_failure`: exit 1, nothing
+  journaled; a refused `--expect` still journals `("error", "doctor")`.
+- `test_the_move_review_says_from_where_to_where_and_nothing_alarming`: no `Risks:`, no
+  `sha256:`, from/to and both coordinates, in the review and after the move.
+- `test_a_move_that_also_repairs_something_else_is_confirmed_by_its_digest`: payload gone too, the
+  full plan is shown, `--yes` without `--expect` is refused and writes nothing.
+- `test_the_tui_says_on_the_dashboard_what_opencode_does_not_load`: Dashboard line, `● 2 to move`
+  on Doctor, a plain `m` review, both gone after the move.
+- Targeted mutations: `isinstance(code, int)` in `cli.main`, and doctor returning a plain `ERROR`,
+  each turn the journal test red; `without_digest` ignoring `moving` turns the wider-plan test red;
+  the TUI review never using `_reviewed_settings_move` turns the Dashboard test red.
+- Related set: 1385 tests over 122 files pass. B-281 records an untracked plugin entry module.
+
 ## Not done here
 
 `XDG_CONFIG_HOME` (B-275); project plugin directories for `opencode2` (B-276); usage plugin

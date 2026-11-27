@@ -5478,3 +5478,11 @@ The live tests take `opencode` from `PATH`, which is 1.18.30 on the test machine
 a pinned OpenCode 2 binary both plainly and as a launcher starts it (`OPENCODE_CONFIG`,
 `OPENCODE_CONFIG_DIR`, `OPENCODE_CONFIG_PROJECT_DISABLE`), locally only, never in CI.
 
+## B-281 — A deleted OpenCode plugin entry module is not drift
+
+Status: **open**, found 2026-11-27 writing D-534's tests.
+
+Deleting `~/.config/opencode/aart-cli/plugin/<alias>/<name>/index.js`, the module the settings entry
+points at, leaves the installation `ready` until the payload beside it is also gone, so doctor
+offers no repair for a plugin OpenCode cannot load. Measure that module as part of the delivery.
+

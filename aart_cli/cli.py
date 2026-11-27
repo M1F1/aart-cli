@@ -21,7 +21,7 @@ from typing import Callable, Optional, Sequence, Tuple
 
 from . import cli_docs
 from .cli_parser import build_parser
-from .command_outcome import OK
+from .command_outcome import OK, Findings
 from .commands import upgrade
 from .model import Request
 from .outcomes import CommandOutcome
@@ -410,7 +410,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         except Exception as error:
             record_command_failure(request, "crash", place, error=error)
             raise
-    if code != OK:
+    # A check that worked and found something to fix exits nonzero, and is no failure (D-534).
+    if code != OK and not isinstance(code, Findings):
         record_command_failure(request, "error", place, exit_code=code, diagnostics=tuple(codes))
     if args.command == "consume":
         # §211: after the command, on stderr, so a `--json` document on stdout is unchanged.

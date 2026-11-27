@@ -18,6 +18,7 @@ import json
 import os
 import pathlib
 import shlex
+import shutil
 import tempfile
 import unittest
 from unittest import mock
@@ -243,8 +244,7 @@ class OpenCodeUserSettingsFileTest(unittest.TestCase):
         _finished, terminal, _handler = _drive(self.env, _at(ConsumerScreen.DOCTOR))
 
         self.assertTrue(
-            terminal.screen_containing("2 written in a settings file the harness does not read"),
-            terminal.last,
+            terminal.screen_containing("opencode does not load 2 installations"), terminal.last
         )
         self.assertTrue(terminal.screen_containing("Press m to move them all"), terminal.last)
 
@@ -256,6 +256,88 @@ class OpenCodeUserSettingsFileTest(unittest.TestCase):
         self.assertEqual(ConsumerScreen.DOCTOR, finished.session.screen)
         self.assertFalse(terminal.screen_containing("Press m to move"), terminal.last)
         self.assertTrue(terminal.screen_containing("nothing to move"), terminal.last)
+
+    def test_a_doctor_that_finds_misplaced_entries_exits_1_and_is_no_failure(self) -> None:
+        self._two_misplaced()
+        journaled: list[tuple[str, str]] = []
+        with mock.patch(
+            "aart_cli.commands.report.record_in_application_home",
+            lambda _home, kind, place, **_keywords: journaled.append((kind, place)),
+        ):
+            code, _out, _err = self._with_stderr("doctor")
+            self.assertEqual(1, code)
+            self.assertEqual([], journaled, "a finding was journaled as a failure")
+            # A command that did fail still is.
+            code, _out, _err = self._with_stderr(
+                "doctor", "--repair-settings", "--yes", "--expect", "sha256:" + "0" * 64
+            )
+
+        self.assertNotEqual(0, code)
+        self.assertEqual([("error", "doctor")], journaled)
+
+    def test_the_move_review_says_from_where_to_where_and_nothing_alarming(self) -> None:
+        self._two_misplaced()
+
+        code, review, _err = self._with_stderr("doctor", "--repair-settings")
+        self.assertEqual(0, code)
+        code, applied, _err = self._with_stderr("doctor", "--repair-settings", "--yes")
+
+        self.assertEqual(0, code, applied)
+        for text in (review, applied):
+            self.assertNotIn("Risks:", text)
+            self.assertNotIn("sha256:", text)
+            self.assertIn(
+                "opencode: from ~/.config/opencode/opencode.json to "
+                "~/.config/opencode/opencode.jsonc",
+                text,
+            )
+            self.assertIn(f"- {COORDINATE}@7.0.0", text)
+            self.assertIn(f"- {HELPERS}@1.0.0", text)
+        self.assertIn("nothing is installed or removed", review)
+        self.assertIn("Moved 2 installations:", applied)
+
+    def test_a_move_that_also_repairs_something_else_is_confirmed_by_its_digest(self) -> None:
+        self._two_misplaced()
+        payload = self.config / "aart-cli/plugin/company/helpers/payload"
+        for path in (payload, *payload.rglob("*")):
+            path.chmod(0o755 if path.is_dir() else 0o644)
+        shutil.rmtree(payload)
+
+        code, review, _err = self._with_stderr("doctor", "--repair-settings")
+        self.assertEqual(0, code, review)
+        self.assertNotIn("nothing is installed or removed", review)
+        self.assertIn("Components changing: payload", review)
+        command = review.rstrip("\n").rsplit("\n", 1)[1].strip()
+        self.assertTrue(
+            command.startswith("aart-cli doctor --repair-settings --yes --expect sha256:")
+        )
+
+        code, _out, _err = self._with_stderr("doctor", "--repair-settings", "--yes")
+        self.assertNotEqual(0, code, "a wider repair applied without its reviewed digest")
+        self.assertFalse(payload.exists())
+        self.assertEqual(2, len(self._ours(self.json)), "a refused repair wrote")
+
+    def test_the_tui_says_on_the_dashboard_what_opencode_does_not_load(self) -> None:
+        self._two_misplaced()
+
+        _finished, terminal, _handler = _drive(self.env, _at(ConsumerScreen.DASHBOARD))
+        self.assertTrue(
+            terminal.screen_containing(
+                "● opencode does not load 2 installations — open Doctor and press m"
+            ),
+            terminal.last,
+        )
+        self.assertTrue(terminal.screen_containing("Doctor  ● 2 to move"), terminal.last)
+
+        _reviewed, terminal, _handler = _drive(self.env, _at(ConsumerScreen.DOCTOR), ord("m"))
+        self.assertTrue(terminal.screen_containing("Enter moves them."), terminal.last)
+        self.assertFalse(terminal.screen_containing("Risks:"), terminal.last)
+        self.assertFalse(terminal.screen_containing("sha256:"), terminal.last)
+
+        self._with_stderr("doctor", "--repair-settings", "--yes")
+        _finished, terminal, _handler = _drive(self.env, _at(ConsumerScreen.DASHBOARD))
+        self.assertFalse(terminal.screen_containing("does not load"), terminal.last)
+        self.assertFalse(terminal.screen_containing("to move"), terminal.last)
 
     def test_with_neither_file_it_creates_opencode_jsonc_and_says_what_manages_the_entry(
         self,

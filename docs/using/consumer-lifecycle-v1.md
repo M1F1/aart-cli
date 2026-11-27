@@ -353,7 +353,13 @@ The second moves them:
 aart-cli doctor --repair-settings --yes
 ```
 
-In the TUI, open Doctor and press `m`, then Enter. Uninstalling removes
+The review lists which entries move from which file to which. If an installation also needs
+something else repaired, its whole plan is shown instead and the last line is the command with
+`--expect <digest>` that confirms it. In the TUI the Dashboard says when the harness does not load
+something; open Doctor and press `m`, then Enter.
+
+`aart-cli doctor` exits 1 while something needs attention. That is its answer, not a failure of
+aart-cli, so it is not recorded as one. Uninstalling removes
 what aart-cli added: its entry, its marker comment, and a `plugin` list or `mcp` object it
 created and left empty. A list or object you wrote a comment into stays, empty, with your
 comment. A project's settings stay in `opencode.json` at the project root.

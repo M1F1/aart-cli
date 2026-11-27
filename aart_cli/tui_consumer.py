@@ -86,6 +86,7 @@ from aart_cli.application.consumer_views import (
     RemediationView,
     RunningInstallationView,
     RunningStepView,
+    SettingsMoveView,
     artifact_usage_row,
     default_harness_row,
     install_path_label,
@@ -115,6 +116,7 @@ from aart_cli.application.consumer_views import (
     secrets_to_ask,
     setting_purpose,
     setting_rows,
+    settings_move_installations,
     target_from_row,
     target_row,
     under_collections,
@@ -1590,6 +1592,8 @@ def _badge(target: ApplicationScreen, view: DashboardView, *, show_updates: bool
         return f"  {NEW_MARK} {view.registries_to_sync} to sync"
     if target is ConsumerScreen.AART_CLI_UPDATE and view.aart_cli_available:
         return f"  {NEW_MARK} {view.aart_cli_available}"
+    if target is ConsumerScreen.DOCTOR and view.settings_to_move:
+        return f"  {NEW_MARK} {len(settings_move_installations(view.settings_to_move))} to move"
     return ""
 
 
@@ -1649,6 +1653,14 @@ def render_dashboard(view: DashboardView, *, show_updates: bool = True) -> tuple
             f"{NEW_MARK} {view.registries_to_sync} "
             f"{'registry has' if view.registries_to_sync == 1 else 'registries have'} newer content"
             " — open Registries and press s"
+        )
+    if view.settings_to_move:
+        # §218, D-534: what a harness never loads is said where everybody starts.
+        harnesses = ", ".join(dict.fromkeys(item.harness for item in view.settings_to_move))
+        count = len(settings_move_installations(view.settings_to_move))
+        lines.append(
+            f"{NEW_MARK} {harnesses} does not load {count} "
+            f"{'installation' if count == 1 else 'installations'} — open Doctor and press m"
         )
     if view.aart_cli_available:
         lines.append(
@@ -1942,13 +1954,70 @@ def doctor_status(view: DoctorView, profile: PresentationProfile) -> tuple[str, 
         ("Actions: repair issues using minimal reconciliation plans.",) if view.actions else (),
         # §218: what OpenCode never loads is said outright, with the one key that moves it all.
         (
-            f"{len(view.misplaced_settings)} written in a settings file the harness does not read",
+            *render_settings_move(view.misplaced_settings, done=False)[:-1],
             "Press m to move them all to the file it reads.",
         )
         if view.misplaced_settings
         else (),
         repairable,
     )
+
+
+def render_settings_move(moves: tuple[SettingsMoveView, ...], *, done: bool) -> tuple[str, ...]:
+    """A move of settings entries as the person sees it: the file each leaves, the one it goes
+    to, and which installations. No risk level and no digest: the artifacts were reviewed when
+    they were installed, and only where their entries are written changes (§218, D-534)."""
+
+    groups: dict[tuple[str, str, str], list[str]] = {}
+    for item in moves:
+        named = groups.setdefault((item.harness, item.recorded, item.read), [])
+        if item.coordinate not in named:
+            named.append(item.coordinate)
+    count = len(settings_move_installations(moves))
+    them = "1 installation" if count == 1 else f"{count} installations"
+    harnesses = ", ".join(dict.fromkeys(item.harness for item in moves))
+    lines = [
+        f"Moved {them}:"
+        if done
+        else f"{harnesses} does not load {them}: their entries are in a file it does not read."
+    ]
+    for (harness, recorded, read), coordinates in groups.items():
+        lines.append(f"{harness}: from {recorded} to {read}, the file {harness} reads")
+        lines.extend(f"- {coordinate}" for coordinate in coordinates)
+    lines.append(
+        f"They load the next time {harnesses} starts."
+        if done
+        else "Moving them changes only where each entry is written: nothing is installed or removed."
+    )
+    return tuple(lines)
+
+
+def _reviewed_settings_move(state: ConsumerUiState, screens) -> tuple[SettingsMoveView, ...]:
+    """The settings move a held Doctor `m` review is, when every plan in it changes nothing but
+    where settings entries are written; otherwise nothing, and the full plan is drawn (D-534)."""
+
+    lifecycle = screens.lifecycle
+    if (
+        state.action is not ConsumerActionKind.REPAIR_SETTINGS
+        or lifecycle is None
+        or screens.doctor is None
+    ):
+        return ()
+    plans = (lifecycle, *lifecycle.also)
+    if not all(
+        plan.steps
+        and not plan.escalated
+        and all(step.component.split(":")[0] in ("settings", "harness") for step in plan.steps)
+        for plan in plans
+    ):
+        return ()
+    artifacts = {plan.artifact for plan in plans}
+    moves = tuple(
+        item for item in screens.doctor.misplaced_settings if item.coordinate in artifacts
+    )
+    if {item.coordinate for item in moves} != artifacts:
+        return ()
+    return moves
 
 
 def render_doctor(view: DoctorView, profile: PresentationProfile) -> tuple[str, ...]:
@@ -5921,11 +5990,15 @@ class CanonicalScreenSource:
         if screen in _PLAN_SCREENS:
             return self._plan(screen, state)
         if screen in _LIFECYCLE_SCREENS:
-            return (
-                ("Nothing has been planned yet.",)
-                if screens.lifecycle is None
-                else render_lifecycle_plan(screens.lifecycle, profile)
-            )
+            if screens.lifecycle is None:
+                return ("Nothing has been planned yet.",)
+            moves = _reviewed_settings_move(state, screens)
+            if moves:
+                plain = (*render_settings_move(moves, done=False), "Enter moves them.")
+                if profile is not PresentationProfile.MORE_INFO:
+                    return plain
+                return separate(plain, render_lifecycle_plan(screens.lifecycle, profile))
+            return render_lifecycle_plan(screens.lifecycle, profile)
         if screen in _OUTCOME_SCREENS:
             # A plan that is running now outranks whatever the last one produced: this is the
             # screen somebody is watching while it runs, and the previous result is not news.

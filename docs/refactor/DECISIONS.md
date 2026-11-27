@@ -13379,3 +13379,26 @@ and too much to put in an instruction for many people whose installations differ
   confirmation); a `--repair-all` across every kind of drift (out of this request, and a broader
   claim than settings moves).
 
+## D-534 — Doctor's findings are no failure; the settings move is said plainly (REPAIR-SETTINGS review)
+
+§215 and §218 amended (review of D-533, 2026-11-27).
+
+- **Findings.** `doctor` exiting 1 because an installation needs attention was journaled as an
+  `error` and sent as `aart_cli.failed`: during a migration every person who runs it would show
+  on the failure dashboard as a failure. Its exit code stays 1 -- scripts read it -- but its type
+  is `command_outcome.Findings`, an `int` whose value is the exit code, and `cli.main` does not
+  journal one. Only doctor's report returns it; a doctor that cannot read its state and every
+  failed repair still return a plain code and are journaled. Rejected: a new exit code (breaks
+  every `doctor || ...`), and inferring from "no diagnostics noted" (silent when a later change
+  notes one).
+- **Plain review.** A `--repair-settings` review of plans whose every step is a `settings` or
+  `harness` component renders through one `render_settings_move` shared by the CLI and the TUI:
+  from, to, which installations, "nothing is installed or removed"; no "Risks: high risk
+  execution" (a plugin's own risk, reviewed at install, not this change's) and no digests.
+  `[v]` in the TUI still shows the full plan beneath.
+- **Only the move goes without a digest.** A misplaced installation whose plan is wider (its
+  payload is also gone, say) is shown in full, and its confirmation needs `--expect`: D-533's
+  "no digest" rests on the plan being only the move, so it is now checked rather than assumed.
+- **TUI start.** The Dashboard says `● opencode does not load N installations — open Doctor and
+  press m`, and Doctor's entry carries `● N to move`, as Registries carries `● N to sync`.
+

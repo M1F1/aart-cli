@@ -12941,7 +12941,11 @@ interruption too.
 
 - **What a failure is.** A *crash*: an exception no handler took, in a command, the terminal
   application, a harness's usage hook or the telemetry sender. An *error*: a command that ended
-  with a nonzero exit code, or a terminal action that stopped. An *interruption*: Ctrl+C in a
+  with a nonzero exit code, or a terminal action that stopped. A check that read everything and
+  found something to fix is not one: `doctor` still exits 1 when an installation needs
+  attention, and that is its answer, not a failure aart-cli met, so it is not journaled; a doctor
+  that could not read what it checks, or a repair that failed, still is. (Amended 2026-11-27 by
+  D-534: during a migration everybody runs doctor, and each finding was counted as a failure.) An *interruption*: Ctrl+C in a
   command or the terminal application, or its end by SIGTERM (something stopping it) or SIGHUP (its
   terminal closed) while it runs, which is counted, not diagnosed. One by a signal has no
   exception type, is kept at the terminal action that was running if one was, and keeps the
@@ -13139,6 +13143,14 @@ such an OpenCode never reads: they were installed and invisible. Reported 2026-1
   and says nothing when none are; the TUI's Doctor counts them and `m` reviews the same move, which
   Enter confirms. A `doctor --repair` review ends with the exact command that applies it,
   digest included. (Amended 2026-11-27 by D-533, owner request.)
+- **Said plainly.** A review whose plans change nothing but where settings entries are written
+  is shown as that: the harness, the file each entry leaves, the file it goes to, the
+  installations, and that nothing is installed or removed, without a risk level or digest; the
+  artifact's own risk was reviewed when it was installed. After the move it says what moved and
+  that the harness loads it when it next starts. A plan that also repairs something else is shown
+  in full and confirmed with `--yes --expect <digest>`, as any repair. The TUI's Dashboard says
+  which harness does not load how many installations and to open Doctor and press `m`, and
+  Doctor's entry is marked with the count. (Amended 2026-11-27 by D-534, review of D-533.)
 - **Nothing left behind.** Removing an entry (uninstall, or the other file's copy on a move) also
   removes the list or object it was the last member of, and every object that then holds nothing,
   in every harness's settings file: an install into a file without a `plugin` key, then an
