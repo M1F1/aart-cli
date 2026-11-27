@@ -13392,3 +13392,53 @@ OpenCode 2.3.2 and 1.19.5.
   parser. Targeted mutations -- no `detached`, the whole environment, the first server instead of
   the longest, handing over without a server, no server needed in Python, the raw server name as
   the prefix -- each turn their named test red.
+
+## D-533 — One doctor command moves every misplaced OpenCode entry (REPAIR-SETTINGS)
+
+§218 amended (owner request, 2026-11-27). The owner hands users a short instruction to make
+aart-cli work with OpenCode 2 again, and asked for commands that are concrete and few. The move of
+D-530 needed every coordinate typed out, then the digest copied into `--yes --expect`: correct,
+and too much to put in an instruction for many people whose installations differ.
+
+- `doctor --repair-settings` reviews the move of every User-scope installation with an entry in a
+  settings file its harness does not read (`misplaced_user_installations`, pure over receipts and
+  which files exist), as the one multi-repair plan of D-530's review. `--repair-settings --yes`
+  applies it without `--expect`. That is the one exception to "confirm with the reviewed digest",
+  and it is safe for the reason the digest exists: the plan is recomputed and reviewed at the
+  moment it is applied, it can only move entries aart-cli wrote and recorded, and a review already
+  printed nothing it then does differently. `--expect`, when passed, still has to match.
+  `--repair-settings` with `--repair` is refused.
+- Every `consume` command, after the newer-version notice, says on stderr how many are not loaded
+  and names the command; silent when none are, and a defect in finding out says nothing (advice
+  never fails a command). `--json` stdout is unchanged.
+- The TUI's Doctor counts them and binds `m` (Move settings) to the same review on screen 30
+  (Verify repair); Enter confirms, as with any reviewed lifecycle action. It needs no focused row.
+- A `doctor --repair` review now ends with the exact command that applies it, shell-quoted, digest
+  included, instead of "re-run with --yes and --expect".
+- Rejected: moving automatically on install or upgrade (the brief: files change only after a
+  confirmation); a `--repair-all` across every kind of drift (out of this request, and a broader
+  claim than settings moves).
+
+## D-534 — Doctor's findings are no failure; the settings move is said plainly (REPAIR-SETTINGS review)
+
+§215 and §218 amended (review of D-533, 2026-11-27).
+
+- **Findings.** `doctor` exiting 1 because an installation needs attention was journaled as an
+  `error` and sent as `aart_cli.failed`: during a migration every person who runs it would show
+  on the failure dashboard as a failure. Its exit code stays 1 -- scripts read it -- but its type
+  is `command_outcome.Findings`, an `int` whose value is the exit code, and `cli.main` does not
+  journal one. Only doctor's report returns it; a doctor that cannot read its state and every
+  failed repair still return a plain code and are journaled. Rejected: a new exit code (breaks
+  every `doctor || ...`), and inferring from "no diagnostics noted" (silent when a later change
+  notes one).
+- **Plain review.** A `--repair-settings` review of plans whose every step is a `settings` or
+  `harness` component renders through one `render_settings_move` shared by the CLI and the TUI:
+  from, to, which installations, "nothing is installed or removed"; no "Risks: high risk
+  execution" (a plugin's own risk, reviewed at install, not this change's) and no digests.
+  `[v]` in the TUI still shows the full plan beneath.
+- **Only the move goes without a digest.** A misplaced installation whose plan is wider (its
+  payload is also gone, say) is shown in full, and its confirmation needs `--expect`: D-533's
+  "no digest" rests on the plan being only the move, so it is now checked rather than assumed.
+- **TUI start.** The Dashboard says `● opencode does not load N installations — open Doctor and
+  press m`, and Doctor's entry carries `● N to move`, as Registries carries `● N to sync`.
+

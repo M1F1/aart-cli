@@ -5500,3 +5500,11 @@ can say it only after the server's `HARNESS_OF` lets `opencode_plugin` carry `op
 `opencode` (its dashboard's `SOURCE_HARNESS` too); until then the use is sent without a harness, as
 now. `source` stays `opencode_plugin`.
 
+## B-281 — A deleted OpenCode plugin entry module is not drift
+
+Status: **open**, found 2026-11-27 writing D-534's tests.
+
+Deleting `~/.config/opencode/aart-cli/plugin/<alias>/<name>/index.js`, the module the settings entry
+points at, leaves the installation `ready` until the payload beside it is also gone, so doctor
+offers no repair for a plugin OpenCode cannot load. Measure that module as part of the delivery.
+

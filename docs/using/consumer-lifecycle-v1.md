@@ -339,14 +339,27 @@ it writes, and leaves every other entry alone. The comment is only for reading t
 it changes nothing.
 
 If an entry sits in the file opencode does not read -- usually because `opencode.jsonc` appeared
-after the install -- doctor says so under *Settings files*, with one command that moves all of
-them:
+after the install -- every `aart-cli consume` command says so, and doctor lists them under
+*Settings files*. Two commands, the same for everybody, move all of them. The first shows what
+would change and changes nothing:
 
 ```bash
-aart-cli doctor --repair company/mcp/github@1.0.0 company/plugin/superpowers@7.0.0 --scope user
+aart-cli doctor --repair-settings
 ```
 
-Review the plan, then confirm it with `--yes --expect <digest>` as above. Uninstalling removes
+The second moves them:
+
+```bash
+aart-cli doctor --repair-settings --yes
+```
+
+The review lists which entries move from which file to which. If an installation also needs
+something else repaired, its whole plan is shown instead and the last line is the command with
+`--expect <digest>` that confirms it. In the TUI the Dashboard says when the harness does not load
+something; open Doctor and press `m`, then Enter.
+
+`aart-cli doctor` exits 1 while something needs attention. That is its answer, not a failure of
+aart-cli, so it is not recorded as one. Uninstalling removes
 what aart-cli added: its entry, its marker comment, and a `plugin` list or `mcp` object it
 created and left empty. A list or object you wrote a comment into stays, empty, with your
 comment. A project's settings stay in `opencode.json` at the project root.

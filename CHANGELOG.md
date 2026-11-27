@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.32.2](https://github.com/M1F1/aart-cli/compare/v0.32.1...v0.32.2) (2026-11-27)
+
+
+### Fixed
+
+* doctor --repair accepts several artifacts, reviewed and confirmed together, so moving many entries is one review ([4b63f2b](https://github.com/M1F1/aart-cli/commit/4b63f2b8b98e3ec4b55a3f127b6a5fd370fb7eb6))
+* doctor --repair-settings, then --yes, moves every OpenCode entry to the file OpenCode reads without naming any; the TUI's Doctor does it with m, and every consume command says when one is needed ([4b63f2b](https://github.com/M1F1/aart-cli/commit/4b63f2b8b98e3ec4b55a3f127b6a5fd370fb7eb6))
+* doctor names an OpenCode entry left in the settings file OpenCode does not read, and its repair moves it ([4b63f2b](https://github.com/M1F1/aart-cli/commit/4b63f2b8b98e3ec4b55a3f127b6a5fd370fb7eb6))
+* doctor that finds something to fix is no longer sent as an aart-cli failure, the settings move is reviewed in plain words, and the TUI Dashboard says what OpenCode does not load ([4b63f2b](https://github.com/M1F1/aart-cli/commit/4b63f2b8b98e3ec4b55a3f127b6a5fd370fb7eb6))
+* OpenCode settings files are edited as JSON with comments, keeping every comment, and aart-cli's entries are marked "managed by aart-cli" ([4b63f2b](https://github.com/M1F1/aart-cli/commit/4b63f2b8b98e3ec4b55a3f127b6a5fd370fb7eb6))
+* uninstall removes a settings list or object it emptied, so a file returns to what it was ([4b63f2b](https://github.com/M1F1/aart-cli/commit/4b63f2b8b98e3ec4b55a3f127b6a5fd370fb7eb6))
+* user MCP servers and plugins for OpenCode go into opencode.jsonc when it exists, so an OpenCode 2 started by a launcher loads them ([4b63f2b](https://github.com/M1F1/aart-cli/commit/4b63f2b8b98e3ec4b55a3f127b6a5fd370fb7eb6))
+
 ## [0.32.1](https://github.com/M1F1/aart-cli/compare/v0.32.0...v0.32.1) (2026-11-16)
 
 

@@ -484,6 +484,9 @@ class Request:
     for_default_branch: bool = False
     # `doctor --check-index` (§216): ask pip's and uv's package index the way an install does.
     check_index: bool = False
+    # `doctor --repair-settings` (§218): review, or with --yes move, every User-scope settings entry
+    # aart-cli wrote into a file its harness does not read.
+    repair_settings: bool = False
     # `consume install`/`update` inputs (§169.4, D-468): raw `ALIAS/KIND/NAME:INPUT=...` flags.
     install_inputs: tuple[str, ...] = ()
     set_later: bool = False

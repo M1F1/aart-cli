@@ -27,6 +27,7 @@ from datetime import date
 from aart_cli.application.settings_relocation import SettingsMove
 from aart_cli.domain.credentials import CredentialObservation, CredentialState
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
+from aart_cli.domain.harness import Scope
 from aart_cli.domain.identifiers import ArtifactCoordinate, InputId
 from aart_cli.domain.inputs import BoundInput, BoundInputs, RuntimeInput
 from aart_cli.domain.inspection import EnvironmentFacts
@@ -50,6 +51,7 @@ from .consumer_views import (
     InstalledCollectionView,
     ReceiptDetailView,
     RegistryView,
+    SettingsMoveView,
     activity_from_receipts,
     offer_update,
     project_credential_record,
@@ -208,6 +210,35 @@ def installed_collections(
     )
 
 
+def settings_move_views(
+    inspections: tuple[InstalledInspection, ...],
+) -> tuple[SettingsMoveView, ...]:
+    """Every User-scope entry in a settings file its harness does not read, as Doctor's `m` and
+    `doctor --repair-settings` move them (§218, D-534)."""
+
+    found: list[SettingsMoveView] = []
+    for item in inspections:
+        owner = item.record.receipt.owner
+        if owner is None or owner.scope is not Scope.USER:
+            continue
+        root = owner.root.rstrip("/") + "/"
+
+        def shown(path: str, root: str = root) -> str:
+            return "~/" + path[len(root) :] if path.startswith(root) else path
+
+        found.extend(
+            SettingsMoveView(
+                item.installation,
+                item.coordinate,
+                move.harness,
+                shown(move.recorded),
+                shown(move.read),
+            )
+            for move in item.moves
+        )
+    return tuple(found)
+
+
 def assemble_consumer_machine(
     inspections: tuple[InstalledInspection, ...],
     *,
@@ -298,12 +329,16 @@ def assemble_consumer_machine(
         for item in records
     )
     collections = installed_collections(inspections, views)
+    misplaced = settings_move_views(inspections)
     return ConsumerMachine(
-        project_dashboard(
-            views,
-            registry_count=len(registries),
-            credential_attention_count=attention,
-            recent_activity=recent,
+        replace(
+            project_dashboard(
+                views,
+                registry_count=len(registries),
+                credential_attention_count=attention,
+                recent_activity=recent,
+            ),
+            settings_to_move=misplaced,
         ),
         views,
         collections,
@@ -311,7 +346,7 @@ def assemble_consumer_machine(
         timeline,
         actions,
         registries,
-        project_doctor(views, collections),
+        project_doctor(views, collections, misplaced),
         tuple(sorted(configurations, key=lambda item: (item.coordinate, item.harness))),
     )
 
@@ -374,10 +409,13 @@ def with_offered_versions(machine: ConsumerMachine, offered: Mapping[str, str]) 
                 recent_activity=dashboard.recent_activity,
             ),
             registries_to_sync=dashboard.registries_to_sync,
+            settings_to_move=dashboard.settings_to_move,
         ),
         installed=views,
         collections=collections,
-        doctor=None if machine.doctor is None else project_doctor(views, collections),
+        doctor=None
+        if machine.doctor is None
+        else project_doctor(views, collections, machine.doctor.misplaced_settings),
     )
 
 

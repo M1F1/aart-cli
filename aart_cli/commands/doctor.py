@@ -10,6 +10,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shlex
+from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime, timezone
 
 from aart_cli import command_outcome as _common
@@ -17,6 +20,7 @@ from aart_cli.application.consumer_session import (
     InstalledInspection,
     credential_dependants,
     installed_collections,
+    settings_move_views,
 )
 from aart_cli.application.consumer_views import (
     ActivityView,
@@ -46,6 +50,7 @@ from aart_cli.application.python_installers import (
     python_installers_to_data,
 )
 from aart_cli.application.reconciliation import repair_plan_to_data
+from aart_cli.application.settings_relocation import misplaced_user_installations
 from aart_cli.configuration.policy import EffectiveConfiguration
 from aart_cli.consumer.application import CONSUMER_REVIEW_MISMATCH
 from aart_cli.consumer.coordinates import CONSUMER_INVALID, parse_artifact_selector
@@ -53,9 +58,11 @@ from aart_cli.domain.diagnostics import Diagnostic, Severity, diagnostic_to_data
 from aart_cli.domain.harness import Scope
 from aart_cli.domain.installation_owner import describe_installation
 from aart_cli.domain.policies import EffectivePolicy
-from aart_cli.domain.result import Err
+from aart_cli.domain.reconciliation import Component
+from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.io.configured_installation_action import InstallationHost
 from aart_cli.io.configured_repair_action import (
+    PreparedConfiguredRepair,
     complete_configured_repair,
     prepare_configured_repair,
 )
@@ -74,12 +81,16 @@ from aart_cli.tui_consumer import (
     render_doctor,
     render_lifecycle_plan,
     render_receipt_detail,
+    render_settings_move,
 )
 
 from ._configured_runtime import load_runtime_configuration
 
 _OPERATION = "doctor"
 _REPAIR_OPERATION = "doctor.repair"
+#: Reviews every User-scope entry aart-cli wrote into a settings file its harness does not read,
+#: and moves them with `--yes`: the same command for everybody, naming no artifact (§218).
+REPAIR_SETTINGS_COMMAND = "aart-cli doctor --repair-settings"
 
 
 def _emit_error(
@@ -322,8 +333,12 @@ def _settings_move_lines(
         coordinates = by_scope.setdefault("" if owner is None else owner.scope.value, [])
         if item.coordinate not in coordinates:
             coordinates.append(item.coordinate)
-    # One command per scope moves them all, reviewed and confirmed once.
+    # One command per scope moves them all, reviewed and confirmed once. User scope -- the only
+    # one with a second settings file -- has one that names nothing, the same for everybody.
     for scope, coordinates in by_scope.items():
+        if scope == Scope.USER.value:
+            lines.append(f"Move them all: {REPAIR_SETTINGS_COMMAND}")
+            continue
         flag = f" --scope {scope}" if scope else ""
         lines.append(f"Move them: aart-cli doctor --repair {' '.join(coordinates)}{flag}")
     return tuple(lines)
@@ -350,6 +365,45 @@ def _candidate_history_lines(unbound: tuple[UnboundCandidateHistory, ...]) -> tu
     return tuple(lines)
 
 
+def _only_moves(prepared: PreparedConfiguredRepair) -> bool:
+    """Whether a repair changes nothing but where settings entries are written."""
+
+    repair = prepared.plan.repair
+    return (
+        bool(repair.steps)
+        and not repair.escalated
+        and all(
+            step.component.component in (Component.SETTINGS, Component.HARNESS)
+            for step in repair.steps
+        )
+    )
+
+
+def _move_lines(
+    prepared_items: list[
+        tuple[str, EffectivePolicy, PreparedConfiguredRepair, InstalledInspection]
+    ],
+    *,
+    done: bool,
+) -> tuple[str, ...]:
+    """A settings move as the TUI draws it, from the inspections it was planned from (D-534)."""
+
+    return render_settings_move(
+        settings_move_views(tuple(inspection for *_rest, inspection in prepared_items)),
+        done=done,
+    )
+
+
+def _repair_command(names: tuple[str, ...], scope: Scope, project_root: str, digest: str) -> str:
+    """The command that applies a reviewed `--repair`, ready to copy."""
+
+    words = ["aart-cli", "doctor", "--repair", *dict.fromkeys(names), "--scope", scope.value]
+    if scope is Scope.PROJECT:
+        words += ["--project", project_root]
+    words += ["--yes", "--expect", digest]
+    return " ".join(shlex.quote(word) for word in words)
+
+
 def _run_repair(
     request: Request,
     *,
@@ -357,9 +411,18 @@ def _run_repair(
     project_root: str,
     user_home: str,
     credential_providers: tuple[CredentialProviderPort, ...],
+    apply_command: str | None = None,
+    settings_review: bool = False,
 ) -> int:
     """Review or execute exact repairs through the configured lifecycle adapter: one, or several
-    named together and confirmed as one plan."""
+    named together and confirmed as one plan.
+
+    A review ends with the command that applies it, ready to copy. `apply_command` is that
+    command where it needs no digest -- `--repair-settings`, which reviews again what it applies
+    -- and then `--yes` alone confirms; otherwise it is this one with `--yes --expect <digest>`.
+    With `settings_review`, a set of plans that only move settings entries is reviewed and
+    reported as that move: where from, where to, and nothing else (D-534).
+    """
 
     scope = Scope(request.scope)
     inspected = read_installed_inspections(
@@ -406,11 +469,13 @@ def _run_repair(
         prepared = prepare_configured_repair(matches[0], policy=policy)
         if isinstance(prepared, Err):
             return _emit_error(request, prepared, _REPAIR_OPERATION, finalized=False)
-        prepared_items.append((coordinate, policy, prepared.value))
+        prepared_items.append((coordinate, policy, prepared.value, matches[0]))
 
     # One artifact keeps its own digest; several are reviewed and confirmed as one plan, whose
     # digest covers every one of theirs in order (§218: moving ten servers is one decision).
-    digests = [str(item.review_digest) for _coordinate, _policy, item in prepared_items]
+    digests = [
+        str(item.review_digest) for _coordinate, _policy, item, _inspection in prepared_items
+    ]
     digest = (
         digests[0]
         if len(digests) == 1
@@ -422,13 +487,19 @@ def _run_repair(
             "review_digest": str(item.review_digest),
             "review": repair_plan_to_data(item.plan.repair),
         }
-        for coordinate, _policy, item in prepared_items
+        for coordinate, _policy, item, _inspection in prepared_items
     ]
     review_lines: list[str] = []
-    for _coordinate, _policy, item in prepared_items:
+    for _coordinate, _policy, item, _inspection in prepared_items:
         review_lines.extend(
             render_lifecycle_plan(project_lifecycle_plan(item.plan), PresentationProfile.LESS_INFO)
         )
+    moving = settings_review and all(
+        _only_moves(item) and inspection.moves
+        for _coordinate, _policy, item, inspection in prepared_items
+    )
+    if moving:
+        review_lines = list(_move_lines(prepared_items, done=False))
     if len(prepared_items) == 1:
         base: dict[str, object] = {
             "schema_version": 1,
@@ -439,8 +510,9 @@ def _run_repair(
             "review": reviews[0]["review"],
         }
     else:
-        review_lines.append(f"Repairs reviewed together: {len(prepared_items)}")
-        review_lines.append(f"Review identity: {digest}")
+        if not moving:
+            review_lines.append(f"Repairs reviewed together: {len(prepared_items)}")
+            review_lines.append(f"Review identity: {digest}")
         base = {
             "schema_version": 1,
             "operation": _REPAIR_OPERATION,
@@ -449,15 +521,30 @@ def _run_repair(
             "review_digest": digest,
             "reviews": reviews,
         }
+    # Only a plan that is nothing but the move is confirmed without its digest: anything wider
+    # it found on the way is reviewed and confirmed as any repair is (D-534).
+    without_digest = apply_command is not None and moving
     if not request.yes:
+        confirm = (
+            f"{apply_command} --yes"
+            if without_digest
+            else f"{apply_command} --yes --expect {digest}"
+            if apply_command is not None
+            else _repair_command(request.names, scope, project_root, digest)
+        )
         _emit(
             request,
             {**base, "ok": True, "finalized": False},
-            (*review_lines, "Reviewed only; re-run with --yes and --expect to apply this plan."),
+            (
+                *review_lines,
+                "Reviewed only; nothing changed. To apply exactly this:",
+                f"  {confirm}",
+            ),
         )
         return _common.OK
 
-    if request.expect is None or request.expect != digest:
+    expected_missing = request.expect is None and not without_digest
+    if expected_missing or (request.expect is not None and request.expect != digest):
         expected = request.expect
         message = (
             "repair confirmation requires --expect with the digest from a prior review"
@@ -490,7 +577,7 @@ def _run_repair(
     results: list[dict[str, object]] = []
     lines: list[str] = []
     successful = True
-    for coordinate, policy, item in prepared_items:
+    for coordinate, policy, item, _inspection in prepared_items:
         now = datetime.now(timezone.utc)
         completed = complete_configured_repair(
             item,
@@ -536,6 +623,8 @@ def _run_repair(
             }
         )
         lines.extend(render_receipt_detail(receipt, PresentationProfile.LESS_INFO))
+    if moving and successful:
+        lines = list(_move_lines(prepared_items, done=True))
     if len(prepared_items) == 1:
         (only,) = results
         _emit(
@@ -558,6 +647,84 @@ def _run_repair(
     return _common.OK if successful else _common.ERROR
 
 
+def misplaced_settings(data_root: str) -> Result[tuple[str, ...]]:
+    """The installations `--repair-settings` moves, read from the receipts and which settings
+    files exist; nothing else is opened, so it is cheap enough to ask after every command."""
+
+    records = LocalReceiptStore(os.path.join(data_root, "state")).installations()
+    if isinstance(records, Err):
+        return records
+    return Ok(misplaced_user_installations(records.value, exists=os.path.isfile))
+
+
+def _run_repair_settings(
+    request: Request,
+    *,
+    data_root: str,
+    project_root: str,
+    user_home: str,
+    credential_providers: tuple[CredentialProviderPort, ...],
+) -> int:
+    """Review, or with `--yes` apply, the move of every misplaced User-scope entry (§218)."""
+
+    names = misplaced_settings(data_root)
+    if isinstance(names, Err):
+        return _emit_error(request, names, _REPAIR_OPERATION, finalized=False)
+    if not names.value:
+        _emit(
+            request,
+            {
+                "schema_version": 1,
+                "operation": _REPAIR_OPERATION,
+                "ok": True,
+                "finalized": False,
+                "scope": Scope.USER.value,
+                "coordinates": [],
+            },
+            (
+                "Nothing to move: every entry aart-cli wrote is in the settings file its harness reads.",
+            ),
+        )
+        return _common.OK
+    return _run_repair(
+        replace(request, names=names.value, scope=Scope.USER.value),
+        data_root=data_root,
+        project_root=project_root,
+        user_home=user_home,
+        credential_providers=credential_providers,
+        apply_command=REPAIR_SETTINGS_COMMAND,
+        settings_review=True,
+    )
+
+
+def announce_misplaced_settings(write: Callable[[str], None], *, user_home: str | None) -> None:
+    """Say, for a `consume` command's stderr, that OpenCode does not load some of what aart-cli
+    installed for it, and the one command that moves it (§218).
+
+    Silent when nothing is misplaced. Advice may not stop a command, so a defect in finding out
+    says nothing.
+    """
+
+    try:
+        runtime = load_runtime_configuration(
+            Request(command="doctor", user_home=user_home), content_required=False
+        )
+        if isinstance(runtime, Err):
+            return
+        found = misplaced_settings(runtime.value.paths.data_root)
+    except Exception:  # noqa: BLE001 -- advice is never what fails a command
+        return
+    if not isinstance(found, Ok) or not found.value:
+        return
+    count = len(found.value)
+    them = "1 MCP server or plugin" if count == 1 else f"{count} MCP servers or plugins"
+    write(
+        f"OpenCode does not load {them} aart-cli installed: "
+        "they are in a settings file it does not read."
+    )
+    write(f"Review moving them: {REPAIR_SETTINGS_COMMAND}  (then add --yes)")
+
+
 def run(request: Request) -> int:
     """Inspect every canonical installation and report minimal reconciliation plans."""
 
@@ -573,6 +740,24 @@ def run(request: Request) -> int:
 
     # The stores every other command reads credentials through, so doctor agrees with them.
     providers = marketplace._credential_providers()
+    if request.repair_settings:
+        if request.names:
+            return _emit_error(
+                request,
+                _error(
+                    "--repair-settings moves every misplaced entry, so it names no artifact",
+                    f"run `{REPAIR_SETTINGS_COMMAND}` on its own",
+                ),
+                _REPAIR_OPERATION,
+                finalized=False,
+            )
+        return _run_repair_settings(
+            request,
+            data_root=runtime.value.paths.data_root,
+            project_root=project_root,
+            user_home=user_home,
+            credential_providers=providers,
+        )
     if request.names:
         return _run_repair(
             request,
@@ -701,4 +886,6 @@ def run(request: Request) -> int:
                 )
             )
         )
-    return _common.OK if payload["ok"] else _common.ERROR
+    # Exit 1 still says something needs attention, as a finding: the check itself worked, so
+    # it is not journaled as a failure aart-cli met (§215, D-534).
+    return _common.OK if payload["ok"] else _common.FOUND
