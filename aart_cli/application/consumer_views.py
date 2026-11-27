@@ -19,6 +19,7 @@ from aart_cli.application.author_views import normalized_workspace
 from aart_cli.configuration.model import SourceKind
 from aart_cli.configuration.seed import (
     baked_failures_sent,
+    baked_opencode_runtime,
     baked_unmanaged_uses,
     baked_usage_harnesses,
 )
@@ -46,6 +47,7 @@ from aart_cli.domain.inputs import (
     validate_config_value,
 )
 from aart_cli.domain.installation_owner import InstallationOwner, compose_installation_key
+from aart_cli.domain.opencode_runtime import OPENCODE_RUNTIMES
 from aart_cli.domain.plans import InstallPlan, install_plan_to_data
 from aart_cli.domain.receipts import (
     RECEIPT_INVALID,
@@ -155,6 +157,7 @@ __all__ = [
     "ConsumerSettings",
     "SETTING_PURPOSE",
     "SETTING_ROWS",
+    "OPENCODE_ROW",
     "TELEMETRY_ERRORS_ROW",
     "TELEMETRY_ROW",
     "TELEMETRY_UNMANAGED_ROW",
@@ -3341,6 +3344,9 @@ class ConsumerSettings:
     #: Whether telemetry sends the failures aart-cli met, as this person chose, or `None`
     #: when nobody chose: then as this build says (§215, D-509).
     telemetry_errors: bool | None = None
+    #: Which OpenCode project plugins are installed for, 1 or 2, as this person chose, or `None`
+    #: when nobody chose: then as this build says (§171.3, D-532).
+    opencode_runtime: int | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -3358,6 +3364,10 @@ class ConsumerSettings:
         if self.telemetry_unmanaged is not None and not isinstance(self.telemetry_unmanaged, bool):
             raise ValueError("consumer settings are invalid")
         if self.telemetry_errors is not None and not isinstance(self.telemetry_errors, bool):
+            raise ValueError("consumer settings are invalid")
+        if self.opencode_runtime is not None and (
+            type(self.opencode_runtime) is not int or self.opencode_runtime not in OPENCODE_RUNTIMES
+        ):
             raise ValueError("consumer settings are invalid")
         if (
             not isinstance(self.profile, PresentationProfile)
@@ -3392,6 +3402,14 @@ class ConsumerSettings:
             return baked_failures_sent()
         return self.telemetry_errors
 
+    @property
+    def opencode(self) -> int:
+        """Which OpenCode project plugins are installed for: the choice, else the build's."""
+
+        if self.opencode_runtime is None:
+            return baked_opencode_runtime()
+        return self.opencode_runtime
+
     def with_profile(self, profile: PresentationProfile) -> ConsumerSettings:
         return replace(self, profile=profile)
 
@@ -3425,6 +3443,8 @@ class ConsumerSettings:
             return replace(self, telemetry_unmanaged=not self.sends_unmanaged_uses)
         if row == TELEMETRY_ERRORS_ROW:
             return replace(self, telemetry_errors=not self.sends_failures)
+        if row == OPENCODE_ROW:
+            return replace(self, opencode_runtime=1 if self.opencode == 2 else 2)
         harness = default_harness_from_row(row)
         if harness is not None:
             return replace(
@@ -3528,11 +3548,14 @@ TELEMETRY_ROW = "telemetry"
 TELEMETRY_UNMANAGED_ROW = "telemetry-unmanaged"
 #: Screen 28's row for whether telemetry sends the failures aart-cli met (§215, D-509).
 TELEMETRY_ERRORS_ROW = "telemetry-errors"
+#: Screen 28's row for which OpenCode project plugins are installed for (§171.3, D-532).
+OPENCODE_ROW = "opencode"
 
 SETTING_ROWS: tuple[str, ...] = (
     "detail-level",
     "default-scope",
     "python-installer",
+    OPENCODE_ROW,
     "show-updates",
     "maintainer-mode",
     "author-mode",
@@ -3605,6 +3628,11 @@ SETTING_PURPOSE: dict[str, str] = {
     "Project writes into this checkout, User writes into your home.",
     "python-installer": "Which backend resolves Python dependencies when an artifact's "
     "contract and this machine allow either: pip is universally present, uv is faster.",
+    OPENCODE_ROW: "Which OpenCode a project plugin is installed for. OpenCode 1 loads it from the "
+    "`plugin` list in the project's `opencode.json`; OpenCode 2 from its own directory under "
+    "`.opencode/plugins/`, which also works when it is started from a subdirectory. Plugins "
+    "already installed stay as they were: uninstall and install them again to move them. Until "
+    "you choose, this aart-cli's build decides.",
     "show-updates": "Whether the Dashboard counts the installed artifacts a registry "
     "offers a newer version of.",
     "maintainer-mode": "Whether this installation maintains a Registry as well as installing "
@@ -3691,6 +3719,7 @@ def settings_to_data(view: ConsumerSettings) -> dict[str, object]:
             else {"telemetry_unmanaged_uses": view.telemetry_unmanaged}
         ),
         **({} if view.telemetry_errors is None else {"telemetry_failures": view.telemetry_errors}),
+        **({} if view.opencode_runtime is None else {"opencode_runtime": view.opencode_runtime}),
     }
 
 
@@ -3716,6 +3745,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
         "artifact_usage",
         "telemetry_unmanaged_uses",
         "telemetry_failures",
+        "opencode_runtime",
     }
     unknown = sorted(set(data) - known)
     if unknown:
@@ -3784,6 +3814,11 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
     failures = data.get("telemetry_failures")
     if failures is not None and not isinstance(failures, bool):
         return Err((_settings_invalid("stored telemetry of failures is true or false"),))
+    opencode = data.get("opencode_runtime")
+    # `type`, not `isinstance`: `true` is an int to Python and `2.0` equals 2, and neither is a
+    # value anybody chose in Settings.
+    if opencode is not None and (type(opencode) is not int or opencode not in OPENCODE_RUNTIMES):
+        return Err((_settings_invalid("stored OpenCode is 1 or 2"),))
     return Ok(
         ConsumerSettings(
             PresentationProfile(detail),
@@ -3797,6 +3832,7 @@ def settings_from_data(data: object) -> Result[ConsumerSettings]:
             None if usage is None else tuple(usage),
             unmanaged,
             failures,
+            opencode,
         )
     )
 

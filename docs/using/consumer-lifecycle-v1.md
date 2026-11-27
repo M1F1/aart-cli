@@ -351,6 +351,28 @@ what aart-cli added: its entry, its marker comment, and a `plugin` list or `mcp`
 created and left empty. A list or object you wrote a comment into stays, empty, with your
 comment. A project's settings stay in `opencode.json` at the project root.
 
+### OpenCode 1 or OpenCode 2
+
+A plugin installed into a project goes where the OpenCode you use loads it. OpenCode 1 loads it
+from the `plugin` list in the project's `opencode.json`. OpenCode 2 loads it from a directory of
+its own, `.opencode/plugins/<installed name>/`, from any subdirectory of the project and when a
+launcher starts it; for OpenCode 2, aart-cli writes nothing into `opencode.json`, because a plugin
+named both ways is loaded twice. aart-cli does not guess which you use: it is a setting, *OpenCode*
+in Settings, or
+
+```bash
+aart-cli consume opencode 2
+```
+
+Without an argument it says which one is used and whether you or the build chose it. The setting
+decides where the next install goes; a plugin installed earlier stays where it was put and still
+uninstalls. To move one, uninstall it and install it again. A plugin installed for your user stays
+in the `plugin` list of your user file, which OpenCode 2 reads too.
+
+OpenCode 2 starts a plugin only when it is written for OpenCode 2 (a default export with an `id`
+and a `setup`); one written only for OpenCode 1 is loaded and then refused by OpenCode 2 itself,
+which its author has to fix.
+
 ### When pip or uv fails
 
 An MCP's runtime dependencies are installed by pip or uv, and aart-cli runs them without your

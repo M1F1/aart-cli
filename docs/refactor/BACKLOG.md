@@ -5457,7 +5457,8 @@ passes a project entry's relative path on unchanged, which OpenCode 2 resolves f
 `opencode2` the directory, never both. Symlinked plugin files are documented by the launcher as
 lost; a symlinked directory is unmeasured.
 
-Status: **open**, owner-ordered after P0-2 (OpenCode 2 report, 2026-11-27, P1-1).
+Status: **done** with P0-2 (D-532, 2026-11-27): chosen in Settings or `consume opencode`, defaulted
+by the build, not detected; no `opencode2` harness and no migration.
 
 OpenCode 2 loads a directory under `.opencode/plugins/` by itself, and a launcher passes it with an
 absolute path, so it works when started from a subdirectory; a project `opencode.json` entry does
@@ -5473,7 +5474,10 @@ which runtime delivered the call. The label moved to B-279.
 
 ## B-278 — Live tests on a pinned OpenCode 2, plain and launcher-managed
 
-Status: **open**, owner-ordered alongside B-276/B-277 (OpenCode 2 report, 2026-11-27, P1-3).
+Status: **open**, owner-ordered alongside B-276/B-277 (OpenCode 2 report, 2026-11-27, P1-3). Begun
+by D-532: `tests/opencode2_project_plugin_live_test.py` runs `opencode2` from `PATH` plainly and as
+a launcher hands over plugins (`OPENCODE_CONFIG_PROJECT_DISABLE`), with a stub model in process;
+still open are MCP servers, instruction files and the usage plugin live on OpenCode 2.
 
 The live tests take `opencode` from `PATH`, which is 1.18.30 on the test machine. Add tests that run
 a pinned OpenCode 2 binary both plainly and as a launcher starts it (`OPENCODE_CONFIG`,
@@ -5491,12 +5495,23 @@ the MCP fixture needs `{"type": "object", "properties": {}}`.
 
 ## B-279 — Label OpenCode 2's uses `opencode2`, locally and in telemetry
 
-Status: **open**, with P0-2 (D-531, 2026-11-27).
+Status: **open**, after P0-2 (D-531, D-532, 2026-11-27).
 
-The usage plugin hands over `runtime: 1|2`. Once the `opencode2` harness exists, the hook records a
-runtime-2 use as `opencode2`, so it resolves against `opencode2` installations, and doctor/TUI can
-say which OpenCode was last used (the only in-process signal of a launcher's binary). Telemetry
+The usage plugin hands over `runtime: 1|2`. D-532 keeps one `opencode` harness (the OpenCode a
+project plugin is installed for is a setting), so locally the runtime is not a harness but a
+fact to show: doctor/TUI can say which OpenCode was last used -- the only in-process signal of a
+launcher's binary -- and point out a Settings choice that differs from it. Telemetry
 can say it only after the server's `HARNESS_OF` lets `opencode_plugin` carry `opencode2` as well as
 `opencode` (its dashboard's `SOURCE_HARNESS` too); until then the use is sent without a harness, as
 now. `source` stays `opencode_plugin`.
 
+
+## B-280 — Hypothesis properties fail mutmut's `differing_executors` health check
+
+Status: **open**, noted with D-532 (2026-11-27).
+
+Under `make mutants`, a property in a `unittest.TestCase` is run by another executor than in the
+plain run, and Hypothesis's `differing_executors` health check fails it, so no mutant of the module
+is checked (`tests/plugin_entry_test.py` with `aart_cli/domain/hooks.py`). The usage-plugin and
+OpenCode-runtime properties suppress that check per property (`_MUTATION`). One shared setting,
+such as a Hypothesis profile loaded by `scripts/mutants.py`, would cover every property at once.

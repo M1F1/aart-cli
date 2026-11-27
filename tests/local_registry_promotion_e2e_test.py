@@ -214,7 +214,7 @@ class LocalRegistryPromotionTest(unittest.TestCase):
         with self._machine() as (home, registry, _author):
             before = _git(registry, "rev-parse", "HEAD")
             # Settings → Registry Maintainer Mode on.
-            self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 4, ENTER, ESCAPE)
+            self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 5, ENTER, ESCAPE)
             # Registry Maintainer Dashboard → Sources → the authoring Source → Upstream sync, confirmed.
             synced = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
             self.assertTrue(synced.screen_containing("/ Upstream sync result"), synced.last)
@@ -243,7 +243,7 @@ class LocalRegistryPromotionTest(unittest.TestCase):
         # D-390: disconnecting the default Registry left the other one connected but no default,
         # and Upstream sync refused with no way to name one. One enabled Registry is unambiguous.
         with self._machine(default=False) as (home, registry, _author):
-            self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 4, ENTER, ESCAPE)
+            self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 5, ENTER, ESCAPE)
             synced = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
 
             drawn = "\n".join("\n".join(frame) for frame in synced.frames)
@@ -258,7 +258,7 @@ class LocalRegistryPromotionTest(unittest.TestCase):
     def test_a_source_is_removed_from_maintainer_sources_and_added_again(self) -> None:
         # D-391: a Source entered wrong had no way out of the TUI; the CLI's remove did.
         with self._machine() as (home, registry, author):
-            self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 4, ENTER, ESCAPE)
+            self._shell(home, registry, *(DOWN,) * 7, ENTER, *(DOWN,) * 5, ENTER, ESCAPE)
             synced = self._shell(home, registry, *(DOWN,) * 8, ENTER, ENTER, ord("s"), ENTER)
             self.assertTrue(synced.screen_containing("/ Upstream sync result"), synced.last)
 

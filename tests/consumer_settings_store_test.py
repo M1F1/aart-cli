@@ -19,6 +19,7 @@ import unittest
 
 from aart_cli.application.consumer_views import (
     CONSUMER_SETTINGS_INVALID,
+    OPENCODE_ROW,
     SETTING_ROWS,
     TELEMETRY_ERRORS_ROW,
     TELEMETRY_ROW,
@@ -41,8 +42,9 @@ class ConsumerSettingsValueTest(unittest.TestCase):
         # Telemetry of uses aart-cli did not install, and of failures, starts as the build's
         # default, and toggled twice it is a choice that reads the same: `telemetry_unmanaged_test`
         # and `failure_journal_test` hold that. Telemetry itself is the outbox's, not a setting:
-        # `telemetry_settings_row_test` holds that.
-        chosen = {TELEMETRY_ROW, TELEMETRY_UNMANAGED_ROW, TELEMETRY_ERRORS_ROW}
+        # `telemetry_settings_row_test` holds that. Which OpenCode is the build's default too, and
+        # `opencode_runtime_test` holds it.
+        chosen = {TELEMETRY_ROW, TELEMETRY_UNMANAGED_ROW, TELEMETRY_ERRORS_ROW, OPENCODE_ROW}
         for row in (item for item in SETTING_ROWS if item not in chosen):
             with self.subTest(row=row):
                 once = ConsumerSettings().toggled(row)

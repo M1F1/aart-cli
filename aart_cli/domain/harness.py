@@ -24,6 +24,8 @@ from .launch import Transport
 from .managed_blocks import BlockPosition
 
 __all__ = [
+    "PLUGIN_DIRECTORIES",
+    "plugin_directory",
     "DELIVERY_TARGETS",
     "McpEditor",
     "McpEntryShape",
@@ -858,6 +860,31 @@ PLUGIN_TARGETS: dict[tuple[str, Scope], PluginTarget] = {
         "opencode", Scope.USER, ".config/opencode/opencode.jsonc", "plugin"
     ),
 }
+
+
+#: Where OpenCode 2 finds a project plugin with no entry anywhere: a directory of its own under
+#: `.opencode/plugins/`, loaded through its `index.js`, from the project root and from any
+#: subdirectory alike (B-276: 2.3.2 by the launcher report, 2026-11-27; the 2.0 preview
+#: 0.0.0-beta-19271 here, D-532). OpenCode 1.19.5 does not load it, and OpenCode 2 loads a plugin
+#: there and in the `plugin` list twice, so it is used instead of `PLUGIN_TARGETS`, never beside
+#: it. User scope is not here: OpenCode 2 loads a user plugin from the list (D-530).
+PLUGIN_DIRECTORIES: dict[tuple[str, Scope], str] = {
+    ("opencode", Scope.PROJECT): f".opencode/plugins/{_NAME_SLOT}",
+}
+
+
+def plugin_directory(harness: str, scope: Scope, name: str) -> str:
+    """Where `harness` finds one plugin by itself, relative to the scope's root, or `KeyError`."""
+
+    try:
+        pattern = PLUGIN_DIRECTORIES[(harness, scope)]
+    except KeyError:
+        raise KeyError(
+            f"no measured plugin directory for harness {harness!r} at {scope.value} scope"
+        ) from None
+    if not isinstance(name, str) or _DELIVERED_NAME_RE.fullmatch(name) is None:
+        raise ValueError(f"{name!r} is not a name a plugin can be placed under")
+    return pattern.replace(_NAME_SLOT, name)
 
 
 def plugin_target(

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from aart_cli import _default_registry, _default_telemetry, _default_usage
+from aart_cli import _default_opencode, _default_registry, _default_telemetry, _default_usage
 from aart_cli.domain.artifact_usage import parse_usage_harnesses
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import SourceAlias
+from aart_cli.domain.opencode_runtime import parse_opencode_runtime
 from aart_cli.domain.result import Err, Ok, Result
 from aart_cli.domain.telemetry import (
     parse_failures_sent,
@@ -116,3 +117,14 @@ def baked_failures_sent(raw: str | None = None) -> bool:
 
     parsed = parse_failures_sent(_default_telemetry.ERRORS if raw is None else raw)
     return parsed.value if isinstance(parsed, Ok) else False
+
+
+def baked_opencode_runtime(raw: str | None = None) -> int:
+    """Which OpenCode this build installs project plugins for until a person chooses (D-532).
+
+    Empty is OpenCode 1. A value the release would have refused is OpenCode 1 too: the release
+    fails before such a wheel exists, so this is a source tree somebody edited by hand.
+    """
+
+    parsed = parse_opencode_runtime(_default_opencode.RUNTIME if raw is None else raw)
+    return parsed.value if isinstance(parsed, Ok) else 1

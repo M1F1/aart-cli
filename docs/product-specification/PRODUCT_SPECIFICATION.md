@@ -10919,7 +10919,8 @@ declarations are not runtime dependencies.
 
 **Amended 2026-11-04 by D-521:** the entry names the installation's tree, which both of opencode's
 plugin runtimes load. **Amended 2026-11-27 by D-530:** at User scope the file is the one §218
-chooses, `opencode.jsonc` before `opencode.json`.
+chooses, `opencode.jsonc` before `opencode.json`. **Amended 2026-11-27 by D-532:** at Project
+scope, an installation made for OpenCode 2 is a directory under `.opencode/plugins/`, not an entry.
 
 Installing a plugin owns one entry of the harness's plugin list and nothing else in the file:
 - opencode reads that list from the `plugin` key of its settings file at the chosen scope's root:
@@ -10945,6 +10946,27 @@ installations into one file (D-521).
 A receipt written before D-521 names the module itself, which OpenCode 1.x still loads; it reads as
 it was, and an update writes the tree.
 
+**OpenCode 2 at Project scope (D-532).** OpenCode 2 loads every directory under the project's
+`.opencode/plugins/` by itself, a launcher hands such a directory over by an absolute path, and a
+project entry's relative path is resolved from wherever OpenCode 2 was started, so it is lost from a
+subdirectory; a plugin both listed and in that directory is loaded twice. So which OpenCode a
+project plugin is installed for is chosen, never detected:
+- Settings has **OpenCode: 1 | 2**, and `aart-cli consume opencode [1|2]` reads or sets it. Until a
+  person chooses, the build decides: `AART_CLI_DEFAULT_OPENCODE` (`1` or `2`, empty meaning `1`) is
+  stamped into the wheel by the release, which refuses any other value.
+- For OpenCode 2 the installation is the directory `.opencode/plugins/<installed name>/` holding one
+  file, `index.js`, which re-exports the entry module by a path relative to itself into the
+  installation's tree, and nothing is written to `opencode.json`. It is a delivery like any other:
+  recorded with the module it loads, measured by its digest, written again by repair, withdrawn by
+  uninstall with the tree. It still registers code, so §171.4 applies to it unchanged.
+- User scope keeps the entry: OpenCode 2 reads the user file's `plugin` list.
+- Nothing migrates. A plugin installed for OpenCode 1 stays an entry when the choice changes, and
+  uninstalls as one; installed again, it is installed for the OpenCode chosen then.
+
+OpenCode 2 starts only a module whose default is its definition (`{ id, setup }` or
+`{ id, effect }`), from either place; one written only for 1.x is imported and refused with its own
+error (measured on beta 19271). That is the plugin's to fix, not the placement's.
+
 A harness that measures no plugin target refuses a plugin it was asked for by name and is left
 out when it was not, exactly as for every other kind.
 
@@ -10961,7 +10983,7 @@ the install before any mutation.
   entry as found, and removes the installation's tree.
 - Status and verification compare the payload against its recorded digest and the entry against
   the receipt. A missing or edited entry is drift and is never assumed away, and so is a missing or
-  edited `index.js`.
+  edited `index.js`, in the tree or under `.opencode/plugins/` (D-532).
 - Repair re-materializes the payload from the installation's own copy and re-registers the entry,
   writing `index.js` again.
 

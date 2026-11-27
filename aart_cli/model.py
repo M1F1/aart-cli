@@ -510,5 +510,7 @@ class Request:
     telemetry_unmanaged: Optional[str] = None
     #: `consume telemetry errors on|off` (D-509).
     telemetry_errors: Optional[str] = None
+    #: `consume opencode 1|2`, or `None` to say which one is in effect (D-532).
+    opencode_runtime: Optional[str] = None
     #: `consume report --limit` (§215).
     report_limit: Optional[int] = None

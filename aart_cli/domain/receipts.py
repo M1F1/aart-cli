@@ -330,6 +330,12 @@ class ArtifactDelivery:
     projected_name: str | None = None
     projected_description: str | None = None
     projected_document: str | None = None
+    #: Set, this delivery is the directory OpenCode 2 finds a project plugin in, holding only the
+    #: `index.js` aart-cli writes there, and this is the absolute path of the plugin module that
+    #: file imports, inside the installation's private tree (§171.3, D-532). `source` is then that
+    #: tree's payload: it is what has to be there for the loader to load anything. `None` for every delivery
+    #: copied from a payload.
+    loads: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.harness, str) or not self.harness.strip():
@@ -367,6 +373,16 @@ class ArtifactDelivery:
                 "/"
             ):
                 raise ValueError("a projected document stays inside the tree it is delivered with")
+        if self.loads is not None:
+            if (
+                not isinstance(self.loads, str)
+                or not self.loads.startswith(self.source.rstrip("/") + "/")
+                or ".." in self.loads.split("/")
+                or any(character in self.loads for character in "\r\n")
+            ):
+                raise ValueError("a plugin loader loads a module inside the tree it names")
+            if self.kind is not DeliveryKind.TREE or self.projected_name is not None:
+                raise ValueError("a plugin loader is a directory, written rather than projected")
 
 
 @dataclass(frozen=True, slots=True)
@@ -674,6 +690,7 @@ def placed_artifact_receipt_to_data(receipt: PlacedArtifactReceipt) -> dict[str,
                     if item.projected_document is None
                     else {"projected_document": item.projected_document}
                 ),
+                **({} if item.loads is None else {"loads": item.loads}),
             }
             for item in receipt.deliveries
         ],
@@ -730,6 +747,7 @@ def _delivery(value: object) -> ArtifactDelivery:
             else str(value["projected_description"])
         ),
         None if value.get("projected_document") is None else str(value["projected_document"]),
+        None if value.get("loads") is None else str(value["loads"]),
     )
 
 

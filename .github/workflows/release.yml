@@ -81,6 +81,9 @@ jobs:
       # Harness names separated by commas, such as `opencode`, that record which skills and MCPs
       # are used without asking (§212, D-502).  Unset or `none` records nowhere until turned on.
       AART_CLI_DEFAULT_USAGE_HARNESSES: ${{ vars.AART_CLI_DEFAULT_USAGE_HARNESSES }}
+      # `1` or `2`: which OpenCode project plugins are installed for until a person chooses in
+      # Settings (§171.3, D-532).  Unset is OpenCode 1.
+      AART_CLI_DEFAULT_OPENCODE: ${{ vars.AART_CLI_DEFAULT_OPENCODE }}
       # The telemetry server this fork's wheel sends to, on from each home's first start where
       # nobody decided (§213, D-503, D-505).  Unset names none and sends nothing.
       AART_CLI_TELEMETRY_ENDPOINT: ${{ vars.AART_CLI_TELEMETRY_ENDPOINT }}
@@ -132,6 +135,9 @@ jobs:
       # Harness names separated by commas, such as `opencode`, that record which skills and MCPs
       # are used without asking (§212, D-502).  Unset or `none` records nowhere until turned on.
       AART_CLI_DEFAULT_USAGE_HARNESSES: ${{ vars.AART_CLI_DEFAULT_USAGE_HARNESSES }}
+      # `1` or `2`: which OpenCode project plugins are installed for until a person chooses in
+      # Settings (§171.3, D-532).  Unset is OpenCode 1.
+      AART_CLI_DEFAULT_OPENCODE: ${{ vars.AART_CLI_DEFAULT_OPENCODE }}
       # The telemetry server this fork's wheel sends to, on from each home's first start where
       # nobody decided (§213, D-503, D-505).  Unset names none and sends nothing.
       AART_CLI_TELEMETRY_ENDPOINT: ${{ vars.AART_CLI_TELEMETRY_ENDPOINT }}

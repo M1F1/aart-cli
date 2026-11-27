@@ -4,6 +4,14 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-27, OPENCODE-2-PROJECT-PLUGINS (P0-2, B-276, D-532): project plugins for the OpenCode chosen.**
+A setting (Settings, `consume opencode`), defaulted by the release-stamped
+`AART_CLI_DEFAULT_OPENCODE`, decides where a project plugin goes; for OpenCode 2 it is a loader
+directory under `.opencode/plugins/` that a real OpenCode 2 starts from a subdirectory and under a
+launcher, reviewed as high-risk execution, measured, repaired and removed as a delivery. No
+migration. Evidence:
+`docs/refactor/slices/OPENCODE-2-PROJECT-PLUGINS-the-directory-opencode-2-loads.md`.
+
 **2026-11-27, OPENCODE-USAGE-PLUGIN (B-277, D-531): opencode usage counts real MCP servers only.**
 The usage plugin asks opencode for its MCP servers and counts a tool only when one of them has it,
 starts the recorder detached so the last uses survive opencode exiting, and passes it no secret
