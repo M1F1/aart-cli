@@ -324,6 +324,25 @@ repairs everything.
 What it cannot repair, it still reports: an artifact whose payload is missing or divergent is named
 with what is wrong, rather than being omitted because no repair for it exists.
 
+### OpenCode's user settings file
+
+For your user, opencode keeps its settings in `~/.config/opencode/opencode.jsonc` or
+`opencode.json`, and an OpenCode started by a launcher reads only the first that exists. aart-cli
+writes MCP servers and plugins into that same file, and creates `opencode.jsonc` when neither is
+there. It keeps your comments and layout, adds `// managed by aart-cli: <artifact>` above each entry
+it writes, and leaves every other entry alone. The comment is only for reading the file: deleting
+it changes nothing.
+
+If an entry sits in the file opencode does not read -- usually because `opencode.jsonc` appeared
+after the install -- doctor says so under *Settings files*, with the command that moves it:
+
+```bash
+aart-cli doctor --repair company/plugin/superpowers@7.0.0 --scope user
+```
+
+Review the plan, then confirm it with `--yes --expect <digest>` as above. A project's settings stay
+in `opencode.json` at the project root.
+
 ### When pip or uv fails
 
 An MCP's runtime dependencies are installed by pip or uv, and aart-cli runs them without your

@@ -1,11 +1,21 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-16, RUNTIME-DEPENDENCIES-VERIFIED)
+## Where the work is (2026-11-27, OPENCODE-USER-SETTINGS-FILE)
+
+**OPENCODE-USER-SETTINGS-FILE** (§218, D-530): user MCP servers and plugins go into
+`~/.config/opencode/opencode.jsonc` when it exists (created when neither file does), edited as
+JSON with comments with a `// managed by aart-cli` marker; an entry left in `opencode.json` is drift
+that doctor names and its reviewed repair moves. Branch `fix/opencode-user-config-file` (worktree
+`/Users/mifi/code/aart-cli-opencode-config`); the PR is what remains. Next, before 2026-11-30:
+**P0-2**, an `opencode2` harness variant detected by version, on a branch stacked on this one; then
+B-276, B-277, B-278 in the report's order. Evidence:
+`docs/refactor/slices/OPENCODE-USER-SETTINGS-FILE-the-file-opencode-reads.md`.
+
+## Where the work was (2026-11-16, RUNTIME-DEPENDENCIES-VERIFIED, released in 0.32.1)
 
 **RUNTIME-DEPENDENCIES-VERIFIED** (§217, D-529, closes B-029): an MCP's Python packages are checked
 against its recorded descriptor wherever the installation is judged. Branch
-`fix/runtime-dependencies-verified` (worktree `/Users/mifi/code/aart-cli-deps-check`); the PR is what
-remains. Evidence: `docs/refactor/slices/RUNTIME-DEPENDENCIES-VERIFIED-packages-checked.md`.
+`fix/runtime-dependencies-verified`, merged (#145). Evidence: `docs/refactor/slices/RUNTIME-DEPENDENCIES-VERIFIED-packages-checked.md`.
 
 ## Where the work was (2026-11-16, PYTHON-INSTALLERS-DOCTOR, released in 0.32.0)
 

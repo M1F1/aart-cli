@@ -29,7 +29,7 @@ import shutil
 import stat
 import subprocess
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
@@ -40,8 +40,15 @@ from aart_cli.domain.harness import (
     Scope,
     registered_command,
     registration_entry,
+    settings_syntax,
+    sibling_settings_paths,
 )
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.domain.settings_text import (
+    JsoncError,
+    parse_settings_text,
+    render_settings_text,
+)
 from aart_cli.io.fs import write_atomic
 
 HARNESS_SETTINGS_UNREADABLE = DiagnosticCode("harness-settings-unreadable")
@@ -70,9 +77,13 @@ class HarnessReceipt:
 
 
 class HarnessRegistryPort(Protocol):
-    def register(self, registration: McpRegistration) -> Result[HarnessReceipt]: ...
+    def register(
+        self, registration: McpRegistration, *, note: str | None = None
+    ) -> Result[HarnessReceipt]: ...
 
-    def unregister(self, target: McpTarget, server: str) -> Result[HarnessReceipt]: ...
+    def unregister(
+        self, target: McpTarget, server: str, *, command: str | None = None
+    ) -> Result[HarnessReceipt]: ...
 
     def registered(self, target: McpTarget) -> Result[tuple[str, ...]]: ...
 
@@ -148,7 +159,9 @@ class CodexServerEditor:
             }
         )
 
-    def register(self, registration: McpRegistration) -> Result[HarnessReceipt]:
+    def register(
+        self, registration: McpRegistration, *, note: str | None = None
+    ) -> Result[HarnessReceipt]:
         servers = self._servers()
         if isinstance(servers, Err):
             return servers
@@ -167,7 +180,9 @@ class CodexServerEditor:
             return added
         return Ok(HarnessReceipt(path, registration.server, changed=True))
 
-    def unregister(self, target: McpTarget, server: str) -> Result[HarnessReceipt]:
+    def unregister(
+        self, target: McpTarget, server: str, *, command: str | None = None
+    ) -> Result[HarnessReceipt]:
         servers = self._servers()
         if isinstance(servers, Err):
             return servers
@@ -213,6 +228,20 @@ def _codex_transport(entry: dict) -> tuple[str | None, list[str]]:
 _DELEGATES = {McpEditor.HARNESS_COMMAND: CodexServerEditor}
 
 
+def _unreadable(result: Err) -> bool:
+    """A sibling file nobody could read is not one this installation's server is in to remove.
+
+    Its harness does not read it while the chosen file exists (§218), and stopping an install into
+    the file it does read because of one it does not would be worse than leaving it alone; the
+    observation skips it the same way.
+    """
+
+    return all(
+        item.code in (HARNESS_SETTINGS_UNREADABLE, HARNESS_SETTINGS_UNUSABLE)
+        for item in result.diagnostics
+    )
+
+
 class LocalHarnessRegistry:
     """Registrations under one scope root on this machine.
 
@@ -238,29 +267,34 @@ class LocalHarnessRegistry:
     def path_for(self, target: McpTarget) -> str:
         return os.path.join(self._root, target.settings_file)
 
-    def _load(self, path: str) -> Result[dict[str, object]]:
+    def _load(self, path: str, target: McpTarget) -> Result[tuple[dict[str, object], str]]:
+        """The settings document at `path` and the text it was read from; both empty when the
+        file is not there yet."""
+
         if not os.path.exists(path):
-            return Ok({})
+            return Ok(({}, ""))
         try:
             with open(path, "r", encoding="utf-8") as handle:
                 raw = handle.read()
         except OSError as error:
             return _error(HARNESS_SETTINGS_UNREADABLE, f"cannot read {path}: {error.strerror}")
-        if not raw.strip():
-            return Ok({})
+        except UnicodeDecodeError:
+            return _error(HARNESS_SETTINGS_UNREADABLE, f"{path} is not UTF-8 text")
+        syntax = settings_syntax(target.harness)
         try:
-            data = json.loads(raw)
-        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+            data = parse_settings_text(raw, syntax) if raw.strip() else {}
+        except ValueError as error:
             return _error(
                 HARNESS_SETTINGS_UNREADABLE,
-                f"{path} is not valid JSON ({error}); fix or move it, and register again",
+                f"{path} is not valid {syntax.value.upper()} ({error}); fix or move it, and "
+                "register again",
             )
         if not isinstance(data, dict):
             return _error(
                 HARNESS_SETTINGS_UNUSABLE,
                 f"{path} holds a {type(data).__name__} where the harness expects an object",
             )
-        return Ok(data)
+        return Ok((data, raw))
 
     def _servers(self, data: dict[str, object], target: McpTarget) -> Result[dict[str, object]]:
         existing = data.get(target.server_map)
@@ -274,66 +308,163 @@ class LocalHarnessRegistry:
             )
         return Ok(existing)
 
-    def _save(self, path: str, data: dict[str, object]) -> Result[None]:
-        content = (json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    def _save(
+        self,
+        path: str,
+        target: McpTarget,
+        raw: str,
+        data: dict[str, object],
+        *,
+        server: str,
+        note: str | None = None,
+    ) -> Result[None]:
+        try:
+            text = render_settings_text(
+                raw,
+                data,
+                settings_syntax(target.harness),
+                path=path,
+                note=note,
+                ours=lambda where, _value: where == (target.server_map, server),
+            )
+        except JsoncError as error:
+            return _error(
+                HARNESS_SETTINGS_UNWRITABLE,
+                f"{path} cannot take {server} without losing a comment in it ({error})",
+                f"move the comments out of {target.server_map!r} in {path}, and register again",
+            )
+        content = text.encode("utf-8")
         try:
             mode = stat.S_IMODE(os.stat(path).st_mode)
         except OSError:
             mode = _DEFAULT_MODE
         try:
+            parent = os.path.dirname(path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
             write_atomic(path, content)
             os.chmod(path, mode)
         except OSError as error:
             return _error(HARNESS_SETTINGS_UNWRITABLE, f"cannot write {path}: {error.strerror}")
         return Ok(None)
 
-    def register(self, registration: McpRegistration) -> Result[HarnessReceipt]:
+    def _siblings(self, target: McpTarget) -> tuple[tuple[str, McpTarget], ...]:
+        """The other files this harness reads at this scope, each as the target it would be."""
+
+        path = self.path_for(target)
+        prefix = path[: -len(target.settings_file)]
+        return tuple(
+            (sibling, replace(target, settings_file=sibling[len(prefix) :]))
+            for sibling in sibling_settings_paths(target.harness, path)
+        )
+
+    def _held_elsewhere(self, target: McpTarget, server: str, command: str) -> str | None:
+        """The first other file this harness reads that still names this server at `command`."""
+
+        for sibling, sibling_target in self._siblings(target):
+            loaded = self._load(sibling, sibling_target)
+            if isinstance(loaded, Err):
+                continue
+            servers = self._servers(loaded.value[0], sibling_target)
+            if isinstance(servers, Err):
+                continue
+            if registered_command(sibling_target, servers.value.get(server)) == command:
+                return sibling
+        return None
+
+    def _remove(
+        self, target: McpTarget, server: str, *, command: str | None = None
+    ) -> Result[HarnessReceipt]:
+        """`server` out of `target`'s file; with `command`, only while it still starts that.
+
+        A file named for one server that starts something else holds someone's own server, which
+        is not this installation's to remove.
+        """
+
+        path = self.path_for(target)
+        loaded = self._load(path, target)
+        if isinstance(loaded, Err):
+            return loaded
+        data, raw = loaded.value
+        servers = self._servers(data, target)
+        if isinstance(servers, Err):
+            return servers
+        if server not in servers.value:
+            return Ok(HarnessReceipt(path, server, changed=False))
+        if command is not None and registered_command(target, servers.value[server]) != command:
+            return Ok(HarnessReceipt(path, server, changed=False))
+        updated = dict(data)
+        updated[target.server_map] = {
+            key: value for key, value in servers.value.items() if key != server
+        }
+        saved = self._save(path, target, raw, updated, server=server)
+        if isinstance(saved, Err):
+            return saved
+        return Ok(HarnessReceipt(path, server, changed=True))
+
+    def register(
+        self, registration: McpRegistration, *, note: str | None = None
+    ) -> Result[HarnessReceipt]:
+        """Write the server into the target's file, and out of every other file the harness reads
+        at that scope (§218): left there, a harness that reads both would hold it twice."""
+
         target = registration.target
         delegate = self._delegate(target)
         if delegate is not None:
             return delegate.register(registration)
         path = self.path_for(target)
-        loaded = self._load(path)
+        loaded = self._load(path, target)
         if isinstance(loaded, Err):
             return loaded
-        servers = self._servers(loaded.value, target)
+        data, raw = loaded.value
+        servers = self._servers(data, target)
         if isinstance(servers, Err):
             return servers
 
+        changed = False
         entry = registration_entry(registration)
-        if servers.value.get(registration.server) == entry:
-            return Ok(HarnessReceipt(path, registration.server, changed=False))
+        if servers.value.get(registration.server) != entry:
+            updated = dict(data)
+            members = dict(servers.value)
+            members[registration.server] = entry
+            updated[target.server_map] = members
+            saved = self._save(path, target, raw, updated, server=registration.server, note=note)
+            if isinstance(saved, Err):
+                return saved
+            changed = True
+        for _sibling, sibling_target in self._siblings(target):
+            removed = self._remove(
+                sibling_target, registration.server, command=registration.command
+            )
+            if isinstance(removed, Err):
+                if _unreadable(removed):
+                    continue
+                return removed
+            changed = changed or removed.value.changed
+        return Ok(HarnessReceipt(path, registration.server, changed=changed))
 
-        data = dict(loaded.value)
-        updated = dict(servers.value)
-        updated[registration.server] = entry
-        data[target.server_map] = updated
-        saved = self._save(path, data)
-        if isinstance(saved, Err):
-            return saved
-        return Ok(HarnessReceipt(path, registration.server, changed=True))
+    def unregister(
+        self, target: McpTarget, server: str, *, command: str | None = None
+    ) -> Result[HarnessReceipt]:
+        """Take the server out of the target's file, and -- when `command` says which server is
+        this installation's -- out of the other files the harness reads too."""
 
-    def unregister(self, target: McpTarget, server: str) -> Result[HarnessReceipt]:
         delegate = self._delegate(target)
         if delegate is not None:
             return delegate.unregister(target, server)
-        path = self.path_for(target)
-        loaded = self._load(path)
-        if isinstance(loaded, Err):
-            return loaded
-        servers = self._servers(loaded.value, target)
-        if isinstance(servers, Err):
-            return servers
-        if server not in servers.value:
-            return Ok(HarnessReceipt(path, server, changed=False))
-
-        data = dict(loaded.value)
-        updated = {key: value for key, value in servers.value.items() if key != server}
-        data[target.server_map] = updated
-        saved = self._save(path, data)
-        if isinstance(saved, Err):
-            return saved
-        return Ok(HarnessReceipt(path, server, changed=True))
+        removed = self._remove(target, server)
+        if isinstance(removed, Err):
+            return removed
+        changed = removed.value.changed
+        if command is not None:
+            for _sibling, sibling_target in self._siblings(target):
+                elsewhere = self._remove(sibling_target, server, command=command)
+                if isinstance(elsewhere, Err):
+                    if _unreadable(elsewhere):
+                        continue
+                    return elsewhere
+                changed = changed or elsewhere.value.changed
+        return Ok(HarnessReceipt(removed.value.path, server, changed=changed))
 
     def registered(self, target: McpTarget) -> Result[tuple[str, ...]]:
         """The server names this harness currently knows, for comparison against desired state."""
@@ -341,10 +472,10 @@ class LocalHarnessRegistry:
         delegate = self._delegate(target)
         if delegate is not None:
             return delegate.registered(target)
-        loaded = self._load(self.path_for(target))
+        loaded = self._load(self.path_for(target), target)
         if isinstance(loaded, Err):
             return loaded
-        servers = self._servers(loaded.value, target)
+        servers = self._servers(loaded.value[0], target)
         if isinstance(servers, Err):
             return servers
         return Ok(tuple(sorted(servers.value)))
@@ -354,19 +485,29 @@ class LocalHarnessRegistry:
 
         Nothing above this needs to know how a harness stores its servers, and a reader that
         assumed one spelling is what made a correct OpenCode registration read as missing.
+
+        A server that is also, or only, in another file the harness reads comes back with that
+        said, which no launcher path equals: it reads as divergent, so the repair writes it where
+        it belongs and out of the other file, and an uninstall takes it out of both (§218).
         """
 
         target = registration.target
         delegate = self._delegate(target)
         if delegate is not None:
             return delegate.observed_command(registration)
-        loaded = self._load(self.path_for(target))
+        loaded = self._load(self.path_for(target), target)
         if isinstance(loaded, Err):
             return None
-        servers = self._servers(loaded.value, target)
+        servers = self._servers(loaded.value[0], target)
         if isinstance(servers, Err):
             return None
-        return registered_command(target, servers.value.get(registration.server))
+        command = registered_command(target, servers.value.get(registration.server))
+        elsewhere = self._held_elsewhere(target, registration.server, registration.command)
+        if command is None:
+            # Only in another file the harness reads: divergent rather than missing, so an
+            # uninstall still takes it out and a repair moves it.
+            return None if elsewhere is None else f"{registration.command} (only in {elsewhere})"
+        return command if elsewhere is None else f"{command} (also in {elsewhere})"
 
 
 class ScopedHarnessRegistry:
@@ -396,17 +537,21 @@ class ScopedHarnessRegistry:
             raise ValueError(f"no root is known for {target.scope.value} scope")
         return registry.path_for(target)
 
-    def register(self, registration: McpRegistration) -> Result[HarnessReceipt]:
+    def register(
+        self, registration: McpRegistration, *, note: str | None = None
+    ) -> Result[HarnessReceipt]:
         registry = self._for(registration.target)
         if registry is None:
             return self._unrooted(registration.target)
-        return registry.register(registration)
+        return registry.register(registration, note=note)
 
-    def unregister(self, target: McpTarget, server: str) -> Result[HarnessReceipt]:
+    def unregister(
+        self, target: McpTarget, server: str, *, command: str | None = None
+    ) -> Result[HarnessReceipt]:
         registry = self._for(target)
         if registry is None:
             return self._unrooted(target)
-        return registry.unregister(target, server)
+        return registry.unregister(target, server, command=command)
 
     def registered(self, target: McpTarget) -> Result[tuple[str, ...]]:
         registry = self._for(target)

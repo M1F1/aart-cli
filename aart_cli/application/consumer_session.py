@@ -24,6 +24,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from datetime import date
 
+from aart_cli.application.settings_relocation import SettingsMove
 from aart_cli.domain.credentials import CredentialObservation, CredentialState
 from aart_cli.domain.diagnostics import Diagnostic, DiagnosticCode, Severity
 from aart_cli.domain.identifiers import ArtifactCoordinate, InputId
@@ -97,12 +98,16 @@ class InstalledInspection:
     record: InstalledRecord
     desired: DesiredState
     current: CurrentState
+    #: Settings entries recorded in a file their harness no longer reads, which this inspection
+    #: judges against the one it does (§218); `record` already names that one.
+    moves: tuple[SettingsMove, ...] = ()
 
     def __post_init__(self) -> None:
         if (
             not isinstance(self.record, InstalledRecord)
             or not isinstance(self.desired, DesiredState)
             or not isinstance(self.current, CurrentState)
+            or any(not isinstance(item, SettingsMove) for item in self.moves)
         ):
             raise ValueError("an installed inspection is invalid")
 

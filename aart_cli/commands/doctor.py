@@ -12,7 +12,11 @@ import os
 from datetime import datetime, timezone
 
 from aart_cli import command_outcome as _common
-from aart_cli.application.consumer_session import credential_dependants, installed_collections
+from aart_cli.application.consumer_session import (
+    InstalledInspection,
+    credential_dependants,
+    installed_collections,
+)
 from aart_cli.application.consumer_views import (
     ActivityView,
     CredentialRecordView,
@@ -266,6 +270,55 @@ def _offline_lines(readiness: OfflineReadiness) -> tuple[str, ...]:
                     f"  runtime dependencies {artifact.runtime_dependencies.value}",
                 )
             )
+    return tuple(lines)
+
+
+def _settings_move_data(inspections: tuple[InstalledInspection, ...]) -> list[dict[str, object]]:
+    return [
+        {
+            "installation": item.installation,
+            "coordinate": item.coordinate,
+            "harness": move.harness,
+            "recorded": move.recorded,
+            "read": move.read,
+            "scope": ""
+            if item.record.receipt.owner is None
+            else item.record.receipt.owner.scope.value,
+        }
+        for item in inspections
+        for move in item.moves
+    ]
+
+
+def _settings_move_lines(
+    inspections: tuple[InstalledInspection, ...], user_home: str
+) -> tuple[str, ...]:
+    """Say which installations sit in a settings file their harness no longer reads (§218).
+
+    Without it the row above says only that a `settings` or `harness` component is divergent,
+    which does not tell anybody that OpenCode never sees the server or plugin. Silence when there
+    is none, as for Candidate history.
+    """
+
+    moved = [(item, move) for item in inspections for move in item.moves]
+    if not moved:
+        return ()
+    home = user_home.rstrip("/") + "/"
+
+    def shown(path: str) -> str:
+        return "~/" + path[len(home) :] if path.startswith(home) else path
+
+    lines = ["Settings files"]
+    for item, move in moved:
+        owner = item.record.receipt.owner
+        scope = "" if owner is None else f" --scope {owner.scope.value}"
+        lines.extend(
+            (
+                f"⚠ {item.coordinate} · {move.harness}: written in {shown(move.recorded)}",
+                f"  {move.harness} reads {shown(move.read)} instead, so it does not load this",
+                f"  move it: aart-cli doctor --repair {item.coordinate}{scope}",
+            )
+        )
     return tuple(lines)
 
 
@@ -523,6 +576,7 @@ def run(request: Request) -> int:
         },
         "items": [_item_data(item) for item in artifacts],
         "repairs": repairs,
+        "settings_files": _settings_move_data(inspected.value.inspections),
         "offline_readiness": offline_readiness_to_data(offline.value),
         "python_installers": python_installers_to_data(installers),
         "orphaned_runs": orphaned_runs_to_data(orphaned),
@@ -549,6 +603,11 @@ def run(request: Request) -> int:
             "\n".join(
                 (
                     *render_doctor(view, PresentationProfile.LESS_INFO),
+                    *(
+                        ("", *moves)
+                        if (moves := _settings_move_lines(inspected.value.inspections, user_home))
+                        else ()
+                    ),
                     "",
                     *_offline_lines(offline.value),
                     "",

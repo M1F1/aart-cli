@@ -5437,3 +5437,44 @@ review, one transaction, INV-213). Running the same install again now completes 
 and the second install skipped pip. Whether the failure screen should say "run it again" is still
 open. Continuing past a failed member is a product decision, because it changes what one
 confirmation applies.
+
+## B-275 — OpenCode's config directory ignores `XDG_CONFIG_HOME`
+
+Status: **open**, noncritical (D-530).
+
+opencode finds its user config directory at `$XDG_CONFIG_HOME/opencode` when that variable is set;
+aart-cli's User-scope rows are `.config/opencode/...` under the home. Somebody who sets
+`XDG_CONFIG_HOME` gets skills, plugins and settings written where their OpenCode does not look.
+Promotion condition: one such report, or a launcher that sets the variable. The change belongs in
+the harness root, not in each row.
+
+## B-276 — `opencode2` places a project plugin as a `.opencode/plugins/<name>/` directory
+
+Status: **open**, owner-ordered after P0-2 (OpenCode 2 report, 2026-11-27, P1-1).
+
+OpenCode 2 loads a directory under `.opencode/plugins/` by itself, and a launcher passes it with an
+absolute path, so it works when started from a subdirectory; a project `opencode.json` entry does
+not. Never both: OpenCode 2 then loads the plugin twice (measured). `opencode` keeps the entry,
+`opencode2` gets the directory with the `index.js` aart-cli already writes. No absolute path in the
+project `opencode.json`.
+
+## B-277 — The opencode usage plugin's label, MCP filter, lost events and environment
+
+Status: **open**, owner-ordered after B-276 (OpenCode 2 report, 2026-11-27, P1-2).
+
+Measured on 2.3.2: the plugin loads, `setup` runs, `execute.before` arrives for skills and MCP
+tools. To do: label OpenCode 2 events `opencode2` from inside the one shared plugin (it was called
+through `setup`), keeping `source` `opencode_plugin` (a server enum); count only tools prefixed by
+a real MCP server's name (built-in `experimental_image_generate` and plugin tools also contain
+`_`); spawn the recorder `detached` and `unref()` it so the last uses before exit are kept; pass it
+only `PATH`, `HOME` and `LANG`, not OpenCode's own secrets. Until D-530 is released, user MCP uses
+are missing because the servers were never loaded.
+
+## B-278 — Live tests on a pinned OpenCode 2, plain and launcher-managed
+
+Status: **open**, owner-ordered alongside B-276/B-277 (OpenCode 2 report, 2026-11-27, P1-3).
+
+The live tests take `opencode` from `PATH`, which is 1.18.30 on the test machine. Add tests that run
+a pinned OpenCode 2 binary both plainly and as a launcher starts it (`OPENCODE_CONFIG`,
+`OPENCODE_CONFIG_DIR`, `OPENCODE_CONFIG_PROJECT_DISABLE`), locally only, never in CI.
+

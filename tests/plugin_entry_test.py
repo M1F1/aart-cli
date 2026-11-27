@@ -252,8 +252,10 @@ class APluginReceiptReadsBackAsWrittenTest(unittest.TestCase):
 
 class OpenCodeIsTheMeasuredPluginHostTest(unittest.TestCase):
     def test_project_and_user_scope_name_the_list_in_opencode_json(self) -> None:
+        # The user row is the file created when neither user file exists (§218); which one an
+        # install writes is chosen on the machine.
         self.assertEqual(("opencode.json", "plugin"), _where(Scope.PROJECT))
-        self.assertEqual((".config/opencode/opencode.json", "plugin"), _where(Scope.USER))
+        self.assertEqual((".config/opencode/opencode.jsonc", "plugin"), _where(Scope.USER))
 
     def test_an_unmeasured_harness_has_no_plugin_target(self) -> None:
         for harness in ("claude", "codex", "tabnine"):

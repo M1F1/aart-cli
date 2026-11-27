@@ -13290,3 +13290,52 @@ package as ready; a repair of a deleted environment rebuilt it empty.
 - **Evidence.** `tests/runtime_dependencies_verified_e2e_test.py` (real venv, real pip, offline
   hand-built wheel, public commands) and `tests/runtime_dependencies_test.py` (parser properties,
   receipt round-trip, judging).
+
+## D-530 — OpenCode's user settings go in the file it reads, edited as JSON with comments (OPENCODE-USER-SETTINGS-FILE)
+
+§218 added, §171.3 amended (owner request, 2026-11-27, deadline 2026-11-30). A report measured
+OpenCode 2.3.2 under a launcher that sets `OPENCODE_CONFIG`: it reads `opencode.jsonc` when it
+exists and `opencode.json` only when it does not, and OpenCode 1.x leaves an empty
+`opencode.jsonc` behind. Every user MCP server and plugin aart-cli wrote was therefore invisible.
+
+- **Choice of file.** `SETTINGS_FILES` lists a harness's user files in the order it reads them;
+  `chosen_settings_file` takes the first that exists, else the first. With neither file present it
+  creates `opencode.jsonc` (owner-approved): the file every OpenCode reads first, so a later
+  OpenCode 1.x run cannot shadow it.
+- **A JSONC editor, not a refusal.** The owner chose the full fix over refusing commented files
+  ("najważniejszy jest user experience"). `aart_cli/domain/jsonc.py` is pure and dependency-free:
+  it parses comments, trailing commas and duplicates, diffs the old document against the new and
+  edits only changed members and items, laying new ones out as `json.dumps(indent=...)` would with
+  the file's own indent. It refuses rather than drops: a replaced span holding a comment raises
+  `JsoncError`, and every result is reparsed and must equal the intended document. Properties:
+  rewrite equals the document or refuses only where comments are; added members keep every
+  comment; unchanged documents are byte-identical; add then remove is identity.
+- **Marker comments.** `// managed by aart-cli: <artifact>` above each entry in `.jsonc` files,
+  removed with the entry. For people only; the receipt is still the ownership record, so nothing
+  parses the comment to decide what is ours. `.json` files get none, as some tools reading
+  `opencode.json` may be strict.
+- **Sibling clean-up in the writers.** `LocalHarnessRegistry.register` and
+  `SettingsEntryInterpreter.apply` remove the same entry from the sibling file after writing the
+  chosen one; MCP removal requires the registered command to match, plugin entries are identified
+  by their `./aart-cli/...` reference. This makes install, update, repair and uninstall move
+  entries without a new component kind. A sibling that cannot be parsed is skipped, as the
+  observation skips it: opencode does not read it while the chosen file exists, and failing an
+  install over it would be worse. A symlinked sibling is read through the link and refused only
+  when it holds the entry, so a dotfiles-managed `opencode.json` does not block installs.
+- **Relocation on read.** `relocated_receipt` (application, pure) rebases a receipt's settings
+  files onto the file read now, so an old receipt naming `opencode.json` is judged against
+  `opencode.jsonc`. Observation reports an entry also or only in the sibling as divergent. Doctor
+  lists the moves under *Settings files* (and `settings_files` in JSON) with the repair command;
+  the repair records the relocated receipt. No migration of stored receipts (no backward
+  compatibility owed).
+- **Not chosen.** Writing both files: two copies drift, and an OpenCode that reads one would still
+  disagree with doctor. Converting `opencode.json` into `opencode.jsonc`: it moves the person's own
+  settings without being asked. A third-party JSONC library: zero runtime dependencies.
+- **Evidence.** `tests/jsonc_test.py` (examples and Hypothesis properties),
+  `tests/opencode_user_settings_file_test.py` (choice, registry, relocation),
+  `tests/opencode_user_settings_file_e2e_test.py` (public commands on an isolated home: create,
+  OpenCode's own file, comments through install and uninstall, json-only, reviewed repair moving
+  an entry, both-files drift, doctor's section, uninstall of a recorded json entry). Targeted
+  mutations: choosing the last candidate, dropping the command match on removal and skipping
+  relocation each turn their named tests red.
+

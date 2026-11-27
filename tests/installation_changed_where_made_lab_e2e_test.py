@@ -24,6 +24,8 @@ import tempfile
 import textwrap
 import unittest
 
+from aart_cli.domain import jsonc
+
 #: Composes the consumer application as `tui.run` does and walks it through `steps`: a string is a
 #: key, and `{"row": pattern}` moves down until the cursor line matches. It prints everything drawn
 #: and, from a fresh composition, every installation the machine holds.
@@ -214,7 +216,7 @@ def _entries(path: pathlib.Path) -> list[str]:
 
     if not path.exists():
         return []
-    return sorted(json.loads(path.read_text(encoding="utf-8")).get("mcp", {}))
+    return sorted(jsonc.loads(path.read_text(encoding="utf-8")).get("mcp", {}))
 
 
 @unittest.skipUnless(sys.platform == "darwin", "the MCP's credential needs the Keychain")
@@ -222,7 +224,7 @@ class AUsersInstallationIsRemovedFromAProjectWhereItLives(_Lab):
     INSTALLS = ((*_MCP, "--scope", "user"),)
 
     def test_its_harness_entry_goes_with_it(self) -> None:
-        user_config = self.home / ".config/opencode/opencode.json"
+        user_config = self.home / ".config/opencode/opencode.jsonc"
         self.assertEqual(len(_entries(user_config)), 1, user_config)
 
         seen = self._walk(*INSTALLED, {"row": r"dummy-mcp.*\buser\b"}, "u", "enter")
@@ -251,7 +253,7 @@ class UserAndProjectRowsAreChangedOneScopeAtATime(_Lab):
             "user and project installations are changed one scope at a time", seen["drawn"]
         )
         self.assertEqual(len(seen["installed"]), 2, seen["drawn"][-3000:])
-        self.assertEqual(len(_entries(self.home / ".config/opencode/opencode.json")), 1)
+        self.assertEqual(len(_entries(self.home / ".config/opencode/opencode.jsonc")), 1)
         self.assertEqual(len(_entries(self.project / "opencode.json")), 1)
 
 

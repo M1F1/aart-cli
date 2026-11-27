@@ -15,7 +15,6 @@ failing somewhere deeper with a message about a provider.
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import shutil
 import stat
@@ -58,7 +57,12 @@ from aart_cli.domain.effects import (
     WithdrawArtifact,
     WriteFile,
 )
-from aart_cli.domain.harness import McpRegistration
+from aart_cli.domain.harness import (
+    McpRegistration,
+    settings_note,
+    settings_syntax,
+    sibling_settings_paths,
+)
 from aart_cli.domain.hooks import (
     PLUGIN_INDEX,
     PluginEntry,
@@ -66,6 +70,7 @@ from aart_cli.domain.hooks import (
     plugin_index,
     remove_settings_entry,
     settings_entry_label,
+    settings_entry_to_json,
 )
 from aart_cli.domain.inputs import SKIPPED_INPUT
 from aart_cli.domain.managed_blocks import (
@@ -79,6 +84,11 @@ from aart_cli.domain.receipts import (
     ArtifactSettingsEntry,
 )
 from aart_cli.domain.result import Err, Ok, Result
+from aart_cli.domain.settings_text import (
+    JsoncError,
+    parse_settings_text,
+    render_settings_text,
+)
 from aart_cli.io.credential_entry import CredentialEntryFallback, enter_another_way
 from aart_cli.io.credentials import CredentialProviderPort, TransientSecret
 from aart_cli.io.fs import write_atomic
@@ -592,32 +602,75 @@ class SettingsEntryInterpreter:
             indexed = self._write_index(effect)
             if isinstance(indexed, Err):
                 return indexed
-        loaded = self._read(effect.destination)
-        if isinstance(loaded, Err):
-            return loaded
-        document = loaded.value
         if isinstance(effect, MergeSettingsEntry):
+            done = f"registered {settings_entry_label(effect.entry)} at {effect.path} in {effect.destination}"
+        else:
+            done = f"removed {settings_entry_label(effect.entry)} at {effect.path} from {effect.destination}"
+        changed = self._edit(
+            effect, effect.destination, merge=isinstance(effect, MergeSettingsEntry)
+        )
+        if isinstance(changed, Err):
+            return changed
+        # Out of every other file the harness reads at this scope, too (§218): an entry left in
+        # the one it was moved from is a plugin OpenCode started on its own would load twice.
+        moved = False
+        for sibling in sibling_settings_paths(effect.harness, effect.destination):
+            removed = self._edit(effect, sibling, merge=False, sibling=True)
+            if isinstance(removed, Err):
+                return removed
+            moved = moved or removed.value
+        if not changed.value and not moved:
+            return Ok(f"{effect.destination} already says what it should")
+        return Ok(done)
+
+    def _edit(
+        self,
+        effect: MergeSettingsEntry | UnmergeSettingsEntry,
+        destination: str,
+        *,
+        merge: bool,
+        sibling: bool = False,
+    ) -> Result[bool]:
+        """Write or take out this entry in one file; whether that changed the file.
+
+        A `sibling` that is a symlink -- a dotfiles checkout, say -- is read through the link, and
+        refused only when the entry is in it: one that does not hold it is nothing to change, and
+        refusing it would stop every install for a file aart-cli has no business with.
+        """
+
+        linked = sibling and os.path.islink(destination)
+        loaded = self._read(destination, effect.harness, follow=linked)
+        if isinstance(loaded, Err):
+            # A sibling nobody can read holds nothing this installation can take out, and its
+            # harness does not read it while the chosen file exists: leave it, as observation does.
+            return Ok(False) if sibling else loaded
+        document, raw = loaded.value
+        if merge:
             # No file yet is a harness nobody has configured, which the merge answers by building
             # the document around the entry. Only a removal cares that there was nothing there.
             written = merge_settings_entry(
                 {} if document is None else document, effect.path, effect.entry
             )
-            done = f"registered {settings_entry_label(effect.entry)} at {effect.path} in {effect.destination}"
         else:
             if document is None:
-                return Ok(f"{effect.destination} is already gone, so the entry in it is too")
+                return Ok(False)
             written = remove_settings_entry(document, effect.path, effect.entry)
-            done = f"removed {settings_entry_label(effect.entry)} at {effect.path} from {effect.destination}"
         if isinstance(written, Err):
             # The list could not be written without displacing something somebody else put there,
             # so the file is left exactly as it is and the refusal names why.
             return written
         if written.value == (document if document is not None else {}):
-            return Ok(f"{effect.destination} already says what it should")
-        saved = self._write(effect.destination, written.value)
+            return Ok(False)
+        if linked:
+            return _error(
+                EXECUTION_REFUSED,
+                f"{destination} is a symlink holding {settings_entry_label(effect.entry)}; take it "
+                "out by hand, or replace the link with a file, and run this again",
+            )
+        saved = self._write(destination, effect, raw, written.value)
         if isinstance(saved, Err):
             return saved
-        return Ok(done)
+        return Ok(True)
 
     def _write_index(self, effect: MergeSettingsEntry) -> Result[None]:
         """The `index.js` a plugin entry naming its tree loads (D-521), written into that tree.
@@ -645,17 +698,19 @@ class SettingsEntryInterpreter:
             return _error(EXECUTION_FAILED, f"cannot write {index}: {error.strerror}")
         return Ok(None)
 
-    def _read(self, destination: str) -> Result[dict[str, object] | None]:
-        """The settings document, or `None` when there is no file there yet."""
+    def _read(
+        self, destination: str, harness: str, *, follow: bool = False
+    ) -> Result[tuple[dict[str, object] | None, str]]:
+        """The settings document and its text, or `None` when there is no file there yet."""
 
-        if os.path.islink(destination):
+        if os.path.islink(destination) and not follow:
             return _error(
                 EXECUTION_REFUSED,
                 f"{destination} is a symlink; writing an entry would go through it into a path "
                 f"nobody reviewed, or replace the arrangement somebody made",
             )
         if not os.path.exists(destination):
-            return Ok(None)
+            return Ok((None, ""))
         if not os.path.isfile(destination):
             return _error(EXECUTION_REFUSED, f"{destination} is not a regular settings file")
         try:
@@ -671,23 +726,47 @@ class SettingsEntryInterpreter:
             # An empty file is a file nobody has configured yet, which is the same thing as one
             # that is not there. Refusing it would leave a harness unconfigurable because
             # something once touched its settings path.
-            return Ok(None)
+            return Ok((None, raw))
+        syntax = settings_syntax(harness)
         try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as error:
+            data = parse_settings_text(raw, syntax)
+        except ValueError as error:
             return _error(
                 EXECUTION_REFUSED,
-                f"{destination} is not valid JSON ({error}); fix or move it, and install again",
+                f"{destination} is not valid {syntax.value.upper()} ({error}); fix or move it, "
+                "and install again",
             )
         if not isinstance(data, dict):
             return _error(
                 EXECUTION_REFUSED,
                 f"{destination} holds a {type(data).__name__} where the harness expects an object",
             )
-        return Ok(data)
+        return Ok((data, raw))
 
-    def _write(self, destination: str, document: dict[str, object]) -> Result[str]:
-        content = (json.dumps(document, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    def _write(
+        self,
+        destination: str,
+        effect: MergeSettingsEntry | UnmergeSettingsEntry,
+        raw: str,
+        document: dict[str, object],
+    ) -> Result[str]:
+        listed = tuple(effect.path.split("."))
+        spelled = settings_entry_to_json(effect.entry)
+        try:
+            text = render_settings_text(
+                raw,
+                document,
+                settings_syntax(effect.harness),
+                path=destination,
+                note=settings_note(self.artifact),
+                ours=lambda where, value: where[:-1] == listed and value == spelled,
+            )
+        except JsoncError as error:
+            return _error(
+                EXECUTION_REFUSED,
+                f"{destination} cannot take this entry without losing a comment in it ({error})",
+            )
+        content = text.encode("utf-8")
         try:
             mode: int | None = stat.S_IMODE(os.stat(destination).st_mode)
         except OSError:
@@ -782,9 +861,11 @@ class HarnessEffectInterpreter:
         recorded = []
         for registration in matching:
             result = (
-                self.registry.register(registration)
+                self.registry.register(registration, note=settings_note(self.artifact))
                 if isinstance(effect, ConfigureHarness)
-                else self.registry.unregister(registration.target, registration.server)
+                else self.registry.unregister(
+                    registration.target, registration.server, command=registration.command
+                )
             )
             if isinstance(result, Err):
                 return result

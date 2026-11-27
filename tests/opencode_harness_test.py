@@ -66,7 +66,9 @@ class OpenCodeTargetTest(unittest.TestCase):
         user = mcp_target("opencode", Scope.USER)
 
         self.assertEqual(project.settings_file, "opencode.json")
-        self.assertEqual(user.settings_file, ".config/opencode/opencode.json")
+        # Created when neither user file is there; `opencode.json` is written only where it is
+        # the one present (§218).
+        self.assertEqual(user.settings_file, ".config/opencode/opencode.jsonc")
         self.assertEqual(project.server_map, "mcp")
         self.assertEqual(user.server_map, "mcp")
 
@@ -217,8 +219,8 @@ class OpenCodeObservationTest(unittest.TestCase):
             if line.startswith("config ")
         )
         self.assertEqual(
-            os.path.join(config_root, "opencode.json"),
-            str(self.user_root / target.settings_file),
+            config_root,
+            os.path.dirname(str(self.user_root / target.settings_file)),
         )
 
 
