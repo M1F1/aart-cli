@@ -16,11 +16,13 @@ import json
 import pathlib
 import tempfile
 import unittest
+from unittest import mock
 
 from aart_cli.domain import jsonc
 from aart_cli.domain.result import Ok
 from aart_cli.io.receipt_store import LocalReceiptStore
 from tests.configured_install_command_e2e_test import _Environment
+from tests.configured_installation_draft_e2e_test import _published_registries
 from tests.plugin_installation_e2e_test import AUTHORED, COORDINATE, MANIFEST, MODULE
 
 HELPERS = "company/plugin/helpers"
@@ -149,7 +151,11 @@ class OpenCodeUserSettingsFileTest(unittest.TestCase):
         self.assertEqual(OPENCODES_OWN, self.jsonc.read_text(encoding="utf-8"))
 
     def test_one_reviewed_repair_moves_every_named_entry(self) -> None:
-        self.env.publish(AUTHORED, HELPERS_TREE)
+        with mock.patch(
+            "tests.configured_install_command_e2e_test._published_registry",
+            lambda _authored, **keywords: _published_registries(AUTHORED, HELPERS_TREE, **keywords),
+        ):
+            self.env.publish(AUTHORED)
         self._write(self.json, json.dumps({"$schema": SCHEMA}, indent=2) + "\n")
         for coordinate in (COORDINATE, HELPERS):
             self._run(
