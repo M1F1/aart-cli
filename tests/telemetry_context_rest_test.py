@@ -418,13 +418,13 @@ class TheHookKeepsAPseudonymTest(unittest.TestCase):
             )
         connection.close()
 
-        self._record("opencode", tool="jira_search", directory="/w", session="ses_1")
+        self._record("opencode", tool="jira_search", server="jira", directory="/w", session="ses_1")
 
         rows = ActivityDatabase(self.state).use_rows()
         assert isinstance(rows, Ok)
         self.assertEqual(
             [(use.name, use.session != "") for _, _, use in rows.value],
-            [("notes", False), ("jira_search", True)],
+            [("notes", False), ("jira", True)],
         )
 
     def test_the_outbox_keeps_a_use_s_session_tool_and_project_to_send(self) -> None:

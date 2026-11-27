@@ -13352,3 +13352,43 @@ exists and `opencode.json` only when it does not, and OpenCode 1.x leaves an emp
   `--all`: the boundary that nothing is repaired unnamed stands. (3) The live opencode tests read
   stdout from a file, not a pipe, because a Bun process may exit before a pipe past 64 KB is
   drained (`opencode debug config` on 1.18.30), and drop every `OPENCODE_*` variable.
+
+## D-531 — The opencode usage plugin names the server, outlives opencode and keeps its secrets (B-277)
+
+Owner request ("telemetria też normalnie działała dla opencode", 2026-11-27) on a report measured on
+OpenCode 2.3.2 and 1.19.5.
+
+- **A tool is an MCP's only when opencode has the server.** Any tool with `_` counted: the built-in
+  `experimental_image_generate` and plugin tools named `<file>_<export>` were sent as unmanaged MCP
+  uses. The plugin asks the runtime for its servers -- `client.mcp.status()` (1.x, keys) and
+  `ctx.mcp.list()` (2, `data[].name`, from the published `@opencode-ai/plugin` types) -- once, and
+  again when a tool fits none known, and hands over `server`, the longest whose name, with what
+  opencode replaces made `_`, prefixes the tool. Python records a use only with a server the tool
+  fits, as the server with the tool beside it, as Claude Code's is; `unmanaged.used` now names the
+  server, not the whole tool. Without the API (an older runtime) nothing is taken for an MCP's:
+  fewer uses, never false ones. Not chosen: reading opencode's config files from Python, because a
+  launcher passes part of it in `OPENCODE_CONFIG_CONTENT`, which only the process sees.
+- **Detached.** `spawn(..., { detached: true, windowsHide: true })` and `unref()`: `opencode run`
+  ending right after a tool call took its non-detached children, so the last uses (in automation,
+  all of them) were lost.
+- **Environment.** Not just `PATH`, `HOME`, `LANG` as the report proposed: the recorder starts
+  telemetry's sender, which reaches the server through `HTTPS_PROXY`/`NO_PROXY` and trusts
+  `SSL_CERT_FILE`/`SSL_CERT_DIR`, and tells automation by `CI`/`AART_CLI_AUTOMATED` (D-511).
+  Without those, telemetry behind a company proxy or CA would stop. `RECORDER_ENVIRONMENT` lists
+  them (matched in any case, plus `LC_*`, `TMPDIR`, `SYSTEMROOT`); nothing else, so neither
+  `OPENCODE_PASSWORD`, a launcher's tokens nor a provider's key reach it. A proxy URL holding
+  credentials is passed, as it is needed to send at all.
+- **Which runtime.** OpenCode 1.19.5 calls `setup` too (without `ctx.tool`), so being called through
+  `setup` does not say OpenCode 2; the hook that delivered the call does. The plugin hands over
+  `runtime: 1|2` from each hook. Nothing reads it yet: labelling the use `opencode2` before the
+  `opencode2` harness exists (P0-2) would match no installation, and both the client's and the
+  telemetry server's rule "a use's harness is its source's" (`HARNESS_OF[opencode_plugin] ==
+  "opencode"`) refuse `harness: opencode2` from `opencode_plugin` -- the free-form SQL column is
+  not the check. B-279 carries the label with P0-2 and that server change.
+- **Evidence.** `tests/opencode_plugin_runtimes_test.py` drives the written plugin in node as both
+  runtimes: servers asked and the longest chosen, false MCP tools not handed over, the recorder in
+  a session of its own given no secret but the proxy, and the last uses recorded after the driver
+  kills its whole process group; `tests/artifact_usage_test.py` (examples and a property) for the
+  parser. Targeted mutations -- no `detached`, the whole environment, the first server instead of
+  the longest, handing over without a server, no server needed in Python, the raw server name as
+  the prefix -- each turn their named test red.

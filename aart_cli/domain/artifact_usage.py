@@ -55,8 +55,8 @@ _MAX_PROJECT = 4096
 _PSEUDONYM = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 #: The least a session key holds, in bytes.
 _MIN_KEY = 32
-#: The namespace OpenCode 2 gives its own tools, which an MCP tool's `<server>_<tool>` would fit.
-_OPENCODE_OWN = "opencode_"
+#: What opencode makes `_` in an MCP server's name when it names the server's tools.
+_OPENCODE_UNSAFE = re.compile(r"[^a-zA-Z0-9_-]")
 
 
 def parse_usage_harnesses(raw: str) -> Result[tuple[str, ...]]:
@@ -122,16 +122,15 @@ def _project(value: object) -> str:
 class ArtifactUse:
     """One call of a skill or an MCP tool, as the harness named it.
 
-    `name` is a skill's name, or the MCP server's for Claude Code. opencode names a tool
-    `<server>_<tool>` and does not say where the server ends, so its whole tool name is kept and
-    the server is found when the uses are ranked against what is installed.
+    `name` is a skill's name, or the MCP server's. opencode names a tool `<server>_<tool>`; its
+    plugin says the server, so the use is the server with the tool beside it, as Claude Code's is.
     """
 
     harness: str
     kind: UsageKind
     name: str
     project: str = ""
-    #: The MCP tool Claude Code called, which its server name alone does not say; empty otherwise.
+    #: The MCP tool called, which its server's name alone does not say; empty otherwise.
     tool: str = ""
     #: The pseudonym of the harness session it happened in (`session_pseudonym`); empty when the
     #: harness said none. Never the harness's own id.
@@ -206,11 +205,17 @@ def _opencode(payload: Mapping[str, object]) -> ArtifactUse | None:
     if tool == "skill":
         skill = _name(payload.get("skill"))
         return None if skill is None else ArtifactUse("opencode", UsageKind.SKILL, skill, project)
-    # Every MCP tool is `<server>_<tool>`; opencode's own tools have no underscore, except that
-    # OpenCode 2 names its own `opencode_<tool>` (D-520).
-    if tool is not None and "_" in tool.strip("_") and not tool.startswith(_OPENCODE_OWN):
-        return ArtifactUse("opencode", UsageKind.MCP, tool, project)
-    return None
+    # An MCP tool is `<server>_<tool>`, and the plugin says which server opencode has it from.
+    # A tool no server is named for -- a built-in such as `experimental_image_generate`, or a
+    # plugin's `<file>_<export>` -- is not an MCP's, underscore or not (B-277).
+    server = _name(payload.get("server"))
+    if tool is None or server is None:
+        return None
+    prefix = _OPENCODE_UNSAFE.sub("_", server) + "_"
+    called = _name(tool[len(prefix) :]) if tool.startswith(prefix) else None
+    if called is None:
+        return None
+    return ArtifactUse("opencode", UsageKind.MCP, server, project, called)
 
 
 def use_from_hook(harness: str, payload: object) -> ArtifactUse | None:

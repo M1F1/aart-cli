@@ -10,7 +10,7 @@ import dataclasses
 import json
 import unittest
 
-from hypothesis import given, settings
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from aart_cli.domain.artifact_usage import (
@@ -22,6 +22,9 @@ from aart_cli.domain.artifact_usage import (
     rank_usage,
     use_from_hook,
 )
+
+#: mutmut runs these from another executor than unittest does.
+_MUTATION = (HealthCheck.differing_executors,)
 
 _JSON = st.recursive(
     st.none() | st.booleans() | st.integers() | st.text(max_size=20),
@@ -78,10 +81,39 @@ class OpencodePluginTest(unittest.TestCase):
 
         self.assertEqual(use, ArtifactUse("opencode", UsageKind.SKILL, "git-release", "/w"))
 
-    def test_a_tool_with_an_underscore_is_kept_whole_as_an_mcp_tool(self) -> None:
-        use = use_from_hook("opencode", {"tool": "jira_search_issues"})
+    def test_an_mcp_tool_is_its_server_with_the_tool_beside_it(self) -> None:
+        use = use_from_hook("opencode", {"tool": "jira_search_issues", "server": "jira"})
 
-        self.assertEqual(use, ArtifactUse("opencode", UsageKind.MCP, "jira_search_issues"))
+        self.assertEqual(use, ArtifactUse("opencode", UsageKind.MCP, "jira", tool="search_issues"))
+
+    def test_a_server_name_opencode_rewrote_still_names_its_tools(self) -> None:
+        use = use_from_hook("opencode", {"tool": "my_jira_search", "server": "my.jira"})
+
+        self.assertEqual(use, ArtifactUse("opencode", UsageKind.MCP, "my.jira", tool="search"))
+
+    def test_a_tool_no_server_is_named_for_is_no_use_underscore_or_not(self) -> None:
+        # B-277: a built-in and a plugin's `<file>_<export>` have underscores too.
+        for payload in (
+            {"tool": "experimental_image_generate"},
+            {"tool": "notes_append"},
+            {"tool": "jira_search", "server": "github"},
+            {"tool": "jira_", "server": "jira"},
+            {"tool": "jira_search", "server": 7},
+        ):
+            with self.subTest(payload=payload):
+                self.assertIsNone(use_from_hook("opencode", payload))
+
+    @settings(suppress_health_check=_MUTATION)
+    @given(
+        server=st.from_regex(r"[a-z][a-z0-9.-]{0,20}", fullmatch=True),
+        called=st.from_regex(r"[a-z][a-z0-9_]{0,20}", fullmatch=True),
+    )
+    def test_any_server_s_tool_is_that_server_s_use(self, server: str, called: str) -> None:
+        tool = server.replace(".", "_") + "_" + called
+
+        use = use_from_hook("opencode", {"tool": tool, "server": server})
+
+        self.assertEqual(use, ArtifactUse("opencode", UsageKind.MCP, server, tool=called))
 
     def test_opencode_s_own_tools_are_no_use(self) -> None:
         for tool in ("bash", "read", "todowrite", "_", "__", "skill"):
@@ -91,7 +123,7 @@ class OpencodePluginTest(unittest.TestCase):
     def test_opencode_2_s_own_namespaced_tools_are_no_use(self) -> None:
         """OpenCode 2 names its own tools `opencode_<tool>`, which an MCP tool's shape fits (D-520);
         measured on 2.1.3, whose `opencode_list_mcp_resources` reached the hook beside an MCP
-        call."""
+        call. No server is named for them."""
 
         for tool in (
             "opencode_list_mcp_resources",
@@ -102,13 +134,13 @@ class OpencodePluginTest(unittest.TestCase):
             with self.subTest(tool=tool):
                 self.assertIsNone(use_from_hook("opencode", {"tool": tool}))
         self.assertEqual(
-            use_from_hook("opencode", {"tool": "opencodex_search"}),
-            ArtifactUse("opencode", UsageKind.MCP, "opencodex_search"),
+            use_from_hook("opencode", {"tool": "opencodex_search", "server": "opencodex"}),
+            ArtifactUse("opencode", UsageKind.MCP, "opencodex", tool="search"),
         )
 
 
 class NothingButNamesTest(unittest.TestCase):
-    @settings(max_examples=300)
+    @settings(suppress_health_check=_MUTATION, max_examples=300)
     @given(
         harness=st.sampled_from((*USAGE_HARNESSES, "tabnine", "")),
         payload=_JSON,
@@ -208,6 +240,7 @@ class RankingTest(unittest.TestCase):
 
         self.assertEqual(sorted(item.harness for item in ranking), ["claude", "opencode"])
 
+    @settings(suppress_health_check=_MUTATION)
     @given(
         st.lists(
             st.builds(

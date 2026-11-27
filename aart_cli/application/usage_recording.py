@@ -23,6 +23,7 @@ __all__ = [
     "CLAUDE_MATCHER",
     "HOOK_SCRIPT",
     "OPENCODE_PLUGIN_MARK",
+    "RECORDER_ENVIRONMENT",
     "UsageHook",
     "claude_settings_with",
     "claude_settings_without",
@@ -143,12 +144,39 @@ def claude_settings_without(document: Mapping[str, object]) -> dict[str, object]
     return _with_entries(document, kept)
 
 
+#: What the recorder the opencode plugin starts is given of opencode's environment, by name in
+#: upper case: enough to run, to keep its locale and to send telemetry through the network the
+#: person configured, and nothing opencode, its provider or a launcher holds (B-277).
+RECORDER_ENVIRONMENT: tuple[str, ...] = (
+    "PATH",
+    "HOME",
+    "LANG",
+    "TMPDIR",
+    "SYSTEMROOT",
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "ALL_PROXY",
+    "NO_PROXY",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "CI",
+    "AART_CLI_AUTOMATED",
+)
+
+
 def opencode_plugin(hook: UsageHook) -> str:
     """The plugin opencode loads from its plugins directory, which runs the usage hook.
 
-    It hands over the tool's name, a skill's name, the directory and opencode's session id, which
-    the hook keeps only as a pseudonym; never the call's arguments. Only `skill` and tools with an
-    underscore -- MCP tools are `<server>_<tool>` -- start it.
+    It hands over the tool's name, the MCP server it belongs to, a skill's name, the directory and
+    opencode's session id, which the hook keeps only as a pseudonym, and which runtime delivered
+    the call (1 or 2, by the hook it came through); never the call's arguments.
+    Only `skill` and the tools of an MCP server opencode has start it: opencode names those
+    `<server>_<tool>`, and asks for its servers -- `client.mcp.status()` on 1.x, `ctx.mcp.list()` on
+    2 -- so a built-in or plugin tool with an underscore is not taken for one.
+
+    The recorder is started detached and let go, so opencode exiting or stopping its process group
+    does not take the last uses with it, and with only `RECORDER_ENVIRONMENT` of opencode's
+    environment.
 
     One file serves both of opencode's plugin runtimes (D-520): its only export is the default
     definition, which OpenCode 1.x (from 1.18.29) loads through `server` and OpenCode 2 through
@@ -159,42 +187,107 @@ def opencode_plugin(hook: UsageHook) -> str:
     if hook.harness != "opencode":
         raise ValueError("the opencode plugin runs opencode's usage hook")
     command = json.dumps(list(hook.arguments))
+    kept = json.dumps(list(RECORDER_ENVIRONMENT))
     return f"""{OPENCODE_PLUGIN_MARK}
 // Turn it off with `aart-cli consume usage disable --harness opencode`; that removes this file.
 import {{ spawn }} from "node:child_process"
 
 const COMMAND = {command}
 
-// Names only: a skill's name, and nothing else the call was given.
-const record = (directory, called, args, sessionID) => {{
+// What the recorder is given of this environment; never opencode's, its provider's or a
+// launcher's secrets.
+const KEPT = new Set({kept})
+const environment = () => {{
+  const given = {{}}
+  for (const [name, value] of Object.entries(process.env)) {{
+    const upper = name.toUpperCase()
+    if (typeof value === "string" && (KEPT.has(upper) || upper.startsWith("LC_"))) given[name] = value
+  }}
+  return given
+}}
+
+// opencode names an MCP tool `<server>_<tool>`, each part with anything but letters, digits, `_`
+// and `-` made `_`. The longest server a tool fits is its own.
+const serverOf = (tool, servers) => {{
+  let found
+  for (const name of servers) {{
+    if (typeof name !== "string") continue
+    const prefix = name.replace(/[^a-zA-Z0-9_-]/g, "_") + "_"
+    if (tool.length > prefix.length && tool.startsWith(prefix)) {{
+      if (found === undefined || name.length > found.length) found = name
+    }}
+  }}
+  return found
+}}
+
+// The servers' names, asked for again when a tool fits none of those already known, since a
+// server can be added while opencode runs.
+const mcpServers = (list) => {{
+  let known = []
+  return async (tool) => {{
+    let server = serverOf(tool, known)
+    if (server !== undefined) return server
+    try {{
+      known = (await list()) ?? []
+    }} catch {{
+      return undefined
+    }}
+    return serverOf(tool, known)
+  }}
+}}
+
+const hand = (payload) => {{
+  const child = spawn(COMMAND[0], COMMAND.slice(1), {{
+    detached: true,
+    env: environment(),
+    stdio: ["pipe", "ignore", "ignore"],
+    windowsHide: true,
+  }})
+  child.on("error", () => {{}})
+  child.stdin.on("error", () => {{}})
+  child.stdin.end(JSON.stringify(payload))
+  child.unref()
+}}
+
+// Names only: a skill's name, the server's, and nothing else the call was given. `runtime` is
+// the hook that delivered the call -- 1.x's `tool.execute.before` or OpenCode 2's
+// `ctx.tool.hook` -- since OpenCode 1.19 calls `setup` too.
+const record = async (runtime, directory, called, args, sessionID, serverFor) => {{
   try {{
     const tool = String(called)
-    if (tool !== "skill" && !tool.includes("_")) return
-    const named = tool === "skill" ? (args?.id ?? args?.name) : undefined
-    const skill = typeof named === "string" ? named : undefined
     const session = typeof sessionID === "string" ? sessionID : undefined
-    const child = spawn(COMMAND[0], COMMAND.slice(1), {{ stdio: ["pipe", "ignore", "ignore"] }})
-    child.on("error", () => {{}})
-    child.stdin.on("error", () => {{}})
-    child.stdin.end(JSON.stringify({{ tool, skill, directory, session }}))
-    child.unref()
+    if (tool === "skill") {{
+      const named = args?.id ?? args?.name
+      if (typeof named === "string") hand({{ tool, skill: named, directory, session, runtime }})
+      return
+    }}
+    if (!tool.includes("_")) return
+    const server = await serverFor(tool)
+    if (server !== undefined) hand({{ tool, server, directory, session, runtime }})
   }} catch {{}}
 }}
 
 // OpenCode 1.x.
-const server = async ({{ directory }}) => ({{
-  "tool.execute.before": async (input, output) =>
-    record(directory, input?.tool, output?.args, input?.sessionID),
-}})
+const server = async ({{ client, directory }}) => {{
+  const serverFor = mcpServers(async () => Object.keys((await client.mcp.status())?.data ?? {{}}))
+  return {{
+    "tool.execute.before": async (input, output) => {{
+      void record(1, directory, input?.tool, output?.args, input?.sessionID, serverFor)
+    }},
+  }}
+}}
 
 // OpenCode 2. A hook that throws fails the tool call, so this one never does; and setup returns
 // nothing, because what it returns is taken as its cleanup.
 async function setup(ctx) {{
   if (typeof ctx?.tool?.hook !== "function") return
   const directory = ctx.location?.directory ?? process.cwd()
-  await ctx.tool.hook("execute.before", (event) =>
-    record(directory, event?.tool, event?.input, event?.sessionID),
+  const serverFor = mcpServers(async () =>
+    ((await ctx.mcp.list())?.data ?? []).map((item) => item?.name),
   )
+  await ctx.tool.hook("execute.before", (event) => {{
+    void record(2, directory, event?.tool, event?.input, event?.sessionID, serverFor)
+  }})
 }}
 
 export default {{ id: "aart-cli-usage", server, setup }}

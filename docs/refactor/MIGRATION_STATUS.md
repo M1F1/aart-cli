@@ -4,6 +4,12 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-27, OPENCODE-USAGE-PLUGIN (B-277, D-531): opencode usage counts real MCP servers only.**
+The usage plugin asks opencode for its MCP servers and counts a tool only when one of them has it,
+starts the recorder detached so the last uses survive opencode exiting, and passes it no secret
+from opencode's environment. Evidence:
+`docs/refactor/slices/OPENCODE-USAGE-PLUGIN-real-servers-detached-no-secrets.md`.
+
 **2026-11-27, OPENCODE-USER-SETTINGS-FILE (§218, D-530): user OpenCode settings go where OpenCode reads them.**
 A launcher-started OpenCode 2 reads `opencode.jsonc` before `opencode.json`, so every user MCP server
 and plugin aart-cli wrote was invisible. Installs now write the file OpenCode reads, edit it as JSON

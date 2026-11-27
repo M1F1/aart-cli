@@ -5450,6 +5450,13 @@ the harness root, not in each row.
 
 ## B-276 — `opencode2` places a project plugin as a `.opencode/plugins/<name>/` directory
 
+Measured 2026-11-27: OpenCode 2 loads `.opencode/plugins/<dir>/index.js` with no entry, 1.19.5 does
+not; 2 with the directory and an entry loads it twice; a launcher started from a subdirectory
+passes a project entry's relative path on unchanged, which OpenCode 2 resolves from the cwd
+(ENOENT), but gives a plugin directory an absolute path. So: `opencode` keeps the entry,
+`opencode2` the directory, never both. Symlinked plugin files are documented by the launcher as
+lost; a symlinked directory is unmeasured.
+
 Status: **open**, owner-ordered after P0-2 (OpenCode 2 report, 2026-11-27, P1-1).
 
 OpenCode 2 loads a directory under `.opencode/plugins/` by itself, and a launcher passes it with an
@@ -5460,15 +5467,9 @@ project `opencode.json`.
 
 ## B-277 — The opencode usage plugin's label, MCP filter, lost events and environment
 
-Status: **open**, owner-ordered after B-276 (OpenCode 2 report, 2026-11-27, P1-2).
-
-Measured on 2.3.2: the plugin loads, `setup` runs, `execute.before` arrives for skills and MCP
-tools. To do: label OpenCode 2 events `opencode2` from inside the one shared plugin (it was called
-through `setup`), keeping `source` `opencode_plugin` (a server enum); count only tools prefixed by
-a real MCP server's name (built-in `experimental_image_generate` and plugin tools also contain
-`_`); spawn the recorder `detached` and `unref()` it so the last uses before exit are kept; pass it
-only `PATH`, `HOME` and `LANG`, not OpenCode's own secrets. Until D-530 is released, user MCP uses
-are missing because the servers were never loaded.
+Status: **done** except the label (D-531, 2026-11-27): the plugin names the MCP server from the
+runtime's own list, starts the recorder detached with `RECORDER_ENVIRONMENT` only, and hands over
+which runtime delivered the call. The label moved to B-279.
 
 ## B-278 — Live tests on a pinned OpenCode 2, plain and launcher-managed
 
@@ -5477,4 +5478,25 @@ Status: **open**, owner-ordered alongside B-276/B-277 (OpenCode 2 report, 2026-1
 The live tests take `opencode` from `PATH`, which is 1.18.30 on the test machine. Add tests that run
 a pinned OpenCode 2 binary both plainly and as a launcher starts it (`OPENCODE_CONFIG`,
 `OPENCODE_CONFIG_DIR`, `OPENCODE_CONFIG_PROJECT_DISABLE`), locally only, never in CI.
+
+The report's recipe (2026-11-27): an isolated `env -i HOME=... PATH=/usr/bin:/bin TERM=dumb
+TMPDIR=...`, a fake OpenAI-compatible model given in `OPENCODE_CONFIG_CONTENT`, `opencode run
+--standalone --print-logs --model fake/m go < /dev/null` (OpenCode 2 without `--standalone` joins or
+starts a shared background server), a separate `OPENCODE_DB` per runtime (1.x cannot open 2's), a
+timeout through `perl -e 'alarm N; exec @ARGV'` on macOS. Evidence in the logs: `mcp connected`,
+`loading plugin`, `failed to load plugin`; firmer, a test plugin writing a mark from `server` and
+`setup`. The fake model must wait (4 s) after a tool call, or the run ends first. OpenCode 2 calls
+MCP tools through `execute` (Code Mode), and skips a tool whose `inputSchema` is not an object, so
+the MCP fixture needs `{"type": "object", "properties": {}}`.
+
+## B-279 — Label OpenCode 2's uses `opencode2`, locally and in telemetry
+
+Status: **open**, with P0-2 (D-531, 2026-11-27).
+
+The usage plugin hands over `runtime: 1|2`. Once the `opencode2` harness exists, the hook records a
+runtime-2 use as `opencode2`, so it resolves against `opencode2` installations, and doctor/TUI can
+say which OpenCode was last used (the only in-process signal of a launcher's binary). Telemetry
+can say it only after the server's `HARNESS_OF` lets `opencode_plugin` carry `opencode2` as well as
+`opencode` (its dashboard's `SOURCE_HARNESS` too); until then the use is sent without a harness, as
+now. `source` stays `opencode_plugin`.
 
