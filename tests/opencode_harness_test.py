@@ -20,7 +20,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -35,6 +34,7 @@ from aart_cli.domain.harness import (
     memory_target,
     registration_entry,
 )
+from tests.opencode_live import OpenCodeUnavailable, run_opencode
 
 SKILL_DOCUMENT = """---
 name: {name}
@@ -122,22 +122,10 @@ class OpenCodeObservationTest(unittest.TestCase):
             directory.mkdir(parents=True)
 
     def _run(self, *arguments: str) -> str:
-        environment = dict(os.environ, HOME=str(self.user_root))
-        for variable in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"):
-            environment.pop(variable, None)
-        completed = subprocess.run(
-            ("opencode", *arguments),
-            cwd=str(self.project),
-            env=environment,
-            capture_output=True,
-            text=True,
-            timeout=180,
-        )
-        if completed.returncode != 0:
-            self.skipTest(
-                f"`opencode {' '.join(arguments)}` is unavailable: {completed.stderr[:200]}"
-            )
-        return completed.stdout
+        try:
+            return run_opencode(*arguments, home=self.user_root, cwd=self.project)
+        except OpenCodeUnavailable as unavailable:
+            self.skipTest(str(unavailable))
 
     def _write(self, root: Path, relative: str, content: str) -> None:
         path = root / relative

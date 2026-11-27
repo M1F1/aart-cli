@@ -394,9 +394,13 @@ class LocalHarnessRegistry:
         if command is not None and registered_command(target, servers.value[server]) != command:
             return Ok(HarnessReceipt(path, server, changed=False))
         updated = dict(data)
-        updated[target.server_map] = {
-            key: value for key, value in servers.value.items() if key != server
-        }
+        remaining = {key: value for key, value in servers.value.items() if key != server}
+        if remaining:
+            updated[target.server_map] = remaining
+        else:
+            # Emptied by this removal: it held only this server, so the file goes back to saying
+            # nothing about servers rather than keeping an empty map (§218).
+            updated.pop(target.server_map, None)
         saved = self._save(path, target, raw, updated, server=server)
         if isinstance(saved, Err):
             return saved

@@ -21,7 +21,23 @@ from aart_cli.domain import jsonc
 from aart_cli.domain.result import Ok
 from aart_cli.io.receipt_store import LocalReceiptStore
 from tests.configured_install_command_e2e_test import _Environment
-from tests.plugin_installation_e2e_test import AUTHORED, COORDINATE
+from tests.plugin_installation_e2e_test import AUTHORED, COORDINATE, MANIFEST, MODULE
+
+HELPERS = "company/plugin/helpers"
+#: A second plugin beside superpowers, so one repair can be asked to move two.
+HELPERS_TREE = (
+    (
+        "helpers/aart-cli.json",
+        json.dumps(
+            {
+                **MANIFEST,
+                "artifact": {"name": "helpers", "kind": "plugin", "x-fixture-version": "1.0.0"},
+                "payload": {"include": [".opencode/plugins/superpowers.js"]},
+            }
+        ),
+    ),
+    ("helpers/.opencode/plugins/superpowers.js", MODULE),
+)
 
 SCHEMA = "https://opencode.ai/config.json"
 #: What OpenCode 1.x writes the first time it runs.
@@ -121,6 +137,73 @@ class OpenCodeUserSettingsFileTest(unittest.TestCase):
 
         self.assertEqual(ANNOTATED, self.jsonc.read_text(encoding="utf-8"))
 
+    def test_a_key_the_install_added_goes_with_the_uninstall_byte_for_byte(self) -> None:
+        self._write(self.jsonc, OPENCODES_OWN)
+
+        self._install()
+        self.assertIn('"plugin"', self.jsonc.read_text(encoding="utf-8"))
+        self._run(
+            "consume", "uninstall", COORDINATE, "--profile", "opencode", "--scope", "user", "--yes"
+        )
+
+        self.assertEqual(OPENCODES_OWN, self.jsonc.read_text(encoding="utf-8"))
+
+    def test_one_reviewed_repair_moves_every_named_entry(self) -> None:
+        self.env.publish(AUTHORED, HELPERS_TREE)
+        self._write(self.json, json.dumps({"$schema": SCHEMA}, indent=2) + "\n")
+        for coordinate in (COORDINATE, HELPERS):
+            self._run(
+                "consume",
+                "install",
+                coordinate,
+                "--profile",
+                "opencode",
+                "--scope",
+                "user",
+                "--yes",
+            )
+        self._write(self.jsonc, OPENCODES_OWN)
+
+        _code, text = self.env.run_text("doctor")
+        named = (f"{HELPERS}@1.0.0", f"{COORDINATE}@7.0.0")
+        self.assertIn(f"Move them: aart-cli doctor --repair {' '.join(named)} --scope user", text)
+        review = self._run("doctor", "--repair", *named, "--scope", "user")
+        self.assertEqual(list(named), review["coordinates"])
+        self.assertEqual(2, len(self._ours(self.json)), "a review wrote")
+        code, refused = self.env.run(
+            "doctor",
+            "--repair",
+            *named,
+            "--scope",
+            "user",
+            "--yes",
+            "--expect",
+            "sha256:" + "0" * 64,
+        )
+        self.assertNotEqual(0, code, refused)
+        for one in named:
+            alone = self._run("doctor", "--repair", one, "--scope", "user")["review_digest"]
+            code, refused = self.env.run(
+                "doctor", "--repair", *named, "--scope", "user", "--yes", "--expect", alone
+            )
+            self.assertNotEqual(0, code, f"the review of {one} alone confirmed both")
+        self.assertEqual(2, len(self._ours(self.json)), "a refused confirmation wrote")
+
+        applied = self._run(
+            "doctor",
+            "--repair",
+            *named,
+            "--scope",
+            "user",
+            "--yes",
+            "--expect",
+            review["review_digest"],
+        )
+
+        self.assertTrue(all(item["ok"] for item in applied["results"]), applied)
+        self.assertEqual(2, len(self._ours(self.jsonc)))
+        self.assertEqual(json.dumps({"$schema": SCHEMA}, indent=2) + "\n", self.json.read_text())
+
     def test_where_only_opencode_json_is_there_it_is_written_without_a_note(self) -> None:
         self._write(self.json, json.dumps({"$schema": SCHEMA}, indent=2) + "\n")
 
@@ -175,7 +258,7 @@ class OpenCodeUserSettingsFileTest(unittest.TestCase):
         _code, text = self.env.run_text("doctor")
         self.assertIn("written in ~/.config/opencode/opencode.json\n", text)
         self.assertIn("opencode reads ~/.config/opencode/opencode.jsonc instead", text)
-        self.assertIn(f"aart-cli doctor --repair {COORDINATE}@7.0.0 --scope user", text)
+        self.assertIn(f"Move them: aart-cli doctor --repair {COORDINATE}@7.0.0 --scope user", text)
 
     def test_doctor_is_silent_about_settings_files_when_nothing_is_misplaced(self) -> None:
         self._install()
@@ -221,7 +304,7 @@ class OpenCodeUserSettingsFileTest(unittest.TestCase):
 
         self.assertTrue(self.json.is_symlink())
         self.assertEqual(json.dumps({"plugin": ["mine"]}), dotfiles.read_text())
-        self.assertEqual([], self._plugins(self.jsonc))
+        self.assertEqual(OPENCODES_OWN, self.jsonc.read_text(encoding="utf-8"))
 
     def test_uninstalling_an_entry_recorded_in_opencode_json_cleans_both_files(self) -> None:
         self._write(self.json, json.dumps({"plugin": ["mine"]}, indent=2))

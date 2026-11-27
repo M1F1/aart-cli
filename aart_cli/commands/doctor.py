@@ -7,6 +7,7 @@ reconcile each observation.  It neither resolves Marketplace content nor replays
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -309,16 +310,22 @@ def _settings_move_lines(
         return "~/" + path[len(home) :] if path.startswith(home) else path
 
     lines = ["Settings files"]
+    by_scope: dict[str, list[str]] = {}
     for item, move in moved:
-        owner = item.record.receipt.owner
-        scope = "" if owner is None else f" --scope {owner.scope.value}"
         lines.extend(
             (
                 f"⚠ {item.coordinate} · {move.harness}: written in {shown(move.recorded)}",
                 f"  {move.harness} reads {shown(move.read)} instead, so it does not load this",
-                f"  move it: aart-cli doctor --repair {item.coordinate}{scope}",
             )
         )
+        owner = item.record.receipt.owner
+        coordinates = by_scope.setdefault("" if owner is None else owner.scope.value, [])
+        if item.coordinate not in coordinates:
+            coordinates.append(item.coordinate)
+    # One command per scope moves them all, reviewed and confirmed once.
+    for scope, coordinates in by_scope.items():
+        flag = f" --scope {scope}" if scope else ""
+        lines.append(f"Move them: aart-cli doctor --repair {' '.join(coordinates)}{flag}")
     return tuple(lines)
 
 
@@ -351,7 +358,8 @@ def _run_repair(
     user_home: str,
     credential_providers: tuple[CredentialProviderPort, ...],
 ) -> int:
-    """Review or execute one exact repair through the configured lifecycle adapter."""
+    """Review or execute exact repairs through the configured lifecycle adapter: one, or several
+    named together and confirmed as one plan."""
 
     scope = Scope(request.scope)
     inspected = read_installed_inspections(
@@ -363,52 +371,84 @@ def _run_repair(
     if isinstance(inspected, Err):
         return _emit_error(request, inspected, _REPAIR_OPERATION, finalized=False)
 
-    raw = request.names[0]
-    selector = parse_artifact_selector(raw)
-    if isinstance(selector, Err):
-        return _emit_error(request, selector, _REPAIR_OPERATION, finalized=False)
-    if selector.value.source is None or selector.value.version is None:
-        return _emit_error(
-            request,
-            _error(
-                "Doctor repair needs an exact source-qualified installed version",
-                "pass --repair <source>/<kind>/<name>@<version>",
-            ),
-            _REPAIR_OPERATION,
-            finalized=False,
+    prepared_items = []
+    for raw in dict.fromkeys(request.names):
+        selector = parse_artifact_selector(raw)
+        if isinstance(selector, Err):
+            return _emit_error(request, selector, _REPAIR_OPERATION, finalized=False)
+        if selector.value.source is None or selector.value.version is None:
+            return _emit_error(
+                request,
+                _error(
+                    "Doctor repair needs an exact source-qualified installed version",
+                    "pass --repair <source>/<kind>/<name>@<version>",
+                ),
+                _REPAIR_OPERATION,
+                finalized=False,
+            )
+        coordinate = str(selector.value)
+        matches = tuple(
+            item
+            for item in inspected.value.inspections
+            if str(item.record.coordinate) == coordinate
         )
-    coordinate = str(selector.value)
-    matches = tuple(
-        item for item in inspected.value.inspections if str(item.record.coordinate) == coordinate
-    )
-    if len(matches) != 1:
-        return _emit_error(
-            request,
-            _error(
-                f"no {scope.value}-scope installation matches {coordinate}",
-                "run aart-cli doctor, then pass one exact installed coordinate to --repair",
-            ),
-            _REPAIR_OPERATION,
-            finalized=False,
-        )
+        if len(matches) != 1:
+            return _emit_error(
+                request,
+                _error(
+                    f"no {scope.value}-scope installation matches {coordinate}",
+                    "run aart-cli doctor, then pass exact installed coordinates to --repair",
+                ),
+                _REPAIR_OPERATION,
+                finalized=False,
+            )
+        policy = EffectivePolicy()
+        prepared = prepare_configured_repair(matches[0], policy=policy)
+        if isinstance(prepared, Err):
+            return _emit_error(request, prepared, _REPAIR_OPERATION, finalized=False)
+        prepared_items.append((coordinate, policy, prepared.value))
 
-    policy = EffectivePolicy()
-    prepared = prepare_configured_repair(matches[0], policy=policy)
-    if isinstance(prepared, Err):
-        return _emit_error(request, prepared, _REPAIR_OPERATION, finalized=False)
-    digest = str(prepared.value.review_digest)
-    review = repair_plan_to_data(prepared.value.plan.repair)
-    review_lines = render_lifecycle_plan(
-        project_lifecycle_plan(prepared.value.plan), PresentationProfile.LESS_INFO
+    # One artifact keeps its own digest; several are reviewed and confirmed as one plan, whose
+    # digest covers every one of theirs in order (§218: moving ten servers is one decision).
+    digests = [str(item.review_digest) for _coordinate, _policy, item in prepared_items]
+    digest = (
+        digests[0]
+        if len(digests) == 1
+        else "sha256:" + hashlib.sha256("\n".join(digests).encode("utf-8")).hexdigest()
     )
-    base = {
-        "schema_version": 1,
-        "operation": _REPAIR_OPERATION,
-        "coordinate": coordinate,
-        "scope": scope.value,
-        "review_digest": digest,
-        "review": review,
-    }
+    reviews = [
+        {
+            "coordinate": coordinate,
+            "review_digest": str(item.review_digest),
+            "review": repair_plan_to_data(item.plan.repair),
+        }
+        for coordinate, _policy, item in prepared_items
+    ]
+    review_lines: list[str] = []
+    for _coordinate, _policy, item in prepared_items:
+        review_lines.extend(
+            render_lifecycle_plan(project_lifecycle_plan(item.plan), PresentationProfile.LESS_INFO)
+        )
+    if len(prepared_items) == 1:
+        base: dict[str, object] = {
+            "schema_version": 1,
+            "operation": _REPAIR_OPERATION,
+            "coordinate": reviews[0]["coordinate"],
+            "scope": scope.value,
+            "review_digest": digest,
+            "review": reviews[0]["review"],
+        }
+    else:
+        review_lines.append(f"Repairs reviewed together: {len(prepared_items)}")
+        review_lines.append(f"Review identity: {digest}")
+        base = {
+            "schema_version": 1,
+            "operation": _REPAIR_OPERATION,
+            "coordinates": [item["coordinate"] for item in reviews],
+            "scope": scope.value,
+            "review_digest": digest,
+            "reviews": reviews,
+        }
     if not request.yes:
         _emit(
             request,
@@ -443,42 +483,78 @@ def _run_repair(
             finalized=False,
             expected_review_digest=expected,
             review_digest=digest,
-            review=review,
+            **({"review": base["review"]} if "review" in base else {"reviews": reviews}),
         )
 
     host = InstallationHost(data_root, project_root, user_home, scope)
-    now = datetime.now(timezone.utc)
-    completed = complete_configured_repair(
-        prepared.value,
-        expected_review_digest=prepared.value.review_digest,
-        host=host,
-        policy=policy,
-        recorded_at=now.isoformat(),
-        today=now.date(),
-        credential_providers=credential_providers,
-        offline=request.offline,
-    )
-    if isinstance(completed, Err):
-        return _emit_error(
-            request,
-            completed,
-            _REPAIR_OPERATION,
-            finalized=False,
-            review_digest=digest,
+    results: list[dict[str, object]] = []
+    lines: list[str] = []
+    successful = True
+    for coordinate, policy, item in prepared_items:
+        now = datetime.now(timezone.utc)
+        completed = complete_configured_repair(
+            item,
+            expected_review_digest=item.review_digest,
+            host=host,
+            policy=policy,
+            recorded_at=now.isoformat(),
+            today=now.date(),
+            credential_providers=credential_providers,
+            offline=request.offline,
         )
-    receipt = completed.value.recorded.receipt
-    successful = receipt.outcome.value in {"succeeded", "attention"}
-    _emit(
-        request,
-        {
-            **base,
-            "ok": successful,
-            "finalized": True,
-            "session_status": receipt.outcome.value,
-            "receipt": receipt_detail_to_data(receipt),
-        },
-        render_receipt_detail(receipt, PresentationProfile.LESS_INFO),
-    )
+        if isinstance(completed, Err):
+            if len(prepared_items) == 1:
+                return _emit_error(
+                    request,
+                    completed,
+                    _REPAIR_OPERATION,
+                    finalized=False,
+                    review_digest=digest,
+                )
+            # The ones before it are applied and recorded; say which stopped, and go on with the
+            # rest: each is its own installation, as an uninstall of several is.
+            note_diagnostics(completed.diagnostics)
+            successful = False
+            results.append(
+                {
+                    "coordinate": coordinate,
+                    "ok": False,
+                    "diagnostics": [diagnostic_to_data(d) for d in completed.diagnostics],
+                }
+            )
+            lines.extend(f"{coordinate}: {d.message}" for d in completed.diagnostics)
+            continue
+        receipt = completed.value.recorded.receipt
+        ok = receipt.outcome.value in {"succeeded", "attention"}
+        successful = successful and ok
+        results.append(
+            {
+                "coordinate": coordinate,
+                "ok": ok,
+                "session_status": receipt.outcome.value,
+                "receipt": receipt_detail_to_data(receipt),
+            }
+        )
+        lines.extend(render_receipt_detail(receipt, PresentationProfile.LESS_INFO))
+    if len(prepared_items) == 1:
+        (only,) = results
+        _emit(
+            request,
+            {
+                **base,
+                "ok": only["ok"],
+                "finalized": True,
+                "session_status": only["session_status"],
+                "receipt": only["receipt"],
+            },
+            tuple(lines),
+        )
+    else:
+        _emit(
+            request,
+            {**base, "ok": successful, "finalized": True, "results": results},
+            tuple(lines),
+        )
     return _common.OK if successful else _common.ERROR
 
 

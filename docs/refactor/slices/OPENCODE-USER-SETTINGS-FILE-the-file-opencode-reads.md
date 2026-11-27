@@ -73,6 +73,26 @@ error-message wording, parser error positions, the self-check after a rewrite (r
 through another bug), and layout branches for containers whose entries share lines, which the
 rewriter replaces whole instead.
 
+## Review follow-up (2026-11-27)
+
+- **Emptied keys.** Uninstall after an install into a file without `plugin` restores it byte for
+  byte (`test_a_key_the_install_added_goes_with_the_uninstall_byte_for_byte`); a moved MCP leaves
+  no `"mcp": {}` (`test_a_map_the_removal_empties_goes_with_it`); hooks and plugins prune emptied
+  parents (`hook_entry_test`, `plugin_entry_test`, `settings_entry_interpreter_test`); a
+  person's comment inside the emptied list keeps it (`EmptiedContainerTest`); a comment inside a
+  removed entry is refused, not dropped (`test_a_comment_somebody_wrote_inside_a_removed_entry_is_refused_not_lost`).
+- **One repair for several.** `test_one_reviewed_repair_moves_every_named_entry`: doctor prints
+  one command, the review lists both, a wrong digest and each single review's digest are refused,
+  the confirmed repair moves both and `opencode.json` returns to what it was.
+- **Live tests.** `tests/opencode_live.py` runs `opencode` with stdout in a file and no
+  `OPENCODE_*` variable; `opencode_harness_test` and `opencode_installation_e2e_test` use it.
+  Passing here on 1.18.29; the 1.18.30 truncation was the reviewer's measurement.
+
+Targeted mutations, each turning only its named test red: keeping an emptied list
+(`hooks.remove_settings_entry`), keeping an emptied map (`_remove`), not refusing a foreign comment
+(`holds_foreign_comment`), no fallback (`render_settings_text`), and the combined digest replaced
+by the first installation's.
+
 ## Not done here
 
 `XDG_CONFIG_HOME` (B-275); project plugin directories for `opencode2` (B-276); usage plugin

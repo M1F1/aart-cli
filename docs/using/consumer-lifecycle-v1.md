@@ -307,19 +307,24 @@ each entry can still undo; credential health and which installations depend on i
 configuration this machine is ignoring, meaning disabled Registry subscriptions and fields your organization's
 policy has locked.
 
-Repair follows the same review-then-confirm boundary as everything else, one artifact at a time:
+Repair follows the same review-then-confirm boundary as everything else. Reviewing an artifact's
+minimal plan applies nothing:
 
 ```sh
-# Review one artifact's minimal plan — applies nothing
 aart-cli doctor --repair company/mcp/github
+```
 
-# Apply exactly the plan that review returned
+Confirming applies exactly the plan that review returned:
+
+```sh
 aart-cli doctor --repair company/mcp/github --yes --expect <digest>
 ```
 
 `--yes` without `--expect` is refused, and a machine that changed between the review and the
-confirmation returns the recomputed plan instead of applying the stale one. There is no flag that
-repairs everything.
+confirmation returns the recomputed plan instead of applying the stale one. Name several artifacts
+to review them together: one review lists every plan, and its single digest confirms all of them,
+so a change to any one of them asks for a new review. There is no flag that repairs everything;
+each artifact is named.
 
 What it cannot repair, it still reports: an artifact whose payload is missing or divergent is named
 with what is wrong, rather than being omitted because no repair for it exists.
@@ -334,14 +339,17 @@ it writes, and leaves every other entry alone. The comment is only for reading t
 it changes nothing.
 
 If an entry sits in the file opencode does not read -- usually because `opencode.jsonc` appeared
-after the install -- doctor says so under *Settings files*, with the command that moves it:
+after the install -- doctor says so under *Settings files*, with one command that moves all of
+them:
 
 ```bash
-aart-cli doctor --repair company/plugin/superpowers@7.0.0 --scope user
+aart-cli doctor --repair company/mcp/github@1.0.0 company/plugin/superpowers@7.0.0 --scope user
 ```
 
-Review the plan, then confirm it with `--yes --expect <digest>` as above. A project's settings stay
-in `opencode.json` at the project root.
+Review the plan, then confirm it with `--yes --expect <digest>` as above. Uninstalling removes
+what aart-cli added: its entry, its marker comment, and a `plugin` list or `mcp` object it
+created and left empty. A list or object you wrote a comment into stays, empty, with your
+comment. A project's settings stay in `opencode.json` at the project root.
 
 ### When pip or uv fails
 

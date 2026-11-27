@@ -100,16 +100,17 @@ def build_parser() -> argparse.ArgumentParser:
             "each action can undo; credential health and which installations depend on it; and the "
             "configuration this machine is ignoring, meaning disabled sources and fields your "
             "organization's policy has locked. On its own the report changes nothing. With "
-            "--repair, review one exact installed artifact's plan; applying it requires both --yes "
-            "and the prior review's --expect digest. This command never reinstalls everything."
+            "--repair, review the plans of the exact installed artifacts it names, as one; applying "
+            "it requires both --yes and the prior review's --expect digest. This command never reinstalls everything."
         ),
     )
     p.add_argument(
         "--repair",
         dest="names",
-        nargs=1,
+        nargs="+",
         metavar="COORDINATE",
-        help="review one installed artifact's minimal repair plan",
+        help="review the minimal repair plan of one or more named installed artifacts, "
+        "confirmed together",
     )
     _add_scope(p)
     p.add_argument(

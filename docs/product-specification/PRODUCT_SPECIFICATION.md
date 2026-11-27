@@ -13120,9 +13120,23 @@ such an OpenCode never reads: they were installed and invisible. Reported 2026-1
   checkout) that does not hold the entry; a symlink that does is refused, naming the remedy.
 - **Doctor.** An installation is judged against the file opencode reads now. An entry recorded in
   the other file, or present in both, is drift: status and doctor report it as needing attention,
-  and doctor names the file it is in, the file opencode reads and the repair command. The repair is
-  a reviewed plan like any other (`--yes --expect <digest>`): it writes the entry into the file
-  opencode reads, takes it out of the other and records the new file on the receipt.
+  and doctor names the file it is in, the file opencode reads and one repair command naming every
+  such installation of a scope. The repair is a reviewed plan like any other
+  (`--yes --expect <digest>`): it writes the entry into the file opencode reads, takes it out of the
+  other and records the new file on the receipt.
+- **Several repairs, one review.** `doctor --repair` accepts several named installations. Their
+  plans are reviewed together under one digest, the SHA-256 of their own digests in the order
+  named, so confirming it applies exactly the reviewed set and a change to any one asks for a new
+  review. Each is still named; there is no repair of everything. One named installation keeps the
+  single review shape. (Amended 2026-11-27, review of D-530.)
+- **Nothing left behind.** Removing an entry (uninstall, or the other file's copy on a move) also
+  removes the list or object it was the last member of, and every object that then holds nothing,
+  in every harness's settings file: an install into a file without a `plugin` key, then an
+  uninstall, leaves the file as it was. A list or object holding a comment somebody wrote is kept
+  empty, with the comment, rather than removed. A list that was already empty before the install
+  cannot be told from one the install created and goes too; to every harness the two mean the
+  same. Removing an entry whose own text holds a comment somebody wrote is refused, as any edit
+  that would lose a comment is.
 - **Not changed.** Where a project's settings live; the `XDG_CONFIG_HOME` config directory, which
   opencode honours and aart-cli does not yet (B-275).
 
@@ -13130,4 +13144,4 @@ such an OpenCode never reads: they were installed and invisible. Reported 2026-1
 install, update or repair at User scope, each of the installation's MCP servers and plugin entries
 is in the first of `opencode.jsonc`, `opencode.json` that exists, and in no other user file; every
 comment and every entry aart-cli does not own is unchanged; an edit that would lose a comment
-changes nothing.
+changes nothing. An uninstall leaves no list or object it emptied, except one holding a comment.

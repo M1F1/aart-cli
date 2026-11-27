@@ -247,6 +247,14 @@ class RewritingTest(unittest.TestCase):
         with self.assertRaisesRegex(JsoncError, "'a' is written more than once"):
             rewrite(text, {"a": 5, "b": 3})
 
+    def test_a_comment_somebody_wrote_inside_a_removed_entry_is_refused_not_lost(self) -> None:
+        text = '{\n  "plugin": [\n    // mine\n    "./aart-cli/a"\n  ]\n}\n'
+
+        with self.assertRaisesRegex(JsoncError, "losing it"):
+            rewrite(text, {}, owned=_owned)
+        marked = '{\n  "plugin": [\n    // managed by aart-cli: a\n    "./aart-cli/a"\n  ]\n}\n'
+        self.assertEqual("{}\n", rewrite(marked, {}, owned=_owned))
+
     def test_a_container_emptied_of_everything_closes_up(self) -> None:
         text = '{\n  "plugin": [\n    // managed by aart-cli: x\n    "./aart-cli/x"\n  ]\n}\n'
 

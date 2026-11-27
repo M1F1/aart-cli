@@ -19,6 +19,7 @@ from aart_cli.domain import jsonc
 from aart_cli.domain.harness import (
     McpRegistration,
     Scope,
+    SettingsSyntax,
     chosen_settings_file,
     mcp_target,
     preferred_settings_path,
@@ -34,6 +35,7 @@ from aart_cli.domain.receipts import (
     PlacedArtifactReceipt,
 )
 from aart_cli.domain.result import Err, Ok
+from aart_cli.domain.settings_text import render_settings_text
 from aart_cli.io.harness import LocalHarnessRegistry
 
 JSONC = ".config/opencode/opencode.jsonc"
@@ -150,6 +152,15 @@ class RegistryTest(unittest.TestCase):
             self.registry.unregister(_user().target, "github", command=LAUNCHER), Ok
         )
 
+    def test_a_map_the_removal_empties_goes_with_it(self) -> None:
+        ours = {"type": "local", "command": [LAUNCHER]}
+        self._write(JSON, json.dumps({"$schema": "s", "mcp": {"github": ours}}))
+        self._write(JSONC, "{}\n")
+
+        self.assertIsInstance(self.registry.register(_user()), Ok)
+
+        self.assertEqual({"$schema": "s"}, json.loads((self.home / JSON).read_text()))
+
     def test_a_same_named_server_somebody_else_wrote_is_not_ours_to_remove(self) -> None:
         theirs = {"type": "local", "command": ["/usr/local/bin/their-github"]}
         self._write(JSON, json.dumps({"mcp": {"github": theirs}}))
@@ -246,6 +257,25 @@ class RelocationTest(unittest.TestCase):
             "/p/opencode.json",
             preferred_settings_path("opencode", "/p/opencode.json", lambda _path: True),
         )
+
+
+class EmptiedContainerTest(unittest.TestCase):
+    """§218: a list aart-cli empties goes with its last entry, unless somebody wrote in it."""
+
+    def test_an_emptied_list_holding_only_our_entry_goes(self) -> None:
+        text = '{\n  "$schema": "x",\n  "plugin": [\n    // managed by aart-cli: a\n    "./a"\n  ]\n}\n'
+
+        rendered = render_settings_text(text, {"$schema": "x"}, SettingsSyntax.JSONC, path="p")
+
+        self.assertEqual('{\n  "$schema": "x"\n}\n', rendered)
+
+    def test_a_comment_somebody_wrote_in_the_list_keeps_the_list_and_the_comment(self) -> None:
+        text = '{\n  "$schema": "x",\n  "plugin": [ // my plugins\n    "./a"\n  ]\n}\n'
+
+        rendered = render_settings_text(text, {"$schema": "x"}, SettingsSyntax.JSONC, path="p")
+
+        self.assertIn("// my plugins", rendered)
+        self.assertEqual({"$schema": "x", "plugin": []}, jsonc.loads(rendered))
 
 
 if __name__ == "__main__":

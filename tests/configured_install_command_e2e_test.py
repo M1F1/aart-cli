@@ -37,7 +37,10 @@ from aart_cli.sources.model import (
     source_instance_id,
     source_store_paths,
 )
-from tests.configured_installation_draft_e2e_test import AuthoredSetup, _published_registry
+from tests.configured_installation_draft_e2e_test import (
+    AuthoredSetup,
+    _published_registries,
+)
 from tests.marketplace_fixtures import configured_source
 from tests.placed_installation_e2e_test import AUTHORED_SKILL, SKILL_BODY, as_delivered
 
@@ -78,8 +81,14 @@ class _Environment:
 
         self.publish(authored)
 
-    def publish(self, authored: tuple[tuple[str, str] | tuple[str, str, bool], ...]) -> None:
+    def publish(
+        self,
+        authored: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+        *more: tuple[tuple[str, str] | tuple[str, str, bool], ...],
+    ) -> None:
         """Make `authored` the approved snapshot this machine's configured registry offers.
+
+        `more` are further author trees, each promoted after it, for a registry offering several.
 
         Publishing again is how a source that has since synchronized is modelled. It replaces what
         the registry approves without touching anything installed, which is the precondition
@@ -90,7 +99,7 @@ class _Environment:
             source_instance_id(self.source),
             self.source.alias,
             "a" * 40,
-            _published_registry(authored, setup=self.setup, mode=self.content_mode),
+            _published_registries(authored, *more, setup=self.setup, mode=self.content_mode),
         )
         assert isinstance(candidate, Ok), candidate
         published = publish_source_snapshot(

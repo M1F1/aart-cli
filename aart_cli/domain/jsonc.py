@@ -304,6 +304,17 @@ class _Rewriter:
     def holds_comment(self, start: int, end: int) -> bool:
         return any(start <= begin and finish <= end for begin, finish in self.comments)
 
+    def holds_foreign_comment(self, start: int, end: int) -> bool:
+        """Whether a comment between `start` and `end` is anything but an aart-cli marker."""
+
+        for begin, finish in self.comments:
+            if start <= begin and finish <= end:
+                comment = self.text[begin:finish]
+                body = comment[2:-2] if comment.startswith("/*") else comment[2:]
+                if self.owned is None or not self.owned(body.strip()):
+                    return True
+        return False
+
     def multiline(self, node: _Node) -> bool:
         """Whether every entry of `node` opens its own line, which is what line edits need."""
 
@@ -434,6 +445,11 @@ class _Rewriter:
         removed: list[_Entry],
         added: list[tuple[Path, str | None, object]],
     ) -> None:
+        for entry in removed:
+            if self.holds_foreign_comment(entry.start, entry.value.end):
+                raise JsoncError(
+                    "removing this would take a comment somebody wrote inside it, losing it"
+                )
         removed_ids = {id(entry) for entry in removed}
         kept = [entry for entry in node.members if id(entry) not in removed_ids]
         if removed and not kept and not added:

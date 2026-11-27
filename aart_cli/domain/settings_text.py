@@ -59,4 +59,27 @@ def render_settings_text(
         def annotate(where: Path, value: object) -> str | None:
             return note if ours(where, value) else None
 
-    return rewrite(raw or "", document, annotate=annotate, owned=is_settings_note)
+    try:
+        return rewrite(raw or "", document, annotate=annotate, owned=is_settings_note)
+    except JsoncError:
+        # A list or object this edit emptied and dropped may hold a comment somebody wrote in it.
+        # Kept empty, the comment stays where it was; anything else that cannot be written without
+        # losing a comment is refused as before.
+        kept = _with_emptied_kept(parse_settings_text(raw or "", syntax), document)
+        if kept == document:
+            raise
+        return rewrite(raw or "", kept, annotate=annotate, owned=is_settings_note)
+
+
+def _with_emptied_kept(before: object, after: object) -> object:
+    """`after`, with every list or object `before` had and `after` dropped put back empty."""
+
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return after
+    kept: dict[str, object] = {}
+    for key, value in after.items():
+        kept[key] = _with_emptied_kept(before.get(key), value)
+    for key, value in before.items():
+        if key not in after and isinstance(value, (list, dict)):
+            kept[key] = [] if isinstance(value, list) else {}
+    return kept

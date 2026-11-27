@@ -146,12 +146,18 @@ class RemoveHookEntryTest(unittest.TestCase):
         assert isinstance(removed, Ok)
         self.assertEqual(document, removed.value)
 
-    def test_removing_the_last_entry_leaves_the_empty_list_rather_than_the_users_file(self) -> None:
+    def test_removing_the_last_entry_takes_what_it_added_and_leaves_the_users_file(self) -> None:
+        # §218: the list and the objects that held only it go; the user's keys stay.
         removed = remove_settings_entry(_merged({"model": "opus"}), PATH, ENTRY)
 
-        assert isinstance(removed, Ok)
-        self.assertEqual([], removed.value["hooks"]["PreToolUse"])
-        self.assertEqual("opus", removed.value["model"])
+        self.assertEqual(Ok({"model": "opus"}), removed)
+
+    def test_an_object_still_holding_something_else_stays(self) -> None:
+        theirs = {"model": "opus", "hooks": {"Stop": [{"hooks": []}]}}
+
+        removed = remove_settings_entry(_merged(theirs), PATH, ENTRY)
+
+        self.assertEqual(Ok(theirs), removed)
 
     def test_removing_from_a_file_that_never_had_the_list_converges(self) -> None:
         removed = remove_settings_entry({"model": "opus"}, PATH, ENTRY)

@@ -13338,4 +13338,17 @@ exists and `opencode.json` only when it does not, and OpenCode 1.x leaves an emp
   an entry, both-files drift, doctor's section, uninstall of a recorded json entry). Targeted
   mutations: choosing the last candidate, dropping the command match on removal and skipping
   relocation each turn their named tests red.
-
+- **Review follow-up (2026-11-27).** (1) Removing an entry also prunes the list or object it
+  emptied and every parent left empty (`hooks._pruned`, and the MCP map in
+  `LocalHarnessRegistry._remove`), for every harness, since "byte for byte" was the promise and a
+  stray `"plugin": []` broke it. Not recorded per key: an empty list the person typed is lost
+  with ours, which every harness reads the same way, and a receipt field for it would be state
+  with no reader. Where the emptied container holds a person's comment, `render_settings_text`
+  keeps it empty instead (the rewriter refuses the removal, the fallback restores the dropped
+  containers and retries). The rewriter now also refuses to remove an entry whose own text holds
+  a comment that is not an aart-cli marker; it dropped it silently before. (2) `doctor --repair`
+  takes several coordinates under one review digest, `sha256` over the per-installation digests
+  in the given order; doctor prints one command per scope. Kept explicit naming rather than a
+  `--all`: the boundary that nothing is repaired unnamed stands. (3) The live opencode tests read
+  stdout from a file, not a pipe, because a Bun process may exit before a pipe past 64 KB is
+  drained (`opencode debug config` on 1.18.30), and drop every `OPENCODE_*` variable.
