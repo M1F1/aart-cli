@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 __all__ = ["JsoncError", "document", "has_comments", "loads", "rewrite"]
 
@@ -42,17 +42,17 @@ class JsoncError(ValueError):
     """The text is not JSONC, or this edit cannot be made without losing what is in it."""
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class _Node:
     kind: str  # "object", "array" or "scalar"
     start: int
     end: int
     value: object = None
-    members: list[_Entry] = field(default_factory=list)
+    members: tuple[_Entry, ...] = ()
     duplicates: frozenset[str] = frozenset()
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class _Entry:
     """One object member or array item: where it starts, its value, and the comma after it."""
 
@@ -161,7 +161,6 @@ class _Parser:
                 comma = self.pos
                 self.pos += 1
             entries.append(_Entry(entry_start, value, comma, key))
-        node = _Node(kind, start, self.pos, members=entries)
         if kind == "object":
             data: dict[str, object] = {}
             seen: set[str] = set()
@@ -172,11 +171,10 @@ class _Parser:
                     duplicates.add(entry.key)
                 seen.add(entry.key)
                 data[entry.key] = entry.value.value
-            node.value = data
-            node.duplicates = frozenset(duplicates)
-        else:
-            node.value = [entry.value.value for entry in entries]
-        return node
+            return _Node(kind, start, self.pos, data, tuple(entries), frozenset(duplicates))
+        return _Node(
+            kind, start, self.pos, [entry.value.value for entry in entries], tuple(entries)
+        )
 
 
 def _parse(text: str) -> tuple[_Node | None, list[tuple[int, int]]]:
