@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.32.3](https://github.com/M1F1/aart-cli/compare/v0.32.2...v0.32.3) (2026-11-28)
+
+
+### Fixed
+
+* opencode usage counts an MCP tool only when opencode has its server, so built-in and plugin tools are no longer sent as MCP uses ([a87b067](https://github.com/M1F1/aart-cli/commit/a87b0678637307d8768749dceabe78e369885069))
+* opencode's first MCP call is recorded even when the run ends right after it ([a87b067](https://github.com/M1F1/aart-cli/commit/a87b0678637307d8768749dceabe78e369885069))
+* opencode's last tool uses before it exits are recorded, and the recorder gets none of opencode's secrets ([a87b067](https://github.com/M1F1/aart-cli/commit/a87b0678637307d8768749dceabe78e369885069))
+* the opencode usage plugin is rewritten only when it changes, so open OpenCode 2 sessions are not reloaded ([a87b067](https://github.com/M1F1/aart-cli/commit/a87b0678637307d8768749dceabe78e369885069))
+
 ## [0.32.2](https://github.com/M1F1/aart-cli/compare/v0.32.1...v0.32.2) (2026-11-27)
 
 
