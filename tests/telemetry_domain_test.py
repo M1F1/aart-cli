@@ -45,9 +45,9 @@ ROOT = Path(__file__).resolve().parent.parent
 CONTRACT = ROOT / "docs" / "telemetry-api-v1.md"
 EXAMPLES = ROOT / "contract" / "telemetry-api-v1.examples.json"
 CONTRACT_SHA256 = {
-    "docs/telemetry-api-v1.md": "8cc63f9a4f759eface7403066d4d813258c7a3b3c92032cefe1cee097128424e",
+    "docs/telemetry-api-v1.md": "18a83b315bbc7da67a4ff27bcb73fd8f2ba144e7b9abeccb3a7774da810233ed",
     "contract/telemetry-api-v1.examples.json": (
-        "c147eb499783599426b9a78c1f2b4a314ae838b1cb3133929720883d2ba947fd"
+        "58e36a2a6a05bb218152dd9525966922f5d4b513e4f4c1bb66349d013be633f7"
     ),
 }
 

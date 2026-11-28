@@ -1,12 +1,22 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-27, OPENCODE-USAGE-PLUGIN)
+## Where the work is (2026-11-28, OPENCODE-HARNESS-VERSION)
+
+**OPENCODE-HARNESS-VERSION** (D-536): OpenCode 2's uses carry `harness_version` from
+`ctx.app.version`, sent from contract revision 8; B-279 is resolved by it. Branch
+`feat/opencode-harness-version` (worktree `/Users/mifi/code/aart-cli-harness-version`), PR #152; the
+server's revision 8 is its PR #20, and should be deployed first or together:
+until a server says 8 the field stays in the outbox and is not sent. Next: **P0-2** (the OpenCode 2
+variant detected by version), then B-276 and B-278. Evidence:
+`docs/refactor/slices/OPENCODE-HARNESS-VERSION-revision-8.md`.
+
+## Where the work was (2026-11-27, OPENCODE-USAGE-PLUGIN, released in 0.32.3)
 
 **OPENCODE-USAGE-PLUGIN** (B-277, D-531): the opencode usage plugin counts an MCP use only for a
 server the runtime reports, starts the recorder detached with `RECORDER_ENVIRONMENT` only, and
 hands over which runtime delivered the call; D-535 waits for the recorder (a second at most) and
 writes the plugin only when it changes. Branch `fix/opencode-usage-plugin`, PR #148 (on `main` since #147 was released in 0.32.2).
-Next: **P0-2** with B-279 (the `opencode2` label), then B-276 and B-278. Evidence:
+Released in 0.32.3. Evidence:
 `docs/refactor/slices/OPENCODE-USAGE-PLUGIN-real-servers-detached-no-secrets.md`.
 
 ## Where the work was (2026-11-27, OPENCODE-USER-SETTINGS-FILE, released in 0.32.2)

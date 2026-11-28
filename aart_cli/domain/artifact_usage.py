@@ -25,6 +25,8 @@ from .receipts import InstallationReceipt, InstalledRecord
 from .result import Err, Ok, Result
 
 __all__ = [
+    "HARNESS_VERSION_PATTERN",
+    "MAX_HARNESS_VERSION",
     "USAGE_HARNESSES",
     "USAGE_HARNESSES_INVALID",
     "ArtifactUse",
@@ -32,7 +34,9 @@ __all__ = [
     "UsageCount",
     "UsageKind",
     "UsageRank",
+    "harness_version_from_hook",
     "installed_names",
+    "is_harness_version",
     "parse_usage_harnesses",
     "rank_usage",
     "resolve_installed",
@@ -55,6 +59,11 @@ _MAX_PROJECT = 4096
 _PSEUDONYM = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 #: The least a session key holds, in bytes.
 _MIN_KEY = 32
+#: A harness's own version as it reports itself (`2.3.2`, `2.4.0-beta.1`, `2.3.2+build.7`): the one
+#: pattern the opencode plugin, this hook, telemetry and the telemetry server all test (D-536).
+HARNESS_VERSION_PATTERN = r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}(?:[-+][0-9A-Za-z.\-]{1,32})?$"
+MAX_HARNESS_VERSION = 64
+_HARNESS_VERSION = re.compile(HARNESS_VERSION_PATTERN)
 #: What opencode makes `_` in an MCP server's name when it names the server's tools.
 _OPENCODE_UNSAFE = re.compile(r"[^a-zA-Z0-9_-]")
 
@@ -135,6 +144,8 @@ class ArtifactUse:
     #: The pseudonym of the harness session it happened in (`session_pseudonym`); empty when the
     #: harness said none. Never the harness's own id.
     session: str = ""
+    #: The version the harness reported of itself (`is_harness_version`); empty when it said none.
+    harness_version: str = ""
 
     def __post_init__(self) -> None:
         if (
@@ -144,6 +155,7 @@ class ArtifactUse:
             or _project(self.project) != self.project
             or not (self.tool == "" or _name(self.tool) == self.tool)
             or not (self.session == "" or _matches_pseudonym(self.session))
+            or not (self.harness_version == "" or is_harness_version(self.harness_version))
         ):
             raise ValueError("an artifact use is invalid")
 
@@ -163,6 +175,30 @@ def session_from_hook(harness: str, payload: object) -> str | None:
         return None
     key = {"claude": "session_id", "opencode": "session"}.get(harness)
     return None if key is None else _name(payload.get(key))
+
+
+def is_harness_version(value: object) -> bool:
+    """Whether `value` is a harness version as the contract carries it: a string of
+    `HARNESS_VERSION_PATTERN`, at most `MAX_HARNESS_VERSION` characters."""
+
+    return (
+        isinstance(value, str)
+        and len(value) <= MAX_HARNESS_VERSION
+        and _HARNESS_VERSION.fullmatch(value) is not None
+    )
+
+
+def harness_version_from_hook(harness: str, payload: object) -> str | None:
+    """The version the harness reported of itself, as its hook handed it over, or `None`.
+
+    Only aart-cli's opencode plugin hands one over, as `harness_version`, read from OpenCode 2's
+    `ctx.app.version`; anything not of the pattern is none. Never raises.
+    """
+
+    if harness != "opencode" or not isinstance(payload, Mapping):
+        return None
+    value = payload.get("harness_version")
+    return value if is_harness_version(value) else None
 
 
 def session_pseudonym(key: bytes, harness: str, session: str) -> str:

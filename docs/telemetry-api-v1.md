@@ -91,11 +91,12 @@ other it refuses the event (`this event_type does not hold that field`). Lifecyc
 | `configuration_inputs`, `credential_inputs` | `artifact.installed`, `artifact.updated` | How many configuration values and credentials the installation asked for, integers 0–1000. Never a value or a name. |
 | `tool` | a use | Which tool of an MCP was called, 1–200 characters of `[0-9A-Za-z._@:+-]`; only when `artifact_type` is `mcp`. Never what it was called with. |
 | `session` | a use | A lowercase UUID that stands for the harness's session the use was in, the same for every use of that session and drawn by aart-cli, so uses in one session can be counted together. Never the harness's own session id. |
+| `harness_version` | a use | Revision 8. The version the harness that delivered the use reported of itself, at most 64 characters matching `^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}(?:[-+][0-9A-Za-z.\-]{1,32})?$` (`2.3.2`, `2.4.0-beta.1`, `2.3.2+build.7`). Absent when the harness said none or said something else: never `unknown`, never a guess such as `2` or `2.x`, never a path. OpenCode 2's plugin reads it from `ctx.app.version`; OpenCode 1.x and Claude Code say none. |
 
 `artifact.used` is sent only for an artifact aart-cli installed and could name with certainty, and
 names that installation. `unmanaged.used` is a use of a skill or MCP that no artifact aart-cli
-installed answers to: `artifact_id` is the name the harness used (a skill's name, an MCP server's
-for Claude Code, the whole tool name for opencode) and `artifact_type` is `skill` or `mcp`. aart-cli
+installed answers to: `artifact_id` is the name the harness used (a skill's name, or an MCP
+server's, with the tool called in `tool`) and `artifact_type` is `skill` or `mcp`. aart-cli
 sends it only while the person, or without their choice the build, says such uses are sent. A use
 aart-cli can attribute is never sent as `unmanaged.used`. Installation, use of an installed artifact
 and use of anything else are separate event types and the server keeps them apart.
@@ -148,7 +149,7 @@ An error body never repeats a submitted value beyond the `event_id` and `index` 
 Version 1 has grown by additions, each a revision. A server says which it holds:
 
 ```json
-{"schema_version": 1, "revision": 7}
+{"schema_version": 1, "revision": 8}
 ```
 
 | Revision | Added |
@@ -160,6 +161,7 @@ Version 1 has grown by additions, each a revision. A server says which it holds:
 | 5 | A failure's `causes`. |
 | 6 | This endpoint. |
 | 7 | The request's `environment`, and an event's `harness`, `scope`, `registry`, `interface`, `previous_version`, `via`, `collection`, `collection_version`, `package_digest`, `duration_ms`, `configuration_inputs`, `credential_inputs`, `tool` and `session`. |
+| 8 | A use's `harness_version`. |
 
 The answer is `200` with that object. The client reads `schema_version` and `revision`, and ignores
 any other field. The server needs no database to answer it.
@@ -168,8 +170,9 @@ The client asks before it sends, at most once per synchronisation. With a revisi
 what that revision holds. An event of a type the revision does not hold, a failure with `causes`
 below revision 5, and every event of a request that would carry `automated` below revision 4 wait
 unsent until the server holds them. They are not marked rejected. Below revision 7 the client
-leaves revision 7's fields out of each event and `environment` out of the request, and sends the
-rest unchanged: those fields only add to what an event says. `401`, `403`, `429`, `5xx`, a
+leaves revision 7's fields out of each event and `environment` out of the request, and below
+revision 8 it leaves out `harness_version`; it sends the rest unchanged: those fields only add to
+what an event says. `401`, `403`, `429`, `5xx`, a
 timeout or no connection are handled as they are for the batch. Any other answer -- a `404` from a
 server older than revision 6, or a `200` that names no revision -- means the client sends as it
 did before revision 6: everything but revision 7's fields and `environment`, handling a `422` as

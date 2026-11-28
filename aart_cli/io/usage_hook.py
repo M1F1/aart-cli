@@ -32,7 +32,12 @@ def record(harness: str, home: str, payload: bytes, *, now: datetime | None = No
 
     from dataclasses import replace
 
-    from aart_cli.domain.artifact_usage import session_from_hook, session_pseudonym, use_from_hook
+    from aart_cli.domain.artifact_usage import (
+        harness_version_from_hook,
+        session_from_hook,
+        session_pseudonym,
+        use_from_hook,
+    )
     from aart_cli.domain.result import Ok
     from aart_cli.io.activity_store import ActivityDatabase
 
@@ -45,6 +50,10 @@ def record(harness: str, home: str, payload: bytes, *, now: datetime | None = No
     use = use_from_hook(harness, document)
     if use is None:
         return False
+    # The version the harness reported of itself; one it cannot be said as is none (D-536).
+    version = harness_version_from_hook(harness, document)
+    if version is not None:
+        use = replace(use, harness_version=version)
     database = ActivityDatabase(str(Path(home) / "state"))
     # The harness's session id is turned into this machine's pseudonym of it here and goes no
     # further; without a key the use is still recorded, without a session (D-519).

@@ -16,7 +16,13 @@ from dataclasses import dataclass, field, fields, replace
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 
-from .artifact_usage import InstalledName, UsageKind, resolve_installed, use_scope
+from .artifact_usage import (
+    InstalledName,
+    UsageKind,
+    is_harness_version,
+    resolve_installed,
+    use_scope,
+)
 from .diagnostics import Diagnostic, DiagnosticCode, Severity
 from .failures import Failure
 from .result import Err, Ok, Result
@@ -29,6 +35,7 @@ __all__ = [
     "BATCH_SIZE",
     "CONTEXT_FOR",
     "CONTEXT_REVISION",
+    "HARNESS_VERSION_REVISION",
     "CONTRACT_PATH",
     "FAILED",
     "HTTP_TIMEOUT_SECONDS",
@@ -84,6 +91,11 @@ BATCH_PATH = "/api/v1/events/batch"
 CONTRACT_PATH = "/api/v1/contract"
 #: The revision that added where and how an event happened, and `environment` (D-518).
 CONTEXT_REVISION = 7
+#: The revision that added a use's `harness_version` (D-536).
+HARNESS_VERSION_REVISION = 8
+#: The context fields a revision past `CONTEXT_REVISION` added, by the revision that added them;
+#: below it the field is left out and the event sent without it.
+_FIELD_REVISION: Mapping[str, int] = {"harness_version": HARNESS_VERSION_REVISION}
 #: The first revision that says itself: a server naming an earlier one is not believed.
 _SAYS_ITS_REVISION = 6
 #: Says whether aart-cli runs as automation, `on` or `off`, overruling `CI` (D-511).
@@ -225,6 +237,7 @@ CONTEXT_FOR: Mapping[str, frozenset[str]] = {
     "credential_inputs": _PLACED,
     "tool": _USES,
     "session": _USES,
+    "harness_version": _USES,
 }
 
 #: What a plugin's install says that its skills do not: its package, its inputs and how it came.
@@ -255,6 +268,7 @@ _SHAPES: Mapping[str, Callable[[object], bool]] = {
     "credential_inputs": lambda value: _count(value, MAX_INPUTS),
     "tool": lambda value: _matches(_NAME, value),
     "session": lambda value: _matches(_UUID, value),
+    "harness_version": is_harness_version,
 }
 
 
@@ -286,19 +300,23 @@ class EventContext:
     credential_inputs: int | None = None
     tool: str | None = None
     session: str | None = None
+    #: The version the harness reported of itself (revision 8): never guessed, never `unknown`.
+    harness_version: str | None = None
 
     def __post_init__(self) -> None:
         for name, value in self.document().items():
             if not _SHAPES[name](value):
                 raise ValueError(f"an event's {name} does not follow the contract")
 
-    def document(self) -> dict[str, object]:
-        """The fields that hold something, by the contract's names."""
+    def document(self, *, revision: int | None = None) -> dict[str, object]:
+        """The fields that hold something, by the contract's names; with `revision`, only those
+        that revision holds."""
 
         return {
             item.name: getattr(self, item.name)
             for item in fields(self)
             if getattr(self, item.name) is not None
+            and (revision is None or revision >= _FIELD_REVISION.get(item.name, CONTEXT_REVISION))
         }
 
     @classmethod
@@ -442,7 +460,7 @@ class TelemetryEvent:
         if self.failure is not None:
             body["failure"] = self.failure.document()
         if revision is not None and revision >= CONTEXT_REVISION:
-            body |= self.context.document()
+            body |= self.context.document(revision=revision)
         return body
 
 
@@ -580,6 +598,7 @@ def use_event(
     tool: str = "",
     session: str = "",
     project: str = "",
+    harness_version: str = "",
 ) -> TelemetryEvent | None:
     """A recorded use as an event: the artifact aart-cli installed, or, when `unmanaged`, the name.
 
@@ -590,7 +609,8 @@ def use_event(
 
     It says its session's pseudonym, the MCP tool called -- Claude Code's `tool`, or the part of
     opencode's name after the server -- and, for an installed artifact, the scope of the
-    installation `project` reached. `project` itself is never sent (D-519).
+    installation `project` reached. `project` itself is never sent (D-519). With either, the
+    version the harness reported of itself, when it is one (D-536).
     """
 
     source = TELEMETRY_SOURCES.get(harness)
@@ -610,7 +630,9 @@ def use_event(
             None,
             # The server is the `artifact_id`, and the tool is said beside it.
             EventContext.fitting(
-                session=session or None, tool=(tool or None) if kind is UsageKind.MCP else None
+                session=session or None,
+                tool=(tool or None) if kind is UsageKind.MCP else None,
+                harness_version=harness_version or None,
             ),
         )
     artifact = _artifact(resolved.artifact)
@@ -629,6 +651,7 @@ def use_event(
         tool=called or None,
         session=session or None,
         scope=use_scope(resolved, project, installed),
+        harness_version=harness_version or None,
     )
     if resolved.member is not None:
         # A skill a plugin carries: a skill, named after its plugin as `<plugin>:<member>`, which

@@ -8,17 +8,20 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
 import unittest
 
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from aart_cli.domain.artifact_usage import (
+    HARNESS_VERSION_PATTERN,
     USAGE_HARNESSES,
     ArtifactUse,
     InstalledName,
     UsageCount,
     UsageKind,
+    harness_version_from_hook,
     rank_usage,
     use_from_hook,
 )
@@ -137,6 +140,72 @@ class OpencodePluginTest(unittest.TestCase):
             use_from_hook("opencode", {"tool": "opencodex_search", "server": "opencodex"}),
             ArtifactUse("opencode", UsageKind.MCP, "opencodex", tool="search"),
         )
+
+
+#: The pattern as the brief and the contract write it, held apart from the code's (D-536).
+_CONTRACT_VERSION = r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}(?:[-+][0-9A-Za-z.\-]{1,32})?$"
+_NOT_VERSIONS = (
+    "",
+    "latest",
+    "v2.3.2",
+    "2.3",
+    "2",
+    "2.x",
+    "unknown",
+    "/Users/someone/.opencode/bin/opencode-v2.3.2",
+    "2.3.2; x",
+    "2.3.2\n",
+    " 2.3.2",
+    "2.3.2-",
+    "2.3.2-" + "a" * 33,
+    "12345.0.0",
+    "2.3.2-beta 1",
+    "2" * 200,
+)
+
+
+class HarnessVersionTest(unittest.TestCase):
+    def test_the_pattern_is_the_contract_s(self) -> None:
+        self.assertEqual(HARNESS_VERSION_PATTERN, _CONTRACT_VERSION)
+
+    def test_a_version_opencode_reported_is_kept(self) -> None:
+        for version in ("2.3.2", "2.4.0-beta.1", "2.3.2+build.7", "0.0.0-beta-19271", "1.19.5"):
+            with self.subTest(version=version):
+                self.assertEqual(
+                    harness_version_from_hook("opencode", {"harness_version": version}), version
+                )
+
+    def test_anything_else_is_no_version(self) -> None:
+        for value in (*_NOT_VERSIONS, None, 232, 2.3, True, ["2.3.2"], {"version": "2.3.2"}):
+            with self.subTest(value=value):
+                self.assertIsNone(harness_version_from_hook("opencode", {"harness_version": value}))
+        self.assertIsNone(harness_version_from_hook("opencode", {}))
+        self.assertIsNone(harness_version_from_hook("opencode", "2.3.2"))
+        # Claude Code's hook says none; a payload that claims one is not believed.
+        self.assertIsNone(harness_version_from_hook("claude", {"harness_version": "2.3.2"}))
+
+    def test_a_use_holds_a_version_or_none(self) -> None:
+        use = ArtifactUse("opencode", UsageKind.SKILL, "review", harness_version="2.3.2")
+        self.assertEqual(use.harness_version, "2.3.2")
+        for value in _NOT_VERSIONS[1:]:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                ArtifactUse("opencode", UsageKind.SKILL, "review", harness_version=value)
+
+    @settings(suppress_health_check=_MUTATION, max_examples=300)
+    @given(
+        value=_JSON
+        | st.text(alphabet="0123456789.-+abcVx/ ;", max_size=70)
+        | st.from_regex(_CONTRACT_VERSION, fullmatch=True)
+    )
+    def test_any_value_is_a_contract_version_or_none_and_never_raises(self, value: object) -> None:
+        said = harness_version_from_hook("opencode", {"tool": "skill", "harness_version": value})
+
+        expected = (
+            isinstance(value, str)
+            and len(value) <= 64
+            and re.fullmatch(_CONTRACT_VERSION, value) is not None
+        )
+        self.assertEqual(said, value if expected else None)
 
 
 class NothingButNamesTest(unittest.TestCase):

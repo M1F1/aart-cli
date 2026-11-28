@@ -2401,7 +2401,7 @@
     {
       "id": "OPENCODE-USAGE-PLUGIN",
       "title": "The opencode usage plugin counts only real MCP servers, outlives opencode and keeps its secrets (B-277, D-531)",
-      "status": "in_progress",
+      "status": "done",
       "steps": [
         {
           "id": "1",
@@ -2415,13 +2415,35 @@
         },
         {
           "id": "3",
-          "title": "The PR (#148, on main since #147 was released in 0.32.2)",
-          "status": "in_progress"
+          "title": "The PR (#148, released in 0.32.3)",
+          "status": "done"
         },
         {
           "id": "4",
-          "title": "B-279: the opencode2 label, with P0-2 and the telemetry server's HARNESS_OF",
-          "status": "todo"
+          "title": "B-279: resolved by OPENCODE-HARNESS-VERSION's harness_version (D-536), no opencode2 label",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "id": "OPENCODE-HARNESS-VERSION",
+      "title": "OpenCode 2's uses carry the version it reported, from contract revision 8 (D-536, B-279)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Plugin reads ctx.app.version, hook checks it, Activity keeps it, telemetry sends it from revision 8",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "Server revision 8: field, event_context column, breakdown dimension",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PRs (client #152, server #20)",
+          "status": "in_progress"
         }
       ]
     }
