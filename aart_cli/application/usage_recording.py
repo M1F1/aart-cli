@@ -16,7 +16,13 @@ import shlex
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from aart_cli.domain.artifact_usage import USAGE_HARNESSES, UsageKind, UsageRank
+from aart_cli.domain.artifact_usage import (
+    HARNESS_VERSION_PATTERN,
+    MAX_HARNESS_VERSION,
+    USAGE_HARNESSES,
+    UsageKind,
+    UsageRank,
+)
 
 __all__ = [
     "ArtifactUsageView",
@@ -168,8 +174,10 @@ def opencode_plugin(hook: UsageHook) -> str:
     """The plugin opencode loads from its plugins directory, which runs the usage hook.
 
     It hands over the tool's name, the MCP server it belongs to, a skill's name, the directory and
-    opencode's session id, which the hook keeps only as a pseudonym, and which runtime delivered
-    the call (1 or 2, by the hook it came through); never the call's arguments.
+    opencode's session id, which the hook keeps only as a pseudonym, which runtime delivered
+    the call (1 or 2, by the hook it came through) and, on OpenCode 2, its version as
+    `ctx.app.version` says it, when it is of `HARNESS_VERSION_PATTERN`; never the call's
+    arguments, and never a version found any other way (D-536).
     Only `skill` and the tools of an MCP server opencode has start it: opencode names those
     `<server>_<tool>`, and asks for its servers -- `client.mcp.status()` on 1.x, `ctx.mcp.list()` on
     2 -- so a built-in or plugin tool with an underscore is not taken for one.
@@ -190,6 +198,7 @@ def opencode_plugin(hook: UsageHook) -> str:
         raise ValueError("the opencode plugin runs opencode's usage hook")
     command = json.dumps(list(hook.arguments))
     kept = json.dumps(list(RECORDER_ENVIRONMENT))
+    version = json.dumps(HARNESS_VERSION_PATTERN)
     return f"""{OPENCODE_PLUGIN_MARK}
 // Turn it off with `aart-cli consume usage disable --harness opencode`; that removes this file.
 import {{ spawn }} from "node:child_process"
@@ -269,21 +278,36 @@ const hand = (payload) => {{
   child.unref()
 }}
 
+// OpenCode 2's version of itself from `ctx.app.version`: a field read, never called, and only of
+// the pattern aart-cli checks it by again; anything else, or a read that throws, is none.
+const VERSION = new RegExp({version})
+const hostVersion = (ctx) => {{
+  try {{
+    const value = ctx?.app?.version
+    return typeof value === "string" && value.length <= {MAX_HARNESS_VERSION} && VERSION.test(value)
+      ? value
+      : undefined
+  }} catch {{
+    return undefined
+  }}
+}}
+
 // Names only: a skill's name, the server's, and nothing else the call was given. `runtime` is
 // the hook that delivered the call -- 1.x's `tool.execute.before` or OpenCode 2's
 // `ctx.tool.hook` -- since OpenCode 1.19 calls `setup` too.
-const record = async (runtime, directory, called, args, sessionID, serverFor) => {{
+const record = async (runtime, directory, called, args, sessionID, serverFor, version) => {{
   try {{
     const tool = String(called)
     const session = typeof sessionID === "string" ? sessionID : undefined
+    const said = {{ directory, session, runtime, ...(version ? {{ harness_version: version }} : {{}}) }}
     if (tool === "skill") {{
       const named = args?.id ?? args?.name
-      if (typeof named === "string") hand({{ tool, skill: named, directory, session, runtime }})
+      if (typeof named === "string") hand({{ tool, skill: named, ...said }})
       return
     }}
     if (!tool.includes("_")) return
     const server = await serverFor(tool)
-    if (server !== undefined) hand({{ tool, server, directory, session, runtime }})
+    if (server !== undefined) hand({{ tool, server, ...said }})
   }} catch {{}}
 }}
 
@@ -302,11 +326,12 @@ const server = async ({{ client, directory }}) => {{
 async function setup(ctx) {{
   if (typeof ctx?.tool?.hook !== "function") return
   const directory = ctx.location?.directory ?? process.cwd()
+  const version = hostVersion(ctx)
   const serverFor = mcpServers(async () =>
     ((await ctx.mcp.list())?.data ?? []).map((item) => item?.name),
   )
   await ctx.tool.hook("execute.before", (event) =>
-    awaited(record(2, directory, event?.tool, event?.input, event?.sessionID, serverFor)),
+    awaited(record(2, directory, event?.tool, event?.input, event?.sessionID, serverFor, version)),
   )
 }}
 

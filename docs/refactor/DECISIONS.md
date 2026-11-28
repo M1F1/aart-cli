@@ -13476,3 +13476,38 @@ during `server()`), and found two faults left:
   rejection. `test_opencode_s_plugin_is_written_only_when_its_bytes_change` (same inode and mtime;
   a changed file is replaced). Targeted mutations -- either runtime's hook not awaited, no limit, no
   shared request, writing unconditionally -- each turn their named test red.
+
+## D-536 — OpenCode 2's uses carry the version it reported, from contract revision 8 (B-279)
+
+§212 and §213 amended (owner request, 2026-11-28, on a brief from the enterprise deployment: which
+OpenCode delivered a use, safely and failing softly). OpenCode 1.x and 2 both send `source`
+`opencode_plugin` and `harness` `opencode`, so the dashboard could not tell them apart.
+
+- **Read, never run.** The plugin reads `ctx.app.version` in OpenCode 2's `setup`, inside a
+  `try`, and keeps it only when it is a string of at most 64 characters matching
+  `^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}(?:[-+][0-9A-Za-z.\-]{1,32})?$`. It never calls anything,
+  never reads the environment, `process.execPath` or `--version`: a launcher's binary path or a
+  build string is no version, and running a command in a hook is a cost and a risk the version is
+  not worth. OpenCode 1.x's path sends none: its `server()` context has no such field. The one
+  pattern is `HARNESS_VERSION_PATTERN` in `aart_cli/domain/artifact_usage.py`, rendered into the
+  plugin and tested to equal the contract's and the server's.
+- **Failing softly.** A version that cannot be read, is not a string or does not match is left
+  out, never `unknown`, `2` or `2.x`; the hook checks it again and the use is recorded without it.
+  The Activity database gains a nullable `harness_version` column on open; when it cannot (a
+  read-only or locked file), uses are recorded and read without the column rather than not at all.
+- **Revision 8.** `harness_version` is a use's context field from revision 8. `EventContext`
+  leaves out a field above the revision the server named, so a revision-7 server keeps receiving
+  exactly what it accepts; the outbox keeps the version either way. The server takes it only in
+  `artifact.used`/`unmanaged.used`, refuses one that is not a version by name (`harness_version
+  must be a version such as 2.3.2`), stores it in `event_context`, adds the column to an older
+  database at start-up, and breaks down by it with a use that said none listed as not said.
+  Rejected: the brief's "accept the event and store `NULL`" for a bad value on the server. Every
+  other context field is refused by name, the shared invalid examples hold both repositories to
+  that, and this client never sends a value it did not test against the same pattern; a bad value
+  is a client bug worth a refusal, not a silent `NULL`.
+- **B-279 resolved without `opencode2`.** `harness_version` says which OpenCode delivered a use, so
+  no `opencode2` harness, no change to the server's `HARNESS_OF` and no second local harness are
+  needed. `runtime` (1 or 2) stays local to the plugin and is not sent: the version already says
+  it, and a field that only repeats another is one more for every reader to reconcile.
+- **Out of scope.** OpenCode 1.x's version, Claude Code's version and a launcher's own version.
+

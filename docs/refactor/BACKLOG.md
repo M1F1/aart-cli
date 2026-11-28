@@ -5492,7 +5492,9 @@ the MCP fixture needs `{"type": "object", "properties": {}}`.
 
 ## B-279 — Label OpenCode 2's uses `opencode2`, locally and in telemetry
 
-Status: **open**, with P0-2 (D-531, 2026-11-27).
+Status: **resolved by D-536 (2026-11-28)** without an `opencode2` label: an OpenCode 2 use carries
+`harness_version` (contract revision 8), which tells it from 1.x's in Activity and on the server.
+What follows is kept as the record of the option not taken.
 
 The usage plugin hands over `runtime: 1|2`. Once the `opencode2` harness exists, the hook records a
 runtime-2 use as `opencode2`, so it resolves against `opencode2` installations, and doctor/TUI can

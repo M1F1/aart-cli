@@ -51,14 +51,22 @@ _SCHEMA = (
     " name TEXT NOT NULL,"
     " project TEXT NOT NULL,"
     " tool TEXT,"
-    " session TEXT)",
+    " session TEXT,"
+    " harness_version TEXT)",
     "CREATE INDEX artifact_use_name ON artifact_use (harness, kind, name)",
     "CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL)",
 )
 
 #: What a database of this schema version gained in place, without a new version: an older one
 #: gains them as it is opened, and what it holds stays as it was (D-519).
-_ADDED_COLUMNS = (("artifact_use", "tool", "TEXT"), ("artifact_use", "session", "TEXT"))
+_ADDED_COLUMNS = (
+    ("artifact_use", "tool", "TEXT"),
+    ("artifact_use", "session", "TEXT"),
+    ("artifact_use", "harness_version", "TEXT"),
+)
+#: A use's columns past the first schema's, each read and written only when the database has it:
+#: one it could not gain costs the use that field, never the use (D-536).
+_USE_COLUMNS = ("tool", "session", "harness_version")
 _ADDED_TABLES = ("CREATE TABLE IF NOT EXISTS meta (name TEXT PRIMARY KEY, value TEXT NOT NULL)",)
 
 #: The `meta` row holding the key session pseudonyms are made under, as hex.
@@ -83,15 +91,32 @@ def _missing(connection: sqlite3.Connection) -> list[str]:
 
 
 def _added(connection: sqlite3.Connection) -> None:
-    """What this schema version gained since the database was made, added once, under the lock."""
+    """What this schema version gained since the database was made, added once, under the lock.
 
-    if not _missing(connection):
-        return
-    connection.execute("BEGIN IMMEDIATE")
-    # Another writer may have added it between the read and the lock.
-    for statement in _missing(connection):
-        connection.execute(statement)
-    connection.execute("COMMIT")
+    A database that cannot gain it now -- read-only, or locked past the wait -- is used as it is:
+    what it lacks is left out of what is written and read (D-536)."""
+
+    try:
+        if not _missing(connection):
+            return
+        connection.execute("BEGIN IMMEDIATE")
+        # Another writer may have added it between the read and the lock.
+        for statement in _missing(connection):
+            connection.execute(statement)
+        connection.execute("COMMIT")
+    except sqlite3.Error:
+        if connection.in_transaction:
+            try:
+                connection.execute("ROLLBACK")
+            except sqlite3.Error:
+                pass
+
+
+def _use_columns(connection: sqlite3.Connection) -> tuple[str, ...]:
+    """The use columns past the first schema's this database has."""
+
+    present = {row[1] for row in connection.execute("PRAGMA table_info(artifact_use)")}
+    return tuple(column for column in _USE_COLUMNS if column in present)
 
 
 def _write_ahead(connection: sqlite3.Connection) -> None:
@@ -213,17 +238,27 @@ class ActivityDatabase:
             if connection is None:
                 return Ok(())
             with closing(connection):
+                present = _use_columns(connection)
+                said = "".join(
+                    f", {column}" if column in present else ", NULL" for column in _USE_COLUMNS
+                )
                 rows = connection.execute(
-                    "SELECT id, moment, harness, kind, name, project, tool, session"
+                    f"SELECT id, moment, harness, kind, name, project{said}"  # noqa: S608 -- fixed names
                     " FROM artifact_use ORDER BY id"
                 ).fetchall()
         except (OSError, sqlite3.Error) as error:
             return _error(ACTIVITY_UNREADABLE, f"cannot read usage from {self.path}: {error}")
         uses: list[tuple[str, str, ArtifactUse]] = []
-        for row, moment, harness, kind, name, project, tool, session in rows:
+        for row, moment, harness, kind, name, project, tool, session, version in rows:
             try:
                 use = ArtifactUse(
-                    harness, UsageKind(kind), name, project, tool or "", session or ""
+                    harness,
+                    UsageKind(kind),
+                    name,
+                    project,
+                    tool or "",
+                    session or "",
+                    version or "",
                 )
             except ValueError:
                 continue  # a row no use could have written is not one to report
@@ -251,7 +286,8 @@ class ActivityDatabase:
             return _error(ACTIVITY_UNWRITABLE, f"cannot keep a session key in {self.path}: {error}")
 
     def record_use(self, use: ArtifactUse, moment: str) -> Result[str]:
-        """Append one artifact use: names, the session's pseudonym and the moment only."""
+        """Append one artifact use: names, the session's pseudonym, the harness's version and the
+        moment only."""
 
         if not isinstance(use, ArtifactUse):
             raise ValueError("only an artifact use is recorded")
@@ -259,18 +295,25 @@ class ActivityDatabase:
             connection = self._open(create=True)
             assert connection is not None
             with closing(connection):
+                optional = {
+                    "tool": use.tool or None,
+                    "session": use.session or None,
+                    "harness_version": use.harness_version or None,
+                }
+                present = _use_columns(connection)
+                columns = ("moment", "harness", "kind", "name", "project", *present)
+                values = (
+                    moment,
+                    use.harness,
+                    use.kind.value,
+                    use.name,
+                    use.project,
+                    *(optional[column] for column in present),
+                )
                 row = connection.execute(
-                    "INSERT INTO artifact_use (moment, harness, kind, name, project, tool, session)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        moment,
-                        use.harness,
-                        use.kind.value,
-                        use.name,
-                        use.project,
-                        use.tool or None,
-                        use.session or None,
-                    ),
+                    f"INSERT INTO artifact_use ({', '.join(columns)})"  # noqa: S608 -- fixed names
+                    f" VALUES ({', '.join('?' for _ in columns)})",
+                    values,
                 ).lastrowid
         except (OSError, sqlite3.Error) as error:
             return _error(ACTIVITY_UNWRITABLE, f"cannot record the use in {self.path}: {error}")

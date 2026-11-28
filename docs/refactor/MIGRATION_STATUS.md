@@ -4,6 +4,13 @@ This file is a chronological evidence log, newest first. Earlier VERIFIED states
 contract tested then. Current obligations are in `NEXT.md`, `plan.json` and
 `INVARIANT_TRACEABILITY.md`; earlier sharing/path allowances are superseded by §169/D-332–D-335.
 
+**2026-11-28, OPENCODE-HARNESS-VERSION (D-536, B-279): OpenCode 2's uses carry the version it reported.**
+The usage plugin reads `ctx.app.version` (never a command, the environment or a path) and hands it
+over only when it is a version; the hook checks it again, Activity keeps it, and telemetry sends it
+as `harness_version` to a server naming contract revision 8. Anything wrong loses the version only,
+never the use. B-279 is resolved without an `opencode2` harness. Evidence:
+`docs/refactor/slices/OPENCODE-HARNESS-VERSION-revision-8.md`.
+
 **2026-11-27, OPENCODE-USAGE-PLUGIN (B-277, D-531): opencode usage counts real MCP servers only.**
 The usage plugin asks opencode for its MCP servers and counts a tool only when one of them has it,
 starts the recorder detached so the last uses survive opencode exiting, and passes it no secret

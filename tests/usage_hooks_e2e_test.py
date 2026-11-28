@@ -104,6 +104,24 @@ class TheHookAsAHarnessRunsItTest(unittest.TestCase):
         self.assertEqual((ran.returncode, ran.stdout), (0, b""), ran.stderr)
         self.assertEqual(_uses(self.home), [("opencode", "mcp", "jira", "/w")])
 
+    def test_opencode_s_version_is_kept_with_the_use_and_a_false_one_is_not(self) -> None:
+        # D-536: the plugin hands over `harness_version`; the hook believes only the pattern.
+        versions = ("2.3.2", "v2.3.2", "/Users/x/opencode")
+        for version in versions:
+            with self.subTest(version=version):
+                ran = self._run(
+                    "opencode",
+                    json.dumps(
+                        {"tool": "skill", "skill": "review", "harness_version": version}
+                    ).encode(),
+                )
+                self.assertEqual((ran.returncode, ran.stdout), (0, b""))
+        with sqlite3.connect(self.home / "state" / "activity.sqlite3") as connection:
+            rows = connection.execute(
+                "SELECT name, harness_version FROM artifact_use ORDER BY id"
+            ).fetchall()
+        self.assertEqual(rows, [("review", "2.3.2"), ("review", None), ("review", None)])
+
     def test_anything_it_cannot_read_records_nothing_and_still_exits_0(self) -> None:
         for payload in (b"", b"not json", b"[]", json.dumps({"tool_name": "Bash"}).encode()):
             with self.subTest(payload=payload):
@@ -208,8 +226,17 @@ class OpencodePluginTest(unittest.TestCase):
         self.assertTrue(plugin.startswith(OPENCODE_PLUGIN_MARK))
         self.assertIn('"tool.execute.before"', plugin)
         self.assertIn('ctx.tool.hook("execute.before"', plugin)
-        self.assertIn("hand({ tool, skill: named, directory, session, runtime })", plugin)
-        self.assertIn("hand({ tool, server, directory, session, runtime })", plugin)
+        self.assertIn(
+            "const said = { directory, session, runtime, ...(version ? { harness_version: version }"
+            " : {}) }",
+            plugin,
+        )
+        self.assertIn("hand({ tool, skill: named, ...said })", plugin)
+        self.assertIn("hand({ tool, server, ...said })", plugin)
+        # The version is read from `ctx.app` and from nowhere else (D-536).
+        self.assertIn("ctx?.app?.version", plugin)
+        for elsewhere in ("process.execPath", "process.version", "--version", "ctx.app.version("):
+            self.assertNotIn(elsewhere, plugin)
         self.assertNotIn("JSON.stringify(output", plugin)
         self.assertNotIn("JSON.stringify(args", plugin)
         self.assertNotIn("JSON.stringify(event", plugin)
@@ -340,6 +367,56 @@ class TheRunningHookTest(unittest.TestCase):
     def test_python_is_never_found_through_the_path(self) -> None:
         with mock.patch.dict(os.environ, {"PATH": ""}):
             self.assertTrue(running_usage_hook("claude", data_root="/h").python.startswith("/"))
+
+
+#: An Activity database as aart-cli before D-536 made it: a use with a tool and a session only.
+_BEFORE_THE_VERSION = (
+    "CREATE TABLE action ( id INTEGER PRIMARY KEY, moment TEXT NOT NULL, receipt BLOB NOT NULL)",
+    "CREATE TABLE artifact_use (id INTEGER PRIMARY KEY, moment TEXT NOT NULL, harness TEXT NOT NULL,"
+    " kind TEXT NOT NULL, name TEXT NOT NULL, project TEXT NOT NULL, tool TEXT, session TEXT)",
+    "CREATE TABLE meta (name TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    "INSERT INTO artifact_use (moment, harness, kind, name, project)"
+    " VALUES ('2026-11-27T10:00:00+00:00', 'opencode', 'skill', 'older', '')",
+    "PRAGMA user_version = 1",
+)
+
+
+class AnOlderActivityDatabaseTest(unittest.TestCase):
+    """D-536: the version is a column an older database gains, and one it cannot gain costs the
+    use that field only."""
+
+    USE = ArtifactUse("opencode", UsageKind.SKILL, "review", harness_version="2.3.2")
+
+    def setUp(self) -> None:
+        self._temporary = tempfile.TemporaryDirectory()
+        self.state = Path(self._temporary.name) / "state"
+        self.state.mkdir()
+        with sqlite3.connect(self.state / "activity.sqlite3") as connection:
+            for statement in _BEFORE_THE_VERSION:
+                connection.execute(statement)
+        self.database = ActivityDatabase(str(self.state))
+
+    def tearDown(self) -> None:
+        self._temporary.cleanup()
+
+    def _names_and_versions(self) -> list[tuple[str, str]]:
+        rows = self.database.use_rows()
+        assert isinstance(rows, Ok), rows
+        return [(use.name, use.harness_version) for _, _, use in rows.value]
+
+    def test_it_gains_the_column_and_keeps_what_it_held(self) -> None:
+        self.assertIsInstance(self.database.record_use(self.USE, "2026-11-28T10:00:00+00:00"), Ok)
+
+        self.assertEqual(self._names_and_versions(), [("older", ""), ("review", "2.3.2")])
+
+    def test_one_that_cannot_gain_it_still_records_and_reads_every_use(self) -> None:
+        failing = ["ALTER TABLE artifact_use ADD COLUMN harness_version TEXT NOT NULL"]
+        with mock.patch("aart_cli.io.activity_store._missing", return_value=failing):
+            written = self.database.record_use(self.USE, "2026-11-28T10:00:00+00:00")
+            read = self._names_and_versions()
+
+        self.assertIsInstance(written, Ok)
+        self.assertEqual(read, [("older", ""), ("review", "")])
 
 
 if __name__ == "__main__":

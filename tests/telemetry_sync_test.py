@@ -505,6 +505,29 @@ class WhatEachServerIsSentTest(unittest.TestCase):
         self.assertEqual(used["registry"], "public")
         self.assertNotIn("harness", used)
 
+    def test_opencode_s_version_reaches_a_server_holding_revision_8_and_no_older_one(self) -> None:
+        # D-536: held back from revision 7 as revision 7's fields are from 6; the use still goes.
+        write_consumer_settings(
+            ConsumerSettings(telemetry_unmanaged=True), data_root=self.home.path
+        )
+        stamp = START.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        use = ArtifactUse(
+            "opencode", UsageKind.MCP, "mine", "/work/project", "search", harness_version="2.3.2"
+        )
+        for index, (revision, expected) in enumerate(((7, None), (8, "2.3.2"), (9, "2.3.2"))):
+            with self.subTest(revision=revision):
+                self.server.revision = revision
+                self.server.requests.clear()
+                self.assertEqual(self.home.outbox.record_use(use, stamp, f"use-v{index}"), Ok(True))
+
+                report = self._sync(force=True)
+
+                (request,) = self.server.requests
+                (event,) = request["events"]
+                self.assertEqual((report.sent, event["event_type"]), (1, "unmanaged.used"))
+                self.assertEqual(event.get("harness_version"), expected)
+                self.assertEqual(event["tool"], "search")
+
     def test_an_older_server_or_one_naming_none_is_sent_what_it_read_before(self) -> None:
         for revision in (6, None):
             with self.subTest(revision=revision):

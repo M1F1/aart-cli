@@ -279,6 +279,37 @@
           }
         ]
       }
+    },
+    {
+      "name": "a use from OpenCode 2 with the version it reported, and one from OpenCode 1.x without (revision 8)",
+      "request": {
+        "schema_version": 1,
+        "client_id": "0b6f4d1e-8f8a-4a43-9a52-2f0f5d0f6a11",
+        "client_version": "0.33.0",
+        "events": [
+          {
+            "event_id": "6e0c7a52-4b1d-4f3a-9c2e-1d2e3f4a5b6c",
+            "occurred_at": "2026-11-28T09:30:00Z",
+            "event_type": "artifact.used",
+            "source": "opencode_plugin",
+            "artifact_id": "jira",
+            "artifact_type": "mcp",
+            "artifact_version": "2.0.0",
+            "registry": "company",
+            "tool": "create_issue",
+            "session": "5a1f0c2e-1b2c-4d3e-8f40-516273849a5b",
+            "harness_version": "2.3.2"
+          },
+          {
+            "event_id": "6e0c7a52-4b1d-4f3a-9c2e-1d2e3f4a5b6d",
+            "occurred_at": "2026-11-28T09:31:00Z",
+            "event_type": "unmanaged.used",
+            "source": "opencode_plugin",
+            "artifact_id": "notes",
+            "artifact_type": "skill"
+          }
+        ]
+      }
     }
   ],
   "invalid": [
@@ -681,6 +712,46 @@
         "registry": "https://registry.example.invalid",
         "occurred_at": "2026-11-03T18:00:00Z",
         "artifact_version": "1.0.0"
+      }
+    },
+    {
+      "name": "a harness version that is not a version",
+      "rejected_index": 0,
+      "event": {
+        "event_id": "9a9a9a9a-0000-4000-8000-000000000031",
+        "occurred_at": "2026-11-28T09:30:00Z",
+        "event_type": "artifact.used",
+        "source": "opencode_plugin",
+        "artifact_id": "jira",
+        "artifact_type": "mcp",
+        "harness_version": "v2.3.2"
+      }
+    },
+    {
+      "name": "a harness version that is a path",
+      "rejected_index": 0,
+      "event": {
+        "event_id": "9a9a9a9a-0000-4000-8000-000000000032",
+        "occurred_at": "2026-11-28T09:30:00Z",
+        "event_type": "unmanaged.used",
+        "source": "opencode_plugin",
+        "artifact_id": "notes",
+        "artifact_type": "skill",
+        "harness_version": "/Users/someone/opencode-v2.3.2"
+      }
+    },
+    {
+      "name": "a harness version of an install",
+      "rejected_index": 0,
+      "event": {
+        "event_id": "9a9a9a9a-0000-4000-8000-000000000033",
+        "occurred_at": "2026-11-28T09:30:00Z",
+        "event_type": "artifact.installed",
+        "source": "aart_cli",
+        "artifact_id": "jira",
+        "artifact_type": "mcp",
+        "artifact_version": "2.0.0",
+        "harness_version": "2.3.2"
       }
     }
   ]

@@ -32,7 +32,7 @@ from aart_cli.domain.policies import EffectivePolicy
 from aart_cli.domain.python_runtime import ArtifactEnvironment
 from aart_cli.domain.result import Ok
 from aart_cli.domain.telemetry import (
-    CONTEXT_REVISION,
+    HARNESS_VERSION_REVISION,
     AnswerKind,
     Environment,
     EventContext,
@@ -78,6 +78,7 @@ VALUES: dict[str, object] = {
     "credential_inputs": 1,
     "tool": "create_issue",
     "session": SESSION,
+    "harness_version": "2.3.2",
 }
 LIFECYCLE = {"artifact.installed", "artifact.updated", "artifact.removed"}
 PLACED = {"artifact.installed", "artifact.updated"}
@@ -98,6 +99,7 @@ HELD_IN = {
     "credential_inputs": PLACED,
     "tool": USES,
     "session": USES,
+    "harness_version": USES,
 }
 
 
@@ -142,7 +144,7 @@ class TheExamplesTest(unittest.TestCase):
                         request["client_version"],
                         tuple(events),
                         automated=request.get("automated", False),
-                        revision=CONTEXT_REVISION,
+                        revision=HARNESS_VERSION_REVISION,
                         environment=None if environment is None else Environment(**environment),
                     ),
                     request,
@@ -280,6 +282,71 @@ class TheRevisionTest(unittest.TestCase):
                     document["environment"], {"os": "darwin", "arch": "arm64", "python": "3.11.9"}
                 )
                 self.assertEqual(document["events"][0]["registry"], "company")
+
+
+class TheHarnessVersionTest(unittest.TestCase):
+    """D-536: a use says the version its harness reported, to a server holding revision 8."""
+
+    def test_a_use_holds_it_and_nothing_else_does(self) -> None:
+        for event_type in ("artifact.used", "unmanaged.used"):
+            with self.subTest(event_type=event_type):
+                event = _event(event_type, EventContext(harness_version="2.4.0-beta.1"))
+                self.assertEqual(event.context.harness_version, "2.4.0-beta.1")
+        for event_type in (*LIFECYCLE, "aart_cli.failed"):
+            with self.subTest(event_type=event_type), self.assertRaises(ValueError):
+                _event(event_type, EventContext(harness_version="2.3.2"))
+
+    def test_what_is_not_a_version_is_refused_and_left_out_when_fitted(self) -> None:
+        for value in (
+            "",
+            "latest",
+            "v2.3.2",
+            "2.3",
+            "unknown",
+            "2.3.2; x",
+            "/a/opencode-2.3.2",
+            232,
+        ):
+            with self.subTest(value=value):
+                with self.assertRaises((ValueError, TypeError)):
+                    _event("artifact.used", EventContext(harness_version=value))  # type: ignore[arg-type]
+                self.assertEqual(EventContext.fitting(harness_version=value), EventContext())
+
+    def test_it_is_sent_from_revision_8_and_the_rest_of_the_use_below_it(self) -> None:
+        event = _event("artifact.used", EventContext(session=SESSION, harness_version="2.3.2"))
+        for revision, expected in ((None, None), (6, None), (7, None), (8, "2.3.2"), (9, "2.3.2")):
+            with self.subTest(revision=revision):
+                (sent,) = batch_document(CLIENT, "0.33.0", (event,), revision=revision)["events"]
+                self.assertEqual(sent.get("harness_version"), expected)
+                self.assertEqual(sent.get("session"), None if revision in (None, 6) else SESSION)
+
+    def test_a_use_event_says_the_version_given_and_never_costs_the_use(self) -> None:
+        installed = WhatAnEventSaysTest.INSTALLED
+        for version, expected in (("2.3.2", "2.3.2"), ("", None), ("2.x", None)):
+            with self.subTest(version=version):
+                used = use_event(
+                    ID,
+                    MOMENT,
+                    "opencode",
+                    UsageKind.MCP,
+                    "jira",
+                    installed,
+                    tool="create_issue",
+                    harness_version=version,
+                )
+                unmanaged = use_event(
+                    ID,
+                    MOMENT,
+                    "opencode",
+                    UsageKind.SKILL,
+                    "mine",
+                    (),
+                    unmanaged=True,
+                    harness_version=version,
+                )
+                assert used is not None and unmanaged is not None
+                self.assertEqual(used.context.harness_version, expected)
+                self.assertEqual(unmanaged.context.harness_version, expected)
 
 
 class TheEnvironmentTest(unittest.TestCase):

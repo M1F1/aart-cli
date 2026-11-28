@@ -245,6 +245,8 @@ class WaitingEvent:
     tool: str = ""
     session: str = ""
     project: str = ""
+    #: The version the harness reported of itself (D-536).
+    harness_version: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -412,7 +414,9 @@ class TelemetryOutbox:
                             use.name,
                             _context_text(
                                 EventContext.fitting(
-                                    tool=use.tool or None, session=use.session or None
+                                    tool=use.tool or None,
+                                    session=use.session or None,
+                                    harness_version=use.harness_version or None,
                                 )
                             ),
                             use.project or None,
@@ -483,6 +487,7 @@ class TelemetryOutbox:
                         tool=said.tool or "",
                         session=said.session or "",
                         project=project or "",
+                        harness_version=said.harness_version or "",
                     )
                 )
             else:

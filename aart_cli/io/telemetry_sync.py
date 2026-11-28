@@ -431,6 +431,7 @@ def _send_outbox(run: _Run, state_root: str, client_version: str) -> None:
                 tool=item.tool,
                 session=item.session,
                 project=item.project,
+                harness_version=item.harness_version,
             )
             if event is None:
                 unattributed.append(item.event_id)

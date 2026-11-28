@@ -390,5 +390,94 @@ class OpenCodeExitingRightAfterTheFirstCallTest(unittest.TestCase):
                 self.assertLess(waited, 1500)
 
 
+# What OpenCode 2's `ctx.app` might hold, one `setup` each, its skill named after the case; and
+# OpenCode 1.x's path, which reads no version (D-536).
+_VERSIONS = textwrap.dedent(
+    """
+    import { pathToFileURL } from "node:url"
+
+    const plugin = (await import(pathToFileURL(process.argv[2]).href)).default
+    const throwing = {}
+    Object.defineProperty(throwing, "version", { get() { throw new Error("no") } })
+    const cases = {
+      "plain": { version: "2.3.2" },
+      "beta": { version: "2.4.0-beta.1" },
+      "none": undefined,
+      "null": null,
+      "number": { version: 232 },
+      "function": { version: () => "2.3.2" },
+      "empty": { version: "" },
+      "latest": { version: "latest" },
+      "prefixed": { version: "v2.3.2" },
+      "path": { version: "/Users/someone/opencode-v2.3.2" },
+      "appended": { version: "2.3.2; x" },
+      "long": { version: "2.3.2-" + "a".repeat(200) },
+      "throwing": throwing,
+    }
+    const said = { registered: 0, results: [] }
+    for (const [name, app] of Object.entries(cases)) {
+      const ctx = {
+        location: { directory: "/two" },
+        mcp: { list: async () => ({ data: [] }) },
+        tool: { hook: async (_, callback) => { said.registered += 1; ctx.hook = callback } },
+      }
+      if (name !== "none") ctx.app = app
+      await plugin.setup(ctx)
+      said.results.push(typeof (await ctx.hook({ tool: "skill", sessionID: "s", input: { id: name } })))
+    }
+    const client = { mcp: { status: async () => ({ data: {} }) } }
+    const hooks = await plugin.server({ client, directory: "/one", app: { version: "1.19.5" } })
+    await hooks["tool.execute.before"]({ tool: "skill", sessionID: "s" }, { args: { name: "one" } })
+    console.log(JSON.stringify(said))
+    """
+)
+
+
+@unittest.skipIf(_NODE is None, "node runs the plugin")
+class OpenCodeSVersionTest(unittest.TestCase):
+    def test_only_a_version_of_the_pattern_read_from_ctx_app_is_handed_over(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            kept = root / "kept.jsonl"
+            keeper = root / HOOK_SCRIPT
+            keeper.parent.mkdir(parents=True)
+            keeper.write_text(_KEEPER)
+            plugin = root / "aart-cli-usage.js"
+            plugin.write_text(
+                opencode_plugin(UsageHook("opencode", sys.executable, str(keeper), str(kept)))
+            )
+            driver = root / "versions.mjs"
+            driver.write_text(_VERSIONS)
+            assert _NODE is not None
+            ran = subprocess.run(
+                [_NODE, str(driver), str(plugin)],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            self.assertEqual(ran.returncode, 0, ran.stderr)
+            said = json.loads(ran.stdout.strip().splitlines()[-1])
+            deadline = time.monotonic() + 30
+            lines: list[str] = []
+            while time.monotonic() < deadline:
+                lines = kept.read_text().splitlines() if kept.exists() else []
+                if len(lines) >= 14:
+                    break
+                time.sleep(0.05)
+            handed = {item["skill"]: item for item in map(json.loads, lines)}
+
+        # Every case registered its hook and none of them threw into the tool call.
+        self.assertEqual(said, {"registered": 13, "results": ["undefined"] * 13})
+        self.assertEqual(len(handed), 14)
+        versions = {name: item.get("harness_version") for name, item in handed.items()}
+        self.assertEqual(
+            {name: version for name, version in versions.items() if version is not None},
+            {"plain": "2.3.2", "beta": "2.4.0-beta.1"},
+        )
+        self.assertNotIn("harness_version", handed["one"])
+        self.assertEqual(handed["one"]["runtime"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

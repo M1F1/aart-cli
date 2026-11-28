@@ -12653,7 +12653,13 @@ JSON files, in preparation for a telemetry server that does not exist yet.
   of those opencode reports (`client.mcp.status()` on 1.x, `ctx.mcp.list()` on 2) that the tool
   fits. The use is that server, with the tool beside it. A tool no server fits is no use, whatever
   its underscores: OpenCode 2's own `opencode_<tool>` (D-520), the built-in
-  `experimental_image_generate`, another plugin's `<file>_<export>` (D-531).
+  `experimental_image_generate`, another plugin's `<file>_<export>` (D-531). An OpenCode 2 use
+  also keeps the version OpenCode reported of itself, read from the field `ctx.app.version` and
+  nothing else -- no command, no environment, no executable path -- and only when it is a version
+  (`2.3.2`, `2.4.0-beta.1`; the pattern of §213's `harness_version`); anything else, a value that
+  cannot be read, OpenCode 1.x and Claude Code keep none, and the use is recorded all the same
+  (D-536). An Activity database from before keeps every use; one that cannot gain the column
+  records uses without it.
 - **The hook.** A user-level hook in each harness, not a Marketplace artifact: an entry in Claude
   Code's `~/.claude/settings.json` (`PreToolUse`, matcher `Skill|mcp__.*`, `async`), and a plugin
   `~/.config/opencode/plugins/aart-cli-usage.js`. The plugin starts the recorder detached and lets
@@ -12801,6 +12807,11 @@ it queryable for analysis.
   machine to find the scope and is never sent. Tabnine's lifecycle events say all of this; its uses
   cannot be recorded, since it offers no hook that names the tool about to run. Never a project, a
   project's name or a hash of one.
+- **Revision 8: the harness's own version (D-536).** A use says the version its harness reported
+  of itself (`harness_version`), as §212 keeps it: today OpenCode 2's, so OpenCode 2's uses can be
+  told from 1.x's without a harness of their own. It is sent only to a server that names revision 8
+  or later; to an older one the use goes without it. A use that has none says none -- never
+  `unknown` or a guess -- and the server lists it as not said.
 - **Automation says so (D-511).** A CI job draws a new installation id each time, so without this
   every job would read as a new person. A request says `"automated": true` when, at the moment it
   is sent, `AART_CLI_AUTOMATED` is `on` or `true`, or, without that, `CI` -- which CI services
@@ -13038,7 +13049,8 @@ signal ends it. A signal ignored or handled before aart-cli started is left as i
 **INV-340 — A server is sent only the fields its revision holds.** An event's where and how
 (D-518) and the request's environment are sent only to a server that names revision 7 or later at
 the start of that run; to any other server the same event is sent as before revision 7, and it is
-still counted. A value the contract cannot carry is never sent, and never stops its event being
+still counted. A field a later revision added, such as revision 8's `harness_version` (D-536), is
+sent only to a server that names that revision or later. A value the contract cannot carry is never sent, and never stops its event being
 sent. No event says a project, a project's name or a hash of one.
 
 # 216. Doctor shows pip and uv as an install runs them
