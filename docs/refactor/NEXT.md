@@ -4,8 +4,8 @@
 
 **OPENCODE-HARNESS-VERSION** (D-536): OpenCode 2's uses carry `harness_version` from
 `ctx.app.version`, sent from contract revision 8; B-279 is resolved by it. Branch
-`feat/opencode-harness-version` (worktree `/Users/mifi/code/aart-cli-harness-version`); the
-server's revision 8 is on its `feat/harness-version`, and should be deployed first or together:
+`feat/opencode-harness-version` (worktree `/Users/mifi/code/aart-cli-harness-version`), PR #152; the
+server's revision 8 is its PR #20, and should be deployed first or together:
 until a server says 8 the field stays in the outbox and is not sent. Next: **P0-2** (the OpenCode 2
 variant detected by version), then B-276 and B-278. Evidence:
 `docs/refactor/slices/OPENCODE-HARNESS-VERSION-revision-8.md`.
