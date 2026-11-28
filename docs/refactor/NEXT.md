@@ -1,6 +1,15 @@
 # AART Refactor — Next Work
 
-## Where the work is (2026-11-27, OPENCODE-USER-SETTINGS-FILE)
+## Where the work is (2026-11-27, OPENCODE-USAGE-PLUGIN)
+
+**OPENCODE-USAGE-PLUGIN** (B-277, D-531): the opencode usage plugin counts an MCP use only for a
+server the runtime reports, starts the recorder detached with `RECORDER_ENVIRONMENT` only, and
+hands over which runtime delivered the call; D-535 waits for the recorder (a second at most) and
+writes the plugin only when it changes. Branch `fix/opencode-usage-plugin`, PR #148 (on `main` since #147 was released in 0.32.2).
+Next: **P0-2** with B-279 (the `opencode2` label), then B-276 and B-278. Evidence:
+`docs/refactor/slices/OPENCODE-USAGE-PLUGIN-real-servers-detached-no-secrets.md`.
+
+## Where the work was (2026-11-27, OPENCODE-USER-SETTINGS-FILE, released in 0.32.2)
 
 **OPENCODE-USER-SETTINGS-FILE** (§218, D-530): user MCP servers and plugins go into
 `~/.config/opencode/opencode.jsonc` when it exists (created when neither file does), edited as

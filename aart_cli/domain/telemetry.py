@@ -608,8 +608,7 @@ def use_event(
             kind.value,
             name,
             None,
-            # opencode's whole tool name is already its `artifact_id`; Claude Code's server is,
-            # and the tool is said beside it.
+            # The server is the `artifact_id`, and the tool is said beside it.
             EventContext.fitting(
                 session=session or None, tool=(tool or None) if kind is UsageKind.MCP else None
             ),

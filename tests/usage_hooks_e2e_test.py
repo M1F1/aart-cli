@@ -96,10 +96,13 @@ class TheHookAsAHarnessRunsItTest(unittest.TestCase):
         self.assertNotIn(_SECRET.encode(), database)
 
     def test_an_opencode_mcp_call_is_recorded(self) -> None:
-        ran = self._run("opencode", json.dumps({"tool": "jira_search", "directory": "/w"}).encode())
+        ran = self._run(
+            "opencode",
+            json.dumps({"tool": "jira_search", "server": "jira", "directory": "/w"}).encode(),
+        )
 
         self.assertEqual((ran.returncode, ran.stdout), (0, b""), ran.stderr)
-        self.assertEqual(_uses(self.home), [("opencode", "mcp", "jira_search", "/w")])
+        self.assertEqual(_uses(self.home), [("opencode", "mcp", "jira", "/w")])
 
     def test_anything_it_cannot_read_records_nothing_and_still_exits_0(self) -> None:
         for payload in (b"", b"not json", b"[]", json.dumps({"tool_name": "Bash"}).encode()):
@@ -205,7 +208,8 @@ class OpencodePluginTest(unittest.TestCase):
         self.assertTrue(plugin.startswith(OPENCODE_PLUGIN_MARK))
         self.assertIn('"tool.execute.before"', plugin)
         self.assertIn('ctx.tool.hook("execute.before"', plugin)
-        self.assertIn("JSON.stringify({ tool, skill, directory, session })", plugin)
+        self.assertIn("hand({ tool, skill: named, directory, session, runtime })", plugin)
+        self.assertIn("hand({ tool, server, directory, session, runtime })", plugin)
         self.assertNotIn("JSON.stringify(output", plugin)
         self.assertNotIn("JSON.stringify(args", plugin)
         self.assertNotIn("JSON.stringify(event", plugin)
@@ -263,6 +267,23 @@ class PuttingItInPlaceTest(unittest.TestCase):
         )
         self.assertIsInstance(refused, Err)
         self.assertEqual(plugin.read_text(), "// somebody's own plugin\n")
+
+    def test_opencode_s_plugin_is_written_only_when_its_bytes_change(self) -> None:
+        # OpenCode 2 watches the file and reloads the plugin in open sessions on a write, and
+        # every `consume` command and TUI start turns usage on again.
+        plugin = Path(harness_file("opencode", user_home=self.user_home))
+        set_usage_hook("opencode", True, user_home=self.user_home, data_root=self.data_root)
+        first = plugin.stat()
+
+        again = set_usage_hook("opencode", True, user_home=self.user_home, data_root=self.data_root)
+
+        self.assertIsInstance(again, Ok)
+        now = plugin.stat()
+        self.assertEqual((first.st_ino, first.st_mtime_ns), (now.st_ino, now.st_mtime_ns))
+        written = plugin.read_bytes()
+        plugin.write_bytes(written.replace(b"aart-cli-usage", b"aart-cli-usage-older", 1))
+        set_usage_hook("opencode", True, user_home=self.user_home, data_root=self.data_root)
+        self.assertEqual(plugin.read_bytes(), written)
 
     def test_by_default_only_a_present_default_harness_is_hooked(self) -> None:
         (Path(self.user_home) / ".claude").mkdir()

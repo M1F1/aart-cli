@@ -13353,6 +13353,46 @@ exists and `opencode.json` only when it does not, and OpenCode 1.x leaves an emp
   stdout from a file, not a pipe, because a Bun process may exit before a pipe past 64 KB is
   drained (`opencode debug config` on 1.18.30), and drop every `OPENCODE_*` variable.
 
+## D-531 — The opencode usage plugin names the server, outlives opencode and keeps its secrets (B-277)
+
+Owner request ("telemetria też normalnie działała dla opencode", 2026-11-27) on a report measured on
+OpenCode 2.3.2 and 1.19.5.
+
+- **A tool is an MCP's only when opencode has the server.** Any tool with `_` counted: the built-in
+  `experimental_image_generate` and plugin tools named `<file>_<export>` were sent as unmanaged MCP
+  uses. The plugin asks the runtime for its servers -- `client.mcp.status()` (1.x, keys) and
+  `ctx.mcp.list()` (2, `data[].name`, from the published `@opencode-ai/plugin` types) -- once, and
+  again when a tool fits none known, and hands over `server`, the longest whose name, with what
+  opencode replaces made `_`, prefixes the tool. Python records a use only with a server the tool
+  fits, as the server with the tool beside it, as Claude Code's is; `unmanaged.used` now names the
+  server, not the whole tool. Without the API (an older runtime) nothing is taken for an MCP's:
+  fewer uses, never false ones. Not chosen: reading opencode's config files from Python, because a
+  launcher passes part of it in `OPENCODE_CONFIG_CONTENT`, which only the process sees.
+- **Detached.** `spawn(..., { detached: true, windowsHide: true })` and `unref()`: `opencode run`
+  ending right after a tool call took its non-detached children, so the last uses (in automation,
+  all of them) were lost.
+- **Environment.** Not just `PATH`, `HOME`, `LANG` as the report proposed: the recorder starts
+  telemetry's sender, which reaches the server through `HTTPS_PROXY`/`NO_PROXY` and trusts
+  `SSL_CERT_FILE`/`SSL_CERT_DIR`, and tells automation by `CI`/`AART_CLI_AUTOMATED` (D-511).
+  Without those, telemetry behind a company proxy or CA would stop. `RECORDER_ENVIRONMENT` lists
+  them (matched in any case, plus `LC_*`, `TMPDIR`, `SYSTEMROOT`); nothing else, so neither
+  `OPENCODE_PASSWORD`, a launcher's tokens nor a provider's key reach it. A proxy URL holding
+  credentials is passed, as it is needed to send at all.
+- **Which runtime.** OpenCode 1.19.5 calls `setup` too (without `ctx.tool`), so being called through
+  `setup` does not say OpenCode 2; the hook that delivered the call does. The plugin hands over
+  `runtime: 1|2` from each hook. Nothing reads it yet: labelling the use `opencode2` before the
+  `opencode2` harness exists (P0-2) would match no installation, and both the client's and the
+  telemetry server's rule "a use's harness is its source's" (`HARNESS_OF[opencode_plugin] ==
+  "opencode"`) refuse `harness: opencode2` from `opencode_plugin` -- the free-form SQL column is
+  not the check. B-279 carries the label with P0-2 and that server change.
+- **Evidence.** `tests/opencode_plugin_runtimes_test.py` drives the written plugin in node as both
+  runtimes: servers asked and the longest chosen, false MCP tools not handed over, the recorder in
+  a session of its own given no secret but the proxy, and the last uses recorded after the driver
+  kills its whole process group; `tests/artifact_usage_test.py` (examples and a property) for the
+  parser. Targeted mutations -- no `detached`, the whole environment, the first server instead of
+  the longest, handing over without a server, no server needed in Python, the raw server name as
+  the prefix -- each turn their named test red.
+
 ## D-533 — One doctor command moves every misplaced OpenCode entry (REPAIR-SETTINGS)
 
 §218 amended (owner request, 2026-11-27). The owner hands users a short instruction to make
@@ -13402,3 +13442,37 @@ and too much to put in an instruction for many people whose installations differ
 - **TUI start.** The Dashboard says `● opencode does not load N installations — open Doctor and
   press m`, and Doctor's entry carries `● N to move`, as Registries carries `● N to sync`.
 
+## D-535 — The opencode usage plugin waits for its recorder and is written only when it changes (B-277 follow-up)
+
+§212 amended (owner request, 2026-11-27, on a report measured live on OpenCode 1.19.5 and 2.3.2,
+also under a launcher). The report confirmed D-531's runtime calls live (`ctx.mcp.list()` is empty
+in `setup` and full at the first tool call; 1.x's `client.mcp.status()` answers in a hook, not
+during `server()`), and found two faults left:
+
+- **The first MCP call of a run could be lost.** The hooks recorded with `void record(...)` and
+  returned at once, while `record` first asked the runtime for its servers and only then started
+  the recorder. A run that ends right after its first MCP call -- automation, a one-shot `opencode
+  run` -- could exit between the two. Both runtimes await a hook (OpenCode 2's adapter wraps it in
+  `Promise.resolve(callback(event))`), so each hook now returns once the recorder is started, or
+  after `WAIT_MS` (1 s) when the runtime does not answer, through a timer that does not keep
+  opencode running. Only a call that has the runtime asked waits at all; once a server is known its
+  calls start the recorder at once. Calls made while the runtime is asked share that one request,
+  since each now waits for it. Rejected: caching the list from `setup` (empty on OpenCode 2), and
+  waiting without a limit (a runtime that never answers would hold every tool call).
+- **The plugin was rewritten on every `consume` command and TUI start.** OpenCode 2 watches
+  `plugins/` (`watcher subscribe ... aart-cli-usage.js` in its log), so each write could reload the
+  plugin in open sessions. It is now written only when its bytes differ, as Claude Code's settings
+  already were; an upgrade still replaces an older plugin at the next start.
+- **Kept as they are.** `REQUESTS_CA_BUNDLE` is not passed: the sender uses `urllib`, which reads
+  `SSL_CERT_FILE`/`SSL_CERT_DIR`, already passed. The `opencode2` label stays with B-279: the
+  telemetry contract says a use's harness is its source's (`opencode` for `opencode_plugin`), so
+  the server changes first. Skills from a plugin on OpenCode 2 and server names opencode rewrites
+  are unmeasured live (B-282).
+- **Evidence.** `OpenCodeExitingRightAfterTheFirstCallTest` (node, per runtime): a runtime that
+  names its servers after 150 ms and a driver that kills its process group as soon as the awaited
+  hook returns -- the use is recorded; a runtime that never answers holds the call under 1.5 s and
+  hands nothing over. `test_calls_made_together_ask_the_runtime_for_its_servers_once`;
+  `test_a_hook_never_throws_into_opencode_2_s_tool_call` now awaits each hook and sees no
+  rejection. `test_opencode_s_plugin_is_written_only_when_its_bytes_change` (same inode and mtime;
+  a changed file is replaced). Targeted mutations -- either runtime's hook not awaited, no limit, no
+  shared request, writing unconditionally -- each turn their named test red.

@@ -2388,12 +2388,39 @@
         },
         {
           "id": "3",
-          "title": "The PR",
-          "status": "in_progress"
+          "title": "The PR (#147, released in 0.32.2)",
+          "status": "done"
         },
         {
           "id": "4",
           "title": "P0-2: opencode2 harness variant detected by version (stacked branch)",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "id": "OPENCODE-USAGE-PLUGIN",
+      "title": "The opencode usage plugin counts only real MCP servers, outlives opencode and keeps its secrets (B-277, D-531)",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "1",
+          "title": "Server named from the runtime's list; detached recorder with RECORDER_ENVIRONMENT; runtime handed over",
+          "status": "done"
+        },
+        {
+          "id": "2",
+          "title": "D-535: each hook waits for its recorder (a second at most); the plugin is written only when it changes",
+          "status": "done"
+        },
+        {
+          "id": "3",
+          "title": "The PR (#148, on main since #147 was released in 0.32.2)",
+          "status": "in_progress"
+        },
+        {
+          "id": "4",
+          "title": "B-279: the opencode2 label, with P0-2 and the telemetry server's HARNESS_OF",
           "status": "todo"
         }
       ]

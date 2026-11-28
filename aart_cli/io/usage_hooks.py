@@ -145,8 +145,14 @@ def set_usage_hook(harness: str, enabled: bool, *, user_home: str, data_root: st
             return Ok(str(path))
         return _write(path, (json.dumps(changed, indent=2, ensure_ascii=False) + "\n").encode())
     if enabled:
-        plugin = opencode_plugin(running_usage_hook(harness, data_root=data_root))
-        return _write(path, plugin.encode("utf-8"))
+        plugin = opencode_plugin(running_usage_hook(harness, data_root=data_root)).encode("utf-8")
+        # OpenCode 2 watches this file and reloads the plugin in open sessions when it is written.
+        try:
+            if path.read_bytes() == plugin:
+                return Ok(str(path))
+        except OSError:
+            pass
+        return _write(path, plugin)
     if not path.exists():
         return Ok(str(path))
     if not usage_hooked(harness, user_home=user_home):
